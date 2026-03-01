@@ -1,0 +1,810 @@
+# 薯片生态前端 vNext 架构设计手册（概述总册）
+
+> 文档状态：研究设计冻结稿（全栈边界）  
+> 调查时间：2026-02-24  
+> 适用阶段：阶段18及后续重构实施阶段
+
+---
+
+## 0. 文档元信息
+
+### 0.1 适用范围
+- 本手册覆盖薯片生态前端与插件运行时全栈接口边界：PAL、Host 内核、Host 服务域、插件运行时、Bridge 传输层、SDK Runtime Client、UI Hooks、声明式 UI 层、统一渲染层、组件库、新主题系统、应用页面域。
+- 目标对象：架构负责人、Host/SDK/组件库维护者、应用插件负责人、主题包开发者、模板维护者。
+
+### 0.3 已锁定决策
+- 页面级响应式自治（不做全局横竖模板）。
+- 生态统一逻辑尺寸单位：`cpx`。
+- 页面基准宽度：`1024cpx`。
+- 不使用“2.0”等版本命名，当前仍是研究设计阶段。
+
+### 0.4 状态更新（2026-02-26，阶段07任务05）
+- settings 双入口与 Vue 活跃链路问题已在阶段07任务05闭环。
+- `chips-app-settings` 主路径固定为 React 单入口；历史 Vue 与 bridge-client 已归档到 `src/archive/**`。
+- 本手册中涉及 settings 双入口的风险与证据条目保留为历史调查快照，并在对应条目中增加闭环注记。
+
+---
+
+## 1. 北极星目标与架构原则
+
+### 1.1 北极星目标
+- 构建可持续 5-10 年演进的插件生态前端基础设施。
+- 以单一标准支撑 `app/card/layout/module/theme` 五类插件。
+- 用户侧体验无感：功能、路径、交互语义稳定。
+- 开发者侧复杂度降低：契约统一、工具统一、模板统一。
+
+### 1.2 不可违反原则
+1. **中心路由原则**：服务间调用必须走内核路由，禁止跨服务直接 import 调用。
+2. **Bridge 隔离原则**：插件仅通过 `window.chips.*` 与系统能力交互。
+3. **底层厚、上层薄**：能力尽量在底层固化，上层仅做业务编排。
+4. **平台无关性**：平台差异收敛到 PAL，核心不直连平台 API。
+5. **无头组件原则**：组件只负责结构和行为，视觉完全主题注入。
+6. **契约优先原则**：接口、事件、manifest、token、布局均契约化。
+7. **鲁棒优先原则**：默认内建隔离、回退、熔断、可观测。
+
+### 1.3 React 架构技能基线（本轮采用）
+- `vercel-composition-patterns`：组件 API 采用组合模式、显式变体、上下文分层，避免 boolean props 爆炸。
+- `vercel-react-best-practices`：并发请求并行化、渲染/订阅优化、性能预算化、重渲染治理。
+
+---
+
+## 2. 全栈分层总览（12层）
+
+> 目标：替代过去“文档六层、实现多层”的口径分裂，明确实现级分层边界。
+
+| 层级 | 名称 | 核心职责 | 只允许依赖 | 禁止依赖 |
+|---|---|---|---|---|
+| L1 | PAL | 平台能力抽象 | OS/Electron 原生能力 | 业务插件 |
+| L2 | Host Kernel | router/registry/event/lifecycle | PAL | 应用页面代码 |
+| L3 | Host Services | file/resource/config/theme/i18n 等 | Kernel | 插件 UI |
+| L4 | Plugin Runtime | 插件加载、隔离、会话、权限 | Kernel+Services | 业务域实现细节 |
+| L5 | Bridge Transport | `window.chips.*` IPC 传输 | Runtime | 页面业务状态 |
+| L6 | Runtime Client | 协议编解码、错误归一、重试 | Bridge Transport | 组件渲染实现 |
+| L7 | UI Hooks | 面向页面的能力调用接口 | Runtime Client | Transport 细节 |
+| L8 | Declarative UI | `View/Stack/Grid/Form/List` 语义原语 | UI Hooks + Component Layer | Host 服务细节 |
+| L9 | Unified Rendering | Normalize/Validate/Resolve/Commit | Declarative UI + Theme Runtime | Host 路由逻辑 |
+| L10 | Component Headless | 状态机、结构、a11y | Theme Runtime(接口) | 视觉硬编码 |
+| L11 | Theme Runtime | token 解析、作用域覆盖、变量注入 | Theme Package | 业务逻辑 |
+| L12 | App/Page Domain | 页面状态、业务流程、编排 | L7-L11 | L1-L5 细节 |
+
+### 2.1 依赖方向白名单
+- 仅允许 `Ln -> Ln-1` 或 `Ln -> 公共契约层`。
+- 禁止跨层跳跃（例如 L12 直调 L5）。
+
+### 2.2 反模式黑名单
+- 应用仓自建 bridge-client。
+- 组件层输出硬编码颜色/阴影/圆角。
+- 同一能力存在双动作名并长期并行。
+
+---
+
+## 3. Host 内核设计（详细）
+
+### 3.1 路由命名与注册机制
+- 路由统一键：`namespace.action`。
+- 支持 `exact/prefix/wildcard` 匹配模式。
+- 每路由可声明：`timeoutMs`、`invokeAccess`、`permission`、`schemaId`。
+- 内核路由必须做参数 schema 校验和权限判定。
+
+### 3.2 调用上下文标准
+`RouteInvocationContext` 固定字段：
+- `requestId`
+- `caller: { id, type, pluginId?, windowId?, permissions? }`
+- `timestamp`
+- `deadline`
+
+### 3.3 生命周期状态机
+- 服务状态：`unloaded -> loading -> ready -> running -> stopping -> stopped/error`。
+- 内核负责状态可观测，不负责服务业务细节。
+
+### 3.4 事件模型
+- 事件总线支持订阅模式、过滤器、超时配置、投递结果统计。
+- 统一事件元信息：`id/name/source/data/timestamp/metadata`。
+
+### 3.5 并发与熔断
+- 路由级超时必配，超时报 `ROUTE_TIMEOUT`。
+- 高频失败路由触发软熔断（窗口期内快速失败 + 可恢复探测）。
+- 指标：p50/p95 延迟、超时率、错误率、缓存命中率。
+
+### 3.6 路由契约描述符（实现约束）
+```ts
+interface RouteDescriptor<I, O> {
+  key: `${string}.${string}`;
+  schemaIn: string;
+  schemaOut: string;
+  permission: string[];
+  timeoutMs: number;
+  idempotent: boolean;
+  retries: 0 | 1 | 2 | 3;
+  handler: (input: I, ctx: RouteInvocationContext) => Promise<O>;
+}
+```
+- 所有服务注册动作必须提供 `RouteDescriptor`，禁止“只注册 handler 不注册契约”。
+- 内核在注册时生成 `route-manifest`，供 SDK 与测试门禁校验。
+
+---
+
+## 4. Host 服务域设计（详细）
+
+### 4.1 服务域清单（目标口径）
+- `file`
+- `resource`
+- `config`
+- `theme`
+- `i18n`
+- `window`
+- `plugin`
+- `module`
+- `platform`
+- `log`
+- `credential`
+- `card`
+- `box`
+- `zip`
+- `serializer`
+- `control-plane`（治理聚合层）
+
+### 4.2 服务动作统一约束
+- 每个动作必须定义：输入 schema、输出 schema、权限、超时、错误码。
+- 幂等动作标注 `idempotent=true`，由调用侧可安全重试。
+- 非幂等动作必须定义防重放策略（requestId 去重窗口）。
+
+### 4.3 错误语义
+统一错误对象：
+```ts
+{ code: string; message: string; details?: unknown; retryable?: boolean }
+```
+
+### 4.4 控制平面定位
+- `control-plane` 仅做治理聚合，不可绕过底层服务语义。
+- 允许聚合动作（如 `theme.apply`）内部映射到底层标准动作（如 `theme.setCurrent`），但必须被契约显式声明。
+
+### 4.5 服务动作面基线（详细口径）
+
+| 服务域 | 核心动作面（示例） | 输入/输出基线 | 幂等性 | 权限边界 | 典型错误码 |
+|---|---|---|---|---|---|
+| `file` | `read/write/stat/list` | path + options -> content/meta | `read/stat/list` 幂等 | `file.read/file.write` | `FILE_NOT_FOUND`, `FILE_PERMISSION_DENIED` |
+| `resource` | `resolve/readMetadata/readBinary` | resourceId -> uri/meta/blob | `resolve/read*` 幂等 | `resource.read` | `RESOURCE_NOT_FOUND` |
+| `config` | `get/set/batchSet/reset` | key/value -> ack/snapshot | `get` 幂等 | `config.read/config.write` | `CONFIG_KEY_INVALID` |
+| `theme` | `list/apply/getCurrent/getAllCss/resolve/contract.get` | themeId/chain -> themeState/css | `list/get*/resolve` 幂等 | `theme.read/theme.write` | `THEME_NOT_FOUND`, `THEME_CONTRACT_INVALID` |
+| `i18n` | `getCurrent/setCurrent/translate/listLocales` | locale/key -> locale/text | `get*/translate` 幂等 | `i18n.read/i18n.write` | `I18N_KEY_MISSING` |
+| `window` | `open/focus/resize/setState` | windowConfig -> windowState | `focus` 幂等 | `window.control` | `WINDOW_NOT_FOUND` |
+| `plugin` | `install/enable/disable/uninstall/query` | pluginManifest -> status | `query` 幂等 | `plugin.manage` | `PLUGIN_INVALID`, `PLUGIN_PERMISSION_DENIED` |
+| `module` | `mount/unmount/query/list` | slot + module -> state | `query/list` 幂等 | `module.manage` | `MODULE_CONFLICT` |
+| `platform` | `getInfo/getCapabilities/openExternal` | none/url -> info/ack | `get*` 幂等 | `platform.read/platform.external` | `PLATFORM_UNSUPPORTED` |
+| `log` | `write/query/export` | record/filter -> ack/bundle | `query` 幂等 | `log.write/log.read` | `LOG_EXPORT_FAILED` |
+| `credential` | `get/set/delete/rotate` | secretRef -> secret/meta | `get` 幂等 | `credential.manage` | `CREDENTIAL_DENIED`, `CREDENTIAL_EXPIRED` |
+| `card` | `parse/render/validate` | cardDoc -> ast/view/model | `parse/validate` 幂等 | `card.read/card.write` | `CARD_SCHEMA_INVALID` |
+| `box` | `pack/unpack/inspect` | inputPath -> artifact/meta | `inspect` 幂等 | `box.pack` | `BOX_FORMAT_INVALID` |
+| `zip` | `compress/extract/list` | files -> zip/meta | `list` 幂等 | `zip.manage` | `ZIP_CORRUPTED` |
+| `serializer` | `encode/decode/validate` | payload + schema -> bytes/object | `decode/validate` 幂等 | `serializer.use` | `SERIALIZE_FAILED` |
+| `control-plane` | `health/check/metrics/diagnose` | scope -> report | 幂等 | `control.read/control.write` | `CONTROL_TIMEOUT` |
+
+### 4.6 服务实现统一模板
+- 每服务必须导出：`types.ts`（输入输出类型）、`constants.ts`（动作名/错误码）、`service.ts`（注册与实现）。
+- 每动作必须存在同名契约测试：`<action>.contract.test.ts`。
+- 服务 `initialize()` 失败必须阻断系统进入 `running`。
+
+---
+
+## 5. 插件运行时设计（详细）
+
+### 5.1 插件类型
+- `app`：独立窗口应用插件
+- `card`：基础卡片渲染/编辑插件
+- `layout`：布局插件
+- `module`：通用功能模块插件
+- `theme`：视觉主题插件
+
+### 5.2 加载与会话
+- 每个插件会话包含：`pluginId`、`pluginType`、`permissions`、`locale`、`themeId`、`launchParams`、`sessionNonce`。
+- 插件初始化必须走 `plugin-init` 握手，握手失败禁止进入 running。
+
+### 5.3 隔离策略
+- App 级隔离：独立 BrowserWindow。
+- Card 渲染隔离：iframe 优先，支持受控模式。
+- 权限隔离：调用时按 sender + pluginId 做实时鉴权。
+
+### 5.4 资源配额
+- 定义插件级 CPU/内存/消息频率软配额。
+- 超配额时触发降级（限频、暂停后台任务、告警）。
+
+### 5.5 插件运行时安全流水线
+1. Manifest 校验（类型、权限、入口、契约版本）
+2. 签名与来源校验（官方/第三方渠道）
+3. 启动握手（`plugin-init`，分配 `sessionNonce`）
+4. 权限快照加载（最小权限）
+5. 沙箱注入（只暴露 `window.chips.*`）
+6. 运行时审计（越权、超频、异常事件）
+7. 会话结束清理（订阅、缓存、临时资源）
+
+---
+
+## 6. Bridge 三层设计（详细）
+
+### 6.1 Bridge Transport
+- 对外入口：`window.chips.invoke/on/once/emit` + 子域 API（window/dialog/plugin/clipboard/shell）。
+- IPC 主通道：`chips:invoke`。
+- 子能力通道：`chips:window:*`、`chips:dialog:*`、`chips:plugin:*` 等。
+
+### 6.2 Runtime Client
+- 职责：参数规范化、协议映射、错误归一、超时控制、重试与回退。
+- 目标：应用层不感知 IPC/route 细节。
+- 统一提供候选动作回退能力（仅用于历史差异吸收，长期目标是收敛为单动作）。
+
+### 6.3 UI Hooks
+- `useTheme/useI18n/useFile/useWindow/usePlugin/useConfig`。
+- Hook 仅允许调用 Runtime Client，不可直连 Transport。
+
+### 6.4 同步与异步语义
+- `invoke` 必为异步 Promise。
+- 事件订阅必须返回可取消句柄。
+- 事件命名统一采用点语义（如 `theme.changed`、`language.changed`）。
+
+### 6.5 重试策略
+- 可重试错误（`retryable=true`）才允许自动重试。
+- 默认指数退避：`200ms * 2^n`，最大 3 次。
+
+### 6.6 错误归一映射
+- `bridge` 层错误统一映射到 `BRIDGE_*`。
+- `service` 层错误统一映射到 `SERVICE_*`。
+- `runtime` 层超时/重试错误统一映射到 `RUNTIME_*`。
+- `ui` 层消费时仅接收标准对象，不直接暴露底层堆栈。
+
+---
+
+## 7. 声明式 UI 层设计（详细）
+
+### 7.1 核心原语
+- `View`
+- `Stack`
+- `Grid`
+- `Form`
+- `List`
+
+### 7.2 声明树节点模型
+```ts
+interface UINode {
+  id: string;
+  type: 'View' | 'Stack' | 'Grid' | 'Form' | 'List' | string;
+  props?: Record<string, unknown>;
+  state?: Record<string, unknown>;
+  bindings?: Record<string, string>;
+  events?: Record<string, string>;
+  themeScope?: string;
+  children?: UINode[];
+}
+```
+
+### 7.3 约束
+- 声明层不承载视觉值（颜色、阴影、半径），仅声明语义。
+- 声明层不可直接发起系统调用，必须通过 UI Hooks。
+
+### 7.4 组合模式规范（采用 Vercel 组合模式）
+- 复杂组件优先 Compound Components。
+- 避免 boolean 模式扩张，改为显式子组件与 slot。
+- Provider 成为唯一状态实现知情者。
+
+### 7.5 副作用与事件绑定模型
+- `events` 仅声明语义事件（如 `onSubmit`, `onOpenFile`），实际执行器在页面域注册。
+- 副作用分级：
+  - `ui-effect`：滚动、聚焦、过渡。
+  - `runtime-effect`：调用 SDK Runtime Client。
+  - `telemetry-effect`：日志与埋点。
+- 禁止在渲染阶段直接触发 `runtime-effect`。
+
+---
+
+## 8. 统一渲染层设计（详细）
+
+### 8.1 渲染流水线
+1. Node Normalize  
+2. Contract Validate  
+3. Theme Resolve  
+4. Layout Compute  
+5. Render Commit  
+6. Effect Dispatch
+
+### 8.2 目标适配器
+- `App Root`
+- `Card Iframe`
+- `Module Slot`
+- `Offscreen Render`
+
+### 8.3 渲染一致性约束
+- 同一声明树在不同目标适配器中语义一致。
+- 非兼容能力必须在 Validate 阶段失败，不允许 silent fallback。
+
+### 8.4 失败隔离
+- 节点级/区域级 Error Boundary。
+- 单节点失败不拖垮整页渲染。
+
+### 8.5 调度与增量更新
+- 渲染层维护 `render queue`，将大树更新拆分为可中断批次。
+- `List/Grid/Table` 默认启用可见区域增量提交。
+- 主题切换触发“样式层更新优先、结构层更新延后”策略，避免阻塞交互。
+
+---
+
+## 9. 页面级布局与尺寸体系（详细）
+
+### 9.1 页面自治
+- 每页面定义自己的断点、信息重排、交互降级策略。
+- 平台层不提供全局横竖模板。
+
+### 9.2 `cpx` 语义
+- 逻辑宽基准：`1024cpx`。
+- 换算公式：
+```txt
+px = cpx * (containerWidthPx / 1024)
+```
+
+### 9.3 布局契约最小字段
+```yaml
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+    contract: ./contracts/page-layout.contract.json
+    minFunctionalSet: ./contracts/min-functional-set.json
+```
+
+### 9.4 页面最小功能集
+- 每页面必须声明关键任务路径（创建/编辑/查看/保存等）在所有支持尺寸下可达。
+- 布局切换不能丢状态（表单输入、滚动位置、临时会话态）。
+
+### 9.5 `cpx` 工程规范
+- 所有布局常量以 `cpx` 声明，渲染前统一换算到 `px`。
+- 换算结果保留 3 位小数，提交到 DOM/CSS 前按策略裁剪：
+  - 字体：四舍五入到 `0.5px`
+  - 边框：最小 `1px` 可见阈值
+  - 位移：允许亚像素渲染
+- SDK 提供 `@chips/layout-math` 统一函数，禁止应用侧重复实现。
+
+---
+
+## 10. 组件库体系设计（详细）
+
+### 10.1 分层目录
+- Primitive
+- Base Interactive
+- Data & Form
+- Workbench
+- Media & Content
+- System UX
+
+### 10.2 契约挂点
+- `data-scope`
+- `data-part`
+- `data-state`
+- `aria-*`
+
+### 10.3 API 设计规则
+- 禁止“多 boolean 控制多模式”API。
+- 使用显式变体组件或组合 API。
+- 组件主导出一个核心能力，辅助能力通过子组件暴露。
+
+### 10.4 无头约束
+- 不允许组件内写死颜色、阴影、半径、动效值。
+- 不允许组件内写死用户可见文案。
+
+### 10.5 组件状态机
+- 交互组件统一以状态机定义：`idle/hover/focus/active/disabled/loading/error`。
+- 状态变化必须投影到 `data-state`。
+
+### 10.6 组件覆盖目标面
+- 必备基础层：Button/Input/Select/Checkbox/Radio/Switch/Dialog/Popover/Tabs/Menu/Tooltip。
+- 必备数据层：DataGrid/Tree/VirtualList/FormField/FormGroup/DateTime/CommandPalette。
+- 必备工作台层：SplitPane/DockPanel/Inspector/PanelHeader/CardShell/ToolWindow。
+- 必备系统层：ErrorBoundary/LoadingBoundary/Notification/Toast/EmptyState/Skeleton。
+- 每个组件必须声明：
+  - 可组合子部件清单
+  - 主题接口点清单
+  - 可访问性语义清单
+  - 单测最小覆盖矩阵
+
+---
+
+## 11. 新主题系统设计（详细）
+
+### 11.1 token 五层
+- `ref`：原始值
+- `sys`：语义值
+- `comp`：组件值
+- `motion`：动效值
+- `layout`：布局密度值
+
+### 11.2 作用域链
+`global -> app -> workspace -> card -> component`
+
+### 11.3 覆盖规则
+1. 作用域优先级（近者优先）
+2. 选择器特异性
+3. 声明顺序
+
+### 11.4 主题公开接口（固定）
+- `theme.list`
+- `theme.apply`
+- `theme.getCurrent`
+- `theme.getAllCss`
+- `theme.resolve`
+- `theme.contract.get`
+
+### 11.5 主题包结构（标准）
+- `manifest.yaml`
+- `tokens/*.json` + `tokens/global.css`
+- `components/*.css`
+- `motions/*.css`
+- `icons/*`
+- `contracts/theme-interface.contract.json`
+- `preview/*`
+- 主题包语义约束：一个主题包仅承载一种外观，不在包内区分白天/夜间、light/dark 或其他模式标签；外观切换通过切换 `themeId` 到另一个主题包完成。
+
+### 11.6 主题解析算法（运行时）
+1. 加载作用域链主题快照（`global -> ... -> component`）
+2. 按 token 层级合并（`ref -> sys -> comp/motion/layout`）
+3. 执行冲突裁决（作用域优先 + 特异性 + 顺序）
+4. 生成变量表与组件映射表
+5. 注入作用域样式并触发 `theme.changed`
+
+### 11.7 主题契约门禁
+- 每个主题包必须通过：
+  - token 完整性校验（缺失/冗余）
+  - 组件接口点校验（`data-scope/data-part`）
+  - 动效参数安全校验（最大时长、曲线白名单）
+  - 颜色对比度校验（文本可读性）
+
+---
+
+## 12. i18n 系统设计（详细）
+
+### 12.1 key 规范
+- 统一 key 语义：`i18n.<domain>.<id>`。
+- 禁止 UI 文案直接硬编码。
+
+### 12.2 加载链
+- 插件词典 > 应用词典 > 生态词典。
+- 缺失 key 必须触发告警并回退默认文案模板。
+
+### 12.3 运行时切换
+- 切换语言时触发 `language.changed`。
+- 页面订阅后只做重渲染，不重启应用。
+
+### 12.4 缺失文案治理
+- CI 门禁输出缺失 key 列表。
+- 缺失率超过阈值禁止发布。
+
+---
+
+## 13. 状态与数据流模型（详细）
+
+### 13.1 三层状态
+1. 本地状态（Local UI state）
+2. 领域状态（Domain state）
+3. 服务状态（Service state）
+
+### 13.2 边界约束
+- Local 不可直接写服务状态。
+- Domain 通过 Runtime Client 驱动服务状态。
+- Service 状态不可反向污染组件本地状态模型。
+
+### 13.3 缓存策略
+- 读多写少能力：TTL + SWR。
+- 写入能力：幂等校验 + 回写确认。
+- 配置类数据：版本戳 + 乐观并发控制。
+
+### 13.4 跨插件共享边界
+- 禁止插件直接共享可变内存引用。
+- 跨插件共享仅允许通过：
+  - Host 服务快照（可审计）
+  - 事件广播（只读载荷）
+  - 明确声明的协作契约（schema + permission）
+
+---
+
+## 14. 安全与权限模型（详细）
+
+### 14.1 权限声明
+- 每插件在 manifest 显式声明权限。
+- 权限校验在 Host IPC 入站点执行。
+
+### 14.2 最小权限原则
+- 默认拒绝，按需放开。
+- 危险能力（文件写、外部打开、凭证访问）必须显式授权。
+
+### 14.3 敏感能力隔离
+- `credential`、`shell`、`window` 高风险动作需独立审计日志。
+- 插件越权调用返回标准 `PERMISSION_DENIED`。
+
+---
+
+## 15. 可观测性与诊断模型（详细）
+
+### 15.1 统一日志字段
+- `traceId`
+- `requestId`
+- `pluginId`
+- `namespace`
+- `action`
+- `durationMs`
+- `result`
+- `errorCode`
+
+### 15.2 链路追踪
+- Transport 入站生成 `requestId`，贯穿 Runtime Client、Kernel、Service。
+- 事件链路记录 `source -> target`。
+
+### 15.3 诊断面板
+- 路由延迟分布、错误码 TOP、权限拒绝 TOP、主题解析失败率。
+
+---
+
+## 16. 性能预算与治理（详细）
+
+### 16.1 预算基线
+- 首屏可交互（TTI）
+- 渲染提交耗时
+- 长任务占比
+- 内存峰值
+- 主题切换耗时
+
+### 16.1.1 建议阈值（架构级）
+- TTI：`<= 2000ms`（常规页面）
+- 单次渲染提交：`p95 <= 32ms`
+- 长任务占比：`<= 5%`
+- 主题切换可见完成：`<= 150ms`
+- 峰值内存：应用级按能力等级配置，默认不超过基线 1.5 倍
+
+### 16.2 治理策略
+- 独立请求并行化（避免 waterfall）。
+- 重组件按可见性分片渲染。
+- 大列表/树/表格强制虚拟化。
+- 主题切换使用异步注入与分片更新。
+
+### 16.3 指标责任
+- Host 负责路由性能指标。
+- SDK 负责 Bridge 调用与渲染链路指标。
+- App 负责页面级交互指标。
+
+---
+
+## 17. 鲁棒性与容灾（详细）
+
+### 17.1 失败隔离
+- 组件级 Error Boundary。
+- 页面局部失败可恢复，不影响全局窗口。
+
+### 17.2 回退策略
+- 主题失败 -> 回退默认主题。
+- 布局契约非法 -> 回退安全模板。
+- Bridge 超时 -> 标准错误 + 可重试提示。
+
+### 17.3 熔断与恢复
+- 同路由连续失败触发熔断。
+- 半开状态探测成功后自动恢复。
+
+### 17.4 数据安全
+- 写操作支持幂等去重。
+- 崩溃恢复后可重放关键未完成操作（限白名单）。
+
+---
+
+## 18. 目录结构与包边界（详细）
+
+### 18.1 仓库策略
+- 维持“每插件独立仓库”的生态策略。
+- 跨仓协作通过契约和模板治理，而非跨仓直接耦合。
+
+### 18.2 包边界
+- Host 内部：`kernel/`, `services/`, `ipc/`, `plugin/`, `pal/`, `window/`。
+- SDK 内部：`bridge/`, `runtime-client(目标新增)`, `hooks(目标新增)`, `theme/`, `renderer/`, `contracts/`。
+- 组件库：`components/`, `theme-contracts/`, `a11y/`, `testing/`。
+
+### 18.3 依赖白名单
+- 应用层仅依赖：SDK + 组件库 + 自身业务域。
+- 禁止应用仓直接依赖 Host 内部包。
+
+---
+
+## 19. 公共接口总表（详细）
+
+### 19.1 主题接口
+- `theme.list({ publisher? })`
+- `theme.apply({ id })`
+- `theme.getCurrent({ appId?, pluginId? })`
+- `theme.getAllCss()`
+- `theme.resolve({ chain })`
+- `theme.contract.get({ component? })`
+
+### 19.2 渲染接口
+- `render.mount(target, tree)`
+- `render.update(target, tree)`
+- `render.unmount(target)`
+
+### 19.3 页面布局接口
+- `pageLayout.getState()`
+- `pageLayout.subscribe()`
+- `pageLayout.getBreakpoint()`
+- `pageLayout.validateContract()`
+- `pageLayout.getScale()`
+- `pageLayout.toPx(valueInCpx)`
+- `pageLayout.toCpx(valueInPx)`
+
+### 19.4 错误模型
+```ts
+interface StandardError {
+  code: string;
+  message: string;
+  details?: unknown;
+  retryable?: boolean;
+}
+```
+
+### 19.5 manifest 固定字段（新增）
+```yaml
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+    contract: ./contracts/page-layout.contract.json
+    minFunctionalSet: ./contracts/min-functional-set.json
+```
+
+---
+
+## 20. 质量门禁（详细）
+
+### 20.1 代码门禁
+- TypeScript strict 全开。
+- 禁止 `any`（仅白名单例外并说明理由）。
+- 文件命名遵循 kebab-case / PascalCase / `types.ts` / `.test.ts`。
+
+### 20.2 前端门禁
+- 零硬编码用户文案。
+- 零组件视觉硬编码。
+- 主题接口点覆盖校验通过。
+
+### 20.3 契约门禁
+- theme/layout/bridge/component 四类契约必须通过。
+- manifest schema 校验必须通过。
+
+### 20.4 测试门禁
+- 每组件 >= 5 单测。
+- 每服务模块 >= 8 单测。
+- 正常/异常/边界路径覆盖。
+
+---
+
+## 21. 全场景测试蓝图（详细）
+
+1. 主题链路：全局/局部作用域覆盖正确。
+2. 声明树渲染：复杂树与大数据性能稳定。
+3. Bridge 异常：超时、断连、权限拒绝、非法参数。
+4. 页面自治布局：极端窗口下关键功能可达。
+5. `cpx` 一致性：多容器宽度尺寸语义稳定。
+6. i18n 切换：全页面无硬编码漏网。
+7. 安全测试：权限越权与敏感能力隔离。
+8. 性能测试：首屏、长任务、内存、主题切换。
+9. 鲁棒性：故障注入后的回退与恢复。
+10. 生态互操作：app/card/layout/module/theme 混合运行。
+
+### 21.1 验收判定方式
+
+| 测试类目 | 判定标准 |
+|---|---|
+| 契约测试 | 通过率 100%，无 schema 漂移 |
+| 单元测试 | 组件/服务门槛达标且关键路径全绿 |
+| 集成测试 | Bridge、Theme、Layout 链路无阻断 |
+| E2E | 关键业务路径与基线行为一致 |
+| 性能测试 | 不突破 16.1.1 建议阈值 |
+| 鲁棒性测试 | 故障注入后可恢复，无全局雪崩 |
+
+---
+
+## 22. 架构验收标准（详细）
+
+### 22.1 分层验收
+- 12层职责无越界。
+- 依赖方向无反向引用。
+
+### 22.2 跨层验收
+- `UI Hooks -> Runtime Client -> Bridge` 调用链闭环。
+- `Declarative UI -> Unified Rendering -> Theme Runtime` 渲染链闭环。
+
+### 22.3 生态级验收
+- 五类插件可在统一规范下开发与运行。
+- 三官方主题可在统一门禁下通过。
+- 模板产物开箱即合规。
+
+---
+
+## 23. 风险与阻塞治理（详细）
+
+### 23.1 风险热度图
+
+| 等级 | 风险项 | 现状 | 处置SLA |
+|---|---|---|---|
+| P0 | 框架分裂（React/Vue双轨） | settings 双入口（阶段07已闭环归档）、editor Vue+shim、template-app Vue 旧口径 | 24h 内裁决并冻结单口径 |
+| P0 | 主题与i18n动作命名分裂 | `getCSS/getAllCss/setCurrent` 与 `apply/getCurrent/setCurrent/getCurrentLanguage/getCurrent` 并存 | 24h 内冻结公共动作表 |
+| P1 | bridge-client 重复实现 | settings/editor/viewer/template 各自维护桥接胶水 | 3 天内统一 Runtime Client |
+| P1 | 主题包校验器不一致 | default/macaron/obsidian 校验严格度差异大 | 3 天内统一校验器 |
+| P1 | 组件覆盖与测试密度不足 | 13组件，部分组件单测低于5 | 阶段内补齐 |
+| P2 | 页面样式与文案硬编码残留 | viewer overlay 文案、样式值硬编码 | 随阶段治理 |
+
+### 23.2 阻塞触发条件
+- 缺失关键契约导致无法继续实现。
+- 缺失关键组件导致业务无法合规落地。
+- Host/SDK/Bridge 接口无法闭环。
+
+### 23.3 阻塞处理流程
+1. 先提交工单到 `项目日志和笔记/问题工单.md`
+2. 在阶段目录创建问题子任务文档
+3. 暂停当前任务线，等待裁决后继续
+
+---
+
+## 24. 附录
+
+### 24.1 术语表
+- **中心路由**：一切系统能力调用由内核路由统一分发。
+- **无头组件**：组件仅含行为与结构，不含视觉样式。
+- **页面自治**：页面自定义断点与布局策略，不依赖全局模板。
+- **契约门禁**：对 API/schema/manifest/主题接口点的自动化校验。
+
+### 24.2 证据索引（本轮复调查）
+
+| 编号 | 文档路径 | 代码路径 | 结论 | 影响层级 |
+|---|---|---|---|---|
+| E01 | `生态架构设计/01-薯片主机架构总览.md` | `Chips-Host/src/main/kernel/router.ts` | 架构原则与路由中心化一致，应继续强化 | L2-L4 |
+| E02 | `生态架构设计/05-插件桥接API设计.md` | `Chips-Host/src/preload/bridge.ts` | Bridge 单入口存在，子域API已扩展 | L5 |
+| E03 | `生态架构设计/06-通信协议与事件系统.md` | `Chips-Host/src/main/ipc/route-handler.ts` | 请求响应模型可闭环，需统一命名口径 | L2-L6 |
+| E04 | `生态架构设计/09-主题与设计系统架构.md` | `Chips-ComponentLibrary/packages/component-library/src/components/*.tsx` | 无头组件方向正确，接口点需扩展 | L10-L11 |
+| E05 | `生态共用/05-前端接口标准.md` | `chips-app-settings/src/main.ts` + `src/main.tsx` | 前端实现存在双入口分裂（历史快照，阶段07任务05已闭环） | L12 |
+| E06 | `生态共用/07-插件开发规范.md` | `chips-app-viewer/src/features/viewer/ViewerStateOverlay.tsx` | 用户文本硬编码仍存在 | L12 |
+| E07 | `生态共用/11-多语言系统规范.md` | `Chips-Host/src/main/services/i18n/i18n-service.ts` | i18n 服务主动作是 `getCurrentLanguage/setLanguage` | L3 |
+| E08 | `生态共用/20-主题包开发指南.md` | `chips-theme-default/manifest.yaml` | default manifest 存在重复 `theme` 字段 | L11 |
+| E09 | `生态架构设计/07-目录结构与技术选型.md` | `chips-template-app/package.json` | 模板仍指向 Vue + `@chips/components` 旧口径 | L12 |
+| E10 | `生态架构设计/11-架构审核与修正.md` | `Chips-Host/src/main/plugin/types.ts` | 五类插件类型定义齐全 | L4 |
+| E11 | `生态共用/04-系统接口标准.md` | `Chips-Host/src/main/services/theme/constants.ts` | theme 服务动作仍含 `setCurrent/getCSS` 旧口径 | L3 |
+| E12 | `生态共用/05-前端接口标准.md` | `Chips-SDK/src/composables/use-theme.ts` | SDK composables 仍是 Vue 形态，与 React 主线冲突 | L6-L7 |
+| E13 | `生态架构设计/09-主题与设计系统架构.md` | `chips-theme-default/contracts/theme-interface.contract.json` | 主题契约包含 13 组件接口点 | L10-L11 |
+| E14 | `生态架构设计/10-插件生态与开发体验.md` | `Chips-Host/src/main/bootstrap/service-bootstrap.ts` | 服务域已较完整，但接口语义需收敛 | L3 |
+| E15 | `生态共用/07-插件开发规范.md` | `chips-app-editor/src/shims/chips-components/index.ts` | editor 通过 shim 兼容，表明组件层未统一 | L10-L12 |
+| E16 | `生态共用/20-主题包开发指南.md` | `Chips-official-theme-macaron-premium/scripts/validate.js` | 主题校验假设 24 组件，和当前13组件口径冲突 | L11 |
+| E17 | `生态共用/20-主题包开发指南.md` | `Chips-official-theme-obsidian-business-theme/scripts/validate.js` | 校验严格度与 default/macaron 不一致 | L11 |
+| E18 | `生态架构设计/05-插件桥接API设计.md` | `chips-app-editor/src/services/bridge-client.ts` | 应用层重复桥接客户端仍存在 | L6-L12 |
+| E19 | `生态共用/05-前端接口标准.md` | `chips-app-settings/src/services/ecosystem-settings-service.ts` | 同一能力存在 `getCurrent/getCurrentTheme/getCurrentLanguage/setLocale` 混用 | L6-L12 |
+| E20 | `生态架构设计/04-插件系统与运行时设计.md` | `chips-template-card/manifest.yaml` | 模板 manifest 版本口径不一致（1.0 vs 1.0.0） | L4-L12 |
+
+### 24.3 分裂点总表（现状 vs 目标 vs 裁决）
+
+| 分裂点 | 现状口径 | 目标口径 | 裁决 |
+|---|---|---|---|
+| 前端框架 | settings 双入口（已归档闭环）、editor Vue、viewer React | React 单主线 | 统一 React 主线，Vue 仅保留归档 |
+| 组件包名 | `@chips/components` 与 `@chips/component-library` 并存 | `@chips/component-library` | 统一新包名 |
+| 主题动作 | `getCSS/getAllCss/getCurrent/setCurrent` 与 `apply` 并存 | `list/apply/getCurrent/getAllCss/resolve/contract.get` | 外部口径统一，内部兼容逐步退出 |
+| i18n 动作 | `getCurrentLanguage/setLanguage` 与 `getCurrent/setCurrent/setLocale` 并存 | `getCurrent + setCurrent`（控制面）与底层 canonical 映射清晰 | 明确“外部统一动作 + 底层映射表” |
+| 事件命名 | `theme.changed` 与 `theme:changed` 并存 | Bridge 外部统一 `theme.changed` | 内部 event bus 可保留但需映射 |
+| 模板栈 | `chips-template-app` 仍是 Vue 模板 | React 模板基线 | 模板全量升级 |
+| 主题校验器 | 三官方主题校验严格度不一致 | 单一校验器 | 统一校验脚本与合同来源 |
+
+### 24.4 选型评分矩阵（最优架构裁决）
+
+| 决策项 | 扩展性 | 解耦度 | 鲁棒性 | 开发者复杂度 | 性能上限 | 可测试性 | 可治理性 | 结论 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| React 单主线 | 5 | 5 | 4 | 4 | 4 | 5 | 5 | 采用 |
+| Bridge 三层分离 | 5 | 5 | 5 | 4 | 4 | 5 | 5 | 采用 |
+| 页面级自治 + cpx | 4 | 4 | 4 | 4 | 4 | 4 | 4 | 采用 |
+| 声明式 UI + 统一渲染 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | 采用 |
+| 主题契约化与统一校验 | 5 | 4 | 5 | 4 | 4 | 5 | 5 | 采用 |
+
+---
+
+## 结语
+
+本手册作为阶段18的全栈架构冻结基线：
+- 不讨论迁移兼容；
+- 以长期最优架构为唯一目标；
+- 通过“分层边界 + 公共接口 + 契约门禁 + 证据追溯”保障后续实施一致性。

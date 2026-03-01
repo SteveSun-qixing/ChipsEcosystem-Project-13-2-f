@@ -38,11 +38,58 @@ on方法用于订阅系统事件。
 
 ## 错误处理
 
-所有API调用都可能抛出错误。错误对象包含code属性表示错误类型，message属性表示错误描述。
+所有API调用都可能抛出错误。错误对象采用统一标准格式，包含以下字段：
 
-常见错误类型包括PERMISSION_DENIED权限不足，NOT_FOUND资源不存在，INVALID_ARGUMENT参数无效，INTERNAL_ERROR内部错误。
+```typescript
+interface StandardError {
+  code: string;        // 错误码
+  message: string;     // 错误描述
+  details?: unknown;   // 详细信息
+  retryable?: boolean; // 是否可重试
+}
+```
 
-建议使用try-catch捕获错误，并向用户提供友好的错误提示。错误应该被记录到日志系统。
+### 错误码体系
+
+错误码按层级分类：
+
+**Bridge 层错误 (BRIDGE_*)**：
+- `BRIDGE_TIMEOUT`：请求超时
+- `BRIDGE_UNAVAILABLE`：Bridge 不可用
+- `BRIDGE_INVALID_PAYLOAD`：载荷格式错误
+
+**Service 层错误 (SERVICE_*)**：
+- `SERVICE_FILE_NOT_FOUND`：文件不存在
+- `SERVICE_FILE_PERMISSION_DENIED`：文件权限被拒绝
+- `SERVICE_THEME_NOT_FOUND`：主题不存在
+- `SERVICE_I18N_KEY_MISSING`：国际化 key 不存在
+- `SERVICE_PLUGIN_INVALID`：插件无效
+- `SERVICE_PERMISSION_DENIED`：权限不足
+
+**Runtime 层错误 (RUNTIME_*)**：
+- `RUNTIME_RETRY_EXhausted`：重试次数耗尽
+- `RUNTIME_CIRCUIT_OPEN`：熔断器开启
+- `RUNTIME_ROUTE_TIMEOUT`：路由超时
+
+### 错误处理建议
+
+建议使用 try-catch 捕获错误，并向用户提供友好的错误提示：
+
+```typescript
+try {
+  const result = await window.chips.invoke('theme', 'apply', { id: 'dark' });
+} catch (error) {
+  if (error.retryable) {
+    // 显示可重试提示
+    console.log('操作失败，是否重试？');
+  } else {
+    // 显示永久错误提示
+    console.error(error.message);
+  }
+  // 记录错误日志
+  window.chips.invoke('log', 'write', { level: 'error', error });
+}
+```
 
 ## 性能优化
 

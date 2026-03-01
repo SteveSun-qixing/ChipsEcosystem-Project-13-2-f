@@ -70,6 +70,34 @@ os字段声明兼容的操作系统，数组形式如["darwin", "win32", "linux"
 
 插件可以定义自定义扩展字段，自定义字段以x-前缀开头。这些字段会被保留给插件特定用途。
 
+## 布局配置字段
+
+插件可以在 manifest.yaml 中声明页面级布局配置。
+
+ui.layout 字段定义布局参数：
+
+| 字段 | 说明 | 可选值 |
+|------|------|--------|
+| owner | 布局责任人 | `page` |
+| unit | 尺寸单位 | `cpx` |
+| baseWidth | 逻辑基准宽度 | `1024` |
+| contract | 布局契约文件路径 | 相对路径 |
+| minFunctionalSet | 最小功能集文件路径 | 相对路径 |
+
+示例：
+
+```yaml
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+    contract: ./contracts/page-layout.contract.json
+    minFunctionalSet: ./contracts/min-functional-set.json
+```
+
+> 遵循页面级响应式自治原则，不使用全局横竖模板。
+
 ## 验证规则
 
 系统对manifest进行验证：

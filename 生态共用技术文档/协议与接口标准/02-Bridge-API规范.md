@@ -81,6 +81,34 @@ storage子域提供本地存储能力，包括storage.get(key)读取数据，sto
 
 module子域提供模块加载能力，包括module.load(moduleId)加载模块，module.unload(moduleId)卸载模块，module.list()获取已加载模块列表。
 
+### plugin子域
+
+plugin子域提供插件信息查询能力，采用 vNext 冻结动作口径：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `plugin.getSelf()` | 获取当前插件自身信息 | 是 |
+| `plugin.list({ type?, capability? })` | 查询已安装插件列表 | 是 |
+| `plugin.get({ pluginId })` | 获取指定插件信息 | 是 |
+| `plugin.getCardPlugin({ cardType })` | 根据卡片类型获取渲染插件 | 是 |
+| `plugin.getLayoutPlugin({ layoutType })` | 根据布局类型获取布局插件 | 是 |
+
+**插件信息结构**：
+
+```ts
+interface PluginInfo {
+  id: string;           // 插件唯一标识
+  version: string;      // 插件版本
+  type: 'app' | 'card' | 'layout' | 'theme'; // 插件类型
+  name: string;         // 插件显示名称
+  description?: string; // 插件描述
+  installPath: string;  // 安装路径
+  capabilities?: string[]; // 插件能力列表
+}
+```
+
+**迁移说明**：旧动作 `getInstalled`、`getInfo`、`findCardPlugin` 已归档，仅做内部兼容映射。
+
 ## 类型定义
 
 Bridge API使用TypeScript编写完整的类型定义。所有接口都有明确的类型标注，包括请求参数类型和响应数据类型。类型定义文件chips.d.ts随SDK一起发布，开发者可以导入到项目中获得代码补全和类型检查。
@@ -129,3 +157,78 @@ interface StandardError {
 订阅卡片创建事件的示例：调用const subscriptionId = window.chips.on('card.created', (event) => { console.log('New card created:', event.data) })，返回订阅ID用于后续取消订阅。
 
 打开文件选择对话框的示例：调用const result = await window.chips.invoke('dialog', 'open', {filters: [{name: 'Cards', extensions: ['card']}]})，返回用户选择的文件路径数组。
+
+## 权限控制
+
+### API 权限映射
+
+并非所有 Bridge API 都无条件开放。部分 API 需要插件在 manifest.yaml 中声明对应权限：
+
+| API | 需要的权限 | 说明 |
+|-----|-----------|------|
+| `chips.invoke('file', 'read')` | file.read | 读取文件 |
+| `chips.invoke('file', 'write')` | file.write | 写入文件 |
+| `chips.invoke('file', 'delete')` | file.delete | 删除文件 |
+| `chips.invoke('resource', 'fetch')` | resource.fetch | 网络请求 |
+| `chips.invoke('card', 'read*')` | card.read | 读取卡片 |
+| `chips.invoke('card', 'write*')` | card.write | 修改卡片 |
+| `chips.window.openPlugin()` | window.create | 创建窗口 |
+| `chips.shell.openExternal()` | shell.openExternal | 打开外部链接 |
+
+### 权限检查流程
+
+```
+1. 插件调用 chips.invoke('file', 'write', {...})
+2. Bridge 将请求发送到主进程
+3. 主进程 IPC 处理器识别请求来自哪个窗口
+4. 查询该窗口对应的插件 ID
+5. 从注册表获取该插件的权限列表
+6. 检查 'file.write' 是否在权限列表中
+7. 如果有权限，转发给路由器执行
+8. 如果无权限，返回 PERMISSION_DENIED 错误
+```
+
+### 无需权限的 API
+
+以下 API 对所有插件无条件开放：
+
+- `chips.on()` / `chips.emit()`（事件系统）
+- `chips.window.close/minimize/maximize`（窗口基本操作）
+- `chips.window.setTitle/getSize/getPosition`（窗口信息）
+- `chips.plugin.getSelf()`（获取自身信息）
+- `chips.invoke('i18n', 'translate')`（翻译文本）
+- `chips.invoke('config', 'get')`（读取配置，不含敏感项）
+- `chips.invoke('theme', 'get*')`（获取主题）
+
+## SDK 封装
+
+薯片 SDK 是 Bridge API 的高层封装，为插件开发者提供更友好的开发体验：
+
+```typescript
+// SDK 封装示例
+import { ChipsSDK } from '@chips/sdk';
+
+const sdk = new ChipsSDK();
+
+// SDK 提供类型安全的 API
+const metadata = await sdk.card.getMetadata('/path/to/card.card');
+// 而不是 chips.invoke('card', 'getMetadata', { cardPath: '...' })
+
+// SDK 提供 Vue/React 集成
+const { useTheme } = sdk.composables;
+const theme = useTheme(); // 自动响应主题变化
+
+// SDK 提供卡片渲染辅助
+const renderer = sdk.createCardRenderer(containerElement);
+await renderer.loadCard('/path/to/card.card');
+```
+
+SDK 是可选的。插件可以直接使用 `window.chips.*` 原始 API，也可以通过 SDK 获得更好的开发体验。SDK 本身是纯前端代码，运行在渲染进程中，底层仍然通过 Bridge API 与主进程通信。
+
+### SDK 缓存策略
+
+SDK 可以在渲染进程中维护缓存，减少 IPC 调用：
+
+- **配置数据缓存**：config 值在读取后缓存，监听变化事件自动更新
+- **主题 CSS 缓存**：主题不频繁变化，可长期缓存
+- **翻译文本缓存**：语言切换时清除

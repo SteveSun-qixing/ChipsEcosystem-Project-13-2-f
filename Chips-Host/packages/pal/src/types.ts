@@ -6,6 +6,9 @@ export interface WindowOptions {
   height: number;
   resizable?: boolean;
   alwaysOnTop?: boolean;
+  url?: string;
+  pluginId?: string;
+  sessionId?: string;
 }
 
 export interface WindowState {
@@ -15,6 +18,9 @@ export interface WindowState {
   height: number;
   focused: boolean;
   state: 'normal' | 'minimized' | 'maximized' | 'fullscreen';
+  url?: string;
+  pluginId?: string;
+  sessionId?: string;
 }
 
 export interface FileReadOptions {

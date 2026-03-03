@@ -6,6 +6,12 @@ export interface BridgeInvokeHandler {
 
 export type BridgeEventHandler = (data: unknown) => void;
 
+export interface BridgeEventAdapter {
+  on(event: string, handler: BridgeEventHandler): () => void;
+  once(event: string, handler: BridgeEventHandler): void;
+  emit(event: string, data?: unknown): void;
+}
+
 export interface ChipsBridge {
   invoke<T = unknown>(action: string, payload?: unknown): Promise<T>;
   on(event: string, handler: BridgeEventHandler): () => void;
@@ -45,13 +51,15 @@ export interface ChipsBridge {
 
 export class BridgeTransport implements ChipsBridge {
   private readonly emitter = new EventEmitter();
+  private readonly eventAdapter?: BridgeEventAdapter;
   public readonly window: ChipsBridge['window'];
   public readonly dialog: ChipsBridge['dialog'];
   public readonly plugin: ChipsBridge['plugin'];
   public readonly clipboard: ChipsBridge['clipboard'];
   public readonly shell: ChipsBridge['shell'];
 
-  public constructor(private readonly invokeHandler: BridgeInvokeHandler) {
+  public constructor(private readonly invokeHandler: BridgeInvokeHandler, options?: { eventAdapter?: BridgeEventAdapter }) {
+    this.eventAdapter = options?.eventAdapter;
     this.window = {
       open: async (config) => this.invoke<unknown>('window.open', { config }),
       focus: async (windowId) => {
@@ -115,6 +123,9 @@ export class BridgeTransport implements ChipsBridge {
   }
 
   public on(event: string, handler: BridgeEventHandler): () => void {
+    if (this.eventAdapter) {
+      return this.eventAdapter.on(event, handler);
+    }
     this.emitter.on(event, handler);
     return () => {
       this.emitter.off(event, handler);
@@ -122,10 +133,18 @@ export class BridgeTransport implements ChipsBridge {
   }
 
   public once(event: string, handler: BridgeEventHandler): void {
+    if (this.eventAdapter) {
+      this.eventAdapter.once(event, handler);
+      return;
+    }
     this.emitter.once(event, handler);
   }
 
   public emit(event: string, data?: unknown): void {
+    if (this.eventAdapter) {
+      this.eventAdapter.emit(event, data);
+      return;
+    }
     this.emitter.emit(event, data);
   }
 

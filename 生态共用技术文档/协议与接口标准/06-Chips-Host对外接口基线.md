@@ -135,6 +135,7 @@ interface StandardError {
 - 运行管理：`start/stop/status`
 - 配置管理：`config list/set/reset`
 - 运行观察：`logs/doctor`
+- 文件入口：`open <target-file>`
 - 插件管理：`plugin install/uninstall/list`
 - 更新管理：`update check/install`
 

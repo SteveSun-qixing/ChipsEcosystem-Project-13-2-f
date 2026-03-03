@@ -16,9 +16,9 @@ interface HostServiceContext {
   pal: PALAdapter;
   workspacePath: string;
   logger: StructuredLogger;
-  cardService: CardService;
-  boxService: BoxService;
-  zipService: StoreZipService;
+  getCardService: () => CardService;
+  getBoxService: () => BoxService;
+  getZipService: () => StoreZipService;
   runtime: PluginRuntime;
 }
 
@@ -1128,7 +1128,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'card.parse', async (input) => {
-            const ast = await ctx.cardService.parse(input.cardFile);
+            const ast = await ctx.getCardService().parse(input.cardFile);
             return { ast };
           })
         )
@@ -1141,7 +1141,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'card.render', async (input) => {
-            const view = await ctx.cardService.render(input.cardFile);
+            const view = await ctx.getCardService().render(input.cardFile);
             return { view };
           })
         )
@@ -1154,7 +1154,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'card.validate', async (input) => {
-            const result = await ctx.cardService.validate(input.cardFile);
+            const result = await ctx.getCardService().validate(input.cardFile);
             return result;
           })
         )
@@ -1173,7 +1173,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'box.pack', async (input) => {
-            const boxFile = await ctx.boxService.pack(input.boxDir, input.outputPath);
+            const boxFile = await ctx.getBoxService().pack(input.boxDir, input.outputPath);
             return { boxFile };
           })
         )
@@ -1186,7 +1186,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'box.unpack', async (input) => {
-            const outputDir = await ctx.boxService.unpack(input.boxFile, input.outputDir);
+            const outputDir = await ctx.getBoxService().unpack(input.boxFile, input.outputDir);
             return { outputDir };
           })
         )
@@ -1199,7 +1199,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'box.inspect', async (input) => {
-            const inspection = await ctx.boxService.inspect(input.boxFile);
+            const inspection = await ctx.getBoxService().inspect(input.boxFile);
             return { inspection };
           })
         )
@@ -1218,7 +1218,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'zip.compress', async (input) => {
-            await ctx.zipService.compress(input.inputDir, input.outputZip);
+            await ctx.getZipService().compress(input.inputDir, input.outputZip);
             return { outputZip: input.outputZip };
           })
         )
@@ -1231,7 +1231,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'zip.extract', async (input) => {
-            await ctx.zipService.extract(input.zipPath, input.outputDir);
+            await ctx.getZipService().extract(input.zipPath, input.outputDir);
             return { outputDir: input.outputDir };
           })
         )
@@ -1244,7 +1244,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'zip.list', async (input) => {
-            const entries = await ctx.zipService.list(input.zipPath);
+            const entries = await ctx.getZipService().list(input.zipPath);
             return { entries };
           })
         )

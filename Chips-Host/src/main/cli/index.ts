@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
 import { HostApplication } from '../core/host-application';
+import { openAssociatedFile } from '../core/file-association';
 import { RuntimeClient } from '../../renderer/runtime-client';
 
 const stateFile = (workspace: string) => path.join(workspace, 'host-state.json');
@@ -59,7 +60,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   const { command, subcommand, args } = parseArgs(argv);
 
   if (command === 'help') {
-    print('chips host <start|stop|status|config|logs|plugin|update|doctor>');
+    print('chips host <start|stop|status|config|logs|plugin|update|doctor|open>');
     return 0;
   }
 
@@ -247,6 +248,24 @@ export const runCli = async (argv: string[]): Promise<number> => {
     };
     print({ checks });
     return 0;
+  }
+
+  if (command === 'open') {
+    const targetPath = subcommand ?? args[0];
+    if (!targetPath) {
+      print({ error: 'open requires target file path' });
+      return 1;
+    }
+
+    try {
+      const result = await withHost(workspace, async (runtime) => openAssociatedFile(runtime, targetPath));
+      print(result);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      print({ error: message });
+      return 1;
+    }
   }
 
   print({ error: `unknown command: ${command}` });

@@ -168,6 +168,51 @@ export const runCli = async (argv: string[]): Promise<number> => {
       return 0;
     }
 
+    if (subcommand === 'enable') {
+      const [pluginId] = args;
+      if (!pluginId) {
+        print({ error: 'plugin enable requires plugin id' });
+        return 1;
+      }
+      await withHost(workspace, async (runtime) => {
+        await runtime.invoke('plugin.enable', { pluginId });
+      });
+      const plugin = plugins.find((item) => item.id === pluginId);
+      if (plugin) {
+        plugin.enabled = true;
+      }
+      await writeJson(pluginFile(workspace), plugins);
+      print({ ok: true });
+      return 0;
+    }
+
+    if (subcommand === 'disable') {
+      const [pluginId] = args;
+      if (!pluginId) {
+        print({ error: 'plugin disable requires plugin id' });
+        return 1;
+      }
+      await withHost(workspace, async (runtime) => {
+        await runtime.invoke('plugin.disable', { pluginId });
+      });
+      const plugin = plugins.find((item) => item.id === pluginId);
+      if (plugin) {
+        plugin.enabled = false;
+      }
+      await writeJson(pluginFile(workspace), plugins);
+      print({ ok: true });
+      return 0;
+    }
+
+    if (subcommand === 'query') {
+      const [type, capability] = args;
+      const result = await withHost(workspace, async (runtime) => {
+        return runtime.invoke('plugin.query', { type, capability });
+      });
+      print(result);
+      return 0;
+    }
+
     print({ error: 'unsupported plugin command' });
     return 1;
   }

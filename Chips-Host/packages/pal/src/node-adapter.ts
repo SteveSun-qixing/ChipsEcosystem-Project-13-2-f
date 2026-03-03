@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { createError } from '../../../src/shared/errors';
 import {
@@ -10,18 +12,29 @@ import {
 } from '../../../src/main/electron/electron-loader';
 import { createId } from '../../../src/shared/utils';
 import type {
+  ClipboardFormat,
+  ClipboardImagePayload,
+  ClipboardPayload,
   DialogFileOptions,
   DialogMessageOptions,
   DialogSaveOptions,
+  FileWatchEvent,
+  FileWatchSubscription,
   FileListOptions,
   FileReadOptions,
   PALAdapter,
   PALClipboard,
   PALDialog,
   PALFileSystem,
+  PALIPC,
   PALNotification,
   PALPlatform,
   PALPower,
+  PALIpcChannelInfo,
+  PALIpcCreateOptions,
+  PALIpcMessage,
+  PALIpcReceiveOptions,
+  PALIpcTransport,
   PALShell,
   PALShortcut,
   PALTray,
@@ -349,6 +362,38 @@ class NodeFileSystem implements PALFileSystem {
 
     return list;
   }
+
+  public async watch(inputPath: string, onEvent: (event: FileWatchEvent) => void): Promise<FileWatchSubscription> {
+    const normalizedPath = this.normalize(inputPath);
+    const watchId = createId();
+
+    let watcher: fsSync.FSWatcher;
+    try {
+      watcher = fsSync.watch(normalizedPath, { persistent: false }, (eventType, filename) => {
+        const resolvedPath =
+          typeof filename === 'string' && filename.length > 0
+            ? path.join(path.dirname(normalizedPath), filename)
+            : normalizedPath;
+        onEvent({
+          type: eventType === 'rename' ? 'rename' : 'change',
+          path: resolvedPath,
+          timestamp: Date.now()
+        });
+      });
+    } catch (error) {
+      throw createError('PAL_FS_WATCH_FAILED', `Unable to watch path: ${normalizedPath}`, {
+        path: normalizedPath,
+        reason: String(error)
+      });
+    }
+
+    return {
+      id: watchId,
+      close: async () => {
+        watcher.close();
+      }
+    };
+  }
 }
 
 class NodeDialog implements PALDialog {
@@ -566,9 +611,47 @@ class NodeDialog implements PALDialog {
 }
 
 class NodeClipboard implements PALClipboard {
-  public async read(format: 'text' = 'text'): Promise<string> {
+  private static readonly filesBufferFormat = 'chips/files';
+  private readonly electron = loadElectronModule();
+
+  public async read(format: ClipboardFormat = 'text'): Promise<ClipboardPayload> {
+    if (this.electron?.clipboard) {
+      if (format === 'text') {
+        return this.electron.clipboard.readText();
+      }
+
+      if (format === 'image') {
+        const image = this.electron.clipboard.readImage();
+        const png = image.toPNG();
+        return {
+          base64: png.toString('base64'),
+          mimeType: 'image/png'
+        };
+      }
+
+      const raw = this.electron.clipboard.readBuffer(NodeClipboard.filesBufferFormat);
+      if (raw.length > 0) {
+        try {
+          const parsed = JSON.parse(raw.toString('utf-8'));
+          return NodeClipboard.asFileList(parsed);
+        } catch {
+          throw createError('PAL_CLIPBOARD_FILE_LIST_INVALID', 'Clipboard file list is corrupted');
+        }
+      }
+
+      const text = this.electron.clipboard.readText();
+      const files: string[] = [];
+      for (const candidate of text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+        const stats = await statSafe(candidate);
+        if (stats) {
+          files.push(path.resolve(candidate));
+        }
+      }
+      return files;
+    }
+
     if (format !== 'text') {
-      throw createError('PAL_CLIPBOARD_UNSUPPORTED_FORMAT', `Unsupported clipboard format: ${format}`);
+      throw createError('PAL_CLIPBOARD_UNSUPPORTED_FORMAT', `Unsupported clipboard format without Electron runtime: ${format}`);
     }
 
     if (process.platform === 'darwin') {
@@ -592,9 +675,38 @@ class NodeClipboard implements PALClipboard {
     throw createError('PAL_CLIPBOARD_UNSUPPORTED', 'Clipboard read requires pbpaste, powershell, wl-paste, xclip, or xsel');
   }
 
-  public async write(data: string, format: 'text' = 'text'): Promise<void> {
+  public async write(data: ClipboardPayload, format: ClipboardFormat = 'text'): Promise<void> {
+    if (this.electron?.clipboard) {
+      if (format === 'text') {
+        if (typeof data !== 'string') {
+          throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Text clipboard data must be a string');
+        }
+        this.electron.clipboard.writeText(data);
+        return;
+      }
+
+      if (format === 'image') {
+        const payload = NodeClipboard.asImagePayload(data);
+        if (!this.electron.nativeImage) {
+          throw createError('PAL_CLIPBOARD_UNSUPPORTED', 'Electron nativeImage is required for image clipboard writes');
+        }
+        const image = this.electron.nativeImage.createFromBuffer(Buffer.from(payload.base64, 'base64'));
+        this.electron.clipboard.writeImage(image);
+        return;
+      }
+
+      const files = NodeClipboard.asFileList(data).map((item) => path.resolve(item));
+      this.electron.clipboard.writeBuffer(NodeClipboard.filesBufferFormat, Buffer.from(JSON.stringify(files), 'utf-8'));
+      this.electron.clipboard.writeText(files.join(os.EOL));
+      return;
+    }
+
     if (format !== 'text') {
-      throw createError('PAL_CLIPBOARD_UNSUPPORTED_FORMAT', `Unsupported clipboard format: ${format}`);
+      throw createError('PAL_CLIPBOARD_UNSUPPORTED_FORMAT', `Unsupported clipboard format without Electron runtime: ${format}`);
+    }
+
+    if (typeof data !== 'string') {
+      throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Text clipboard data must be a string');
     }
 
     if (process.platform === 'darwin') {
@@ -622,6 +734,31 @@ class NodeClipboard implements PALClipboard {
     }
 
     throw createError('PAL_CLIPBOARD_UNSUPPORTED', 'Clipboard write requires pbcopy, powershell, wl-copy, xclip, or xsel');
+  }
+
+  private static asImagePayload(data: ClipboardPayload): ClipboardImagePayload {
+    if (!data || typeof data !== 'object') {
+      throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Image clipboard payload must be object');
+    }
+    const candidate = data as unknown as Record<string, unknown>;
+    if (typeof candidate.base64 !== 'string' || candidate.base64.length === 0) {
+      throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Image clipboard payload requires base64');
+    }
+    return {
+      base64: candidate.base64,
+      mimeType: typeof candidate.mimeType === 'string' ? candidate.mimeType : undefined
+    };
+  }
+
+  private static asFileList(data: unknown): string[] {
+    if (!Array.isArray(data)) {
+      throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Files clipboard payload must be string[]');
+    }
+    const files = data.map((item) => (typeof item === 'string' ? item.trim() : '')).filter((item) => item.length > 0);
+    if (files.length !== data.length) {
+      throw createError('PAL_CLIPBOARD_INVALID_PAYLOAD', 'Files clipboard payload must contain only non-empty strings');
+    }
+    return files;
   }
 }
 
@@ -855,6 +992,228 @@ class NodePlatform implements PALPlatform {
   }
 }
 
+interface PendingIpcReceiver {
+  resolve: (message: PALIpcMessage) => void;
+  reject: (error: unknown) => void;
+  timer?: NodeJS.Timeout;
+}
+
+interface NodeIpcChannelState {
+  info: PALIpcChannelInfo;
+  maxBufferBytes: number;
+  queue: PALIpcMessage[];
+  pending: PendingIpcReceiver[];
+  server?: net.Server;
+}
+
+class NodeIPC implements PALIPC {
+  private readonly channels = new Map<string, NodeIpcChannelState>();
+
+  public async createChannel(options: PALIpcCreateOptions): Promise<PALIpcChannelInfo> {
+    const trimmedName = options.name.trim();
+    if (trimmedName.length === 0) {
+      throw createError('PAL_IPC_INVALID_CHANNEL', 'IPC channel name is required');
+    }
+    if (options.transport === 'unix-socket' && process.platform === 'win32') {
+      throw createError('PAL_IPC_UNSUPPORTED_TRANSPORT', 'Unix domain socket is not supported on Windows');
+    }
+
+    const channelId = createId();
+    const endpoint = this.createEndpoint(trimmedName, channelId, options.transport);
+    const info: PALIpcChannelInfo = {
+      channelId,
+      name: trimmedName,
+      transport: options.transport,
+      endpoint
+    };
+    const state: NodeIpcChannelState = {
+      info,
+      maxBufferBytes: options.maxBufferBytes ?? 4 * 1024 * 1024,
+      queue: [],
+      pending: []
+    };
+    this.channels.set(channelId, state);
+
+    if (options.transport !== 'shared-memory') {
+      state.server = await this.createServer(state);
+    }
+
+    return { ...info };
+  }
+
+  public async send(channelId: string, payload: Buffer | string): Promise<void> {
+    const state = this.requireChannel(channelId);
+    const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload, 'utf-8');
+    if (body.length > state.maxBufferBytes) {
+      throw createError('PAL_IPC_PAYLOAD_TOO_LARGE', `IPC payload exceeds limit for channel: ${state.info.name}`, {
+        size: body.length,
+        maxBufferBytes: state.maxBufferBytes
+      });
+    }
+
+    if (state.info.transport === 'shared-memory') {
+      this.pushMessage(state, body);
+      return;
+    }
+
+    const endpoint = state.info.endpoint;
+    if (!endpoint) {
+      throw createError('PAL_IPC_ENDPOINT_MISSING', `IPC endpoint missing for channel: ${state.info.name}`);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const client = net.createConnection(endpoint);
+      client.once('error', (error) => {
+        reject(createError('PAL_IPC_SEND_FAILED', `IPC send failed for channel: ${state.info.name}`, { reason: String(error) }));
+      });
+      client.once('connect', () => {
+        client.write(body);
+        client.end();
+      });
+      client.once('close', () => {
+        resolve();
+      });
+    });
+  }
+
+  public async receive(channelId: string, options?: PALIpcReceiveOptions): Promise<PALIpcMessage> {
+    const state = this.requireChannel(channelId);
+    const immediate = state.queue.shift();
+    if (immediate) {
+      return immediate;
+    }
+
+    return new Promise<PALIpcMessage>((resolve, reject) => {
+      const pending: PendingIpcReceiver = {
+        resolve,
+        reject
+      };
+      const timeoutMs = options?.timeoutMs;
+      if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+        pending.timer = setTimeout(() => {
+          state.pending = state.pending.filter((item) => item !== pending);
+          reject(createError('PAL_IPC_RECEIVE_TIMEOUT', `IPC receive timeout for channel: ${state.info.name}`, { timeoutMs }));
+        }, timeoutMs);
+      }
+      state.pending.push(pending);
+    });
+  }
+
+  public async closeChannel(channelId: string): Promise<void> {
+    const state = this.channels.get(channelId);
+    if (!state) {
+      return;
+    }
+
+    this.channels.delete(channelId);
+    for (const pending of state.pending) {
+      if (pending.timer) {
+        clearTimeout(pending.timer);
+      }
+      pending.reject(createError('PAL_IPC_CHANNEL_CLOSED', `IPC channel closed: ${state.info.name}`));
+    }
+    state.pending = [];
+
+    if (state.server) {
+      await new Promise<void>((resolve) => {
+        state.server!.close(() => resolve());
+      });
+    }
+
+    if (state.info.endpoint && this.isSocketPath(state.info.endpoint)) {
+      await fs.rm(state.info.endpoint, { force: true });
+    }
+  }
+
+  public async listChannels(): Promise<PALIpcChannelInfo[]> {
+    return [...this.channels.values()].map((state) => ({ ...state.info }));
+  }
+
+  private requireChannel(channelId: string): NodeIpcChannelState {
+    const state = this.channels.get(channelId);
+    if (!state) {
+      throw createError('PAL_IPC_CHANNEL_NOT_FOUND', `IPC channel not found: ${channelId}`);
+    }
+    return state;
+  }
+
+  private pushMessage(state: NodeIpcChannelState, payload: Buffer): void {
+    const message: PALIpcMessage = {
+      channelId: state.info.channelId,
+      transport: state.info.transport,
+      payload,
+      receivedAt: Date.now()
+    };
+
+    const pending = state.pending.shift();
+    if (pending) {
+      if (pending.timer) {
+        clearTimeout(pending.timer);
+      }
+      pending.resolve(message);
+      return;
+    }
+
+    state.queue.push(message);
+  }
+
+  private async createServer(state: NodeIpcChannelState): Promise<net.Server> {
+    const endpoint = state.info.endpoint;
+    if (!endpoint) {
+      throw createError('PAL_IPC_ENDPOINT_MISSING', `IPC endpoint missing for channel: ${state.info.name}`);
+    }
+
+    if (this.isSocketPath(endpoint)) {
+      await fs.rm(endpoint, { force: true });
+    }
+
+    const server = net.createServer((socket) => {
+      const chunks: Buffer[] = [];
+      socket.on('data', (chunk) => {
+        const nextChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        chunks.push(nextChunk);
+      });
+      socket.on('end', () => {
+        const payload = Buffer.concat(chunks);
+        this.pushMessage(state, payload);
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: unknown) => {
+        server.off('listening', onListening);
+        reject(createError('PAL_IPC_BIND_FAILED', `IPC bind failed for channel: ${state.info.name}`, { reason: String(error) }));
+      };
+      const onListening = () => {
+        server.off('error', onError);
+        resolve();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(endpoint);
+    });
+
+    server.on('error', () => {});
+    return server;
+  }
+
+  private createEndpoint(name: string, channelId: string, transport: PALIpcTransport): string | undefined {
+    const normalizedName = name.replace(/[^a-zA-Z0-9_-]/g, '-');
+    if (transport === 'shared-memory') {
+      return undefined;
+    }
+    if (transport === 'named-pipe' && process.platform === 'win32') {
+      return `\\\\.\\pipe\\chips-${normalizedName}-${channelId}`;
+    }
+    const suffix = transport === 'named-pipe' ? 'pipe' : 'sock';
+    return path.join(os.tmpdir(), `chips-${suffix}-${normalizedName}-${channelId}.sock`);
+  }
+
+  private isSocketPath(endpoint: string): boolean {
+    return !endpoint.startsWith('\\\\.\\pipe\\');
+  }
+}
+
 export class NodePalAdapter implements PALAdapter {
   public readonly window: PALWindow = new NodeWindowManager();
   public readonly fs: PALFileSystem = new NodeFileSystem();
@@ -866,4 +1225,5 @@ export class NodePalAdapter implements PALAdapter {
   public readonly notification: PALNotification = new NodeNotification();
   public readonly shortcut: PALShortcut = new NodeShortcut();
   public readonly power: PALPower = new NodePower();
+  public readonly ipc: PALIPC = new NodeIPC();
 }

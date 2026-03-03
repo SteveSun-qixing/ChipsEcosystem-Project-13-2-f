@@ -34,6 +34,7 @@ describe('BridgeTransport', () => {
     await bridge.notification.show({ title: 'chips', body: 'ready' });
     await bridge.tray.getState();
     await bridge.shortcut.list();
+    await bridge.ipc.listChannels();
 
     expect(actions).toEqual([
       'window.open',
@@ -43,7 +44,8 @@ describe('BridgeTransport', () => {
       'platform.shellOpenExternal',
       'platform.notificationShow',
       'platform.trayGetState',
-      'platform.shortcutList'
+      'platform.shortcutList',
+      'platform.ipcListChannels'
     ]);
   });
 });

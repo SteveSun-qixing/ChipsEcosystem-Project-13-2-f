@@ -3,7 +3,7 @@
 ## 1. 目标
 
 - 将系统能力统一收敛到 `platform.*` 服务域动作，Bridge 子域仅保留语义入口。
-- 补齐 PAL 侧托盘、通知、快捷键、电源能力，消除“能力声明存在但实现缺失”的断层。
+- 补齐 PAL 侧文件监控、剪贴板多格式、托盘/通知/快捷键/电源与本地 IPC 能力，消除“能力声明存在但实现缺失”的断层。
 - 在 Kernel 路由层对非幂等动作启用 `requestId` 防重放窗口，满足质量文档的 `NFR-SEC-003`。
 
 ## 2. PAL Node 适配器落地
@@ -21,11 +21,16 @@
 
 ### 2.2 Clipboard
 
-- 当前基线只支持 `text` 格式。
+- 支持格式：`text`、`image`、`files`。
+- Electron 优先策略：
+  - 文本：`clipboard.readText/writeText`
+  - 图片：`clipboard.readImage/writeImage` + `nativeImage`
+  - 文件列表：`clipboard.readBuffer/writeBuffer('chips/files')`，并回填文本路径行
 - 平台策略：
   - macOS：`pbcopy/pbpaste`
   - Windows：`powershell Set-Clipboard/Get-Clipboard`
   - Linux：`wl-copy/wl-paste`，回退 `xclip/xsel`
+  - 非 Electron 环境仅支持 `text`，其余格式明确返回 `PAL_CLIPBOARD_UNSUPPORTED_FORMAT`
 
 ### 2.3 Shell
 
@@ -42,15 +47,24 @@
 - Shortcut：`register/unregister/isRegistered/list/clear`，Electron 环境对接 `globalShortcut`。
 - Power：`getState/setPreventSleep`，Electron 环境对接 `powerMonitor/powerSaveBlocker`。
 
+### 2.5 File Watch / IPC
+
+- File Watch：`fs.watch(path, callback)`，返回可关闭订阅句柄，统一输出 `rename/change` 事件。
+- IPC：新增 `PALIPC` 抽象，提供 `createChannel/send/receive/closeChannel/listChannels`：
+  - `named-pipe`：Windows 使用 `\\\\.\\pipe\\...`；非 Windows 回退本地 socket 路径。
+  - `unix-socket`：类 Unix 使用 socket 文件路径；Windows 明确拒绝。
+  - `shared-memory`：进程内高性能队列语义，支持超时接收。
+
 ## 3. 服务层路由绑定
 
 实现文件：`src/main/services/register-host-services.ts`
 
 - `platform.openExternal/platform.shellOpenExternal` 统一转发到 `ctx.pal.shell.openExternal`。
 - `platform.dialog*` 路由统一走 `ctx.pal.dialog.*`，并对 `message` 必填字段做入站校验。
-- `platform.clipboard*` 路由统一走 `ctx.pal.clipboard.*`，仅接受 `text`。
+- `platform.clipboard*` 路由统一走 `ctx.pal.clipboard.*`，支持 `text/image/files` 并做格式级校验。
 - `platform.shell*` 路由统一走 `ctx.pal.shell.*`，不再使用文件系统探测替代真实动作。
 - 新增 `platform.notificationShow/platform.tray*/platform.shortcut*/platform.power*` 路由，完整覆盖 PAL 系统能力面。
+- 新增 `file.watch` 单次监听路由与 `platform.ipcCreateChannel/platform.ipcSend/platform.ipcReceive/platform.ipcCloseChannel/platform.ipcListChannels`。
 
 ## 4. Kernel 防重放机制
 
@@ -67,4 +81,6 @@
   - 新增非幂等请求重放拒绝用例
   - 新增幂等请求重复放行用例
 - `tests/unit/host-services-pal-routing.test.ts`
-  - 校验 `platform.dialog*/clipboard*/shell*/notification/tray/shortcut/power` 全量路由是否正确转发到 PAL
+  - 校验 `platform.dialog*/clipboard*/shell*/notification/tray/shortcut/power/ipc` 全量路由是否正确转发到 PAL
+- `tests/unit/pal-capabilities.test.ts`
+  - 校验 Node PAL 的 `watch`、多格式剪贴板与 IPC 通道能力

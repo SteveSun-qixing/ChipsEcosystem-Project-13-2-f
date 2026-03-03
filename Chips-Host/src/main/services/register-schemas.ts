@@ -10,6 +10,7 @@ export const registerHostSchemas = (): void => {
   registerPair('file.write', ['path', 'content']);
   registerPair('file.stat', ['path']);
   registerPair('file.list', ['dir']);
+  registerPair('file.watch', ['path']);
 
   registerPair('resource.resolve', ['resourceId']);
   registerPair('resource.readMetadata', ['resourceId']);
@@ -59,6 +60,11 @@ export const registerHostSchemas = (): void => {
   registerPair('platform.shortcutClear', []);
   registerPair('platform.powerGetState', []);
   registerPair('platform.powerSetPreventSleep', ['prevent']);
+  registerPair('platform.ipcCreateChannel', ['name', 'transport']);
+  registerPair('platform.ipcSend', ['channelId', 'payload']);
+  registerPair('platform.ipcReceive', ['channelId']);
+  registerPair('platform.ipcCloseChannel', ['channelId']);
+  registerPair('platform.ipcListChannels', []);
 
   registerPair('plugin.install', ['manifestPath']);
   registerPair('plugin.enable', ['pluginId']);

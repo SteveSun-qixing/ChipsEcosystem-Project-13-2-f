@@ -19,6 +19,13 @@ export interface ElectronContextBridgeLike {
   exposeInMainWorld(name: string, api: unknown): void;
 }
 
+export interface ElectronAppLike {
+  whenReady(): Promise<void>;
+  on(event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void): void;
+  off(event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void): void;
+  quit(): void;
+}
+
 export interface ElectronWebContentsLike {
   id: number;
   send(channel: string, payload: unknown): void;
@@ -94,7 +101,25 @@ export interface ElectronPowerSaveBlockerLike {
   isStarted(id: number): boolean;
 }
 
+export interface ElectronNativeImageLike {
+  toPNG(): Buffer;
+}
+
+export interface ElectronNativeImageModuleLike {
+  createFromBuffer(buffer: Buffer): ElectronNativeImageLike;
+}
+
+export interface ElectronClipboardLike {
+  readText(): string;
+  writeText(text: string): void;
+  readImage(): ElectronNativeImageLike;
+  writeImage(image: ElectronNativeImageLike): void;
+  readBuffer(format: string): Buffer;
+  writeBuffer(format: string, buffer: Buffer): void;
+}
+
 export interface ElectronModuleLike {
+  app?: ElectronAppLike;
   ipcMain?: ElectronIpcMainLike;
   ipcRenderer?: ElectronIpcRendererLike;
   contextBridge?: ElectronContextBridgeLike;
@@ -105,6 +130,8 @@ export interface ElectronModuleLike {
   Menu?: ElectronMenuLike;
   powerMonitor?: ElectronPowerMonitorLike;
   powerSaveBlocker?: ElectronPowerSaveBlockerLike;
+  clipboard?: ElectronClipboardLike;
+  nativeImage?: ElectronNativeImageModuleLike;
 }
 
 const readElectronMock = (): ElectronModuleLike | undefined => {

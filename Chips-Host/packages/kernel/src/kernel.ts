@@ -2,6 +2,8 @@ import { createError } from '../../../src/shared/errors';
 import type { RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../../src/shared/types';
 import { EventBus } from './event-bus';
 import { LifecycleManager } from './lifecycle';
+import type { KernelModuleDefinition, KernelModuleRecord } from './module-loader';
+import { ModuleLoader } from './module-loader';
 import { ServiceRegistry } from './registry';
 import { KernelRouter } from './router';
 
@@ -10,12 +12,14 @@ export class Kernel {
   public readonly registry: ServiceRegistry;
   public readonly events: EventBus;
   public readonly lifecycle: LifecycleManager;
+  public readonly modules: ModuleLoader;
 
   public constructor() {
     this.router = new KernelRouter();
     this.registry = new ServiceRegistry();
     this.events = new EventBus();
     this.lifecycle = new LifecycleManager();
+    this.modules = new ModuleLoader();
   }
 
   public registerRoute<I, O>(descriptor: RouteDescriptor<I, O>): void {
@@ -67,5 +71,20 @@ export class Kernel {
     if (state !== expected) {
       throw createError('SERVICE_UNAVAILABLE', `Service is not running: ${name}`, { state });
     }
+  }
+
+  public loadModule(module: KernelModuleDefinition): KernelModuleRecord {
+    return this.modules.load(module, {
+      registerRoute: (descriptor) => {
+        this.router.register(descriptor);
+      },
+      registerService: (service) => {
+        this.registerService(service);
+      }
+    });
+  }
+
+  public listModules(): KernelModuleRecord[] {
+    return this.modules.list();
   }
 }

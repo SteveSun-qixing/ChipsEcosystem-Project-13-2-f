@@ -7,7 +7,7 @@ import { CardService } from '../../../packages/card-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import { StructuredLogger } from '../../shared/logger';
-import { createBridgeForKernel } from '../../preload/create-bridge';
+import { createBridgeForKernel, HOST_INTERNAL_PERMISSIONS } from '../../preload/create-bridge';
 import { PluginRuntime } from '../../runtime';
 import { bindKernelToElectronIpc } from '../ipc/chips-ipc';
 import { registerHostSchemas } from '../services/register-schemas';
@@ -111,6 +111,10 @@ export class HostApplication {
   }
 
   public createBridge() {
-    return createBridgeForKernel(this.kernel);
+    return createBridgeForKernel(this.kernel, {
+      callerId: 'host-application',
+      callerType: 'app',
+      permissions: [...HOST_INTERNAL_PERMISSIONS]
+    });
   }
 }

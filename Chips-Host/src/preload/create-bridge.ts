@@ -5,13 +5,14 @@ import { BridgeTransport } from '../../packages/bridge-api/src';
 import { loadElectronModule } from '../main/electron/electron-loader';
 import { CHIPS_EMIT_CHANNEL, CHIPS_EVENT_CHANNEL_PREFIX, CHIPS_INVOKE_CHANNEL } from '../main/ipc/chips-ipc';
 
-interface BridgeContextOptions {
+export interface BridgeContextOptions {
   callerId?: string;
+  callerType?: RouteInvocationContext['caller']['type'];
   pluginId?: string;
   permissions?: string[];
 }
 
-const defaultPermissions = [
+export const HOST_INTERNAL_PERMISSIONS = [
   'file.read',
   'file.write',
   'resource.read',
@@ -37,20 +38,30 @@ const defaultPermissions = [
   'serializer.use',
   'control.read',
   'control.write'
-];
+] as const;
 
-export const createBridgeForKernel = (kernel: Kernel, options?: BridgeContextOptions) => {
-  const buildContext = (): RouteInvocationContext => ({
+const sanitizePermissions = (permissions: string[] | undefined): string[] => {
+  if (!permissions) {
+    return [];
+  }
+  return permissions.map((item) => item.trim()).filter((item) => item.length > 0);
+};
+
+const buildContext = (options?: BridgeContextOptions): RouteInvocationContext => {
+  const callerType = options?.callerType ?? 'plugin';
+  return {
     requestId: createId(),
     caller: {
       id: options?.callerId ?? 'renderer-preload',
-      type: 'plugin',
-      pluginId: options?.pluginId ?? 'local-plugin',
-      permissions: options?.permissions ?? defaultPermissions
+      type: callerType,
+      pluginId: callerType === 'plugin' ? options?.pluginId : undefined,
+      permissions: sanitizePermissions(options?.permissions)
     },
     timestamp: now()
-  });
+  };
+};
 
+export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeContextOptions): BridgeTransport => {
   const electron = loadElectronModule();
   if (electron?.ipcRenderer) {
     return new BridgeTransport(
@@ -58,7 +69,7 @@ export const createBridgeForKernel = (kernel: Kernel, options?: BridgeContextOpt
         const result = await electron.ipcRenderer!.invoke(CHIPS_INVOKE_CHANNEL, {
           action,
           payload,
-          context: buildContext()
+          context: buildContext(options)
         });
         return result as T;
       },
@@ -88,7 +99,31 @@ export const createBridgeForKernel = (kernel: Kernel, options?: BridgeContextOpt
     );
   }
 
+  if (!kernel) {
+    throw new Error('Kernel instance is required when Electron ipcRenderer is not available');
+  }
+
   return new BridgeTransport(async (action, payload) => {
-    return kernel.invoke(action, payload, buildContext());
+    return kernel.invoke(action, payload, buildContext(options));
   });
+};
+
+export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips'): void => {
+  const electron = loadElectronModule();
+  if (electron?.contextBridge) {
+    electron.contextBridge.exposeInMainWorld(name, bridge);
+    return;
+  }
+
+  const target = globalThis as Record<string, unknown>;
+  target[name] = bridge;
+};
+
+export const createAndExposeBridgeForKernel = (
+  kernel: Kernel | null,
+  options?: BridgeContextOptions & { exposeName?: string }
+): BridgeTransport => {
+  const bridge = createBridgeForKernel(kernel, options);
+  exposeBridgeToMainWorld(bridge, options?.exposeName ?? 'chips');
+  return bridge;
 };

@@ -14,7 +14,9 @@ import { registerHostSchemas } from '../../src/main/services/register-schemas';
 import { registerHostServices } from '../../src/main/services/register-host-services';
 
 interface PalState {
-  clipboard: string;
+  clipboardText: string;
+  clipboardImageBase64: string | null;
+  clipboardFiles: string[];
   dialogOpenArgs: unknown[];
   dialogSaveArgs: unknown[];
   dialogMessageArgs: unknown[];
@@ -26,6 +28,7 @@ interface PalState {
   trayActive: boolean;
   shortcuts: string[];
   preventSleep: boolean;
+  ipcChannels: Map<string, { name: string; transport: 'named-pipe' | 'unix-socket' | 'shared-memory'; queue: Buffer[] }>;
 }
 
 const createContextFactory = () => {
@@ -45,6 +48,8 @@ const createContextFactory = () => {
 };
 
 const createPal = (state: PalState): PALAdapter => {
+  let ipcSequence = 0;
+
   return {
     window: {
       async create(options) {
@@ -95,6 +100,12 @@ const createPal = (state: PalState): PALAdapter => {
       },
       async list(inputPath) {
         return fs.readdir(inputPath);
+      },
+      async watch(_inputPath, _onEvent) {
+        return {
+          id: 'watch-1',
+          async close() {}
+        };
       }
     },
     dialog: {
@@ -116,11 +127,28 @@ const createPal = (state: PalState): PALAdapter => {
       }
     },
     clipboard: {
-      async read() {
-        return state.clipboard;
+      async read(format = 'text') {
+        if (format === 'image') {
+          return {
+            base64: state.clipboardImageBase64 ?? '',
+            mimeType: 'image/png'
+          };
+        }
+        if (format === 'files') {
+          return [...state.clipboardFiles];
+        }
+        return state.clipboardText;
       },
-      async write(data) {
-        state.clipboard = data;
+      async write(data, format = 'text') {
+        if (format === 'image' && typeof data === 'object' && data && 'base64' in data) {
+          state.clipboardImageBase64 = String((data as { base64: unknown }).base64);
+          return;
+        }
+        if (format === 'files' && Array.isArray(data)) {
+          state.clipboardFiles = data.map((item) => String(item));
+          return;
+        }
+        state.clipboardText = String(data);
       }
     },
     shell: {
@@ -194,6 +222,51 @@ const createPal = (state: PalState): PALAdapter => {
         state.preventSleep = prevent;
         return prevent;
       }
+    },
+    ipc: {
+      async createChannel(options) {
+        ipcSequence += 1;
+        const channelId = `ipc-${ipcSequence}`;
+        state.ipcChannels.set(channelId, {
+          name: options.name,
+          transport: options.transport,
+          queue: []
+        });
+        return {
+          channelId,
+          name: options.name,
+          transport: options.transport
+        };
+      },
+      async send(channelId, payload) {
+        const channel = state.ipcChannels.get(channelId);
+        if (!channel) {
+          throw new Error(`Missing channel: ${channelId}`);
+        }
+        channel.queue.push(Buffer.isBuffer(payload) ? payload : Buffer.from(payload, 'utf-8'));
+      },
+      async receive(channelId) {
+        const channel = state.ipcChannels.get(channelId);
+        if (!channel) {
+          throw new Error(`Missing channel: ${channelId}`);
+        }
+        return {
+          channelId,
+          transport: channel.transport,
+          payload: channel.queue.shift() ?? Buffer.from(''),
+          receivedAt: Date.now()
+        };
+      },
+      async closeChannel(channelId) {
+        state.ipcChannels.delete(channelId);
+      },
+      async listChannels() {
+        return [...state.ipcChannels.entries()].map(([channelId, channel]) => ({
+          channelId,
+          name: channel.name,
+          transport: channel.transport
+        }));
+      }
     }
   };
 };
@@ -211,7 +284,9 @@ describe('Host services PAL routing', () => {
 
   it('forwards dialog routes to PAL dialog implementation', async () => {
     const state: PalState = {
-      clipboard: '',
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
       dialogOpenArgs: [],
       dialogSaveArgs: [],
       dialogMessageArgs: [],
@@ -222,7 +297,8 @@ describe('Host services PAL routing', () => {
       notifications: [],
       trayActive: false,
       shortcuts: [],
-      preventSleep: false
+      preventSleep: false,
+      ipcChannels: new Map()
     };
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
@@ -274,7 +350,9 @@ describe('Host services PAL routing', () => {
 
   it('forwards clipboard and shell routes to PAL clipboard/shell implementation', async () => {
     const state: PalState = {
-      clipboard: '',
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
       dialogOpenArgs: [],
       dialogSaveArgs: [],
       dialogMessageArgs: [],
@@ -285,7 +363,8 @@ describe('Host services PAL routing', () => {
       notifications: [],
       trayActive: false,
       shortcuts: [],
-      preventSleep: false
+      preventSleep: false,
+      ipcChannels: new Map()
     };
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
@@ -311,6 +390,21 @@ describe('Host services PAL routing', () => {
       { format: 'text' },
       context(platformRead)
     );
+    await kernel.invoke(
+      'platform.clipboardWrite',
+      { data: { base64: Buffer.from('image-data').toString('base64') }, format: 'image' },
+      context(platformRead)
+    );
+    await kernel.invoke(
+      'platform.clipboardWrite',
+      { data: ['/tmp/chips/a.txt', '/tmp/chips/b.txt'], format: 'files' },
+      context(platformRead)
+    );
+    const fileClipboard = await kernel.invoke<{ format: 'files' }, { data: string[] }>(
+      'platform.clipboardRead',
+      { format: 'files' },
+      context(platformRead)
+    );
 
     await kernel.invoke('platform.shellOpenPath', { path: '/tmp/chips/a.txt' }, context(platformExternal));
     await kernel.invoke('platform.shellOpenExternal', { url: 'https://chips.example' }, context(platformExternal));
@@ -320,8 +414,28 @@ describe('Host services PAL routing', () => {
     await kernel.invoke('platform.traySet', { options: { tooltip: 'chips' } }, context(platformExternal));
     await kernel.invoke('platform.shortcutRegister', { accelerator: 'CommandOrControl+Shift+N' }, context(platformExternal));
     await kernel.invoke('platform.powerSetPreventSleep', { prevent: true }, context(platformExternal));
+    const createdChannel = await kernel.invoke<
+      { name: string; transport: 'shared-memory' },
+      { channel: { channelId: string } }
+    >('platform.ipcCreateChannel', { name: 'chips-test', transport: 'shared-memory' }, context(platformExternal));
+    await kernel.invoke(
+      'platform.ipcSend',
+      { channelId: createdChannel.channel.channelId, payload: Buffer.from('hello-ipc').toString('base64'), encoding: 'base64' },
+      context(platformExternal)
+    );
+    const received = await kernel.invoke<
+      { channelId: string },
+      { message: { payload: string; encoding: string; transport: string } }
+    >('platform.ipcReceive', { channelId: createdChannel.channel.channelId }, context(platformRead));
+    const listed = await kernel.invoke<Record<string, unknown>, { channels: Array<{ channelId: string }> }>(
+      'platform.ipcListChannels',
+      {},
+      context(platformRead)
+    );
+    await kernel.invoke('platform.ipcCloseChannel', { channelId: createdChannel.channel.channelId }, context(platformExternal));
 
     expect(readBack.data).toBe('chips-data');
+    expect(fileClipboard.data).toEqual(['/tmp/chips/a.txt', '/tmp/chips/b.txt']);
     expect(state.shellOpenPath).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellShowInFolder).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellOpenExternal).toEqual(['https://chips.example', 'https://chips.example/platform']);
@@ -329,5 +443,9 @@ describe('Host services PAL routing', () => {
     expect(state.trayActive).toBe(true);
     expect(state.shortcuts).toContain('CommandOrControl+Shift+N');
     expect(state.preventSleep).toBe(true);
+    expect(Buffer.from(received.message.payload, 'base64').toString('utf-8')).toBe('hello-ipc');
+    expect(received.message.encoding).toBe('base64');
+    expect(received.message.transport).toBe('shared-memory');
+    expect(listed.channels.map((item) => item.channelId)).toContain(createdChannel.channel.channelId);
   });
 });

@@ -819,7 +819,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.openExternal', async (input) => {
-            await ctx.pal.platform.openExternal(input.url);
+            await ctx.pal.shell.openExternal(input.url);
             return { ack: true };
           })
         )
@@ -831,7 +831,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.openFile', async () => ({ filePaths: null }))
+          withMetrics(state, 'dialog.openFile', async (input) => {
+            const filePaths = await ctx.pal.dialog.openFile(input.options);
+            return { filePaths };
+          })
         )
       },
       dialogSaveFile: {
@@ -841,7 +844,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.saveFile', async () => ({ filePath: null }))
+          withMetrics(state, 'dialog.saveFile', async (input) => {
+            const filePath = await ctx.pal.dialog.saveFile(input.options);
+            return { filePath };
+          })
         )
       },
       dialogShowMessage: {
@@ -851,7 +857,17 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.showMessage', async () => ({ response: 0 }))
+          withMetrics(state, 'dialog.showMessage', async (input) => {
+            if (typeof input.options.message !== 'string') {
+              throw createError('DIALOG_INVALID_OPTIONS', 'dialog.showMessage requires options.message');
+            }
+            const response = await ctx.pal.dialog.showMessage({
+              title: typeof input.options.title === 'string' ? input.options.title : undefined,
+              message: input.options.message,
+              detail: typeof input.options.detail === 'string' ? input.options.detail : undefined
+            });
+            return { response };
+          })
         )
       },
       dialogShowConfirm: {
@@ -861,7 +877,17 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.showConfirm', async () => ({ confirmed: true }))
+          withMetrics(state, 'dialog.showConfirm', async (input) => {
+            if (typeof input.options.message !== 'string') {
+              throw createError('DIALOG_INVALID_OPTIONS', 'dialog.showConfirm requires options.message');
+            }
+            const confirmed = await ctx.pal.dialog.showConfirm({
+              title: typeof input.options.title === 'string' ? input.options.title : undefined,
+              message: input.options.message,
+              detail: typeof input.options.detail === 'string' ? input.options.detail : undefined
+            });
+            return { confirmed };
+          })
         )
       },
       clipboardRead: {
@@ -871,7 +897,15 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'clipboard.read', async () => ({ data: state.clipboard }))
+          withMetrics(state, 'clipboard.read', async (input) => {
+            const format = input.format === 'text' || !input.format ? 'text' : undefined;
+            if (!format) {
+              throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
+            }
+            const data = await ctx.pal.clipboard.read(format);
+            state.clipboard = data;
+            return { data };
+          })
         )
       },
       clipboardWrite: {
@@ -882,6 +916,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'clipboard.write', async (input) => {
+            if (typeof input.data !== 'string') {
+              throw createError('CLIPBOARD_INVALID_PAYLOAD', 'clipboard.write requires string data');
+            }
+            await ctx.pal.clipboard.write(input.data, input.format === 'text' || !input.format ? 'text' : 'text');
             state.clipboard = input.data;
             return { ack: true };
           })
@@ -895,7 +933,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'shell.openPath', async (input) => {
-            await fs.access(input.path);
+            await ctx.pal.shell.openPath(input.path);
             return { ack: true };
           })
         )
@@ -908,7 +946,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'shell.openExternal', async (input) => {
-            await ctx.pal.platform.openExternal(input.url);
+            await ctx.pal.shell.openExternal(input.url);
             return { ack: true };
           })
         )
@@ -921,7 +959,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'shell.showItemInFolder', async (input) => {
-            await fs.access(path.dirname(input.path));
+            await ctx.pal.shell.showItemInFolder(input.path);
             return { ack: true };
           })
         )

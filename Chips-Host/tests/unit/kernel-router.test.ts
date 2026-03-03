@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { KernelRouter } from '../../packages/kernel/src';
 import type { RouteInvocationContext } from '../../src/shared/types';
 
-const context = (): RouteInvocationContext => ({
-  requestId: 'req-1',
+const context = (requestId = 'req-1'): RouteInvocationContext => ({
+  requestId,
   caller: {
     id: 'tester',
     type: 'service',
@@ -77,5 +77,56 @@ describe('KernelRouter', () => {
     const result = await router.invoke('unstable.fetch', {}, context());
     expect(result).toMatchObject({ ok: true });
     expect(calls).toBe(3);
+  });
+
+  it('rejects replayed request IDs for non-idempotent routes', async () => {
+    const router = new KernelRouter({ replayWindowMs: 5_000 });
+    let calls = 0;
+    router.register({
+      key: 'math.increment',
+      schemaIn: 'schemas/math.increment.request.json',
+      schemaOut: 'schemas/math.increment.response.json',
+      permission: ['math.write'],
+      timeoutMs: 1000,
+      idempotent: false,
+      retries: 0,
+      handler: async (input: { value: number }) => {
+        calls += 1;
+        return { next: input.value + 1 };
+      }
+    });
+
+    const initial = await router.invoke<{ value: number }, { next: number }>('math.increment', { value: 1 }, context('req-replay'));
+    expect(initial.next).toBe(2);
+
+    await expect(
+      router.invoke<{ value: number }, { next: number }>('math.increment', { value: 1 }, context('req-replay'))
+    ).rejects.toMatchObject({ code: 'ROUTE_REPLAY_DETECTED' });
+    expect(calls).toBe(1);
+  });
+
+  it('allows repeated request IDs for idempotent routes', async () => {
+    const router = new KernelRouter({ replayWindowMs: 5_000 });
+    let calls = 0;
+    router.register({
+      key: 'math.constant',
+      schemaIn: 'schemas/math.constant.request.json',
+      schemaOut: 'schemas/math.constant.response.json',
+      permission: ['math.read'],
+      timeoutMs: 1000,
+      idempotent: true,
+      retries: 0,
+      handler: async () => {
+        calls += 1;
+        return { value: 42 };
+      }
+    });
+
+    const first = await router.invoke<{}, { value: number }>('math.constant', {}, context('req-stable'));
+    const second = await router.invoke<{}, { value: number }>('math.constant', {}, context('req-stable'));
+
+    expect(first.value).toBe(42);
+    expect(second.value).toBe(42);
+    expect(calls).toBe(2);
   });
 });

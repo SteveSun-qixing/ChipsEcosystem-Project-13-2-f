@@ -48,7 +48,20 @@
 | `clipboard` | 剪贴板读写 |
 | `shell` | 外部打开、定位文件 |
 
-## 2.3 通道命名
+### 2.3 子域参数基线
+
+- `dialog.openFile(options)`：
+  - `defaultPath` 存在时优先直接返回该路径（用于自动化与无头场景）
+  - `mode` 支持 `file | directory`
+  - `allowMultiple` 控制多选
+- `dialog.saveFile(options)`：
+  - `defaultPath` 存在时返回该路径并确保目录可写
+- `clipboard.read/write`：
+  - 当前基线仅支持 `text` 格式
+- `shell.openPath/openExternal/showItemInFolder`：
+  - 对应系统原生命令打开行为，不做业务层路径改写
+
+## 2.4 通道命名
 
 - 主通道：`chips:invoke`
 - 子通道：`chips:<domain>:*`
@@ -93,6 +106,11 @@ interface StandardError {
 - `RUNTIME_*`：运行时超时与重试错误
 - `PERMISSION_*`：权限错误
 
+关键错误码补充：
+
+- `ROUTE_REPLAY_DETECTED`：非幂等动作命中 requestId 防重放窗口
+- `PAL_COMMAND_NOT_FOUND` / `PAL_COMMAND_FAILED`：PAL 调用系统命令失败
+
 ---
 
 ## 5. 权限基线
@@ -100,6 +118,7 @@ interface StandardError {
 - 所有敏感动作必须走插件权限校验。
 - 权限由插件 manifest 显式声明，未声明即拒绝。
 - 高风险能力（凭证、外部打开、窗口控制）必须审计。
+- 非幂等动作必须启用 requestId 去重窗口，避免重放写入。
 
 ---
 

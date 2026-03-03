@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HostApplication } from '../../src/main/core/host-application';
+import { openAssociatedFile } from '../../src/main/core/file-association';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { RuntimeClient } from '../../src/renderer/runtime-client';
 
@@ -125,5 +126,45 @@ describe('Host services integration', () => {
 
     const queried = await runtime.invoke<{ plugins: Array<{ id: string; manifestPath: string }> }>('plugin.query', {});
     expect(queried.plugins.some((plugin) => plugin.id === 'chips.runtime.cpk')).toBe(true);
+  });
+
+  it('uses plugin handler when opening associated card file', async () => {
+    const pluginDir = path.join(workspace, 'card-handler-plugin');
+    await fs.mkdir(path.join(pluginDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(pluginDir, 'manifest.yaml'),
+      [
+        'id: chips.card.handler',
+        'version: "1.0.0"',
+        'type: app',
+        'name: Card Handler',
+        'permissions:',
+        '  - file.read',
+        'capabilities:',
+        '  - file-handler:.card',
+        'entry: dist/index.html'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(path.join(pluginDir, 'dist/index.html'), '<html><body>card handler</body></html>', 'utf-8');
+
+    const zip = new StoreZipService();
+    const cpkPath = path.join(workspace, 'chips.card.handler.cpk');
+    await zip.compress(pluginDir, cpkPath);
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: cpkPath });
+    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+
+    const cardSourceDir = path.join(workspace, 'card-open-source');
+    await fs.mkdir(path.join(cardSourceDir, '.card'), { recursive: true });
+    await fs.writeFile(path.join(cardSourceDir, '.card/metadata.yaml'), 'id: test.card\nname: Test Card\n', 'utf-8');
+    await fs.writeFile(path.join(cardSourceDir, '.card/structure.yaml'), 'cards: []\n', 'utf-8');
+    await fs.writeFile(path.join(cardSourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+    const cardFile = path.join(workspace, 'associated.card');
+    await zip.compress(cardSourceDir, cardFile);
+
+    const result = await openAssociatedFile(runtime, cardFile);
+    expect(result.mode).toBe('card');
+    expect(result.pluginId).toBe('chips.card.handler');
+    expect(result.windowId).toBeTypeOf('string');
   });
 });

@@ -54,6 +54,10 @@
   - `defaultPath` 存在时优先直接返回该路径（用于自动化与无头场景）
   - `mode` 支持 `file | directory`
   - `allowMultiple` 控制多选
+- `window.open(payload)`：
+  - 必填：`config.title/config.width/config.height`
+  - 可选：`config.url`（插件入口）、`config.pluginId`（插件标识）、`config.sessionId`（会话标识）
+  - 当 `url` 为本地 HTML 路径时由主机加载本地入口；为 `http(s)/file/chips` URL 时按 URL 方式加载
 - `dialog.saveFile(options)`：
   - `defaultPath` 存在时返回该路径并确保目录可写
 - `plugin.install(payload)`：
@@ -67,9 +71,14 @@
 
 ## 2.4 通道命名
 
-- 主通道：`chips:invoke`
-- 子通道：`chips:<domain>:*`
-- 事件广播：`chips:event:<name>`
+- 主调用通道：`chips:invoke`
+  - 请求：`{ action, payload, context? }`
+  - 响应：动作返回值或标准错误对象
+- 渲染进程事件上行通道：`chips:emit`
+  - 请求：`{ event, data? }`
+- 主进程事件下行通道：`chips:event:<name>`
+  - 载荷：事件 `data`
+- `chips:<domain>:*` 作为扩展通道保留位，当前基线实现统一走 `chips:invoke`。
 
 ---
 

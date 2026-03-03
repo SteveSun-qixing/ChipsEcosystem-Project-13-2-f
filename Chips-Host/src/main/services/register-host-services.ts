@@ -25,9 +25,11 @@ interface HostServiceContext {
 interface PluginRecord {
   id: string;
   manifestPath: string;
+  installPath: string;
   enabled: boolean;
   type: 'app' | 'card' | 'layout' | 'module' | 'theme';
   capabilities: string[];
+  entry?: string;
   installedAt: number;
 }
 
@@ -61,6 +63,7 @@ interface RuntimeState {
   locale: string;
   locales: Record<string, Record<string, string>>;
   routeMetrics: Map<string, RouteMetric>;
+  activatedServices: Set<string>;
 }
 
 const ensureWorkspace = async (workspacePath: string): Promise<void> => {
@@ -154,7 +157,8 @@ const buildState = (): RuntimeState => ({
       'system.error': 'System error'
     }
   },
-  routeMetrics: new Map<string, RouteMetric>()
+  routeMetrics: new Map<string, RouteMetric>(),
+  activatedServices: new Set<string>()
 });
 
 const persistConfig = async (workspacePath: string, configMap: Map<string, unknown>): Promise<void> => {
@@ -176,6 +180,45 @@ const loadConfig = async (workspacePath: string, state: RuntimeState): Promise<v
 };
 
 const toPlainLogEntries = (entries: LogEntry[]): LogEntry[] => entries.map((entry) => deepClone(entry));
+
+const ensureServiceActivation = async (ctx: HostServiceContext, state: RuntimeState, serviceName: string): Promise<void> => {
+  if (state.activatedServices.has(serviceName)) {
+    return;
+  }
+
+  if (serviceName === 'card') {
+    ctx.getCardService();
+  } else if (serviceName === 'box') {
+    ctx.getBoxService();
+  } else if (serviceName === 'zip') {
+    ctx.getZipService();
+  }
+
+  state.activatedServices.add(serviceName);
+  await ctx.kernel.events.emit('service.activated', 'host-service', { service: serviceName });
+};
+
+const bindLazyActivation = (ctx: HostServiceContext, state: RuntimeState, service: ServiceRegistration): ServiceRegistration => {
+  const wrappedActions: ServiceRegistration['actions'] = {};
+  for (const [actionName, actionDefinition] of Object.entries(service.actions)) {
+    const descriptor = actionDefinition.descriptor;
+    const originalHandler = descriptor.handler;
+    wrappedActions[actionName] = {
+      descriptor: {
+        ...descriptor,
+        handler: async (input, routeContext) => {
+          await ensureServiceActivation(ctx, state, service.name);
+          return originalHandler(input, routeContext);
+        }
+      }
+    };
+  }
+
+  return {
+    ...service,
+    actions: wrappedActions
+  };
+};
 
 const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRegistration[] => {
   const fileService: ServiceRegistration = {
@@ -525,7 +568,19 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'window',
     actions: {
       open: {
-        descriptor: descriptor<{ config: { title: string; width: number; height: number } }, { window: unknown }>(
+        descriptor: descriptor<
+          {
+            config: {
+              title: string;
+              width: number;
+              height: number;
+              url?: string;
+              pluginId?: string;
+              sessionId?: string;
+            };
+          },
+          { window: unknown }
+        >(
           'window.open',
           ['window.control'],
           3_000,
@@ -681,9 +736,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               plugins: records.map((record) => ({
                 id: record.manifest.id,
                 manifestPath: record.manifestPath,
+                installPath: record.installPath,
                 enabled: record.enabled,
                 type: record.manifest.type,
                 capabilities: record.manifest.capabilities ?? [],
+                entry: record.manifest.entry,
                 installedAt: record.installedAt
               }))
             };
@@ -1373,7 +1430,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     }
   };
 
-  return [
+  const rawServices = [
     fileService,
     resourceService,
     configService,
@@ -1391,6 +1448,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     serializerService,
     controlPlaneService
   ];
+
+  return rawServices.map((service) => bindLazyActivation(ctx, state, service));
 };
 
 export const registerHostServices = async (ctx: HostServiceContext): Promise<void> => {

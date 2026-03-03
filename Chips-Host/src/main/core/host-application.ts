@@ -9,6 +9,7 @@ import { StoreZipService } from '../../../packages/zip-service/src';
 import { StructuredLogger } from '../../shared/logger';
 import { createBridgeForKernel } from '../../preload/create-bridge';
 import { PluginRuntime } from '../../runtime';
+import { bindKernelToElectronIpc } from '../ipc/chips-ipc';
 import { registerHostSchemas } from '../services/register-schemas';
 import { registerHostServices } from '../services/register-host-services';
 
@@ -25,6 +26,7 @@ export class HostApplication {
   private cardService?: CardService;
   private boxService?: BoxService;
   private zipService?: StoreZipService;
+  private ipcBinding?: { active: boolean; dispose(): void };
 
   private started = false;
 
@@ -67,6 +69,8 @@ export class HostApplication {
       runtime: this.runtime
     });
 
+    this.ipcBinding = bindKernelToElectronIpc(this.kernel);
+
     await fs.writeFile(
       path.join(this.workspacePath, 'route-manifest.json'),
       JSON.stringify(this.kernel.getRouteManifest(), null, 2),
@@ -90,6 +94,8 @@ export class HostApplication {
     }
 
     this.started = false;
+    this.ipcBinding?.dispose();
+    this.ipcBinding = undefined;
     this.logger.write({
       level: 'info',
       message: 'Chips Host stopped',

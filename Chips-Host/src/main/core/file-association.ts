@@ -9,6 +9,8 @@ interface PluginQueryResponse {
     enabled: boolean;
     type: 'app' | 'card' | 'layout' | 'module' | 'theme';
     capabilities: string[];
+    installPath?: string;
+    entry?: string;
   }>;
 }
 
@@ -40,24 +42,34 @@ const resolveWindowId = (opened: WindowOpenResponse): string => {
   return opened.window.id;
 };
 
-const findEnabledHandlerPlugin = async (runtime: RuntimeClient, extension: string): Promise<string | undefined> => {
+const findEnabledHandlerPlugin = async (
+  runtime: RuntimeClient,
+  extension: string
+): Promise<{ id: string; installPath?: string; entry?: string } | undefined> => {
   const capability = `file-handler:${extension}`;
   const queried = await runtime.invoke<PluginQueryResponse>('plugin.query', {
     type: 'app',
     capability
   });
   const candidate = queried.plugins.find((plugin) => plugin.enabled && plugin.type === 'app');
-  return candidate?.id;
+  if (!candidate) {
+    return undefined;
+  }
+  return {
+    id: candidate.id,
+    installPath: candidate.installPath,
+    entry: candidate.entry
+  };
 };
 
 const openByPlugin = async (
   runtime: RuntimeClient,
-  pluginId: string,
+  plugin: { id: string; installPath?: string; entry?: string },
   targetPath: string,
   defaultTitle: string
 ): Promise<{ pluginId: string; windowId: string }> => {
   const initialized = await runtime.invoke<PluginInitResponse>('plugin.init', {
-    pluginId,
+    pluginId: plugin.id,
     launchParams: {
       targetPath,
       trigger: 'file-association'
@@ -68,15 +80,23 @@ const openByPlugin = async (
     nonce: initialized.session.sessionNonce
   });
 
+  const url =
+    plugin.installPath && plugin.entry
+      ? path.resolve(plugin.installPath, plugin.entry)
+      : undefined;
+
   const opened = await runtime.invoke<WindowOpenResponse>('window.open', {
     config: {
       title: `${defaultTitle} - ${path.basename(targetPath)}`,
       width: 1280,
-      height: 800
+      height: 800,
+      pluginId: plugin.id,
+      sessionId: initialized.session.sessionId,
+      url
     }
   });
   return {
-    pluginId,
+    pluginId: plugin.id,
     windowId: resolveWindowId(opened)
   };
 };
@@ -91,9 +111,9 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
   const extension = path.extname(targetPath).toLowerCase();
   if (extension === '.card') {
     await runtime.invoke('card.render', { cardFile: targetPath });
-    const pluginId = await findEnabledHandlerPlugin(runtime, extension);
-    if (pluginId) {
-      const opened = await openByPlugin(runtime, pluginId, targetPath, 'Card Viewer');
+    const plugin = await findEnabledHandlerPlugin(runtime, extension);
+    if (plugin) {
+      const opened = await openByPlugin(runtime, plugin, targetPath, 'Card Viewer');
       return {
         targetPath,
         extension,
@@ -119,9 +139,9 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
 
   if (extension === '.box') {
     await runtime.invoke('box.inspect', { boxFile: targetPath });
-    const pluginId = await findEnabledHandlerPlugin(runtime, extension);
-    if (pluginId) {
-      const opened = await openByPlugin(runtime, pluginId, targetPath, 'Box Viewer');
+    const plugin = await findEnabledHandlerPlugin(runtime, extension);
+    if (plugin) {
+      const opened = await openByPlugin(runtime, plugin, targetPath, 'Box Viewer');
       return {
         targetPath,
         extension,

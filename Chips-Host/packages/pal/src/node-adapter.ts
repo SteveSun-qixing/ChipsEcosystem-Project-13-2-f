@@ -3,6 +3,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { createError } from '../../../src/shared/errors';
+import {
+  loadElectronModule,
+  type ElectronBrowserWindowCtorLike,
+  type ElectronBrowserWindowLike
+} from '../../../src/main/electron/electron-loader';
 import { createId } from '../../../src/shared/utils';
 import type {
   DialogFileOptions,
@@ -97,25 +102,67 @@ const statSafe = async (inputPath: string): Promise<{ isFile: boolean; isDirecto
 
 class NodeWindowManager implements PALWindow {
   private readonly windows = new Map<string, WindowState>();
+  private readonly electronWindows = new Map<string, ElectronBrowserWindowLike>();
+  private readonly electronBrowserWindow?: ElectronBrowserWindowCtorLike;
+
+  public constructor() {
+    const electron = loadElectronModule();
+    this.electronBrowserWindow = electron?.BrowserWindow;
+  }
 
   public async create(options: WindowOptions): Promise<WindowState> {
     const id = createId();
+    const title = options.title;
+    const width = options.width;
+    const height = options.height;
     const state: WindowState = {
       id,
-      title: options.title,
-      width: options.width,
-      height: options.height,
+      title,
+      width,
+      height,
       focused: false,
-      state: 'normal'
+      state: 'normal',
+      url: options.url,
+      pluginId: options.pluginId,
+      sessionId: options.sessionId
     };
+
+    if (this.electronBrowserWindow) {
+      const browserWindow = new this.electronBrowserWindow({
+        title,
+        width,
+        height,
+        resizable: options.resizable ?? true,
+        alwaysOnTop: options.alwaysOnTop ?? false,
+        show: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      this.electronWindows.set(id, browserWindow);
+      browserWindow.on('closed', () => {
+        this.electronWindows.delete(id);
+        this.windows.delete(id);
+      });
+      await this.loadWindowContent(browserWindow, options.url);
+      state.focused = browserWindow.isFocused();
+      state.state = this.resolveWindowState(browserWindow);
+    }
+
     this.windows.set(id, state);
     return state;
   }
 
   public async focus(id: string): Promise<void> {
-    const target = this.windows.get(id);
+    const target = this.getWindowState(id);
     if (!target) {
       throw createError('PAL_WINDOW_NOT_FOUND', `Window not found: ${id}`);
+    }
+
+    const browserWindow = this.electronWindows.get(id);
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.focus();
     }
 
     for (const value of this.windows.values()) {
@@ -126,9 +173,14 @@ class NodeWindowManager implements PALWindow {
   }
 
   public async resize(id: string, width: number, height: number): Promise<void> {
-    const target = this.windows.get(id);
+    const target = this.getWindowState(id);
     if (!target) {
       throw createError('PAL_WINDOW_NOT_FOUND', `Window not found: ${id}`);
+    }
+
+    const browserWindow = this.electronWindows.get(id);
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.setSize(width, height);
     }
 
     target.width = width;
@@ -136,29 +188,95 @@ class NodeWindowManager implements PALWindow {
   }
 
   public async setState(id: string, state: WindowState['state']): Promise<void> {
-    const target = this.windows.get(id);
+    const target = this.getWindowState(id);
     if (!target) {
       throw createError('PAL_WINDOW_NOT_FOUND', `Window not found: ${id}`);
+    }
+
+    const browserWindow = this.electronWindows.get(id);
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      if (state === 'minimized') {
+        browserWindow.minimize();
+      } else if (state === 'maximized') {
+        browserWindow.maximize();
+      } else if (state === 'fullscreen') {
+        browserWindow.setFullScreen(true);
+      } else {
+        browserWindow.setFullScreen(false);
+        browserWindow.restore();
+      }
     }
 
     target.state = state;
   }
 
   public async getState(id: string): Promise<WindowState> {
-    const target = this.windows.get(id);
+    const target = this.getWindowState(id);
     if (!target) {
       throw createError('PAL_WINDOW_NOT_FOUND', `Window not found: ${id}`);
+    }
+
+    const browserWindow = this.electronWindows.get(id);
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      const bounds = browserWindow.getBounds();
+      target.width = bounds.width;
+      target.height = bounds.height;
+      target.focused = browserWindow.isFocused();
+      target.state = this.resolveWindowState(browserWindow);
     }
 
     return { ...target };
   }
 
   public async close(id: string): Promise<void> {
-    if (!this.windows.has(id)) {
+    const target = this.getWindowState(id);
+    if (!target) {
       throw createError('PAL_WINDOW_NOT_FOUND', `Window not found: ${id}`);
     }
 
+    const browserWindow = this.electronWindows.get(id);
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.close();
+      this.electronWindows.delete(id);
+    }
+
     this.windows.delete(id);
+  }
+
+  private getWindowState(id: string): WindowState | undefined {
+    return this.windows.get(id);
+  }
+
+  private resolveWindowState(window: ElectronBrowserWindowLike): WindowState['state'] {
+    if (window.isFullScreen()) {
+      return 'fullscreen';
+    }
+    if (window.isMinimized()) {
+      return 'minimized';
+    }
+    if (window.isMaximized()) {
+      return 'maximized';
+    }
+    return 'normal';
+  }
+
+  private async loadWindowContent(window: ElectronBrowserWindowLike, url: string | undefined): Promise<void> {
+    if (!url || url.length === 0) {
+      return;
+    }
+
+    if (/^(https?:|file:|chips:)/i.test(url)) {
+      await Promise.resolve(window.loadURL(url));
+      return;
+    }
+
+    const normalizedPath = path.resolve(url);
+    if (path.extname(normalizedPath).toLowerCase() === '.html') {
+      await Promise.resolve(window.loadFile(normalizedPath));
+      return;
+    }
+
+    await Promise.resolve(window.loadURL(`file://${normalizedPath}`));
   }
 }
 

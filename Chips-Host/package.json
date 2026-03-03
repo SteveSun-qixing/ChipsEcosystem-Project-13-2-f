@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:contract": "vitest run tests/contract",
     "test:watch": "vitest",
     "start": "node dist/src/main/cli/index.js",
     "dev": "tsx src/main/cli/index.ts"

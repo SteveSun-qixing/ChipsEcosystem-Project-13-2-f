@@ -36,4 +36,23 @@ describe('chips host cli', () => {
     const code = await runCli(['doctor']);
     expect(code).toBe(0);
   });
+
+  it('supports plugin lifecycle commands', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+    const manifestPath = path.join(workspace, 'demo.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        id: 'chips.cli.plugin',
+        version: '1.0.0',
+        type: 'app',
+        name: 'CLI Plugin',
+        permissions: ['file.read']
+      })
+    );
+
+    expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
+    expect(await runCli(['plugin', 'list'])).toBe(0);
+    expect(await runCli(['plugin', 'query'])).toBe(0);
+  });
 });

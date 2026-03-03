@@ -4,6 +4,7 @@ import { createError } from '../../shared/errors';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
 import { StructuredLogger } from '../../shared/logger';
+import { PluginRuntime } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { PALAdapter } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
@@ -18,6 +19,7 @@ interface HostServiceContext {
   cardService: CardService;
   boxService: BoxService;
   zipService: StoreZipService;
+  runtime: PluginRuntime;
 }
 
 interface PluginRecord {
@@ -43,27 +45,37 @@ interface ThemeRecord {
   tokens: Record<string, unknown>;
 }
 
+interface RouteMetric {
+  count: number;
+  failures: number;
+  latencies: number[];
+}
+
 interface RuntimeState {
   config: Map<string, unknown>;
-  plugins: Map<string, PluginRecord>;
   modules: Map<string, ModuleRecord>;
   credentials: Map<string, string>;
+  clipboard: unknown;
   themes: ThemeRecord[];
   currentThemeId: string;
   locale: string;
   locales: Record<string, Record<string, string>>;
-  routeMetrics: Map<string, { count: number; failures: number }>;
+  routeMetrics: Map<string, RouteMetric>;
 }
 
 const ensureWorkspace = async (workspacePath: string): Promise<void> => {
   await fs.mkdir(workspacePath, { recursive: true });
 };
 
-const updateMetric = (state: RuntimeState, route: string, failed: boolean): void => {
-  const current = state.routeMetrics.get(route) ?? { count: 0, failures: 0 };
+const updateMetric = (state: RuntimeState, route: string, failed: boolean, durationMs: number): void => {
+  const current = state.routeMetrics.get(route) ?? { count: 0, failures: 0, latencies: [] };
   current.count += 1;
   if (failed) {
     current.failures += 1;
+  }
+  current.latencies.push(durationMs);
+  if (current.latencies.length > 200) {
+    current.latencies.shift();
   }
   state.routeMetrics.set(route, current);
 };
@@ -74,15 +86,25 @@ const withMetrics = <I, O>(
   handler: (input: I, ctx: RouteInvocationContext) => Promise<O>
 ): ((input: I, ctx: RouteInvocationContext) => Promise<O>) => {
   return async (input, ctx) => {
+    const started = Date.now();
     try {
       const result = await handler(input, ctx);
-      updateMetric(state, route, false);
+      updateMetric(state, route, false, Date.now() - started);
       return result;
     } catch (error) {
-      updateMetric(state, route, true);
+      updateMetric(state, route, true, Date.now() - started);
       throw error;
     }
   };
+};
+
+const percentile = (values: number[], p: number): number => {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index] ?? 0;
 };
 
 const descriptor = <I, O>(
@@ -105,9 +127,9 @@ const descriptor = <I, O>(
 
 const buildState = (): RuntimeState => ({
   config: new Map<string, unknown>(),
-  plugins: new Map<string, PluginRecord>(),
   modules: new Map<string, ModuleRecord>(),
   credentials: new Map<string, string>(),
+  clipboard: null,
   themes: [
     {
       id: 'chips-official.default-theme',
@@ -132,7 +154,7 @@ const buildState = (): RuntimeState => ({
       'system.error': 'System error'
     }
   },
-  routeMetrics: new Map<string, { count: number; failures: number }>()
+  routeMetrics: new Map<string, RouteMetric>()
 });
 
 const persistConfig = async (workspacePath: string, configMap: Map<string, unknown>): Promise<void> => {
@@ -554,6 +576,32 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             return { ack: true };
           })
         )
+      },
+      getState: {
+        descriptor: descriptor<{ windowId: string }, { state: unknown }>(
+          'window.getState',
+          ['window.control'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'window.getState', async (input) => {
+            const state = await ctx.pal.window.getState(input.windowId);
+            return { state };
+          })
+        )
+      },
+      close: {
+        descriptor: descriptor<{ windowId: string }, { ack: true }>(
+          'window.close',
+          ['window.control'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'window.close', async (input) => {
+            await ctx.pal.window.close(input.windowId);
+            return { ack: true };
+          })
+        )
       }
     }
   };
@@ -569,18 +617,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.install', async (input) => {
-            const id = `plugin.${createId()}`;
-            const record: PluginRecord = {
-              id,
-              manifestPath: input.manifestPath,
-              enabled: false,
-              type: 'app',
-              capabilities: [],
-              installedAt: Date.now()
-            };
-            state.plugins.set(id, record);
-            await ctx.kernel.events.emit('plugin.installed', 'plugin-service', { pluginId: id });
-            return { pluginId: id };
+            const record = await ctx.runtime.install(input.manifestPath);
+            await ctx.kernel.events.emit('plugin.installed', 'plugin-service', { pluginId: record.manifest.id });
+            return { pluginId: record.manifest.id };
           })
         )
       },
@@ -592,11 +631,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.enable', async (input) => {
-            const plugin = state.plugins.get(input.pluginId);
-            if (!plugin) {
-              throw createError('PLUGIN_NOT_FOUND', `Plugin not found: ${input.pluginId}`);
-            }
-            plugin.enabled = true;
+            await ctx.runtime.enable(input.pluginId);
             await ctx.kernel.events.emit('plugin.enabled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })
@@ -610,11 +645,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.disable', async (input) => {
-            const plugin = state.plugins.get(input.pluginId);
-            if (!plugin) {
-              throw createError('PLUGIN_NOT_FOUND', `Plugin not found: ${input.pluginId}`);
-            }
-            plugin.enabled = false;
+            await ctx.runtime.disable(input.pluginId);
             await ctx.kernel.events.emit('plugin.disabled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })
@@ -628,10 +659,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.uninstall', async (input) => {
-            if (!state.plugins.has(input.pluginId)) {
-              throw createError('PLUGIN_NOT_FOUND', `Plugin not found: ${input.pluginId}`);
-            }
-            state.plugins.delete(input.pluginId);
+            await ctx.runtime.uninstall(input.pluginId);
             await ctx.kernel.events.emit('plugin.uninstalled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })
@@ -645,14 +673,48 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'plugin.query', async (input) => {
-            let records = [...state.plugins.values()];
-            if (input.type) {
-              records = records.filter((plugin) => plugin.type === input.type);
-            }
-            if (input.capability) {
-              records = records.filter((plugin) => plugin.capabilities.includes(input.capability!));
-            }
-            return { plugins: records };
+            const records = ctx.runtime.query({
+              type: input.type as PluginRecord['type'] | undefined,
+              capability: input.capability
+            });
+            return {
+              plugins: records.map((record) => ({
+                id: record.manifest.id,
+                manifestPath: record.manifestPath,
+                enabled: record.enabled,
+                type: record.manifest.type,
+                capabilities: record.manifest.capabilities ?? [],
+                installedAt: record.installedAt
+              }))
+            };
+          })
+        )
+      },
+      init: {
+        descriptor: descriptor<{ pluginId: string; launchParams?: Record<string, unknown> }, { session: unknown }>(
+          'plugin.init',
+          ['plugin.manage'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'plugin.init', async (input) => {
+            const session = ctx.runtime.pluginInit(input.pluginId, input.launchParams ?? {});
+            await ctx.kernel.events.emit('plugin.init', 'plugin-service', { pluginId: input.pluginId, sessionId: session.sessionId });
+            return { session };
+          })
+        )
+      },
+      handshakeComplete: {
+        descriptor: descriptor<{ sessionId: string; nonce: string }, { session: unknown }>(
+          'plugin.handshake.complete',
+          ['plugin.manage'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'plugin.handshake.complete', async (input) => {
+            const session = ctx.runtime.completeHandshake(input.sessionId, input.nonce);
+            await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId: session.pluginId, sessionId: session.sessionId });
+            return { session };
           })
         )
       }
@@ -758,6 +820,108 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'platform.openExternal', async (input) => {
             await ctx.pal.platform.openExternal(input.url);
+            return { ack: true };
+          })
+        )
+      },
+      dialogOpenFile: {
+        descriptor: descriptor<{ options?: Record<string, unknown> }, { filePaths: string[] | null }>(
+          'dialog.openFile',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'dialog.openFile', async () => ({ filePaths: null }))
+        )
+      },
+      dialogSaveFile: {
+        descriptor: descriptor<{ options?: Record<string, unknown> }, { filePath: string | null }>(
+          'dialog.saveFile',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'dialog.saveFile', async () => ({ filePath: null }))
+        )
+      },
+      dialogShowMessage: {
+        descriptor: descriptor<{ options: Record<string, unknown> }, { response: number }>(
+          'dialog.showMessage',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'dialog.showMessage', async () => ({ response: 0 }))
+        )
+      },
+      dialogShowConfirm: {
+        descriptor: descriptor<{ options: Record<string, unknown> }, { confirmed: boolean }>(
+          'dialog.showConfirm',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'dialog.showConfirm', async () => ({ confirmed: true }))
+        )
+      },
+      clipboardRead: {
+        descriptor: descriptor<{ format?: string }, { data: unknown }>(
+          'clipboard.read',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'clipboard.read', async () => ({ data: state.clipboard }))
+        )
+      },
+      clipboardWrite: {
+        descriptor: descriptor<{ data: unknown; format?: string }, { ack: true }>(
+          'clipboard.write',
+          ['platform.read'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'clipboard.write', async (input) => {
+            state.clipboard = input.data;
+            return { ack: true };
+          })
+        )
+      },
+      shellOpenPath: {
+        descriptor: descriptor<{ path: string }, { ack: true }>(
+          'shell.openPath',
+          ['platform.external'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'shell.openPath', async (input) => {
+            await fs.access(input.path);
+            return { ack: true };
+          })
+        )
+      },
+      shellOpenExternal: {
+        descriptor: descriptor<{ url: string }, { ack: true }>(
+          'shell.openExternal',
+          ['platform.external'],
+          8_000,
+          false,
+          0,
+          withMetrics(state, 'shell.openExternal', async (input) => {
+            await ctx.pal.platform.openExternal(input.url);
+            return { ack: true };
+          })
+        )
+      },
+      shellShowItemInFolder: {
+        descriptor: descriptor<{ path: string }, { ack: true }>(
+          'shell.showItemInFolder',
+          ['platform.external'],
+          5_000,
+          true,
+          0,
+          withMetrics(state, 'shell.showItemInFolder', async (input) => {
+            await fs.access(path.dirname(input.path));
             return { ack: true };
           })
         )
@@ -1124,7 +1288,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       metrics: {
-        descriptor: descriptor<Record<string, unknown>, { metrics: Record<string, { count: number; failures: number }> }>(
+        descriptor: descriptor<Record<string, unknown>, { metrics: Record<string, { count: number; failures: number; p50: number; p95: number }> }>(
           'control-plane.metrics',
           ['control.read'],
           2_000,
@@ -1132,7 +1296,17 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'control-plane.metrics', async () => {
             return {
-              metrics: Object.fromEntries(state.routeMetrics.entries())
+              metrics: Object.fromEntries(
+                [...state.routeMetrics.entries()].map(([route, metric]) => [
+                  route,
+                  {
+                    count: metric.count,
+                    failures: metric.failures,
+                    p50: percentile(metric.latencies, 50),
+                    p95: percentile(metric.latencies, 95)
+                  }
+                ])
+              )
             };
           })
         )
@@ -1149,6 +1323,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               diagnose: {
                 routeCount: ctx.kernel.getRouteManifest().length,
                 serviceCount: ctx.kernel.registry.list().length,
+                runtimeSnapshot: ctx.runtime.snapshot(),
                 topFailureRoutes: [...state.routeMetrics.entries()]
                   .sort((a, b) => b[1].failures - a[1].failures)
                   .slice(0, 5)

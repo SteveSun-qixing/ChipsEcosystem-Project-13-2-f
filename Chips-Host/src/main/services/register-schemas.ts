@@ -36,12 +36,28 @@ export const registerHostSchemas = (): void => {
   registerPair('window.focus', ['windowId']);
   registerPair('window.resize', ['windowId', 'width', 'height']);
   registerPair('window.setState', ['windowId', 'state']);
+  registerPair('window.getState', ['windowId']);
+  registerPair('window.close', ['windowId']);
+
+  registerPair('dialog.openFile', []);
+  registerPair('dialog.saveFile', []);
+  registerPair('dialog.showMessage', ['options']);
+  registerPair('dialog.showConfirm', ['options']);
+
+  registerPair('clipboard.read', []);
+  registerPair('clipboard.write', ['data']);
+
+  registerPair('shell.openPath', ['path']);
+  registerPair('shell.openExternal', ['url']);
+  registerPair('shell.showItemInFolder', ['path']);
 
   registerPair('plugin.install', ['manifestPath']);
   registerPair('plugin.enable', ['pluginId']);
   registerPair('plugin.disable', ['pluginId']);
   registerPair('plugin.uninstall', ['pluginId']);
   registerPair('plugin.query', []);
+  registerPair('plugin.init', ['pluginId']);
+  registerPair('plugin.handshake.complete', ['sessionId', 'nonce']);
 
   registerPair('module.mount', ['slot', 'module']);
   registerPair('module.unmount', ['slot']);

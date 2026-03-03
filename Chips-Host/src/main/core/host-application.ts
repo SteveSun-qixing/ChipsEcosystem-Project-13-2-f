@@ -1,5 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs/promises';
 import { Kernel } from '../../../packages/kernel/src';
 import { NodePalAdapter } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
@@ -7,6 +8,7 @@ import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import { StructuredLogger } from '../../shared/logger';
 import { createBridgeForKernel } from '../../preload/create-bridge';
+import { PluginRuntime } from '../../runtime';
 import { registerHostSchemas } from '../services/register-schemas';
 import { registerHostServices } from '../services/register-host-services';
 
@@ -19,6 +21,7 @@ export class HostApplication {
   public readonly pal: NodePalAdapter;
   public readonly logger: StructuredLogger;
   public readonly workspacePath: string;
+  public readonly runtime: PluginRuntime;
 
   private started = false;
 
@@ -27,6 +30,10 @@ export class HostApplication {
     this.pal = new NodePalAdapter();
     this.logger = new StructuredLogger();
     this.workspacePath = options?.workspacePath ?? path.join(os.homedir(), '.chips-host');
+    this.runtime = new PluginRuntime(this.workspacePath, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme'
+    });
   }
 
   public async start(): Promise<void> {
@@ -35,6 +42,7 @@ export class HostApplication {
     }
 
     registerHostSchemas();
+    await this.runtime.load();
 
     await registerHostServices({
       kernel: this.kernel,
@@ -43,8 +51,15 @@ export class HostApplication {
       logger: this.logger,
       cardService: new CardService(),
       boxService: new BoxService(),
-      zipService: new StoreZipService()
+      zipService: new StoreZipService(),
+      runtime: this.runtime
     });
+
+    await fs.writeFile(
+      path.join(this.workspacePath, 'route-manifest.json'),
+      JSON.stringify(this.kernel.getRouteManifest(), null, 2),
+      'utf-8'
+    );
 
     this.started = true;
     this.logger.write({

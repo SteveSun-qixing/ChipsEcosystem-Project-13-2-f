@@ -6,7 +6,37 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
   invoke: (action, payload) => handler(action, payload) as Promise<any>,
   on: () => () => undefined,
   once: () => undefined,
-  emit: () => undefined
+  emit: () => undefined,
+  window: {
+    open: async () => ({}),
+    focus: async () => undefined,
+    resize: async () => undefined,
+    setState: async () => undefined,
+    getState: async () => ({}),
+    close: async () => undefined
+  },
+  dialog: {
+    openFile: async () => ({}),
+    saveFile: async () => ({}),
+    showMessage: async () => ({}),
+    showConfirm: async () => true
+  },
+  plugin: {
+    install: async () => ({}),
+    enable: async () => undefined,
+    disable: async () => undefined,
+    uninstall: async () => undefined,
+    query: async () => ({})
+  },
+  clipboard: {
+    read: async () => ({}),
+    write: async () => undefined
+  },
+  shell: {
+    openPath: async () => undefined,
+    openExternal: async () => undefined,
+    showItemInFolder: async () => undefined
+  }
 });
 
 describe('RuntimeClient', () => {

@@ -71,4 +71,29 @@ describe('Host services integration', () => {
     expect(report.report.services).toBe(16);
     expect(report.report.routes).toBeGreaterThan(30);
   });
+
+  it('supports plugin runtime handshake flow', async () => {
+    const manifestPath = path.join(workspace, 'runtime.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        id: 'chips.runtime.plugin',
+        version: '1.0.0',
+        type: 'app',
+        name: 'Runtime Plugin',
+        permissions: ['file.read']
+      })
+    );
+
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
+    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+    const init = await runtime.invoke<{ session: { sessionId: string; sessionNonce: string } }>('plugin.init', {
+      pluginId: installed.pluginId
+    });
+    const completed = await runtime.invoke<{ session: { status: string } }>('plugin.handshake.complete', {
+      sessionId: init.session.sessionId,
+      nonce: init.session.sessionNonce
+    });
+    expect(completed.session.status).toBe('running');
+  });
 });

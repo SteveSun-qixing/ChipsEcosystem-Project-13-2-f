@@ -173,7 +173,7 @@ interface StandardError {
 | `chips.invoke('card', 'read*')` | card.read | 读取卡片 |
 | `chips.invoke('card', 'write*')` | card.write | 修改卡片 |
 | `chips.window.openPlugin()` | window.create | 创建窗口 |
-| `chips.shell.openExternal()` | shell.openExternal | 打开外部链接 |
+| `chips.shell.openExternal()` | platform.shellOpenExternal | 打开外部链接 |
 
 ### 权限检查流程
 

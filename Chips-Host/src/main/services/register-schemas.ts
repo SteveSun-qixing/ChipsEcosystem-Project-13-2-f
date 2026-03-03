@@ -39,17 +39,26 @@ export const registerHostSchemas = (): void => {
   registerPair('window.getState', ['windowId']);
   registerPair('window.close', ['windowId']);
 
-  registerPair('dialog.openFile', []);
-  registerPair('dialog.saveFile', []);
-  registerPair('dialog.showMessage', ['options']);
-  registerPair('dialog.showConfirm', ['options']);
-
-  registerPair('clipboard.read', []);
-  registerPair('clipboard.write', ['data']);
-
-  registerPair('shell.openPath', ['path']);
-  registerPair('shell.openExternal', ['url']);
-  registerPair('shell.showItemInFolder', ['path']);
+  registerPair('platform.dialogOpenFile', []);
+  registerPair('platform.dialogSaveFile', []);
+  registerPair('platform.dialogShowMessage', ['options']);
+  registerPair('platform.dialogShowConfirm', ['options']);
+  registerPair('platform.clipboardRead', []);
+  registerPair('platform.clipboardWrite', ['data']);
+  registerPair('platform.shellOpenPath', ['path']);
+  registerPair('platform.shellOpenExternal', ['url']);
+  registerPair('platform.shellShowItemInFolder', ['path']);
+  registerPair('platform.notificationShow', ['options']);
+  registerPair('platform.traySet', ['options']);
+  registerPair('platform.trayClear', []);
+  registerPair('platform.trayGetState', []);
+  registerPair('platform.shortcutRegister', ['accelerator']);
+  registerPair('platform.shortcutUnregister', ['accelerator']);
+  registerPair('platform.shortcutIsRegistered', ['accelerator']);
+  registerPair('platform.shortcutList', []);
+  registerPair('platform.shortcutClear', []);
+  registerPair('platform.powerGetState', []);
+  registerPair('platform.powerSetPreventSleep', ['prevent']);
 
   registerPair('plugin.install', ['manifestPath']);
   registerPair('plugin.enable', ['pluginId']);

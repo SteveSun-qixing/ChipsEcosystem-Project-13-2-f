@@ -21,7 +21,16 @@ const ACTION_ALIASES: Record<string, string> = {
   'theme.getCSS': 'theme.getAllCss',
   'theme.setCurrent': 'theme.apply',
   'i18n.getCurrentLanguage': 'i18n.getCurrent',
-  'i18n.setLanguage': 'i18n.setCurrent'
+  'i18n.setLanguage': 'i18n.setCurrent',
+  'dialog.openFile': 'platform.dialogOpenFile',
+  'dialog.saveFile': 'platform.dialogSaveFile',
+  'dialog.showMessage': 'platform.dialogShowMessage',
+  'dialog.showConfirm': 'platform.dialogShowConfirm',
+  'clipboard.read': 'platform.clipboardRead',
+  'clipboard.write': 'platform.clipboardWrite',
+  'shell.openPath': 'platform.shellOpenPath',
+  'shell.openExternal': 'platform.shellOpenExternal',
+  'shell.showItemInFolder': 'platform.shellShowItemInFolder'
 };
 
 const DEFAULT_OPTIONS: RuntimeClientOptions = {

@@ -51,6 +51,7 @@
 ### 2.3 子域参数基线
 
 - `dialog.openFile(options)`：
+  - 桥接到主机动作：`platform.dialogOpenFile`
   - `defaultPath` 存在时优先直接返回该路径（用于自动化与无头场景）
   - `mode` 支持 `file | directory`
   - `allowMultiple` 控制多选
@@ -59,14 +60,17 @@
   - 可选：`config.url`（插件入口）、`config.pluginId`（插件标识）、`config.sessionId`（会话标识）
   - 当 `url` 为本地 HTML 路径时由主机加载本地入口；为 `http(s)/file/chips` URL 时按 URL 方式加载
 - `dialog.saveFile(options)`：
+  - 桥接到主机动作：`platform.dialogSaveFile`
   - `defaultPath` 存在时返回该路径并确保目录可写
 - `plugin.install(payload)`：
   - 入参字段：`manifestPath`（兼容字段名）
   - 支持路径类型：插件目录、`.cpk` 包、`manifest.yaml/yml/json` 清单文件
   - 安装后由主机统一落库存储到主机插件目录
 - `clipboard.read/write`：
+  - 桥接到主机动作：`platform.clipboardRead/platform.clipboardWrite`
   - 当前基线仅支持 `text` 格式
 - `shell.openPath/openExternal/showItemInFolder`：
+  - 桥接到主机动作：`platform.shellOpenPath/platform.shellOpenExternal/platform.shellShowItemInFolder`
   - 对应系统原生命令打开行为，不做业务层路径改写
 
 ## 2.4 通道命名

@@ -165,7 +165,7 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
     };
   }
 
-  await runtime.invoke('shell.openPath', { path: targetPath });
+  await runtime.invoke('platform.shellOpenPath', { path: targetPath });
   return {
     targetPath,
     extension,

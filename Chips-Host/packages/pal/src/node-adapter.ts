@@ -19,9 +19,17 @@ import type {
   PALClipboard,
   PALDialog,
   PALFileSystem,
+  PALNotification,
   PALPlatform,
+  PALPower,
   PALShell,
+  PALShortcut,
+  PALTray,
   PALWindow,
+  NotificationOptions,
+  PowerState,
+  TrayOptions,
+  TrayState,
   WindowOptions,
   WindowState
 } from './types';
@@ -657,6 +665,182 @@ class NodeShell implements PALShell {
   }
 }
 
+class NodeTray implements PALTray {
+  private readonly electron = loadElectronModule();
+  private tray: { setImage(image: string): void; setToolTip(text: string): void; setContextMenu(menu: unknown): void; destroy(): void; isDestroyed?(): boolean } | null = null;
+  private state: TrayState = { active: false };
+
+  public async set(options: TrayOptions): Promise<TrayState> {
+    this.state = {
+      ...this.state,
+      ...options,
+      menu: options.menu ? [...options.menu] : this.state.menu,
+      active: true
+    };
+
+    if (this.electron?.Tray) {
+      if (!this.tray) {
+        if (!options.icon) {
+          throw createError('PAL_TRAY_ICON_REQUIRED', 'Tray icon is required when Electron tray is enabled');
+        }
+        this.tray = new this.electron.Tray(options.icon);
+      } else if (options.icon) {
+        this.tray.setImage(options.icon);
+      }
+
+      if (options.tooltip) {
+        this.tray.setToolTip(options.tooltip);
+      }
+
+      if (options.menu && this.electron.Menu?.buildFromTemplate) {
+        const menu = this.electron.Menu.buildFromTemplate(
+          options.menu.map((item) => ({
+            id: item.id,
+            label: item.label
+          }))
+        );
+        this.tray.setContextMenu(menu);
+      }
+    }
+
+    return {
+      ...this.state,
+      menu: this.state.menu ? [...this.state.menu] : undefined
+    };
+  }
+
+  public async clear(): Promise<void> {
+    if (this.tray && !(this.tray.isDestroyed?.() ?? false)) {
+      this.tray.destroy();
+    }
+    this.tray = null;
+    this.state = { active: false };
+  }
+
+  public async getState(): Promise<TrayState> {
+    return {
+      ...this.state,
+      menu: this.state.menu ? [...this.state.menu] : undefined
+    };
+  }
+}
+
+class NodeNotification implements PALNotification {
+  private readonly electron = loadElectronModule();
+
+  public async show(options: NotificationOptions): Promise<void> {
+    if (this.electron?.Notification) {
+      const notification = new this.electron.Notification({
+        title: options.title,
+        body: options.body,
+        icon: options.icon,
+        silent: options.silent ?? false
+      });
+      notification.show();
+      return;
+    }
+
+    if (process.platform === 'darwin') {
+      const title = quoteAppleScript(options.title);
+      const body = quoteAppleScript(options.body);
+      await runCommand('osascript', ['-e', `display notification "${body}" with title "${title}"`]);
+      return;
+    }
+
+    if (process.platform === 'linux' && (await commandExists('notify-send'))) {
+      await runCommand('notify-send', [options.title, options.body]);
+      return;
+    }
+
+    process.stdout.write(`[notification] ${options.title}: ${options.body}\n`);
+  }
+}
+
+class NodeShortcut implements PALShortcut {
+  private readonly electron = loadElectronModule();
+  private readonly callbacks = new Map<string, () => void>();
+
+  public async register(accelerator: string, onTrigger?: () => void): Promise<boolean> {
+    if (this.electron?.globalShortcut) {
+      const registered = this.electron.globalShortcut.register(accelerator, () => {
+        const callback = this.callbacks.get(accelerator);
+        callback?.();
+      });
+      if (!registered) {
+        return false;
+      }
+      if (onTrigger) {
+        this.callbacks.set(accelerator, onTrigger);
+      }
+      return true;
+    }
+
+    if (onTrigger) {
+      this.callbacks.set(accelerator, onTrigger);
+    } else if (!this.callbacks.has(accelerator)) {
+      this.callbacks.set(accelerator, () => {});
+    }
+    return true;
+  }
+
+  public async unregister(accelerator: string): Promise<void> {
+    this.electron?.globalShortcut?.unregister(accelerator);
+    this.callbacks.delete(accelerator);
+  }
+
+  public async isRegistered(accelerator: string): Promise<boolean> {
+    if (this.electron?.globalShortcut) {
+      return this.electron.globalShortcut.isRegistered(accelerator);
+    }
+    return this.callbacks.has(accelerator);
+  }
+
+  public async list(): Promise<string[]> {
+    return [...this.callbacks.keys()];
+  }
+
+  public async clear(): Promise<void> {
+    this.electron?.globalShortcut?.unregisterAll();
+    this.callbacks.clear();
+  }
+}
+
+class NodePower implements PALPower {
+  private readonly electron = loadElectronModule();
+  private blockerId: number | null = null;
+  private preventSleep = false;
+
+  public async getState(): Promise<PowerState> {
+    const idleSeconds = this.electron?.powerMonitor?.getSystemIdleTime?.() ?? 0;
+    return {
+      idleSeconds,
+      preventSleep: this.preventSleep
+    };
+  }
+
+  public async setPreventSleep(prevent: boolean): Promise<boolean> {
+    if (!prevent) {
+      if (this.blockerId !== null && this.electron?.powerSaveBlocker?.isStarted(this.blockerId)) {
+        this.electron.powerSaveBlocker.stop(this.blockerId);
+      }
+      this.blockerId = null;
+      this.preventSleep = false;
+      return false;
+    }
+
+    if (this.electron?.powerSaveBlocker) {
+      if (this.blockerId !== null && this.electron.powerSaveBlocker.isStarted(this.blockerId)) {
+        this.preventSleep = true;
+        return true;
+      }
+      this.blockerId = this.electron.powerSaveBlocker.start('prevent-app-suspension');
+    }
+
+    this.preventSleep = true;
+    return true;
+  }
+}
+
 class NodePlatform implements PALPlatform {
   public async getInfo() {
     return {
@@ -667,7 +851,7 @@ class NodePlatform implements PALPlatform {
   }
 
   public async getCapabilities(): Promise<string[]> {
-    return ['window', 'file', 'dialog', 'clipboard', 'shell', 'tray', 'power', 'shortcut', 'ipc'];
+    return ['window', 'file', 'dialog', 'clipboard', 'shell', 'tray', 'notification', 'power', 'shortcut', 'ipc'];
   }
 }
 
@@ -678,4 +862,8 @@ export class NodePalAdapter implements PALAdapter {
   public readonly clipboard: PALClipboard = new NodeClipboard();
   public readonly shell: PALShell = new NodeShell();
   public readonly platform: PALPlatform = new NodePlatform();
+  public readonly tray: PALTray = new NodeTray();
+  public readonly notification: PALNotification = new NodeNotification();
+  public readonly shortcut: PALShortcut = new NodeShortcut();
+  public readonly power: PALPower = new NodePower();
 }

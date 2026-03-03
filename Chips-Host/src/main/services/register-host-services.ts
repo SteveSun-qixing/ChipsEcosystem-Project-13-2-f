@@ -883,12 +883,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       dialogOpenFile: {
         descriptor: descriptor<{ options?: Record<string, unknown> }, { filePaths: string[] | null }>(
-          'dialog.openFile',
+          'platform.dialogOpenFile',
           ['platform.read'],
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.openFile', async (input) => {
+          withMetrics(state, 'platform.dialogOpenFile', async (input) => {
             const filePaths = await ctx.pal.dialog.openFile(input.options);
             return { filePaths };
           })
@@ -896,12 +896,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       dialogSaveFile: {
         descriptor: descriptor<{ options?: Record<string, unknown> }, { filePath: string | null }>(
-          'dialog.saveFile',
+          'platform.dialogSaveFile',
           ['platform.read'],
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.saveFile', async (input) => {
+          withMetrics(state, 'platform.dialogSaveFile', async (input) => {
             const filePath = await ctx.pal.dialog.saveFile(input.options);
             return { filePath };
           })
@@ -909,14 +909,14 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       dialogShowMessage: {
         descriptor: descriptor<{ options: Record<string, unknown> }, { response: number }>(
-          'dialog.showMessage',
+          'platform.dialogShowMessage',
           ['platform.read'],
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.showMessage', async (input) => {
+          withMetrics(state, 'platform.dialogShowMessage', async (input) => {
             if (typeof input.options.message !== 'string') {
-              throw createError('DIALOG_INVALID_OPTIONS', 'dialog.showMessage requires options.message');
+              throw createError('DIALOG_INVALID_OPTIONS', 'platform.dialogShowMessage requires options.message');
             }
             const response = await ctx.pal.dialog.showMessage({
               title: typeof input.options.title === 'string' ? input.options.title : undefined,
@@ -929,14 +929,14 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       dialogShowConfirm: {
         descriptor: descriptor<{ options: Record<string, unknown> }, { confirmed: boolean }>(
-          'dialog.showConfirm',
+          'platform.dialogShowConfirm',
           ['platform.read'],
           2_000,
           true,
           0,
-          withMetrics(state, 'dialog.showConfirm', async (input) => {
+          withMetrics(state, 'platform.dialogShowConfirm', async (input) => {
             if (typeof input.options.message !== 'string') {
-              throw createError('DIALOG_INVALID_OPTIONS', 'dialog.showConfirm requires options.message');
+              throw createError('DIALOG_INVALID_OPTIONS', 'platform.dialogShowConfirm requires options.message');
             }
             const confirmed = await ctx.pal.dialog.showConfirm({
               title: typeof input.options.title === 'string' ? input.options.title : undefined,
@@ -949,12 +949,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       clipboardRead: {
         descriptor: descriptor<{ format?: string }, { data: unknown }>(
-          'clipboard.read',
+          'platform.clipboardRead',
           ['platform.read'],
           2_000,
           true,
           0,
-          withMetrics(state, 'clipboard.read', async (input) => {
+          withMetrics(state, 'platform.clipboardRead', async (input) => {
             const format = input.format === 'text' || !input.format ? 'text' : undefined;
             if (!format) {
               throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
@@ -967,14 +967,14 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       clipboardWrite: {
         descriptor: descriptor<{ data: unknown; format?: string }, { ack: true }>(
-          'clipboard.write',
+          'platform.clipboardWrite',
           ['platform.read'],
           2_000,
           false,
           0,
-          withMetrics(state, 'clipboard.write', async (input) => {
+          withMetrics(state, 'platform.clipboardWrite', async (input) => {
             if (typeof input.data !== 'string') {
-              throw createError('CLIPBOARD_INVALID_PAYLOAD', 'clipboard.write requires string data');
+              throw createError('CLIPBOARD_INVALID_PAYLOAD', 'platform.clipboardWrite requires string data');
             }
             await ctx.pal.clipboard.write(input.data, input.format === 'text' || !input.format ? 'text' : 'text');
             state.clipboard = input.data;
@@ -984,12 +984,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       shellOpenPath: {
         descriptor: descriptor<{ path: string }, { ack: true }>(
-          'shell.openPath',
+          'platform.shellOpenPath',
           ['platform.external'],
           5_000,
           false,
           0,
-          withMetrics(state, 'shell.openPath', async (input) => {
+          withMetrics(state, 'platform.shellOpenPath', async (input) => {
             await ctx.pal.shell.openPath(input.path);
             return { ack: true };
           })
@@ -997,12 +997,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       shellOpenExternal: {
         descriptor: descriptor<{ url: string }, { ack: true }>(
-          'shell.openExternal',
+          'platform.shellOpenExternal',
           ['platform.external'],
           8_000,
           false,
           0,
-          withMetrics(state, 'shell.openExternal', async (input) => {
+          withMetrics(state, 'platform.shellOpenExternal', async (input) => {
             await ctx.pal.shell.openExternal(input.url);
             return { ack: true };
           })
@@ -1010,14 +1010,173 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       shellShowItemInFolder: {
         descriptor: descriptor<{ path: string }, { ack: true }>(
-          'shell.showItemInFolder',
+          'platform.shellShowItemInFolder',
           ['platform.external'],
           5_000,
           true,
           0,
-          withMetrics(state, 'shell.showItemInFolder', async (input) => {
+          withMetrics(state, 'platform.shellShowItemInFolder', async (input) => {
             await ctx.pal.shell.showItemInFolder(input.path);
             return { ack: true };
+          })
+        )
+      },
+      notificationShow: {
+        descriptor: descriptor<{ options: { title: string; body: string; icon?: string; silent?: boolean } }, { ack: true }>(
+          'platform.notificationShow',
+          ['platform.read'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'platform.notificationShow', async (input) => {
+            if (typeof input.options.title !== 'string' || typeof input.options.body !== 'string') {
+              throw createError('PLATFORM_NOTIFICATION_INVALID', 'platform.notificationShow requires title/body');
+            }
+            await ctx.pal.notification.show(input.options);
+            return { ack: true };
+          })
+        )
+      },
+      traySet: {
+        descriptor: descriptor<{ options: { icon?: string; tooltip?: string; menu?: Array<{ id: string; label: string }> } }, { tray: unknown }>(
+          'platform.traySet',
+          ['platform.external'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'platform.traySet', async (input) => {
+            const tray = await ctx.pal.tray.set(input.options ?? {});
+            await ctx.kernel.events.emit('platform.tray.changed', 'platform-service', { tray });
+            return { tray };
+          })
+        )
+      },
+      trayClear: {
+        descriptor: descriptor<Record<string, unknown>, { ack: true }>(
+          'platform.trayClear',
+          ['platform.external'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'platform.trayClear', async () => {
+            await ctx.pal.tray.clear();
+            await ctx.kernel.events.emit('platform.tray.changed', 'platform-service', { tray: { active: false } });
+            return { ack: true };
+          })
+        )
+      },
+      trayGetState: {
+        descriptor: descriptor<Record<string, unknown>, { tray: unknown }>(
+          'platform.trayGetState',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'platform.trayGetState', async () => {
+            const tray = await ctx.pal.tray.getState();
+            return { tray };
+          })
+        )
+      },
+      shortcutRegister: {
+        descriptor: descriptor<{ accelerator: string; eventName?: string }, { registered: boolean }>(
+          'platform.shortcutRegister',
+          ['platform.external'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'platform.shortcutRegister', async (input) => {
+            if (typeof input.accelerator !== 'string' || input.accelerator.length === 0) {
+              throw createError('PLATFORM_SHORTCUT_INVALID', 'platform.shortcutRegister requires accelerator');
+            }
+            const eventName = typeof input.eventName === 'string' && input.eventName.length > 0
+              ? input.eventName
+              : 'platform.shortcut.triggered';
+            const registered = await ctx.pal.shortcut.register(input.accelerator, () => {
+              void ctx.kernel.events.emit(eventName, 'platform-shortcut', { accelerator: input.accelerator });
+            });
+            if (!registered) {
+              throw createError('PLATFORM_SHORTCUT_REGISTER_FAILED', `Cannot register shortcut: ${input.accelerator}`);
+            }
+            return { registered: true };
+          })
+        )
+      },
+      shortcutUnregister: {
+        descriptor: descriptor<{ accelerator: string }, { ack: true }>(
+          'platform.shortcutUnregister',
+          ['platform.external'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'platform.shortcutUnregister', async (input) => {
+            await ctx.pal.shortcut.unregister(input.accelerator);
+            return { ack: true };
+          })
+        )
+      },
+      shortcutIsRegistered: {
+        descriptor: descriptor<{ accelerator: string }, { registered: boolean }>(
+          'platform.shortcutIsRegistered',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'platform.shortcutIsRegistered', async (input) => {
+            const registered = await ctx.pal.shortcut.isRegistered(input.accelerator);
+            return { registered };
+          })
+        )
+      },
+      shortcutList: {
+        descriptor: descriptor<Record<string, unknown>, { accelerators: string[] }>(
+          'platform.shortcutList',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'platform.shortcutList', async () => {
+            const accelerators = await ctx.pal.shortcut.list();
+            return { accelerators };
+          })
+        )
+      },
+      shortcutClear: {
+        descriptor: descriptor<Record<string, unknown>, { ack: true }>(
+          'platform.shortcutClear',
+          ['platform.external'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'platform.shortcutClear', async () => {
+            await ctx.pal.shortcut.clear();
+            return { ack: true };
+          })
+        )
+      },
+      powerGetState: {
+        descriptor: descriptor<Record<string, unknown>, { state: unknown }>(
+          'platform.powerGetState',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'platform.powerGetState', async () => {
+            const powerState = await ctx.pal.power.getState();
+            return { state: powerState };
+          })
+        )
+      },
+      powerSetPreventSleep: {
+        descriptor: descriptor<{ prevent: boolean }, { preventSleep: boolean }>(
+          'platform.powerSetPreventSleep',
+          ['platform.external'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'platform.powerSetPreventSleep', async (input) => {
+            const preventSleep = await ctx.pal.power.setPreventSleep(Boolean(input.prevent));
+            return { preventSleep };
           })
         )
       }

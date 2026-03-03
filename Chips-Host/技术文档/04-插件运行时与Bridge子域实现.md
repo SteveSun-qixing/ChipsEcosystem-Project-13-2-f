@@ -24,10 +24,13 @@
 
 子域动作映射：
 - `window.*` -> `window.open/focus/resize/setState/getState/close`
-- `dialog.*` -> `dialog.openFile/saveFile/showMessage/showConfirm`
+- `dialog.*` -> `platform.dialogOpenFile/dialogSaveFile/dialogShowMessage/dialogShowConfirm`
 - `plugin.*` -> `plugin.install/enable/disable/uninstall/query`
-- `clipboard.*` -> `clipboard.read/write`
-- `shell.*` -> `shell.openPath/openExternal/showItemInFolder`
+- `clipboard.*` -> `platform.clipboardRead/clipboardWrite`
+- `shell.*` -> `platform.shellOpenPath/shellOpenExternal/shellShowItemInFolder`
+- `notification.*` -> `platform.notificationShow`
+- `tray.*` -> `platform.traySet/trayClear/trayGetState`
+- `shortcut.*` -> `platform.shortcutRegister/shortcutUnregister/shortcutIsRegistered/shortcutList/shortcutClear`
 
 ## 服务注册联动
 

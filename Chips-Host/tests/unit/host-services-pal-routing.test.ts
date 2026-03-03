@@ -22,6 +22,10 @@ interface PalState {
   shellOpenPath: string[];
   shellOpenExternal: string[];
   shellShowInFolder: string[];
+  notifications: Array<{ title: string; body: string }>;
+  trayActive: boolean;
+  shortcuts: string[];
+  preventSleep: boolean;
 }
 
 const createContextFactory = () => {
@@ -139,7 +143,56 @@ const createPal = (state: PalState): PALAdapter => {
         };
       },
       async getCapabilities() {
-        return ['dialog', 'clipboard', 'shell'];
+        return ['dialog', 'clipboard', 'shell', 'tray', 'notification', 'shortcut', 'power'];
+      }
+    },
+    tray: {
+      async set() {
+        state.trayActive = true;
+        return { active: true };
+      },
+      async clear() {
+        state.trayActive = false;
+      },
+      async getState() {
+        return { active: state.trayActive };
+      }
+    },
+    notification: {
+      async show(options) {
+        state.notifications.push({ title: options.title, body: options.body });
+      }
+    },
+    shortcut: {
+      async register(accelerator) {
+        if (!state.shortcuts.includes(accelerator)) {
+          state.shortcuts.push(accelerator);
+        }
+        return true;
+      },
+      async unregister(accelerator) {
+        state.shortcuts = state.shortcuts.filter((item) => item !== accelerator);
+      },
+      async isRegistered(accelerator) {
+        return state.shortcuts.includes(accelerator);
+      },
+      async list() {
+        return [...state.shortcuts];
+      },
+      async clear() {
+        state.shortcuts = [];
+      }
+    },
+    power: {
+      async getState() {
+        return {
+          idleSeconds: 0,
+          preventSleep: state.preventSleep
+        };
+      },
+      async setPreventSleep(prevent) {
+        state.preventSleep = prevent;
+        return prevent;
       }
     }
   };
@@ -165,7 +218,11 @@ describe('Host services PAL routing', () => {
       dialogConfirmArgs: [],
       shellOpenPath: [],
       shellOpenExternal: [],
-      shellShowInFolder: []
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false
     };
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
@@ -185,22 +242,22 @@ describe('Host services PAL routing', () => {
     const platformRead = ['platform.read'];
 
     const opened = await kernel.invoke<{ options: { defaultPath: string } }, { filePaths: string[] | null }>(
-      'dialog.openFile',
+      'platform.dialogOpenFile',
       { options: { defaultPath: '/tmp/demo.txt' } },
       context(platformRead)
     );
     const saved = await kernel.invoke<{ options: { defaultPath: string } }, { filePath: string | null }>(
-      'dialog.saveFile',
+      'platform.dialogSaveFile',
       { options: { defaultPath: '/tmp/output.txt' } },
       context(platformRead)
     );
     const message = await kernel.invoke<{ options: { message: string } }, { response: number }>(
-      'dialog.showMessage',
+      'platform.dialogShowMessage',
       { options: { message: 'hello' } },
       context(platformRead)
     );
     const confirm = await kernel.invoke<{ options: { message: string } }, { confirmed: boolean }>(
-      'dialog.showConfirm',
+      'platform.dialogShowConfirm',
       { options: { message: 'ok?' } },
       context(platformRead)
     );
@@ -224,7 +281,11 @@ describe('Host services PAL routing', () => {
       dialogConfirmArgs: [],
       shellOpenPath: [],
       shellOpenExternal: [],
-      shellShowInFolder: []
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false
     };
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
@@ -244,21 +305,29 @@ describe('Host services PAL routing', () => {
     const platformRead = ['platform.read'];
     const platformExternal = ['platform.external'];
 
-    await kernel.invoke('clipboard.write', { data: 'chips-data', format: 'text' }, context(platformRead));
+    await kernel.invoke('platform.clipboardWrite', { data: 'chips-data', format: 'text' }, context(platformRead));
     const readBack = await kernel.invoke<{ format: 'text' }, { data: string }>(
-      'clipboard.read',
+      'platform.clipboardRead',
       { format: 'text' },
       context(platformRead)
     );
 
-    await kernel.invoke('shell.openPath', { path: '/tmp/chips/a.txt' }, context(platformExternal));
-    await kernel.invoke('shell.openExternal', { url: 'https://chips.example' }, context(platformExternal));
-    await kernel.invoke('shell.showItemInFolder', { path: '/tmp/chips/a.txt' }, context(platformExternal));
+    await kernel.invoke('platform.shellOpenPath', { path: '/tmp/chips/a.txt' }, context(platformExternal));
+    await kernel.invoke('platform.shellOpenExternal', { url: 'https://chips.example' }, context(platformExternal));
+    await kernel.invoke('platform.shellShowItemInFolder', { path: '/tmp/chips/a.txt' }, context(platformExternal));
     await kernel.invoke('platform.openExternal', { url: 'https://chips.example/platform' }, context(platformExternal));
+    await kernel.invoke('platform.notificationShow', { options: { title: 'chips', body: 'ready' } }, context(platformRead));
+    await kernel.invoke('platform.traySet', { options: { tooltip: 'chips' } }, context(platformExternal));
+    await kernel.invoke('platform.shortcutRegister', { accelerator: 'CommandOrControl+Shift+N' }, context(platformExternal));
+    await kernel.invoke('platform.powerSetPreventSleep', { prevent: true }, context(platformExternal));
 
     expect(readBack.data).toBe('chips-data');
     expect(state.shellOpenPath).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellShowInFolder).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellOpenExternal).toEqual(['https://chips.example', 'https://chips.example/platform']);
+    expect(state.notifications).toEqual([{ title: 'chips', body: 'ready' }]);
+    expect(state.trayActive).toBe(true);
+    expect(state.shortcuts).toContain('CommandOrControl+Shift+N');
+    expect(state.preventSleep).toBe(true);
   });
 });

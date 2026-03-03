@@ -58,6 +58,13 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     isRegistered: async () => false,
     list: async () => [],
     clear: async () => undefined
+  },
+  ipc: {
+    createChannel: async () => ({}),
+    send: async () => undefined,
+    receive: async () => ({}),
+    closeChannel: async () => undefined,
+    listChannels: async () => []
   }
 });
 

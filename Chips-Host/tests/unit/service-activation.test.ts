@@ -69,6 +69,12 @@ const createPal = (): PALAdapter => ({
     },
     async list() {
       return [];
+    },
+    async watch() {
+      return {
+        id: 'watch-1',
+        async close() {}
+      };
     }
   },
   dialog: {
@@ -142,6 +148,28 @@ const createPal = (): PALAdapter => ({
     },
     async setPreventSleep(prevent) {
       return prevent;
+    }
+  },
+  ipc: {
+    async createChannel(options) {
+      return {
+        channelId: 'ipc-1',
+        name: options.name,
+        transport: options.transport
+      };
+    },
+    async send() {},
+    async receive() {
+      return {
+        channelId: 'ipc-1',
+        transport: 'shared-memory',
+        payload: Buffer.from(''),
+        receivedAt: Date.now()
+      };
+    },
+    async closeChannel() {},
+    async listChannels() {
+      return [];
     }
   }
 });

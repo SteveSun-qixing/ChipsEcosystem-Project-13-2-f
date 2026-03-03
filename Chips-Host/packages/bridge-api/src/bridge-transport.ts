@@ -69,6 +69,17 @@ export interface ChipsBridge {
     list(): Promise<string[]>;
     clear(): Promise<void>;
   };
+  ipc: {
+    createChannel(options: {
+      name: string;
+      transport: 'named-pipe' | 'unix-socket' | 'shared-memory';
+      maxBufferBytes?: number;
+    }): Promise<unknown>;
+    send(channelId: string, payload: string, encoding?: 'utf8' | 'base64'): Promise<void>;
+    receive(channelId: string, timeoutMs?: number): Promise<unknown>;
+    closeChannel(channelId: string): Promise<void>;
+    listChannels(): Promise<unknown[]>;
+  };
 }
 
 export class BridgeTransport implements ChipsBridge {
@@ -83,6 +94,7 @@ export class BridgeTransport implements ChipsBridge {
   public readonly notification: ChipsBridge['notification'];
   public readonly tray: ChipsBridge['tray'];
   public readonly shortcut: ChipsBridge['shortcut'];
+  public readonly ipc: ChipsBridge['ipc'];
 
   public constructor(private readonly invokeHandler: BridgeInvokeHandler, options?: { eventAdapter?: BridgeEventAdapter }) {
     this.eventAdapter = options?.eventAdapter;
@@ -191,6 +203,22 @@ export class BridgeTransport implements ChipsBridge {
       },
       clear: async () => {
         await this.invoke('platform.shortcutClear', {});
+      }
+    };
+
+    this.ipc = {
+      createChannel: async (options) => this.invoke<unknown>('platform.ipcCreateChannel', options),
+      send: async (channelId, payload, encoding) => {
+        await this.invoke('platform.ipcSend', { channelId, payload, encoding });
+      },
+      receive: async (channelId, timeoutMs) =>
+        this.invoke<unknown>('platform.ipcReceive', { channelId, timeoutMs }),
+      closeChannel: async (channelId) => {
+        await this.invoke('platform.ipcCloseChannel', { channelId });
+      },
+      listChannels: async () => {
+        const result = await this.invoke<{ channels: unknown[] }>('platform.ipcListChannels', {});
+        return result.channels;
       }
     };
   }

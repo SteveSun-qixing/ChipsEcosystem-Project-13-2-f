@@ -275,6 +275,48 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             return { entries };
           })
         )
+      },
+      watch: {
+        descriptor: descriptor<{ path: string; timeoutMs?: number }, { event: unknown | null }>(
+          'file.watch',
+          ['file.read'],
+          30_000,
+          true,
+          0,
+          withMetrics(state, 'file.watch', async (input) => {
+            const timeoutMs = typeof input.timeoutMs === 'number' && input.timeoutMs > 0 ? input.timeoutMs : 5_000;
+            const event = await new Promise<unknown | null>(async (resolve, reject) => {
+              let closed = false;
+              let subscription: Awaited<ReturnType<typeof ctx.pal.fs.watch>> | undefined;
+              const closeWatch = async () => {
+                if (closed) {
+                  return;
+                }
+                closed = true;
+                await subscription?.close();
+              };
+
+              const timer = setTimeout(async () => {
+                await closeWatch();
+                resolve(null);
+              }, timeoutMs);
+
+              try {
+                subscription = await ctx.pal.fs.watch(input.path, async (watchEvent) => {
+                  clearTimeout(timer);
+                  await closeWatch();
+                  resolve(watchEvent);
+                });
+              } catch (error) {
+                clearTimeout(timer);
+                await closeWatch();
+                reject(error);
+              }
+            });
+
+            return { event };
+          })
+        )
       }
     }
   };
@@ -955,8 +997,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.clipboardRead', async (input) => {
-            const format = input.format === 'text' || !input.format ? 'text' : undefined;
-            if (!format) {
+            const format = input.format ?? 'text';
+            if (format !== 'text' && format !== 'image' && format !== 'files') {
               throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
             }
             const data = await ctx.pal.clipboard.read(format);
@@ -973,10 +1015,28 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.clipboardWrite', async (input) => {
-            if (typeof input.data !== 'string') {
-              throw createError('CLIPBOARD_INVALID_PAYLOAD', 'platform.clipboardWrite requires string data');
+            const format = input.format ?? 'text';
+            if (format === 'text' && typeof input.data !== 'string') {
+              throw createError('CLIPBOARD_INVALID_PAYLOAD', 'platform.clipboardWrite requires string data when format=text');
             }
-            await ctx.pal.clipboard.write(input.data, input.format === 'text' || !input.format ? 'text' : 'text');
+            if (format === 'image') {
+              if (
+                !input.data ||
+                typeof input.data !== 'object' ||
+                typeof (input.data as { base64?: unknown }).base64 !== 'string'
+              ) {
+                throw createError('CLIPBOARD_INVALID_PAYLOAD', 'platform.clipboardWrite requires { base64 } when format=image');
+              }
+            }
+            if (format === 'files') {
+              if (!Array.isArray(input.data) || input.data.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+                throw createError('CLIPBOARD_INVALID_PAYLOAD', 'platform.clipboardWrite requires string[] when format=files');
+              }
+            }
+            if (format !== 'text' && format !== 'image' && format !== 'files') {
+              throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
+            }
+            await ctx.pal.clipboard.write(input.data as never, format);
             state.clipboard = input.data;
             return { ack: true };
           })
@@ -1177,6 +1237,135 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'platform.powerSetPreventSleep', async (input) => {
             const preventSleep = await ctx.pal.power.setPreventSleep(Boolean(input.prevent));
             return { preventSleep };
+          })
+        )
+      },
+      ipcCreateChannel: {
+        descriptor: descriptor<{ name: string; transport: 'named-pipe' | 'unix-socket' | 'shared-memory'; maxBufferBytes?: number }, { channel: unknown }>(
+          'platform.ipcCreateChannel',
+          ['platform.external'],
+          4_000,
+          false,
+          0,
+          withMetrics(state, 'platform.ipcCreateChannel', async (input, routeContext) => {
+            if (typeof input.name !== 'string' || input.name.trim().length === 0) {
+              throw createError('PLATFORM_IPC_INVALID_CHANNEL', 'platform.ipcCreateChannel requires channel name');
+            }
+            if (input.transport !== 'named-pipe' && input.transport !== 'unix-socket' && input.transport !== 'shared-memory') {
+              throw createError('PLATFORM_IPC_INVALID_TRANSPORT', `Unsupported IPC transport: ${String(input.transport)}`);
+            }
+            const channel = await ctx.pal.ipc.createChannel({
+              name: input.name,
+              transport: input.transport,
+              maxBufferBytes: input.maxBufferBytes
+            });
+            ctx.logger.write({
+              level: 'info',
+              message: 'Platform IPC channel created',
+              requestId: routeContext.requestId,
+              pluginId: routeContext.caller.pluginId,
+              namespace: 'platform',
+              action: 'ipcCreateChannel',
+              result: 'success',
+              metadata: { channelId: channel.channelId, transport: channel.transport }
+            });
+            return { channel };
+          })
+        )
+      },
+      ipcSend: {
+        descriptor: descriptor<{ channelId: string; payload: string; encoding?: 'utf8' | 'base64' }, { ack: true }>(
+          'platform.ipcSend',
+          ['platform.external'],
+          4_000,
+          false,
+          0,
+          withMetrics(state, 'platform.ipcSend', async (input, routeContext) => {
+            if (typeof input.channelId !== 'string' || input.channelId.length === 0) {
+              throw createError('PLATFORM_IPC_INVALID_CHANNEL', 'platform.ipcSend requires channelId');
+            }
+            if (typeof input.payload !== 'string') {
+              throw createError('PLATFORM_IPC_INVALID_PAYLOAD', 'platform.ipcSend requires string payload');
+            }
+            const encoding = input.encoding === 'base64' ? 'base64' : 'utf8';
+            const payload = encoding === 'base64' ? Buffer.from(input.payload, 'base64') : input.payload;
+            await ctx.pal.ipc.send(input.channelId, payload);
+            ctx.logger.write({
+              level: 'info',
+              message: 'Platform IPC payload sent',
+              requestId: routeContext.requestId,
+              pluginId: routeContext.caller.pluginId,
+              namespace: 'platform',
+              action: 'ipcSend',
+              result: 'success',
+              metadata: { channelId: input.channelId, bytes: Buffer.isBuffer(payload) ? payload.length : Buffer.byteLength(payload) }
+            });
+            return { ack: true };
+          })
+        )
+      },
+      ipcReceive: {
+        descriptor: descriptor<{ channelId: string; timeoutMs?: number }, { message: unknown }>(
+          'platform.ipcReceive',
+          ['platform.read'],
+          35_000,
+          true,
+          0,
+          withMetrics(state, 'platform.ipcReceive', async (input) => {
+            if (typeof input.channelId !== 'string' || input.channelId.length === 0) {
+              throw createError('PLATFORM_IPC_INVALID_CHANNEL', 'platform.ipcReceive requires channelId');
+            }
+            const response = await ctx.pal.ipc.receive(input.channelId, {
+              timeoutMs: input.timeoutMs
+            });
+            return {
+              message: {
+                channelId: response.channelId,
+                transport: response.transport,
+                payload: response.payload.toString('base64'),
+                encoding: 'base64',
+                receivedAt: response.receivedAt
+              }
+            };
+          })
+        )
+      },
+      ipcCloseChannel: {
+        descriptor: descriptor<{ channelId: string }, { ack: true }>(
+          'platform.ipcCloseChannel',
+          ['platform.external'],
+          4_000,
+          false,
+          0,
+          withMetrics(state, 'platform.ipcCloseChannel', async (input, routeContext) => {
+            if (typeof input.channelId !== 'string' || input.channelId.length === 0) {
+              throw createError('PLATFORM_IPC_INVALID_CHANNEL', 'platform.ipcCloseChannel requires channelId');
+            }
+            await ctx.pal.ipc.closeChannel(input.channelId);
+            ctx.logger.write({
+              level: 'info',
+              message: 'Platform IPC channel closed',
+              requestId: routeContext.requestId,
+              pluginId: routeContext.caller.pluginId,
+              namespace: 'platform',
+              action: 'ipcCloseChannel',
+              result: 'success',
+              metadata: { channelId: input.channelId }
+            });
+            return { ack: true };
+          })
+        )
+      },
+      ipcListChannels: {
+        descriptor: descriptor<Record<string, unknown>, { channels: unknown[] }>(
+          'platform.ipcListChannels',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'platform.ipcListChannels', async () => {
+            const channels = await ctx.pal.ipc.listChannels();
+            return { channels };
           })
         )
       }

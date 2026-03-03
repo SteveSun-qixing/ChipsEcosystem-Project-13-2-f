@@ -38,6 +38,17 @@ export interface FileStat {
   mtimeMs: number;
 }
 
+export interface FileWatchEvent {
+  type: 'rename' | 'change';
+  path: string;
+  timestamp: number;
+}
+
+export interface FileWatchSubscription {
+  id: string;
+  close(): Promise<void>;
+}
+
 export interface PlatformInfo {
   platform: NodeJS.Platform;
   arch: string;
@@ -105,6 +116,7 @@ export interface PALFileSystem {
   writeFile(path: string, data: string | Buffer): Promise<void>;
   stat(path: string): Promise<FileStat>;
   list(path: string, options?: FileListOptions): Promise<string[]>;
+  watch(path: string, onEvent: (event: FileWatchEvent) => void): Promise<FileWatchSubscription>;
 }
 
 export interface PALDialog {
@@ -114,9 +126,18 @@ export interface PALDialog {
   showConfirm(options: DialogMessageOptions): Promise<boolean>;
 }
 
+export type ClipboardFormat = 'text' | 'image' | 'files';
+
+export interface ClipboardImagePayload {
+  base64: string;
+  mimeType?: string;
+}
+
+export type ClipboardPayload = string | ClipboardImagePayload | string[];
+
 export interface PALClipboard {
-  read(format?: 'text'): Promise<string>;
-  write(data: string, format?: 'text'): Promise<void>;
+  read(format?: ClipboardFormat): Promise<ClipboardPayload>;
+  write(data: ClipboardPayload, format?: ClipboardFormat): Promise<void>;
 }
 
 export interface PALShell {
@@ -153,6 +174,40 @@ export interface PALPower {
   setPreventSleep(prevent: boolean): Promise<boolean>;
 }
 
+export type PALIpcTransport = 'named-pipe' | 'unix-socket' | 'shared-memory';
+
+export interface PALIpcCreateOptions {
+  name: string;
+  transport: PALIpcTransport;
+  maxBufferBytes?: number;
+}
+
+export interface PALIpcChannelInfo {
+  channelId: string;
+  name: string;
+  transport: PALIpcTransport;
+  endpoint?: string;
+}
+
+export interface PALIpcReceiveOptions {
+  timeoutMs?: number;
+}
+
+export interface PALIpcMessage {
+  channelId: string;
+  transport: PALIpcTransport;
+  payload: Buffer;
+  receivedAt: number;
+}
+
+export interface PALIPC {
+  createChannel(options: PALIpcCreateOptions): Promise<PALIpcChannelInfo>;
+  send(channelId: string, payload: Buffer | string): Promise<void>;
+  receive(channelId: string, options?: PALIpcReceiveOptions): Promise<PALIpcMessage>;
+  closeChannel(channelId: string): Promise<void>;
+  listChannels(): Promise<PALIpcChannelInfo[]>;
+}
+
 export interface PALAdapter {
   window: PALWindow;
   fs: PALFileSystem;
@@ -164,6 +219,7 @@ export interface PALAdapter {
   notification: PALNotification;
   shortcut: PALShortcut;
   power: PALPower;
+  ipc: PALIPC;
 }
 
 export interface PALError extends StandardError {

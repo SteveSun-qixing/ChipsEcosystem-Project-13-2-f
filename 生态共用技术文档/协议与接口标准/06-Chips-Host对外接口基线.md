@@ -47,6 +47,7 @@
 | `plugin` | 插件安装、启停、查询 |
 | `clipboard` | 剪贴板读写 |
 | `shell` | 外部打开、定位文件 |
+| `ipc` | 本地 IPC 通道管理与消息收发 |
 
 ### 2.3 子域参数基线
 
@@ -68,10 +69,14 @@
   - 安装后由主机统一落库存储到主机插件目录
 - `clipboard.read/write`：
   - 桥接到主机动作：`platform.clipboardRead/platform.clipboardWrite`
-  - 当前基线仅支持 `text` 格式
+  - 支持格式：`text`、`image`（`{ base64, mimeType? }`）、`files`（`string[]`）
 - `shell.openPath/openExternal/showItemInFolder`：
   - 桥接到主机动作：`platform.shellOpenPath/platform.shellOpenExternal/platform.shellShowItemInFolder`
   - 对应系统原生命令打开行为，不做业务层路径改写
+- `ipc.createChannel/send/receive/closeChannel/listChannels`：
+  - 桥接到主机动作：`platform.ipcCreateChannel/platform.ipcSend/platform.ipcReceive/platform.ipcCloseChannel/platform.ipcListChannels`
+  - `transport` 支持：`named-pipe`、`unix-socket`、`shared-memory`
+  - `platform.ipcReceive` 返回消息统一使用 `base64` 载荷（字段：`payload` + `encoding=base64`）
 
 ## 2.4 通道命名
 

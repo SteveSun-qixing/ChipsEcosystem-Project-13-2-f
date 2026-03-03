@@ -1,7 +1,7 @@
 import type { Kernel } from '../../packages/kernel/src';
 import type { RouteInvocationContext } from '../shared/types';
 import { createId, now } from '../shared/utils';
-import { BridgeTransport } from '../../packages/bridge-api/src';
+import { BridgeTransport, type ChipsBridge } from '../../packages/bridge-api/src';
 import { loadElectronModule } from '../main/electron/electron-loader';
 import { CHIPS_EMIT_CHANNEL, CHIPS_EVENT_CHANNEL_PREFIX, CHIPS_INVOKE_CHANNEL } from '../main/ipc/chips-ipc';
 
@@ -109,14 +109,30 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
 };
 
 export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips'): void => {
+  const exposed: ChipsBridge = {
+    invoke: bridge.invoke.bind(bridge),
+    on: bridge.on.bind(bridge),
+    once: bridge.once.bind(bridge),
+    emit: bridge.emit.bind(bridge),
+    window: bridge.window,
+    dialog: bridge.dialog,
+    plugin: bridge.plugin,
+    clipboard: bridge.clipboard,
+    shell: bridge.shell,
+    platform: bridge.platform,
+    notification: bridge.notification,
+    tray: bridge.tray,
+    shortcut: bridge.shortcut,
+    ipc: bridge.ipc
+  };
   const electron = loadElectronModule();
   if (electron?.contextBridge) {
-    electron.contextBridge.exposeInMainWorld(name, bridge);
+    electron.contextBridge.exposeInMainWorld(name, exposed);
     return;
   }
 
   const target = globalThis as Record<string, unknown>;
-  target[name] = bridge;
+  target[name] = exposed;
 };
 
 export const createAndExposeBridgeForKernel = (

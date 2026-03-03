@@ -46,7 +46,14 @@ describe('preload contextBridge exposure', () => {
     exposeBridgeToMainWorld(bridge);
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
-    expect(exposeInMainWorld).toHaveBeenCalledWith('chips', bridge);
+    expect(exposeInMainWorld).toHaveBeenCalledWith(
+      'chips',
+      expect.objectContaining({
+        invoke: expect.any(Function),
+        window: expect.any(Object),
+        ipc: expect.any(Object)
+      })
+    );
 
     const result = await bridge.invoke<{ value: string }>('demo.echo', { value: 'ok' });
     expect(result.value).toBe('ok');
@@ -83,6 +90,13 @@ describe('preload contextBridge exposure', () => {
         payload: {}
       })
     );
-    expect(exposeInMainWorld).toHaveBeenCalledWith('chips', bridge);
+    expect(exposeInMainWorld).toHaveBeenCalledWith(
+      'chips',
+      expect.objectContaining({
+        invoke: expect.any(Function),
+        platform: expect.any(Object),
+        ipc: expect.any(Object)
+      })
+    );
   });
 });

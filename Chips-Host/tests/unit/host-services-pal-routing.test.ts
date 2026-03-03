@@ -176,9 +176,9 @@ describe('Host services PAL routing', () => {
       pal: createPal(state),
       workspacePath: workspace,
       logger: new StructuredLogger(),
-      cardService: new CardService(),
-      boxService: new BoxService(),
-      zipService: new StoreZipService(),
+      getCardService: () => new CardService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
       runtime
     });
     const context = createContextFactory();
@@ -235,9 +235,9 @@ describe('Host services PAL routing', () => {
       pal: createPal(state),
       workspacePath: workspace,
       logger: new StructuredLogger(),
-      cardService: new CardService(),
-      boxService: new BoxService(),
-      zipService: new StoreZipService(),
+      getCardService: () => new CardService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
       runtime
     });
     const context = createContextFactory();

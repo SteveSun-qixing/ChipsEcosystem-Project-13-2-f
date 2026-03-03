@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import { StoreZipService } from '../../packages/zip-service/src';
 
 let workspace: string;
 
@@ -54,5 +55,20 @@ describe('chips host cli', () => {
     expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
     expect(await runCli(['plugin', 'list'])).toBe(0);
     expect(await runCli(['plugin', 'query'])).toBe(0);
+  });
+
+  it('opens .card file through file association entry', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+    const cardSourceDir = path.join(workspace, 'demo-card-source');
+    await fs.mkdir(path.join(cardSourceDir, '.card'), { recursive: true });
+    await fs.writeFile(path.join(cardSourceDir, '.card/metadata.yaml'), 'id: demo.card\nname: Demo Card\n', 'utf-8');
+    await fs.writeFile(path.join(cardSourceDir, '.card/structure.yaml'), 'cards: []\n', 'utf-8');
+    await fs.writeFile(path.join(cardSourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+
+    const cardFile = path.join(workspace, 'demo.card');
+    const zip = new StoreZipService();
+    await zip.compress(cardSourceDir, cardFile);
+
+    expect(await runCli(['open', cardFile])).toBe(0);
   });
 });

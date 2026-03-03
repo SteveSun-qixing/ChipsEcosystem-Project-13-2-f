@@ -22,6 +22,9 @@ export class HostApplication {
   public readonly logger: StructuredLogger;
   public readonly workspacePath: string;
   public readonly runtime: PluginRuntime;
+  private cardService?: CardService;
+  private boxService?: BoxService;
+  private zipService?: StoreZipService;
 
   private started = false;
 
@@ -49,9 +52,18 @@ export class HostApplication {
       pal: this.pal,
       workspacePath: this.workspacePath,
       logger: this.logger,
-      cardService: new CardService(),
-      boxService: new BoxService(),
-      zipService: new StoreZipService(),
+      getCardService: () => {
+        this.cardService ??= new CardService();
+        return this.cardService;
+      },
+      getBoxService: () => {
+        this.boxService ??= new BoxService();
+        return this.boxService;
+      },
+      getZipService: () => {
+        this.zipService ??= new StoreZipService();
+        return this.zipService;
+      },
       runtime: this.runtime
     });
 

@@ -38,6 +38,25 @@ export interface PlatformInfo {
   release: string;
 }
 
+export interface DialogFileOptions {
+  defaultPath?: string;
+  mode?: 'file' | 'directory';
+  allowMultiple?: boolean;
+  mustExist?: boolean;
+  title?: string;
+}
+
+export interface DialogSaveOptions {
+  defaultPath?: string;
+  title?: string;
+}
+
+export interface DialogMessageOptions {
+  title?: string;
+  message: string;
+  detail?: string;
+}
+
 export interface PALWindow {
   create(options: WindowOptions): Promise<WindowState>;
   focus(id: string): Promise<void>;
@@ -55,15 +74,35 @@ export interface PALFileSystem {
   list(path: string, options?: FileListOptions): Promise<string[]>;
 }
 
+export interface PALDialog {
+  openFile(options?: DialogFileOptions): Promise<string[] | null>;
+  saveFile(options?: DialogSaveOptions): Promise<string | null>;
+  showMessage(options: DialogMessageOptions): Promise<number>;
+  showConfirm(options: DialogMessageOptions): Promise<boolean>;
+}
+
+export interface PALClipboard {
+  read(format?: 'text'): Promise<string>;
+  write(data: string, format?: 'text'): Promise<void>;
+}
+
+export interface PALShell {
+  openPath(targetPath: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
+  showItemInFolder(targetPath: string): Promise<void>;
+}
+
 export interface PALPlatform {
   getInfo(): Promise<PlatformInfo>;
   getCapabilities(): Promise<string[]>;
-  openExternal(url: string): Promise<void>;
 }
 
 export interface PALAdapter {
   window: PALWindow;
   fs: PALFileSystem;
+  dialog: PALDialog;
+  clipboard: PALClipboard;
+  shell: PALShell;
   platform: PALPlatform;
 }
 

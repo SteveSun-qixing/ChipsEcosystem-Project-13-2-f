@@ -14,12 +14,15 @@ export class KernelRouter {
   private readonly descriptors = new Map<string, RouteDescriptor<unknown, unknown>>();
   private readonly permissionGuard = new PermissionGuard();
   private readonly circuitByKey = new Map<string, RouteCircuitState>();
+  private readonly replayByOperation = new Map<string, number>();
   private readonly failureThreshold: number;
   private readonly coolDownMs: number;
+  private readonly replayWindowMs: number;
 
-  public constructor(options?: { failureThreshold?: number; coolDownMs?: number }) {
+  public constructor(options?: { failureThreshold?: number; coolDownMs?: number; replayWindowMs?: number }) {
     this.failureThreshold = options?.failureThreshold ?? 5;
     this.coolDownMs = options?.coolDownMs ?? 5_000;
+    this.replayWindowMs = options?.replayWindowMs ?? 10 * 60_000;
   }
 
   public register<I, O>(descriptor: RouteDescriptor<I, O>): void {
@@ -47,6 +50,7 @@ export class KernelRouter {
     this.guardPermissions(descriptor.permission, context);
 
     schemaRegistry.validate(descriptor.schemaIn, input);
+    this.guardReplay(descriptor, context);
 
     const started = now();
     let attempt = 0;
@@ -153,6 +157,36 @@ export class KernelRouter {
     }
 
     state.openUntil = undefined;
+  }
+
+  private guardReplay(descriptor: RouteDescriptor<unknown, unknown>, context: RouteInvocationContext): void {
+    if (descriptor.idempotent) {
+      return;
+    }
+
+    const current = now();
+    this.pruneReplayWindow(current);
+
+    const operationKey = `${descriptor.key}:${context.caller.type}:${context.caller.id}:${context.requestId}`;
+    const expireAt = this.replayByOperation.get(operationKey);
+    if (expireAt && expireAt > current) {
+      throw createError('ROUTE_REPLAY_DETECTED', `Duplicate request detected for route: ${descriptor.key}`, {
+        route: descriptor.key,
+        requestId: context.requestId,
+        callerId: context.caller.id,
+        expireAt
+      });
+    }
+
+    this.replayByOperation.set(operationKey, current + this.replayWindowMs);
+  }
+
+  private pruneReplayWindow(current: number): void {
+    for (const [operationKey, expireAt] of this.replayByOperation.entries()) {
+      if (expireAt <= current) {
+        this.replayByOperation.delete(operationKey);
+      }
+    }
   }
 
   private markSuccess(key: string): void {

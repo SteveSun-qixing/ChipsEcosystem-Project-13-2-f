@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { StoreZipService } from '../../packages/zip-service/src';
 import { PluginRuntime } from '../../src/runtime';
 
 let workspace: string;
@@ -100,5 +101,37 @@ describe('PluginRuntime', () => {
     });
     expect(quota.cpuBudget).toBe(40);
     expect(runtime.getQuota('chips.perm.plugin').memoryBudgetMb).toBe(256);
+  });
+
+  it('installs .cpk package with manifest.yaml', async () => {
+    const packageDir = path.join(workspace, 'cpk-source');
+    await fs.mkdir(path.join(packageDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(packageDir, 'manifest.yaml'),
+      [
+        'id: chips.cpk.plugin',
+        'version: "1.0.0"',
+        'type: app',
+        'name: CPK Plugin',
+        'permissions:',
+        '  - file.read',
+        'capabilities:',
+        '  - preview',
+        'entry: dist/main.js'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(path.join(packageDir, 'dist/main.js'), 'module.exports = {};', 'utf-8');
+
+    const cpkPath = path.join(workspace, 'chips.cpk.plugin.cpk');
+    const zip = new StoreZipService();
+    await zip.compress(packageDir, cpkPath);
+
+    const record = await runtime.install(cpkPath);
+    expect(record.manifest.id).toBe('chips.cpk.plugin');
+    expect(record.manifest.permissions).toEqual(['file.read']);
+    expect(record.manifest.capabilities).toEqual(['preview']);
+    expect(record.manifestPath.endsWith('manifest.yaml')).toBe(true);
+    await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
   });
 });

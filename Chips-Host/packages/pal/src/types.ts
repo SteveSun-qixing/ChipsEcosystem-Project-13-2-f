@@ -63,6 +63,33 @@ export interface DialogMessageOptions {
   detail?: string;
 }
 
+export interface TrayMenuItem {
+  id: string;
+  label: string;
+}
+
+export interface TrayOptions {
+  icon?: string;
+  tooltip?: string;
+  menu?: TrayMenuItem[];
+}
+
+export interface TrayState extends TrayOptions {
+  active: boolean;
+}
+
+export interface NotificationOptions {
+  title: string;
+  body: string;
+  icon?: string;
+  silent?: boolean;
+}
+
+export interface PowerState {
+  idleSeconds: number;
+  preventSleep: boolean;
+}
+
 export interface PALWindow {
   create(options: WindowOptions): Promise<WindowState>;
   focus(id: string): Promise<void>;
@@ -103,6 +130,29 @@ export interface PALPlatform {
   getCapabilities(): Promise<string[]>;
 }
 
+export interface PALTray {
+  set(options: TrayOptions): Promise<TrayState>;
+  clear(): Promise<void>;
+  getState(): Promise<TrayState>;
+}
+
+export interface PALNotification {
+  show(options: NotificationOptions): Promise<void>;
+}
+
+export interface PALShortcut {
+  register(accelerator: string, onTrigger?: () => void): Promise<boolean>;
+  unregister(accelerator: string): Promise<void>;
+  isRegistered(accelerator: string): Promise<boolean>;
+  list(): Promise<string[]>;
+  clear(): Promise<void>;
+}
+
+export interface PALPower {
+  getState(): Promise<PowerState>;
+  setPreventSleep(prevent: boolean): Promise<boolean>;
+}
+
 export interface PALAdapter {
   window: PALWindow;
   fs: PALFileSystem;
@@ -110,6 +160,10 @@ export interface PALAdapter {
   clipboard: PALClipboard;
   shell: PALShell;
   platform: PALPlatform;
+  tray: PALTray;
+  notification: PALNotification;
+  shortcut: PALShortcut;
+  power: PALPower;
 }
 
 export interface PALError extends StandardError {

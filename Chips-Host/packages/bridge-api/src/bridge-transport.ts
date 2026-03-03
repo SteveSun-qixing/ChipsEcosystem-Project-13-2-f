@@ -47,6 +47,28 @@ export interface ChipsBridge {
     openExternal(url: string): Promise<void>;
     showItemInFolder(path: string): Promise<void>;
   };
+  platform: {
+    getInfo(): Promise<unknown>;
+    getCapabilities(): Promise<string[]>;
+    openExternal(url: string): Promise<void>;
+    powerGetState(): Promise<unknown>;
+    powerSetPreventSleep(prevent: boolean): Promise<boolean>;
+  };
+  notification: {
+    show(options: { title: string; body: string; icon?: string; silent?: boolean }): Promise<void>;
+  };
+  tray: {
+    set(options: { icon?: string; tooltip?: string; menu?: Array<{ id: string; label: string }> }): Promise<unknown>;
+    clear(): Promise<void>;
+    getState(): Promise<unknown>;
+  };
+  shortcut: {
+    register(accelerator: string, eventName?: string): Promise<void>;
+    unregister(accelerator: string): Promise<void>;
+    isRegistered(accelerator: string): Promise<boolean>;
+    list(): Promise<string[]>;
+    clear(): Promise<void>;
+  };
 }
 
 export class BridgeTransport implements ChipsBridge {
@@ -57,6 +79,10 @@ export class BridgeTransport implements ChipsBridge {
   public readonly plugin: ChipsBridge['plugin'];
   public readonly clipboard: ChipsBridge['clipboard'];
   public readonly shell: ChipsBridge['shell'];
+  public readonly platform: ChipsBridge['platform'];
+  public readonly notification: ChipsBridge['notification'];
+  public readonly tray: ChipsBridge['tray'];
+  public readonly shortcut: ChipsBridge['shortcut'];
 
   public constructor(private readonly invokeHandler: BridgeInvokeHandler, options?: { eventAdapter?: BridgeEventAdapter }) {
     this.eventAdapter = options?.eventAdapter;
@@ -78,10 +104,10 @@ export class BridgeTransport implements ChipsBridge {
     };
 
     this.dialog = {
-      openFile: async (options) => this.invoke<unknown>('dialog.openFile', { options }),
-      saveFile: async (options) => this.invoke<unknown>('dialog.saveFile', { options }),
-      showMessage: async (options) => this.invoke<unknown>('dialog.showMessage', { options }),
-      showConfirm: async (options) => this.invoke<boolean>('dialog.showConfirm', { options })
+      openFile: async (options) => this.invoke<unknown>('platform.dialogOpenFile', { options }),
+      saveFile: async (options) => this.invoke<unknown>('platform.dialogSaveFile', { options }),
+      showMessage: async (options) => this.invoke<unknown>('platform.dialogShowMessage', { options }),
+      showConfirm: async (options) => this.invoke<boolean>('platform.dialogShowConfirm', { options })
     };
 
     this.plugin = {
@@ -99,21 +125,72 @@ export class BridgeTransport implements ChipsBridge {
     };
 
     this.clipboard = {
-      read: async (format) => this.invoke<unknown>('clipboard.read', { format }),
+      read: async (format) => this.invoke<unknown>('platform.clipboardRead', { format }),
       write: async (data, format) => {
-        await this.invoke('clipboard.write', { data, format });
+        await this.invoke('platform.clipboardWrite', { data, format });
       }
     };
 
     this.shell = {
       openPath: async (targetPath) => {
-        await this.invoke('shell.openPath', { path: targetPath });
+        await this.invoke('platform.shellOpenPath', { path: targetPath });
       },
       openExternal: async (url) => {
-        await this.invoke('shell.openExternal', { url });
+        await this.invoke('platform.shellOpenExternal', { url });
       },
       showItemInFolder: async (targetPath) => {
-        await this.invoke('shell.showItemInFolder', { path: targetPath });
+        await this.invoke('platform.shellShowItemInFolder', { path: targetPath });
+      }
+    };
+
+    this.platform = {
+      getInfo: async () => this.invoke<unknown>('platform.getInfo', {}),
+      getCapabilities: async () => this.invoke<string[]>('platform.getCapabilities', {}),
+      openExternal: async (url) => {
+        await this.invoke('platform.openExternal', { url });
+      },
+      powerGetState: async () => this.invoke<unknown>('platform.powerGetState', {}),
+      powerSetPreventSleep: async (prevent) => {
+        const result = await this.invoke<{ preventSleep: boolean }>('platform.powerSetPreventSleep', { prevent });
+        return result.preventSleep;
+      }
+    };
+
+    this.notification = {
+      show: async (options) => {
+        await this.invoke('platform.notificationShow', { options });
+      }
+    };
+
+    this.tray = {
+      set: async (options) => {
+        return this.invoke<unknown>('platform.traySet', { options });
+      },
+      clear: async () => {
+        await this.invoke('platform.trayClear', {});
+      },
+      getState: async () => {
+        return this.invoke<unknown>('platform.trayGetState', {});
+      }
+    };
+
+    this.shortcut = {
+      register: async (accelerator, eventName) => {
+        await this.invoke('platform.shortcutRegister', { accelerator, eventName });
+      },
+      unregister: async (accelerator) => {
+        await this.invoke('platform.shortcutUnregister', { accelerator });
+      },
+      isRegistered: async (accelerator) => {
+        const result = await this.invoke<{ registered: boolean }>('platform.shortcutIsRegistered', { accelerator });
+        return result.registered;
+      },
+      list: async () => {
+        const result = await this.invoke<{ accelerators: string[] }>('platform.shortcutList', {});
+        return result.accelerators;
+      },
+      clear: async () => {
+        await this.invoke('platform.shortcutClear', {});
       }
     };
   }

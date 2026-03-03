@@ -52,11 +52,59 @@ export interface ElectronBrowserWindowCtorLike {
   getAllWindows?(): ElectronBrowserWindowLike[];
 }
 
+export interface ElectronNotificationLike {
+  show(): void;
+}
+
+export interface ElectronNotificationCtorLike {
+  new (options: Record<string, unknown>): ElectronNotificationLike;
+  isSupported?(): boolean;
+}
+
+export interface ElectronShortcutLike {
+  register(accelerator: string, callback: () => void): boolean;
+  unregister(accelerator: string): void;
+  unregisterAll(): void;
+  isRegistered(accelerator: string): boolean;
+}
+
+export interface ElectronTrayLike {
+  setImage(image: string): void;
+  setToolTip(text: string): void;
+  setContextMenu(menu: unknown): void;
+  destroy(): void;
+  isDestroyed?(): boolean;
+}
+
+export interface ElectronTrayCtorLike {
+  new (image: string): ElectronTrayLike;
+}
+
+export interface ElectronMenuLike {
+  buildFromTemplate(template: Array<Record<string, unknown>>): unknown;
+}
+
+export interface ElectronPowerMonitorLike {
+  getSystemIdleTime?(): number;
+}
+
+export interface ElectronPowerSaveBlockerLike {
+  start(type: 'prevent-app-suspension' | 'prevent-display-sleep'): number;
+  stop(id: number): boolean;
+  isStarted(id: number): boolean;
+}
+
 export interface ElectronModuleLike {
   ipcMain?: ElectronIpcMainLike;
   ipcRenderer?: ElectronIpcRendererLike;
   contextBridge?: ElectronContextBridgeLike;
   BrowserWindow?: ElectronBrowserWindowCtorLike;
+  Notification?: ElectronNotificationCtorLike;
+  globalShortcut?: ElectronShortcutLike;
+  Tray?: ElectronTrayCtorLike;
+  Menu?: ElectronMenuLike;
+  powerMonitor?: ElectronPowerMonitorLike;
+  powerSaveBlocker?: ElectronPowerSaveBlockerLike;
 }
 
 const readElectronMock = (): ElectronModuleLike | undefined => {

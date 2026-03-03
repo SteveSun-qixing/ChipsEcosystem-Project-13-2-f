@@ -130,11 +130,59 @@ class MockBrowserWindow {
   }
 }
 
+class MockTray {
+  public static instances: MockTray[] = [];
+  public tooltip?: string;
+  public image: string;
+  public menu: unknown;
+  private destroyed = false;
+
+  public constructor(image: string) {
+    this.image = image;
+    MockTray.instances.push(this);
+  }
+
+  public setImage(image: string): void {
+    this.image = image;
+  }
+
+  public setToolTip(text: string): void {
+    this.tooltip = text;
+  }
+
+  public setContextMenu(menu: unknown): void {
+    this.menu = menu;
+  }
+
+  public destroy(): void {
+    this.destroyed = true;
+  }
+
+  public isDestroyed(): boolean {
+    return this.destroyed;
+  }
+}
+
+class MockNotification {
+  public static payloads: Array<Record<string, unknown>> = [];
+  private readonly options: Record<string, unknown>;
+
+  public constructor(options: Record<string, unknown>) {
+    this.options = options;
+  }
+
+  public show(): void {
+    MockNotification.payloads.push(this.options);
+  }
+}
+
 afterEach(() => {
   const globalValue = globalThis as Record<string, unknown>;
   delete globalValue[ELECTRON_MOCK_KEY];
   MockBrowserWindow.instances = [];
   MockBrowserWindow.sequence = 0;
+  MockTray.instances = [];
+  MockNotification.payloads = [];
 });
 
 describe('Node PAL BrowserWindow host chain', () => {
@@ -192,5 +240,76 @@ describe('Node PAL BrowserWindow host chain', () => {
     const browserWindow = MockBrowserWindow.instances[0]!;
     expect(browserWindow.loadedFile).toBe(path.resolve(htmlEntry));
     expect(browserWindow.loadedUrl).toBeUndefined();
+  });
+
+  it('supports tray/notification/shortcut/power capabilities in Electron mode', async () => {
+    const registeredShortcuts = new Map<string, () => void>();
+    const powerBlockers = new Set<number>();
+    let blockerSequence = 0;
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow,
+      Notification: MockNotification,
+      Tray: MockTray,
+      Menu: {
+        buildFromTemplate: (template: unknown[]) => ({ template })
+      },
+      globalShortcut: {
+        register: (accelerator: string, callback: () => void) => {
+          registeredShortcuts.set(accelerator, callback);
+          return true;
+        },
+        unregister: (accelerator: string) => {
+          registeredShortcuts.delete(accelerator);
+        },
+        unregisterAll: () => {
+          registeredShortcuts.clear();
+        },
+        isRegistered: (accelerator: string) => registeredShortcuts.has(accelerator)
+      },
+      powerMonitor: {
+        getSystemIdleTime: () => 12
+      },
+      powerSaveBlocker: {
+        start: () => {
+          blockerSequence += 1;
+          powerBlockers.add(blockerSequence);
+          return blockerSequence;
+        },
+        stop: (id: number) => {
+          powerBlockers.delete(id);
+          return true;
+        },
+        isStarted: (id: number) => powerBlockers.has(id)
+      }
+    };
+
+    const pal = new NodePalAdapter();
+    await pal.notification.show({ title: 'chips', body: 'ready' });
+    expect(MockNotification.payloads).toEqual([
+      { title: 'chips', body: 'ready', icon: undefined, silent: false }
+    ]);
+
+    const trayState = await pal.tray.set({
+      icon: '/tmp/chips-icon.png',
+      tooltip: 'chips',
+      menu: [{ id: 'open', label: 'Open' }]
+    });
+    expect(trayState.active).toBe(true);
+    expect(MockTray.instances).toHaveLength(1);
+    expect(MockTray.instances[0]!.tooltip).toBe('chips');
+
+    const onShortcut = { called: 0 };
+    await pal.shortcut.register('CommandOrControl+Shift+N', () => {
+      onShortcut.called += 1;
+    });
+    expect(await pal.shortcut.isRegistered('CommandOrControl+Shift+N')).toBe(true);
+    registeredShortcuts.get('CommandOrControl+Shift+N')?.();
+    expect(onShortcut.called).toBe(1);
+
+    expect(await pal.power.getState()).toMatchObject({ idleSeconds: 12, preventSleep: false });
+    expect(await pal.power.setPreventSleep(true)).toBe(true);
+    expect(await pal.power.getState()).toMatchObject({ preventSleep: true });
+    expect(await pal.power.setPreventSleep(false)).toBe(false);
   });
 });

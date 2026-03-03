@@ -19,7 +19,7 @@ describe('BridgeTransport', () => {
     expect(calls).toEqual([{ id: 'theme-1' }]);
   });
 
-  it('exposes window/plugin/clipboard/shell subdomains', async () => {
+  it('exposes window/plugin/platform subdomains', async () => {
     const actions: string[] = [];
     const bridge = new BridgeTransport(async (action) => {
       actions.push(action);
@@ -31,13 +31,19 @@ describe('BridgeTransport', () => {
     await bridge.plugin.query();
     await bridge.clipboard.write('text/plain');
     await bridge.shell.openExternal('https://example.com');
+    await bridge.notification.show({ title: 'chips', body: 'ready' });
+    await bridge.tray.getState();
+    await bridge.shortcut.list();
 
     expect(actions).toEqual([
       'window.open',
       'window.getState',
       'plugin.query',
-      'clipboard.write',
-      'shell.openExternal'
+      'platform.clipboardWrite',
+      'platform.shellOpenExternal',
+      'platform.notificationShow',
+      'platform.trayGetState',
+      'platform.shortcutList'
     ]);
   });
 });

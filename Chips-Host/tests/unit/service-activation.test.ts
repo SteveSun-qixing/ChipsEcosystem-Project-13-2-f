@@ -107,6 +107,42 @@ const createPal = (): PALAdapter => ({
     async getCapabilities() {
       return ['window', 'file'];
     }
+  },
+  tray: {
+    async set() {
+      return { active: true };
+    },
+    async clear() {},
+    async getState() {
+      return { active: false };
+    }
+  },
+  notification: {
+    async show() {}
+  },
+  shortcut: {
+    async register() {
+      return true;
+    },
+    async unregister() {},
+    async isRegistered() {
+      return false;
+    },
+    async list() {
+      return [];
+    },
+    async clear() {}
+  },
+  power: {
+    async getState() {
+      return {
+        idleSeconds: 0,
+        preventSleep: false
+      };
+    },
+    async setPreventSleep(prevent) {
+      return prevent;
+    }
   }
 });
 

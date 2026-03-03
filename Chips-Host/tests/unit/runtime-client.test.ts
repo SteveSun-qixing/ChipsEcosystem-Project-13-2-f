@@ -36,6 +36,28 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     openPath: async () => undefined,
     openExternal: async () => undefined,
     showItemInFolder: async () => undefined
+  },
+  platform: {
+    getInfo: async () => ({}),
+    getCapabilities: async () => [],
+    openExternal: async () => undefined,
+    powerGetState: async () => ({}),
+    powerSetPreventSleep: async () => false
+  },
+  notification: {
+    show: async () => undefined
+  },
+  tray: {
+    set: async () => ({}),
+    clear: async () => undefined,
+    getState: async () => ({})
+  },
+  shortcut: {
+    register: async () => undefined,
+    unregister: async () => undefined,
+    isRegistered: async () => false,
+    list: async () => [],
+    clear: async () => undefined
   }
 });
 
@@ -52,6 +74,19 @@ describe('RuntimeClient', () => {
     const result = await runtime.invoke('theme.getCSS', {});
     expect(result).toBe('ok');
     expect(actionName).toBe('theme.getAllCss');
+  });
+
+  it('maps legacy platform-related aliases', async () => {
+    let actionName = '';
+    const runtime = new RuntimeClient(
+      createBridge(async (action) => {
+        actionName = action;
+        return { ok: true };
+      })
+    );
+
+    await runtime.invoke('dialog.openFile', {});
+    expect(actionName).toBe('platform.dialogOpenFile');
   });
 
   it('retries retryable errors', async () => {

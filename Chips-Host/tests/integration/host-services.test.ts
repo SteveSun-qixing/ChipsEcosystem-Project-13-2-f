@@ -1,0 +1,74 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { HostApplication } from '../../src/main/core/host-application';
+import { RuntimeClient } from '../../src/renderer/runtime-client';
+
+let workspace: string;
+let app: HostApplication;
+let runtime: RuntimeClient;
+
+beforeEach(async () => {
+  workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-host-it-'));
+  app = new HostApplication({ workspacePath: workspace });
+  await app.start();
+  runtime = new RuntimeClient(app.createBridge(), {
+    defaultTimeout: 5000,
+    maxRetries: 1,
+    retryDelay: 10,
+    retryBackoff: 2,
+    enableRetry: true
+  });
+});
+
+afterEach(async () => {
+  await app.stop();
+  await fs.rm(workspace, { recursive: true, force: true });
+});
+
+describe('Host services integration', () => {
+  it('reads and writes configuration through routes', async () => {
+    await runtime.invoke('config.set', { key: 'ui.language', value: 'zh-CN' });
+    const result = await runtime.invoke<{ value: string }>('config.get', { key: 'ui.language' });
+    expect(result.value).toBe('zh-CN');
+  });
+
+  it('lists and applies themes', async () => {
+    const list = await runtime.invoke<{ themes: Array<{ id: string }> }>('theme.list', {});
+    expect(list.themes.length).toBeGreaterThan(0);
+
+    await runtime.invoke('theme.apply', { id: list.themes[0]!.id });
+    const current = await runtime.invoke<{ theme: { id: string } }>('theme.getCurrent', {});
+    expect(current.theme.id).toBe(list.themes[0]!.id);
+  });
+
+  it('supports i18n translation and locale switching', async () => {
+    await runtime.invoke('i18n.setCurrent', { locale: 'en-US' });
+    const translated = await runtime.invoke<{ text: string }>('i18n.translate', { key: 'system.ready' });
+    expect(translated.text).toBe('System ready');
+  });
+
+  it('creates window records via window service', async () => {
+    const opened = await runtime.invoke<{ window: { id: string } }>('window.open', {
+      config: { title: 'Demo', width: 800, height: 600 }
+    });
+    expect(opened.window.id).toBeTypeOf('string');
+
+    const focused = await runtime.invoke('window.focus', { windowId: opened.window.id });
+    expect(focused).toMatchObject({ ack: true });
+  });
+
+  it('writes and queries logs', async () => {
+    await runtime.invoke('log.write', { level: 'info', message: 'integration-log' });
+    const result = await runtime.invoke<{ entries: Array<{ message: string }> }>('log.query', {});
+    expect(result.entries.some((entry) => entry.message === 'integration-log')).toBe(true);
+  });
+
+  it('returns control-plane health report', async () => {
+    const report = await runtime.invoke<{ status: string; report: { routes: number; services: number } }>('control-plane.health', {});
+    expect(report.status).toBe('ok');
+    expect(report.report.services).toBe(16);
+    expect(report.report.routes).toBeGreaterThan(30);
+  });
+});

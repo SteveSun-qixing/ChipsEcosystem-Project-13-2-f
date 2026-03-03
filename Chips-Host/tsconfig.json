@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@chips/shared/*": ["src/shared/*"],
+      "@chips/pal/*": ["packages/pal/src/*"],
+      "@chips/kernel/*": ["packages/kernel/src/*"],
+      "@chips/protocol/*": ["packages/protocol/src/*"],
+      "@chips/bridge-api/*": ["packages/bridge-api/src/*"],
+      "@chips/common-basics/*": ["packages/common-basics/src/*"],
+      "@chips/card-service/*": ["packages/card-service/src/*"],
+      "@chips/box-service/*": ["packages/box-service/src/*"],
+      "@chips/zip-service/*": ["packages/zip-service/src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "packages/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

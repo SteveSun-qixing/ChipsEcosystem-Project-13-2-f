@@ -56,6 +56,10 @@
   - `allowMultiple` 控制多选
 - `dialog.saveFile(options)`：
   - `defaultPath` 存在时返回该路径并确保目录可写
+- `plugin.install(payload)`：
+  - 入参字段：`manifestPath`（兼容字段名）
+  - 支持路径类型：插件目录、`.cpk` 包、`manifest.yaml/yml/json` 清单文件
+  - 安装后由主机统一落库存储到主机插件目录
 - `clipboard.read/write`：
   - 当前基线仅支持 `text` 格式
 - `shell.openPath/openExternal/showItemInFolder`：

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HostApplication } from '../../src/main/core/host-application';
+import { StoreZipService } from '../../packages/zip-service/src';
 import { RuntimeClient } from '../../src/renderer/runtime-client';
 
 let workspace: string;
@@ -95,5 +96,34 @@ describe('Host services integration', () => {
       nonce: init.session.sessionNonce
     });
     expect(completed.session.status).toBe('running');
+  });
+
+  it('installs plugin from .cpk package', async () => {
+    const packageDir = path.join(workspace, 'demo-cpk-plugin');
+    await fs.mkdir(path.join(packageDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(packageDir, 'manifest.yaml'),
+      [
+        'id: chips.runtime.cpk',
+        'version: "1.0.0"',
+        'type: app',
+        'name: Runtime CPK Plugin',
+        'permissions:',
+        '  - file.read',
+        'entry: dist/main.js'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(path.join(packageDir, 'dist/main.js'), 'module.exports = {};', 'utf-8');
+
+    const cpkPath = path.join(workspace, 'chips.runtime.cpk.cpk');
+    const zip = new StoreZipService();
+    await zip.compress(packageDir, cpkPath);
+
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: cpkPath });
+    expect(installed.pluginId).toBe('chips.runtime.cpk');
+
+    const queried = await runtime.invoke<{ plugins: Array<{ id: string; manifestPath: string }> }>('plugin.query', {});
+    expect(queried.plugins.some((plugin) => plugin.id === 'chips.runtime.cpk')).toBe(true);
   });
 });

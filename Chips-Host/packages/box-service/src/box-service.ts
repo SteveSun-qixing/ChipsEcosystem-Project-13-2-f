@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createError } from '../../../src/shared/errors';
+import { parseYamlLite } from '../../../src/shared/yaml-lite';
 import { StoreZipService } from '../../zip-service/src';
-import { parseYamlLite } from '../../card-service/src/yaml-lite';
 
 export interface BoxInspection {
   metadata: Record<string, unknown>;

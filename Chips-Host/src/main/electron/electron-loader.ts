@@ -145,7 +145,13 @@ const readElectronMock = (): ElectronModuleLike | undefined => {
 
 const readElectronRuntime = (): ElectronModuleLike | null => {
   try {
-    const req = (0, eval)('require') as NodeRequire;
+    const runtime = globalThis as { require?: NodeRequire };
+    const req =
+      typeof require === 'function'
+        ? require
+        : typeof runtime.require === 'function'
+          ? runtime.require
+          : ((0, eval)('require') as NodeRequire);
     const module = req('electron') as ElectronModuleLike;
     if (!module || typeof module !== 'object') {
       return null;

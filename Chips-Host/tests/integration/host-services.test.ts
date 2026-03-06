@@ -36,6 +36,25 @@ describe('Host services integration', () => {
     expect(result.value).toBe('zh-CN');
   });
 
+  it('resolves layered config precedence by scope', async () => {
+    await runtime.invoke('config.set', { key: 'chips.layer.key', value: 'system', scope: 'system' });
+    await runtime.invoke('config.set', { key: 'chips.layer.key', value: 'workspace', scope: 'workspace' });
+    const workspaceValue = await runtime.invoke<{ value: string }>('config.get', { key: 'chips.layer.key' });
+    expect(workspaceValue.value).toBe('workspace');
+
+    await runtime.invoke('config.set', { key: 'chips.layer.key', value: 'user', scope: 'user' });
+    const userValue = await runtime.invoke<{ value: string }>('config.get', { key: 'chips.layer.key' });
+    expect(userValue.value).toBe('user');
+
+    await runtime.invoke('config.reset', { key: 'chips.layer.key', scope: 'user' });
+    const fallbackWorkspace = await runtime.invoke<{ value: string }>('config.get', { key: 'chips.layer.key' });
+    expect(fallbackWorkspace.value).toBe('workspace');
+
+    await runtime.invoke('config.reset', { key: 'chips.layer.key', scope: 'workspace' });
+    const fallbackSystem = await runtime.invoke<{ value: string }>('config.get', { key: 'chips.layer.key' });
+    expect(fallbackSystem.value).toBe('system');
+  });
+
   it('lists and applies themes', async () => {
     const list = await runtime.invoke<{ themes: Array<{ id: string }> }>('theme.list', {});
     expect(list.themes.length).toBeGreaterThan(0);
@@ -45,10 +64,68 @@ describe('Host services integration', () => {
     expect(current.theme.id).toBe(list.themes[0]!.id);
   });
 
+  it('resolves theme token chain and enforces max depth', async () => {
+    const resolved = await runtime.invoke<{ tokens: Record<string, unknown> }>('theme.resolve', {
+      chain: ['chips-official.default-theme']
+    });
+    expect(Object.keys(resolved.tokens).length).toBeGreaterThan(0);
+
+    await expect(
+      runtime.invoke('theme.resolve', {
+        chain: ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+      })
+    ).rejects.toMatchObject({ code: 'THEME_CHAIN_TOO_DEEP' });
+  });
+
   it('supports i18n translation and locale switching', async () => {
     await runtime.invoke('i18n.setCurrent', { locale: 'en-US' });
     const translated = await runtime.invoke<{ text: string }>('i18n.translate', { key: 'system.ready' });
     expect(translated.text).toBe('System ready');
+  });
+
+  it('renders card through unified rendering target options', async () => {
+    const source = path.join(workspace, 'render-card-source');
+    await fs.mkdir(path.join(source, '.card'), { recursive: true });
+    await fs.mkdir(path.join(source, 'content'), { recursive: true });
+    await fs.writeFile(path.join(source, '.card/metadata.yaml'), 'id: card.render.demo\nname: Render Demo\n', 'utf-8');
+    await fs.writeFile(path.join(source, '.card/structure.yaml'), 'cards: [intro]\n', 'utf-8');
+    await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+    await fs.writeFile(path.join(source, 'content/intro.yaml'), 'type: text\n', 'utf-8');
+
+    const cardFile = path.join(workspace, 'render-demo.card');
+    const zip = new StoreZipService();
+    await zip.compress(source, cardFile);
+
+    const rendered = await runtime.invoke<{
+      view: {
+        target: string;
+        body: string;
+        semanticHash: string;
+        consistency?: { consistent: boolean };
+      };
+    }>('card.render', {
+      cardFile,
+      options: {
+        target: 'offscreen-render',
+        verifyConsistency: true
+      }
+    });
+
+    expect(rendered.view.target).toBe('offscreen-render');
+    expect(rendered.view.body).toContain('data-target="offscreen-render"');
+    expect(rendered.view.semanticHash.length).toBeGreaterThan(10);
+    expect(rendered.view.consistency?.consistent).toBe(true);
+  });
+
+  it('rejects invalid card.render options target by schema', async () => {
+    await expect(
+      runtime.invoke('card.render', {
+        cardFile: '/tmp/invalid.card',
+        options: {
+          target: 'invalid-target'
+        }
+      })
+    ).rejects.toMatchObject({ code: 'SCHEMA_VALIDATION_FAILED' });
   });
 
   it('creates window records via window service', async () => {
@@ -65,6 +142,26 @@ describe('Host services integration', () => {
     await runtime.invoke('log.write', { level: 'info', message: 'integration-log' });
     const result = await runtime.invoke<{ entries: Array<{ message: string }> }>('log.query', {});
     expect(result.entries.some((entry) => entry.message === 'integration-log')).toBe(true);
+  });
+
+  it('persists encrypted credentials across host restart', async () => {
+    await runtime.invoke('credential.set', { ref: 'chips.api.token', value: 'secret-token' });
+    const stored = await fs.readFile(path.join(workspace, 'credentials.enc.json'), 'utf-8');
+    expect(stored.includes('secret-token')).toBe(false);
+
+    await app.stop();
+    app = new HostApplication({ workspacePath: workspace });
+    await app.start();
+    runtime = new RuntimeClient(app.createBridge(), {
+      defaultTimeout: 5000,
+      maxRetries: 1,
+      retryDelay: 10,
+      retryBackoff: 2,
+      enableRetry: true
+    });
+
+    const restored = await runtime.invoke<{ value: string | null }>('credential.get', { ref: 'chips.api.token' });
+    expect(restored.value).toBe('secret-token');
   });
 
   it('returns control-plane health report', async () => {

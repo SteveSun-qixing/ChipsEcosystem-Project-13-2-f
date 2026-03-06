@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { createError } from '../../shared/errors';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
@@ -54,9 +55,12 @@ interface RouteMetric {
 }
 
 interface RuntimeState {
-  config: Map<string, unknown>;
+  configDefaults: Map<string, unknown>;
+  configSystem: Map<string, unknown>;
+  configWorkspace: Map<string, unknown>;
+  configUser: Map<string, unknown>;
   modules: Map<string, ModuleRecord>;
-  credentials: Map<string, string>;
+  credentials: Map<string, { iv: string; tag: string; value: string }>;
   clipboard: unknown;
   themes: ThemeRecord[];
   currentThemeId: string;
@@ -65,6 +69,8 @@ interface RuntimeState {
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
 }
+
+type ConfigScope = 'user' | 'workspace' | 'system';
 
 const ensureWorkspace = async (workspacePath: string): Promise<void> => {
   await fs.mkdir(workspacePath, { recursive: true });
@@ -129,9 +135,17 @@ const descriptor = <I, O>(
 });
 
 const buildState = (): RuntimeState => ({
-  config: new Map<string, unknown>(),
+  configDefaults: new Map<string, unknown>([
+    ['ui.language', 'zh-CN'],
+    ['ui.theme', 'chips-official.default-theme'],
+    ['window.defaultWidth', 1200],
+    ['window.defaultHeight', 760]
+  ]),
+  configSystem: new Map<string, unknown>(),
+  configWorkspace: new Map<string, unknown>(),
+  configUser: new Map<string, unknown>(),
   modules: new Map<string, ModuleRecord>(),
-  credentials: new Map<string, string>(),
+  credentials: new Map<string, { iv: string; tag: string; value: string }>(),
   clipboard: null,
   themes: [
     {
@@ -161,22 +175,161 @@ const buildState = (): RuntimeState => ({
   activatedServices: new Set<string>()
 });
 
-const persistConfig = async (workspacePath: string, configMap: Map<string, unknown>): Promise<void> => {
-  const data = Object.fromEntries(configMap.entries());
-  await fs.writeFile(path.join(workspacePath, 'config.json'), JSON.stringify(data, null, 2), 'utf-8');
+const CONFIG_SCOPE_FILES: Record<ConfigScope, string> = {
+  user: 'config.json',
+  workspace: 'config.workspace.json',
+  system: 'config.system.json'
 };
 
-const loadConfig = async (workspacePath: string, state: RuntimeState): Promise<void> => {
-  const configPath = path.join(workspacePath, 'config.json');
+const CREDENTIAL_STORE_FILE = 'credentials.enc.json';
+
+const mapFromRecord = (record: Record<string, unknown>): Map<string, unknown> => {
+  return new Map<string, unknown>(Object.entries(record));
+};
+
+const persistConfigScope = async (workspacePath: string, scope: ConfigScope, configMap: Map<string, unknown>): Promise<void> => {
+  const data = Object.fromEntries(configMap.entries());
+  const fileName = CONFIG_SCOPE_FILES[scope];
+  await fs.writeFile(path.join(workspacePath, fileName), JSON.stringify(data, null, 2), 'utf-8');
+};
+
+const loadConfigScope = async (workspacePath: string, scope: ConfigScope): Promise<Map<string, unknown>> => {
+  const configPath = path.join(workspacePath, CONFIG_SCOPE_FILES[scope]);
   try {
     const raw = await fs.readFile(configPath, 'utf-8');
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    for (const [key, value] of Object.entries(parsed)) {
-      state.config.set(key, value);
+    return mapFromRecord(parsed);
+  } catch {
+    return new Map<string, unknown>();
+  }
+};
+
+const loadConfig = async (workspacePath: string, state: RuntimeState): Promise<void> => {
+  state.configSystem = await loadConfigScope(workspacePath, 'system');
+  state.configWorkspace = await loadConfigScope(workspacePath, 'workspace');
+  state.configUser = await loadConfigScope(workspacePath, 'user');
+  await persistConfigScope(workspacePath, 'user', state.configUser);
+};
+
+const parseConfigScope = (value: unknown): ConfigScope => {
+  if (value === 'system' || value === 'workspace' || value === 'user') {
+    return value;
+  }
+  if (typeof value === 'undefined') {
+    return 'user';
+  }
+  throw createError('CONFIG_SCOPE_INVALID', `Invalid config scope: ${String(value)}`);
+};
+
+const getConfigMapByScope = (state: RuntimeState, scope: ConfigScope): Map<string, unknown> => {
+  if (scope === 'system') {
+    return state.configSystem;
+  }
+  if (scope === 'workspace') {
+    return state.configWorkspace;
+  }
+  return state.configUser;
+};
+
+const resolveConfigValue = (state: RuntimeState, key: string): unknown => {
+  if (state.configUser.has(key)) {
+    return state.configUser.get(key);
+  }
+  if (state.configWorkspace.has(key)) {
+    return state.configWorkspace.get(key);
+  }
+  if (state.configSystem.has(key)) {
+    return state.configSystem.get(key);
+  }
+  return state.configDefaults.get(key) ?? null;
+};
+
+const resolveConfigSnapshot = (state: RuntimeState): Record<string, unknown> => {
+  return Object.fromEntries([
+    ...state.configDefaults.entries(),
+    ...state.configSystem.entries(),
+    ...state.configWorkspace.entries(),
+    ...state.configUser.entries()
+  ]);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const mergeRecords = (base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const current = result[key];
+    if (isRecord(current) && isRecord(value)) {
+      result[key] = mergeRecords(current, value);
+      continue;
+    }
+    result[key] = deepClone(value);
+  }
+  return result;
+};
+
+const credentialCipherKey = (workspacePath: string): Buffer => {
+  const secret = process.env.CHIPS_CREDENTIAL_KEY ?? `${workspacePath}:chips-host-credential`;
+  return crypto.createHash('sha256').update(secret).digest();
+};
+
+const encryptCredential = (
+  key: Buffer,
+  plainText: string
+): { iv: string; tag: string; value: string } => {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(plainText, 'utf-8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    value: encrypted.toString('base64')
+  };
+};
+
+const decryptCredential = (
+  key: Buffer,
+  payload: { iv: string; tag: string; value: string }
+): string => {
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(payload.iv, 'base64')
+  );
+  decipher.setAuthTag(Buffer.from(payload.tag, 'base64'));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(payload.value, 'base64')),
+    decipher.final()
+  ]);
+  return decrypted.toString('utf-8');
+};
+
+const loadCredentials = async (workspacePath: string, state: RuntimeState): Promise<void> => {
+  const storePath = path.join(workspacePath, CREDENTIAL_STORE_FILE);
+  try {
+    const raw = await fs.readFile(storePath, 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, { iv: string; tag: string; value: string }>;
+    for (const [ref, encrypted] of Object.entries(parsed)) {
+      if (
+        encrypted &&
+        typeof encrypted.iv === 'string' &&
+        typeof encrypted.tag === 'string' &&
+        typeof encrypted.value === 'string'
+      ) {
+        state.credentials.set(ref, encrypted);
+      }
     }
   } catch {
-    await persistConfig(workspacePath, state.config);
+    await fs.writeFile(storePath, JSON.stringify({}, null, 2), 'utf-8');
   }
+};
+
+const persistCredentials = async (workspacePath: string, encryptedStore: Map<string, { iv: string; tag: string; value: string }>): Promise<void> => {
+  const payload = Object.fromEntries(encryptedStore.entries());
+  await fs.writeFile(path.join(workspacePath, CREDENTIAL_STORE_FILE), JSON.stringify(payload, null, 2), 'utf-8');
 };
 
 const toPlainLogEntries = (entries: LogEntry[]): LogEntry[] => entries.map((entry) => deepClone(entry));
@@ -221,6 +374,8 @@ const bindLazyActivation = (ctx: HostServiceContext, state: RuntimeState, servic
 };
 
 const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRegistration[] => {
+  const credentialKey = credentialCipherKey(ctx.workspacePath);
+
   const fileService: ServiceRegistration = {
     name: 'file',
     actions: {
@@ -382,54 +537,60 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'config.get', async (input) => {
-            return { value: state.config.get(input.key) ?? null };
+            return { value: resolveConfigValue(state, input.key) };
           })
         )
       },
       set: {
-        descriptor: descriptor<{ key: string; value: unknown }, { ack: true }>(
+        descriptor: descriptor<{ key: string; value: unknown; scope?: ConfigScope }, { ack: true }>(
           'config.set',
           ['config.write'],
           2_000,
           false,
           0,
           withMetrics(state, 'config.set', async (input) => {
-            state.config.set(input.key, input.value);
-            await persistConfig(ctx.workspacePath, state.config);
+            const scope = parseConfigScope(input.scope);
+            const target = getConfigMapByScope(state, scope);
+            target.set(input.key, input.value);
+            await persistConfigScope(ctx.workspacePath, scope, target);
             return { ack: true };
           })
         )
       },
       batchSet: {
-        descriptor: descriptor<{ entries: Record<string, unknown> }, { ack: true }>(
+        descriptor: descriptor<{ entries: Record<string, unknown>; scope?: ConfigScope }, { ack: true }>(
           'config.batchSet',
           ['config.write'],
           5_000,
           false,
           0,
           withMetrics(state, 'config.batchSet', async (input) => {
+            const scope = parseConfigScope(input.scope);
+            const target = getConfigMapByScope(state, scope);
             for (const [key, value] of Object.entries(input.entries)) {
-              state.config.set(key, value);
+              target.set(key, value);
             }
-            await persistConfig(ctx.workspacePath, state.config);
+            await persistConfigScope(ctx.workspacePath, scope, target);
             return { ack: true };
           })
         )
       },
       reset: {
-        descriptor: descriptor<{ key?: string }, { ack: true }>(
+        descriptor: descriptor<{ key?: string; scope?: ConfigScope }, { ack: true }>(
           'config.reset',
           ['config.write'],
           2_000,
           false,
           0,
           withMetrics(state, 'config.reset', async (input) => {
+            const scope = parseConfigScope(input.scope);
+            const target = getConfigMapByScope(state, scope);
             if (input.key) {
-              state.config.delete(input.key);
+              target.delete(input.key);
             } else {
-              state.config.clear();
+              target.clear();
             }
-            await persistConfig(ctx.workspacePath, state.config);
+            await persistConfigScope(ctx.workspacePath, scope, target);
             return { ack: true };
           })
         )
@@ -512,12 +673,21 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           2_000,
           true,
           0,
-          withMetrics(state, 'theme.resolve', async () => {
-            const theme = state.themes.find((candidate) => candidate.id === state.currentThemeId);
-            if (!theme) {
-              throw createError('THEME_NOT_FOUND', 'Current theme not found');
+          withMetrics(state, 'theme.resolve', async (input) => {
+            const chain = input.chain.length > 0 ? input.chain : [state.currentThemeId];
+            if (chain.length > 6) {
+              throw createError('THEME_CHAIN_TOO_DEEP', 'Theme resolve chain exceeds 6 levels');
             }
-            return { tokens: theme.tokens };
+
+            let merged: Record<string, unknown> = {};
+            for (const themeId of chain) {
+              const theme = state.themes.find((candidate) => candidate.id === themeId);
+              if (!theme) {
+                throw createError('THEME_NOT_FOUND', `Theme not found in resolve chain: ${themeId}`);
+              }
+              merged = mergeRecords(merged, theme.tokens);
+            }
+            return { tokens: merged };
           })
         )
       },
@@ -907,6 +1077,32 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'platform.getCapabilities', async () => {
             const capabilities = await ctx.pal.platform.getCapabilities();
             return { capabilities };
+          })
+        )
+      },
+      getScreenInfo: {
+        descriptor: descriptor<Record<string, unknown>, { screen: unknown }>(
+          'platform.getScreenInfo',
+          ['platform.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'platform.getScreenInfo', async () => {
+            const screen = await ctx.pal.screen.getPrimary();
+            return { screen };
+          })
+        )
+      },
+      listScreens: {
+        descriptor: descriptor<Record<string, unknown>, { screens: unknown[] }>(
+          'platform.listScreens',
+          ['platform.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'platform.listScreens', async () => {
+            const screens = await ctx.pal.screen.getAll();
+            return { screens };
           })
         )
       },
@@ -1448,7 +1644,18 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               action: 'get',
               result: 'success'
             });
-            return { value: state.credentials.get(input.ref) ?? null };
+            const encrypted = state.credentials.get(input.ref);
+            if (!encrypted) {
+              return { value: null };
+            }
+            try {
+              return { value: decryptCredential(credentialKey, encrypted) };
+            } catch (error) {
+              throw createError('CREDENTIAL_DECRYPT_FAILED', 'Credential decrypt failed', {
+                ref: input.ref,
+                reason: String(error)
+              });
+            }
           })
         )
       },
@@ -1460,7 +1667,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'credential.set', async (input, routeContext) => {
-            state.credentials.set(input.ref, input.value);
+            state.credentials.set(input.ref, encryptCredential(credentialKey, input.value));
+            await persistCredentials(ctx.workspacePath, state.credentials);
             ctx.logger.write({
               level: 'warn',
               message: 'Credential updated',
@@ -1483,6 +1691,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'credential.delete', async (input, routeContext) => {
             state.credentials.delete(input.ref);
+            await persistCredentials(ctx.workspacePath, state.credentials);
             ctx.logger.write({
               level: 'warn',
               message: 'Credential deleted',
@@ -1505,7 +1714,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'credential.rotate', async (input, routeContext) => {
             const next = createId();
-            state.credentials.set(input.ref, next);
+            state.credentials.set(input.ref, encryptCredential(credentialKey, next));
+            await persistCredentials(ctx.workspacePath, state.credentials);
             ctx.logger.write({
               level: 'warn',
               message: 'Credential rotated',
@@ -1539,14 +1749,24 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       render: {
-        descriptor: descriptor<{ cardFile: string }, { view: unknown }>(
+        descriptor: descriptor<
+          {
+            cardFile: string;
+            options?: {
+              target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render';
+              viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
+              verifyConsistency?: boolean;
+            };
+          },
+          { view: unknown }
+        >(
           'card.render',
           ['card.read'],
           10_000,
           false,
           0,
           withMetrics(state, 'card.render', async (input) => {
-            const view = await ctx.getCardService().render(input.cardFile);
+            const view = await ctx.getCardService().render(input.cardFile, input.options);
             return { view };
           })
         )
@@ -1766,6 +1986,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               diagnose: {
                 routeCount: ctx.kernel.getRouteManifest().length,
                 serviceCount: ctx.kernel.registry.list().length,
+                config: resolveConfigSnapshot(state),
                 runtimeSnapshot: ctx.runtime.snapshot(),
                 topFailureRoutes: [...state.routeMetrics.entries()]
                   .sort((a, b) => b[1].failures - a[1].failures)
@@ -1805,6 +2026,7 @@ export const registerHostServices = async (ctx: HostServiceContext): Promise<voi
 
   const runtimeState = buildState();
   await loadConfig(ctx.workspacePath, runtimeState);
+  await loadCredentials(ctx.workspacePath, runtimeState);
 
   const services = createServices(ctx, runtimeState);
   for (const service of services) {

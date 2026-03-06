@@ -4,6 +4,12 @@
 
 Bridge API是插件访问系统能力的标准接口，通过Electron的contextBridge机制暴露给渲染进程。Bridge API是插件访问底层能力的唯一通道，插件不能直接访问Node.js API、文件系统或网络。
 
+## 架构归属声明（2026-03-06）
+
+- L5-L9（含 Runtime Client、Declarative UI、Unified Rendering）属于 Host 内置运行时能力。
+- SDK 仅是开发者工具包，负责 Bridge API 的类型化封装和调用辅助，不承载运行时主实现。
+- 用户环境只安装 Host 即可运行；SDK 不作为运行时必装项。
+
 ## 核心接口
 
 ### 三层架构
@@ -70,6 +76,31 @@ theme子域提供主题能力，采用 vNext 冻结动作口径：
 | `theme.contract.get({ component? })` | 获取主题契约接口点 | 是 |
 
 **迁移说明**：旧动作 `getCss`、`getAll`、`setCurrent` 已归档，仅做内部兼容映射，不再作为外部接口暴露。
+
+### card子域（统一渲染相关）
+
+card 子域采用 vNext 动作口径：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `card.parse({ cardFile })` | 解析卡片结构并返回 AST | 是 |
+| `card.validate({ cardFile })` | 验证卡片格式合法性 | 是 |
+| `card.render({ cardFile, options? })` | 调用 Host L9 统一渲染链路并返回渲染结果 | 否 |
+
+`card.render.options` 推荐字段：
+
+- `target`: `app-root | card-iframe | module-slot | offscreen-render`
+- `viewport`: `{ width?, height?, scrollTop?, scrollLeft? }`
+- `verifyConsistency`: `boolean`
+
+参数校验规则：
+
+- `target` 非白名单值时，Host 必须返回 `SCHEMA_VALIDATION_FAILED`。
+- `viewport.width/height`（若提供）必须大于 0 且为有限数值。
+- `viewport.scrollTop/scrollLeft`（若提供）必须为有限数值。
+- `verifyConsistency`（若提供）必须为布尔值。
+
+`card.render` 返回 `view.semanticHash` 与可选 `view.diagnostics/view.consistency`，用于一致性比对与诊断。
 
 ### storage子域
 
@@ -218,12 +249,14 @@ const metadata = await sdk.card.getMetadata('/path/to/card.card');
 const { useTheme } = sdk.composables;
 const theme = useTheme(); // 自动响应主题变化
 
-// SDK 提供卡片渲染辅助
-const renderer = sdk.createCardRenderer(containerElement);
-await renderer.loadCard('/path/to/card.card');
+// SDK 提供 Host 渲染能力调用封装
+await sdk.card.renderByHost({
+  cardFile: '/path/to/card.card',
+  target: containerElement
+});
 ```
 
-SDK 是可选的。插件可以直接使用 `window.chips.*` 原始 API，也可以通过 SDK 获得更好的开发体验。SDK 本身是纯前端代码，运行在渲染进程中，底层仍然通过 Bridge API 与主进程通信。
+SDK 是可选的。插件可以直接使用 `window.chips.*` 原始 API，也可以通过 SDK 获得更好的开发体验。SDK 本身是纯前端封装，运行在渲染进程中，底层仍通过 Bridge API 调用 Host 内置运行时能力。
 
 ### SDK 缓存策略
 

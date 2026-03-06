@@ -7,9 +7,11 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:contract": "vitest run tests/contract",
+    "test:perf:l9": "tsx scripts/benchmark-unified-rendering.ts --strict",
     "test:watch": "vitest",
     "start": "node dist/src/main/cli/index.js",
-    "dev": "tsx src/main/cli/index.ts"
+    "dev": "tsx src/main/cli/index.ts",
+    "perf:l9": "tsx scripts/benchmark-unified-rendering.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

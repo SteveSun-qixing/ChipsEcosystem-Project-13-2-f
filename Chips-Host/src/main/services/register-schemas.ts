@@ -1,8 +1,70 @@
-import { objectWithKeys, schemaRegistry } from '../../shared/schema';
+import { objectWithKeys, schemaRegistry, type SchemaValidator } from '../../shared/schema';
 
-const registerPair = (action: string, keys: string[]): void => {
-  schemaRegistry.register(`schemas/${action}.request.json`, objectWithKeys(keys));
-  schemaRegistry.register(`schemas/${action}.response.json`, () => ({ valid: true }));
+const registerPair = (action: string, requestKeys: string[], responseKeys: string[] = []): void => {
+  schemaRegistry.register(`schemas/${action}.request.json`, objectWithKeys(requestKeys));
+  schemaRegistry.register(`schemas/${action}.response.json`, objectWithKeys(responseKeys));
+};
+
+const RENDER_TARGETS = new Set(['app-root', 'card-iframe', 'module-slot', 'offscreen-render']);
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const validateCardRenderRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.cardFile !== 'string' || input.cardFile.trim().length === 0) {
+    errors.push('cardFile must be a non-empty string');
+  }
+
+  if (typeof input.options !== 'undefined') {
+    if (!isRecord(input.options)) {
+      errors.push('options must be an object');
+    } else {
+      const target = input.options.target;
+      if (typeof target !== 'undefined' && (typeof target !== 'string' || !RENDER_TARGETS.has(target))) {
+        errors.push('options.target is invalid');
+      }
+
+      const verifyConsistency = input.options.verifyConsistency;
+      if (typeof verifyConsistency !== 'undefined' && typeof verifyConsistency !== 'boolean') {
+        errors.push('options.verifyConsistency must be a boolean');
+      }
+
+      const viewport = input.options.viewport;
+      if (typeof viewport !== 'undefined') {
+        if (!isRecord(viewport)) {
+          errors.push('options.viewport must be an object');
+        } else {
+          for (const key of ['width', 'height', 'scrollTop', 'scrollLeft']) {
+            const value = viewport[key];
+            if (typeof value === 'undefined') {
+              continue;
+            }
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+              errors.push(`options.viewport.${key} must be a finite number`);
+              continue;
+            }
+            if ((key === 'width' || key === 'height') && value <= 0) {
+              errors.push(`options.viewport.${key} must be greater than 0`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      valid: false,
+      errors
+    };
+  }
+  return { valid: true };
 };
 
 export const registerHostSchemas = (): void => {
@@ -81,6 +143,8 @@ export const registerHostSchemas = (): void => {
 
   registerPair('platform.getInfo', []);
   registerPair('platform.getCapabilities', []);
+  registerPair('platform.getScreenInfo', []);
+  registerPair('platform.listScreens', []);
   registerPair('platform.openExternal', ['url']);
 
   registerPair('log.write', ['level', 'message']);
@@ -93,7 +157,8 @@ export const registerHostSchemas = (): void => {
   registerPair('credential.rotate', ['ref']);
 
   registerPair('card.parse', ['cardFile']);
-  registerPair('card.render', ['cardFile']);
+  schemaRegistry.register('schemas/card.render.request.json', validateCardRenderRequest);
+  schemaRegistry.register('schemas/card.render.response.json', objectWithKeys(['view']));
   registerPair('card.validate', ['cardFile']);
 
   registerPair('box.pack', ['boxDir', 'outputPath']);

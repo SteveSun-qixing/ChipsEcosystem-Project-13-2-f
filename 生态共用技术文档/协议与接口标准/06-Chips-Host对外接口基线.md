@@ -24,7 +24,7 @@
 | 层级 | 对外入口 | 消费方 |
 |---|---|---|
 | L5 | `window.chips.invoke/on/once/emit` + 子域 API | 插件、应用插件、主题插件 |
-| L6 | Runtime Client（SDK 封装） | 插件业务层、UI Hooks |
+| L6 | Runtime Client（Host 内置运行时，SDK 仅封装调用） | 插件业务层、UI Hooks |
 | CLI | `chips host <command>` | 用户、运维脚本、自动化任务 |
 
 ---
@@ -99,6 +99,41 @@
 
 > 具体动作列表以对应服务文档与契约清单为准；本节只冻结公开命名空间与动作命名规则。
 
+### 3.1 card.render（L9 统一渲染入口）补充基线
+
+- 动作：`card.render`
+- 必填入参：
+  - `cardFile: string`
+- 可选入参：
+  - `options.target`: `app-root | card-iframe | module-slot | offscreen-render`
+  - `options.viewport`: `{ width?, height?, scrollTop?, scrollLeft? }`
+  - `options.verifyConsistency`: `boolean`
+- 入参校验规则（Host schema）：
+  - `options.target` 必须属于白名单目标值，非法值直接返回 `SCHEMA_VALIDATION_FAILED`。
+  - `options.viewport.width/height`（若提供）必须为大于 0 的有限数值。
+  - `options.viewport.scrollTop/scrollLeft`（若提供）必须为有限数值。
+  - `options.verifyConsistency`（若提供）必须为布尔值。
+- 响应 `view` 建议字段：
+  - `title: string`
+  - `body: string`（适配器提交后的 HTML）
+  - `contentFiles: string[]`
+  - `target: string`
+  - `semanticHash: string`
+  - `diagnostics?: RenderNodeDiagnostic[]`
+  - `consistency?: RenderConsistencyResult`
+
+`RenderNodeDiagnostic` 建议字段：
+
+```ts
+interface RenderNodeDiagnostic {
+  nodeId: string;
+  stage: 'node-normalize' | 'contract-validate' | 'theme-resolve' | 'layout-compute' | 'render-commit' | 'effect-dispatch';
+  code: string;
+  message: string;
+  details?: unknown;
+}
+```
+
 ---
 
 ## 4. 事件与错误语义基线
@@ -132,6 +167,9 @@ interface StandardError {
 
 - `ROUTE_REPLAY_DETECTED`：非幂等动作命中 requestId 防重放窗口
 - `PAL_COMMAND_NOT_FOUND` / `PAL_COMMAND_FAILED`：PAL 调用系统命令失败
+- `RENDER_CONTRACT_*`：统一渲染契约校验失败
+- `RENDER_THEME_*`：统一渲染主题解析失败
+- `RENDER_LAYOUT_*`：统一渲染布局计算失败
 
 ---
 

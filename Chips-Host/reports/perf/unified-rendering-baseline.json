@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-03-06T11:03:35.156Z",
+  "runs": 20,
+  "nodeCount": 500,
+  "thresholds": {
+    "renderCommitP95Ms": 32,
+    "longTaskRatioMax": 0.05
+  },
+  "total": {
+    "p50": 28.528291,
+    "p95": 65.444291,
+    "avg": 38.32918745,
+    "min": 17.979875,
+    "max": 108.727125
+  },
+  "commit": {
+    "p50": 8,
+    "p95": 21,
+    "avg": 10.35,
+    "min": 4,
+    "max": 25
+  },
+  "layout": {
+    "p50": 9,
+    "p95": 16,
+    "avg": 10.15,
+    "min": 4,
+    "max": 28
+  },
+  "normalize": {
+    "p50": 1,
+    "p95": 7,
+    "avg": 2,
+    "min": 0,
+    "max": 7
+  }
+}

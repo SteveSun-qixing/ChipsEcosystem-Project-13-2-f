@@ -4,6 +4,8 @@
 
 薯片SDK让第三方开发者可以将薯片能力集成到自己的软件中。SDK提供程序化的接口访问生态的核心功能，包括文件操作、内容渲染、插件管理、主题能力等。
 
+> 架构归属声明（2026-03-06）：Host 主责 L1-L9 运行时链路（含 Runtime Client 与渲染层）；SDK 仅提供开发封装与调用入口，不承载运行时主实现。
+
 ## 安装
 
 SDK通过npm安装。在Node.js项目中使用npm install chips-sdk安装。在浏览器项目中可以使用CDN引入或打包工具导入。
@@ -42,11 +44,76 @@ client.card.render(cardDoc: CardDocument, options?: RenderOptions): Promise<Card
 
 ## 内容渲染
 
-SDK提供内容渲染能力。
+SDK提供 Host 渲染能力的调用封装。
 
-渲染卡片使用client.render.card方法，传入卡片配置。返回渲染后的HTML字符串或组件。
+渲染卡片通过 `client.render.card` 或统一显示窗口接口触发 Host 内置渲染运行时。SDK 不直接承载渲染引擎主实现。
 
-渲染器支持自定义模板。可以传入自定义模板覆盖默认模板，实现特定设计需求。
+模板策略由 Host 渲染运行时统一管理，SDK 只负责参数封装与调用链路。
+
+### card.render（统一渲染入口）推荐封装
+
+SDK 推荐直接封装 Host `card.render`，暴露以下参数：
+
+```typescript
+client.card.render({
+  cardFile: string,
+  options?: {
+    target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render',
+    viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number },
+    verifyConsistency?: boolean
+  }
+}): Promise<{
+  view: {
+    title: string;
+    body: string;
+    contentFiles: string[];
+    target: string;
+    semanticHash: string;
+    diagnostics?: Array<{
+      nodeId: string;
+      stage: string;
+      code: string;
+      message: string;
+      details?: unknown;
+    }>;
+    consistency?: {
+      consistent: boolean;
+      hashByTarget: Record<string, string>;
+      mismatches: string[];
+    };
+  };
+}>
+```
+
+说明：
+
+- `target` 默认建议为 `card-iframe`。
+- `verifyConsistency=true` 适用于测试/验收环境，不建议默认在生产场景全量开启。
+- `semanticHash` 可用于跨目标渲染一致性对比与缓存键管理。
+- SDK 调用前应做参数预校验；若透传到 Host 后触发 schema 校验失败，错误码为 `SCHEMA_VALIDATION_FAILED`。
+
+### 卡片显示窗口（vNext 统一接口）
+
+在需要展示卡片的应用中，统一使用 SDK 显示窗口接口：
+
+```typescript
+client.card.coverFrame.render({
+  cardFile: string,
+  cardName?: string
+}): Promise<IframeWindow>
+
+client.card.compositeWindow.render({
+  cardFile: string,
+  mode?: 'view' | 'preview'
+}): Promise<IframeWindow>
+```
+
+说明：
+
+- `coverFrame` 返回卡片封面 iframe（下方显示卡片名称）。
+- `compositeWindow` 返回复合卡片 iframe 窗口。
+- `compositeWindow.mode` 只允许 `view | preview`。
+- 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
 
 ## 插件管理
 

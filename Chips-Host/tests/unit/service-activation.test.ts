@@ -114,6 +114,32 @@ const createPal = (): PALAdapter => ({
       return ['window', 'file'];
     }
   },
+  screen: {
+    async getPrimary() {
+      return {
+        id: 'screen-1',
+        width: 1920,
+        height: 1080,
+        scaleFactor: 1,
+        x: 0,
+        y: 0,
+        primary: true
+      };
+    },
+    async getAll() {
+      return [
+        {
+          id: 'screen-1',
+          width: 1920,
+          height: 1080,
+          scaleFactor: 1,
+          x: 0,
+          y: 0,
+          primary: true
+        }
+      ];
+    }
+  },
   tray: {
     async set() {
       return { active: true };
@@ -197,13 +223,17 @@ describe('Service activation and lazy heavy service creation', () => {
     let cardCreated = 0;
     let boxCreated = 0;
     let zipCreated = 0;
+    const cardRenderCalls: Array<{ cardFile: string; options?: Record<string, unknown> }> = [];
     let cardService: CardService | undefined;
     let boxService: BoxService | undefined;
     let zipService: StoreZipService | undefined;
 
     const fakeCardService = {
       parse: async () => ({ node: 'card-ast' }),
-      render: async () => ({ node: 'card-view' }),
+      render: async (cardFile: string, options?: Record<string, unknown>) => {
+        cardRenderCalls.push({ cardFile, options });
+        return { node: 'card-view' };
+      },
       validate: async () => ({ valid: true, errors: [] as string[] })
     } as unknown as CardService;
     const fakeBoxService = {
@@ -262,7 +292,17 @@ describe('Service activation and lazy heavy service creation', () => {
     await kernel.invoke('config.get', { key: 'ui.language' }, createContext(permissionAll));
     await kernel.invoke('config.get', { key: 'ui.language' }, createContext(permissionAll));
     await kernel.invoke('card.parse', { cardFile: '/tmp/demo.card' }, createContext(permissionAll));
-    await kernel.invoke('card.render', { cardFile: '/tmp/demo.card' }, createContext(permissionAll));
+    await kernel.invoke(
+      'card.render',
+      {
+        cardFile: '/tmp/demo.card',
+        options: {
+          target: 'offscreen-render',
+          verifyConsistency: true
+        }
+      },
+      createContext(permissionAll)
+    );
     await kernel.invoke('box.inspect', { boxFile: '/tmp/demo.box' }, createContext(permissionAll));
     await kernel.invoke('zip.list', { zipPath: '/tmp/demo.zip' }, createContext(permissionAll));
     off();
@@ -274,5 +314,13 @@ describe('Service activation and lazy heavy service creation', () => {
     expect(activated.filter((item) => item === 'card')).toHaveLength(1);
     expect(activated.filter((item) => item === 'box')).toHaveLength(1);
     expect(activated.filter((item) => item === 'zip')).toHaveLength(1);
+    expect(cardRenderCalls).toHaveLength(1);
+    expect(cardRenderCalls[0]).toMatchObject({
+      cardFile: '/tmp/demo.card',
+      options: {
+        target: 'offscreen-render',
+        verifyConsistency: true
+      }
+    });
   });
 });

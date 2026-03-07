@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../../packages/kernel/src';
 import { createBridgeForKernel } from '../../src/preload/create-bridge';
 import { objectWithKeys, schemaRegistry } from '../../src/shared/schema';
-import { bindKernelToElectronIpc, CHIPS_EMIT_CHANNEL, CHIPS_EVENT_CHANNEL_PREFIX, CHIPS_INVOKE_CHANNEL } from '../../src/main/ipc/chips-ipc';
+import {
+  bindKernelToElectronIpc,
+  CHIPS_EMIT_CHANNEL,
+  CHIPS_EVENT_CHANNEL_PREFIX,
+  CHIPS_INVOKE_CHANNEL,
+  CHIPS_PLATFORM_CHANNEL_PREFIX
+} from '../../src/main/ipc/chips-ipc';
 
 type IpcListener = (event: unknown, payload: unknown) => void;
 type IpcInvokeHandler = (event: unknown, payload: unknown) => Promise<unknown> | unknown;
@@ -112,6 +118,8 @@ describe('chips ipc bridge', () => {
     const kernel = new Kernel();
     schemaRegistry.register('schemas/demo.echo.request.json', objectWithKeys(['value']));
     schemaRegistry.register('schemas/demo.echo.response.json', objectWithKeys(['value']));
+    schemaRegistry.register('schemas/platform.getInfo.request.json', objectWithKeys([]));
+    schemaRegistry.register('schemas/platform.getInfo.response.json', objectWithKeys(['info']));
     kernel.registerRoute({
       key: 'demo.echo',
       schemaIn: 'schemas/demo.echo.request.json',
@@ -122,12 +130,22 @@ describe('chips ipc bridge', () => {
       retries: 0,
       handler: async (input: { value: string }) => ({ value: input.value })
     });
+    kernel.registerRoute({
+      key: 'platform.getInfo',
+      schemaIn: 'schemas/platform.getInfo.request.json',
+      schemaOut: 'schemas/platform.getInfo.response.json',
+      permission: ['platform.read'],
+      timeoutMs: 1000,
+      idempotent: true,
+      retries: 0,
+      handler: async () => ({ info: { platform: 'test' } })
+    });
 
     const binding = bindKernelToElectronIpc(kernel);
     expect(binding.active).toBe(true);
 
     const bridge = createBridgeForKernel(kernel, {
-      permissions: ['demo.read'],
+      permissions: ['demo.read', 'platform.read'],
       callerId: 'renderer-test',
       pluginId: 'chips.test.plugin'
     });
@@ -135,6 +153,8 @@ describe('chips ipc bridge', () => {
     const echoed = await bridge.invoke<{ value: string }>('demo.echo', { value: 'ok' });
     expect(echoed.value).toBe('ok');
     expect(electronMock.invokeHandlers.has(CHIPS_INVOKE_CHANNEL)).toBe(true);
+    await bridge.platform.getInfo();
+    expect(electronMock.invokeHandlers.has(`${CHIPS_PLATFORM_CHANNEL_PREFIX}getInfo`)).toBe(true);
 
     const fromKernel: unknown[] = [];
     const off = bridge.on('demo.updated', (payload) => {
@@ -154,6 +174,50 @@ describe('chips ipc bridge', () => {
     await expect(fromRenderer).resolves.toEqual({ source: 'renderer' });
     expect(electronMock.mainListeners.has(CHIPS_EMIT_CHANNEL)).toBe(true);
     expect(electronMock.rendererListeners.has(`${CHIPS_EVENT_CHANNEL_PREFIX}demo.updated`)).toBe(true);
+
+    binding.dispose();
+  });
+
+  it('enforces plugin message-rate quota when quota provider is supplied', async () => {
+    const electronMock = createElectronMock();
+    (globalThis as Record<string, unknown>)[MOCK_KEY] = electronMock.module;
+
+    const kernel = new Kernel();
+    schemaRegistry.register('schemas/demo.echo.request.json', objectWithKeys(['value']));
+    schemaRegistry.register('schemas/demo.echo.response.json', objectWithKeys(['value']));
+
+    kernel.registerRoute({
+      key: 'demo.echo',
+      schemaIn: 'schemas/demo.echo.request.json',
+      schemaOut: 'schemas/demo.echo.response.json',
+      permission: ['demo.read'],
+      timeoutMs: 1_000,
+      idempotent: true,
+      retries: 0,
+      handler: async (input: { value: string }) => ({ value: input.value })
+    });
+
+    const binding = bindKernelToElectronIpc(kernel, {
+      getPluginQuota: (pluginId) => {
+        if (pluginId === 'chips.quota.plugin') {
+          return { messageRateBudget: 2 };
+        }
+        return { messageRateBudget: 1_000 };
+      }
+    });
+    expect(binding.active).toBe(true);
+
+    const bridge = createBridgeForKernel(kernel, {
+      permissions: ['demo.read'],
+      callerId: 'renderer-quota',
+      pluginId: 'chips.quota.plugin'
+    });
+
+    await bridge.invoke('demo.echo', { value: 'a' });
+    await bridge.invoke('demo.echo', { value: 'b' });
+    await expect(bridge.invoke('demo.echo', { value: 'c' })).rejects.toMatchObject({
+      code: 'PLUGIN_QUOTA_EXCEEDED'
+    });
 
     binding.dispose();
   });

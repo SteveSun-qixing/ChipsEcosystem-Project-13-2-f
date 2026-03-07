@@ -1,0 +1,30 @@
+:root {
+  color-scheme: light;
+
+  /* 将五层 token 映射到全局外观基线 */
+  background-color: var(--chips-sys-color-surface, #ffffff);
+  color: var(--chips-sys-color-on-surface, #111111);
+
+  /* 便于 CSS 使用的常用派生变量（基于 ref/sys 层） */
+  --chips-base-radius-sm: var(--chips-ref-radius-sm, 6px);
+  --chips-base-radius-md: var(--chips-ref-radius-md, 10px);
+  --chips-base-space-2: var(--chips-ref-space-2, 8px);
+  --chips-base-space-3: var(--chips-ref-space-3, 12px);
+  --chips-base-space-4: var(--chips-ref-space-4, 16px);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: inherit;
+  color: inherit;
+}
+
+/* 让所有基于 data-scope 的组件在盒模型与排版上保持一致 */
+
+[data-scope] {
+  box-sizing: border-box;
+  font-family: inherit;
+}

@@ -30,6 +30,7 @@ import type {
   PALNotification,
   PALPlatform,
   PALPower,
+  PALScreen,
   PALIpcChannelInfo,
   PALIpcCreateOptions,
   PALIpcMessage,
@@ -41,6 +42,7 @@ import type {
   PALWindow,
   NotificationOptions,
   PowerState,
+  ScreenInfo,
   TrayOptions,
   TrayState,
   WindowOptions,
@@ -988,7 +990,44 @@ class NodePlatform implements PALPlatform {
   }
 
   public async getCapabilities(): Promise<string[]> {
-    return ['window', 'file', 'dialog', 'clipboard', 'shell', 'tray', 'notification', 'power', 'shortcut', 'ipc'];
+    return ['window', 'file', 'dialog', 'clipboard', 'shell', 'screen', 'tray', 'notification', 'power', 'shortcut', 'ipc'];
+  }
+}
+
+class NodeScreen implements PALScreen {
+  private readonly electron = loadElectronModule();
+
+  public async getPrimary(): Promise<ScreenInfo> {
+    const screens = await this.getAll();
+    const primary = screens.find((item) => item.primary);
+    return primary ?? screens[0]!;
+  }
+
+  public async getAll(): Promise<ScreenInfo[]> {
+    if (this.electron?.screen?.getAllDisplays) {
+      const primaryDisplay = this.electron.screen.getPrimaryDisplay?.();
+      return this.electron.screen.getAllDisplays().map((display) => ({
+        id: String(display.id),
+        width: display.size.width,
+        height: display.size.height,
+        scaleFactor: display.scaleFactor ?? 1,
+        x: display.bounds.x,
+        y: display.bounds.y,
+        primary: primaryDisplay ? display.id === primaryDisplay.id : display.bounds.x === 0 && display.bounds.y === 0
+      }));
+    }
+
+    return [
+      {
+        id: 'default-screen',
+        width: 0,
+        height: 0,
+        scaleFactor: 1,
+        x: 0,
+        y: 0,
+        primary: true
+      }
+    ];
   }
 }
 
@@ -1221,6 +1260,7 @@ export class NodePalAdapter implements PALAdapter {
   public readonly clipboard: PALClipboard = new NodeClipboard();
   public readonly shell: PALShell = new NodeShell();
   public readonly platform: PALPlatform = new NodePlatform();
+  public readonly screen: PALScreen = new NodeScreen();
   public readonly tray: PALTray = new NodeTray();
   public readonly notification: PALNotification = new NodeNotification();
   public readonly shortcut: PALShortcut = new NodeShortcut();

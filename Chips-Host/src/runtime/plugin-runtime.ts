@@ -17,6 +17,8 @@ export interface PluginManifest {
   permissions: string[];
   capabilities?: string[];
   entry?: string;
+  source?: 'official' | 'third-party' | 'local';
+  signature?: string;
 }
 
 export interface PluginRecord {
@@ -49,6 +51,17 @@ export interface RuntimeQuota {
 export interface RuntimeSnapshot {
   plugins: PluginRecord[];
   sessions: PluginSession[];
+  audits: RuntimeAuditEntry[];
+}
+
+export interface RuntimeAuditEntry {
+  id: string;
+  timestamp: number;
+  stage: string;
+  result: 'success' | 'error';
+  pluginId?: string;
+  sessionId?: string;
+  details?: Record<string, unknown>;
 }
 
 const defaultQuota: RuntimeQuota = {
@@ -58,8 +71,11 @@ const defaultQuota: RuntimeQuota = {
 };
 
 const pluginTypes: PluginType[] = ['app', 'card', 'layout', 'module', 'theme'];
+const pluginSources = ['official', 'third-party', 'local'] as const;
 
 const hasPluginType = (value: string): value is PluginType => pluginTypes.includes(value as PluginType);
+const hasPluginSource = (value: string): value is (typeof pluginSources)[number] =>
+  pluginSources.includes(value as (typeof pluginSources)[number]);
 
 const asStringArray = (value: unknown, field: string, sourcePath: string, allowEmpty = true): string[] => {
   if (!Array.isArray(value)) {
@@ -86,6 +102,7 @@ export class PluginRuntime {
   private readonly plugins = new Map<string, PluginRecord>();
   private readonly sessions = new Map<string, PluginSession>();
   private readonly quotaByPlugin = new Map<string, RuntimeQuota>();
+  private readonly audits: RuntimeAuditEntry[] = [];
   private readonly zip = new StoreZipService();
 
   public constructor(
@@ -115,8 +132,10 @@ export class PluginRuntime {
   }
 
   public async install(sourcePath: string): Promise<PluginRecord> {
+    this.recordAudit('install.resolve-source', 'success', { sourcePath: path.resolve(sourcePath) });
     const source = await this.resolveInstallSource(sourcePath);
     try {
+      this.validateManifest(source.manifest, source.manifestPath);
       if (this.plugins.has(source.manifest.id)) {
         throw createError('PLUGIN_ALREADY_EXISTS', `Plugin already exists: ${source.manifest.id}`);
       }
@@ -143,7 +162,14 @@ export class PluginRuntime {
       this.plugins.set(source.manifest.id, record);
       this.quotaByPlugin.set(source.manifest.id, defaultQuota);
       await this.persist();
+      this.recordAudit('install.complete', 'success', { pluginId: source.manifest.id });
       return record;
+    } catch (error) {
+      this.recordAudit('install.complete', 'error', {
+        pluginId: source.manifest.id,
+        reason: String(error)
+      });
+      throw error;
     } finally {
       if (source.cleanup) {
         await source.cleanup();
@@ -162,6 +188,7 @@ export class PluginRuntime {
     this.closeSessions(pluginId);
     await fs.rm(record.installPath, { recursive: true, force: true });
     await this.persist();
+    this.recordAudit('plugin.uninstall', 'success', { pluginId });
   }
 
   public async enable(pluginId: string): Promise<void> {
@@ -171,6 +198,7 @@ export class PluginRuntime {
     }
     record.enabled = true;
     await this.persist();
+    this.recordAudit('plugin.enable', 'success', { pluginId });
   }
 
   public async disable(pluginId: string): Promise<void> {
@@ -181,6 +209,7 @@ export class PluginRuntime {
     record.enabled = false;
     this.closeSessions(pluginId);
     await this.persist();
+    this.recordAudit('plugin.disable', 'success', { pluginId });
   }
 
   public query(filter?: { type?: PluginType; capability?: string }): PluginRecord[] {
@@ -222,6 +251,11 @@ export class PluginRuntime {
     };
 
     this.sessions.set(session.sessionId, session);
+    this.recordAudit('session.init', 'success', {
+      pluginId,
+      sessionId: session.sessionId,
+      permissionCount: session.permissions.length
+    });
     return session;
   }
 
@@ -234,8 +268,18 @@ export class PluginRuntime {
     if (session.sessionNonce !== nonce) {
       throw createError('PLUGIN_HANDSHAKE_FAILED', 'Invalid session nonce');
     }
+    if (session.status !== 'handshaking') {
+      throw createError('PLUGIN_HANDSHAKE_FAILED', 'Session is not in handshaking state', {
+        sessionId,
+        status: session.status
+      });
+    }
 
     session.status = 'running';
+    this.recordAudit('session.handshake', 'success', {
+      pluginId: session.pluginId,
+      sessionId: session.sessionId
+    });
     return session;
   }
 
@@ -246,6 +290,10 @@ export class PluginRuntime {
     }
     session.status = 'stopped';
     this.sessions.delete(sessionId);
+    this.recordAudit('session.stop', 'success', {
+      pluginId: session.pluginId,
+      sessionId
+    });
   }
 
   public ensurePermission(pluginId: string, permission: string): void {
@@ -276,7 +324,8 @@ export class PluginRuntime {
   public snapshot(): RuntimeSnapshot {
     return {
       plugins: this.query(),
-      sessions: [...this.sessions.values()]
+      sessions: [...this.sessions.values()],
+      audits: [...this.audits]
     };
   }
 
@@ -284,7 +333,73 @@ export class PluginRuntime {
     for (const [sessionId, session] of this.sessions.entries()) {
       if (session.pluginId === pluginId) {
         this.sessions.delete(sessionId);
+        this.recordAudit('session.stop', 'success', {
+          pluginId: session.pluginId,
+          sessionId
+        });
       }
+    }
+  }
+
+  private validateManifest(manifest: PluginManifest, manifestPath: string): void {
+    if (!/^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/i.test(manifest.id)) {
+      throw createError('PLUGIN_INVALID', `Plugin id must use reverse-domain format: ${manifest.id}`, {
+        manifestPath
+      });
+    }
+    if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(manifest.version)) {
+      throw createError('PLUGIN_INVALID', `Plugin version must use semantic version: ${manifest.version}`, {
+        manifestPath
+      });
+    }
+    for (const permission of manifest.permissions) {
+      if (!/^[a-z]+(?:-[a-z]+)*(?:\.[a-z]+(?:-[a-z]+)*)+$/.test(permission)) {
+        throw createError('PLUGIN_INVALID', `Invalid permission name: ${permission}`, {
+          manifestPath
+        });
+      }
+    }
+    if (manifest.entry) {
+      if (path.isAbsolute(manifest.entry) || manifest.entry.includes('..')) {
+        throw createError('PLUGIN_INVALID', 'Plugin entry must be a safe relative path', {
+          manifestPath,
+          entry: manifest.entry
+        });
+      }
+    }
+    if (manifest.source && manifest.source !== 'local') {
+      if (!manifest.signature || manifest.signature.trim().length === 0) {
+        throw createError('PLUGIN_SIGNATURE_INVALID', 'Plugin signature is required for non-local source', {
+          manifestPath,
+          source: manifest.source
+        });
+      }
+    }
+  }
+
+  private recordAudit(
+    stage: string,
+    result: 'success' | 'error',
+    payload: {
+      pluginId?: string;
+      sessionId?: string;
+      reason?: string;
+      sourcePath?: string;
+      permissionCount?: number;
+    } & Record<string, unknown>
+  ): void {
+    const { pluginId, sessionId, ...details } = payload;
+    this.audits.push({
+      id: createId(),
+      timestamp: now(),
+      stage,
+      result,
+      pluginId,
+      sessionId,
+      details
+    });
+    if (this.audits.length > 500) {
+      this.audits.shift();
     }
   }
 
@@ -456,6 +571,14 @@ export class PluginRuntime {
       typeof record.capabilities === 'undefined'
         ? undefined
         : asStringArray(record.capabilities, 'capabilities', manifestPath, true);
+    const source =
+      typeof record.source === 'string' && hasPluginSource(record.source)
+        ? record.source
+        : undefined;
+    if (typeof record.source === 'string' && !source) {
+      throw createError('PLUGIN_INVALID', `Invalid plugin source: ${record.source}`, { manifestPath });
+    }
+    const signature = typeof record.signature === 'string' ? record.signature : undefined;
 
     return {
       id: record.id,
@@ -465,7 +588,9 @@ export class PluginRuntime {
       description: typeof record.description === 'string' ? record.description : undefined,
       permissions,
       capabilities,
-      entry: typeof record.entry === 'string' ? record.entry : undefined
+      entry: typeof record.entry === 'string' ? record.entry : undefined,
+      source,
+      signature
     };
   }
 

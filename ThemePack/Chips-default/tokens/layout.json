@@ -1,0 +1,12 @@
+{
+  "chips": {
+    "layout": {
+      "density": {
+        "comfortable": "40cpx"
+      },
+      "gap": {
+        "md": "12cpx"
+      }
+    }
+  }
+}

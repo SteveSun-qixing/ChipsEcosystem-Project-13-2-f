@@ -1,0 +1,10 @@
+{
+  "card-viewer": {
+    "actions": {
+      "open": "Open card"
+    },
+    "bridge": {
+      "themeLabel": "Current theme"
+    }
+  }
+}

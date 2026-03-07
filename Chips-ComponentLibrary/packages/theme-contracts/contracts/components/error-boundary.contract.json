@@ -1,0 +1,37 @@
+{
+  "component": "error-boundary",
+  "scope": "error-boundary",
+  "parts": [
+    "root",
+    "title",
+    "description",
+    "action",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.error-boundary.root.surface",
+    "chips.comp.error-boundary.root.border.error",
+    "chips.comp.error-boundary.title.color",
+    "chips.comp.error-boundary.description.color",
+    "chips.comp.error-boundary.action.surface.idle",
+    "chips.comp.error-boundary.action.surface.active",
+    "chips.comp.error-boundary.status.color.error",
+    "chips.comp.error-boundary.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

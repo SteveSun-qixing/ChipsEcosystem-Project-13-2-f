@@ -55,6 +55,16 @@ export interface PlatformInfo {
   release: string;
 }
 
+export interface ScreenInfo {
+  id: string;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
 export interface DialogFileOptions {
   defaultPath?: string;
   mode?: 'file' | 'directory';
@@ -151,6 +161,11 @@ export interface PALPlatform {
   getCapabilities(): Promise<string[]>;
 }
 
+export interface PALScreen {
+  getPrimary(): Promise<ScreenInfo>;
+  getAll(): Promise<ScreenInfo[]>;
+}
+
 export interface PALTray {
   set(options: TrayOptions): Promise<TrayState>;
   clear(): Promise<void>;
@@ -215,6 +230,7 @@ export interface PALAdapter {
   clipboard: PALClipboard;
   shell: PALShell;
   platform: PALPlatform;
+  screen: PALScreen;
   tray: PALTray;
   notification: PALNotification;
   shortcut: PALShortcut;

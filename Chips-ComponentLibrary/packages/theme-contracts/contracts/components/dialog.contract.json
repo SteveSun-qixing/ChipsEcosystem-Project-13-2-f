@@ -1,0 +1,38 @@
+{
+  "component": "dialog",
+  "scope": "dialog",
+  "parts": [
+    "root",
+    "trigger",
+    "backdrop",
+    "content",
+    "title",
+    "description",
+    "close",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.dialog.backdrop.surface",
+    "chips.comp.dialog.content.radius",
+    "chips.comp.dialog.content.surface",
+    "chips.comp.dialog.title.color",
+    "chips.comp.dialog.close.color",
+    "chips.comp.dialog.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

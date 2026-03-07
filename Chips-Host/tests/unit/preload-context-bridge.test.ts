@@ -6,7 +6,7 @@ import {
   createBridgeForKernel,
   exposeBridgeToMainWorld
 } from '../../src/preload/create-bridge';
-import { CHIPS_INVOKE_CHANNEL } from '../../src/main/ipc/chips-ipc';
+import { CHIPS_INVOKE_CHANNEL, CHIPS_PLATFORM_CHANNEL_PREFIX } from '../../src/main/ipc/chips-ipc';
 
 const MOCK_KEY = '__chipsElectronMock';
 
@@ -84,9 +84,8 @@ describe('preload contextBridge exposure', () => {
 
     expect(response).toEqual({ ok: true });
     expect(invoke).toHaveBeenCalledWith(
-      CHIPS_INVOKE_CHANNEL,
+      `${CHIPS_PLATFORM_CHANNEL_PREFIX}getInfo`,
       expect.objectContaining({
-        action: 'platform.getInfo',
         payload: {}
       })
     );

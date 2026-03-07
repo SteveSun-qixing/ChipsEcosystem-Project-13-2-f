@@ -9,6 +9,10 @@ class SchemaRegistry {
     this.validators.set(schemaId, validator);
   }
 
+  public has(schemaId: string): boolean {
+    return this.validators.has(schemaId);
+  }
+
   public validate(schemaId: string, input: unknown): void {
     const validator = this.validators.get(schemaId);
     if (!validator) {

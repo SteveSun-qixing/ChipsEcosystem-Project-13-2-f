@@ -4,6 +4,7 @@ export type {
   PluginRecord,
   PluginSession,
   PluginType,
+  RuntimeAuditEntry,
   RuntimeQuota,
   RuntimeSnapshot
 } from './plugin-runtime';

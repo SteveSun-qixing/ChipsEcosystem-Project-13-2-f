@@ -1,0 +1,13 @@
+{
+  "name": "@chips/card-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./states": "./src/states.js"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  }
+}

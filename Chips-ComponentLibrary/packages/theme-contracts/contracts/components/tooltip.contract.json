@@ -1,0 +1,34 @@
+{
+  "component": "tooltip",
+  "scope": "tooltip",
+  "parts": [
+    "root",
+    "trigger",
+    "content",
+    "arrow",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.tooltip.content.radius",
+    "chips.comp.tooltip.content.surface",
+    "chips.comp.tooltip.content.text.color",
+    "chips.comp.tooltip.arrow.surface",
+    "chips.comp.tooltip.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

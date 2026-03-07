@@ -1,0 +1,210 @@
+# Image Basic Card Plugin Manifest
+# 图片基础卡片插件清单
+
+# === 基础信息 ===
+id: "chipshub:image-card"
+name: "card_type.image.name"
+version: "1.0.0"
+description: "card_type.image.desc"
+author: "Chips Team"
+publisher: "chipshub"
+license: "MIT"
+homepage: "https://github.com/chipscard/image-card-plugin"
+repository: "https://github.com/chipscard/image-card-plugin"
+
+# === 插件类型 ===
+type: "base_card"
+cardType: "ImageCard"
+
+# === 图标和截图 ===
+icon: "assets/icon.svg"
+screenshots:
+  - "assets/screenshots/render.png"
+  - "assets/screenshots/editor.png"
+
+# === 标签和分类 ===
+tags:
+  - "image"
+  - "photo"
+  - "gallery"
+  - "picture"
+category: "媒体类"
+
+# === 入口文件 ===
+main: "dist/index.js"
+style: "dist/style.css"
+
+# === 支持的协议版本 ===
+protocol_version:
+  min: "1.0.0"
+  max: "1.5.0"
+
+# === 依赖声明 ===
+dependencies:
+  plugins: []
+  libraries:
+    vue: "^3.4.0"
+    typescript: "^5.0.0"
+
+# === 权限需求 ===
+permissions:
+  - "card.read"
+  - "card.write"
+  - "resource.read"
+  - "resource.write"
+
+# === 配置Schema ===
+config_schema:
+  type: object
+  required:
+    - card_type
+    - images
+  properties:
+    card_type:
+      const: "ImageCard"
+    images:
+      type: array
+      description: "图片列表"
+      items:
+        type: object
+        required:
+          - id
+          - source
+        properties:
+          id:
+            type: string
+            description: "图片唯一ID"
+          source:
+            type: string
+            enum: ["file", "url"]
+            description: "图片来源：file-本地文件，url-网络地址"
+          file_path:
+            type: string
+            description: "本地图片文件路径"
+          url:
+            type: string
+            description: "图片URL地址"
+          alt:
+            type: string
+            description: "图片替代文本"
+          title:
+            type: string
+            description: "图片标题说明"
+    layout_type:
+      type: string
+      enum: ["single", "grid", "long-scroll", "horizontal-scroll"]
+      default: "single"
+      description: "排版类型：single-单张图片，grid-网格排版，long-scroll-长图拼接，horizontal-scroll-横向滑动"
+    layout_options:
+      type: object
+      description: "排版选项"
+      properties:
+        # 网格排版选项
+        grid_mode:
+          type: string
+          enum: ["2x2", "3x3", "3-column-infinite"]
+          default: "2x2"
+          description: "网格模式：2x2-两列两行，3x3-三列三行，3-column-infinite-三列无限行"
+        # 长图拼接选项
+        scroll_mode:
+          type: string
+          enum: ["fixed-window", "adaptive"]
+          default: "fixed-window"
+          description: "长图滚动模式：fixed-window-固定窗口滚动，adaptive-自适应无限长"
+        fixed_window_height:
+          type: integer
+          default: 600
+          description: "固定窗口高度（像素），scroll_mode为fixed-window时使用"
+        # 单张图片选项
+        single_width_percent:
+          type: integer
+          minimum: 10
+          maximum: 100
+          default: 100
+          description: "单张图片宽度百分比"
+        single_alignment:
+          type: string
+          enum: ["left", "center", "right"]
+          default: "center"
+          description: "单张图片对齐方式"
+        # 通用选项
+        gap:
+          type: integer
+          default: 8
+          description: "图片间距（像素）"
+    theme:
+      type: string
+      default: ""
+      description: "主题包标识"
+    layout:
+      type: object
+      properties:
+        height_mode:
+          type: string
+          enum: ["auto", "fixed"]
+          default: "auto"
+        fixed_height:
+          type: integer
+          description: "固定高度（像素）"
+
+# === 多语言支持 ===
+i18n:
+  default_locale: "zh-CN"
+  supported_locales:
+    - "zh-CN"
+    - "zh-TW"
+    - "en-US"
+    - "ja-JP"
+    - "ko-KR"
+  vocabulary_file: "assets/i18n/dev_vocabulary.yaml"
+
+# === 兼容性 ===
+compatibility:
+  platforms:
+    - "win32"
+    - "darwin"
+    - "linux"
+    - "web"
+  min_core_version: "1.0.0"
+
+# === 提供的服务 ===
+services:
+  - name: "image.render"
+    description: "渲染图片卡片"
+    input_schema:
+      type: object
+      properties:
+        config:
+          type: object
+          description: "卡片配置"
+        options:
+          type: object
+          description: "渲染选项"
+    output_schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+        html:
+          type: string
+          description: "渲染后的HTML"
+
+  - name: "image.upload"
+    description: "上传图片到卡片资源"
+    input_schema:
+      type: object
+      properties:
+        card_id:
+          type: string
+        file_data:
+          type: string
+          description: "图片文件数据（base64）"
+        file_name:
+          type: string
+    output_schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+        file_path:
+          type: string

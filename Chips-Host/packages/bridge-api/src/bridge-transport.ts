@@ -50,6 +50,8 @@ export interface ChipsBridge {
   platform: {
     getInfo(): Promise<unknown>;
     getCapabilities(): Promise<string[]>;
+    getScreenInfo(): Promise<unknown>;
+    listScreens(): Promise<unknown[]>;
     openExternal(url: string): Promise<void>;
     powerGetState(): Promise<unknown>;
     powerSetPreventSleep(prevent: boolean): Promise<boolean>;
@@ -158,6 +160,11 @@ export class BridgeTransport implements ChipsBridge {
     this.platform = {
       getInfo: async () => this.invoke<unknown>('platform.getInfo', {}),
       getCapabilities: async () => this.invoke<string[]>('platform.getCapabilities', {}),
+      getScreenInfo: async () => this.invoke<unknown>('platform.getScreenInfo', {}),
+      listScreens: async () => {
+        const result = await this.invoke<{ screens: unknown[] }>('platform.listScreens', {});
+        return result.screens;
+      },
       openExternal: async (url) => {
         await this.invoke('platform.openExternal', { url });
       },

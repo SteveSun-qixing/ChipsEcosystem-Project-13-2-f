@@ -3,7 +3,17 @@ import type { RouteInvocationContext } from '../shared/types';
 import { createId, now } from '../shared/utils';
 import { BridgeTransport, type ChipsBridge } from '../../packages/bridge-api/src';
 import { loadElectronModule } from '../main/electron/electron-loader';
-import { CHIPS_EMIT_CHANNEL, CHIPS_EVENT_CHANNEL_PREFIX, CHIPS_INVOKE_CHANNEL } from '../main/ipc/chips-ipc';
+import {
+  CHIPS_CLIPBOARD_CHANNEL_PREFIX,
+  CHIPS_DIALOG_CHANNEL_PREFIX,
+  CHIPS_EMIT_CHANNEL,
+  CHIPS_EVENT_CHANNEL_PREFIX,
+  CHIPS_INVOKE_CHANNEL,
+  CHIPS_PLATFORM_CHANNEL_PREFIX,
+  CHIPS_PLUGIN_CHANNEL_PREFIX,
+  CHIPS_SHELL_CHANNEL_PREFIX,
+  CHIPS_WINDOW_CHANNEL_PREFIX
+} from '../main/ipc/chips-ipc';
 
 export interface BridgeContextOptions {
   callerId?: string;
@@ -47,6 +57,33 @@ const sanitizePermissions = (permissions: string[] | undefined): string[] => {
   return permissions.map((item) => item.trim()).filter((item) => item.length > 0);
 };
 
+const ACTION_CHANNEL_MAP: Record<string, string> = {
+  'window.open': `${CHIPS_WINDOW_CHANNEL_PREFIX}open`,
+  'window.focus': `${CHIPS_WINDOW_CHANNEL_PREFIX}focus`,
+  'window.resize': `${CHIPS_WINDOW_CHANNEL_PREFIX}resize`,
+  'window.setState': `${CHIPS_WINDOW_CHANNEL_PREFIX}setState`,
+  'window.getState': `${CHIPS_WINDOW_CHANNEL_PREFIX}getState`,
+  'window.close': `${CHIPS_WINDOW_CHANNEL_PREFIX}close`,
+  'platform.dialogOpenFile': `${CHIPS_DIALOG_CHANNEL_PREFIX}openFile`,
+  'platform.dialogSaveFile': `${CHIPS_DIALOG_CHANNEL_PREFIX}saveFile`,
+  'platform.dialogShowMessage': `${CHIPS_DIALOG_CHANNEL_PREFIX}showMessage`,
+  'platform.dialogShowConfirm': `${CHIPS_DIALOG_CHANNEL_PREFIX}showConfirm`,
+  'plugin.install': `${CHIPS_PLUGIN_CHANNEL_PREFIX}install`,
+  'plugin.enable': `${CHIPS_PLUGIN_CHANNEL_PREFIX}enable`,
+  'plugin.disable': `${CHIPS_PLUGIN_CHANNEL_PREFIX}disable`,
+  'plugin.uninstall': `${CHIPS_PLUGIN_CHANNEL_PREFIX}uninstall`,
+  'plugin.query': `${CHIPS_PLUGIN_CHANNEL_PREFIX}query`,
+  'platform.clipboardRead': `${CHIPS_CLIPBOARD_CHANNEL_PREFIX}read`,
+  'platform.clipboardWrite': `${CHIPS_CLIPBOARD_CHANNEL_PREFIX}write`,
+  'platform.shellOpenPath': `${CHIPS_SHELL_CHANNEL_PREFIX}openPath`,
+  'platform.shellOpenExternal': `${CHIPS_SHELL_CHANNEL_PREFIX}openExternal`,
+  'platform.shellShowItemInFolder': `${CHIPS_SHELL_CHANNEL_PREFIX}showItemInFolder`,
+  'platform.getInfo': `${CHIPS_PLATFORM_CHANNEL_PREFIX}getInfo`,
+  'platform.getCapabilities': `${CHIPS_PLATFORM_CHANNEL_PREFIX}getCapabilities`,
+  'platform.getScreenInfo': `${CHIPS_PLATFORM_CHANNEL_PREFIX}getScreenInfo`,
+  'platform.listScreens': `${CHIPS_PLATFORM_CHANNEL_PREFIX}listScreens`
+};
+
 const buildContext = (options?: BridgeContextOptions): RouteInvocationContext => {
   const callerType = options?.callerType ?? 'plugin';
   return {
@@ -66,11 +103,20 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
   if (electron?.ipcRenderer) {
     return new BridgeTransport(
       async <T>(action: string, payload: unknown) => {
-        const result = await electron.ipcRenderer!.invoke(CHIPS_INVOKE_CHANNEL, {
-          action,
-          payload,
-          context: buildContext(options)
-        });
+        const context = buildContext(options);
+        const channel = ACTION_CHANNEL_MAP[action] ?? CHIPS_INVOKE_CHANNEL;
+        const request =
+          channel === CHIPS_INVOKE_CHANNEL
+            ? {
+                action,
+                payload,
+                context
+              }
+            : {
+                payload,
+                context
+              };
+        const result = await electron.ipcRenderer!.invoke(channel, request);
         return result as T;
       },
       {

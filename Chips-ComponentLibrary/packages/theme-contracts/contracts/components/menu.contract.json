@@ -1,0 +1,35 @@
+{
+  "component": "menu",
+  "scope": "menu",
+  "parts": [
+    "root",
+    "trigger",
+    "content",
+    "item",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.menu.content.radius",
+    "chips.comp.menu.content.surface",
+    "chips.comp.menu.item.surface.hover",
+    "chips.comp.menu.item.surface.active",
+    "chips.comp.menu.item.text.color",
+    "chips.comp.menu.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

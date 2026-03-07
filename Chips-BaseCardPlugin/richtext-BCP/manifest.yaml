@@ -1,0 +1,19 @@
+id: chips.basecard.richtext
+name: 富文本基础卡片插件
+version: 0.1.0
+type: card
+entry: dist/src/index.js
+description: 富文本基础卡片插件（通过 chips-scaffold-basecard 生成，支持富文本内容的编辑与渲染）。
+author:
+  name: 
+  email: 
+capabilities:
+  cardTypes:
+    - base.richtext
+permissions: []
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux

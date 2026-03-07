@@ -1,0 +1,37 @@
+{
+  "component": "tree",
+  "scope": "tree",
+  "parts": [
+    "root",
+    "node",
+    "toggle",
+    "label",
+    "children",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.tree.root.surface",
+    "chips.comp.tree.node.surface.idle",
+    "chips.comp.tree.node.surface.selected",
+    "chips.comp.tree.node.text.color",
+    "chips.comp.tree.toggle.color",
+    "chips.comp.tree.guide.color",
+    "chips.comp.tree.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

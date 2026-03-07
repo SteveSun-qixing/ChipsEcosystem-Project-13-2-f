@@ -1,0 +1,34 @@
+{
+  "component": "loading-boundary",
+  "scope": "loading-boundary",
+  "parts": [
+    "root",
+    "content",
+    "fallback",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.loading-boundary.root.surface",
+    "chips.comp.loading-boundary.fallback.surface",
+    "chips.comp.loading-boundary.skeleton.surface.idle",
+    "chips.comp.loading-boundary.skeleton.surface.active",
+    "chips.comp.loading-boundary.status.color.info",
+    "chips.comp.loading-boundary.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

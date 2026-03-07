@@ -60,7 +60,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
   const { command, subcommand, args } = parseArgs(argv);
 
   if (command === 'help') {
-    print('chips host <start|stop|status|config|logs|plugin|update|doctor|open>');
+    print('chips host <start|stop|status|config|logs|plugin|theme|update|doctor|open>');
     return 0;
   }
 
@@ -125,6 +125,89 @@ export const runCli = async (argv: string[]): Promise<number> => {
     const exported = await withHost(workspace, async (runtime) => runtime.invoke('log.export', {}));
     print(exported);
     return 0;
+  }
+
+  if (command === 'theme') {
+    if (subcommand === 'list') {
+      const result = await withHost(workspace, async (runtime) => {
+        return runtime.invoke('theme.list', {});
+      });
+      print(result);
+      return 0;
+    }
+
+    if (subcommand === 'current') {
+      const result = await withHost(workspace, async (runtime) => {
+        return runtime.invoke('theme.getCurrent', {});
+      });
+      print(result);
+      return 0;
+    }
+
+    if (subcommand === 'apply') {
+      const [id] = args;
+      if (!id) {
+        print({ error: 'theme apply requires theme id' });
+        return 1;
+      }
+
+      await withHost(workspace, async (runtime) => {
+        await runtime.invoke('theme.apply', { id });
+      });
+      print({ ok: true });
+      return 0;
+    }
+
+    if (subcommand === 'resolve') {
+      const [id] = args;
+      const result = await withHost(workspace, async (runtime) => {
+        const chain = id ? [id] : [];
+        return runtime.invoke('theme.resolve', { chain });
+      });
+      print(result);
+      return 0;
+    }
+
+    if (subcommand === 'contract') {
+      const [component] = args;
+      const result = await withHost(workspace, async (runtime) => {
+        return runtime.invoke('theme.contract.get', component ? { component } : {});
+      });
+      print(result);
+      return 0;
+    }
+
+    if (subcommand === 'validate') {
+      const summary = await withHost(workspace, async (runtime) => {
+        const { themes } = await runtime.invoke<{
+          themes: Array<{ id: string }>;
+        }>('theme.list', {});
+
+        const results: Array<{ id: string; ok: boolean; error?: unknown }> = [];
+
+        for (const theme of themes) {
+          try {
+            await runtime.invoke('theme.apply', { id: theme.id });
+            await runtime.invoke('theme.resolve', { chain: [theme.id] });
+            results.push({ id: theme.id, ok: true });
+          } catch (error) {
+            results.push({
+              id: theme.id,
+              ok: false,
+              error
+            });
+          }
+        }
+
+        return { themes: results };
+      });
+
+      print(summary);
+      return 0;
+    }
+
+    print({ error: 'unsupported theme command' });
+    return 1;
   }
 
   if (command === 'plugin') {

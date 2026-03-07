@@ -1,0 +1,22 @@
+{
+  "name": "chips-scaffold-app",
+  "version": "0.1.0",
+  "description": "薯片生态 应用插件（type: app）官方脚手架与工程模板",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/cli/app-scaffold-api.js",
+  "exports": {
+    ".": "./dist/src/cli/app-scaffold-api.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/tests/**/*.test.js",
+    "test:templates": "node scripts/check-templates.mjs",
+    "test:e2e": "npm run build && node scripts/run-generated-e2e.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

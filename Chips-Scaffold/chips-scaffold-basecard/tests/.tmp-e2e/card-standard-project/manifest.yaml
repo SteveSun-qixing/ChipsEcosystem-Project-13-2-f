@@ -1,0 +1,20 @@
+id: com.example.card-standard
+name: Standard Basecard Plugin
+version: 0.1.0
+type: card
+entry: dist/src/index.js
+description: 基于 chips-scaffold-basecard 生成的标准基础卡片插件。
+author:
+  name: Scaffold
+  email: dev@example.com
+capabilities:
+  cardTypes:
+    - base.text
+permissions: []
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+

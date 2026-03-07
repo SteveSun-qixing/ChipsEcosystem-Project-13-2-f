@@ -69,7 +69,15 @@ export class HostApplication {
       runtime: this.runtime
     });
 
-    this.ipcBinding = bindKernelToElectronIpc(this.kernel);
+    this.ipcBinding = bindKernelToElectronIpc(this.kernel, {
+      getPluginQuota: (pluginId) => {
+        try {
+          return this.runtime.getQuota(pluginId);
+        } catch {
+          return undefined;
+        }
+      }
+    });
 
     await fs.writeFile(
       path.join(this.workspacePath, 'route-manifest.json'),

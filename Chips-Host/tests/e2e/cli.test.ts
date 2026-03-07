@@ -57,6 +57,14 @@ describe('chips host cli', () => {
     expect(await runCli(['plugin', 'query'])).toBe(0);
   });
 
+  it('supports theme management commands', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+
+    expect(await runCli(['theme', 'list'])).toBe(0);
+    expect(await runCli(['theme', 'current'])).toBe(0);
+    expect(await runCli(['theme', 'validate'])).toBe(0);
+  });
+
   it('opens .card file through file association entry', async () => {
     const { runCli } = await import('../../src/main/cli/index');
     const cardSourceDir = path.join(workspace, 'demo-card-source');

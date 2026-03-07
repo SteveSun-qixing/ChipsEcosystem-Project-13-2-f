@@ -1,0 +1,130 @@
+# 图片基础卡片插件 - 开发阶段词汇表
+# Image Basic Card Plugin - Development Vocabulary
+#
+# ⚠️ 说明：
+# 1. 此文件仅在开发阶段使用
+# 2. 构建时，所有key会被替换为系统词汇编码
+# 3. 运行时，系统根据当前语言环境返回对应翻译
+#
+# 格式：key: "默认文本（中文）"
+
+# === 插件 ===
+plugin:
+  initialized: "图片卡片插件已初始化"
+  already_initialized: "插件已经初始化"
+  not_initialized: "插件未初始化"
+  started: "插件已启动"
+  stopped: "插件已停止"
+  destroyed: "插件已销毁"
+
+# === 工具栏 ===
+toolbar:
+  undo: "撤销"
+  redo: "重做"
+
+# === 编辑器 ===
+editor:
+  upload: "上传图片"
+  upload_hint: "点击上传图片，或将图片拖放到此处"
+  upload_sub_hint: "支持 JPG、PNG、GIF、WebP 格式"
+  url_input: "图片URL"
+  url_placeholder: "请粘贴图片链接地址，如 https://..."
+  add_by_url: "添加"
+  remove_image: "删除这张图片"
+  replace_image: "替换图片"
+  move_up: "上移"
+  move_down: "下移"
+  image_alt: "替代文本"
+  image_alt_placeholder: "图片描述（用于无障碍访问，可选）"
+  image_title: "图片标题"
+  image_title_placeholder: "为这张图片添加标题（可选）"
+  image_count: "共 {count} 张图片"
+  max_images_hint: "最多可添加 {max} 张图片"
+  drag_to_sort: "拖拽可调整顺序"
+  clear_all: "清空全部"
+  section_add_images: "添加图片"
+  section_image_list: "图片列表"
+  section_or: "或"
+  empty_hint: "还没有添加图片，请从上方上传或输入链接"
+  image_index: "第 {index} 张"
+
+# === 排版设置 ===
+layout:
+  title: "排版设置"
+  type: "排版类型"
+  single: "单张图片"
+  grid: "网格排版"
+  long_scroll: "长图拼接"
+  horizontal_scroll: "横向滑动"
+  grid_mode: "网格模式"
+  grid_2x2: "2 × 2 网格"
+  grid_3x3: "3 × 3 网格"
+  grid_3col_infinite: "3 列瀑布流"
+  scroll_mode: "滚动模式"
+  fixed_window: "固定窗口滚动"
+  adaptive: "自适应（无限长）"
+  window_height: "窗口高度"
+  width_percent: "图片宽度"
+  alignment: "对齐方式"
+  align_left: "靠左"
+  align_center: "居中"
+  align_right: "靠右"
+  gap: "图片间距"
+  single_desc: "展示一张图片，可调整宽度和对齐方式"
+  grid_desc: "以网格形式排列展示多张图片"
+  long_scroll_desc: "将图片纵向拼接为长图，可滚动浏览"
+  horizontal_scroll_desc: "图片横向排列，可水平滑动查看"
+
+# === 提示 ===
+hint:
+  single_auto: "仅有1张图片，自动使用单张排版"
+  grid_overflow: "+{count}"
+  scroll_horizontal: "横向滑动查看更多图片"
+
+# === 消息 ===
+message:
+  upload_success: "上传成功"
+  image_added: "图片已添加"
+  image_removed: "图片已删除"
+  images_cleared: "已清空所有图片"
+  order_updated: "排序已更新"
+
+# === 错误 ===
+error:
+  invalid_url: "无效的图片地址"
+  image_too_large: "图片大小超过 {max}MB"
+  unsupported_format: "不支持的图片格式"
+  max_images_exceeded: "图片数量已达上限 {max}"
+  upload_failed: "图片上传失败"
+  load_failed: "图片加载失败"
+  image_not_found: "图片未找到: {file}"
+  render_failed: "渲染失败"
+  editor_not_initialized: "编辑器未初始化"
+
+# === 确认 ===
+confirm:
+  remove_image: "确定要删除这张图片吗？"
+  clear_all: "确定要清空所有图片吗？这将移除全部已添加的图片。"
+
+# === 状态 ===
+status:
+  loading: "加载中..."
+  uploading: "正在上传..."
+
+# === 日志 ===
+log:
+  renderer_created: "渲染器已创建"
+  editor_created: "编辑器已创建"
+  service_registered: "服务已注册: {service}"
+  image_loaded: "图片已加载: {id}"
+  image_load_error: "图片加载失败: {id}"
+
+# === 通用 ===
+common:
+  cancel: "取消"
+  confirm: "确定"
+  close: "关闭"
+  save: "保存"
+  delete: "删除"
+  pixels: "px"
+  percent: "%"

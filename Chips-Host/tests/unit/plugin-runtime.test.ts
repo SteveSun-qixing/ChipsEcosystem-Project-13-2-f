@@ -134,4 +134,27 @@ describe('PluginRuntime', () => {
     expect(record.manifestPath.endsWith('manifest.yaml')).toBe(true);
     await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
   });
+
+  it('requires signature for non-local plugin source', async () => {
+    const manifestPath = path.join(workspace, 'signed.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.signed.plugin',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Signed Plugin',
+          permissions: ['file.read'],
+          source: 'official'
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(runtime.install(manifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_SIGNATURE_INVALID'
+    });
+  });
 });

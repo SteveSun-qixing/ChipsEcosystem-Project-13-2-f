@@ -2,8 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createError } from '../../shared/errors';
+import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
+import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
+import { buildThemeContractsView, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
 import { StructuredLogger } from '../../shared/logger';
 import { PluginRuntime } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
@@ -154,8 +157,23 @@ const buildState = (): RuntimeState => ({
       publisher: 'chips-official',
       css: ':root { --chip-color-bg: #ffffff; --chip-color-fg: #111111; }',
       tokens: {
-        ref: { white: '#ffffff', black: '#111111' },
-        sys: { bg: '{ref.white}', fg: '{ref.black}' }
+        ref: {
+          white: '#ffffff',
+          black: '#111111'
+        },
+        sys: {},
+        comp: {
+          chips: {
+            comp: {
+              button: {
+                background: '{white}',
+                color: '{black}'
+              }
+            }
+          }
+        },
+        motion: {},
+        layout: {}
       }
     }
   ],
@@ -628,8 +646,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (!theme) {
               throw createError('THEME_NOT_FOUND', `Theme not found: ${input.id}`);
             }
+            const layers = mergeThemeLayers([{ id: theme.id, tokens: theme.tokens }]);
+            const resolved = resolveThemeFromLayers(layers);
+            validateThemeContractWithTokens(theme.id, layers, resolved.variables);
+            const previousThemeId = state.currentThemeId;
             state.currentThemeId = theme.id;
-            await ctx.kernel.events.emit('theme.changed', 'theme-service', { id: theme.id });
+            await ctx.kernel.events.emit('theme.changed', 'theme-service', {
+              previousThemeId,
+              themeId: theme.id,
+              timestamp: Date.now()
+            });
             return { ack: true };
           })
         )
@@ -651,7 +677,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       getAllCss: {
-        descriptor: descriptor<Record<string, unknown>, { css: string }>(
+        descriptor: descriptor<Record<string, unknown>, { css: string; themeId: string }>(
           'theme.getAllCss',
           ['theme.read'],
           2_000,
@@ -662,12 +688,22 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (!theme) {
               throw createError('THEME_NOT_FOUND', 'Current theme not found');
             }
-            return { css: theme.css };
+            return { css: theme.css, themeId: theme.id };
           })
         )
       },
       resolve: {
-        descriptor: descriptor<{ chain: string[] }, { tokens: Record<string, unknown> }>(
+        descriptor: descriptor<
+          { chain: string[] },
+          {
+            resolved: Array<{
+              id: string;
+              displayName: string;
+              order: number;
+            }>;
+            tokens: Record<string, unknown>;
+          }
+        >(
           'theme.resolve',
           ['theme.read'],
           2_000,
@@ -679,32 +715,50 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               throw createError('THEME_CHAIN_TOO_DEEP', 'Theme resolve chain exceeds 6 levels');
             }
 
-            let merged: Record<string, unknown> = {};
-            for (const themeId of chain) {
+            const resolved: Array<{ id: string; displayName: string; order: number }> = [];
+            const themesForMerge: Array<{ id: string; tokens: Record<string, unknown> }> = [];
+
+            chain.forEach((themeId, index) => {
               const theme = state.themes.find((candidate) => candidate.id === themeId);
               if (!theme) {
                 throw createError('THEME_NOT_FOUND', `Theme not found in resolve chain: ${themeId}`);
               }
-              merged = mergeRecords(merged, theme.tokens);
-            }
-            return { tokens: merged };
+              themesForMerge.push({ id: theme.id, tokens: theme.tokens });
+              resolved.push({
+                id: theme.id,
+                displayName: theme.name,
+                order: index
+              });
+            });
+
+            const mergedLayers = mergeThemeLayers(themesForMerge);
+            const resolvedTheme = resolveThemeFromLayers(mergedLayers);
+
+            return { resolved, tokens: resolvedTheme.variables };
           })
         )
       },
       contractGet: {
-        descriptor: descriptor<{ component?: string }, { contract: Record<string, unknown> }>(
+        descriptor: descriptor<
+          { component?: string },
+          {
+            contracts: {
+              [component: string]: {
+                scope: string;
+                parts: string[];
+                states: string[];
+                tokens: string[];
+              };
+            };
+          }
+        >(
           'theme.contract.get',
           ['theme.read'],
           2_000,
           true,
           0,
           withMetrics(state, 'theme.contract.get', async (input) => {
-            return {
-              contract: {
-                component: input.component ?? 'global',
-                slots: ['background', 'foreground', 'border', 'radius', 'shadow']
-              }
-            };
+            return buildThemeContractsView(state.currentThemeId, input.component);
           })
         )
       }
@@ -1913,7 +1967,22 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'serializer.validate', async (input) => {
-            return { valid: typeof input.schema === 'string' && input.schema.length > 0 };
+            if (typeof input.schema !== 'string' || input.schema.trim().length === 0) {
+              return { valid: false };
+            }
+
+            const schemaId = input.schema.trim();
+
+            if (!schemaRegistry.has(schemaId)) {
+              return { valid: false };
+            }
+
+            try {
+              schemaRegistry.validate(schemaId, input.payload);
+              return { valid: true };
+            } catch {
+              return { valid: false };
+            }
           })
         )
       }

@@ -40,6 +40,8 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
   platform: {
     getInfo: async () => ({}),
     getCapabilities: async () => [],
+    getScreenInfo: async () => ({}),
+    listScreens: async () => [],
     openExternal: async () => undefined,
     powerGetState: async () => ({}),
     powerSetPreventSleep: async () => false
@@ -136,5 +138,33 @@ describe('RuntimeClient', () => {
     );
 
     await expect(runtime.invoke('slow.action', {})).rejects.toMatchObject({ code: 'RUNTIME_TIMEOUT' });
+  });
+
+  it('removes event subscription via off', async () => {
+    const listeners = new Map<string, Set<(payload: unknown) => void>>();
+    const bridge = {
+      ...createBridge(async () => ({})),
+      on: (event: string, handler: (payload: unknown) => void) => {
+        const bucket = listeners.get(event) ?? new Set<(payload: unknown) => void>();
+        bucket.add(handler);
+        listeners.set(event, bucket);
+        return () => {
+          bucket.delete(handler);
+        };
+      }
+    } as ChipsBridge;
+
+    const runtime = new RuntimeClient(bridge);
+    let count = 0;
+    const handler = () => {
+      count += 1;
+    };
+
+    runtime.on('theme.changed', handler);
+    listeners.get('theme.changed')?.forEach((listener) => listener({}));
+    runtime.off('theme.changed', handler);
+    listeners.get('theme.changed')?.forEach((listener) => listener({}));
+
+    expect(count).toBe(1);
   });
 });

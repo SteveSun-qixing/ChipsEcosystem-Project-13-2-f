@@ -1,0 +1,50 @@
+/* Input 容器 */
+[data-scope="input"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--chips-base-space-2);
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  border-radius: var(--chips-comp-input-root-radius, var(--chips-base-radius-md));
+  border: 1px solid var(--chips-comp-input-root-border-idle);
+  background-color: var(--chips-comp-input-root-surface-idle);
+  color: var(--chips-comp-input-value-color, var(--chips-sys-color-on-surface));
+  font-size: 14px;
+  line-height: 1.4;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    border-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="input"][data-part="root"][data-state="focus"],
+[data-scope="input"][data-part="root"]:focus-within {
+  background-color: var(--chips-comp-input-root-surface-focus, var(--chips-comp-input-root-surface-idle));
+  border-color: var(--chips-comp-input-root-border-idle);
+  box-shadow: 0 0 0 1px var(--chips-comp-input-root-border-idle);
+}
+
+[data-scope="input"][data-part="root"][data-state="error"] {
+  border-color: var(--chips-comp-input-root-border-error);
+  box-shadow: 0 0 0 1px var(--chips-comp-input-root-border-error);
+}
+
+[data-scope="input"][data-part="root"][data-state="disabled"] {
+  opacity: 0.6;
+}
+
+/* 实际可编辑控件 */
+[data-scope="input"][data-part="control"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--chips-comp-input-value-color, inherit);
+  font: inherit;
+  padding: 0;
+  outline: none;
+}
+
+[data-scope="input"][data-part="control"]::placeholder {
+  color: var(--chips-comp-input-placeholder-color, color-mix(in srgb, currentColor 60%, transparent));
+}

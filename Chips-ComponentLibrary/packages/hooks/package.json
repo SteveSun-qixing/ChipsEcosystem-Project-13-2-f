@@ -1,0 +1,9 @@
+{
+  "name": "@chips/hooks",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.js",
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  }
+}

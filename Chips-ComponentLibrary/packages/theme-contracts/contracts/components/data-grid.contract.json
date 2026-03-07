@@ -1,0 +1,38 @@
+{
+  "component": "data-grid",
+  "scope": "data-grid",
+  "parts": [
+    "root",
+    "table",
+    "header",
+    "row",
+    "cell",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.data-grid.root.surface",
+    "chips.comp.data-grid.header.surface",
+    "chips.comp.data-grid.header.text.color",
+    "chips.comp.data-grid.row.surface.idle",
+    "chips.comp.data-grid.row.surface.selected",
+    "chips.comp.data-grid.cell.text.color",
+    "chips.comp.data-grid.border.color",
+    "chips.comp.data-grid.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

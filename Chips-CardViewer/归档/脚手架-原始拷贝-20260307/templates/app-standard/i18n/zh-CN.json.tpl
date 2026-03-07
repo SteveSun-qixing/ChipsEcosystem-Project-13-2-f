@@ -1,0 +1,10 @@
+{
+  "card-viewer": {
+    "actions": {
+      "open": "打开卡片"
+    },
+    "bridge": {
+      "themeLabel": "当前主题"
+    }
+  }
+}

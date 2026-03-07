@@ -65,9 +65,15 @@ describe('Host services integration', () => {
   });
 
   it('resolves theme token chain and enforces max depth', async () => {
-    const resolved = await runtime.invoke<{ tokens: Record<string, unknown> }>('theme.resolve', {
+    const resolved = await runtime.invoke<{
+      resolved: Array<{ id: string; displayName: string; order: number }>;
+      tokens: Record<string, unknown>;
+    }>('theme.resolve', {
       chain: ['chips-official.default-theme']
     });
+    expect(resolved.resolved.length).toBeGreaterThan(0);
+    expect(resolved.resolved[0]?.id).toBe('chips-official.default-theme');
+    expect(resolved.resolved[0]?.order).toBe(0);
     expect(Object.keys(resolved.tokens).length).toBeGreaterThan(0);
 
     await expect(

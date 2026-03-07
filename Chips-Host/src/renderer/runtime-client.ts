@@ -43,6 +43,7 @@ const DEFAULT_OPTIONS: RuntimeClientOptions = {
 
 export class RuntimeClient {
   private readonly options: RuntimeClientOptions;
+  private readonly subscriptions = new Map<string, Map<(payload: unknown) => void, () => void>>();
 
   public constructor(private readonly bridge: ChipsBridge, options?: Partial<RuntimeClientOptions>) {
     this.options = {
@@ -87,7 +88,21 @@ export class RuntimeClient {
   }
 
   public on(event: string, handler: (payload: unknown) => void): () => void {
-    return this.bridge.on(event, handler);
+    const unsubscribe = this.bridge.on(event, handler);
+    let bucket = this.subscriptions.get(event);
+    if (!bucket) {
+      bucket = new Map();
+      this.subscriptions.set(event, bucket);
+    }
+    bucket.set(handler, unsubscribe);
+    return () => {
+      unsubscribe();
+      const currentBucket = this.subscriptions.get(event);
+      currentBucket?.delete(handler);
+      if (currentBucket && currentBucket.size === 0) {
+        this.subscriptions.delete(event);
+      }
+    };
   }
 
   public once(event: string, handler: (payload: unknown) => void): void {
@@ -95,11 +110,28 @@ export class RuntimeClient {
   }
 
   public off(event: string, handler?: (payload: unknown) => void): void {
-    if (!handler) {
+    const bucket = this.subscriptions.get(event);
+    if (!bucket) {
       return;
     }
-    const unsubscribe = this.bridge.on(event, handler);
+
+    if (!handler) {
+      for (const unsubscribe of bucket.values()) {
+        unsubscribe();
+      }
+      this.subscriptions.delete(event);
+      return;
+    }
+
+    const unsubscribe = bucket.get(handler);
+    if (!unsubscribe) {
+      return;
+    }
     unsubscribe();
+    bucket.delete(handler);
+    if (bucket.size === 0) {
+      this.subscriptions.delete(event);
+    }
   }
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {

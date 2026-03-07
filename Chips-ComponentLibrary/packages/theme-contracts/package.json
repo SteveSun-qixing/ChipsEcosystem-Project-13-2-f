@@ -1,0 +1,6 @@
+{
+  "name": "@chips/theme-contracts",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./contracts/components/card-cover-frame.contract.json"
+}

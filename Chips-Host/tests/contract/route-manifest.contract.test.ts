@@ -62,6 +62,8 @@ describe('route manifest contract', () => {
       'module.list',
       'platform.getInfo',
       'platform.getCapabilities',
+      'platform.getScreenInfo',
+      'platform.listScreens',
       'platform.openExternal',
       'platform.dialogOpenFile',
       'platform.dialogSaveFile',

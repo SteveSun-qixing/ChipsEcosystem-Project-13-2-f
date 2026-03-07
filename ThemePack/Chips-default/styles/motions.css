@@ -1,0 +1,24 @@
+/* 基础淡入淡出动效，使用 motion 层 token 控制时长与缓动 */
+
+.chips-fade-enter,
+.chips-fade-exit {
+  transition:
+    opacity var(--chips-motion-duration-normal, 250ms)
+      var(--chips-motion-easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.chips-fade-enter {
+  opacity: 0;
+}
+
+.chips-fade-enter-active {
+  opacity: 1;
+}
+
+.chips-fade-exit {
+  opacity: 1;
+}
+
+.chips-fade-exit-active {
+  opacity: 0;
+}

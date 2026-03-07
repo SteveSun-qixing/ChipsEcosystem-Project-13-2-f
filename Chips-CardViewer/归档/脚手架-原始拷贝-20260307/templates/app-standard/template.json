@@ -1,0 +1,11 @@
+{
+  "id": "app-standard",
+  "name": "卡片查看器应用模板",
+  "description": "用于构建薯片生态中的卡片查看器应用，内建统一卡片显示链路接入与复合卡片窗口展示能力。",
+  "tags": ["app", "viewer", "card", "single-window"],
+  "supports": {
+    "multiWindow": false,
+    "sdk": false,
+    "componentLibrary": true
+  }
+}

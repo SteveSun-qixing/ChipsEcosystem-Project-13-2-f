@@ -129,4 +129,61 @@ describe('KernelRouter', () => {
     expect(second.value).toBe(42);
     expect(calls).toBe(2);
   });
+
+  it('does not match prefix routes when namespace boundary is missing', async () => {
+    const router = new KernelRouter();
+    router.register({
+      key: 'file.*',
+      schemaIn: 'schemas/file.any.request.json',
+      schemaOut: 'schemas/file.any.response.json',
+      permission: ['math.read'],
+      timeoutMs: 1000,
+      idempotent: true,
+      retries: 0,
+      handler: async () => ({ ok: true })
+    });
+
+    await expect(router.invoke('filex.read', {}, context())).rejects.toMatchObject({
+      code: 'ROUTE_NOT_FOUND'
+    });
+  });
+
+  it('opens circuit after repeated failures and recovers after cooldown', async () => {
+    const router = new KernelRouter({ failureThreshold: 2, coolDownMs: 30 });
+    let calls = 0;
+
+    router.register({
+      key: 'unstable.circuit',
+      schemaIn: 'schemas/unstable.circuit.request.json',
+      schemaOut: 'schemas/unstable.circuit.response.json',
+      permission: ['math.read'],
+      timeoutMs: 100,
+      idempotent: false,
+      retries: 0,
+      handler: async () => {
+        calls += 1;
+        throw { code: 'SERVICE_UNAVAILABLE', message: 'fail' };
+      }
+    });
+
+    await expect(router.invoke('unstable.circuit', {}, context('c1'))).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE'
+    });
+    await expect(router.invoke('unstable.circuit', {}, context('c2'))).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE'
+    });
+    const before = calls;
+
+    await expect(router.invoke('unstable.circuit', {}, context('c3'))).rejects.toMatchObject({
+      code: 'RUNTIME_CIRCUIT_OPEN'
+    });
+    expect(calls).toBe(before);
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    await expect(router.invoke('unstable.circuit', {}, context('c4'))).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE'
+    });
+    expect(calls).toBe(before + 1);
+  });
 });

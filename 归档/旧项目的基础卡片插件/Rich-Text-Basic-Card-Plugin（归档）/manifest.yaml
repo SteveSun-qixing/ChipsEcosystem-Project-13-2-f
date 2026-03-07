@@ -1,0 +1,143 @@
+# Rich Text Basic Card Plugin Manifest
+# 富文本基础卡片插件清单
+
+# === 基础信息 ===
+id: "chipshub:rich-text-card"
+name: "card_type.rich_text.name"
+version: "1.0.0"
+description: "card_type.rich_text.desc"
+author: "Chips Team"
+publisher: "chipshub"
+license: "MIT"
+homepage: "https://github.com/chipscard/rich-text-card-plugin"
+repository: "https://github.com/chipscard/rich-text-card-plugin"
+
+# === 插件类型 ===
+type: "base_card"
+cardType: "RichTextCard"
+
+# === 图标和截图 ===
+icon: "assets/icon.svg"
+screenshots:
+  - "assets/screenshots/render.png"
+  - "assets/screenshots/editor.png"
+
+# === 标签和分类 ===
+tags:
+  - "text"
+  - "rich-text"
+  - "rtf"
+  - "document"
+category: "文本类"
+
+# === 入口文件 ===
+main: "dist/index.js"
+style: "dist/style.css"
+
+# === 支持的协议版本 ===
+protocol_version:
+  min: "1.0.0"
+  max: "1.5.0"
+
+# === 依赖声明 ===
+dependencies:
+  plugins: []
+  libraries:
+    vue: "^3.4.0"
+    typescript: "^5.0.0"
+
+# === 权限需求 ===
+permissions:
+  - "card.read"
+  - "card.write"
+  - "resource.read"
+  - "resource.write"
+
+# === 配置Schema ===
+config_schema:
+  type: object
+  required:
+    - card_type
+    - content_source
+  properties:
+    card_type:
+      const: "RichTextCard"
+    content_source:
+      type: string
+      enum: ["file", "inline"]
+      description: "内容来源：file-外部文件，inline-内联内容"
+    content_file:
+      type: string
+      description: "富文本文件路径（source为file时使用）"
+    content_text:
+      type: string
+      description: "内联HTML内容（source为inline时使用）"
+    toolbar:
+      type: boolean
+      default: false
+      description: "是否显示工具栏（编辑模式）"
+    read_only:
+      type: boolean
+      default: true
+      description: "是否只读"
+    theme:
+      type: string
+      default: ""
+      description: "主题包标识"
+    layout:
+      type: object
+      properties:
+        height_mode:
+          type: string
+          enum: ["auto", "fixed"]
+          default: "auto"
+        fixed_height:
+          type: integer
+          description: "固定高度（像素）"
+
+# === 多语言支持 ===
+i18n:
+  default_locale: "zh-CN"
+  supported_locales:
+    - "zh-CN"
+    - "zh-TW"
+    - "en-US"
+    - "ja-JP"
+    - "ko-KR"
+  vocabulary_file: "assets/i18n/vocabulary.yaml"
+
+# === 兼容性 ===
+compatibility:
+  platforms:
+    - "win32"
+    - "darwin"
+    - "linux"
+    - "web"
+  min_core_version: "1.0.0"
+
+# === 提供的服务 ===
+services:
+  - name: "richtext.render"
+    description: "渲染富文本内容"
+    input_schema:
+      type: object
+      properties:
+        content: { type: string }
+        options: { type: object }
+    output_schema:
+      type: object
+      properties:
+        html: { type: string }
+        success: { type: boolean }
+
+  - name: "richtext.format"
+    description: "格式化选中文本"
+    input_schema:
+      type: object
+      properties:
+        format_type: { type: string }
+        value: { type: string }
+    output_schema:
+      type: object
+      properties:
+        success: { type: boolean }

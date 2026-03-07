@@ -119,20 +119,32 @@ export class KernelRouter {
       return exact;
     }
 
-    const candidates = [...this.descriptors.values()];
-    for (const descriptor of candidates) {
-      if (descriptor.key.endsWith('.*')) {
-        const prefix = descriptor.key.slice(0, -2);
-        if (key.startsWith(prefix)) {
-          return descriptor;
-        }
-      }
+    let matchedPrefix: RouteDescriptor<unknown, unknown> | undefined;
+    let matchedPrefixLength = -1;
+    let wildcard: RouteDescriptor<unknown, unknown> | undefined;
+
+    for (const descriptor of this.descriptors.values()) {
       if (descriptor.key === '*.*') {
-        return descriptor;
+        wildcard = descriptor;
+        continue;
+      }
+
+      if (!descriptor.key.endsWith('.*')) {
+        continue;
+      }
+
+      const prefix = descriptor.key.slice(0, -2);
+      if (!key.startsWith(prefix + '.')) {
+        continue;
+      }
+
+      if (prefix.length > matchedPrefixLength) {
+        matchedPrefix = descriptor;
+        matchedPrefixLength = prefix.length;
       }
     }
 
-    return undefined;
+    return matchedPrefix ?? wildcard;
   }
 
   private guardPermissions(required: string[], context: RouteInvocationContext): void {

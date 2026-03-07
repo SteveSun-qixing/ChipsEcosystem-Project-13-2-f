@@ -101,6 +101,18 @@ export interface ElectronPowerSaveBlockerLike {
   isStarted(id: number): boolean;
 }
 
+export interface ElectronDisplayLike {
+  id: number;
+  size: { width: number; height: number };
+  bounds: { x: number; y: number; width: number; height: number };
+  scaleFactor?: number;
+}
+
+export interface ElectronScreenLike {
+  getAllDisplays(): ElectronDisplayLike[];
+  getPrimaryDisplay?(): ElectronDisplayLike;
+}
+
 export interface ElectronNativeImageLike {
   toPNG(): Buffer;
 }
@@ -130,6 +142,7 @@ export interface ElectronModuleLike {
   Menu?: ElectronMenuLike;
   powerMonitor?: ElectronPowerMonitorLike;
   powerSaveBlocker?: ElectronPowerSaveBlockerLike;
+  screen?: ElectronScreenLike;
   clipboard?: ElectronClipboardLike;
   nativeImage?: ElectronNativeImageModuleLike;
 }

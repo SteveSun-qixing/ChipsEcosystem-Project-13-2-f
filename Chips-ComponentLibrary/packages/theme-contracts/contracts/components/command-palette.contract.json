@@ -1,0 +1,38 @@
+{
+  "component": "command-palette",
+  "scope": "command-palette",
+  "parts": [
+    "root",
+    "trigger",
+    "search",
+    "list",
+    "item",
+    "shortcut",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.command-palette.root.surface",
+    "chips.comp.command-palette.search.surface.idle",
+    "chips.comp.command-palette.search.border.idle",
+    "chips.comp.command-palette.result.surface.active",
+    "chips.comp.command-palette.result.text.color",
+    "chips.comp.command-palette.shortcut.color",
+    "chips.comp.command-palette.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

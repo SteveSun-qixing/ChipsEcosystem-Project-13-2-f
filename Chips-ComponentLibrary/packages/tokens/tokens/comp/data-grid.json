@@ -1,0 +1,34 @@
+{
+  "chips": {
+    "comp": {
+      "data-grid": {
+        "root": {
+          "surface": "{chips.sys.color.surface}"
+        },
+        "header": {
+          "surface": "{chips.sys.color.surface}",
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "row": {
+          "surface": {
+            "idle": "{chips.sys.color.surface}",
+            "selected": "{chips.sys.color.primary}"
+          }
+        },
+        "cell": {
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "border": {
+          "color": "{chips.sys.color.on-surface}"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.primary}"
+        }
+      }
+    }
+  }
+}

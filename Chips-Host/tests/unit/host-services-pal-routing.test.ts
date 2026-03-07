@@ -174,6 +174,32 @@ const createPal = (state: PalState): PALAdapter => {
         return ['dialog', 'clipboard', 'shell', 'tray', 'notification', 'shortcut', 'power'];
       }
     },
+    screen: {
+      async getPrimary() {
+        return {
+          id: 'screen-1',
+          width: 2560,
+          height: 1440,
+          scaleFactor: 2,
+          x: 0,
+          y: 0,
+          primary: true
+        };
+      },
+      async getAll() {
+        return [
+          {
+            id: 'screen-1',
+            width: 2560,
+            height: 1440,
+            scaleFactor: 2,
+            x: 0,
+            y: 0,
+            primary: true
+          }
+        ];
+      }
+    },
     tray: {
       async set() {
         state.trayActive = true;
@@ -410,6 +436,16 @@ describe('Host services PAL routing', () => {
     await kernel.invoke('platform.shellOpenExternal', { url: 'https://chips.example' }, context(platformExternal));
     await kernel.invoke('platform.shellShowItemInFolder', { path: '/tmp/chips/a.txt' }, context(platformExternal));
     await kernel.invoke('platform.openExternal', { url: 'https://chips.example/platform' }, context(platformExternal));
+    const primaryScreen = await kernel.invoke<Record<string, unknown>, { screen: { id: string } }>(
+      'platform.getScreenInfo',
+      {},
+      context(platformRead)
+    );
+    const allScreens = await kernel.invoke<Record<string, unknown>, { screens: Array<{ id: string }> }>(
+      'platform.listScreens',
+      {},
+      context(platformRead)
+    );
     await kernel.invoke('platform.notificationShow', { options: { title: 'chips', body: 'ready' } }, context(platformRead));
     await kernel.invoke('platform.traySet', { options: { tooltip: 'chips' } }, context(platformExternal));
     await kernel.invoke('platform.shortcutRegister', { accelerator: 'CommandOrControl+Shift+N' }, context(platformExternal));
@@ -439,6 +475,8 @@ describe('Host services PAL routing', () => {
     expect(state.shellOpenPath).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellShowInFolder).toEqual(['/tmp/chips/a.txt']);
     expect(state.shellOpenExternal).toEqual(['https://chips.example', 'https://chips.example/platform']);
+    expect(primaryScreen.screen.id).toBe('screen-1');
+    expect(allScreens.screens).toHaveLength(1);
     expect(state.notifications).toEqual([{ title: 'chips', body: 'ready' }]);
     expect(state.trayActive).toBe(true);
     expect(state.shortcuts).toContain('CommandOrControl+Shift+N');

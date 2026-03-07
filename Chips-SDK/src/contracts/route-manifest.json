@@ -1,0 +1,280 @@
+{
+  "routes": {
+    "box.inspect": {
+      "action": "box.inspect"
+    },
+    "box.pack": {
+      "action": "box.pack"
+    },
+    "box.unpack": {
+      "action": "box.unpack"
+    },
+    "card.parse": {
+      "action": "card.parse"
+    },
+    "card.render": {
+      "action": "card.render"
+    },
+    "card.validate": {
+      "action": "card.validate"
+    },
+    "config.batchSet": {
+      "action": "config.batchSet"
+    },
+    "config.get": {
+      "action": "config.get"
+    },
+    "config.reset": {
+      "action": "config.reset"
+    },
+    "config.set": {
+      "action": "config.set"
+    },
+    "control-plane.check": {
+      "action": "control-plane.check"
+    },
+    "control-plane.diagnose": {
+      "action": "control-plane.diagnose"
+    },
+    "control-plane.health": {
+      "action": "control-plane.health"
+    },
+    "control-plane.metrics": {
+      "action": "control-plane.metrics"
+    },
+    "credential.delete": {
+      "action": "credential.delete"
+    },
+    "credential.get": {
+      "action": "credential.get"
+    },
+    "credential.rotate": {
+      "action": "credential.rotate"
+    },
+    "credential.set": {
+      "action": "credential.set"
+    },
+    "file.list": {
+      "action": "file.list"
+    },
+    "file.read": {
+      "action": "file.read"
+    },
+    "file.stat": {
+      "action": "file.stat"
+    },
+    "file.watch": {
+      "action": "file.watch"
+    },
+    "file.write": {
+      "action": "file.write"
+    },
+    "i18n.getCurrent": {
+      "action": "i18n.getCurrent"
+    },
+    "i18n.listLocales": {
+      "action": "i18n.listLocales"
+    },
+    "i18n.setCurrent": {
+      "action": "i18n.setCurrent"
+    },
+    "i18n.translate": {
+      "action": "i18n.translate"
+    },
+    "log.export": {
+      "action": "log.export"
+    },
+    "log.query": {
+      "action": "log.query"
+    },
+    "log.write": {
+      "action": "log.write"
+    },
+    "module.list": {
+      "action": "module.list"
+    },
+    "module.mount": {
+      "action": "module.mount"
+    },
+    "module.query": {
+      "action": "module.query"
+    },
+    "module.unmount": {
+      "action": "module.unmount"
+    },
+    "platform.clipboardRead": {
+      "action": "platform.clipboardRead"
+    },
+    "platform.clipboardWrite": {
+      "action": "platform.clipboardWrite"
+    },
+    "platform.dialogOpenFile": {
+      "action": "platform.dialogOpenFile"
+    },
+    "platform.dialogSaveFile": {
+      "action": "platform.dialogSaveFile"
+    },
+    "platform.dialogShowConfirm": {
+      "action": "platform.dialogShowConfirm"
+    },
+    "platform.dialogShowMessage": {
+      "action": "platform.dialogShowMessage"
+    },
+    "platform.getCapabilities": {
+      "action": "platform.getCapabilities"
+    },
+    "platform.getInfo": {
+      "action": "platform.getInfo"
+    },
+    "platform.getScreenInfo": {
+      "action": "platform.getScreenInfo"
+    },
+    "platform.ipcCloseChannel": {
+      "action": "platform.ipcCloseChannel"
+    },
+    "platform.ipcCreateChannel": {
+      "action": "platform.ipcCreateChannel"
+    },
+    "platform.ipcListChannels": {
+      "action": "platform.ipcListChannels"
+    },
+    "platform.ipcReceive": {
+      "action": "platform.ipcReceive"
+    },
+    "platform.ipcSend": {
+      "action": "platform.ipcSend"
+    },
+    "platform.listScreens": {
+      "action": "platform.listScreens"
+    },
+    "platform.notificationShow": {
+      "action": "platform.notificationShow"
+    },
+    "platform.openExternal": {
+      "action": "platform.openExternal"
+    },
+    "platform.powerGetState": {
+      "action": "platform.powerGetState"
+    },
+    "platform.powerSetPreventSleep": {
+      "action": "platform.powerSetPreventSleep"
+    },
+    "platform.shellOpenExternal": {
+      "action": "platform.shellOpenExternal"
+    },
+    "platform.shellOpenPath": {
+      "action": "platform.shellOpenPath"
+    },
+    "platform.shellShowItemInFolder": {
+      "action": "platform.shellShowItemInFolder"
+    },
+    "platform.shortcutClear": {
+      "action": "platform.shortcutClear"
+    },
+    "platform.shortcutIsRegistered": {
+      "action": "platform.shortcutIsRegistered"
+    },
+    "platform.shortcutList": {
+      "action": "platform.shortcutList"
+    },
+    "platform.shortcutRegister": {
+      "action": "platform.shortcutRegister"
+    },
+    "platform.shortcutUnregister": {
+      "action": "platform.shortcutUnregister"
+    },
+    "platform.trayClear": {
+      "action": "platform.trayClear"
+    },
+    "platform.trayGetState": {
+      "action": "platform.trayGetState"
+    },
+    "platform.traySet": {
+      "action": "platform.traySet"
+    },
+    "plugin.disable": {
+      "action": "plugin.disable"
+    },
+    "plugin.enable": {
+      "action": "plugin.enable"
+    },
+    "plugin.handshake.complete": {
+      "action": "plugin.handshake.complete"
+    },
+    "plugin.init": {
+      "action": "plugin.init"
+    },
+    "plugin.install": {
+      "action": "plugin.install"
+    },
+    "plugin.query": {
+      "action": "plugin.query"
+    },
+    "plugin.uninstall": {
+      "action": "plugin.uninstall"
+    },
+    "resource.readBinary": {
+      "action": "resource.readBinary"
+    },
+    "resource.readMetadata": {
+      "action": "resource.readMetadata"
+    },
+    "resource.resolve": {
+      "action": "resource.resolve"
+    },
+    "serializer.decode": {
+      "action": "serializer.decode"
+    },
+    "serializer.encode": {
+      "action": "serializer.encode"
+    },
+    "serializer.validate": {
+      "action": "serializer.validate"
+    },
+    "theme.apply": {
+      "action": "theme.apply"
+    },
+    "theme.contract.get": {
+      "action": "theme.contract.get"
+    },
+    "theme.getAllCss": {
+      "action": "theme.getAllCss"
+    },
+    "theme.getCurrent": {
+      "action": "theme.getCurrent"
+    },
+    "theme.list": {
+      "action": "theme.list"
+    },
+    "theme.resolve": {
+      "action": "theme.resolve"
+    },
+    "window.close": {
+      "action": "window.close"
+    },
+    "window.focus": {
+      "action": "window.focus"
+    },
+    "window.getState": {
+      "action": "window.getState"
+    },
+    "window.open": {
+      "action": "window.open"
+    },
+    "window.resize": {
+      "action": "window.resize"
+    },
+    "window.setState": {
+      "action": "window.setState"
+    },
+    "zip.compress": {
+      "action": "zip.compress"
+    },
+    "zip.extract": {
+      "action": "zip.extract"
+    },
+    "zip.list": {
+      "action": "zip.list"
+    }
+  }
+}

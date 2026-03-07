@@ -1,0 +1,32 @@
+{
+  "component": "skeleton",
+  "scope": "skeleton",
+  "parts": [
+    "root",
+    "item",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.skeleton.root.surface",
+    "chips.comp.skeleton.item.surface.idle",
+    "chips.comp.skeleton.item.surface.active",
+    "chips.comp.skeleton.status.color.info",
+    "chips.comp.skeleton.focus.outline"
+  ],
+  "iframe": {
+    "requiredSandbox": true,
+    "lifecycleEvents": [
+      "ready",
+      "error"
+    ]
+  }
+}

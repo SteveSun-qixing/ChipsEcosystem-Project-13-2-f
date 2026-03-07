@@ -4,6 +4,14 @@
 > **层级**：L3 Host Services  
 > **适用阶段**：阶段18及后续重构实施阶段
 
+
+## 架构归属声明（2026-03-06）
+
+- Host 主责 L1-L9 运行时链路（含 Runtime Client、Declarative UI、Unified Rendering）并随 Host 发布。
+- 组件库主责 L10 Component Headless，只负责状态机、结构与 a11y。
+- SDK 仅作为开发者工具包提供类型、封装、脚手架与测试辅助，不承载运行时主实现。
+- 用户设备仅安装 Host 即可运行；SDK 仅在开发与集成阶段按需使用。
+
 ## 服务域概述
 
 Host服务域是薯片生态运行在主进程中的核心服务集合，为上层插件和应用提供各种系统级能力。
@@ -140,7 +148,7 @@ interface ThemeService {
   list(publisher?: string): Promise<ThemeMeta[]>;
   apply(id: string): Promise<void>;
   getCurrent(appId?: string, pluginId?: string): Promise<ThemeState>;
-  getAllCss(): Promise<string>;
+  getAllCss(): Promise<{ css: string; themeId: string }>;
   resolve(chain: string[]): Promise<ResolvedTokens>;
   contract.get(component?: string): Promise<ThemeContract>;
 }

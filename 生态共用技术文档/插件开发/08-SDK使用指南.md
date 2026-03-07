@@ -34,10 +34,10 @@ client.card.parse(cardPath: string): Promise<CardDocument>
 client.card.validate(cardDoc: CardDocument): Promise<ValidationResult>
 ```
 
-渲染卡片使用 `client.card.render()` 方法，传入卡片配置。返回渲染后的视图对象。方法签名：
+渲染卡片使用 `client.card.render()` 方法，传入卡片文件路径。返回渲染后的视图对象。方法签名：
 
 ```typescript
-client.card.render(cardDoc: CardDocument, options?: RenderOptions): Promise<CardView>
+client.card.render(cardFile: string, options?: RenderOptions): Promise<CardView>
 ```
 
 > 注意：旧版 `cards.read`、`cards.create`、`cards.update`、`cards.delete` 方法已归档，请使用 `card.parse/render/validate` 接口。
@@ -52,17 +52,17 @@ SDK提供 Host 渲染能力的调用封装。
 
 ### card.render（统一渲染入口）推荐封装
 
-SDK 推荐直接封装 Host `card.render`，暴露以下参数：
+SDK 直接封装 Host `card.render`，推荐签名为：
 
 ```typescript
-client.card.render({
+client.card.render(
   cardFile: string,
   options?: {
-    target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render',
-    viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number },
-    verifyConsistency?: boolean
+    target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render';
+    viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
+    verifyConsistency?: boolean;
   }
-}): Promise<{
+): Promise<{
   view: {
     title: string;
     body: string;
@@ -117,13 +117,45 @@ client.card.compositeWindow.render({
 
 ## 插件管理
 
-SDK提供插件管理能力。
+SDK 提供插件管理与查询能力，直接映射 Host `plugin.*` 服务动作。
 
-列出插件使用client.plugins.list方法，返回已安装插件列表。
+- 列出插件：  
+  使用 `client.plugin.list(options?)` 返回已安装插件列表（面向普通插件/应用使用场景）：
 
-安装插件使用client.plugins.install方法，传入插件包路径或URL。返回安装结果。
+  ```typescript
+  client.plugin.list(options?: { type?: PluginType; capability?: string }): Promise<PluginInfo[]>;
+  ```
 
-卸载插件使用client.plugins.uninstall方法，传入插件ID。返回卸载结果。
+- 安装插件：  
+  使用 `client.plugin.install(manifestPath)` 安装插件包或插件目录，返回新插件 ID：
+
+  ```typescript
+  client.plugin.install(manifestPath: string): Promise<{ pluginId: string }>;
+  ```
+
+- 启用 / 禁用插件：  
+
+  ```typescript
+  client.plugin.enable(pluginId: string): Promise<void>;
+  client.plugin.disable(pluginId: string): Promise<void>;
+  ```
+
+- 卸载插件：  
+
+  ```typescript
+  client.plugin.uninstall(pluginId: string): Promise<void>;
+  ```
+
+- 按运行时记录查询插件（运维/工具场景）：  
+
+  ```typescript
+  client.plugin.query(options?: {
+    type?: PluginType;
+    capability?: string;
+  }): Promise<PluginRecord[]>;
+  ```
+
+其中 `PluginInfo` 与 `PluginRecord` 的结构在 SDK 类型定义中给出，分别用于“插件自身视角信息”和“Host 运行时插件记录”两类场景。
 
 ## 主题能力
 
@@ -141,10 +173,10 @@ client.theme.list(publisher?: string): Promise<ThemeInfo[]>
 client.theme.getCurrent(appId?: string, pluginId?: string): Promise<ThemeInfo>
 ```
 
-获取主题 CSS 使用 `client.theme.getAllCss()` 方法，传入主题ID，返回主题的完整 CSS 代码。方法签名：
+获取主题 CSS 使用 `client.theme.getAllCss()` 方法，返回当前主题的完整 CSS 代码。方法签名：
 
 ```typescript
-client.theme.getAllCss(themeId: string): Promise<string>
+client.theme.getAllCss(): Promise<string>
 ```
 
 应用主题使用 `client.theme.apply()` 方法，传入主题ID，切换系统主题。方法签名：

@@ -464,18 +464,21 @@ export class PluginRuntime {
     await fs.copyFile(absolutePath, stagedManifestPath);
 
     if (manifest.entry) {
-      const sourceEntryPath = path.resolve(path.dirname(absolutePath), manifest.entry);
-      const entryStats = await this.statSafe(sourceEntryPath);
-      if (!entryStats) {
+      const sourceRoot = path.dirname(absolutePath);
+      const entryRoot = this.resolveManifestEntryRoot(manifest.entry);
+      const sourceEntryRootPath = path.resolve(sourceRoot, entryRoot);
+      const entryRootStats = await this.statSafe(sourceEntryRootPath);
+      if (!entryRootStats) {
         await fs.rm(staged, { recursive: true, force: true });
         throw createError('PLUGIN_ENTRY_NOT_FOUND', `Plugin entry not found: ${manifest.entry}`, {
           sourcePath: absolutePath,
           entry: manifest.entry
         });
       }
-      const stagedEntryPath = path.join(staged, manifest.entry);
-      await fs.mkdir(path.dirname(stagedEntryPath), { recursive: true });
-      await fs.cp(sourceEntryPath, stagedEntryPath, { recursive: true });
+
+      const stagedEntryRootPath = path.join(staged, entryRoot);
+      await fs.mkdir(path.dirname(stagedEntryRootPath), { recursive: true });
+      await fs.cp(sourceEntryRootPath, stagedEntryRootPath, { recursive: true });
     }
 
     return {
@@ -486,6 +489,18 @@ export class PluginRuntime {
         await fs.rm(staged, { recursive: true, force: true });
       }
     };
+  }
+
+  private resolveManifestEntryRoot(entry: string): string {
+    const normalized = path.normalize(entry).replace(/^[.][\\/]/, '');
+    const segments = normalized.split(path.sep).filter((segment) => segment.length > 0);
+    if (segments.length === 0) {
+      return normalized;
+    }
+    if (segments.length === 1) {
+      return normalized;
+    }
+    return segments[0]!;
   }
 
   private async findManifestPath(rootPath: string): Promise<string> {

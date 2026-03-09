@@ -32,7 +32,11 @@ export class HostApplication {
 
   public constructor(options?: HostApplicationOptions) {
     this.kernel = new Kernel();
-    this.pal = new NodePalAdapter();
+    this.pal = new NodePalAdapter({
+      window: {
+        electronPreloadPath: path.resolve(__dirname, '../../preload/plugin-window.js')
+      }
+    });
     this.logger = new StructuredLogger();
     this.workspacePath = options?.workspacePath ?? path.join(os.homedir(), '.chips-host');
     this.runtime = new PluginRuntime(this.workspacePath, {

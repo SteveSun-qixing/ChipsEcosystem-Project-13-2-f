@@ -18,6 +18,7 @@ interface PluginInitResponse {
   session: {
     sessionId: string;
     sessionNonce: string;
+    permissions: string[];
   };
 }
 
@@ -92,6 +93,7 @@ const openByPlugin = async (
       height: 800,
       pluginId: plugin.id,
       sessionId: initialized.session.sessionId,
+      permissions: initialized.session.permissions,
       url
     }
   });

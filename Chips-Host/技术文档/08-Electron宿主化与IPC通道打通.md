@@ -46,11 +46,13 @@
 更新文件：
 - `packages/pal/src/node-adapter.ts`
 - `packages/pal/src/types.ts`
+- `src/preload/plugin-window.ts`
 
 行为：
 - `PALWindow.create/focus/resize/setState/getState/close` 在 Electron 环境下驱动真实 BrowserWindow。
 - `window.open.config.url` 支持载入目标页面。
 - `window.open` 新增窗口上下文透传：`pluginId/sessionId/url`，用于插件窗口会话绑定。
+- 应用插件窗口新增 preload 注入：真实 BrowserWindow 会暴露 `window.chips.*`，并通过 `additionalArguments` 传递 `pluginId/permissions` 上下文。
 - 非 Electron 环境保留内存态窗口模型，保证跨环境一致接口。
 
 ### 2.4 服务级动态加载深化
@@ -69,6 +71,7 @@
 新增文件：
 - `src/main/core/main-process.ts`
 - `src/main/index.ts`（新增导出）
+- `src/main/electron/dev-run-app.ts`
 
 行为：
 - 启动时统一编排 `app.whenReady -> hostApplication.start`。
@@ -80,6 +83,7 @@
   - `process.on('uncaughtException')`
   - `process.on('unhandledRejection')`
   - 异常统一写入结构化日志，避免静默失败。
+- 开发态 `chipsdev run` 改为拉起真实 Electron Host，并在主进程内部完成插件安装、握手与窗口打开，而不是在普通 Node CLI 中只创建内存态 Host。
 
 ## 3. 文件关联与插件宿主协同
 

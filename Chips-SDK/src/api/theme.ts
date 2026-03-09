@@ -4,14 +4,17 @@ import { createError } from "../types/errors";
 export interface ThemeMeta {
   id: string;
   displayName: string;
-  version?: string;
+  version: string;
+  isDefault: boolean;
   publisher?: string;
+  parentTheme?: string;
 }
 
 export interface ThemeState {
-  id: string;
+  themeId: string;
   displayName: string;
-  variables?: Record<string, unknown>;
+  version: string;
+  parentTheme?: string;
 }
 
 export interface ResolvedTheme {
@@ -38,7 +41,10 @@ export interface ThemeApi {
 export function createThemeApi(client: CoreClient): ThemeApi {
   return {
     async list(publisher) {
-      return client.invoke("theme.list", { publisher });
+      const result = await client.invoke<{ publisher?: string }, { themes: ThemeMeta[] }>("theme.list", {
+        publisher,
+      });
+      return result.themes;
     },
     async apply(themeId) {
       if (!themeId) {
@@ -47,7 +53,7 @@ export function createThemeApi(client: CoreClient): ThemeApi {
       return client.invoke("theme.apply", { id: themeId });
     },
     async getCurrent(options) {
-      return client.invoke("theme.getCurrent", options ?? {});
+      return client.invoke<{ appId?: string; pluginId?: string }, ThemeState>("theme.getCurrent", options ?? {});
     },
     async getAllCss() {
       const result = await client.invoke<Record<string, never>, { css: string; themeId?: string }>(

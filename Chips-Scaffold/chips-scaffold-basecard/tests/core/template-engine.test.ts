@@ -52,8 +52,15 @@ describe("template-engine", () => {
       path.join(targetDir, "manifest.yaml"),
       "utf8"
     );
+    const pkg = JSON.parse(
+      await fs.readFile(path.join(targetDir, "package.json"), "utf8")
+    );
     expect(manifest).toMatch(/type:\s+card/);
     expect(manifest).toMatch(/capabilities:/);
+    await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
+    expect(pkg.devDependencies.eslint).toBe("^8.57.1");
+    expect(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
+    expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
 
     const readme = await fs.readFile(
       path.join(targetDir, "README.md"),

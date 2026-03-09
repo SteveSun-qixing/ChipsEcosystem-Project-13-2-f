@@ -6,11 +6,14 @@ import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
-import { buildThemeContractsView, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
+import { buildThemeContractsView, type ThemeContract, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
+import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
 import { StructuredLogger } from '../../shared/logger';
+import type { PluginUiConfig } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
+import { parseYamlLite } from '../../shared/yaml-lite';
 import type { Kernel } from '../../../packages/kernel/src';
-import type { PALAdapter } from '../../../packages/pal/src';
+import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
@@ -33,7 +36,8 @@ interface PluginRecord {
   enabled: boolean;
   type: 'app' | 'card' | 'layout' | 'module' | 'theme';
   capabilities: string[];
-  entry?: string;
+  entry?: string | Record<string, string>;
+  ui?: PluginUiConfig;
   installedAt: number;
 }
 
@@ -45,10 +49,14 @@ interface ModuleRecord {
 
 interface ThemeRecord {
   id: string;
-  name: string;
-  publisher: string;
+  displayName: string;
+  version: string;
+  publisher?: string;
+  parentTheme?: string;
+  isDefault: boolean;
   css: string;
   tokens: Record<string, unknown>;
+  contract?: ThemeContract;
 }
 
 interface RouteMetric {
@@ -150,33 +158,7 @@ const buildState = (): RuntimeState => ({
   modules: new Map<string, ModuleRecord>(),
   credentials: new Map<string, { iv: string; tag: string; value: string }>(),
   clipboard: null,
-  themes: [
-    {
-      id: 'chips-official.default-theme',
-      name: 'Default Theme',
-      publisher: 'chips-official',
-      css: ':root { --chip-color-bg: #ffffff; --chip-color-fg: #111111; }',
-      tokens: {
-        ref: {
-          white: '#ffffff',
-          black: '#111111'
-        },
-        sys: {},
-        comp: {
-          chips: {
-            comp: {
-              button: {
-                background: '{white}',
-                color: '{black}'
-              }
-            }
-          }
-        },
-        motion: {},
-        layout: {}
-      }
-    }
-  ],
+  themes: [],
   currentThemeId: 'chips-official.default-theme',
   locale: 'zh-CN',
   locales: {
@@ -286,6 +268,171 @@ const mergeRecords = (base: Record<string, unknown>, overlay: Record<string, unk
     result[key] = deepClone(value);
   }
   return result;
+};
+
+const asString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+};
+
+const normalizeThemeAssetPath = (value: string): string => {
+  return path.normalize(value).replace(/^[.][\\/]/, '');
+};
+
+const readJsonRecord = async (filePath: string): Promise<Record<string, unknown>> => {
+  const raw = await fs.readFile(filePath, 'utf-8');
+  const parsed = JSON.parse(raw) as unknown;
+  if (!isRecord(parsed)) {
+    throw createError('THEME_LOAD_FAILED', `Theme asset must be an object: ${filePath}`, { filePath });
+  }
+  return parsed;
+};
+
+const readThemeContract = async (installPath: string, contractPath?: string): Promise<ThemeContract | undefined> => {
+  if (!contractPath) {
+    return undefined;
+  }
+
+  const resolvedPath = path.resolve(installPath, normalizeThemeAssetPath(contractPath));
+  const raw = await fs.readFile(resolvedPath, 'utf-8');
+  const parsed = JSON.parse(raw) as unknown;
+  if (!isRecord(parsed) || !Array.isArray(parsed.components) || typeof parsed.version !== 'string') {
+    throw createError('THEME_CONTRACT_INVALID', 'Theme contract file is invalid', {
+      contractPath: resolvedPath
+    });
+  }
+  return parsed as unknown as ThemeContract;
+};
+
+const loadThemeRecordFromPlugin = async (plugin: ReturnType<PluginRuntime['query']>[number]): Promise<ThemeRecord> => {
+  const rawManifest = parseYamlLite(await fs.readFile(plugin.manifestPath, 'utf-8')) as Record<string, unknown>;
+  const themeId = asString(rawManifest.themeId) ?? plugin.manifest.id;
+  const displayName = asString(rawManifest.displayName) ?? plugin.manifest.name;
+  const publisher = asString(rawManifest.publisher);
+  const parentTheme = asString(rawManifest.parentTheme);
+  const isDefault = rawManifest.isDefault === true;
+  const entry = isRecord(rawManifest.entry) ? rawManifest.entry : {};
+  const tokensPath = asString(entry.tokens);
+  const themeCssPath = asString(entry.themeCss);
+  const layout = isRecord(rawManifest.ui) && isRecord(rawManifest.ui.layout) ? rawManifest.ui.layout : undefined;
+  const contractPath = asString(layout?.contract);
+
+  if (!tokensPath || !themeCssPath) {
+    throw createError('THEME_LOAD_FAILED', 'Theme manifest is missing entry.tokens or entry.themeCss', {
+      manifestPath: plugin.manifestPath,
+      pluginId: plugin.manifest.id
+    });
+  }
+
+  const resolvedTokensPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(tokensPath));
+  const resolvedThemeCssPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(themeCssPath));
+  const [tokens, css, contract] = await Promise.all([
+    readJsonRecord(resolvedTokensPath),
+    fs.readFile(resolvedThemeCssPath, 'utf-8'),
+    readThemeContract(plugin.installPath, contractPath)
+  ]);
+
+  return {
+    id: themeId,
+    displayName,
+    version: plugin.manifest.version,
+    publisher,
+    parentTheme,
+    isDefault,
+    css,
+    tokens,
+    contract
+  };
+};
+
+const loadInstalledThemes = async (runtime: PluginRuntime): Promise<ThemeRecord[]> => {
+  const plugins = runtime.query({ type: 'theme' });
+  const loaded = await Promise.all(plugins.map((plugin) => loadThemeRecordFromPlugin(plugin)));
+  return loaded.sort((left, right) => {
+    if (left.isDefault !== right.isDefault) {
+      return left.isDefault ? -1 : 1;
+    }
+    return left.id.localeCompare(right.id);
+  });
+};
+
+const findThemeRecord = (state: RuntimeState, themeId: string): ThemeRecord | undefined => {
+  return state.themes.find((theme) => theme.id === themeId);
+};
+
+const resolveThemeChain = (state: RuntimeState, inputIds: string[]): ThemeRecord[] => {
+  const chain = inputIds.length > 0 ? inputIds : [state.currentThemeId];
+  if (chain.length > 6) {
+    throw createError('THEME_CHAIN_TOO_DEEP', 'Theme resolve chain exceeds 6 levels');
+  }
+  const records: ThemeRecord[] = [];
+  const appended = new Set<string>();
+  const visiting = new Set<string>();
+
+  const visit = (themeId: string): void => {
+    const record = findThemeRecord(state, themeId);
+    if (!record) {
+      throw createError('THEME_NOT_FOUND', `Theme not found in resolve chain: ${themeId}`, { themeId });
+    }
+    if (visiting.has(themeId)) {
+      throw createError('THEME_DEPENDENCY_ERROR', `Theme parent chain contains a cycle: ${themeId}`, { themeId });
+    }
+    if (appended.has(themeId)) {
+      return;
+    }
+
+    visiting.add(themeId);
+    if (record.parentTheme) {
+      visit(record.parentTheme);
+    }
+    visiting.delete(themeId);
+
+    appended.add(themeId);
+    records.push(record);
+  };
+
+  chain.forEach(visit);
+
+  if (records.length > 6) {
+    throw createError('THEME_CHAIN_TOO_DEEP', 'Theme resolve chain exceeds 6 levels');
+  }
+
+  return records;
+};
+
+const resolveThemeContext = (state: RuntimeState, inputIds: string[]) => {
+  const records = resolveThemeChain(state, inputIds);
+  const mergedLayers = mergeThemeLayers(records.map((theme) => ({ id: theme.id, tokens: theme.tokens })));
+  const resolvedTheme = resolveThemeFromLayers(mergedLayers);
+  const activeTheme = records[records.length - 1];
+  if (!activeTheme) {
+    throw createError('THEME_NOT_FOUND', 'No active theme found');
+  }
+
+  return {
+    records,
+    activeTheme,
+    resolvedTheme,
+    renderTheme: toRenderThemeSnapshot(activeTheme.id, resolvedTheme),
+    css: records
+      .map((theme) => theme.css.trim())
+      .filter((cssText) => cssText.length > 0)
+      .join('\n\n')
+  };
+};
+
+const syncCurrentThemeState = (state: RuntimeState): void => {
+  const configuredThemeId = asString(resolveConfigValue(state, 'ui.theme'));
+  const defaultTheme = state.themes.find((theme) => theme.isDefault);
+  const fallbackTheme = defaultTheme ?? state.themes[0];
+
+  if (configuredThemeId && findThemeRecord(state, configuredThemeId)) {
+    state.currentThemeId = configuredThemeId;
+    return;
+  }
+
+  if (fallbackTheme) {
+    state.currentThemeId = fallbackTheme.id;
+  }
 };
 
 const credentialCipherKey = (workspacePath: string): Buffer => {
@@ -571,6 +718,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const target = getConfigMapByScope(state, scope);
             target.set(input.key, input.value);
             await persistConfigScope(ctx.workspacePath, scope, target);
+            if (input.key === 'ui.theme') {
+              syncCurrentThemeState(state);
+            }
             return { ack: true };
           })
         )
@@ -589,6 +739,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               target.set(key, value);
             }
             await persistConfigScope(ctx.workspacePath, scope, target);
+            if (Object.prototype.hasOwnProperty.call(input.entries, 'ui.theme')) {
+              syncCurrentThemeState(state);
+            }
             return { ack: true };
           })
         )
@@ -609,6 +762,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               target.clear();
             }
             await persistConfigScope(ctx.workspacePath, scope, target);
+            if (!input.key || input.key === 'ui.theme') {
+              syncCurrentThemeState(state);
+            }
             return { ack: true };
           })
         )
@@ -620,7 +776,19 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'theme',
     actions: {
       list: {
-        descriptor: descriptor<{ publisher?: string }, { themes: ThemeRecord[] }>(
+        descriptor: descriptor<
+          { publisher?: string },
+          {
+            themes: Array<{
+              id: string;
+              displayName: string;
+              version: string;
+              isDefault: boolean;
+              publisher?: string;
+              parentTheme?: string;
+            }>;
+          }
+        >(
           'theme.list',
           ['theme.read'],
           2_000,
@@ -630,49 +798,75 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const themes = input.publisher
               ? state.themes.filter((theme) => theme.publisher === input.publisher)
               : state.themes;
-            return { themes };
+            return {
+              themes: themes.map((theme) => ({
+                id: theme.id,
+                displayName: theme.displayName,
+                version: theme.version,
+                isDefault: theme.isDefault,
+                publisher: theme.publisher,
+                parentTheme: theme.parentTheme
+              }))
+            };
           })
         )
       },
       apply: {
-        descriptor: descriptor<{ id: string }, { ack: true }>(
+        descriptor: descriptor<{ id: string }, { success: true; themeId: string }>(
           'theme.apply',
           ['theme.write'],
           2_000,
           false,
           0,
           withMetrics(state, 'theme.apply', async (input) => {
-            const theme = state.themes.find((candidate) => candidate.id === input.id);
-            if (!theme) {
+            if (!findThemeRecord(state, input.id)) {
               throw createError('THEME_NOT_FOUND', `Theme not found: ${input.id}`);
             }
-            const layers = mergeThemeLayers([{ id: theme.id, tokens: theme.tokens }]);
-            const resolved = resolveThemeFromLayers(layers);
-            validateThemeContractWithTokens(theme.id, layers, resolved.variables);
+
+            const context = resolveThemeContext(state, [input.id]);
+            validateThemeContractWithTokens(context.activeTheme.id, context.activeTheme.contract, context.resolvedTheme.variables);
+
             const previousThemeId = state.currentThemeId;
-            state.currentThemeId = theme.id;
+            state.currentThemeId = context.activeTheme.id;
+            state.configUser.set('ui.theme', context.activeTheme.id);
+            await persistConfigScope(ctx.workspacePath, 'user', state.configUser);
+
             await ctx.kernel.events.emit('theme.changed', 'theme-service', {
               previousThemeId,
-              themeId: theme.id,
+              themeId: context.activeTheme.id,
               timestamp: Date.now()
             });
-            return { ack: true };
+
+            return { success: true, themeId: context.activeTheme.id };
           })
         )
       },
       getCurrent: {
-        descriptor: descriptor<Record<string, unknown>, { theme: ThemeRecord }>(
+        descriptor: descriptor<
+          { appId?: string; pluginId?: string },
+          {
+            themeId: string;
+            displayName: string;
+            version: string;
+            parentTheme?: string;
+          }
+        >(
           'theme.getCurrent',
           ['theme.read'],
           2_000,
           true,
           0,
           withMetrics(state, 'theme.getCurrent', async () => {
-            const theme = state.themes.find((candidate) => candidate.id === state.currentThemeId);
+            const theme = findThemeRecord(state, state.currentThemeId);
             if (!theme) {
               throw createError('THEME_NOT_FOUND', 'Current theme not found');
             }
-            return { theme };
+            return {
+              themeId: theme.id,
+              displayName: theme.displayName,
+              version: theme.version,
+              parentTheme: theme.parentTheme
+            };
           })
         )
       },
@@ -684,11 +878,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'theme.getAllCss', async () => {
-            const theme = state.themes.find((candidate) => candidate.id === state.currentThemeId);
-            if (!theme) {
-              throw createError('THEME_NOT_FOUND', 'Current theme not found');
-            }
-            return { css: theme.css, themeId: theme.id };
+            const context = resolveThemeContext(state, []);
+            return { css: context.css, themeId: context.activeTheme.id };
           })
         )
       },
@@ -710,31 +901,15 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'theme.resolve', async (input) => {
-            const chain = input.chain.length > 0 ? input.chain : [state.currentThemeId];
-            if (chain.length > 6) {
-              throw createError('THEME_CHAIN_TOO_DEEP', 'Theme resolve chain exceeds 6 levels');
-            }
-
-            const resolved: Array<{ id: string; displayName: string; order: number }> = [];
-            const themesForMerge: Array<{ id: string; tokens: Record<string, unknown> }> = [];
-
-            chain.forEach((themeId, index) => {
-              const theme = state.themes.find((candidate) => candidate.id === themeId);
-              if (!theme) {
-                throw createError('THEME_NOT_FOUND', `Theme not found in resolve chain: ${themeId}`);
-              }
-              themesForMerge.push({ id: theme.id, tokens: theme.tokens });
-              resolved.push({
+            const context = resolveThemeContext(state, input.chain);
+            return {
+              resolved: context.records.map((theme, index) => ({
                 id: theme.id,
-                displayName: theme.name,
+                displayName: theme.displayName,
                 order: index
-              });
-            });
-
-            const mergedLayers = mergeThemeLayers(themesForMerge);
-            const resolvedTheme = resolveThemeFromLayers(mergedLayers);
-
-            return { resolved, tokens: resolvedTheme.variables };
+              })),
+              tokens: context.resolvedTheme.variables
+            };
           })
         )
       },
@@ -758,7 +933,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'theme.contract.get', async (input) => {
-            return buildThemeContractsView(state.currentThemeId, input.component);
+            const theme = findThemeRecord(state, state.currentThemeId);
+            if (!theme) {
+              throw createError('THEME_NOT_FOUND', 'Current theme not found');
+            }
+            return buildThemeContractsView(theme.contract, input.component);
           })
         )
       }
@@ -844,6 +1023,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               pluginId?: string;
               sessionId?: string;
               permissions?: string[];
+              chrome?: WindowChromeOptions;
             };
           },
           { window: unknown }
@@ -1008,6 +1188,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
                 type: record.manifest.type,
                 capabilities: record.manifest.capabilities ?? [],
                 entry: record.manifest.entry,
+                ui: record.manifest.ui ? deepClone(record.manifest.ui) : undefined,
                 installedAt: record.installedAt
               }))
             };
@@ -1821,7 +2002,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'card.render', async (input) => {
-            const view = await ctx.getCardService().render(input.cardFile, input.options);
+            const themeContext = resolveThemeContext(state, []);
+            const view = await ctx.getCardService().render(input.cardFile, {
+              ...input.options,
+              theme: themeContext.renderTheme,
+              themeCssText: themeContext.css
+            });
             return { view };
           })
         )
@@ -2097,6 +2283,8 @@ export const registerHostServices = async (ctx: HostServiceContext): Promise<voi
   const runtimeState = buildState();
   await loadConfig(ctx.workspacePath, runtimeState);
   await loadCredentials(ctx.workspacePath, runtimeState);
+  runtimeState.themes = await loadInstalledThemes(ctx.runtime);
+  syncCurrentThemeState(runtimeState);
 
   const services = createServices(ctx, runtimeState);
   for (const service of services) {

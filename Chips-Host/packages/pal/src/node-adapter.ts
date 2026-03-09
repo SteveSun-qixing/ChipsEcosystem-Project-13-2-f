@@ -45,11 +45,55 @@ import type {
   ScreenInfo,
   TrayOptions,
   TrayState,
+  WindowChromeOptions,
   WindowOptions,
   WindowState
 } from './types';
 
 const quoteAppleScript = (value: string): string => value.replaceAll('"', '\\"');
+
+const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined): WindowChromeOptions | undefined => {
+  if (!chrome) {
+    return undefined;
+  }
+
+  return {
+    ...chrome,
+    titleBarOverlay:
+      chrome.titleBarOverlay && typeof chrome.titleBarOverlay === 'object'
+        ? { ...chrome.titleBarOverlay }
+        : chrome.titleBarOverlay
+  };
+};
+
+const buildElectronWindowChromeOptions = (chrome: WindowChromeOptions | undefined): Record<string, unknown> => {
+  if (!chrome) {
+    return {};
+  }
+
+  const resolved: Record<string, unknown> = {};
+
+  if (typeof chrome.frame === 'boolean') {
+    resolved.frame = chrome.frame;
+  }
+  if (typeof chrome.transparent === 'boolean') {
+    resolved.transparent = chrome.transparent;
+  }
+  if (typeof chrome.backgroundColor === 'string') {
+    resolved.backgroundColor = chrome.backgroundColor;
+  }
+  if (typeof chrome.titleBarStyle === 'string') {
+    resolved.titleBarStyle = chrome.titleBarStyle;
+  }
+  if (typeof chrome.titleBarOverlay !== 'undefined') {
+    resolved.titleBarOverlay =
+      chrome.titleBarOverlay && typeof chrome.titleBarOverlay === 'object'
+        ? { ...chrome.titleBarOverlay }
+        : chrome.titleBarOverlay;
+  }
+
+  return resolved;
+};
 
 const runCommand = async (command: string, args: string[], input?: string): Promise<string> => {
   return new Promise<string>((resolve, reject) => {
@@ -155,7 +199,8 @@ class NodeWindowManager implements PALWindow {
       state: 'normal',
       url: options.url,
       pluginId: options.pluginId,
-      sessionId: options.sessionId
+      sessionId: options.sessionId,
+      chrome: cloneWindowChromeOptions(options.chrome)
     };
 
     if (this.electronBrowserWindow) {
@@ -188,6 +233,7 @@ class NodeWindowManager implements PALWindow {
         resizable: options.resizable ?? true,
         alwaysOnTop: options.alwaysOnTop ?? false,
         show: true,
+        ...buildElectronWindowChromeOptions(options.chrome),
         webPreferences
       });
       this.electronWindows.set(id, browserWindow);
@@ -275,7 +321,10 @@ class NodeWindowManager implements PALWindow {
       target.state = this.resolveWindowState(browserWindow);
     }
 
-    return { ...target };
+    return {
+      ...target,
+      chrome: cloneWindowChromeOptions(target.chrome)
+    };
   }
 
   public async close(id: string): Promise<void> {

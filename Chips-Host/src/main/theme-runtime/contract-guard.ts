@@ -1,7 +1,6 @@
 import { createError } from '../../shared/errors';
-import type { ThemeTokenLayers } from './types';
 
-interface ThemeContractComponent {
+export interface ThemeContractComponent {
   name: string;
   scope: string;
   parts?: string[];
@@ -9,37 +8,16 @@ interface ThemeContractComponent {
   tokens: string[];
 }
 
-interface ThemeContract {
+export interface ThemeContract {
   version: string;
   components: ThemeContractComponent[];
 }
 
-const DEFAULT_THEME_CONTRACT: ThemeContract = {
-  version: '1.0.0',
-  components: [
-    {
-      name: 'button',
-      scope: 'comp',
-      parts: [],
-      states: [],
-      tokens: ['background', 'color']
-    }
-  ]
-};
-
-const getThemeContract = (themeId: string): ThemeContract | undefined => {
-  if (themeId === 'chips-official.default-theme') {
-    return DEFAULT_THEME_CONTRACT;
-  }
-  return undefined;
-};
-
 export const validateThemeContractWithTokens = (
   themeId: string,
-  layers: ThemeTokenLayers,
+  contract: ThemeContract | undefined,
   variables: Record<string, unknown>
 ): void => {
-  const contract = getThemeContract(themeId);
   if (!contract) {
     return;
   }
@@ -49,7 +27,7 @@ export const validateThemeContractWithTokens = (
   for (const component of contract.components) {
     const baseName = component.name;
     for (const token of component.tokens) {
-      const key = `chips.comp.${baseName}.${token}`;
+      const key = token.startsWith('chips.') ? token : `chips.comp.${baseName}.${token}`;
       if (!(key in variables)) {
         missing.push({ component: baseName, token, key });
       }
@@ -65,7 +43,7 @@ export const validateThemeContractWithTokens = (
 };
 
 export const buildThemeContractsView = (
-  themeId: string,
+  contract: ThemeContract | undefined,
   componentFilter?: string
 ): {
   contracts: {
@@ -77,7 +55,6 @@ export const buildThemeContractsView = (
     };
   };
 } => {
-  const contract = getThemeContract(themeId);
   if (!contract) {
     return { contracts: {} };
   }
@@ -89,7 +66,7 @@ export const buildThemeContractsView = (
     if (componentFilter && componentFilter !== name) {
       continue;
     }
-    const tokens = component.tokens.map((token) => `chips.comp.${name}.${token}`);
+    const tokens = component.tokens.map((token) => (token.startsWith('chips.') ? token : `chips.comp.${name}.${token}`));
     entries.push([
       name,
       {
@@ -105,4 +82,3 @@ export const buildThemeContractsView = (
     contracts: Object.fromEntries(entries)
   };
 };
-

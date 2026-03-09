@@ -213,7 +213,7 @@ describe('PluginRuntime', () => {
     const record = await runtime.install(cpkPath);
     expect(record.manifest.id).toBe('chips.sdk.generated');
     await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
-  });
+  }, 15_000);
 
   it('requires signature for non-local plugin source', async () => {
     const manifestPath = path.join(workspace, 'signed.plugin.json');

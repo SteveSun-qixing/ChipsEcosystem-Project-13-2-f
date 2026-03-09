@@ -10,12 +10,12 @@ permissions:
 
 entry:
   tokens: "dist/tokens.json"
-  themeCss: "theme.css"
+  themeCss: "dist/theme.css"
 
 # 主题相关配置（供 Theme Runtime 与生态工具使用）
 themeId: "chips-official.default-theme"
 displayName: "薯片官方 · 默认主题"
-isDefault: false
+isDefault: true
 parentTheme: ""
 
 ui:

@@ -287,6 +287,18 @@ const runCliTool = (projectRoot, binName, args) => {
   });
 };
 
+const hasCliTool = (projectRoot, binName) => {
+  const executableNames =
+    process.platform === 'win32' ? [`${binName}.cmd`, `${binName}.exe`, binName] : [binName];
+  const binDirs = collectAncestorNodeModuleBinDirs(projectRoot).concat(
+    path.join(__dirname, '..', 'node_modules', '.bin')
+  );
+
+  return binDirs.some((binDir) =>
+    executableNames.some((fileName) => fs.existsSync(path.join(binDir, fileName)))
+  );
+};
+
 const ensurePackageBuildArtifact = async (packageDir, artifactPath, packageLabel) => {
   if (fs.existsSync(artifactPath)) {
     return;
@@ -616,12 +628,7 @@ const handleLint = async () => {
   const projectRoot = resolveProjectRoot();
   await loadProjectConfig(projectRoot);
 
-  const eslintBinDir = path.join(projectRoot, 'node_modules', '.bin');
-  const hasEslintBin =
-    fs.existsSync(path.join(eslintBinDir, process.platform === 'win32' ? 'eslint.cmd' : 'eslint')) ||
-    fs.existsSync(path.join(__dirname, '..', 'node_modules', '.bin', process.platform === 'win32' ? 'eslint.cmd' : 'eslint'));
-
-  if (!hasEslintBin) {
+  if (!hasCliTool(projectRoot, 'eslint')) {
     throw new Error(
       '未检测到 ESLint 可执行文件。请在工程中安装 eslint 并配置 .eslintrc 后再运行 chipsdev lint。'
     );
@@ -649,9 +656,68 @@ const handleE2E = async () => {
   );
 };
 
-const collectPackageFiles = async (sourceDir) => {
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeManifestAssetPath = (value) =>
+  path.normalize(String(value).trim()).replace(/^[.][\\/]/, '');
+
+const collectManifestAssetPaths = (manifest) => {
+  const assets = [];
+
+  if (typeof manifest?.entry === 'string' && manifest.entry.trim().length > 0) {
+    assets.push(manifest.entry.trim());
+  } else if (isPlainObject(manifest?.entry)) {
+    for (const value of Object.values(manifest.entry)) {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new Error('manifest.entry 中的路径必须是非空字符串。');
+      }
+      assets.push(value.trim());
+    }
+  } else if (typeof manifest?.entry !== 'undefined') {
+    throw new Error('manifest.entry 必须是字符串或对象。');
+  }
+
+  const layout = isPlainObject(manifest?.ui) && isPlainObject(manifest.ui.layout) ? manifest.ui.layout : undefined;
+  for (const field of ['contract', 'minFunctionalSet']) {
+    const value = layout?.[field];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      assets.push(value.trim());
+    }
+  }
+
+  if (typeof manifest?.preview === 'string' && manifest.preview.trim().length > 0) {
+    assets.push(manifest.preview.trim());
+  }
+
+  return [...new Set(assets.map(normalizeManifestAssetPath).filter((item) => item.length > 0))];
+};
+
+const collectManifestAssetRoots = (assets) => {
+  const roots = new Set();
+  for (const asset of assets) {
+    const normalized = normalizeManifestAssetPath(asset);
+    const segments = normalized.split(path.sep).filter(Boolean);
+    if (segments.length === 0) {
+      continue;
+    }
+    roots.add(segments.length === 1 ? normalized : segments[0]);
+  }
+  return [...roots];
+};
+
+const collectPackageFiles = async (projectRoot, sourceRoots) => {
   const files = [];
-  const stack = [sourceDir];
+  const seenRoots = new Set();
+  const stack = [];
+
+  for (const sourceRoot of sourceRoots) {
+    const normalizedRoot = path.resolve(projectRoot, sourceRoot);
+    if (seenRoots.has(normalizedRoot)) {
+      continue;
+    }
+    seenRoots.add(normalizedRoot);
+    stack.push(normalizedRoot);
+  }
 
   while (stack.length > 0) {
     const current = stack.pop();
@@ -670,14 +736,18 @@ const collectPackageFiles = async (sourceDir) => {
         continue;
       }
 
-      const relativePath = path.relative(sourceDir, absolutePath).split(path.sep).join('/');
+      const relativePath = path.relative(projectRoot, absolutePath).split(path.sep).join('/');
       const normalized = relativePath.toLowerCase();
 
       if (
         normalized === 'manifest.yaml' ||
+        normalized.endsWith('/manifest.yaml') ||
         normalized === 'manifest.yml' ||
+        normalized.endsWith('/manifest.yml') ||
         normalized === 'manifest.json' ||
+        normalized.endsWith('/manifest.json') ||
         normalized === 'publish-meta.json' ||
+        normalized.endsWith('/publish-meta.json') ||
         normalized.endsWith('.cpk')
       ) {
         continue;
@@ -685,7 +755,7 @@ const collectPackageFiles = async (sourceDir) => {
 
       files.push({
         absolutePath,
-        archivePath: path.posix.join('dist', relativePath)
+        archivePath: relativePath
       });
     }
   }
@@ -694,7 +764,7 @@ const collectPackageFiles = async (sourceDir) => {
   return files;
 };
 
-const zipDirectoryToCpk = async (sourceDir, manifestPath, targetFile) => {
+const zipDirectoryToCpk = async (projectRoot, sourceRoots, manifestPath, targetFile) => {
   const archiver = require('archiver');
 
   await ensureDirectoryExists(path.dirname(targetFile));
@@ -715,7 +785,7 @@ const zipDirectoryToCpk = async (sourceDir, manifestPath, targetFile) => {
 
   // 构建产物放在 dist/ 目录下；排除错误产物与已生成的打包产物，
   // 避免包内出现重复 manifest 或将 .cpk 自身再次打进包里。
-  const files = await collectPackageFiles(sourceDir);
+  const files = await collectPackageFiles(projectRoot, sourceRoots);
   for (const file of files) {
     archive.file(file.absolutePath, { name: file.archivePath, store: true });
   }
@@ -747,13 +817,14 @@ const handlePackage = async () => {
   const safeId = pluginId.replace(/[^a-zA-Z0-9_.-]+/g, '_');
   const fileName = `${safeId}-${version}.cpk`;
   const targetDir = path.join(projectRoot, 'dist');
+  const sourceRoots = [...new Set([config.outDir, ...collectManifestAssetRoots(collectManifestAssetPaths(manifest))])];
 
-  await assertManifestEntryExists(projectRoot, manifest);
+  await assertManifestAssetsExist(projectRoot, manifest);
 
   await ensureDirectoryExists(targetDir);
   const targetPath = path.join(targetDir, fileName);
 
-  await zipDirectoryToCpk(outDir, manifestPath, targetPath);
+  await zipDirectoryToCpk(projectRoot, sourceRoots, manifestPath, targetPath);
 
   log({
     message: '打包成功',
@@ -782,16 +853,15 @@ const validateManifestShape = (manifest) => {
   return errors;
 };
 
-const assertManifestEntryExists = async (projectRoot, manifest) => {
-  if (!manifest || typeof manifest.entry !== 'string' || manifest.entry.trim().length === 0) {
-    return;
-  }
-
-  const entryPath = path.join(projectRoot, manifest.entry);
-  try {
-    await fsp.access(entryPath, fs.constants.R_OK);
-  } catch {
-    throw new Error(`manifest.entry 指向的构建产物不存在：${manifest.entry}`);
+const assertManifestAssetsExist = async (projectRoot, manifest) => {
+  const assets = collectManifestAssetPaths(manifest);
+  for (const asset of assets) {
+    const assetPath = path.join(projectRoot, asset);
+    try {
+      await fsp.access(assetPath, fs.constants.R_OK);
+    } catch {
+      throw new Error(`manifest 资源不存在：${asset}`);
+    }
   }
 };
 
@@ -815,7 +885,7 @@ const handleValidate = async () => {
   }
 
   try {
-    await assertManifestEntryExists(projectRoot, manifest);
+    await assertManifestAssetsExist(projectRoot, manifest);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }

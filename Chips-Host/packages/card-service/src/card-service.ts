@@ -20,6 +20,7 @@ export interface CardRenderOptions {
   target?: RenderTarget;
   viewport?: Partial<RenderViewport>;
   theme?: ThemeSnapshot;
+  themeCssText?: string;
   verifyConsistency?: boolean;
 }
 
@@ -94,24 +95,6 @@ const escapeHtml = (value: string): string => {
 };
 
 const escapeInlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
-
-const createDefaultTheme = (themeId: string): ThemeSnapshot => ({
-  id: themeId,
-  tokens: {
-    'surface.canvas': '#f5f4ef',
-    'surface.card': '#ffffff',
-    'surface.border': '#d6d0c5',
-    'text.primary': '#181512',
-    'text.secondary': '#5b5148',
-    'accent.primary': '#956a3a'
-  },
-  scopes: {
-    'card.root': {
-      'surface.canvas': '#f5f4ef',
-      'surface.card': '#ffffff'
-    }
-  }
-});
 
 const createConsistencySnapshot = (semanticHash: string): RenderConsistencyResult => ({
   consistent: true,
@@ -231,32 +214,112 @@ const extractRichTextTitle = (html: string): { title: string; body: string } => 
   }
 };
 
-const createBasecardThemeCss = (theme: ThemeSnapshot): string => {
-  const primary = String(theme.tokens['text.primary'] ?? '#181512');
-  const secondary = String(theme.tokens['text.secondary'] ?? '#5b5148');
-  const border = String(theme.tokens['surface.border'] ?? '#d6d0c5');
-  const accent = String(theme.tokens['accent.primary'] ?? '#956a3a');
-  const surface = String(theme.tokens['surface.card'] ?? '#ffffff');
+const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
+  const declarations = Object.entries(theme.tokens)
+    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+    .map(([key, value]) => `  --${key.replaceAll('.', '-')}: ${String(value)};`);
 
-  return [
-    ':root { color-scheme: light; }',
-    'html, body { margin: 0; padding: 0; background: transparent; }',
-    'body { font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: ' + primary + '; }',
-    '.chips-basecard { box-sizing: border-box; width: 100%; background: ' + surface + '; padding: 22px 24px; }',
-    '.chips-basecard__title { margin: 0 0 14px; font-size: 24px; line-height: 1.3; color: ' + primary + '; }',
-    '.chips-basecard__body { color: ' + secondary + '; }',
-    '.chips-basecard__body > :first-child { margin-top: 0; }',
-    '.chips-basecard__body > :last-child { margin-bottom: 0; }',
-    '.chips-basecard__body a { color: ' + accent + '; }',
-    '.chips-basecard__body img { max-width: 100%; height: auto; border-radius: 10px; }',
-    '.chips-basecard__body blockquote { margin: 16px 0; padding: 0 0 0 16px; border-left: 3px solid ' + border + '; }',
-    '.chips-basecard__body hr { border: none; border-top: 1px solid ' + border + '; margin: 18px 0; }',
-    '.chips-basecard__body code { padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.05); }',
-    '.chips-basecard__body pre { overflow: auto; padding: 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.05); }'
-  ].join('\n');
+  if (declarations.length === 0) {
+    return ':root { color-scheme: light; }';
+  }
+
+  return [':root {', '  color-scheme: light;', ...declarations, '}'].join('\n');
 };
 
-const createChildFrameDocument = (nodeId: string, cardType: string, title: string, contentHtml: string, themeCssText: string): string => {
+const joinStyleBlocks = (...blocks: Array<string | undefined>): string => {
+  return blocks.map((block) => block?.trim() ?? '').filter((block) => block.length > 0).join('\n\n');
+};
+
+const createBasecardThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
+  return joinStyleBlocks(
+    themeCssText,
+    createThemeVariablesCss(theme),
+    [
+      'html, body { margin: 0; padding: 0; background: transparent; }',
+      'body {',
+      '  font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+      '  color: var(--chips-sys-color-on-surface, #111111);',
+      '}',
+      '.chips-basecard {',
+      '  box-sizing: border-box;',
+      '  width: 100%;',
+      '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
+      '  padding: 22px 24px;',
+      '}',
+      '.chips-basecard__title {',
+      '  margin: 0 0 14px;',
+      '  font-size: 24px;',
+      '  line-height: 1.3;',
+      '  color: var(--chips-sys-color-on-surface, #111111);',
+      '}',
+      '.chips-basecard__body { color: var(--chips-sys-color-on-surface, #111111); }',
+      '.chips-basecard__body > :first-child { margin-top: 0; }',
+      '.chips-basecard__body > :last-child { margin-bottom: 0; }',
+      '.chips-basecard__body a { color: var(--chips-sys-color-primary, #2563eb); }',
+      '.chips-basecard__body img { max-width: 100%; height: auto; border-radius: 10px; }',
+      '.chips-basecard__body blockquote {',
+      '  margin: 16px 0;',
+      '  padding: 0 0 0 16px;',
+      '  border-left: 3px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '}',
+      '.chips-basecard__body hr {',
+      '  border: none;',
+      '  border-top: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '  margin: 18px 0;',
+      '}',
+      '.chips-basecard__body code {',
+      '  padding: 1px 6px;',
+      '  border-radius: 6px;',
+      '  background: rgba(0, 0, 0, 0.05);',
+      '}',
+      '.chips-basecard__body pre {',
+      '  overflow: auto;',
+      '  padding: 14px;',
+      '  border-radius: 10px;',
+      '  background: rgba(0, 0, 0, 0.05);',
+      '}'
+    ].join('\n')
+  );
+};
+
+const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
+  return joinStyleBlocks(
+    themeCssText,
+    createThemeVariablesCss(theme),
+    [
+      'html, body { margin: 0; padding: 0; min-height: 100%; }',
+      'body {',
+      '  background: var(--chips-sys-color-surface, #ffffff);',
+      '  color: var(--chips-sys-color-on-surface, #111111);',
+      '  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+      '}',
+      '.chips-composite { max-width: 980px; margin: 0 auto; padding: 28px 22px 40px; box-sizing: border-box; }',
+      '.chips-composite__header { margin-bottom: 18px; }',
+      '.chips-composite__title { margin: 0; font-size: 30px; line-height: 1.2; color: var(--chips-sys-color-on-surface, #111111); }',
+      '.chips-composite__meta { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 68%, white 32%); }',
+      '.chips-composite__stack { display: grid; gap: 16px; }',
+      '.chips-composite__node {',
+      '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
+      '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '  border-radius: 18px;',
+      '  overflow: hidden;',
+      '  box-shadow: 0 10px 30px rgba(17, 17, 17, 0.08);',
+      '}',
+      '.chips-composite__frame { display: block; width: 100%; min-height: 96px; border: 0; background: transparent; }',
+      '.chips-composite__degraded { padding: 22px 24px; color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 72%, white 28%); }',
+      '.chips-composite__degraded strong { display: block; margin-bottom: 8px; color: var(--chips-sys-color-on-surface, #111111); }',
+      '.chips-composite__degraded p { margin: 0; }',
+      '.chips-composite__meta code {',
+      '  padding: 2px 6px;',
+      '  border-radius: 999px;',
+      '  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 12%, white 88%);',
+      '  color: var(--chips-sys-color-primary, #2563eb);',
+      '}'
+    ].join('\n')
+  );
+};
+
+const createChildFrameDocument = (nodeId: string, cardType: string, title: string, contentHtml: string): string => {
   const safeNodeId = JSON.stringify(nodeId);
   const contentTitle = title || cardType;
 
@@ -268,7 +331,6 @@ const createChildFrameDocument = (nodeId: string, cardType: string, title: strin
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
     '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
     `  <title>${escapeHtml(contentTitle)}</title>`,
-    `  <style>${themeCssText}</style>`,
     '</head>',
     `<body data-node-id="${escapeHtml(nodeId)}" data-card-type="${escapeHtml(cardType)}">`,
     contentHtml,
@@ -306,6 +368,7 @@ const createCompositeDocument = (
   target: RenderTarget,
   semanticHash: string,
   theme: ThemeSnapshot,
+  themeCssText: string | undefined,
   nodes: RenderedBaseCardNode[]
 ): string => {
   const nodeMarkup = nodes
@@ -334,13 +397,6 @@ const createCompositeDocument = (
     .filter((node) => node.error)
     .map((node) => node.error) as FrameErrorPayload[];
 
-  const canvas = String(theme.tokens['surface.canvas'] ?? '#f5f4ef');
-  const surface = String(theme.tokens['surface.card'] ?? '#ffffff');
-  const border = String(theme.tokens['surface.border'] ?? '#d6d0c5');
-  const primary = String(theme.tokens['text.primary'] ?? '#181512');
-  const secondary = String(theme.tokens['text.secondary'] ?? '#5b5148');
-  const accent = String(theme.tokens['accent.primary'] ?? '#956a3a');
-
   return [
     '<!doctype html>',
     '<html lang="zh-CN">',
@@ -349,22 +405,7 @@ const createCompositeDocument = (
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
     '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:; child-src \'self\' blob:; frame-src \'self\' blob:;" />',
     `  <title>${escapeHtml(title)}</title>`,
-    '  <style>',
-    '    :root { color-scheme: light; }',
-    '    html, body { margin: 0; padding: 0; min-height: 100%; }',
-    `    body { background: ${canvas}; color: ${primary}; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }`,
-    '    .chips-composite { max-width: 980px; margin: 0 auto; padding: 28px 22px 40px; box-sizing: border-box; }',
-    '    .chips-composite__header { margin-bottom: 18px; }',
-    `    .chips-composite__title { margin: 0; font-size: 30px; line-height: 1.2; color: ${primary}; }`,
-    `    .chips-composite__meta { margin-top: 8px; font-size: 12px; color: ${secondary}; }`,
-    '    .chips-composite__stack { display: grid; gap: 16px; }',
-    `    .chips-composite__node { background: ${surface}; border: 1px solid ${border}; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 30px rgba(24, 21, 18, 0.06); }`,
-    '    .chips-composite__frame { display: block; width: 100%; min-height: 96px; border: 0; background: transparent; }',
-    `    .chips-composite__degraded { padding: 22px 24px; color: ${secondary}; }`,
-    `    .chips-composite__degraded strong { display: block; margin-bottom: 8px; color: ${primary}; }`,
-    `    .chips-composite__degraded p { margin: 0; color: ${secondary}; }`,
-    `    .chips-composite__meta code { padding: 2px 6px; border-radius: 999px; background: rgba(149, 106, 58, 0.12); color: ${accent}; }`,
-    '  </style>',
+    `  <style>${createCompositeThemeCss(theme, themeCssText)}</style>`,
     '</head>',
     `<body data-target="${escapeHtml(target)}" data-semantic-hash="${escapeHtml(semanticHash)}">`,
     '  <main class="chips-composite">',
@@ -549,20 +590,23 @@ export class CardService {
       const structureNodes = parseStructureNodes(ctx.structure, ctx.contentByNodeId);
       const title = asString(ctx.metadata.name) ?? 'Untitled Card';
       const cardId = asString(ctx.metadata.card_id) ?? asString(ctx.metadata.id) ?? createId();
-      const declaredThemeId = asString(ctx.metadata.theme) ?? 'chips-official.default-theme';
       const target = options?.target ?? 'card-iframe';
-      const theme = options?.theme ?? createDefaultTheme(declaredThemeId);
+      const theme = options?.theme;
+      if (!theme) {
+        throw createError('THEME_NOT_FOUND', 'Card render requires a resolved theme snapshot.');
+      }
+      const themeCssText = options?.themeCssText;
       const renderedNodes: RenderedBaseCardNode[] = [];
 
       for (const node of structureNodes) {
-        renderedNodes.push(await this.renderStructureNode(node, ctx, theme, diagnostics));
+        renderedNodes.push(await this.renderStructureNode(node, ctx, theme, themeCssText, diagnostics));
       }
 
       const semanticModel = {
         cardId,
         title,
         target,
-        themeId: declaredThemeId,
+        themeId: theme.id,
         contentFiles: ctx.contentFiles,
         nodes: renderedNodes.map((node) => ({
           nodeId: node.nodeId,
@@ -573,7 +617,7 @@ export class CardService {
         }))
       };
       const semanticHash = crypto.createHash('sha256').update(JSON.stringify(semanticModel)).digest('hex');
-      const body = createCompositeDocument(title, target, semanticHash, theme, renderedNodes);
+      const body = createCompositeDocument(title, target, semanticHash, theme, themeCssText, renderedNodes);
 
       return {
         title,
@@ -591,6 +635,7 @@ export class CardService {
     node: StructureNode,
     ctx: CardPackageContext,
     theme: ThemeSnapshot,
+    themeCssText: string | undefined,
     diagnostics: RenderNodeDiagnostic[]
   ): Promise<RenderedBaseCardNode> {
     const content = ctx.contentByNodeId.get(node.id);
@@ -634,7 +679,7 @@ export class CardService {
     try {
       const config = await this.normalizeNodeConfig(plugin, content, ctx.rootDir);
       const title = asString(asRecord(config).title) ?? node.id;
-      const contentHtml = await this.renderBasecardHtml(plugin, config, theme);
+      const contentHtml = await this.renderBasecardHtml(plugin, config, theme, themeCssText);
       if (!contentHtml.trim()) {
         throw createError('CARD_PLUGIN_EMPTY_RENDER', `Plugin ${plugin.manifest.id} returned empty content.`, {
           nodeId: node.id,
@@ -647,7 +692,7 @@ export class CardService {
         cardType,
         title,
         pluginId: plugin.manifest.id,
-        frameHtml: createChildFrameDocument(node.id, cardType, title, contentHtml, createBasecardThemeCss(theme))
+        frameHtml: createChildFrameDocument(node.id, cardType, title, contentHtml)
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -674,7 +719,10 @@ export class CardService {
     const candidates = this.buildCardTypeCandidates(cardType);
 
     return plugins
-      .filter((record): record is RenderablePluginRecord => Boolean(record.enabled && record.manifest.entry))
+      .filter(
+        (record): record is RenderablePluginRecord =>
+          Boolean(record.enabled && typeof record.manifest.entry === 'string' && record.manifest.entry.length > 0)
+      )
       .find((record) => {
         const capabilities = new Set(record.manifest.capabilities ?? []);
         return candidates.some((candidate) => capabilities.has(candidate));
@@ -735,7 +783,8 @@ export class CardService {
   private async renderBasecardHtml(
     plugin: RenderablePluginRecord,
     config: Record<string, unknown>,
-    theme: ThemeSnapshot
+    theme: ThemeSnapshot,
+    themeCssText: string | undefined
   ): Promise<string> {
     const module = await this.loadPluginModule(plugin);
     if (typeof module.renderBasecardView !== 'function') {
@@ -778,7 +827,7 @@ export class CardService {
       module.renderBasecardView({
         container,
         config,
-        themeCssText: createBasecardThemeCss(theme)
+        themeCssText: createBasecardThemeCss(theme, themeCssText)
       });
       return container.innerHTML;
     } finally {

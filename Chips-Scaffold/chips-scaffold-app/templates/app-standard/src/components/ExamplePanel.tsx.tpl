@@ -12,7 +12,7 @@ export function ExamplePanel({ title }: ExamplePanelProps) {
       style={{
         padding: 16,
         borderRadius: 8,
-        border: "1px solid var(--chips-border-subtle, rgba(255,255,255,0.08))",
+        border: "1px solid var(--chips-border-subtle, rgba(17,17,17,0.08))",
       }}
     >
       <h2 style={{ fontSize: 14, marginBottom: 8 }}>{title}</h2>

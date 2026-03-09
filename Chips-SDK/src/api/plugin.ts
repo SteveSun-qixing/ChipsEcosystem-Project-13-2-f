@@ -3,6 +3,28 @@ import { createError } from "../types/errors";
 
 export type PluginType = "app" | "card" | "layout" | "theme" | "module";
 
+export type WindowChromeTitleBarStyle = "default" | "hidden" | "hiddenInset" | "customButtonsOnHover";
+
+export interface WindowChromeOverlayOptions {
+  color?: string;
+  symbolColor?: string;
+  height?: number;
+}
+
+export interface WindowChromeOptions {
+  frame?: boolean;
+  transparent?: boolean;
+  backgroundColor?: string;
+  titleBarStyle?: WindowChromeTitleBarStyle;
+  titleBarOverlay?: boolean | WindowChromeOverlayOptions;
+}
+
+export interface PluginUiConfig {
+  window?: {
+    chrome?: WindowChromeOptions;
+  };
+}
+
 export interface PluginInfo {
   id: string;
   version: string;
@@ -20,8 +42,9 @@ export interface PluginRecord {
   enabled: boolean;
   type: PluginType;
   capabilities: string[];
-  entry: string;
-  installedAt: string;
+  entry?: string | Record<string, string>;
+  ui?: PluginUiConfig;
+  installedAt: number;
 }
 
 export interface PluginApi {

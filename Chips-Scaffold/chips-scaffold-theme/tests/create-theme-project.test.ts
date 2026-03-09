@@ -22,7 +22,7 @@ describe('chips-scaffold-theme', () => {
 
     await createThemeProject({
       targetDir: projectDir,
-      themeId: 'chips-official:default-theme',
+      themeId: 'chips-official.default-theme',
       displayName: '薯片官方 · 默认主题',
       description: 'Default theme for Chips ecosystem'
     });
@@ -37,7 +37,10 @@ describe('chips-scaffold-theme', () => {
 
     const manifestContent = readFile(manifestPath);
     expect(manifestContent).toContain('type: theme');
-    expect(manifestContent).toContain('themeId: chips-official:default-theme');
+    expect(manifestContent).toContain('themeId: chips-official.default-theme');
+    expect(manifestContent).toContain('schemaVersion: "1.0.0"');
+    expect(manifestContent).toContain('tokens: dist/tokens.json');
+    expect(manifestContent).toContain('themeCss: dist/theme.css');
     expect(manifestContent).toContain('薯片官方 · 默认主题');
 
     const packageJson = JSON.parse(readFile(packageJsonPath)) as { name: string; scripts?: Record<string, string> };

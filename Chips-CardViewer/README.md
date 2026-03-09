@@ -17,11 +17,14 @@
 ## 2. 运行方式
 
 ```bash
-cd Chips-CardViewer
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
 npm install
+cd Chips-CardViewer
 npm run dev        # 启动开发服务器（chipsdev server）
 chipsdev run       # 启动完整 Host 底层并加载当前应用插件
 ```
+
+`Chips-CardViewer` 的 `chips-sdk`、`@chips/component-library`、`chipsdev` 和 ESLint 工具链统一由生态根工作区解析，不再单独维护一套本地 `file:` 依赖或子工程独立安装链路。
 
 在 Host 中加载本插件后：
 
@@ -33,6 +36,7 @@ chipsdev run       # 启动完整 Host 底层并加载当前应用插件
 
 - React + `@chips/component-library` + 主题系统；
 - 统一卡片显示链路：`chips-sdk -> client.card.compositeWindow.render({ cardFile, mode: 'view' })`；
+- 查看器壳层、拖拽区、加载态与错误态统一消费主题变量，不再保留深色/暖色硬编码兜底；
 - 多语言与配置均通过独立文件管理，避免硬编码；
 - 日志封装为单独模块，当前输出到浏览器控制台，字段统一包含时间、scope、traceId 与必要上下文。
 

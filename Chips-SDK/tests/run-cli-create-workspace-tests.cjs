@@ -106,6 +106,7 @@ const main = async () => {
     assert.equal(createdPackage.volta.extends, '../../package.json');
 
     await runBinary('npm', ['install'], sandboxRoot, env);
+    await runBinary('npm', ['run', 'lint'], targetDir, env);
     await runBinary('npm', ['run', 'build'], targetDir, env);
     await runBinary('npm', ['test'], targetDir, env);
 

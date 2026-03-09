@@ -96,6 +96,7 @@ const main = async () => {
     assert.match(vitestConfig, /environment:\s*"jsdom"/);
 
     await run('npm', ['install'], sandboxRoot, env);
+    await run('npm', ['run', 'lint'], targetDir, env);
     await run('npm', ['run', 'build'], targetDir, env);
     await run('npm', ['test'], targetDir, env);
     await run('npm', ['run', 'validate'], targetDir, env);

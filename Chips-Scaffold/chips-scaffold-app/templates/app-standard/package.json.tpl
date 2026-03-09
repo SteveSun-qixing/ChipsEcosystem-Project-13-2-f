@@ -18,6 +18,8 @@
   "devDependencies": {
     "typescript": "^5.4.0",
     "vitest": "^1.5.0",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/parser": "^7.18.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "chips-sdk": "^0.1.0"

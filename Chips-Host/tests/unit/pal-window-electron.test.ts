@@ -256,6 +256,52 @@ describe('Node PAL BrowserWindow host chain', () => {
     expect(browserWindow.loadedUrl).toBeUndefined();
   });
 
+  it('maps window chrome options into Electron BrowserWindow configuration', async () => {
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow
+    };
+
+    const pal = new NodePalAdapter({
+      window: {
+        electronPreloadPath: __filename
+      }
+    });
+    const opened = await pal.window.create({
+      title: 'Chrome Window',
+      width: 960,
+      height: 720,
+      pluginId: 'chips.demo.chrome',
+      sessionId: 'session-chrome',
+      chrome: {
+        backgroundColor: '#ffffff',
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+          color: '#ffffff00',
+          symbolColor: '#667085',
+          height: 44
+        }
+      }
+    });
+
+    const browserWindow = MockBrowserWindow.instances[0]!;
+    expect(browserWindow.options.backgroundColor).toBe('#ffffff');
+    expect(browserWindow.options.titleBarStyle).toBe('hidden');
+    expect(browserWindow.options.titleBarOverlay).toMatchObject({
+      color: '#ffffff00',
+      symbolColor: '#667085',
+      height: 44
+    });
+    expect(opened.chrome).toMatchObject({
+      backgroundColor: '#ffffff',
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#ffffff00',
+        symbolColor: '#667085',
+        height: 44
+      }
+    });
+  });
+
   it('supports tray/notification/shortcut/power capabilities in Electron mode', async () => {
     const registeredShortcuts = new Map<string, () => void>();
     const powerBlockers = new Set<number>();

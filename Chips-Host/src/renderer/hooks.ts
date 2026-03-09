@@ -1,5 +1,21 @@
 import type { RuntimeClient } from './runtime-client';
 
+export type WindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+
+export interface WindowChromeOverlayOptions {
+  color?: string;
+  symbolColor?: string;
+  height?: number;
+}
+
+export interface WindowChromeOptions {
+  frame?: boolean;
+  transparent?: boolean;
+  backgroundColor?: string;
+  titleBarStyle?: WindowChromeTitleBarStyle;
+  titleBarOverlay?: boolean | WindowChromeOverlayOptions;
+}
+
 export interface ThemeClient {
   list(publisher?: string): Promise<unknown>;
   apply(id: string): Promise<void>;
@@ -31,6 +47,7 @@ export interface WindowClient {
     url?: string;
     pluginId?: string;
     sessionId?: string;
+    chrome?: WindowChromeOptions;
   }): Promise<unknown>;
   focus(windowId: string): Promise<void>;
   resize(windowId: string, width: number, height: number): Promise<void>;

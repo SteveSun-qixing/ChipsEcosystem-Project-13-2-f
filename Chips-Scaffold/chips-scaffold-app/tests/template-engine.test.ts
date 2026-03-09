@@ -41,18 +41,44 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const manifestPath = path.join(targetDir, "manifest.yaml");
     const pkgPath = path.join(targetDir, "package.json");
     const indexHtmlPath = path.join(targetDir, "index.html");
+    const eslintConfigPath = path.join(targetDir, ".eslintrc.cjs");
 
     await stat(manifestPath);
     await stat(pkgPath);
     await stat(indexHtmlPath);
+    await stat(eslintConfigPath);
 
     const manifestContent = await readFile(manifestPath, "utf8");
+    const packageContent = JSON.parse(await readFile(pkgPath, "utf8"));
     assert.ok(
       manifestContent.includes("type: app"),
       "manifest.yaml 应声明 type: app",
+    );
+    assert.ok(
+      manifestContent.includes("titleBarStyle: hidden"),
+      "manifest.yaml 应包含标准应用窗口 chrome 配置",
+    );
+    assert.equal(
+      packageContent.dependencies["@chips/component-library"],
+      "^0.1.0",
+      "模板必须保持组件库正式 semver 依赖，由生态根工作区解析本地包",
+    );
+    assert.equal(
+      packageContent.devDependencies.eslint,
+      "^8.57.1",
+      "模板必须预置 ESLint，保证 chipsdev lint 可直接运行",
+    );
+    assert.equal(
+      packageContent.devDependencies["@typescript-eslint/parser"],
+      "^7.18.0",
+      "模板必须预置 TypeScript ESLint parser，保证 TS/TSX 文件可被解析",
+    );
+    assert.equal(
+      packageContent.devDependencies["chips-sdk"],
+      "^0.1.0",
+      "模板必须保持 SDK 正式 semver 依赖，由生态根工作区解析本地包",
     );
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
 });
-

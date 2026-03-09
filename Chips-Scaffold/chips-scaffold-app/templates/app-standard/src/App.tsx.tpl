@@ -3,8 +3,9 @@ import { ChipsThemeProvider, ChipsButton, ChipsInput } from "@chips/component-li
 import { ExamplePanel } from "./components/ExamplePanel";
 
 type ThemeInfo = {
-  id?: string;
-  name?: string;
+  themeId?: string;
+  displayName?: string;
+  version?: string;
 };
 
 function useChipsThemeInfo() {
@@ -12,7 +13,7 @@ function useChipsThemeInfo() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const bridge = (window as any).chips;
+    const bridge = typeof window !== "undefined" ? (window as any).chips : undefined;
     if (!bridge || typeof bridge.invoke !== "function") {
       setError("Bridge API 未就绪（window.chips.invoke 不可用）");
       return;
@@ -21,7 +22,7 @@ function useChipsThemeInfo() {
     let cancelled = false;
 
     bridge
-      .invoke("theme", "getCurrent", {})
+      .invoke("theme.getCurrent", {})
       .then((info: ThemeInfo) => {
         if (!cancelled) {
           setThemeInfo(info);
@@ -45,7 +46,11 @@ function Header() {
   return (
     <header
       data-chips-app="app-standard.header"
-      style={{ padding: "16px 24px", borderBottom: "1px solid var(--chips-border-subtle)" }}
+      style={{
+        padding: "44px 24px 16px",
+        borderBottom: "1px solid var(--chips-border-subtle, rgba(17,17,17,0.12))",
+        WebkitAppRegion: "drag",
+      }}
     >
       <h1 style={{ margin: 0, fontSize: 18 }}>{{ DISPLAY_NAME }}</h1>
       <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.8 }}>
@@ -79,7 +84,7 @@ function MainContent() {
           <p style={{ fontSize: 12 }}>
             当前主题：
             <code>
-              {themeInfo?.id || "未知"} / {themeInfo?.name || "Unknown"}
+              {themeInfo?.themeId || "未知"} / {themeInfo?.displayName || "Unknown"}
             </code>
           </p>
         )}
@@ -91,16 +96,23 @@ function MainContent() {
 }
 
 export function App() {
+  const themeEventSource = typeof window !== "undefined" ? (window as any).chips : undefined;
+
   return (
-    <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
+    <ChipsThemeProvider
+      themeId="chips-official.default-theme"
+      version="1.0.0"
+      eventSource={themeEventSource}
+      eventName="theme.changed"
+    >
       <div
         data-chips-app="app-standard.shell"
         style={{
           minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
-          background: "var(--chips-sys-color-surface, #141414)",
-          color: "var(--chips-sys-color-on-surface, #f5f5f5)",
+          background: "var(--chips-sys-color-surface, #ffffff)",
+          color: "var(--chips-sys-color-on-surface, #111111)",
         }}
       >
         <Header />

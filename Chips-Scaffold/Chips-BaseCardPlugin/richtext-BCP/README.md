@@ -1,20 +1,21 @@
 # 富文本基础卡片插件
 
-> 通过 `chips-scaffold-basecard` 生成的文本型基础卡片插件工程。
+> 通过 `chips-scaffold-basecard` 生成的富文本基础卡片插件工程。
 
 ## 简介
 
-本插件工程实现了一个面向纯文本内容的基础卡片插件（`type: card`），用于演示如何：
+本插件工程实现了一个面向富文本内容的基础卡片插件（`type: card`），用于演示如何：
 
-- 在查看器中以标题 + 正文的形式渲染文本内容；
-- 在编辑引擎中提供对应的编辑面板；
-- 使用 YAML 配置文件保存文本内容；
+- 在查看器中以标题 + 富文本内容的形式渲染卡片；
+- 在编辑引擎中提供富文本编辑面板（支持加粗、斜体、下划线等基础样式）；
+- 使用 YAML 配置文件保存富文本内容（HTML 字符串）；
 - 使用多语言文案与基础错误处理。
 
 ## 项目结构
 
 ```text
 richtext-BCP/
+├─ .eslintrc.cjs
 ├─ manifest.yaml
 ├─ package.json
 ├─ tsconfig.json
@@ -53,12 +54,17 @@ richtext-BCP/
 ## 快速开始
 
 ```bash
-cd richtext-BCP
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
 npm install
+cd richtext-BCP
 npm run dev
 ```
 
 ## 配置结构
 
-文本型基础卡片配置类型在 `src/schema/card-config.ts` 中定义，对应 YAML 文件示例位于 `templates/default-card-config.yaml`。
+富文本基础卡片配置类型在 `src/schema/card-config.ts` 中定义，示例配置位于 `templates/default-card-config.yaml`。
 
+## 主题接入约束
+
+- Host 会在渲染阶段注入 `themeCssText`，渲染运行时必须优先消费当前生效主题；
+- 富文本基础卡片不得自行硬编码整套卡片视觉色板，所有结构样式应通过主题类名与变量落地。

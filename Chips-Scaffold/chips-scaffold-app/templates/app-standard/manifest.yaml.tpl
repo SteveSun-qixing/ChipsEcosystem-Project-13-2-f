@@ -32,3 +32,11 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1024
+  window:
+    chrome:
+      backgroundColor: "#ffffff"
+      titleBarStyle: hidden
+      titleBarOverlay:
+        color: "#ffffff00"
+        symbolColor: "#667085"
+        height: 44

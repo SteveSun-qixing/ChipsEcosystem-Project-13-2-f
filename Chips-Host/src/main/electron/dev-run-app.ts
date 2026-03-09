@@ -3,6 +3,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { bootstrapHostMainProcess } from '../core/main-process';
 import { RuntimeClient } from '../../renderer/runtime-client';
+import type { PluginUiConfig } from '../../shared/window-chrome';
+import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { parseYamlLite } from '../../shared/yaml-lite';
 
 interface ParsedArgs {
@@ -19,7 +21,8 @@ interface PluginQueryResponse {
   plugins: Array<{
     id: string;
     installPath?: string;
-    entry?: string;
+    entry?: string | Record<string, string>;
+    ui?: PluginUiConfig;
   }>;
 }
 
@@ -123,7 +126,7 @@ const run = async (): Promise<void> => {
     });
     const record = queryResult.plugins.find((item) => item.id === pluginId);
     const url =
-      record && record.installPath && record.entry
+      record && record.installPath && typeof record.entry === 'string'
         ? path.resolve(record.installPath, record.entry)
         : undefined;
 
@@ -135,7 +138,8 @@ const run = async (): Promise<void> => {
         pluginId,
         sessionId: initResult.session.sessionId,
         permissions: initResult.session.permissions,
-        url
+        url,
+        chrome: resolveManifestWindowChrome(record?.ui)
       }
     });
 

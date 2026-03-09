@@ -19,6 +19,7 @@ function resolveErrorMessage(error: unknown): string {
 }
 
 export function App() {
+  const themeEventSource = typeof window !== "undefined" ? (window as any).chips : undefined;
   const traceId = useMemo(() => createTraceId("card-viewer"), []);
   const logger = useMemo(
     () =>
@@ -63,7 +64,7 @@ export function App() {
   }, [error, logger]);
 
   const toolbar = (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div style={{ display: "flex", gap: 8, WebkitAppRegion: "no-drag" }}>
       <ChipsButton
         variant="secondary"
         onClick={async () => {
@@ -125,7 +126,12 @@ export function App() {
     );
 
   return (
-    <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
+    <ChipsThemeProvider
+      themeId="chips-official.default-theme"
+      version="1.0.0"
+      eventSource={themeEventSource}
+      eventName="theme.changed"
+    >
       <CardViewerShell
         toolbar={toolbar}
         content={
@@ -135,9 +141,11 @@ export function App() {
                 role="alert"
                 style={{
                   borderRadius: 8,
-                  border: "1px solid rgba(255, 95, 95, 0.35)",
-                  background: "rgba(120, 20, 20, 0.38)",
-                  color: "#ffe5e5",
+                  border:
+                    "1px solid color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 28%, transparent)",
+                  background:
+                    "color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 10%, var(--chips-sys-color-surface, #ffffff))",
+                  color: "var(--chips-sys-color-error, #d92d20)",
                   padding: "10px 12px",
                   fontSize: 12,
                 }}

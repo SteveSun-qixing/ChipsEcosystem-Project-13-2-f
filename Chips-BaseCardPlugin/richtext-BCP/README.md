@@ -15,6 +15,7 @@
 
 ```text
 richtext-BCP/
+├─ .eslintrc.cjs
 ├─ manifest.yaml
 ├─ package.json
 ├─ tsconfig.json
@@ -53,11 +54,19 @@ richtext-BCP/
 ## 快速开始
 
 ```bash
-cd richtext-BCP
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
 npm install
+cd richtext-BCP
 npm run dev
 ```
+
+`chips-sdk`、`chipsdev` 与 ESLint 工具链统一通过生态根工作区解析；当前工程不再单独维护 sibling `file:` 依赖。
 
 ## 配置结构
 
 富文本基础卡片配置类型在 `src/schema/card-config.ts` 中定义，示例配置位于 `templates/default-card-config.yaml`。
+
+## 主题接入约束
+
+- Host 会在渲染阶段注入 `themeCssText`，渲染运行时必须优先消费当前生效主题；
+- 富文本基础卡片不得自行硬编码整套卡片视觉色板，所有结构样式应通过主题类名与变量落地。

@@ -19,7 +19,7 @@ export interface CreateThemeProjectOptions {
    */
   templateId?: string;
   /**
-   * 主题技术 ID，例如：chips-official:default-theme。
+   * 主题技术 ID，例如：chips-official.default-theme。
    */
   themeId: string;
   /**
@@ -95,8 +95,9 @@ const resolvePluginId = (explicitId: string | undefined, themeId: string): strin
     return trimmed;
   }
 
-  // 约定：将 themeId（publisher:name）转换为反向域名形式：
-  // 例如 chips-official:default-theme -> theme.default_theme.chips_official
+  // 约定：优先支持当前生态使用的点语义 themeId；
+  // 例如 chips-official.default-theme -> theme.theme.chips-official-default-theme。
+  // 若传入历史的 `publisher:name` 形式，也继续按旧规则进行安全转换。
   const normalized = themeId.toLowerCase();
   const parts = normalized.split(':');
   const publisher = parts[0] ?? 'chips';
@@ -118,4 +119,3 @@ const validatePluginId = (id: string): void => {
     );
   }
 };
-

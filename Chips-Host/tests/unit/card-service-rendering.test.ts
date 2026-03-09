@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CardService } from '../../packages/card-service/src';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { PluginRuntime } from '../../src/runtime';
+import { mergeThemeLayers, resolveThemeFromLayers } from '../../src/main/theme-runtime/resolve-algorithm';
+import { toRenderThemeSnapshot } from '../../src/main/theme-runtime/render-bridge';
 
 const zip = new StoreZipService();
 const tempDirs: string[] = [];
@@ -54,6 +56,17 @@ const createCardArchive = async (): Promise<string> => {
   return cardFile;
 };
 
+const loadThemeRenderContext = async (): Promise<{ theme: ReturnType<typeof toRenderThemeSnapshot>; themeCssText: string }> => {
+  const themeRoot = path.resolve(process.cwd(), '../ThemePack/Chips-default');
+  const tokens = JSON.parse(await fs.readFile(path.join(themeRoot, 'dist', 'tokens.json'), 'utf-8')) as Record<string, unknown>;
+  const themeCssText = await fs.readFile(path.join(themeRoot, 'dist', 'theme.css'), 'utf-8');
+  const resolved = resolveThemeFromLayers(mergeThemeLayers([{ id: 'chips-official.default-theme', tokens }]));
+  return {
+    theme: toRenderThemeSnapshot('chips-official.default-theme', resolved),
+    themeCssText
+  };
+};
+
 afterEach(async () => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
@@ -66,6 +79,7 @@ afterEach(async () => {
 describe('CardService rendering', () => {
   it('renders card through unified rendering engine', async () => {
     const cardFile = await createCardArchive();
+    const themeContext = await loadThemeRenderContext();
     const workspace = await createTempDir('chips-card-runtime-');
     const runtime = new PluginRuntime(workspace, {
       locale: 'zh-CN',
@@ -77,7 +91,8 @@ describe('CardService rendering', () => {
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
-      target: 'card-iframe'
+      target: 'card-iframe',
+      ...themeContext
     });
 
     expect(view.title).toBe('Test Card');
@@ -88,10 +103,11 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('Hello Chips.');
     expect(view.body).toContain('chips.basecard.richtext');
     expect(view.contentFiles).toEqual(['details.yaml', 'intro.yaml']);
-  }, 15_000);
+  }, 30_000);
 
   it('can run consistency verification during card render', async () => {
     const cardFile = await createCardArchive();
+    const themeContext = await loadThemeRenderContext();
     const workspace = await createTempDir('chips-card-runtime-');
     const runtime = new PluginRuntime(workspace, {
       locale: 'zh-CN',
@@ -104,11 +120,12 @@ describe('CardService rendering', () => {
 
     const view = await service.render(cardFile, {
       target: 'offscreen-render',
-      verifyConsistency: true
+      verifyConsistency: true,
+      ...themeContext
     });
 
     expect(view.target).toBe('offscreen-render');
     expect(view.consistency?.consistent).toBe(true);
     expect(view.body).toContain('data-target="offscreen-render"');
-  }, 15_000);
+  }, 30_000);
 });

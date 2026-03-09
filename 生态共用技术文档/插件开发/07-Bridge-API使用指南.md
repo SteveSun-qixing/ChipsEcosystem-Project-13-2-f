@@ -77,7 +77,7 @@ interface StandardError {
 
 ```typescript
 try {
-  const result = await window.chips.invoke('theme', 'apply', { id: 'dark' });
+  const result = await window.chips.invoke('theme.apply', { id: 'chips-official.default-theme' });
 } catch (error) {
   if (error.retryable) {
     // 显示可重试提示
@@ -87,7 +87,7 @@ try {
     console.error(error.message);
   }
   // 记录错误日志
-  window.chips.invoke('log', 'write', { level: 'error', error });
+  window.chips.invoke('log.write', { level: 'error', error });
 }
 ```
 

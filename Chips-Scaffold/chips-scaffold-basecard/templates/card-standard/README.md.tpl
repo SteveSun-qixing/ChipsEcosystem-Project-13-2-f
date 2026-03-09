@@ -6,7 +6,7 @@
 
 本插件工程实现了一个基础卡片插件（`type: card`），用于演示如何：
 
-- 在查看器中渲染基础卡片内容；
+- 在查看器中渲染基础卡片内容，并消费 Host 注入的主题 CSS；
 - 在编辑引擎中提供编辑面板，编辑基础卡片配置；
 - 使用 YAML 配置文件保存基础卡片数据；
 - 使用多语言文案与基础错误处理。
@@ -15,6 +15,7 @@
 
 ```text
 {{ PROJECT_NAME }}/
+├─ .eslintrc.cjs          # 工程级 ESLint 配置（供 chipsdev lint 调用）
 ├─ manifest.yaml          # 插件清单（type: card）
 ├─ package.json           # NPM 配置
 ├─ tsconfig.json          # TypeScript 配置
@@ -53,10 +54,13 @@
 ## 快速开始
 
 ```bash
-cd {{ PROJECT_NAME }}
+cd <生态根工作区>
 npm install
+cd {{ PROJECT_NAME }}
 npm run dev
 ```
+
+基础卡片工程中的 `chips-sdk` 与 `chipsdev` 统一依赖生态根工作区解析；请通过 `chipsdev create` 将工程接入工作区，不再单独在项目目录执行首次依赖安装。
 
 在开发模式下，使用 `chips dev server` 启动本地开发环境，根据 `chips dev` 工具文档在 Host 工作区中加载插件进行调试。
 
@@ -66,3 +70,7 @@ npm run dev
 
 参数表与填写说明见 `templates/parameters.md`。
 
+## 主题接入约束
+
+- Host 会在渲染阶段向基础卡片插件注入 `themeCssText`，模板默认会把该样式挂载到渲染容器中；
+- 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包。

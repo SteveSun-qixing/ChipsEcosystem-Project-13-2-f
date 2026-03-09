@@ -7,11 +7,15 @@
 ## 1. 快速开始
 
 ```bash
+cd <生态根工作区>
 npm install
+cd {{ PROJECT_NAME }}
 npm run dev        # 启动开发服务器（等价 chips dev server）
 ```
 
-开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: index.html` 加载本插件窗口。
+应用插件的一方依赖（如 `chips-sdk`、`@chips/component-library`）统一通过生态根工作区解析，本工程应通过 `chipsdev create` 接入生态工作区，不再单独在项目目录执行首次 `npm install`。
+
+开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认启用白色窗口壳层与隐藏式标题栏覆盖层。
 
 ## 2. 可用脚本
 
@@ -25,6 +29,7 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 
 ```text
 {{ PROJECT_NAME }}/
+├─ .eslintrc.cjs        # 工程级 ESLint 配置（供 chipsdev lint 调用）
 ├─ manifest.yaml        # 插件清单（id/name/version/type/permissions/entry 等）
 ├─ package.json         # NPM 包描述与脚本
 ├─ tsconfig.json        # TypeScript 配置
@@ -54,7 +59,7 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 - 前端框架：React（参见生态设计原稿与应用插件开发指南）
 - UI 能力：`@chips/component-library`（组件库对外使用总览）
 - 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本
-- 主题系统：通过组件库 `ChipsThemeProvider` 接入主题运行时，不在业务代码中硬编码颜色/圆角/阴影
+- 主题系统：通过组件库 `ChipsThemeProvider` 接入主题运行时，并监听 `theme.changed` 事件，不在业务代码中硬编码颜色/圆角/阴影
 - 系统能力调用：仅通过 `window.chips.*`（Bridge API），不越层直接访问 Host 内部模块
 
 ## 5. 下一步开发建议
@@ -62,5 +67,5 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 1. 根据业务需要在 `src/features/` 或 `src/components/` 中扩展页面与组件；
 2. 通过组件库与主题系统接入真实 UI 并补充交互测试；
 3. 按需扩展 `manifest.yaml` 中的权限与 capabilities（遵循插件开发规范与 Manifest 配置规范）；
-4. 在编写或调整 Host/Bridge 调用前，查阅生态共用技术文档中的协议与接口标准章节，避免契约漂移。
-
+4. 若模板启用了隐藏式标题栏，页面头部必须提供拖拽区，并将交互控件显式标记为 `no-drag`；
+5. 在编写或调整 Host/Bridge 调用前，查阅生态共用技术文档中的协议与接口标准章节，避免契约漂移。

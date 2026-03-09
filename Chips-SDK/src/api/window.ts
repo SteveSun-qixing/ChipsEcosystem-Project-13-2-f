@@ -1,5 +1,21 @@
 import type { CoreClient } from "../types/client";
 
+export type WindowChromeTitleBarStyle = "default" | "hidden" | "hiddenInset" | "customButtonsOnHover";
+
+export interface WindowChromeOverlayOptions {
+  color?: string;
+  symbolColor?: string;
+  height?: number;
+}
+
+export interface WindowChromeOptions {
+  frame?: boolean;
+  transparent?: boolean;
+  backgroundColor?: string;
+  titleBarStyle?: WindowChromeTitleBarStyle;
+  titleBarOverlay?: boolean | WindowChromeOverlayOptions;
+}
+
 export interface WindowConfig {
   title: string;
   width: number;
@@ -7,6 +23,7 @@ export interface WindowConfig {
   url?: string;
   pluginId?: string;
   sessionId?: string;
+  chrome?: WindowChromeOptions;
 }
 
 export interface WindowState {
@@ -15,6 +32,7 @@ export interface WindowState {
   width: number;
   height: number;
   focused: boolean;
+  chrome?: WindowChromeOptions;
   [key: string]: unknown;
 }
 
@@ -41,4 +59,3 @@ export function createWindowApi(client: CoreClient): WindowApi {
     },
   };
 }
-

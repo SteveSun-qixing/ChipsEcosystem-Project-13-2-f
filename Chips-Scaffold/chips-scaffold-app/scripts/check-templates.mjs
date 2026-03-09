@@ -25,6 +25,7 @@ async function main() {
     "template.json",
     "manifest.yaml.tpl",
     "package.json.tpl",
+    ".eslintrc.cjs.tpl",
     "tsconfig.json.tpl",
     "chips.config.mjs.tpl",
     "README.md.tpl",
@@ -92,4 +93,3 @@ main().catch((error) => {
   console.error("[check-templates] 执行失败", error);
   process.exitCode = 1;
 });
-

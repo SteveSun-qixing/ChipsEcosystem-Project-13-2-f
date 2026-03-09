@@ -1,5 +1,21 @@
 import type { StandardError } from '../../../src/shared/types';
 
+export type WindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+
+export interface WindowChromeOverlayOptions {
+  color?: string;
+  symbolColor?: string;
+  height?: number;
+}
+
+export interface WindowChromeOptions {
+  frame?: boolean;
+  transparent?: boolean;
+  backgroundColor?: string;
+  titleBarStyle?: WindowChromeTitleBarStyle;
+  titleBarOverlay?: boolean | WindowChromeOverlayOptions;
+}
+
 export interface WindowOptions {
   title: string;
   width: number;
@@ -10,6 +26,7 @@ export interface WindowOptions {
   pluginId?: string;
   sessionId?: string;
   permissions?: string[];
+  chrome?: WindowChromeOptions;
 }
 
 export interface WindowState {
@@ -22,6 +39,7 @@ export interface WindowState {
   url?: string;
   pluginId?: string;
   sessionId?: string;
+  chrome?: WindowChromeOptions;
 }
 
 export interface FileReadOptions {

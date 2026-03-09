@@ -170,14 +170,19 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
       style={{
         flex: 1,
         borderRadius: 8,
-        border: "1px solid var(--chips-border-subtle, rgba(255,255,255,0.24))",
+        border:
+          "1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 16%, transparent)",
         overflow: "hidden",
         position: "relative",
+        background: "var(--chips-sys-color-surface, #ffffff)",
       }}
     >
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       {isLoading && (
         <div
+          data-scope="composite-card-window"
+          data-part="overlay"
+          data-state="loading"
           style={{
             position: "absolute",
             inset: 0,
@@ -185,7 +190,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
             alignItems: "center",
             justifyContent: "center",
             fontSize: 12,
-            background: "rgba(0,0,0,0.4)",
+            color: "var(--chips-sys-color-on-surface, #111111)",
           }}
         >
           正在加载卡片…
@@ -193,6 +198,9 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
       )}
       {error && (
         <div
+          data-scope="composite-card-window"
+          data-part="overlay"
+          data-state="error"
           style={{
             position: "absolute",
             inset: 0,
@@ -200,7 +208,9 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
             alignItems: "center",
             justifyContent: "center",
             fontSize: 12,
-            background: "rgba(96,0,0,0.8)",
+            background:
+              "color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 12%, var(--chips-sys-color-surface, #ffffff))",
+            color: "var(--chips-sys-color-error, #d92d20)",
           }}
         >
           <span>{error}</span>

@@ -13,18 +13,20 @@ export function CardViewerShell({ toolbar, content }: CardViewerShellProps) {
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
-        background: "var(--chips-sys-color-surface, #101014)",
-        color: "var(--chips-sys-color-on-surface, #f5f5f5)",
+        background: "var(--chips-sys-color-surface, #ffffff)",
+        color: "var(--chips-sys-color-on-surface, #111111)",
       }}
     >
       <header
         data-chips-app="card-viewer.header"
         style={{
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--chips-border-subtle, rgba(255,255,255,0.12))",
+          padding: "44px 16px 12px",
+          borderBottom:
+            "1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 12%, transparent)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          WebkitAppRegion: "drag",
         }}
       >
         <div>
@@ -50,4 +52,3 @@ export function CardViewerShell({ toolbar, content }: CardViewerShellProps) {
     </div>
   );
 }
-

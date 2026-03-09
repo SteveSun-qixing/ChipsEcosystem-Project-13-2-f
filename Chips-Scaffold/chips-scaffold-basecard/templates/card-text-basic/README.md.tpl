@@ -15,6 +15,7 @@
 
 ```text
 {{ PROJECT_NAME }}/
+├─ .eslintrc.cjs
 ├─ manifest.yaml
 ├─ package.json
 ├─ tsconfig.json
@@ -53,12 +54,14 @@
 ## 快速开始
 
 ```bash
-cd {{ PROJECT_NAME }}
+cd <生态根工作区>
 npm install
+cd {{ PROJECT_NAME }}
 npm run dev
 ```
+
+文本型基础卡片模板同样依赖生态根工作区提供 `chips-sdk` 与 `chipsdev`，不得在项目目录单独维护一套临时依赖链路。
 
 ## 配置结构
 
 文本型基础卡片配置类型在 `src/schema/card-config.ts` 中定义，对应 YAML 文件示例位于 `templates/default-card-config.yaml`。
-

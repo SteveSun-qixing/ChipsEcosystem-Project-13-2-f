@@ -3,10 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { createError } from '../shared/errors';
+import type { PluginUiConfig } from '../shared/window-chrome';
+import { parsePluginUiConfig } from '../shared/window-chrome';
 import { parseYamlLite } from '../shared/yaml-lite';
 import { createId, now } from '../shared/utils';
 
 export type PluginType = 'app' | 'card' | 'layout' | 'module' | 'theme';
+
+export type PluginEntry = string | Record<string, string>;
 
 export interface PluginManifest {
   id: string;
@@ -16,9 +20,11 @@ export interface PluginManifest {
   description?: string;
   permissions: string[];
   capabilities?: string[];
-  entry?: string;
+  entry?: PluginEntry;
+  assets?: string[];
   source?: 'official' | 'third-party' | 'local';
   signature?: string;
+  ui?: PluginUiConfig;
 }
 
 export interface PluginRecord {
@@ -77,6 +83,10 @@ const hasPluginType = (value: string): value is PluginType => pluginTypes.includ
 const hasPluginSource = (value: string): value is (typeof pluginSources)[number] =>
   pluginSources.includes(value as (typeof pluginSources)[number]);
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
 const asStringArray = (value: unknown, field: string, sourcePath: string, allowEmpty = true): string[] => {
   if (!Array.isArray(value)) {
     throw createError('PLUGIN_INVALID', `${field} must be an array`, { sourcePath, field });
@@ -89,6 +99,64 @@ const asStringArray = (value: unknown, field: string, sourcePath: string, allowE
     throw createError('PLUGIN_INVALID', `${field} cannot be empty`, { sourcePath, field });
   }
   return entries;
+};
+
+const normalizeAssetPath = (value: string): string => {
+  return path.normalize(value.trim()).replace(/^[.][\\/]/, '');
+};
+
+const collectManifestAssetPaths = (record: Record<string, unknown>, manifestPath: string): { entry?: PluginEntry; assets: string[] } => {
+  const assets: string[] = [];
+  const rawEntry = record.entry;
+  let entry: PluginEntry | undefined;
+
+  if (typeof rawEntry === 'string') {
+    const trimmed = rawEntry.trim();
+    if (trimmed.length === 0) {
+      throw createError('PLUGIN_INVALID', 'Manifest entry must not be empty', { manifestPath });
+    }
+    entry = trimmed;
+    assets.push(trimmed);
+  } else if (typeof rawEntry !== 'undefined') {
+    if (!isRecord(rawEntry)) {
+      throw createError('PLUGIN_INVALID', 'Manifest entry must be a string or object', { manifestPath });
+    }
+
+    const mapped: Record<string, string> = {};
+    for (const [key, value] of Object.entries(rawEntry)) {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw createError('PLUGIN_INVALID', `Manifest entry.${key} must be a non-empty string`, {
+          manifestPath,
+          field: `entry.${key}`
+        });
+      }
+      mapped[key] = value.trim();
+      assets.push(mapped[key]!);
+    }
+
+    if (Object.keys(mapped).length > 0) {
+      entry = mapped;
+    }
+  }
+
+  const ui = isRecord(record.ui) ? record.ui : undefined;
+  const layout = ui && isRecord(ui.layout) ? ui.layout : undefined;
+  for (const field of ['contract', 'minFunctionalSet']) {
+    const value = layout?.[field];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      assets.push(value.trim());
+    }
+  }
+
+  const preview = record.preview;
+  if (typeof preview === 'string' && preview.trim().length > 0) {
+    assets.push(preview.trim());
+  }
+
+  return {
+    entry,
+    assets: [...new Set(assets.map(normalizeAssetPath).filter((item) => item.length > 0))]
+  };
 };
 
 interface InstallSource {
@@ -363,11 +431,11 @@ export class PluginRuntime {
         });
       }
     }
-    if (manifest.entry) {
-      if (path.isAbsolute(manifest.entry) || manifest.entry.includes('..')) {
+    for (const assetPath of manifest.assets ?? []) {
+      if (path.isAbsolute(assetPath) || assetPath.includes('..')) {
         throw createError('PLUGIN_INVALID', 'Plugin entry must be a safe relative path', {
           manifestPath,
-          entry: manifest.entry
+          entry: assetPath
         });
       }
     }
@@ -425,7 +493,7 @@ export class PluginRuntime {
     if (sourceStats.isDirectory()) {
       const manifestPath = await this.findManifestPath(absolutePath);
       const manifest = await this.readManifest(manifestPath);
-      await this.ensureEntryExists(manifest, manifestPath);
+      await this.ensureManifestAssetsExist(manifest, manifestPath);
       return {
         manifest,
         manifestPath,
@@ -447,7 +515,7 @@ export class PluginRuntime {
 
       const manifestPath = await this.findManifestPath(extracted);
       const manifest = await this.readManifest(manifestPath);
-      await this.ensureEntryExists(manifest, manifestPath);
+      await this.ensureManifestAssetsExist(manifest, manifestPath);
       return {
         manifest,
         manifestPath,
@@ -463,22 +531,25 @@ export class PluginRuntime {
     const stagedManifestPath = path.join(staged, path.basename(absolutePath));
     await fs.copyFile(absolutePath, stagedManifestPath);
 
-    if (manifest.entry) {
+    if ((manifest.assets ?? []).length > 0) {
       const sourceRoot = path.dirname(absolutePath);
-      const entryRoot = this.resolveManifestEntryRoot(manifest.entry);
-      const sourceEntryRootPath = path.resolve(sourceRoot, entryRoot);
-      const entryRootStats = await this.statSafe(sourceEntryRootPath);
-      if (!entryRootStats) {
-        await fs.rm(staged, { recursive: true, force: true });
-        throw createError('PLUGIN_ENTRY_NOT_FOUND', `Plugin entry not found: ${manifest.entry}`, {
-          sourcePath: absolutePath,
-          entry: manifest.entry
-        });
-      }
+      const assetRoots = this.resolveManifestAssetRoots(manifest.assets ?? []);
 
-      const stagedEntryRootPath = path.join(staged, entryRoot);
-      await fs.mkdir(path.dirname(stagedEntryRootPath), { recursive: true });
-      await fs.cp(sourceEntryRootPath, stagedEntryRootPath, { recursive: true });
+      for (const assetRoot of assetRoots) {
+        const sourceAssetRootPath = path.resolve(sourceRoot, assetRoot);
+        const assetRootStats = await this.statSafe(sourceAssetRootPath);
+        if (!assetRootStats) {
+          await fs.rm(staged, { recursive: true, force: true });
+          throw createError('PLUGIN_ENTRY_NOT_FOUND', `Plugin entry not found: ${assetRoot}`, {
+            sourcePath: absolutePath,
+            entry: assetRoot
+          });
+        }
+
+        const stagedAssetRootPath = path.join(staged, assetRoot);
+        await fs.mkdir(path.dirname(stagedAssetRootPath), { recursive: true });
+        await fs.cp(sourceAssetRootPath, stagedAssetRootPath, { recursive: true });
+      }
     }
 
     return {
@@ -491,16 +562,21 @@ export class PluginRuntime {
     };
   }
 
-  private resolveManifestEntryRoot(entry: string): string {
-    const normalized = path.normalize(entry).replace(/^[.][\\/]/, '');
-    const segments = normalized.split(path.sep).filter((segment) => segment.length > 0);
-    if (segments.length === 0) {
-      return normalized;
+  private resolveManifestAssetRoots(entries: string[]): string[] {
+    const roots = new Set<string>();
+    for (const entry of entries) {
+      const normalized = normalizeAssetPath(entry);
+      const segments = normalized.split(path.sep).filter((segment) => segment.length > 0);
+      if (segments.length === 0) {
+        continue;
+      }
+      if (segments.length === 1) {
+        roots.add(normalized);
+        continue;
+      }
+      roots.add(segments[0]!);
     }
-    if (segments.length === 1) {
-      return normalized;
-    }
-    return segments[0]!;
+    return [...roots];
   }
 
   private async findManifestPath(rootPath: string): Promise<string> {
@@ -629,6 +705,8 @@ export class PluginRuntime {
     }
     const signature = typeof record.signature === 'string' ? record.signature : undefined;
 
+    const { entry, assets } = collectManifestAssetPaths(record, manifestPath);
+
     return {
       id: record.id,
       version: record.version,
@@ -637,24 +715,28 @@ export class PluginRuntime {
       description: typeof record.description === 'string' ? record.description : undefined,
       permissions,
       capabilities,
-      entry: typeof record.entry === 'string' ? record.entry : undefined,
+      entry,
+      assets,
       source,
-      signature
+      signature,
+      ui: parsePluginUiConfig(record.ui, manifestPath)
     };
   }
 
-  private async ensureEntryExists(manifest: PluginManifest, manifestPath: string): Promise<void> {
-    if (!manifest.entry) {
+  private async ensureManifestAssetsExist(manifest: PluginManifest, manifestPath: string): Promise<void> {
+    if (!manifest.assets || manifest.assets.length === 0) {
       return;
     }
 
-    const entryPath = path.resolve(path.dirname(manifestPath), manifest.entry);
-    const entryStats = await this.statSafe(entryPath);
-    if (!entryStats) {
-      throw createError('PLUGIN_ENTRY_NOT_FOUND', `Plugin entry not found: ${manifest.entry}`, {
-        manifestPath,
-        entry: manifest.entry
-      });
+    for (const assetPath of manifest.assets) {
+      const resolvedPath = path.resolve(path.dirname(manifestPath), assetPath);
+      const stats = await this.statSafe(resolvedPath);
+      if (!stats) {
+        throw createError('PLUGIN_ENTRY_NOT_FOUND', `Plugin entry not found: ${assetPath}`, {
+          manifestPath,
+          entry: assetPath
+        });
+      }
     }
   }
 

@@ -218,6 +218,7 @@ describe('Service activation and lazy heavy service creation', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
+    await runtime.install(path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'));
     registerHostSchemas();
 
     let cardCreated = 0;

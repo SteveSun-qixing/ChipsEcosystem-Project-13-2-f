@@ -22,7 +22,12 @@ function main() {
       throw new Error(`模板 ${templateId} 缺少 template.json 元数据文件。`);
     }
     const files = fs.readdirSync(dir);
-    const required = ["manifest.yaml.tpl", "package.json.tpl", "tsconfig.json.tpl"];
+    const required = [
+      "manifest.yaml.tpl",
+      "package.json.tpl",
+      ".eslintrc.cjs.tpl",
+      "tsconfig.json.tpl"
+    ];
     for (const fileName of required) {
       if (!files.includes(fileName)) {
         throw new Error(`模板 ${templateId} 缺少必要文件：${fileName}`);
@@ -35,4 +40,3 @@ function main() {
 }
 
 main();
-

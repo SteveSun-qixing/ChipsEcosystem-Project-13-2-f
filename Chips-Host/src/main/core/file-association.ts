@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createError } from '../../shared/errors';
+import type { PluginUiConfig } from '../../shared/window-chrome';
+import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import type { RuntimeClient } from '../../renderer/runtime-client';
 
 interface PluginQueryResponse {
@@ -10,7 +12,8 @@ interface PluginQueryResponse {
     type: 'app' | 'card' | 'layout' | 'module' | 'theme';
     capabilities: string[];
     installPath?: string;
-    entry?: string;
+    entry?: string | Record<string, string>;
+    ui?: PluginUiConfig;
   }>;
 }
 
@@ -46,7 +49,7 @@ const resolveWindowId = (opened: WindowOpenResponse): string => {
 const findEnabledHandlerPlugin = async (
   runtime: RuntimeClient,
   extension: string
-): Promise<{ id: string; installPath?: string; entry?: string } | undefined> => {
+): Promise<{ id: string; installPath?: string; entry?: string | Record<string, string>; ui?: PluginUiConfig } | undefined> => {
   const capability = `file-handler:${extension}`;
   const queried = await runtime.invoke<PluginQueryResponse>('plugin.query', {
     type: 'app',
@@ -59,13 +62,14 @@ const findEnabledHandlerPlugin = async (
   return {
     id: candidate.id,
     installPath: candidate.installPath,
-    entry: candidate.entry
+    entry: candidate.entry,
+    ui: candidate.ui
   };
 };
 
 const openByPlugin = async (
   runtime: RuntimeClient,
-  plugin: { id: string; installPath?: string; entry?: string },
+  plugin: { id: string; installPath?: string; entry?: string | Record<string, string>; ui?: PluginUiConfig },
   targetPath: string,
   defaultTitle: string
 ): Promise<{ pluginId: string; windowId: string }> => {
@@ -82,7 +86,7 @@ const openByPlugin = async (
   });
 
   const url =
-    plugin.installPath && plugin.entry
+    plugin.installPath && typeof plugin.entry === 'string'
       ? path.resolve(plugin.installPath, plugin.entry)
       : undefined;
 
@@ -94,7 +98,8 @@ const openByPlugin = async (
       pluginId: plugin.id,
       sessionId: initialized.session.sessionId,
       permissions: initialized.session.permissions,
-      url
+      url,
+      chrome: resolveManifestWindowChrome(plugin.ui)
     }
   });
   return {

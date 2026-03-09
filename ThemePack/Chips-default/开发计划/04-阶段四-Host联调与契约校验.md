@@ -20,15 +20,15 @@
 
 - 在本项目 `package.json` 中确保存在：
   - `build`：构建 `dist/tokens.json` 与 `dist/theme.css`；
-  - 如有需要，新增用于打包的脚本（例如借助 `chips dev package` 或等价工具）；
+  - 如有需要，新增用于打包的脚本（例如借助 `chipsdev package` 或等价工具）；
 - 在本地执行构建与打包，产出 `.cpk` 文件。
 
 ### 2.2 Host 安装与切换
 
 - 选择一个工作空间（`Chips-Host` 工作目录），通过：
-  - `chips host plugin install` 或 Host 的 plugin API 安装默认主题包；
-  - `chips host theme list` 验证主题已被识别；
-  - `chips host theme apply <id>` 切换到该默认主题；
+  - `chips plugin install` 或 Host 的 plugin API 安装默认主题包；
+  - `chips theme list` 验证主题已被识别；
+  - `chips theme apply <id>` 切换到该默认主题；
 - 确保主题切换后：
   - 不报错（尤其是 `THEME_CONTRACT_INVALID`、`THEME_TOKEN_MISSING` 等）；
   - `theme.getAllCss` 能返回正确的 CSS 内容；
@@ -48,7 +48,7 @@
 ## 3. 依赖与前置条件
 
 - 阶段二与阶段三已完成，并通过本工程内的测试与验证脚本；
-- Host 与 `chips dev` 版本满足当前主题包需求；
+- Host 与 `chipsdev` 版本满足当前主题包需求；
 - 相关生态文档中关于 `theme.*` 动作与主题契约的口径已冻结。
 
 ---
@@ -67,7 +67,7 @@
 
 - 打包方式：
   - 在 `ThemePack/Chips-default` 内执行 `npm run build` 生成 `dist/tokens.json` 与 `dist/theme.css`；
-  - 依据 CPK 规范，使用系统 `zip -r -0` 将精简后的发布内容（`manifest.yaml/tokens/dist/contracts/theme.css/icons/preview`）打包为：
+  - 依据 CPK 规范，当前标准流程应优先使用 `chipsdev package`；若手工打包，需使用系统 `zip -r -0` 或等价 Store 模式，将精简后的发布内容（`manifest.yaml/tokens/dist/contracts/theme.css/icons/preview`）打包为：
     - `ThemePack/Chips-default/chips-default-theme.cpk`。
   - 打包采用 STORE 模式（零压缩），符合《CPK打包格式规范》要求。
 - manifest 对齐：
@@ -81,9 +81,9 @@
   - 通过 `chips workspace set` 将工作空间指向本仓内测试目录：
     - `/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/.chips-workspace/theme-default-demo`。
 - 安装与启用：
-  - 安装：  
-    - `chips theme install /Users/.../ThemePack/Chips-default/chips-default-theme.cpk`  
-    - 返回：`themeId theme.theme.chips-official-default-theme`、`installed true`；
+  - 安装（按当前 CLI 口径）：
+    - `chips plugin install /Users/.../ThemePack/Chips-default/chips-default-theme.cpk`
+    - 返回：`pluginId theme.theme.chips-official-default-theme`；
   - 安装后 `chips plugin list` 中出现新插件记录：
     - `id: "theme.theme.chips-official-default-theme"`、`type: "theme"`、`enabled: true`；
   - `chips theme list` 中新增主题：

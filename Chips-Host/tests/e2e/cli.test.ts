@@ -16,7 +16,14 @@ afterEach(async () => {
   delete process.env.CHIPS_HOME;
 });
 
-describe('chips host cli', () => {
+describe('chips cli', () => {
+  it('exposes direct chips help without host subcommand', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+
+    expect(await runCli(['help'])).toBe(0);
+    expect(await runCli(['host', 'help'])).toBe(1);
+  });
+
   it('supports start/status/stop lifecycle', async () => {
     const { runCli } = await import('../../src/main/cli/index');
 
@@ -55,6 +62,29 @@ describe('chips host cli', () => {
     expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
     expect(await runCli(['plugin', 'list'])).toBe(0);
     expect(await runCli(['plugin', 'query'])).toBe(0);
+  });
+
+  it('returns structured error output when plugin install fails', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+    const chunks: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const code = await runCli(['plugin', 'install', path.join(workspace, 'missing-plugin.cpk')]);
+      expect(code).toBe(1);
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+
+    const output = chunks.join('');
+    expect(output).toContain('"code": "PLUGIN_SOURCE_NOT_FOUND"');
+    expect(output).toContain('Plugin source not found');
+    expect(output).not.toContain('UnhandledPromiseRejection');
   });
 
   it('supports theme management commands', async () => {

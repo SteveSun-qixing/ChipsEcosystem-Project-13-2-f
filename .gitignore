@@ -1,0 +1,7 @@
+.DS_Store
+**/.DS_Store
+.chips-host-dev/
+**/node_modules/
+**/dist/
+Chips-Scaffold/chips-scaffold-basecard/tests/.tmp-basecard-tests/
+Chips-Scaffold/chips-scaffold-basecard/tests/.tmp-e2e/

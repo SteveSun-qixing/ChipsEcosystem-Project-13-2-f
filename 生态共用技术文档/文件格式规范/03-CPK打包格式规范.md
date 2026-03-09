@@ -105,7 +105,7 @@ theme/
 
 ## 打包工具
 
-系统提供CPK打包工具CLI命令。chips pack命令将指定目录打包为cpk文件。chips unpack命令解压cpk文件。chips validate命令验证cpk文件结构完整性。
+系统提供基于 `chipsdev` 与 `chips` 的 CPK 工具链。开发者在插件工程中使用 `chipsdev package` 生成 `.cpk` 文件，使用 `chipsdev validate` 校验构建产物与清单结构；Host 侧通过 `chips plugin install <cpk路径>` 安装 `.cpk` 并执行运行时校验。
 
 ## 签名机制
 

@@ -39,8 +39,8 @@ describe('Theme Runtime', () => {
     expect(resolved.variables['chips.comp.button.background']).toBe('#ffffff');
     expect(resolved.variables['chips.comp.dialog.surface']).toBe('#ffffff');
 
-    expect(resolved.componentTokens.button['chips.comp.button.background']).toBe('#ffffff');
-    expect(resolved.componentTokens.dialog['chips.comp.dialog.surface']).toBe('#ffffff');
+    expect(resolved.componentTokens.button!['chips.comp.button.background']).toBe('#ffffff');
+    expect(resolved.componentTokens.dialog!['chips.comp.dialog.surface']).toBe('#ffffff');
   });
 
   it('builds theme scope chain from context', () => {
@@ -92,4 +92,3 @@ describe('Theme Runtime', () => {
     expect(resolvedProps.other).toBe('value');
   });
 });
-

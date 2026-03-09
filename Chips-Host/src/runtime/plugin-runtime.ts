@@ -353,7 +353,11 @@ export class PluginRuntime {
       });
     }
     for (const permission of manifest.permissions) {
-      if (!/^[a-z]+(?:-[a-z]+)*(?:\.[a-z]+(?:-[a-z]+)*)+$/.test(permission)) {
+      // Permission naming convention (see 插件开发规范):
+      // - segments separated by "."
+      // - each segment uses lower-case letters, digits and hyphens, e.g.:
+      //   "file.read", "i18n.read", "global-shortcut.write"
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/.test(permission)) {
         throw createError('PLUGIN_INVALID', `Invalid permission name: ${permission}`, {
           manifestPath
         });
@@ -566,11 +570,41 @@ export class PluginRuntime {
       throw createError('PLUGIN_INVALID', `Invalid plugin type: ${record.type}`, { manifestPath });
     }
 
-    const permissions = asStringArray(record.permissions, 'permissions', manifestPath, false);
-    const capabilities =
-      typeof record.capabilities === 'undefined'
-        ? undefined
-        : asStringArray(record.capabilities, 'capabilities', manifestPath, true);
+    // Normalise permissions:
+    // - parseYamlLite 会把 `permissions: []` 解析成字符串 `"[]"`，
+    //   这里专门把它视为「空数组」以兼容现有清单写法。
+    const rawPermissions = (record as Record<string, unknown>).permissions;
+    const permissionsValue =
+      typeof rawPermissions === 'string' && rawPermissions.trim() === '[]' ? [] : rawPermissions;
+    const permissions = asStringArray(permissionsValue, 'permissions', manifestPath, true);
+
+    // Normalise capabilities:
+    // 支持两种结构：
+    // 1) 直接数组：capabilities: ["base.richtext"]
+    // 2) 对象形式：capabilities: { cardTypes: ["base.richtext"] }
+    let capabilities: string[] | undefined;
+    const rawCapabilities = (record as Record<string, unknown>).capabilities;
+
+    if (typeof rawCapabilities === 'undefined') {
+      capabilities = undefined;
+    } else if (Array.isArray(rawCapabilities)) {
+      capabilities = asStringArray(rawCapabilities, 'capabilities', manifestPath, true);
+    } else if (rawCapabilities && typeof rawCapabilities === 'object') {
+      const capsObject = rawCapabilities as Record<string, unknown>;
+      const cardTypesValue = capsObject.cardTypes;
+      if (typeof cardTypesValue === 'string' && cardTypesValue.trim() === '[]') {
+        capabilities = [];
+      } else if (Array.isArray(cardTypesValue)) {
+        capabilities = asStringArray(cardTypesValue, 'capabilities.cardTypes', manifestPath, true);
+      } else {
+        throw createError('PLUGIN_INVALID', 'capabilities.cardTypes must be an array', { manifestPath });
+      }
+    } else if (typeof rawCapabilities === 'string' && rawCapabilities.trim() === '[]') {
+      capabilities = [];
+    } else {
+      throw createError('PLUGIN_INVALID', 'capabilities must be an array or object', { manifestPath });
+    }
+
     const source =
       typeof record.source === 'string' && hasPluginSource(record.source)
         ? record.source

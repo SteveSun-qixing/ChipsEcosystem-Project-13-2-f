@@ -1,0 +1,1074 @@
+#!/usr/bin/env node
+
+/**
+ * Chips Dev 开发者命令行工具（chipsdev）
+ *
+ * 统一入口：chipsdev <command> [options]
+ * 底层使用 Vite（dev server + build）与 Vitest（test），由 chips.config.mjs 驱动。
+ */
+
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const childProcess = require('node:child_process');
+const yaml = require('yaml');
+
+const PROJECT_CONFIG_FILE = 'chips.config.mjs';
+const MANIFEST_FILE = 'manifest.yaml';
+
+const COMMANDS = new Set([
+  'help',
+  'init',
+  'create',
+  'server',
+  'debug',
+  'build',
+  'test',
+  'lint',
+  'e2e',
+  'package',
+  'validate',
+  'login',
+  'publish',
+  'version',
+  'run'
+]);
+
+const log = (value) => {
+  if (typeof value === 'string') {
+    process.stdout.write(value + '\n');
+  } else {
+    process.stdout.write(JSON.stringify(value, null, 2) + '\n');
+  }
+};
+
+const logError = (value) => {
+  if (typeof value === 'string') {
+    process.stderr.write(value + '\n');
+  } else {
+    process.stderr.write(JSON.stringify(value, null, 2) + '\n');
+  }
+};
+
+const toErrorPayload = (error) => {
+  if (error instanceof Error) {
+    return {
+      error: error.message,
+      details: {
+        name: error.name,
+        stack: error.stack
+      }
+    };
+  }
+
+  if (error && typeof error === 'object') {
+    return error;
+  }
+
+  return { error: String(error) };
+};
+
+const printHelp = () => {
+  log(
+    [
+      'Chips Dev 命令行工具 (chipsdev)',
+      '',
+      '用法：',
+      '  chipsdev <command> [options]',
+      '',
+      '可用命令：',
+      '  init        初始化项目级开发配置（chips.config.mjs）',
+      '  create      从官方脚手架模板创建新工程',
+      '  server      启动 Vite 开发服务器',
+      '  debug       以调试模式启动目标项目（与 server 行为一致，可扩展调试预设）',
+      '  build       使用 Vite 构建插件工程',
+      '  test        使用 Vitest 运行单元测试',
+      '  lint        使用 ESLint 执行代码规范检查',
+      '  e2e         运行端到端测试（工程自行提供 e2e 脚本时调用）',
+      '  package     根据 manifest.yaml 和构建产物打包生成 .cpk 插件包',
+      '  validate    执行项目级契约校验（配置、清单、产物完整性等）',
+      '  login       在本机保存开发者凭据（为未来线上发布做准备）',
+      '  publish     生成发布包元数据并校验，可对接后续市场服务',
+      '  run         在开发环境下启动 Host 并运行应用插件',
+      '  version     查看 chipsdev 版本',
+      '  help        查看帮助信息'
+    ].join('\n')
+  );
+};
+
+const parseArgs = (argv) => {
+  const [command = 'help', ...rest] = argv;
+  return { command, args: rest };
+};
+
+const loadJsonFile = async (filePath, fallback) => {
+  try {
+    const raw = await fsp.readFile(filePath, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
+
+const saveJsonFile = async (filePath, value) => {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, JSON.stringify(value, null, 2), 'utf-8');
+};
+
+const resolveProjectRoot = () => process.cwd();
+
+const loadPackageJsonVersion = async () => {
+  const herePackage = path.resolve(__dirname, '..', 'package.json');
+  try {
+    const pkg = await loadJsonFile(herePackage, {});
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+};
+
+const loadProjectConfig = async (projectRoot) => {
+  const configPath = path.join(projectRoot, PROJECT_CONFIG_FILE);
+  try {
+    await fsp.access(configPath, fs.constants.R_OK);
+  } catch {
+    throw new Error(`未找到项目配置文件：${PROJECT_CONFIG_FILE}（当前目录：${projectRoot}）`);
+  }
+
+  const fileUrl = pathToFileURL(configPath).href;
+  const mod = await import(fileUrl);
+  const config = mod.default ?? mod.config ?? mod;
+
+  if (!config || typeof config !== 'object') {
+    throw new Error(`配置文件 ${PROJECT_CONFIG_FILE} 必须导出一个对象。`);
+  }
+
+  const type = config.type ?? 'app';
+  const srcDir = config.srcDir ?? 'src';
+  const outDir = config.outDir ?? 'dist';
+  const entry = config.entry ?? (type === 'app' ? 'index.html' : path.join(srcDir, 'main.ts'));
+  const testsDir = config.testsDir ?? 'tests';
+
+  return { ...config, type, srcDir, outDir, entry, testsDir };
+};
+
+const loadManifest = async (projectRoot) => {
+  const manifestPath = path.join(projectRoot, MANIFEST_FILE);
+  try {
+    const raw = await fsp.readFile(manifestPath, 'utf-8');
+    const doc = yaml.parse(raw);
+    if (!doc || typeof doc !== 'object') {
+      throw new Error('manifest.yaml 内容无效：解析结果不是对象。');
+    }
+    return { manifest: doc, manifestPath };
+  } catch (error) {
+    const err = /** @type {NodeJS.ErrnoException} */ (error);
+    if (err.code === 'ENOENT') {
+      throw new Error(`未找到插件清单文件：${MANIFEST_FILE}（当前目录：${projectRoot}）`);
+    }
+    throw new Error(`读取 ${MANIFEST_FILE} 失败：${err.message}`);
+  }
+};
+
+const makeBinEnv = (projectRoot) => {
+  const binDirs = [
+    path.join(projectRoot, 'node_modules', '.bin'),
+    path.join(__dirname, '..', 'node_modules', '.bin')
+  ];
+  const unique = [];
+  for (const dir of binDirs) {
+    if (fs.existsSync(dir) && !unique.includes(dir)) {
+      unique.push(dir);
+    }
+  }
+  const existingPath = process.env.PATH ?? '';
+  return {
+    ...process.env,
+    PATH: unique.concat(existingPath).join(path.delimiter)
+  };
+};
+
+const runCliTool = (projectRoot, binName, args) => {
+  const env = makeBinEnv(projectRoot);
+  return new Promise((resolve, reject) => {
+    const child = childProcess.spawn(binName, args, {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      env
+    });
+
+    child.on('error', (error) => {
+      reject(error);
+    });
+
+    child.on('exit', (code, signal) => {
+      if (typeof code === 'number') {
+        if (code === 0) {
+          resolve(undefined);
+        } else {
+          reject(new Error(`${binName} 退出码为 ${code}`));
+        }
+      } else {
+        reject(new Error(`${binName} 因信号 ${signal ?? 'UNKNOWN'} 退出`));
+      }
+    });
+  });
+};
+
+const ensureDirectoryExists = async (dir) => {
+  await fsp.mkdir(dir, { recursive: true });
+};
+
+const readTextFileIfExists = async (filePath) => {
+  try {
+    const raw = await fsp.readFile(filePath, 'utf-8');
+    return raw;
+  } catch (error) {
+    const err = /** @type {NodeJS.ErrnoException} */ (error);
+    if (err.code === 'ENOENT') return undefined;
+    throw err;
+  }
+};
+
+const writeTextFile = async (filePath, content) => {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, content, 'utf-8');
+};
+
+const defaultConfigTemplate = () => {
+  return `/**
+ * Chips Dev 配置文件
+ * type: app | card | layout | module | theme | i18n
+ */
+
+const config = {
+  type: 'app',
+  srcDir: 'src',
+  outDir: 'dist',
+  entry: 'index.html',
+  testsDir: 'tests'
+};
+
+export default config;
+`;
+};
+
+const handleInit = async () => {
+  const projectRoot = resolveProjectRoot();
+  const configPath = path.join(projectRoot, PROJECT_CONFIG_FILE);
+  const exists = fs.existsSync(configPath);
+
+  if (exists) {
+    const config = await loadProjectConfig(projectRoot);
+    log({
+      message: `${PROJECT_CONFIG_FILE} 已存在，当前配置：`,
+      config
+    });
+    return;
+  }
+
+  await writeTextFile(configPath, defaultConfigTemplate());
+  log(`已在当前目录创建默认配置文件：${PROJECT_CONFIG_FILE}`);
+};
+
+const resolveDevWorkspace = async (projectRoot) => {
+  if (process.env.CHIPS_HOME && process.env.CHIPS_HOME.trim().length > 0) {
+    return process.env.CHIPS_HOME;
+  }
+
+  // 从当前工程向上查找 .chips-host-dev 目录，找到则使用。
+  let current = projectRoot;
+  while (true) {
+    const candidate = path.join(current, '.chips-host-dev');
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  // 未找到则在项目根目录创建一个新的工作区。
+  const fallback = path.join(projectRoot, '.chips-host-dev');
+  await ensureDirectoryExists(fallback);
+  return fallback;
+};
+
+const handleServer = async (mode = 'server') => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+
+  const vite = await import('vite');
+  const root = projectRoot;
+  const isApp = config.type === 'app';
+  const entryPath = path.resolve(projectRoot, config.entry);
+
+  const viteConfig = {
+    root,
+    configFile: false,
+    server: {
+      port: process.env.PORT ? Number(process.env.PORT) : 5173,
+      host: process.env.HOST || 'localhost'
+    },
+    build: isApp
+      ? {
+          outDir: config.outDir,
+          rollupOptions: {
+            input: entryPath
+          }
+        }
+      : {
+          outDir: config.outDir,
+          lib: {
+            entry: entryPath,
+            name: config.libraryName || 'ChipsPlugin',
+            formats: ['es'],
+            fileName: 'index'
+          }
+        }
+  };
+
+  if (mode === 'debug') {
+    viteConfig.server.open = true;
+  }
+
+  const server = await vite.createServer(viteConfig);
+  await server.listen();
+  server.printUrls();
+};
+
+const handleBuild = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+
+  const vite = await import('vite');
+  const root = projectRoot;
+  const isApp = config.type === 'app';
+  const entryPath = path.resolve(projectRoot, config.entry);
+
+  const viteConfig = {
+    root,
+    configFile: false,
+    build: isApp
+      ? {
+          outDir: config.outDir,
+          rollupOptions: {
+            input: entryPath
+          }
+        }
+      : {
+          outDir: config.outDir,
+          lib: {
+            entry: entryPath,
+            name: config.libraryName || 'ChipsPlugin',
+            formats: ['es'],
+            fileName: 'index'
+          }
+        }
+  };
+
+  await vite.build(viteConfig);
+
+  // 将 manifest.yaml 同步到构建输出目录，供后续 package / run / plugin.install 使用。
+  const manifestSrc = path.join(projectRoot, MANIFEST_FILE);
+  const manifestDestDir = path.join(projectRoot, config.outDir);
+  const manifestDest = path.join(manifestDestDir, MANIFEST_FILE);
+  try {
+    await fsp.access(manifestSrc, fs.constants.R_OK);
+    await ensureDirectoryExists(manifestDestDir);
+    await fsp.copyFile(manifestSrc, manifestDest);
+  } catch (error) {
+    const err = /** @type {NodeJS.ErrnoException} */ (error);
+    throw new Error(`同步 manifest.yaml 到构建目录失败：${err.message}`);
+  }
+
+  log(`构建完成，输出目录：${config.outDir}`);
+};
+
+const handleTest = async (passThroughArgs) => {
+  const projectRoot = resolveProjectRoot();
+  await loadProjectConfig(projectRoot);
+  const args = ['run'].concat(passThroughArgs);
+  await runCliTool(projectRoot, 'vitest', args);
+};
+
+const handleLint = async () => {
+  const projectRoot = resolveProjectRoot();
+  await loadProjectConfig(projectRoot);
+
+  const eslintBinDir = path.join(projectRoot, 'node_modules', '.bin');
+  const hasEslintBin =
+    fs.existsSync(path.join(eslintBinDir, process.platform === 'win32' ? 'eslint.cmd' : 'eslint')) ||
+    fs.existsSync(path.join(__dirname, '..', 'node_modules', '.bin', process.platform === 'win32' ? 'eslint.cmd' : 'eslint'));
+
+  if (!hasEslintBin) {
+    throw new Error(
+      '未检测到 ESLint 可执行文件。请在工程中安装 eslint 并配置 .eslintrc 后再运行 chipsdev lint。'
+    );
+  }
+
+  const patterns = ['src/**/*.{ts,tsx,js,jsx}', 'tests/**/*.{ts,tsx,js,jsx}'];
+  await runCliTool(projectRoot, 'eslint', patterns);
+};
+
+const handleE2E = async () => {
+  const projectRoot = resolveProjectRoot();
+  await loadProjectConfig(projectRoot);
+
+  const pkgJsonPath = path.join(projectRoot, 'package.json');
+  const pkg = await loadJsonFile(pkgJsonPath, {});
+  const scripts = pkg.scripts || {};
+
+  if (typeof scripts.e2e === 'string') {
+    await runCliTool(projectRoot, 'npm', ['run', 'e2e']);
+    return;
+  }
+
+  throw new Error(
+    '当前工程未定义 e2e 测试脚本。请在 package.json 中添加 "e2e" 脚本后再运行 chipsdev e2e。'
+  );
+};
+
+const collectPackageFiles = async (sourceDir) => {
+  const files = [];
+  const stack = [sourceDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+
+    const entries = await fsp.readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const relativePath = path.relative(sourceDir, absolutePath).split(path.sep).join('/');
+      const normalized = relativePath.toLowerCase();
+
+      if (
+        normalized === 'manifest.yaml' ||
+        normalized === 'manifest.yml' ||
+        normalized === 'manifest.json' ||
+        normalized === 'publish-meta.json' ||
+        normalized.endsWith('.cpk')
+      ) {
+        continue;
+      }
+
+      files.push({
+        absolutePath,
+        archivePath: path.posix.join('dist', relativePath)
+      });
+    }
+  }
+
+  files.sort((left, right) => left.archivePath.localeCompare(right.archivePath));
+  return files;
+};
+
+const zipDirectoryToCpk = async (sourceDir, manifestPath, targetFile) => {
+  const archiver = require('archiver');
+
+  await ensureDirectoryExists(path.dirname(targetFile));
+
+  const output = fs.createWriteStream(targetFile);
+  const archive = archiver('zip', { store: true });
+
+  const done = new Promise((resolve, reject) => {
+    output.on('close', resolve);
+    output.on('error', reject);
+    archive.on('error', reject);
+  });
+
+  archive.pipe(output);
+
+  // manifest.yaml 放在包根目录
+  archive.file(manifestPath, { name: 'manifest.yaml', store: true });
+
+  // 构建产物放在 dist/ 目录下；排除构建阶段复制的 manifest 与已生成的打包产物，
+  // 避免包内出现重复 manifest 或将 .cpk 自身再次打进包里。
+  const files = await collectPackageFiles(sourceDir);
+  for (const file of files) {
+    archive.file(file.absolutePath, { name: file.archivePath, store: true });
+  }
+
+  archive.finalize();
+
+  await done;
+};
+
+const handlePackage = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+  const { manifest, manifestPath } = await loadManifest(projectRoot);
+
+  const outDir = path.join(projectRoot, config.outDir);
+  const hasOutDir = fs.existsSync(outDir) && fs.statSync(outDir).isDirectory();
+  if (!hasOutDir) {
+    throw new Error(
+      `未找到构建输出目录：${outDir}。请先运行 chipsdev build 再执行 chipsdev package。`
+    );
+  }
+
+  const pluginId = manifest.id || manifest.pluginId;
+  const version = manifest.version || '0.1.0';
+  if (!pluginId || typeof pluginId !== 'string') {
+    throw new Error('manifest.yaml 中缺少插件标识字段 id（或 pluginId）。');
+  }
+
+  const safeId = pluginId.replace(/[^a-zA-Z0-9_.-]+/g, '_');
+  const fileName = `${safeId}-${version}.cpk`;
+  const targetDir = path.join(projectRoot, 'dist');
+
+  await ensureDirectoryExists(targetDir);
+  const targetPath = path.join(targetDir, fileName);
+
+  await zipDirectoryToCpk(outDir, manifestPath, targetPath);
+
+  log({
+    message: '打包成功',
+    output: targetPath
+  });
+};
+
+const validateManifestShape = (manifest) => {
+  const errors = [];
+  if (!manifest || typeof manifest !== 'object') {
+    errors.push('manifest 必须是对象。');
+    return errors;
+  }
+  if (!manifest.id || typeof manifest.id !== 'string') {
+    errors.push('manifest.id 必须存在且为字符串。');
+  }
+  if (!manifest.name || typeof manifest.name !== 'string') {
+    errors.push('manifest.name 必须存在且为字符串。');
+  }
+  if (!manifest.version || typeof manifest.version !== 'string') {
+    errors.push('manifest.version 必须存在且为字符串。');
+  }
+  if (!manifest.type || typeof manifest.type !== 'string') {
+    errors.push('manifest.type 必须存在且为字符串。');
+  }
+  return errors;
+};
+
+const handleValidate = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+  const { manifest } = await loadManifest(projectRoot);
+
+  const errors = validateManifestShape(manifest);
+
+  const outDir = path.join(projectRoot, config.outDir);
+  const distExists = fs.existsSync(outDir) && fs.statSync(outDir).isDirectory();
+
+  if (!distExists) {
+    errors.push(`构建输出目录不存在：${config.outDir}，请先运行 chipsdev build。`);
+  } else {
+    const files = await fsp.readdir(outDir);
+    if (files.length === 0) {
+      errors.push(`构建输出目录 ${config.outDir} 为空，请检查构建配置。`);
+    }
+  }
+
+  const result = {
+    ok: errors.length === 0,
+    errors,
+    summary: {
+      manifest: manifest.id ?? '(missing id)',
+      version: manifest.version,
+      type: manifest.type,
+      outDir: config.outDir
+    }
+  };
+
+  if (!result.ok) {
+    logError(result);
+    throw new Error('chipsdev validate 发现问题，请根据 errors 列表修复。');
+  }
+
+  log(result);
+};
+
+const toFileDependency = (fromDir, targetDir) => {
+  const relative = path.relative(fromDir, targetDir).split(path.sep).join('/');
+  return `file:${relative.startsWith('.') ? relative : `./${relative}`}`;
+};
+
+const findAncestorWithEntries = (startPath, entries) => {
+  let current = path.resolve(startPath);
+  while (true) {
+    if (entries.every((entry) => fs.existsSync(path.join(current, entry)))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+};
+
+const resolveEcosystemRoot = () => {
+  const fromEnv = process.env.CHIPS_ECOSYSTEM_ROOT;
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (fs.existsSync(resolved)) {
+      return resolved;
+    }
+  }
+
+  const projectRoot = resolveProjectRoot();
+  const fromProject = findAncestorWithEntries(projectRoot, ['Chips-SDK', 'Chips-Host']);
+  if (fromProject) {
+    return fromProject;
+  }
+
+  const cliPackageRoot = path.resolve(__dirname, '..');
+  const fromCliPackage = findAncestorWithEntries(cliPackageRoot, ['Chips-SDK', 'Chips-Host']);
+  if (fromCliPackage) {
+    return fromCliPackage;
+  }
+
+  return path.resolve(__dirname, '..', '..');
+};
+
+const adaptWorkspaceDependencies = async (targetDir) => {
+  const pkgJsonPath = path.join(targetDir, 'package.json');
+  if (!fs.existsSync(pkgJsonPath)) {
+    return;
+  }
+
+  const ecosystemRoot = resolveEcosystemRoot();
+  const targetRoot = path.resolve(targetDir);
+  if (path.dirname(targetRoot) !== ecosystemRoot) {
+    return;
+  }
+
+  const pkg = await loadJsonFile(pkgJsonPath, {});
+  const next = { ...pkg };
+  const devDependencies = { ...(next.devDependencies || {}) };
+  const dependencies = { ...(next.dependencies || {}) };
+
+  const sdkPackageDir = path.join(ecosystemRoot, 'Chips-SDK');
+  devDependencies['chips-sdk'] = toFileDependency(targetRoot, sdkPackageDir);
+
+  if ('@chips/component-library' in dependencies) {
+    const componentLibraryPackageDir = path.join(
+      ecosystemRoot,
+      'Chips-ComponentLibrary',
+      'packages',
+      'component-library'
+    );
+    dependencies['@chips/component-library'] = toFileDependency(targetRoot, componentLibraryPackageDir);
+  }
+
+  next.devDependencies = devDependencies;
+  if (Object.keys(dependencies).length > 0) {
+    next.dependencies = dependencies;
+  }
+
+  await saveJsonFile(pkgJsonPath, next);
+};
+
+const handleCreate = async (args) => {
+  const projectRoot = resolveProjectRoot();
+
+  // 简单参数解析：chipsdev create <type> <targetDir> [--template id] [...]
+  const [type, targetDir = '.'] = args;
+  if (!type) {
+    throw new Error('chipsdev create 需要指定类型，例如：chipsdev create app my-app');
+  }
+
+  const ecosystemRoot = resolveEcosystemRoot();
+  const scaffoldRoot = path.join(ecosystemRoot, 'Chips-Scaffold');
+
+  if (!fs.existsSync(scaffoldRoot) || !fs.statSync(scaffoldRoot).isDirectory()) {
+    throw new Error(
+      `未找到 Chips-Scaffold 目录：${scaffoldRoot}。请在包含 Chips-Scaffold 的工作区内运行 chipsdev。`
+    );
+  }
+
+  if (type === 'theme') {
+    // 主题脚手架：使用 chips-scaffold-theme 提供的 API。
+    const modulePath = path.join(
+      scaffoldRoot,
+      'chips-scaffold-theme',
+      'dist',
+      'src',
+      'index.js'
+    );
+    if (!fs.existsSync(modulePath)) {
+      throw new Error(
+        `未找到主题脚手架构建产物：${modulePath}。请先在 chips-scaffold-theme 仓库运行 npm install && npm run build。`
+      );
+    }
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const themeScaffold = require(modulePath);
+    const options = {
+      targetDir: path.resolve(projectRoot, targetDir),
+      themeId: 'chips-official:default-theme',
+      displayName: 'Chips Theme',
+      templateId: 'theme-standard'
+    };
+    await themeScaffold.createThemeProject(options);
+    await adaptWorkspaceDependencies(options.targetDir);
+    log({
+      message: '主题工程创建完成',
+      targetDir: options.targetDir,
+      templateId: options.templateId
+    });
+    return;
+  }
+
+  if (type === 'app') {
+    const modulePath = path.join(
+      scaffoldRoot,
+      'chips-scaffold-app',
+      'dist',
+      'src',
+      'cli',
+      'app-scaffold-api.js'
+    );
+    if (!fs.existsSync(modulePath)) {
+      throw new Error(
+        `未找到应用脚手架构建产物：${modulePath}。请先在 chips-scaffold-app 仓库运行 npm install && npm run build。`
+      );
+    }
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const appScaffold = require(modulePath);
+    const options = {
+      targetDir: path.resolve(projectRoot, targetDir),
+      templateId: 'app-standard'
+    };
+    await appScaffold.createAppProject(options);
+    await adaptWorkspaceDependencies(options.targetDir);
+    log({
+      message: '应用工程创建完成',
+      targetDir: options.targetDir,
+      templateId: options.templateId
+    });
+    return;
+  }
+
+  if (type === 'card') {
+    const modulePath = path.join(
+      scaffoldRoot,
+      'chips-scaffold-basecard',
+      'dist',
+      'index.js'
+    );
+    if (!fs.existsSync(modulePath)) {
+      throw new Error(
+        `未找到基础卡片脚手架构建产物：${modulePath}。请先在 chips-scaffold-basecard 仓库运行 npm install && npm run build。`
+      );
+    }
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const basecardScaffold = require(modulePath);
+    const options = {
+      targetDir: path.resolve(projectRoot, targetDir),
+      templateId: 'card-standard'
+    };
+    await basecardScaffold.createBasecardProject(options);
+    await adaptWorkspaceDependencies(options.targetDir);
+    log({
+      message: '基础卡片工程创建完成',
+      targetDir: options.targetDir,
+      templateId: options.templateId
+    });
+    return;
+  }
+
+  throw new Error(
+    `不支持的 create 类型：${type}。当前支持：app、card、theme。`
+  );
+};
+
+const getChipsdevConfigPath = () => {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (!home) {
+    throw new Error('无法确定用户主目录，无法保存 chipsdev 配置。');
+  }
+  return path.join(home, '.chipsdev', 'config.json');
+};
+
+const handleLogin = async () => {
+  const configPath = getChipsdevConfigPath();
+  const existing = await loadJsonFile(configPath, {});
+
+  const next = {
+    ...existing,
+    loggedInAt: new Date().toISOString()
+  };
+
+  await saveJsonFile(configPath, next);
+  log({
+    message: '已在本机记录 chipsdev 登录时间（占位本地配置），后续可对接在线市场服务。',
+    configPath
+  });
+};
+
+const handlePublish = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+  const { manifest } = await loadManifest(projectRoot);
+
+  const outDir = path.join(projectRoot, config.outDir);
+  const distExists = fs.existsSync(outDir) && fs.statSync(outDir).isDirectory();
+  if (!distExists) {
+    throw new Error(
+      `未找到构建输出目录：${config.outDir}。请先运行 chipsdev build && chipsdev package。`
+    );
+  }
+
+  const cpkDir = path.join(projectRoot, 'dist');
+  const cpkFiles = fs.existsSync(cpkDir)
+    ? (await fsp.readdir(cpkDir)).filter((name) => name.endsWith('.cpk'))
+    : [];
+
+  if (cpkFiles.length === 0) {
+    throw new Error(
+      `未找到 .cpk 包。请先运行 chipsdev package 生成插件包。`
+    );
+  }
+
+  const publishMeta = {
+    pluginId: manifest.id ?? manifest.pluginId,
+    name: manifest.name,
+    version: manifest.version,
+    type: manifest.type,
+    files: cpkFiles.map((name) => path.join('dist', name)),
+    createdAt: new Date().toISOString()
+  };
+
+  const metaPath = path.join(projectRoot, 'dist', 'publish-meta.json');
+  await saveJsonFile(metaPath, publishMeta);
+
+  log({
+    message:
+      '已生成发布元数据（publish-meta.json），可作为对接线上市场服务的输入。',
+    metaPath
+  });
+};
+
+const main = async () => {
+  const { command, args } = parseArgs(process.argv.slice(2));
+
+  if (!COMMANDS.has(command)) {
+    logError({
+      error: `未知命令：${command}`,
+      hint: '使用 `chipsdev help` 查看可用命令'
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'help') {
+    printHelp();
+    process.exitCode = 0;
+    return;
+  }
+
+  if (command === 'version') {
+    const version = await loadPackageJsonVersion();
+    log({ name: 'chipsdev', version });
+    process.exitCode = 0;
+    return;
+  }
+
+  try {
+    if (command === 'init') {
+      await handleInit();
+    } else if (command === 'server') {
+      await handleServer('server');
+    } else if (command === 'debug') {
+      await handleServer('debug');
+    } else if (command === 'build') {
+      await handleBuild();
+    } else if (command === 'test') {
+      await handleTest(args);
+    } else if (command === 'lint') {
+      await handleLint();
+    } else if (command === 'e2e') {
+      await handleE2E();
+    } else if (command === 'package') {
+      await handlePackage();
+    } else if (command === 'validate') {
+      await handleValidate();
+    } else if (command === 'create') {
+      await handleCreate(args);
+    } else if (command === 'login') {
+      await handleLogin();
+    } else if (command === 'publish') {
+      await handlePublish();
+    } else if (command === 'run') {
+      await handleRun();
+    } else {
+      logError({
+        error: `未处理的命令：${command}`,
+        hint: '使用 `chipsdev help` 查看可用命令'
+      });
+      process.exitCode = 1;
+      return;
+    }
+
+    process.exitCode = 0;
+  } catch (error) {
+    logError(toErrorPayload(error));
+    process.exitCode = 1;
+  }
+};
+
+const handleRun = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+  const { manifest } = await loadManifest(projectRoot);
+
+  if (manifest.type !== 'app') {
+    throw new Error(
+      `chipsdev run 当前仅支持应用插件 (manifest.type === "app")，当前类型为：${manifest.type}`
+    );
+  }
+
+  // 先执行构建，确保 outDir 与 dist manifest 就绪。
+  await handleBuild();
+
+  const workspacePath = await resolveDevWorkspace(projectRoot);
+
+  // 载入 HostApplication 与 RuntimeClient，以完整 Host 运行时启动插件。
+  const ecosystemRoot = resolveEcosystemRoot();
+  const hostDistRoot = path.join(ecosystemRoot, 'Chips-Host', 'dist', 'src');
+
+  const hostAppPath = path.join(hostDistRoot, 'main', 'core', 'host-application.js');
+  const runtimeClientPath = path.join(hostDistRoot, 'renderer', 'runtime-client.js');
+
+  if (!fs.existsSync(hostAppPath) || !fs.existsSync(runtimeClientPath)) {
+    throw new Error(
+      `未找到 Chips-Host 构建产物。请先在 Chips-Host 仓库运行 "npm install" 与 "npm run build"。`
+    );
+  }
+
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  const { HostApplication } = require(hostAppPath);
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  const { RuntimeClient } = require(runtimeClientPath);
+
+  const app = new HostApplication({ workspacePath });
+  await app.start();
+
+  const bridge = app.createBridge();
+  const runtime = new RuntimeClient(bridge);
+
+  try {
+    const manifestDestDir = path.join(projectRoot, config.outDir);
+    const manifestPathInDist = path.join(manifestDestDir, MANIFEST_FILE);
+
+    const installedPlugins = await runtime.invoke('plugin.query', {
+      type: 'app',
+      capability: undefined
+    });
+    const existingPlugin =
+      installedPlugins.plugins &&
+      installedPlugins.plugins.find((item) => item.id === manifest.id);
+
+    if (existingPlugin) {
+      try {
+        await runtime.invoke('plugin.disable', { pluginId: manifest.id });
+      } catch {
+        // ignore disable errors and continue uninstall
+      }
+      await runtime.invoke('plugin.uninstall', { pluginId: manifest.id });
+    }
+
+    const installResult = await runtime.invoke('plugin.install', { manifestPath: manifestPathInDist });
+    const pluginId = installResult.pluginId;
+
+    await runtime.invoke('plugin.enable', { pluginId });
+
+    const initResult = await runtime.invoke('plugin.init', {
+      pluginId,
+      launchParams: {
+        trigger: 'chipsdev.run'
+      }
+    });
+
+    await runtime.invoke('plugin.handshake.complete', {
+      sessionId: initResult.session.sessionId,
+      nonce: initResult.session.sessionNonce
+    });
+
+    const queryResult = await runtime.invoke('plugin.query', {
+      type: 'app',
+      capability: undefined
+    });
+
+    const record =
+      queryResult.plugins &&
+      queryResult.plugins.find((item) => item.id === pluginId);
+
+    let url;
+    if (record && record.installPath && record.entry) {
+      url = path.resolve(record.installPath, record.entry);
+    }
+
+    const opened = await runtime.invoke('window.open', {
+      config: {
+        title: manifest.name || pluginId,
+        width: 1280,
+        height: 800,
+        pluginId,
+        sessionId: initResult.session.sessionId,
+        url
+      }
+    });
+
+    const windowId =
+      opened && typeof opened === 'object'
+        ? opened.windowId || opened.id || opened.windowId
+        : undefined;
+
+    log({
+      message: 'Host 已在开发工作区中启动应用插件',
+      workspacePath,
+      pluginId,
+      windowId
+    });
+
+    const shutdown = async () => {
+      try {
+        await app.stop();
+      } catch {
+        // ignore
+      }
+      process.exit(0);
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+
+    // 保持进程存活，直到用户中断。
+    // eslint-disable-next-line no-empty-function
+    await new Promise(() => {});
+  } catch (error) {
+    try {
+      await app.stop();
+    } catch {
+      // ignore
+    }
+    throw error;
+  }
+};
+
+main().catch((error) => {
+  logError(toErrorPayload(error));
+  process.exitCode = 1;
+});

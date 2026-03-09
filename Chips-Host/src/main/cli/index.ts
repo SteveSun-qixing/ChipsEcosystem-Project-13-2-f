@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -5,6 +7,7 @@ import process from 'node:process';
 import { HostApplication } from '../core/host-application';
 import { openAssociatedFile } from '../core/file-association';
 import { RuntimeClient } from '../../renderer/runtime-client';
+import { toStandardError } from '../../shared/errors';
 
 const stateFile = (workspace: string) => path.join(workspace, 'host-state.json');
 const pluginFile = (workspace: string) => path.join(workspace, 'plugins.json');
@@ -36,6 +39,16 @@ const print = (value: unknown): void => {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 };
 
+const printCliError = (error: unknown): void => {
+  const standard = toStandardError(error, 'CLI_COMMAND_FAILED');
+  print({
+    error: standard.message,
+    code: standard.code,
+    details: standard.details,
+    retryable: standard.retryable
+  });
+};
+
 const withHost = async <T>(workspace: string, run: (runtime: RuntimeClient) => Promise<T>): Promise<T> => {
   const app = new HostApplication({ workspacePath: workspace });
   await app.start();
@@ -54,309 +67,317 @@ const parseArgs = (argv: string[]): { command: string; subcommand?: string; args
 };
 
 export const runCli = async (argv: string[]): Promise<number> => {
-  const workspace = getWorkspace();
-  await ensureWorkspace(workspace);
+  try {
+    const workspace = getWorkspace();
+    await ensureWorkspace(workspace);
 
-  const { command, subcommand, args } = parseArgs(argv);
+    const { command, subcommand, args } = parseArgs(argv);
 
-  if (command === 'help') {
-    print('chips host <start|stop|status|config|logs|plugin|theme|update|doctor|open>');
-    return 0;
-  }
-
-  if (command === 'start') {
-    const state = {
-      running: true,
-      pid: process.pid,
-      startedAt: new Date().toISOString()
-    };
-    await writeJson(stateFile(workspace), state);
-    print(state);
-    return 0;
-  }
-
-  if (command === 'stop') {
-    await fs.rm(stateFile(workspace), { force: true });
-    print({ running: false });
-    return 0;
-  }
-
-  if (command === 'status') {
-    const state = await readJson(stateFile(workspace), { running: false });
-    print(state);
-    return 0;
-  }
-
-  if (command === 'config') {
-    if (subcommand === 'list') {
-      const config = await readJson(path.join(workspace, 'config.json'), {});
-      print(config);
-      return 0;
-    }
-
-    if (subcommand === 'set') {
-      const [key, value] = args;
-      if (!key) {
-        print({ error: 'config set requires key and value' });
-        return 1;
-      }
-
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('config.set', { key, value });
+    if (command === 'host') {
+      print({
+        error: 'chips 不再使用 host 二级指令。',
+        hint: '请直接使用 `chips help`、`chips start`、`chips plugin install <path>` 等命令。'
       });
-      print({ ok: true });
-      return 0;
-    }
-
-    if (subcommand === 'reset') {
-      const [key] = args;
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('config.reset', { key });
-      });
-      print({ ok: true });
-      return 0;
-    }
-
-    print({ error: 'unsupported config command' });
-    return 1;
-  }
-
-  if (command === 'logs') {
-    const exported = await withHost(workspace, async (runtime) => runtime.invoke('log.export', {}));
-    print(exported);
-    return 0;
-  }
-
-  if (command === 'theme') {
-    if (subcommand === 'list') {
-      const result = await withHost(workspace, async (runtime) => {
-        return runtime.invoke('theme.list', {});
-      });
-      print(result);
-      return 0;
-    }
-
-    if (subcommand === 'current') {
-      const result = await withHost(workspace, async (runtime) => {
-        return runtime.invoke('theme.getCurrent', {});
-      });
-      print(result);
-      return 0;
-    }
-
-    if (subcommand === 'apply') {
-      const [id] = args;
-      if (!id) {
-        print({ error: 'theme apply requires theme id' });
-        return 1;
-      }
-
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('theme.apply', { id });
-      });
-      print({ ok: true });
-      return 0;
-    }
-
-    if (subcommand === 'resolve') {
-      const [id] = args;
-      const result = await withHost(workspace, async (runtime) => {
-        const chain = id ? [id] : [];
-        return runtime.invoke('theme.resolve', { chain });
-      });
-      print(result);
-      return 0;
-    }
-
-    if (subcommand === 'contract') {
-      const [component] = args;
-      const result = await withHost(workspace, async (runtime) => {
-        return runtime.invoke('theme.contract.get', component ? { component } : {});
-      });
-      print(result);
-      return 0;
-    }
-
-    if (subcommand === 'validate') {
-      const summary = await withHost(workspace, async (runtime) => {
-        const { themes } = await runtime.invoke<{
-          themes: Array<{ id: string }>;
-        }>('theme.list', {});
-
-        const results: Array<{ id: string; ok: boolean; error?: unknown }> = [];
-
-        for (const theme of themes) {
-          try {
-            await runtime.invoke('theme.apply', { id: theme.id });
-            await runtime.invoke('theme.resolve', { chain: [theme.id] });
-            results.push({ id: theme.id, ok: true });
-          } catch (error) {
-            results.push({
-              id: theme.id,
-              ok: false,
-              error
-            });
-          }
-        }
-
-        return { themes: results };
-      });
-
-      print(summary);
-      return 0;
-    }
-
-    print({ error: 'unsupported theme command' });
-    return 1;
-  }
-
-  if (command === 'plugin') {
-    const plugins = await readJson<Array<{ id: string; manifestPath: string; enabled: boolean }>>(pluginFile(workspace), []);
-
-    if (subcommand === 'list') {
-      print(plugins);
-      return 0;
-    }
-
-    if (subcommand === 'install') {
-      const [manifestPath] = args;
-      if (!manifestPath) {
-        print({ error: 'plugin install requires manifest path' });
-        return 1;
-      }
-
-      const result = await withHost(workspace, async (runtime) => {
-        return runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
-      });
-
-      plugins.push({ id: result.pluginId, manifestPath, enabled: false });
-      await writeJson(pluginFile(workspace), plugins);
-      print(result);
-      return 0;
-    }
-
-    if (subcommand === 'uninstall') {
-      const [pluginId] = args;
-      if (!pluginId) {
-        print({ error: 'plugin uninstall requires plugin id' });
-        return 1;
-      }
-
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('plugin.uninstall', { pluginId });
-      });
-
-      const next = plugins.filter((plugin) => plugin.id !== pluginId);
-      await writeJson(pluginFile(workspace), next);
-      print({ ok: true });
-      return 0;
-    }
-
-    if (subcommand === 'enable') {
-      const [pluginId] = args;
-      if (!pluginId) {
-        print({ error: 'plugin enable requires plugin id' });
-        return 1;
-      }
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('plugin.enable', { pluginId });
-      });
-      const plugin = plugins.find((item) => item.id === pluginId);
-      if (plugin) {
-        plugin.enabled = true;
-      }
-      await writeJson(pluginFile(workspace), plugins);
-      print({ ok: true });
-      return 0;
-    }
-
-    if (subcommand === 'disable') {
-      const [pluginId] = args;
-      if (!pluginId) {
-        print({ error: 'plugin disable requires plugin id' });
-        return 1;
-      }
-      await withHost(workspace, async (runtime) => {
-        await runtime.invoke('plugin.disable', { pluginId });
-      });
-      const plugin = plugins.find((item) => item.id === pluginId);
-      if (plugin) {
-        plugin.enabled = false;
-      }
-      await writeJson(pluginFile(workspace), plugins);
-      print({ ok: true });
-      return 0;
-    }
-
-    if (subcommand === 'query') {
-      const [type, capability] = args;
-      const result = await withHost(workspace, async (runtime) => {
-        return runtime.invoke('plugin.query', { type, capability });
-      });
-      print(result);
-      return 0;
-    }
-
-    print({ error: 'unsupported plugin command' });
-    return 1;
-  }
-
-  if (command === 'update') {
-    if (subcommand === 'check') {
-      print({ currentVersion: '0.1.0', latestVersion: '0.1.0', updateAvailable: false });
-      return 0;
-    }
-
-    if (subcommand === 'install') {
-      print({ installed: true, version: '0.1.0' });
-      return 0;
-    }
-
-    print({ error: 'unsupported update command' });
-    return 1;
-  }
-
-  if (command === 'doctor') {
-    const checks = {
-      workspaceExists: true,
-      workspaceWritable: true,
-      stateFileExists: await fs
-        .access(stateFile(workspace))
-        .then(() => true)
-        .catch(() => false),
-      pluginStoreExists: await fs
-        .access(pluginFile(workspace))
-        .then(() => true)
-        .catch(() => false)
-    };
-    print({ checks });
-    return 0;
-  }
-
-  if (command === 'open') {
-    const targetPath = subcommand ?? args[0];
-    if (!targetPath) {
-      print({ error: 'open requires target file path' });
       return 1;
     }
 
-    try {
+    if (command === 'help') {
+      print('chips <start|stop|status|config|logs|plugin|theme|update|doctor|open>');
+      return 0;
+    }
+
+    if (command === 'start') {
+      const state = {
+        running: true,
+        pid: process.pid,
+        startedAt: new Date().toISOString()
+      };
+      await writeJson(stateFile(workspace), state);
+      print(state);
+      return 0;
+    }
+
+    if (command === 'stop') {
+      await fs.rm(stateFile(workspace), { force: true });
+      print({ running: false });
+      return 0;
+    }
+
+    if (command === 'status') {
+      const state = await readJson(stateFile(workspace), { running: false });
+      print(state);
+      return 0;
+    }
+
+    if (command === 'config') {
+      if (subcommand === 'list') {
+        const config = await readJson(path.join(workspace, 'config.json'), {});
+        print(config);
+        return 0;
+      }
+
+      if (subcommand === 'set') {
+        const [key, value] = args;
+        if (!key) {
+          print({ error: 'config set requires key and value' });
+          return 1;
+        }
+
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('config.set', { key, value });
+        });
+        print({ ok: true });
+        return 0;
+      }
+
+      if (subcommand === 'reset') {
+        const [key] = args;
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('config.reset', { key });
+        });
+        print({ ok: true });
+        return 0;
+      }
+
+      print({ error: 'unsupported config command' });
+      return 1;
+    }
+
+    if (command === 'logs') {
+      const exported = await withHost(workspace, async (runtime) => runtime.invoke('log.export', {}));
+      print(exported);
+      return 0;
+    }
+
+    if (command === 'theme') {
+      if (subcommand === 'list') {
+        const result = await withHost(workspace, async (runtime) => runtime.invoke('theme.list', {}));
+        print(result);
+        return 0;
+      }
+
+      if (subcommand === 'current') {
+        const result = await withHost(workspace, async (runtime) => runtime.invoke('theme.getCurrent', {}));
+        print(result);
+        return 0;
+      }
+
+      if (subcommand === 'apply') {
+        const [id] = args;
+        if (!id) {
+          print({ error: 'theme apply requires theme id' });
+          return 1;
+        }
+
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('theme.apply', { id });
+        });
+        print({ ok: true });
+        return 0;
+      }
+
+      if (subcommand === 'resolve') {
+        const [id] = args;
+        const result = await withHost(workspace, async (runtime) => {
+          const chain = id ? [id] : [];
+          return runtime.invoke('theme.resolve', { chain });
+        });
+        print(result);
+        return 0;
+      }
+
+      if (subcommand === 'contract') {
+        const [component] = args;
+        const result = await withHost(workspace, async (runtime) => {
+          return runtime.invoke('theme.contract.get', component ? { component } : {});
+        });
+        print(result);
+        return 0;
+      }
+
+      if (subcommand === 'validate') {
+        const summary = await withHost(workspace, async (runtime) => {
+          const { themes } = await runtime.invoke<{
+            themes: Array<{ id: string }>;
+          }>('theme.list', {});
+
+          const results: Array<{ id: string; ok: boolean; error?: unknown }> = [];
+
+          for (const theme of themes) {
+            try {
+              await runtime.invoke('theme.apply', { id: theme.id });
+              await runtime.invoke('theme.resolve', { chain: [theme.id] });
+              results.push({ id: theme.id, ok: true });
+            } catch (error) {
+              results.push({
+                id: theme.id,
+                ok: false,
+                error
+              });
+            }
+          }
+
+          return { themes: results };
+        });
+
+        print(summary);
+        return 0;
+      }
+
+      print({ error: 'unsupported theme command' });
+      return 1;
+    }
+
+    if (command === 'plugin') {
+      const plugins = await readJson<Array<{ id: string; manifestPath: string; enabled: boolean }>>(pluginFile(workspace), []);
+
+      if (subcommand === 'list') {
+        print(plugins);
+        return 0;
+      }
+
+      if (subcommand === 'install') {
+        const [manifestPath] = args;
+        if (!manifestPath) {
+          print({ error: 'plugin install requires manifest path' });
+          return 1;
+        }
+
+        const result = await withHost(workspace, async (runtime) => {
+          return runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
+        });
+
+        plugins.push({ id: result.pluginId, manifestPath, enabled: false });
+        await writeJson(pluginFile(workspace), plugins);
+        print(result);
+        return 0;
+      }
+
+      if (subcommand === 'uninstall') {
+        const [pluginId] = args;
+        if (!pluginId) {
+          print({ error: 'plugin uninstall requires plugin id' });
+          return 1;
+        }
+
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('plugin.uninstall', { pluginId });
+        });
+
+        const next = plugins.filter((plugin) => plugin.id !== pluginId);
+        await writeJson(pluginFile(workspace), next);
+        print({ ok: true });
+        return 0;
+      }
+
+      if (subcommand === 'enable') {
+        const [pluginId] = args;
+        if (!pluginId) {
+          print({ error: 'plugin enable requires plugin id' });
+          return 1;
+        }
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('plugin.enable', { pluginId });
+        });
+        const plugin = plugins.find((item) => item.id === pluginId);
+        if (plugin) {
+          plugin.enabled = true;
+        }
+        await writeJson(pluginFile(workspace), plugins);
+        print({ ok: true });
+        return 0;
+      }
+
+      if (subcommand === 'disable') {
+        const [pluginId] = args;
+        if (!pluginId) {
+          print({ error: 'plugin disable requires plugin id' });
+          return 1;
+        }
+        await withHost(workspace, async (runtime) => {
+          await runtime.invoke('plugin.disable', { pluginId });
+        });
+        const plugin = plugins.find((item) => item.id === pluginId);
+        if (plugin) {
+          plugin.enabled = false;
+        }
+        await writeJson(pluginFile(workspace), plugins);
+        print({ ok: true });
+        return 0;
+      }
+
+      if (subcommand === 'query') {
+        const [type, capability] = args;
+        const result = await withHost(workspace, async (runtime) => {
+          return runtime.invoke('plugin.query', { type, capability });
+        });
+        print(result);
+        return 0;
+      }
+
+      print({ error: 'unsupported plugin command' });
+      return 1;
+    }
+
+    if (command === 'update') {
+      if (subcommand === 'check') {
+        print({ currentVersion: '0.1.0', latestVersion: '0.1.0', updateAvailable: false });
+        return 0;
+      }
+
+      if (subcommand === 'install') {
+        print({ installed: true, version: '0.1.0' });
+        return 0;
+      }
+
+      print({ error: 'unsupported update command' });
+      return 1;
+    }
+
+    if (command === 'doctor') {
+      const checks = {
+        workspaceExists: true,
+        workspaceWritable: true,
+        stateFileExists: await fs
+          .access(stateFile(workspace))
+          .then(() => true)
+          .catch(() => false),
+        pluginStoreExists: await fs
+          .access(pluginFile(workspace))
+          .then(() => true)
+          .catch(() => false)
+      };
+      print({ checks });
+      return 0;
+    }
+
+    if (command === 'open') {
+      const targetPath = subcommand ?? args[0];
+      if (!targetPath) {
+        print({ error: 'open requires target file path' });
+        return 1;
+      }
+
       const result = await withHost(workspace, async (runtime) => openAssociatedFile(runtime, targetPath));
       print(result);
       return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      print({ error: message });
-      return 1;
     }
-  }
 
-  print({ error: `unknown command: ${command}` });
-  return 1;
+    print({ error: `unknown command: ${command}` });
+    return 1;
+  } catch (error) {
+    printCliError(error);
+    return 1;
+  }
 };
 
 if (require.main === module) {
-  runCli(process.argv.slice(2)).then((code) => {
-    process.exitCode = code;
-  });
+  runCli(process.argv.slice(2))
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      printCliError(error);
+      process.exitCode = 1;
+    });
 }

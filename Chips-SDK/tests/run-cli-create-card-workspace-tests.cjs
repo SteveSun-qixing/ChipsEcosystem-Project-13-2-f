@@ -48,6 +48,10 @@ const main = async () => {
         {
           name: 'chips-ecosystem-workspace',
           private: true,
+          volta: {
+            node: process.versions.node,
+            npm: '10.9.3'
+          },
           workspaces: [
             'Chips-*',
             'Chips-BaseCardPlugin/*',
@@ -80,6 +84,7 @@ const main = async () => {
     assert.equal(createdPackage.devDependencies['chips-sdk'], '^0.1.0');
     assert.equal(createdPackage.devDependencies.vitest, '^3.0.8');
     assert.equal(createdPackage.devDependencies.jsdom, '^28.1.0');
+    assert.equal(createdPackage.volta.extends, '../../package.json');
 
     const chipsConfig = await fsp.readFile(path.join(targetDir, 'chips.config.mjs'), 'utf-8');
     assert.match(chipsConfig, /type:\s*"card"/);

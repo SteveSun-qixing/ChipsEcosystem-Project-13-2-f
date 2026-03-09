@@ -16,5 +16,8 @@
     "yaml": "^2.7.0",
     "archiver": "^7.0.1"
   },
-  "types": "index.d.ts"
+  "types": "index.d.ts",
+  "volta": {
+    "extends": "../package.json"
+  }
 }

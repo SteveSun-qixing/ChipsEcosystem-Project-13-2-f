@@ -44,6 +44,11 @@ const requiredTemplateSpecs = new Map([
   ]]
 ]);
 
+const requiredRootVolta = {
+  node: "22.18.0",
+  npm: "10.9.3"
+};
+
 const requiredTemplateFiles = new Map([
   ["Chips-Scaffold/chips-scaffold-basecard/templates/card-standard", [
     "vitest.config.mts.tpl",
@@ -89,11 +94,73 @@ const getByPath = (value, dottedPath) => {
   }, value);
 };
 
+const escapeRegex = (value) => value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+
+const workspacePatternToRegex = (pattern) => {
+  const normalized = pattern.split(path.sep).join("/");
+  let source = "^";
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (char === "*") {
+      if (normalized[index + 1] === "*") {
+        source += ".*";
+        index += 1;
+      } else {
+        source += "[^/]+";
+      }
+      continue;
+    }
+    source += escapeRegex(char);
+  }
+  source += "$";
+  return new RegExp(source);
+};
+
+const workspacePatternMatches = (pattern, relativePath) => {
+  return workspacePatternToRegex(pattern).test(relativePath.split(path.sep).join("/"));
+};
+
+const collectWorkspacePackagePaths = (workspacePatterns) => {
+  const matches = [];
+  const ignoredDirectories = new Set([".git", "node_modules", "dist", "release-artifacts", "归档"]);
+
+  const visit = (currentDir, relativeDir = "") => {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      if (ignoredDirectories.has(entry.name)) {
+        continue;
+      }
+      const nextDir = path.join(currentDir, entry.name);
+      const nextRelativeDir = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+      const packageJsonPath = path.join(nextDir, "package.json");
+      if (
+        fs.existsSync(packageJsonPath) &&
+        workspacePatterns.some((pattern) => workspacePatternMatches(pattern, nextRelativeDir))
+      ) {
+        matches.push(path.join(nextRelativeDir, "package.json").split(path.sep).join("/"));
+      }
+      visit(nextDir, nextRelativeDir);
+    }
+  };
+
+  visit(root);
+  return matches.sort((left, right) => left.localeCompare(right));
+};
+
 const errors = [];
 
 for (const pattern of expectedWorkspacePatterns) {
   if (!rootPackage.workspaces || !rootPackage.workspaces.includes(pattern)) {
     errors.push(`缺少根 workspace 模式：${pattern}`);
+  }
+}
+
+for (const [field, expectedValue] of Object.entries(requiredRootVolta)) {
+  if (rootPackage.volta?.[field] !== expectedValue) {
+    errors.push(`根 package.json 的 volta.${field} 应为 ${expectedValue}，当前为 ${String(rootPackage.volta?.[field])}`);
   }
 }
 
@@ -138,6 +205,20 @@ for (const [relativePath, snippets] of requiredTemplateContent) {
     if (!content.includes(snippet)) {
       errors.push(`${relativePath} 缺少必要内容：${snippet}`);
     }
+  }
+}
+
+const workspacePackagePaths = collectWorkspacePackagePaths(expectedWorkspacePatterns);
+for (const relativePackagePath of workspacePackagePaths) {
+  const absolutePath = path.join(root, relativePackagePath);
+  const pkg = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
+  const packageDir = path.dirname(absolutePath);
+  const expectedExtends = path
+    .relative(packageDir, rootPackagePath)
+    .split(path.sep)
+    .join("/");
+  if (pkg.volta?.extends !== expectedExtends) {
+    errors.push(`${relativePackagePath} 的 volta.extends 应为 ${expectedExtends}，当前为 ${String(pkg.volta?.extends)}`);
   }
 }
 

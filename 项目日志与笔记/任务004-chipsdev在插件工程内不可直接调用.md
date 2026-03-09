@@ -21,6 +21,7 @@
 3. 在 `Chips-SDK/cli/index.js` 中增强生态根目录解析逻辑，使本地安装在插件工程中的 `chipsdev` 仍能正确找到 `Chips-Host`、`Chips-Scaffold` 等兄弟仓库。
 4. 在 `chipsdev create` 后自动适配当前生态工作区依赖，避免新建工程再次出现“工程内无法直接调用 chipsdev”的问题。
 5. 更新开发环境指南、开发者命令行手册、命令拆分指南，明确“插件工程内需安装项目级 `chips-sdk` 依赖后直接调用 `chipsdev`”的规范。
+6. 在 `2026-03-09` 补齐生态根 Volta 配置与各工作区 `volta.extends`，正式解决 npm workspace hoist 下 Volta 不能在子工程目录解析 `chipsdev` 的问题。
 
 ## 验收要点
 

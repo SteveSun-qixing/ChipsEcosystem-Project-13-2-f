@@ -40,6 +40,35 @@ const main = async () => {
   await run(['help']);
   await run(['version']);
 
+  const buildProject = fs.mkdtempSync(path.join(os.tmpdir(), 'chipsdev-build-smoke-'));
+  fs.writeFileSync(
+    path.join(buildProject, 'chips.config.mjs'),
+    [
+      'export default {',
+      "  type: 'app',",
+      "  srcDir: 'src',",
+      "  outDir: 'dist',",
+      "  entry: 'index.html',",
+      "  testsDir: 'tests'",
+      '};'
+    ].join('\n')
+  );
+  fs.writeFileSync(
+    path.join(buildProject, 'manifest.yaml'),
+    [
+      'id: chips.build.smoke',
+      'version: "1.0.0"',
+      'type: app',
+      'name: Build Smoke Plugin',
+      'permissions: []',
+      'entry: dist/index.html'
+    ].join('\n')
+  );
+  fs.writeFileSync(
+    path.join(buildProject, 'index.html'),
+    '<!doctype html><html><body><div id="app"></div></body></html>'
+  );
+
   const tempProject = fs.mkdtempSync(path.join(os.tmpdir(), 'chipsdev-local-bin-'));
   fs.writeFileSync(
     path.join(tempProject, 'package.json'),
@@ -57,9 +86,18 @@ const main = async () => {
   );
 
   try {
+    await run(['build'], buildProject);
+    if (!fs.existsSync(path.join(buildProject, 'dist', 'index.html'))) {
+      throw new Error('chipsdev build did not produce dist/index.html');
+    }
+    if (fs.existsSync(path.join(buildProject, 'dist', 'manifest.yaml'))) {
+      throw new Error('chipsdev build must not copy manifest.yaml into dist/');
+    }
+
     await runBinary('npm', ['install'], tempProject);
     await runBinary('chipsdev', ['help'], tempProject);
   } finally {
+    fs.rmSync(buildProject, { recursive: true, force: true });
     fs.rmSync(tempProject, { recursive: true, force: true });
   }
 

@@ -433,19 +433,6 @@ const handleBuild = async () => {
 
   await vite.build(viteConfig);
 
-  // 将 manifest.yaml 同步到构建输出目录，供后续 package / run / plugin.install 使用。
-  const manifestSrc = path.join(projectRoot, MANIFEST_FILE);
-  const manifestDestDir = path.join(projectRoot, config.outDir);
-  const manifestDest = path.join(manifestDestDir, MANIFEST_FILE);
-  try {
-    await fsp.access(manifestSrc, fs.constants.R_OK);
-    await ensureDirectoryExists(manifestDestDir);
-    await fsp.copyFile(manifestSrc, manifestDest);
-  } catch (error) {
-    const err = /** @type {NodeJS.ErrnoException} */ (error);
-    throw new Error(`同步 manifest.yaml 到构建目录失败：${err.message}`);
-  }
-
   log(`构建完成，输出目录：${config.outDir}`);
 };
 
@@ -561,7 +548,7 @@ const zipDirectoryToCpk = async (sourceDir, manifestPath, targetFile) => {
   // manifest.yaml 放在包根目录
   archive.file(manifestPath, { name: 'manifest.yaml', store: true });
 
-  // 构建产物放在 dist/ 目录下；排除构建阶段复制的 manifest 与已生成的打包产物，
+  // 构建产物放在 dist/ 目录下；排除错误产物与已生成的打包产物，
   // 避免包内出现重复 manifest 或将 .cpk 自身再次打进包里。
   const files = await collectPackageFiles(sourceDir);
   for (const file of files) {
@@ -839,6 +826,25 @@ const adaptWorkspaceDependencies = async (targetDir) => {
   }
 
   await ensureWorkspaceRegistration(ecosystemRoot, targetRoot);
+
+  const pkg = await loadJsonFile(pkgJsonPath, {});
+  const relativeRootPackagePath = path
+    .relative(targetRoot, path.join(ecosystemRoot, 'package.json'))
+    .split(path.sep)
+    .join('/');
+  const nextVolta = {
+    ...(pkg.volta && typeof pkg.volta === 'object' ? pkg.volta : {}),
+    extends: relativeRootPackagePath
+  };
+  const needsUpdate =
+    !pkg.volta ||
+    typeof pkg.volta !== 'object' ||
+    pkg.volta.extends !== relativeRootPackagePath;
+
+  if (needsUpdate) {
+    pkg.volta = nextVolta;
+    await saveJsonFile(pkgJsonPath, pkg);
+  }
 };
 
 const deriveProjectName = (targetDir) => {
@@ -1123,8 +1129,8 @@ const main = async () => {
 
 const handleRun = async () => {
   const projectRoot = resolveProjectRoot();
-  const config = await loadProjectConfig(projectRoot);
-  const { manifest } = await loadManifest(projectRoot);
+  await loadProjectConfig(projectRoot);
+  const { manifest, manifestPath } = await loadManifest(projectRoot);
 
   if (manifest.type !== 'app') {
     throw new Error(
@@ -1162,9 +1168,6 @@ const handleRun = async () => {
   const runtime = new RuntimeClient(bridge);
 
   try {
-    const manifestDestDir = path.join(projectRoot, config.outDir);
-    const manifestPathInDist = path.join(manifestDestDir, MANIFEST_FILE);
-
     const installedPlugins = await runtime.invoke('plugin.query', {
       type: 'app',
       capability: undefined
@@ -1182,7 +1185,7 @@ const handleRun = async () => {
       await runtime.invoke('plugin.uninstall', { pluginId: manifest.id });
     }
 
-    const installResult = await runtime.invoke('plugin.install', { manifestPath: manifestPathInDist });
+    const installResult = await runtime.invoke('plugin.install', { manifestPath });
     const pluginId = installResult.pluginId;
 
     await runtime.invoke('plugin.enable', { pluginId });

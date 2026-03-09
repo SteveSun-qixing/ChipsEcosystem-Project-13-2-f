@@ -6,6 +6,11 @@
   "exports": {
     ".": "./index.js"
   },
+  "dependencies": {
+    "@chips/card-runtime": "0.1.0",
+    "@chips/components": "0.1.0",
+    "@chips/hooks": "0.1.0"
+  },
   "peerDependencies": {
     "react": ">=18.0.0"
   }

@@ -1,0 +1,19 @@
+{
+  "name": "chips-ecosystem-workspace",
+  "private": true,
+  "packageManager": "npm@10.9.3",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "workspaces": [
+    "Chips-*",
+    "Chips-BaseCardPlugin/*",
+    "Chips-ComponentLibrary/packages/*",
+    "Chips-ComponentLibrary/packages/adapters/*",
+    "Chips-Scaffold/*",
+    "ThemePack/*"
+  ],
+  "scripts": {
+    "verify:workspace": "node ./scripts/verify-ecosystem-workspace.mjs"
+  }
+}

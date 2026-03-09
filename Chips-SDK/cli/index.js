@@ -171,11 +171,44 @@ const loadManifest = async (projectRoot) => {
   }
 };
 
+const collectAncestorNodeModuleBinDirs = (projectRoot) => {
+  const binDirs = [];
+  const seen = new Set();
+  const queue = [projectRoot];
+
+  try {
+    const realProjectRoot = fs.realpathSync(projectRoot);
+    if (!queue.includes(realProjectRoot)) {
+      queue.push(realProjectRoot);
+    }
+  } catch {
+    // 忽略 realpath 失败，按原始路径继续。
+  }
+
+  for (const start of queue) {
+    let current = start;
+    while (true) {
+      const binDir = path.join(current, 'node_modules', '.bin');
+      if (fs.existsSync(binDir) && !seen.has(binDir)) {
+        seen.add(binDir);
+        binDirs.push(binDir);
+      }
+
+      const parent = path.dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+    }
+  }
+
+  return binDirs;
+};
+
 const makeBinEnv = (projectRoot) => {
-  const binDirs = [
-    path.join(projectRoot, 'node_modules', '.bin'),
+  const binDirs = collectAncestorNodeModuleBinDirs(projectRoot).concat(
     path.join(__dirname, '..', 'node_modules', '.bin')
-  ];
+  );
   const unique = [];
   for (const dir of binDirs) {
     if (fs.existsSync(dir) && !unique.includes(dir)) {
@@ -216,6 +249,23 @@ const runCliTool = (projectRoot, binName, args) => {
   });
 };
 
+const ensurePackageBuildArtifact = async (packageDir, artifactPath, packageLabel) => {
+  if (fs.existsSync(artifactPath)) {
+    return;
+  }
+
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error(`未找到 ${packageLabel} 的 package.json：${packageJsonPath}`);
+  }
+
+  await runCliTool(packageDir, 'npm', ['run', 'build']);
+
+  if (!fs.existsSync(artifactPath)) {
+    throw new Error(`未找到 ${packageLabel} 构建产物：${artifactPath}`);
+  }
+};
+
 const ensureDirectoryExists = async (dir) => {
   await fsp.mkdir(dir, { recursive: true });
 };
@@ -234,6 +284,19 @@ const readTextFileIfExists = async (filePath) => {
 const writeTextFile = async (filePath, content) => {
   await fsp.mkdir(path.dirname(filePath), { recursive: true });
   await fsp.writeFile(filePath, content, 'utf-8');
+};
+
+const hasProjectVitestConfig = (projectRoot) => {
+  const candidateFiles = [
+    'vitest.config.ts',
+    'vitest.config.mts',
+    'vitest.config.cts',
+    'vitest.config.js',
+    'vitest.config.mjs',
+    'vitest.config.cjs'
+  ];
+
+  return candidateFiles.some((fileName) => fs.existsSync(path.join(projectRoot, fileName)));
 };
 
 const defaultConfigTemplate = () => {
@@ -388,8 +451,12 @@ const handleBuild = async () => {
 
 const handleTest = async (passThroughArgs) => {
   const projectRoot = resolveProjectRoot();
-  await loadProjectConfig(projectRoot);
-  const args = ['run'].concat(passThroughArgs);
+  const config = await loadProjectConfig(projectRoot);
+  const args = ['run'];
+  if (!hasProjectVitestConfig(projectRoot)) {
+    args.push('--dir', config.testsDir);
+  }
+  args.push(...passThroughArgs);
   await runCliTool(projectRoot, 'vitest', args);
 };
 
@@ -529,6 +596,8 @@ const handlePackage = async () => {
   const fileName = `${safeId}-${version}.cpk`;
   const targetDir = path.join(projectRoot, 'dist');
 
+  await assertManifestEntryExists(projectRoot, manifest);
+
   await ensureDirectoryExists(targetDir);
   const targetPath = path.join(targetDir, fileName);
 
@@ -561,6 +630,19 @@ const validateManifestShape = (manifest) => {
   return errors;
 };
 
+const assertManifestEntryExists = async (projectRoot, manifest) => {
+  if (!manifest || typeof manifest.entry !== 'string' || manifest.entry.trim().length === 0) {
+    return;
+  }
+
+  const entryPath = path.join(projectRoot, manifest.entry);
+  try {
+    await fsp.access(entryPath, fs.constants.R_OK);
+  } catch {
+    throw new Error(`manifest.entry 指向的构建产物不存在：${manifest.entry}`);
+  }
+};
+
 const handleValidate = async () => {
   const projectRoot = resolveProjectRoot();
   const config = await loadProjectConfig(projectRoot);
@@ -578,6 +660,12 @@ const handleValidate = async () => {
     if (files.length === 0) {
       errors.push(`构建输出目录 ${config.outDir} 为空，请检查构建配置。`);
     }
+  }
+
+  try {
+    await assertManifestEntryExists(projectRoot, manifest);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
   }
 
   const result = {
@@ -599,11 +687,6 @@ const handleValidate = async () => {
   log(result);
 };
 
-const toFileDependency = (fromDir, targetDir) => {
-  const relative = path.relative(fromDir, targetDir).split(path.sep).join('/');
-  return `file:${relative.startsWith('.') ? relative : `./${relative}`}`;
-};
-
 const findAncestorWithEntries = (startPath, entries) => {
   let current = path.resolve(startPath);
   while (true) {
@@ -618,28 +701,128 @@ const findAncestorWithEntries = (startPath, entries) => {
   }
 };
 
+const loadPackageJsonSync = (packageJsonPath) => {
+  try {
+    return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+  } catch {
+    return null;
+  }
+};
+
+const toRealPathIfExists = (targetPath) => {
+  try {
+    return fs.realpathSync.native(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+};
+
+const isEcosystemWorkspaceRoot = (targetPath) => {
+  const packageJsonPath = path.join(targetPath, 'package.json');
+  const pkg = loadPackageJsonSync(packageJsonPath);
+  if (!pkg || pkg.name !== 'chips-ecosystem-workspace') {
+    return false;
+  }
+  return Array.isArray(pkg.workspaces);
+};
+
+const findEcosystemWorkspaceRoot = (startPath) => {
+  let current = toRealPathIfExists(startPath);
+  while (true) {
+    if (isEcosystemWorkspaceRoot(current)) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+};
+
+const escapeRegex = (value) => value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+
+const workspacePatternToRegex = (pattern) => {
+  const normalized = pattern.split(path.sep).join('/');
+  let source = '^';
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (char === '*') {
+      if (normalized[index + 1] === '*') {
+        source += '.*';
+        index += 1;
+      } else {
+        source += '[^/]+';
+      }
+      continue;
+    }
+    source += escapeRegex(char);
+  }
+  source += '$';
+  return new RegExp(source);
+};
+
+const workspacePatternMatches = (pattern, relativePath) => {
+  return workspacePatternToRegex(pattern).test(relativePath.split(path.sep).join('/'));
+};
+
+const ensureWorkspaceRegistration = async (ecosystemRoot, targetDir) => {
+  const relativePath = path.relative(ecosystemRoot, targetDir).split(path.sep).join('/');
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return;
+  }
+
+  const rootPackagePath = path.join(ecosystemRoot, 'package.json');
+  const rootPackage = await loadJsonFile(rootPackagePath, {});
+  const workspaceEntries = Array.isArray(rootPackage.workspaces) ? [...rootPackage.workspaces] : [];
+  const alreadyCovered = workspaceEntries.some((entry) => {
+    if (entry === relativePath) {
+      return true;
+    }
+    return workspacePatternMatches(entry, relativePath);
+  });
+
+  if (alreadyCovered) {
+    return;
+  }
+
+  workspaceEntries.push(relativePath);
+  rootPackage.workspaces = workspaceEntries.sort((left, right) => left.localeCompare(right));
+  await saveJsonFile(rootPackagePath, rootPackage);
+};
+
 const resolveEcosystemRoot = () => {
   const fromEnv = process.env.CHIPS_ECOSYSTEM_ROOT;
   if (fromEnv) {
-    const resolved = path.resolve(fromEnv);
+    const resolved = toRealPathIfExists(fromEnv);
     if (fs.existsSync(resolved)) {
       return resolved;
     }
   }
 
   const projectRoot = resolveProjectRoot();
+  const fromWorkspace = findEcosystemWorkspaceRoot(projectRoot);
+  if (fromWorkspace) {
+    return fromWorkspace;
+  }
+
   const fromProject = findAncestorWithEntries(projectRoot, ['Chips-SDK', 'Chips-Host']);
   if (fromProject) {
     return fromProject;
   }
 
   const cliPackageRoot = path.resolve(__dirname, '..');
+  const fromCliWorkspace = findEcosystemWorkspaceRoot(cliPackageRoot);
+  if (fromCliWorkspace) {
+    return fromCliWorkspace;
+  }
+
   const fromCliPackage = findAncestorWithEntries(cliPackageRoot, ['Chips-SDK', 'Chips-Host']);
   if (fromCliPackage) {
     return fromCliPackage;
   }
 
-  return path.resolve(__dirname, '..', '..');
+  return toRealPathIfExists(path.resolve(__dirname, '..', '..'));
 };
 
 const adaptWorkspaceDependencies = async (targetDir) => {
@@ -649,36 +832,40 @@ const adaptWorkspaceDependencies = async (targetDir) => {
   }
 
   const ecosystemRoot = resolveEcosystemRoot();
-  const targetRoot = path.resolve(targetDir);
-  if (path.dirname(targetRoot) !== ecosystemRoot) {
+  const targetRoot = toRealPathIfExists(targetDir);
+  const relativePath = path.relative(ecosystemRoot, targetRoot);
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     return;
   }
 
-  const pkg = await loadJsonFile(pkgJsonPath, {});
-  const next = { ...pkg };
-  const devDependencies = { ...(next.devDependencies || {}) };
-  const dependencies = { ...(next.dependencies || {}) };
-
-  const sdkPackageDir = path.join(ecosystemRoot, 'Chips-SDK');
-  devDependencies['chips-sdk'] = toFileDependency(targetRoot, sdkPackageDir);
-
-  if ('@chips/component-library' in dependencies) {
-    const componentLibraryPackageDir = path.join(
-      ecosystemRoot,
-      'Chips-ComponentLibrary',
-      'packages',
-      'component-library'
-    );
-    dependencies['@chips/component-library'] = toFileDependency(targetRoot, componentLibraryPackageDir);
-  }
-
-  next.devDependencies = devDependencies;
-  if (Object.keys(dependencies).length > 0) {
-    next.dependencies = dependencies;
-  }
-
-  await saveJsonFile(pkgJsonPath, next);
+  await ensureWorkspaceRegistration(ecosystemRoot, targetRoot);
 };
+
+const deriveProjectName = (targetDir) => {
+  const rawName = path.basename(path.resolve(targetDir));
+  return rawName.length > 0 ? rawName : 'chips-project';
+};
+
+const slugifyForPluginId = (value) => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized.length > 0 ? normalized : 'chips-project';
+};
+
+const toDisplayName = (value) => {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b[a-z]/g, (match) => match.toUpperCase()) || 'Chips Project';
+};
+
+const deriveAuthorName = () => process.env.USER || process.env.USERNAME || 'Chips Developer';
+
+const deriveAuthorEmail = (slug) => `${slug}@example.invalid`;
 
 const handleCreate = async (args) => {
   const projectRoot = resolveProjectRoot();
@@ -700,18 +887,14 @@ const handleCreate = async (args) => {
 
   if (type === 'theme') {
     // 主题脚手架：使用 chips-scaffold-theme 提供的 API。
+    const packageDir = path.join(scaffoldRoot, 'chips-scaffold-theme');
     const modulePath = path.join(
-      scaffoldRoot,
-      'chips-scaffold-theme',
+      packageDir,
       'dist',
       'src',
       'index.js'
     );
-    if (!fs.existsSync(modulePath)) {
-      throw new Error(
-        `未找到主题脚手架构建产物：${modulePath}。请先在 chips-scaffold-theme 仓库运行 npm install && npm run build。`
-      );
-    }
+    await ensurePackageBuildArtifact(packageDir, modulePath, '主题脚手架');
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const themeScaffold = require(modulePath);
     const options = {
@@ -731,24 +914,28 @@ const handleCreate = async (args) => {
   }
 
   if (type === 'app') {
+    const packageDir = path.join(scaffoldRoot, 'chips-scaffold-app');
     const modulePath = path.join(
-      scaffoldRoot,
-      'chips-scaffold-app',
+      packageDir,
       'dist',
       'src',
       'cli',
       'app-scaffold-api.js'
     );
-    if (!fs.existsSync(modulePath)) {
-      throw new Error(
-        `未找到应用脚手架构建产物：${modulePath}。请先在 chips-scaffold-app 仓库运行 npm install && npm run build。`
-      );
-    }
+    await ensurePackageBuildArtifact(packageDir, modulePath, '应用脚手架');
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const appScaffold = require(modulePath);
+    const projectName = deriveProjectName(targetDir);
+    const slug = slugifyForPluginId(projectName);
     const options = {
+      projectName,
       targetDir: path.resolve(projectRoot, targetDir),
-      templateId: 'app-standard'
+      templateId: 'app-standard',
+      pluginId: `com.example.${slug}`,
+      displayName: toDisplayName(projectName),
+      version: '0.1.0',
+      authorName: deriveAuthorName(),
+      authorEmail: deriveAuthorEmail(slug)
     };
     await appScaffold.createAppProject(options);
     await adaptWorkspaceDependencies(options.targetDir);
@@ -761,22 +948,28 @@ const handleCreate = async (args) => {
   }
 
   if (type === 'card') {
+    const packageDir = path.join(scaffoldRoot, 'chips-scaffold-basecard');
     const modulePath = path.join(
-      scaffoldRoot,
-      'chips-scaffold-basecard',
+      packageDir,
       'dist',
+      'src',
       'index.js'
     );
-    if (!fs.existsSync(modulePath)) {
-      throw new Error(
-        `未找到基础卡片脚手架构建产物：${modulePath}。请先在 chips-scaffold-basecard 仓库运行 npm install && npm run build。`
-      );
-    }
+    await ensurePackageBuildArtifact(packageDir, modulePath, '基础卡片脚手架');
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const basecardScaffold = require(modulePath);
+    const projectName = deriveProjectName(targetDir);
+    const slug = slugifyForPluginId(projectName);
     const options = {
+      projectName,
       targetDir: path.resolve(projectRoot, targetDir),
-      templateId: 'card-standard'
+      templateId: 'card-standard',
+      pluginId: `com.example.${slug}`,
+      cardType: `base.${slug.replace(/-/g, '.')}`,
+      displayName: toDisplayName(projectName),
+      version: '0.1.0',
+      authorName: deriveAuthorName(),
+      authorEmail: deriveAuthorEmail(slug)
     };
     await basecardScaffold.createBasecardProject(options);
     await adaptWorkspaceDependencies(options.targetDir);

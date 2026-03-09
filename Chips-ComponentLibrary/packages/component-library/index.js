@@ -1,2 +1,3 @@
-export * from '../hooks/src/index.js';
-export * from '../components/src/index.js';
+export * from "@chips/hooks";
+export * from "@chips/components";
+export * from "@chips/card-runtime";

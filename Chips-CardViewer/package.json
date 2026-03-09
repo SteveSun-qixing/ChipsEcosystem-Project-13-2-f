@@ -13,13 +13,13 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@chips/component-library": "file:../Chips-ComponentLibrary/packages/component-library"
+    "@chips/component-library": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
     "vitest": "^1.5.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "chips-sdk": "file:../Chips-SDK"
+    "chips-sdk": "^0.1.0"
   }
 }

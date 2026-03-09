@@ -2,7 +2,7 @@ id: {{ PLUGIN_ID }}
 name: {{ DISPLAY_NAME }}
 version: {{ VERSION }}
 type: app
-entry: index.html
+entry: dist/index.html
 
 description: 标准应用插件模板示例工程，由 chips-scaffold-app 生成。
 
@@ -32,4 +32,3 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1024
-

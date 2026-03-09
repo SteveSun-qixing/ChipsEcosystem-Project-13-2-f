@@ -11,8 +11,9 @@
     "validate": "chipsdev validate"
   },
   "devDependencies": {
+    "jsdom": "^28.1.0",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8",
-    "chips-sdk": "file:../Chips-SDK"
+    "chips-sdk": "^0.1.0"
   }
 }

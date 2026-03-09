@@ -2,7 +2,7 @@ id: {{ PLUGIN_ID }}
 name: {{ DISPLAY_NAME }}
 version: {{ VERSION }}
 type: card
-entry: dist/src/index.js
+entry: dist/index.mjs
 description: 文本型基础卡片插件（通过 chips-scaffold-basecard 生成）。
 author:
   name: {{ AUTHOR_NAME }}
@@ -17,4 +17,3 @@ os:
   - darwin
   - win32
   - linux
-

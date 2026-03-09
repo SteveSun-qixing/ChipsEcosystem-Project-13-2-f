@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import * as fsSync from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +13,25 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const TEMPLATES_ROOT = path.resolve(__dirname, "../../templates");
+function resolveTemplatesRoot(): string {
+  const candidates = [
+    path.resolve(__dirname, "../../templates"),
+    path.resolve(__dirname, "../../../templates"),
+    path.resolve(process.cwd(), "templates"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate) && fsSync.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  }
+
+  throw createError("TEMPLATE_NOT_FOUND", "无法解析模板根目录", {
+    candidates,
+  });
+}
+
+const TEMPLATES_ROOT = resolveTemplatesRoot();
 
 export async function listTemplateMetas(): Promise<AppScaffoldTemplateMeta[]> {
   const entries = await fs.readdir(TEMPLATES_ROOT, { withFileTypes: true });
@@ -109,13 +128,18 @@ async function ensureTargetDirEmpty(targetDir: string): Promise<void> {
 }
 
 function isTextLike(filename: string): boolean {
-  const ext = path.extname(filename).toLowerCase();
+  const normalizedFilename = filename.endsWith(".tpl")
+    ? filename.slice(0, -4)
+    : filename;
+  const ext = path.extname(normalizedFilename).toLowerCase();
   return [
     ".ts",
     ".tsx",
     ".js",
     ".jsx",
     ".json",
+    ".html",
+    ".css",
     ".md",
     ".yaml",
     ".yml",
@@ -128,8 +152,9 @@ function renderTemplateString(
   content: string,
   context: TemplateContext,
 ): string {
+  const contextValues: Record<string, string | undefined> = { ...context };
   return content.replace(/{{\s*([A-Z0-9_]+)\s*}}/g, (match, key) => {
-    const value = (context as Record<string, string | undefined>)[key];
+    const value = contextValues[key];
     if (value === undefined) {
       throw createError("INVALID_ARGUMENT", "模板占位符缺少对应变量", {
         placeholder: key,

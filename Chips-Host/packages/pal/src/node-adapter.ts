@@ -1244,8 +1244,11 @@ class NodeIPC implements PALIPC {
     if (transport === 'named-pipe' && process.platform === 'win32') {
       return `\\\\.\\pipe\\chips-${normalizedName}-${channelId}`;
     }
-    const suffix = transport === 'named-pipe' ? 'pipe' : 'sock';
-    return path.join(os.tmpdir(), `chips-${suffix}-${normalizedName}-${channelId}.sock`);
+    const compactId = channelId.replace(/-/g, '');
+    const compactName = normalizedName.slice(0, 12) || 'ipc';
+    const socketDir = os.tmpdir().length <= 40 ? os.tmpdir() : '/tmp';
+    const socketTag = transport === 'named-pipe' ? 'np' : 'us';
+    return path.join(socketDir, `ch-${socketTag}-${compactName}-${compactId}.sock`);
   }
 
   private isSocketPath(endpoint: string): boolean {

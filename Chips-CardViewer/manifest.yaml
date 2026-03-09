@@ -2,7 +2,7 @@ id: com.chips.card-viewer
 name: 卡片查看器
 version: 0.1.0
 type: app
-entry: index.html
+entry: dist/index.html
 
 description: 卡片查看器应用，用于通过统一卡片显示链路查看复合卡片内容。
 
@@ -32,4 +32,3 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1024
-

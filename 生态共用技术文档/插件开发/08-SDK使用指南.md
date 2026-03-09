@@ -2,13 +2,27 @@
 
 ## 概述
 
-薯片SDK让第三方开发者可以将薯片能力集成到自己的软件中。SDK提供程序化的接口访问生态的核心功能，包括文件操作、内容渲染、插件管理、主题能力等。
+薯片 SDK 当前主要面向两类场景：
+
+- 薯片主机内部应用插件；
+- 生态内部工具链与开发命令行。
+
+SDK 提供程序化接口访问生态核心能力，包括文件操作、内容渲染、插件管理与主题能力。
 
 > 架构归属声明（2026-03-06）：Host 主责 L1-L9 运行时链路（含 Runtime Client 与渲染层）；SDK 仅提供开发封装与调用入口，不承载运行时主实现。
 
 ## 安装
 
-SDK通过npm安装。在Node.js项目中使用npm install chips-sdk安装。在浏览器项目中可以使用CDN引入或打包工具导入。
+生态一方仓库统一通过根工作区安装 SDK：
+
+```bash
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
+npm install
+```
+
+随后在一方工程中直接声明正式 semver 依赖（例如 `^0.1.0`），由生态根工作区自动链接到本地 `chips-sdk` 工作区包。
+
+脚手架模板中的默认依赖同样保持 semver 版本范围；当工程创建在生态根工作区内时，`chipsdev create` 只负责把新工程注册进根工作区，不再写入 `file:` 或其他临时依赖。
 
 安装后导入SDK模块。ES Module导入方式使用import * as Chips from 'chips-sdk'。CommonJS导入方式使用const Chips = require('chips-sdk')。
 

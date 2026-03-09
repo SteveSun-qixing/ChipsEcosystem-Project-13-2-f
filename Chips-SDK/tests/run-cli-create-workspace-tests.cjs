@@ -66,6 +66,10 @@ const main = async () => {
         {
           name: 'chips-ecosystem-workspace',
           private: true,
+          volta: {
+            node: process.versions.node,
+            npm: '10.9.3'
+          },
           workspaces: [
             'Chips-*',
             'Chips-BaseCardPlugin/*',
@@ -99,6 +103,7 @@ const main = async () => {
     const createdPackage = JSON.parse(await fsp.readFile(path.join(targetDir, 'package.json'), 'utf-8'));
     assert.equal(createdPackage.dependencies['@chips/component-library'], '^0.1.0');
     assert.equal(createdPackage.devDependencies['chips-sdk'], '^0.1.0');
+    assert.equal(createdPackage.volta.extends, '../../package.json');
 
     await runBinary('npm', ['install'], sandboxRoot, env);
     await runBinary('npm', ['run', 'build'], targetDir, env);

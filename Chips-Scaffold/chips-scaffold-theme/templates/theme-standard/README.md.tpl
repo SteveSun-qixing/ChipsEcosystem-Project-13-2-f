@@ -35,6 +35,6 @@
 
 ## 后续集成
 
-- 使用 `chips dev package` 打包为 `.cpk` 后，通过 `chips host plugin install` 安装到指定工作空间；
-- 使用 `chips host theme list` / `theme apply` / `theme validate` 等命令进行运行时级联动校验。
-
+- 使用 `chipsdev package` 打包为 `.cpk` 后，通过 `chips plugin install` 安装到指定工作空间；
+- 使用 `chips theme list` / `chips theme apply` / `chips theme validate` 等命令进行运行时级联动校验；
+- 主题包 `.cpk` 需要保持包根 `manifest.yaml` + `dist/` 运行产物结构，并采用 ZIP Store 模式输出。

@@ -9,6 +9,7 @@ export interface WindowOptions {
   url?: string;
   pluginId?: string;
   sessionId?: string;
+  permissions?: string[];
 }
 
 export interface WindowState {

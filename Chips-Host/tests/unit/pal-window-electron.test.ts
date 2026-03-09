@@ -191,19 +191,30 @@ describe('Node PAL BrowserWindow host chain', () => {
       BrowserWindow: MockBrowserWindow
     };
 
-    const pal = new NodePalAdapter();
+    const pal = new NodePalAdapter({
+      window: {
+        electronPreloadPath: __filename
+      }
+    });
     const opened = await pal.window.create({
       title: 'Demo App',
       width: 900,
       height: 700,
       url: 'https://chips.local/app',
       pluginId: 'chips.demo.app',
-      sessionId: 'session-1'
+      sessionId: 'session-1',
+      permissions: ['theme.read', 'i18n.read']
     });
 
     expect(MockBrowserWindow.instances).toHaveLength(1);
     const browserWindow = MockBrowserWindow.instances[0]!;
     expect(browserWindow.loadedUrl).toBe('https://chips.local/app');
+    expect(browserWindow.options.webPreferences).toMatchObject({
+      preload: path.resolve(__filename),
+      additionalArguments: [
+        expect.stringContaining('--chips-bridge-context=')
+      ]
+    });
     expect(opened.pluginId).toBe('chips.demo.app');
     expect(opened.sessionId).toBe('session-1');
     expect(opened.url).toBe('https://chips.local/app');

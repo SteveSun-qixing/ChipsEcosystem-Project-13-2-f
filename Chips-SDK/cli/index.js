@@ -266,6 +266,130 @@ const ensurePackageBuildArtifact = async (packageDir, artifactPath, packageLabel
   }
 };
 
+const resolveNodePackageEntry = (request, searchPaths, errorMessage) => {
+  for (const searchPath of searchPaths) {
+    try {
+      return require.resolve(request, {
+        paths: [searchPath]
+      });
+    } catch {
+      // continue
+    }
+  }
+
+  throw new Error(errorMessage);
+};
+
+const resolveElectronExecutable = (searchPaths) => {
+  const electronModulePath = resolveNodePackageEntry(
+    'electron',
+    searchPaths,
+    '未找到 Electron 运行时。请先在生态根目录执行 npm install。'
+  );
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  const electronExecutable = require(electronModulePath);
+  if (typeof electronExecutable !== 'string' || electronExecutable.length === 0) {
+    throw new Error('Electron 可执行路径解析失败。');
+  }
+  return electronExecutable;
+};
+
+const runForegroundProcess = (command, args, options = {}) =>
+  new Promise((resolve, reject) => {
+    const child = childProcess.spawn(command, args, {
+      cwd: options.cwd ?? process.cwd(),
+      stdio: 'inherit',
+      env: options.env ?? process.env,
+      detached: process.platform !== 'win32'
+    });
+
+    let interrupted = false;
+    let forceKillTimer;
+
+    const terminateChild = (signal) => {
+      if (child.exitCode !== null) {
+        return;
+      }
+
+      try {
+        if (process.platform === 'win32' || !child.pid) {
+          child.kill(signal);
+        } else {
+          process.kill(-child.pid, signal);
+        }
+      } catch (error) {
+        if (!error || error.code !== 'ESRCH') {
+          throw error;
+        }
+      }
+
+      if (!forceKillTimer) {
+        forceKillTimer = setTimeout(() => {
+          try {
+            if (process.platform === 'win32' || !child.pid) {
+              child.kill('SIGKILL');
+            } else {
+              process.kill(-child.pid, 'SIGKILL');
+            }
+          } catch (error) {
+            if (!error || error.code !== 'ESRCH') {
+              throw error;
+            }
+          }
+        }, 5_000);
+        forceKillTimer.unref?.();
+      }
+    };
+
+    const cleanup = () => {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer);
+      }
+    };
+
+    const onSigint = () => {
+      interrupted = true;
+      terminateChild('SIGTERM');
+    };
+    const onSigterm = () => {
+      interrupted = true;
+      terminateChild('SIGTERM');
+    };
+
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+
+    child.on('error', (error) => {
+      cleanup();
+      reject(error);
+    });
+
+    child.on('exit', (code, signal) => {
+      cleanup();
+      if (interrupted) {
+        resolve(undefined);
+        return;
+      }
+      if (typeof code === 'number') {
+        if (code === 0) {
+          resolve(undefined);
+          return;
+        }
+        reject(new Error(`${command} 退出码为 ${code}`));
+        return;
+      }
+
+      if (signal === 'SIGINT' || signal === 'SIGTERM') {
+        resolve(undefined);
+        return;
+      }
+
+      reject(new Error(`${command} 因信号 ${signal ?? 'UNKNOWN'} 退出`));
+    });
+  });
+
 const ensureDirectoryExists = async (dir) => {
   await fsp.mkdir(dir, { recursive: true });
 };
@@ -413,6 +537,7 @@ const handleBuild = async () => {
   const viteConfig = {
     root,
     configFile: false,
+    base: isApp ? './' : undefined,
     build: isApp
       ? {
           outDir: config.outDir,
@@ -1138,130 +1263,22 @@ const handleRun = async () => {
     );
   }
 
-  // 先执行构建，确保 outDir 与 dist manifest 就绪。
+  // 先执行构建，确保应用构建产物与相对资源路径就绪。
   await handleBuild();
 
   const workspacePath = await resolveDevWorkspace(projectRoot);
-
-  // 载入 HostApplication 与 RuntimeClient，以完整 Host 运行时启动插件。
   const ecosystemRoot = resolveEcosystemRoot();
-  const hostDistRoot = path.join(ecosystemRoot, 'Chips-Host', 'dist', 'src');
+  const hostPackageDir = path.join(ecosystemRoot, 'Chips-Host');
+  const hostRunnerPath = path.join(hostPackageDir, 'dist', 'src', 'main', 'electron', 'dev-run-app.js');
 
-  const hostAppPath = path.join(hostDistRoot, 'main', 'core', 'host-application.js');
-  const runtimeClientPath = path.join(hostDistRoot, 'renderer', 'runtime-client.js');
+  await ensurePackageBuildArtifact(hostPackageDir, hostRunnerPath, 'Chips-Host');
 
-  if (!fs.existsSync(hostAppPath) || !fs.existsSync(runtimeClientPath)) {
-    throw new Error(
-      `未找到 Chips-Host 构建产物。请先在 Chips-Host 仓库运行 "npm install" 与 "npm run build"。`
-    );
-  }
+  const electronExecutable = resolveElectronExecutable([hostPackageDir, ecosystemRoot]);
 
-  // eslint-disable-next-line global-require, import/no-dynamic-require
-  const { HostApplication } = require(hostAppPath);
-  // eslint-disable-next-line global-require, import/no-dynamic-require
-  const { RuntimeClient } = require(runtimeClientPath);
-
-  const app = new HostApplication({ workspacePath });
-  await app.start();
-
-  const bridge = app.createBridge();
-  const runtime = new RuntimeClient(bridge);
-
-  try {
-    const installedPlugins = await runtime.invoke('plugin.query', {
-      type: 'app',
-      capability: undefined
-    });
-    const existingPlugin =
-      installedPlugins.plugins &&
-      installedPlugins.plugins.find((item) => item.id === manifest.id);
-
-    if (existingPlugin) {
-      try {
-        await runtime.invoke('plugin.disable', { pluginId: manifest.id });
-      } catch {
-        // ignore disable errors and continue uninstall
-      }
-      await runtime.invoke('plugin.uninstall', { pluginId: manifest.id });
-    }
-
-    const installResult = await runtime.invoke('plugin.install', { manifestPath });
-    const pluginId = installResult.pluginId;
-
-    await runtime.invoke('plugin.enable', { pluginId });
-
-    const initResult = await runtime.invoke('plugin.init', {
-      pluginId,
-      launchParams: {
-        trigger: 'chipsdev.run'
-      }
-    });
-
-    await runtime.invoke('plugin.handshake.complete', {
-      sessionId: initResult.session.sessionId,
-      nonce: initResult.session.sessionNonce
-    });
-
-    const queryResult = await runtime.invoke('plugin.query', {
-      type: 'app',
-      capability: undefined
-    });
-
-    const record =
-      queryResult.plugins &&
-      queryResult.plugins.find((item) => item.id === pluginId);
-
-    let url;
-    if (record && record.installPath && record.entry) {
-      url = path.resolve(record.installPath, record.entry);
-    }
-
-    const opened = await runtime.invoke('window.open', {
-      config: {
-        title: manifest.name || pluginId,
-        width: 1280,
-        height: 800,
-        pluginId,
-        sessionId: initResult.session.sessionId,
-        url
-      }
-    });
-
-    const windowId =
-      opened && typeof opened === 'object'
-        ? opened.windowId || opened.id || opened.windowId
-        : undefined;
-
-    log({
-      message: 'Host 已在开发工作区中启动应用插件',
-      workspacePath,
-      pluginId,
-      windowId
-    });
-
-    const shutdown = async () => {
-      try {
-        await app.stop();
-      } catch {
-        // ignore
-      }
-      process.exit(0);
-    };
-
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
-
-    // 保持进程存活，直到用户中断。
-    // eslint-disable-next-line no-empty-function
-    await new Promise(() => {});
-  } catch (error) {
-    try {
-      await app.stop();
-    } catch {
-      // ignore
-    }
-    throw error;
-  }
+  await runForegroundProcess(electronExecutable, [hostRunnerPath, `--workspace=${workspacePath}`, `--manifest=${manifestPath}`], {
+    cwd: projectRoot,
+    env: makeBinEnv(projectRoot)
+  });
 };
 
 main().catch((error) => {

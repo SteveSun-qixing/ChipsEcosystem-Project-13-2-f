@@ -2,12 +2,9 @@ import childProcess from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { PluginRuntime } from '../../src/runtime';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let workspace: string;
 let runtime: PluginRuntime;
@@ -54,7 +51,7 @@ describe('PluginRuntime', () => {
 
   it('installs plugin from root manifest with dist entry', async () => {
     const projectDir = path.join(workspace, 'root-manifest-project');
-    await fs.mkdir(path.join(projectDir, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(projectDir, 'dist', 'assets'), { recursive: true });
     const manifestPath = path.join(projectDir, 'manifest.yaml');
     await fs.writeFile(
       manifestPath,
@@ -70,11 +67,13 @@ describe('PluginRuntime', () => {
       'utf-8'
     );
     await fs.writeFile(path.join(projectDir, 'dist', 'index.html'), '<!doctype html>', 'utf-8');
+    await fs.writeFile(path.join(projectDir, 'dist', 'assets', 'entry.js'), 'console.log("chips");', 'utf-8');
 
     const record = await runtime.install(manifestPath);
     expect(record.manifest.id).toBe('chips.root.manifest');
     await expect(fs.access(path.join(record.installPath, 'manifest.yaml'))).resolves.toBeUndefined();
     await expect(fs.access(path.join(record.installPath, 'dist', 'index.html'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(record.installPath, 'dist', 'assets', 'entry.js'))).resolves.toBeUndefined();
   });
 
   it('creates and completes plugin-init handshake sessions', async () => {

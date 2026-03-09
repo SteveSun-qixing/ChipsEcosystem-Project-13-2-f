@@ -843,6 +843,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               url?: string;
               pluginId?: string;
               sessionId?: string;
+              permissions?: string[];
             };
           },
           { window: unknown }

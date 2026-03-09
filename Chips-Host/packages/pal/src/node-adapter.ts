@@ -123,14 +123,22 @@ const statSafe = async (inputPath: string): Promise<{ isFile: boolean; isDirecto
   }
 };
 
+const CHIPS_BRIDGE_CONTEXT_ARG_PREFIX = '--chips-bridge-context=';
+
+interface WindowManagerOptions {
+  electronPreloadPath?: string;
+}
+
 class NodeWindowManager implements PALWindow {
   private readonly windows = new Map<string, WindowState>();
   private readonly electronWindows = new Map<string, ElectronBrowserWindowLike>();
   private readonly electronBrowserWindow?: ElectronBrowserWindowCtorLike;
+  private readonly electronPreloadPath?: string;
 
-  public constructor() {
+  public constructor(options?: WindowManagerOptions) {
     const electron = loadElectronModule();
     this.electronBrowserWindow = electron?.BrowserWindow;
+    this.electronPreloadPath = options?.electronPreloadPath;
   }
 
   public async create(options: WindowOptions): Promise<WindowState> {
@@ -151,6 +159,27 @@ class NodeWindowManager implements PALWindow {
     };
 
     if (this.electronBrowserWindow) {
+      const webPreferences: Record<string, unknown> = {
+        nodeIntegration: false,
+        contextIsolation: true
+      };
+      const additionalArguments = this.buildBridgeArguments(options);
+      if (additionalArguments.length > 0) {
+        webPreferences.additionalArguments = additionalArguments;
+      }
+      if (options.pluginId) {
+        const preloadPath = this.resolveElectronPreloadPath();
+        if (!preloadPath) {
+          throw createError(
+            'PAL_WINDOW_PRELOAD_MISSING',
+            'Electron preload script is required for plugin windows',
+            {
+              pluginId: options.pluginId
+            }
+          );
+        }
+        webPreferences.preload = preloadPath;
+      }
       const browserWindow = new this.electronBrowserWindow({
         title,
         width,
@@ -158,10 +187,7 @@ class NodeWindowManager implements PALWindow {
         resizable: options.resizable ?? true,
         alwaysOnTop: options.alwaysOnTop ?? false,
         show: true,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true
-        }
+        webPreferences
       });
       this.electronWindows.set(id, browserWindow);
       browserWindow.on('closed', () => {
@@ -300,6 +326,35 @@ class NodeWindowManager implements PALWindow {
     }
 
     await Promise.resolve(window.loadURL(`file://${normalizedPath}`));
+  }
+
+  private resolveElectronPreloadPath(): string | undefined {
+    if (!this.electronPreloadPath || this.electronPreloadPath.length === 0) {
+      return undefined;
+    }
+
+    const normalizedPath = path.resolve(this.electronPreloadPath);
+    if (!fsSync.existsSync(normalizedPath)) {
+      throw createError('PAL_WINDOW_PRELOAD_NOT_FOUND', `Electron preload not found: ${normalizedPath}`, {
+        preloadPath: normalizedPath
+      });
+    }
+    return normalizedPath;
+  }
+
+  private buildBridgeArguments(options: WindowOptions): string[] {
+    if (!options.pluginId) {
+      return [];
+    }
+
+    const payload = {
+      pluginId: options.pluginId,
+      permissions: options.permissions ?? []
+    };
+
+    return [
+      `${CHIPS_BRIDGE_CONTEXT_ARG_PREFIX}${Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url')}`
+    ];
   }
 }
 
@@ -1257,7 +1312,7 @@ class NodeIPC implements PALIPC {
 }
 
 export class NodePalAdapter implements PALAdapter {
-  public readonly window: PALWindow = new NodeWindowManager();
+  public readonly window: PALWindow;
   public readonly fs: PALFileSystem = new NodeFileSystem();
   public readonly dialog: PALDialog = new NodeDialog();
   public readonly clipboard: PALClipboard = new NodeClipboard();
@@ -1269,4 +1324,8 @@ export class NodePalAdapter implements PALAdapter {
   public readonly shortcut: PALShortcut = new NodeShortcut();
   public readonly power: PALPower = new NodePower();
   public readonly ipc: PALIPC = new NodeIPC();
+
+  public constructor(options?: { window?: WindowManagerOptions }) {
+    this.window = new NodeWindowManager(options?.window);
+  }
 }

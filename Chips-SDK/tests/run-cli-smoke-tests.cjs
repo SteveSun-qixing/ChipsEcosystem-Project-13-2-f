@@ -66,8 +66,9 @@ const main = async () => {
   );
   fs.writeFileSync(
     path.join(buildProject, 'index.html'),
-    '<!doctype html><html><body><div id="app"></div></body></html>'
+    '<!doctype html><html><body><div id="app"></div><script type="module" src="./main.js"></script></body></html>'
   );
+  fs.writeFileSync(path.join(buildProject, 'main.js'), 'document.getElementById("app").textContent = "chips";');
 
   const tempProject = fs.mkdtempSync(path.join(os.tmpdir(), 'chipsdev-local-bin-'));
   fs.writeFileSync(
@@ -90,8 +91,15 @@ const main = async () => {
     if (!fs.existsSync(path.join(buildProject, 'dist', 'index.html'))) {
       throw new Error('chipsdev build did not produce dist/index.html');
     }
+    if (!fs.existsSync(path.join(buildProject, 'dist', 'assets'))) {
+      throw new Error('chipsdev build did not produce dist/assets');
+    }
     if (fs.existsSync(path.join(buildProject, 'dist', 'manifest.yaml'))) {
       throw new Error('chipsdev build must not copy manifest.yaml into dist/');
+    }
+    const builtHtml = fs.readFileSync(path.join(buildProject, 'dist', 'index.html'), 'utf8');
+    if (!builtHtml.includes('./assets/')) {
+      throw new Error('chipsdev build must emit relative asset paths for app plugins');
     }
 
     await runBinary('npm', ['install'], tempProject);

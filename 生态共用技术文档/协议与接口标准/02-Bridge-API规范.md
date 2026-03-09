@@ -140,6 +140,23 @@ interface PluginInfo {
 
 **迁移说明**：旧动作 `getInstalled`、`getInfo`、`findCardPlugin` 已归档，仅做内部兼容映射。
 
+### preload 本地辅助能力
+
+对于必须在 preload 中完成、且不应通过 IPC 回传主进程的本地能力，Host 可以在 `window.chips` 暴露受控辅助函数。
+
+当前已冻结一项拖拽文件辅助能力：
+
+```ts
+window.chips.platform.getPathForFile(file: File): string
+```
+
+约束：
+
+- 仅用于解析拖拽/选择所得 `File` 对象对应的本地路径；
+- Electron 环境下由 preload 调用 `webUtils.getPathForFile(file)` 实现；
+- 普通浏览器或不支持该能力的环境返回空字符串；
+- 不得借此暴露任意 Node/Electron 原生对象到页面主世界。
+
 ## 类型定义
 
 Bridge API使用TypeScript编写完整的类型定义。所有接口都有明确的类型标注，包括请求参数类型和响应数据类型。类型定义文件chips.d.ts随SDK一起发布，开发者可以导入到项目中获得代码补全和类型检查。

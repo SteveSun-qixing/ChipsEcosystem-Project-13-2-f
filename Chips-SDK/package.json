@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "commonjs",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "bin": {
     "chipsdev": "cli/index.js"
   },

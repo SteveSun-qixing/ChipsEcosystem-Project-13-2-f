@@ -210,6 +210,9 @@ describe('Node PAL BrowserWindow host chain', () => {
     const browserWindow = MockBrowserWindow.instances[0]!;
     expect(browserWindow.loadedUrl).toBe('https://chips.local/app');
     expect(browserWindow.options.webPreferences).toMatchObject({
+      sandbox: false,
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: path.resolve(__filename),
       additionalArguments: [
         expect.stringContaining('--chips-bridge-context=')

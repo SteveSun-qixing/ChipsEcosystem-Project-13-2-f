@@ -27,12 +27,26 @@ chipsdev run       # 启动完整 Host 底层并加载当前应用插件
 
 - 可以将 `*.card` 文件拖入窗口；
 - 或通过 Host 菜单“用卡片查看器打开”传入卡片文件；
-- 或通过 `cardViewer.pickCard` 路由由 Host 弹出文件选择器。
+- 或通过应用内“打开卡片”按钮调用 `platform.dialogOpenFile` 选择文件。
 
 ## 3. 技术要点
 
 - React + `@chips/component-library` + 主题系统；
-- 统一卡片显示链路：`window.chips.client.card.compositeWindow.render({ cardFile, mode: 'view' })`；
+- 统一卡片显示链路：`chips-sdk -> client.card.compositeWindow.render({ cardFile, mode: 'view' })`；
 - 多语言与配置均通过独立文件管理，避免硬编码；
-- 日志封装为单独模块，预留接入 Host 日志服务入口。
+- 日志封装为单独模块，当前输出到浏览器控制台，字段统一包含时间、scope、traceId 与必要上下文。
 
+## 4. 调试日志
+
+当前版本已为以下链路补齐控制台调试日志：
+
+- 应用启动、React 根挂载、全局 `error` / `unhandledrejection`；
+- 拖拽进入、离开、投放、文件路径解析；
+- 按钮打开文件对话框、Host 返回选择结果；
+- `client.card.compositeWindow.render` 调用开始、返回 iframe、挂载完成；
+- `chips.composite:ready`、`chips.composite:node-error`、`chips.composite:fatal-error`；
+- iframe 原生 `load/error` 与组件清理阶段。
+
+拖拽导入的本地文件路径解析走 `window.chips.platform.getPathForFile(file)`，由 Host preload 通过 Electron `webUtils` 提供，避免依赖已废弃的 `File.path`。
+
+排查时可直接在 DevTools Console 中搜索 `card-viewer:` 或 `trace=`。

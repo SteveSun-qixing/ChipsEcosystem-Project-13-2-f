@@ -130,6 +130,10 @@ export interface ElectronClipboardLike {
   writeBuffer(format: string, buffer: Buffer): void;
 }
 
+export interface ElectronWebUtilsLike {
+  getPathForFile(file: unknown): string;
+}
+
 export interface ElectronModuleLike {
   app?: ElectronAppLike;
   ipcMain?: ElectronIpcMainLike;
@@ -145,6 +149,7 @@ export interface ElectronModuleLike {
   screen?: ElectronScreenLike;
   clipboard?: ElectronClipboardLike;
   nativeImage?: ElectronNativeImageModuleLike;
+  webUtils?: ElectronWebUtilsLike;
 }
 
 const readElectronMock = (): ElectronModuleLike | undefined => {

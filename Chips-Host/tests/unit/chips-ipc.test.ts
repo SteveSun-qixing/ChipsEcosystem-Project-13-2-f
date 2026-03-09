@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../../packages/kernel/src';
 import { createBridgeForKernel } from '../../src/preload/create-bridge';
 import { objectWithKeys, schemaRegistry } from '../../src/shared/schema';
+import { createError } from '../../src/shared/errors';
 import {
   bindKernelToElectronIpc,
   CHIPS_EMIT_CHANNEL,
@@ -217,6 +218,53 @@ describe('chips ipc bridge', () => {
     await bridge.invoke('demo.echo', { value: 'b' });
     await expect(bridge.invoke('demo.echo', { value: 'c' })).rejects.toMatchObject({
       code: 'PLUGIN_QUOTA_EXCEEDED'
+    });
+
+    binding.dispose();
+  });
+
+  it('decodes structured errors thrown through Electron invoke handlers', async () => {
+    const electronMock = createElectronMock();
+    const originalInvoke = electronMock.module.ipcRenderer!.invoke;
+    electronMock.module.ipcRenderer!.invoke = async (channel: string, payload: unknown) => {
+      try {
+        return await originalInvoke(channel, payload);
+      } catch (error) {
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error(`Error invoking remote method '${channel}': ${String(error)}`);
+      }
+    };
+
+    (globalThis as Record<string, unknown>)[MOCK_KEY] = electronMock.module;
+
+    const kernel = new Kernel();
+    schemaRegistry.register('schemas/demo.fail.request.json', objectWithKeys([]));
+    schemaRegistry.register('schemas/demo.fail.response.json', objectWithKeys([]));
+    kernel.registerRoute({
+      key: 'demo.fail',
+      schemaIn: 'schemas/demo.fail.request.json',
+      schemaOut: 'schemas/demo.fail.response.json',
+      permission: ['demo.read'],
+      timeoutMs: 1_000,
+      idempotent: true,
+      retries: 0,
+      handler: async () => {
+        throw createError('DEMO_FAIL', 'Demo failure from kernel');
+      }
+    });
+
+    const binding = bindKernelToElectronIpc(kernel);
+    const bridge = createBridgeForKernel(kernel, {
+      permissions: ['demo.read'],
+      callerId: 'renderer-error',
+      pluginId: 'chips.error.plugin'
+    });
+
+    await expect(bridge.invoke('demo.fail', {})).rejects.toMatchObject({
+      code: 'DEMO_FAIL',
+      message: 'Demo failure from kernel'
     });
 
     binding.dispose();

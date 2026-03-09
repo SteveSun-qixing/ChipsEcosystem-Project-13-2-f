@@ -16,6 +16,8 @@ keywords:
   - viewer
 
 permissions:
+  - card.read
+  - platform.read
   - theme.read
   - i18n.read
 

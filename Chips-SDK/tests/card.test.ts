@@ -229,4 +229,54 @@ describe("CardApi", () => {
       (globalThis as any).window = previousWindow;
     }
   });
+
+  it("compositeWindow onReady falls back to iframe load event", async () => {
+    const api = createCardApi(
+      createStubClient(async () => {
+        throw new Error("should not be called");
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const loadListeners: Array<() => void> = [];
+      const frame = {
+        contentWindow: {},
+        contentDocument: {
+          readyState: "loading",
+        },
+        addEventListener: (type: string, listener: () => void) => {
+          if (type === "load") {
+            loadListeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      } as unknown as HTMLIFrameElement;
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      };
+
+      let readyCount = 0;
+      api.compositeWindow.onReady(frame, () => {
+        readyCount += 1;
+      });
+
+      expect(loadListeners).toHaveLength(1);
+      loadListeners[0]!();
+      loadListeners[0]!();
+      expect(readyCount).toBe(1);
+      expect(listeners.length).toBeGreaterThan(0);
+    } finally {
+      (globalThis as any).window = previousWindow;
+    }
+  });
 });

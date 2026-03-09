@@ -201,7 +201,7 @@ export function createCardApi(client: CoreClient): CardApi {
         };
       },
       onReady(frame, handler) {
-        return subscribeToCompositeEvent(frame, "chips.composite:ready", handler);
+        return subscribeToCompositeReady(frame, handler);
       },
       onNodeError(frame, handler) {
         return subscribeToCompositeEvent<CompositeNodeError>(
@@ -221,6 +221,55 @@ export function createCardApi(client: CoreClient): CardApi {
         );
       },
     },
+  };
+}
+
+function subscribeToCompositeReady(
+  frame: HTMLIFrameElement,
+  handler: () => void,
+): () => void {
+  let settled = false;
+
+  const invokeOnce = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    handler();
+  };
+
+  const disposeMessage = subscribeToCompositeEvent(frame, "chips.composite:ready", () => {
+    invokeOnce();
+  });
+
+  const handleLoad = () => {
+    invokeOnce();
+  };
+
+  const canListenToLoad =
+    typeof (frame as { addEventListener?: unknown }).addEventListener === "function" &&
+    typeof (frame as { removeEventListener?: unknown }).removeEventListener === "function";
+
+  if (canListenToLoad) {
+    frame.addEventListener("load", handleLoad);
+  }
+
+  try {
+    const readyState = frame.contentDocument?.readyState;
+    if (readyState === "interactive" || readyState === "complete") {
+      queueMicrotask(() => {
+        invokeOnce();
+      });
+    }
+  } catch {
+    // ignore cross-context access errors and rely on load/message events
+  }
+
+  return () => {
+    if (canListenToLoad) {
+      frame.removeEventListener("load", handleLoad);
+    }
+    disposeMessage();
   };
 }
 

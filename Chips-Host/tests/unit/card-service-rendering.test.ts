@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardService } from '../../packages/card-service/src';
 import { StoreZipService } from '../../packages/zip-service/src';
+import { PluginRuntime } from '../../src/runtime';
 
 const zip = new StoreZipService();
 const tempDirs: string[] = [];
@@ -21,13 +22,31 @@ const createCardArchive = async (): Promise<string> => {
 
   await fs.writeFile(
     path.join(sourceDir, '.card/metadata.yaml'),
-    ['id: test-card-id', 'name: Test Card', 'theme: chips-official.default-theme'].join('\n'),
+    ['card_id: test-card-id', 'name: Test Card', 'theme: chips-official.default-theme'].join('\n'),
     'utf-8'
   );
-  await fs.writeFile(path.join(sourceDir, '.card/structure.yaml'), 'cards: [intro,details]\n', 'utf-8');
+  await fs.writeFile(
+    path.join(sourceDir, '.card/structure.yaml'),
+    ['structure:', '  - id: "intro"', '    type: "RichTextCard"', '  - id: "details"', '    type: "RichTextCard"'].join(
+      '\n'
+    ),
+    'utf-8'
+  );
   await fs.writeFile(path.join(sourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
-  await fs.writeFile(path.join(sourceDir, 'content/intro.yaml'), 'type: text\n', 'utf-8');
-  await fs.writeFile(path.join(sourceDir, 'content/details.yaml'), 'type: text\n', 'utf-8');
+  await fs.writeFile(
+    path.join(sourceDir, 'content/intro.yaml'),
+    ['card_type: "RichTextCard"', 'content_source: "inline"', 'content_text: |', '  <h1>Intro</h1>', '  <p>Hello Chips.</p>'].join(
+      '\n'
+    ),
+    'utf-8'
+  );
+  await fs.writeFile(
+    path.join(sourceDir, 'content/details.yaml'),
+    ['card_type: "RichTextCard"', 'content_source: "inline"', 'content_text: |', '  <h1>Details</h1>', '  <p>Second node body.</p>'].join(
+      '\n'
+    ),
+    'utf-8'
+  );
 
   const outputDir = await createTempDir('chips-card-output-');
   const cardFile = path.join(outputDir, 'demo.card');
@@ -47,7 +66,15 @@ afterEach(async () => {
 describe('CardService rendering', () => {
   it('renders card through unified rendering engine', async () => {
     const cardFile = await createCardArchive();
-    const service = new CardService();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme'
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
       target: 'card-iframe'
@@ -57,12 +84,23 @@ describe('CardService rendering', () => {
     expect(view.target).toBe('card-iframe');
     expect(view.semanticHash.length).toBeGreaterThan(10);
     expect(view.body).toContain('data-target="card-iframe"');
+    expect(view.body).toContain('Intro');
+    expect(view.body).toContain('Hello Chips.');
+    expect(view.body).toContain('chips.basecard.richtext');
     expect(view.contentFiles).toEqual(['details.yaml', 'intro.yaml']);
-  });
+  }, 15_000);
 
   it('can run consistency verification during card render', async () => {
     const cardFile = await createCardArchive();
-    const service = new CardService();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme'
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
       target: 'offscreen-render',
@@ -72,5 +110,5 @@ describe('CardService rendering', () => {
     expect(view.target).toBe('offscreen-render');
     expect(view.consistency?.consistent).toBe(true);
     expect(view.body).toContain('data-target="offscreen-render"');
-  });
+  }, 15_000);
 });

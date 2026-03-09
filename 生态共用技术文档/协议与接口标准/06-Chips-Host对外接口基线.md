@@ -12,7 +12,7 @@
 
 - 插件与应用通过 `window.chips.*` 访问主机能力。
 - SDK 对 Bridge API 的标准封装。
-- `chips host` 命令行管理接口。
+- `chips` 命令行管理接口。
 - 主机对外事件语义与错误语义。
 
 不覆盖主机内部实现细节（内部细节见 `Chips-Host/技术文档`）。
@@ -25,7 +25,7 @@
 |---|---|---|
 | L5 | `window.chips.invoke/on/once/emit` + 子域 API | 插件、应用插件、主题插件 |
 | L6 | Runtime Client（Host 内置运行时，SDK 仅封装调用） | 插件业务层、UI Hooks |
-| CLI | `chips host <command>` | 用户、运维脚本、自动化任务 |
+| CLI | `chips <command>` | 用户、运维脚本、自动化任务 |
 
 ---
 
@@ -184,7 +184,7 @@ interface StandardError {
 
 ## 6. CLI 对外接口基线
 
-命令入口：`chips host`
+命令入口：`chips`
 
 公开命令域：
 
@@ -196,6 +196,8 @@ interface StandardError {
 - 更新管理：`update check/install`
 
 CLI 应满足：
+
+- 不再暴露 `chips host` 二级命令；
 
 - 支持脚本化调用与非交互执行。
 - 支持 JSON 输出用于自动化集成。

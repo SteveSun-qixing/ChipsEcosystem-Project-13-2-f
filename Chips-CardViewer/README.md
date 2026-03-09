@@ -19,7 +19,8 @@
 ```bash
 cd Chips-CardViewer
 npm install
-npm run dev        # 启动开发服务器（chips dev server）
+npm run dev        # 启动开发服务器（chipsdev server）
+chipsdev run       # 启动完整 Host 底层并加载当前应用插件
 ```
 
 在 Host 中加载本插件后：

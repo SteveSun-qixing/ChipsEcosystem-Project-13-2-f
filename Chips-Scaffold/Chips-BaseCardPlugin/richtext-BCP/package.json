@@ -4,15 +4,15 @@
   "private": false,
   "type": "commonjs",
   "scripts": {
-    "dev": "chips dev server",
-    "build": "chips dev build",
-    "test": "chips dev test",
-    "lint": "chips dev lint",
-    "validate": "chips dev validate"
+    "dev": "chipsdev server",
+    "build": "chipsdev build",
+    "test": "chipsdev test",
+    "lint": "chipsdev lint",
+    "validate": "chipsdev validate"
   },
   "devDependencies": {
     "typescript": "^5.8.2",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "chips-sdk": "file:../../../Chips-SDK"
   }
 }
-

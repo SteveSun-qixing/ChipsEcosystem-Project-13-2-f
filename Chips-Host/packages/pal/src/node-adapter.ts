@@ -161,7 +161,8 @@ class NodeWindowManager implements PALWindow {
     if (this.electronBrowserWindow) {
       const webPreferences: Record<string, unknown> = {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        sandbox: false
       };
       const additionalArguments = this.buildBridgeArguments(options);
       if (additionalArguments.length > 0) {

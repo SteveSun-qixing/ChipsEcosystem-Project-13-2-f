@@ -59,7 +59,10 @@ export class HostApplication {
       workspacePath: this.workspacePath,
       logger: this.logger,
       getCardService: () => {
-        this.cardService ??= new CardService();
+        this.cardService ??= new CardService({
+          runtime: this.runtime,
+          workspaceRoot: process.cwd()
+        });
         return this.cardService;
       },
       getBoxService: () => {

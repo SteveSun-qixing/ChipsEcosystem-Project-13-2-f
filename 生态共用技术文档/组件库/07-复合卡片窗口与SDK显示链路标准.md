@@ -44,7 +44,30 @@
 - iframe 沙箱与通信边界必须受控
 - `mode` 参数仅允许 `view | preview`
 - 建议 SDK 输出 iframe origin，组件端按白名单过滤消息来源
+- `ready` 语义应兼容两类完成信号：
+  - 复合卡片运行时主动发送 `chips.composite:ready`
+  - 纯 `srcdoc` / 静态 iframe 至少在原生 `load` 后视为已可展示
 - 查看器、编辑器、其他应用调用行为一致
+
+## 6.1 基础卡片节点解析规则
+
+- `structure.yaml` 中的 `structure[].type` 与内容文件中的 `card_type` 是复合卡片层的节点类型标识。
+- Host 在分发到基础卡片插件时，使用插件 `capabilities.cardTypes` 进行匹配。
+- 当前正式匹配规则：
+  - 先尝试直接匹配 `type/card_type` 原值；
+  - 若节点类型满足 `*Card` 命名，则再生成 `base.<去掉Card后的小写紧凑名>` 作为插件能力候选。
+- 例如：
+  - `RichTextCard` -> `base.richtext`
+  - `ImageCard` -> `base.image`
+  - `VideoCard` -> `base.video`
+
+## 6.2 复合窗口运行时要求
+
+- 外层 `CompositeCardWindow` 最终仍只向应用层交付一个复合 iframe。
+- 该复合 iframe 内部必须按结构顺序拼接基础卡片节点窗口。
+- 每个基础卡片节点窗口应以独立 iframe 形态交付，便于失败隔离、尺寸回传和后续交互扩展。
+- 节点 iframe 加载完成后，应向复合窗口回传高度；复合窗口负责更新节点 iframe 高度并在全部节点完成后发送 `chips.composite:ready`。
+- 节点失败时，复合窗口应发送 `chips.composite:node-error`，同时在对应位置显示降级内容。
 
 ## 7. SDK 显示接口接入规则
 

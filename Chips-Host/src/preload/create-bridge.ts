@@ -4,6 +4,7 @@ import { createId, now } from '../shared/utils';
 import { BridgeTransport, type ChipsBridge } from '../../packages/bridge-api/src';
 import { loadElectronModule } from '../main/electron/electron-loader';
 import {
+  CHIPS_IPC_ERROR_PREFIX,
   CHIPS_CLIPBOARD_CHANNEL_PREFIX,
   CHIPS_DIALOG_CHANNEL_PREFIX,
   CHIPS_EMIT_CHANNEL,
@@ -14,6 +15,7 @@ import {
   CHIPS_SHELL_CHANNEL_PREFIX,
   CHIPS_WINDOW_CHANNEL_PREFIX
 } from '../main/ipc/chips-ipc';
+import type { StandardError } from '../shared/types';
 
 export interface BridgeContextOptions {
   callerId?: string;
@@ -98,26 +100,56 @@ const buildContext = (options?: BridgeContextOptions): RouteInvocationContext =>
   };
 };
 
+const decodeIpcError = (error: unknown): StandardError | null => {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  if (!error.message.startsWith(CHIPS_IPC_ERROR_PREFIX)) {
+    return null;
+  }
+
+  const payload = error.message.slice(CHIPS_IPC_ERROR_PREFIX.length);
+  try {
+    const parsed = JSON.parse(payload) as StandardError;
+    if (typeof parsed.code === 'string' && typeof parsed.message === 'string') {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
 export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeContextOptions): BridgeTransport => {
   const electron = loadElectronModule();
   if (electron?.ipcRenderer) {
     return new BridgeTransport(
       async <T>(action: string, payload: unknown) => {
-        const context = buildContext(options);
-        const channel = ACTION_CHANNEL_MAP[action] ?? CHIPS_INVOKE_CHANNEL;
-        const request =
-          channel === CHIPS_INVOKE_CHANNEL
-            ? {
-                action,
-                payload,
-                context
-              }
-            : {
-                payload,
-                context
-              };
-        const result = await electron.ipcRenderer!.invoke(channel, request);
-        return result as T;
+        try {
+          const context = buildContext(options);
+          const channel = ACTION_CHANNEL_MAP[action] ?? CHIPS_INVOKE_CHANNEL;
+          const request =
+            channel === CHIPS_INVOKE_CHANNEL
+              ? {
+                  action,
+                  payload,
+                  context
+                }
+              : {
+                  payload,
+                  context
+                };
+          const result = await electron.ipcRenderer!.invoke(channel, request);
+          return result as T;
+        } catch (error) {
+          const decoded = decodeIpcError(error);
+          if (decoded) {
+            throw decoded;
+          }
+          throw error;
+        }
       },
       {
         eventAdapter: {
@@ -154,8 +186,30 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
   });
 };
 
+type ExposedPlatformBridge = ChipsBridge['platform'] & {
+  getPathForFile(file: unknown): string;
+};
+
+const createExposedPlatformBridge = (platform: ChipsBridge['platform']): ExposedPlatformBridge => {
+  return {
+    ...platform,
+    getPathForFile(file: unknown): string {
+      const electron = loadElectronModule();
+      if (!electron?.webUtils?.getPathForFile) {
+        return '';
+      }
+
+      try {
+        return electron.webUtils.getPathForFile(file);
+      } catch {
+        return '';
+      }
+    }
+  };
+};
+
 export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips'): void => {
-  const exposed: ChipsBridge = {
+  const exposed: ChipsBridge & { platform: ExposedPlatformBridge } = {
     invoke: bridge.invoke.bind(bridge),
     on: bridge.on.bind(bridge),
     once: bridge.once.bind(bridge),
@@ -165,7 +219,7 @@ export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips')
     plugin: bridge.plugin,
     clipboard: bridge.clipboard,
     shell: bridge.shell,
-    platform: bridge.platform,
+    platform: createExposedPlatformBridge(bridge.platform),
     notification: bridge.notification,
     tray: bridge.tray,
     shortcut: bridge.shortcut,

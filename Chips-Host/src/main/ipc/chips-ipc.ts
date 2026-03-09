@@ -1,4 +1,4 @@
-import { createError } from '../../shared/errors';
+import { createError, toStandardError } from '../../shared/errors';
 import { createId, now } from '../../shared/utils';
 import type { RouteInvocationContext } from '../../shared/types';
 import type { Kernel } from '../../../packages/kernel/src';
@@ -13,6 +13,7 @@ export const CHIPS_PLUGIN_CHANNEL_PREFIX = 'chips:plugin:';
 export const CHIPS_CLIPBOARD_CHANNEL_PREFIX = 'chips:clipboard:';
 export const CHIPS_SHELL_CHANNEL_PREFIX = 'chips:shell:';
 export const CHIPS_PLATFORM_CHANNEL_PREFIX = 'chips:platform:';
+export const CHIPS_IPC_ERROR_PREFIX = '__chips_ipc_error__:';
 
 export interface ChipsInvokeRequest {
   action: string;
@@ -101,6 +102,11 @@ const forwardKernelEvents = (kernel: Kernel): (() => void) => {
   });
 };
 
+const encodeIpcError = (error: unknown): Error => {
+  const standard = toStandardError(error);
+  return new Error(`${CHIPS_IPC_ERROR_PREFIX}${JSON.stringify(standard)}`);
+};
+
 export const bindKernelToElectronIpc = (
   kernel: Kernel,
   options?: {
@@ -166,16 +172,20 @@ export const bindKernelToElectronIpc = (
   };
 
   const invokeHandler = async (event: unknown, request: unknown): Promise<unknown> => {
-    if (!request || typeof request !== 'object') {
-      throw createError('BRIDGE_INVALID_REQUEST', 'chips:invoke payload must be object');
+    try {
+      if (!request || typeof request !== 'object') {
+        throw createError('BRIDGE_INVALID_REQUEST', 'chips:invoke payload must be object');
+      }
+      const typed = request as Record<string, unknown>;
+      if (typeof typed.action !== 'string' || typed.action.length === 0) {
+        throw createError('BRIDGE_INVALID_REQUEST', 'chips:invoke requires action');
+      }
+      const context = buildContext(typed.context as Partial<RouteInvocationContext> | undefined, event);
+      enforcePluginQuota(context, typed.action);
+      return await kernel.invoke(typed.action, typed.payload ?? {}, context);
+    } catch (error) {
+      throw encodeIpcError(error);
     }
-    const typed = request as Record<string, unknown>;
-    if (typeof typed.action !== 'string' || typed.action.length === 0) {
-      throw createError('BRIDGE_INVALID_REQUEST', 'chips:invoke requires action');
-    }
-    const context = buildContext(typed.context as Partial<RouteInvocationContext> | undefined, event);
-    enforcePluginQuota(context, typed.action);
-    return kernel.invoke(typed.action, typed.payload ?? {}, context);
   };
 
   const emitHandler = async (event: unknown, payload: unknown): Promise<void> => {
@@ -193,10 +203,14 @@ export const bindKernelToElectronIpc = (
   electron.ipcMain.handle(CHIPS_INVOKE_CHANNEL, invokeHandler);
   for (const [channel, action] of Object.entries(CHIPS_SUBCHANNEL_ACTIONS)) {
     electron.ipcMain.handle(channel, async (event: unknown, request: unknown): Promise<unknown> => {
-      const typed = (request ?? {}) as ChipsSubchannelRequest;
-      const context = buildContext(typed.context, event);
-       enforcePluginQuota(context, action);
-      return kernel.invoke(action, typed.payload ?? {}, context);
+      try {
+        const typed = (request ?? {}) as ChipsSubchannelRequest;
+        const context = buildContext(typed.context, event);
+        enforcePluginQuota(context, action);
+        return await kernel.invoke(action, typed.payload ?? {}, context);
+      } catch (error) {
+        throw encodeIpcError(error);
+      }
     });
   }
   electron.ipcMain.on(CHIPS_EMIT_CHANNEL, emitHandler);

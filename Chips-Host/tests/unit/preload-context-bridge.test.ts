@@ -62,10 +62,14 @@ describe('preload contextBridge exposure', () => {
   it('creates and exposes bridge with ipcRenderer only runtime', async () => {
     const exposeInMainWorld = vi.fn();
     const invoke = vi.fn().mockResolvedValue({ ok: true });
+    const getPathForFile = vi.fn().mockReturnValue('/tmp/demo.card');
 
     (globalThis as Record<string, unknown>)[MOCK_KEY] = {
       contextBridge: {
         exposeInMainWorld
+      },
+      webUtils: {
+        getPathForFile
       },
       ipcRenderer: {
         invoke,
@@ -93,9 +97,20 @@ describe('preload contextBridge exposure', () => {
       'chips',
       expect.objectContaining({
         invoke: expect.any(Function),
-        platform: expect.any(Object),
+        platform: expect.objectContaining({
+          getPathForFile: expect.any(Function)
+        }),
         ipc: expect.any(Object)
       })
     );
+
+    const exposed = exposeInMainWorld.mock.calls[0]?.[1] as {
+      platform: {
+        getPathForFile(file: unknown): string;
+      };
+    };
+    const resolvedPath = exposed.platform.getPathForFile({ name: 'demo.card' });
+    expect(resolvedPath).toBe('/tmp/demo.card');
+    expect(getPathForFile).toHaveBeenCalledTimes(1);
   });
 });

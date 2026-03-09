@@ -53,6 +53,10 @@
 - `window.open.config.url` 支持载入目标页面。
 - `window.open` 新增窗口上下文透传：`pluginId/sessionId/url`，用于插件窗口会话绑定。
 - 应用插件窗口新增 preload 注入：真实 BrowserWindow 会暴露 `window.chips.*`，并通过 `additionalArguments` 传递 `pluginId/permissions` 上下文。
+- 插件窗口显式使用 `nodeIntegration: false`、`contextIsolation: true`、`sandbox: false`：
+  - 渲染页依旧不能直接访问 Node；
+  - 仅受控 preload 可使用 Node 风格模块解析，保证 `src/preload/plugin-window.ts -> create-bridge.ts` 多文件桥接链路稳定运行；
+  - 避免 Electron 默认 sandbox preload 模式下的相对模块加载失败。
 - 非 Electron 环境保留内存态窗口模型，保证跨环境一致接口。
 
 ### 2.4 服务级动态加载深化

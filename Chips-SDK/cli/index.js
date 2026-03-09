@@ -118,6 +118,44 @@ const saveJsonFile = async (filePath, value) => {
 
 const resolveProjectRoot = () => process.cwd();
 
+const escapeForRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const resolveProjectDependencyEntry = (projectRoot, specifier) => {
+  try {
+    return require.resolve(specifier, { paths: [projectRoot] });
+  } catch {
+    return null;
+  }
+};
+
+const createFrontendResolveConfig = (projectRoot) => {
+  const alias = [];
+  const specifiers = [
+    'react/jsx-dev-runtime',
+    'react/jsx-runtime',
+    'react-dom/client',
+    'react-dom/server',
+    'react-dom',
+    'react'
+  ];
+
+  for (const specifier of specifiers) {
+    const replacement = resolveProjectDependencyEntry(projectRoot, specifier);
+    if (!replacement) {
+      continue;
+    }
+    alias.push({
+      find: new RegExp(`^${escapeForRegex(specifier)}$`),
+      replacement
+    });
+  }
+
+  return {
+    alias,
+    dedupe: ['react', 'react-dom']
+  };
+};
+
 const loadPackageJsonVersion = async () => {
   const herePackage = path.resolve(__dirname, '..', 'package.json');
   try {
@@ -494,6 +532,7 @@ const handleServer = async (mode = 'server') => {
   const viteConfig = {
     root,
     configFile: false,
+    resolve: createFrontendResolveConfig(projectRoot),
     server: {
       port: process.env.PORT ? Number(process.env.PORT) : 5173,
       host: process.env.HOST || 'localhost'
@@ -538,6 +577,7 @@ const handleBuild = async () => {
     root,
     configFile: false,
     base: isApp ? './' : undefined,
+    resolve: createFrontendResolveConfig(projectRoot),
     build: isApp
       ? {
           outDir: config.outDir,

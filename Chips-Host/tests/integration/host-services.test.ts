@@ -90,13 +90,26 @@ describe('Host services integration', () => {
   });
 
   it('renders card through unified rendering target options', async () => {
+    const install = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP/manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: install.pluginId });
+
     const source = path.join(workspace, 'render-card-source');
     await fs.mkdir(path.join(source, '.card'), { recursive: true });
     await fs.mkdir(path.join(source, 'content'), { recursive: true });
-    await fs.writeFile(path.join(source, '.card/metadata.yaml'), 'id: card.render.demo\nname: Render Demo\n', 'utf-8');
-    await fs.writeFile(path.join(source, '.card/structure.yaml'), 'cards: [intro]\n', 'utf-8');
+    await fs.writeFile(path.join(source, '.card/metadata.yaml'), 'card_id: card.render.demo\nname: Render Demo\n', 'utf-8');
+    await fs.writeFile(
+      path.join(source, '.card/structure.yaml'),
+      'structure:\n  - id: "intro"\n    type: "RichTextCard"\n',
+      'utf-8'
+    );
     await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
-    await fs.writeFile(path.join(source, 'content/intro.yaml'), 'type: text\n', 'utf-8');
+    await fs.writeFile(
+      path.join(source, 'content/intro.yaml'),
+      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <h1>Render Intro</h1>\n  <p>Rendered through host service.</p>\n',
+      'utf-8'
+    );
 
     const cardFile = path.join(workspace, 'render-demo.card');
     const zip = new StoreZipService();
@@ -119,9 +132,11 @@ describe('Host services integration', () => {
 
     expect(rendered.view.target).toBe('offscreen-render');
     expect(rendered.view.body).toContain('data-target="offscreen-render"');
+    expect(rendered.view.body).toContain('Render Intro');
+    expect(rendered.view.body).toContain('Rendered through host service.');
     expect(rendered.view.semanticHash.length).toBeGreaterThan(10);
     expect(rendered.view.consistency?.consistent).toBe(true);
-  });
+  }, 15_000);
 
   it('rejects invalid card.render options target by schema', async () => {
     await expect(

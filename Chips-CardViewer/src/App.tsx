@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ChipsThemeProvider, ChipsButton } from "@chips/component-library";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ChipsThemeProvider } from "@chips/component-library";
 import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
 import { CardWindow } from "./components/CardWindow";
@@ -63,55 +63,48 @@ export function App() {
     });
   }, [error, logger]);
 
-  const toolbar = (
-    <div style={{ display: "flex", gap: 8, WebkitAppRegion: "no-drag" }}>
-      <ChipsButton
-        variant="secondary"
-        onClick={async () => {
-          try {
-            setError(null);
-            logger.info("用户点击“打开卡片”按钮，准备调用文件选择对话框");
-            const result = await client.invoke<
-              {
-                options: {
-                  title: string;
-                  mode: "file";
-                  allowMultiple: false;
-                  mustExist: true;
-                };
-              },
-              { filePaths: string[] | null }
-            >("platform.dialogOpenFile", {
-              options: {
-                title: "打开卡片文件",
-                mode: "file",
-                allowMultiple: false,
-                mustExist: true,
-              },
-            });
+  const handleOpenCard = useCallback(async () => {
+    try {
+      setError(null);
+      logger.info("用户点击“选择导入卡片”按钮，准备调用文件选择对话框");
+      const result = await client.invoke<
+        {
+          options: {
+            title: string;
+            mode: "file";
+            allowMultiple: false;
+            mustExist: true;
+          };
+        },
+        { filePaths: string[] | null }
+      >("platform.dialogOpenFile", {
+        options: {
+          title: "打开卡片文件",
+          mode: "file",
+          allowMultiple: false,
+          mustExist: true,
+        },
+      });
 
-            const selected = Array.isArray(result.filePaths) ? result.filePaths[0] : undefined;
-            logger.info("文件选择对话框已返回", {
-              fileCount: Array.isArray(result.filePaths) ? result.filePaths.length : 0,
-              selected,
-            });
-            if (selected) {
-              setCardFile(selected);
-            }
-          } catch (runtimeError) {
-            logger.error("通过按钮导入卡片失败", runtimeError);
-            setError(resolveErrorMessage(runtimeError));
-          }
-        }}
-      >
-        打开卡片
-      </ChipsButton>
-    </div>
-  );
+      const selected = Array.isArray(result.filePaths) ? result.filePaths[0] : undefined;
+      logger.info("文件选择对话框已返回", {
+        fileCount: Array.isArray(result.filePaths) ? result.filePaths.length : 0,
+        selected,
+      });
+      if (selected) {
+        setCardFile(selected);
+      }
+    } catch (runtimeError) {
+      logger.error("通过按钮导入卡片失败", runtimeError);
+      setError(resolveErrorMessage(runtimeError));
+    }
+  }, [client, logger]);
 
   const content =
     cardFile === null ? (
       <DropZone
+        error={error}
+        onOpenCard={handleOpenCard}
         traceId={traceId}
         onCardFile={(nextCardFile) => {
           logger.info("拖拽导入已选定卡片文件", {
@@ -133,29 +126,7 @@ export function App() {
       eventName="theme.changed"
     >
       <CardViewerShell
-        toolbar={toolbar}
-        content={
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-            {error ? (
-              <div
-                role="alert"
-                style={{
-                  borderRadius: 8,
-                  border:
-                    "1px solid color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 28%, transparent)",
-                  background:
-                    "color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 10%, var(--chips-sys-color-surface, #ffffff))",
-                  color: "var(--chips-sys-color-error, #d92d20)",
-                  padding: "10px 12px",
-                  fontSize: 12,
-                }}
-              >
-                {error}
-              </div>
-            ) : null}
-            <div style={{ flex: 1, minHeight: 0 }}>{content}</div>
-          </div>
-        }
+        content={content}
       />
     </ChipsThemeProvider>
   );

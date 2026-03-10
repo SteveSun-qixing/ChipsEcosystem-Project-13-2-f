@@ -169,9 +169,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
       data-chips-app="card-viewer.window"
       style={{
         flex: 1,
-        borderRadius: 8,
-        border:
-          "1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 16%, transparent)",
+        minHeight: 0,
         overflow: "hidden",
         position: "relative",
         background: "var(--chips-sys-color-surface, #ffffff)",

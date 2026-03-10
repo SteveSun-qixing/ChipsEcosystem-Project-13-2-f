@@ -1,0 +1,17 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--chips-sys-color-surface, #ffffff);
+  color: var(--chips-sys-color-on-surface, #111111);
+}
+
+* {
+  box-sizing: border-box;
+}

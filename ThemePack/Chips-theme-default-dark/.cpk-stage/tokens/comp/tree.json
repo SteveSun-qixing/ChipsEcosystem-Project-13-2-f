@@ -1,0 +1,29 @@
+{
+  "chips": {
+    "comp": {
+      "tree": {
+        "root": {
+          "surface": "{chips.sys.color.surface}"
+        },
+        "node": {
+          "surface": {
+            "idle": "{chips.sys.color.surface}",
+            "selected": "{chips.sys.color.surface-accent}"
+          },
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "toggle": {
+          "color": "{chips.sys.color.on-surface-muted}"
+        },
+        "guide": {
+          "color": "{chips.sys.color.border-strong}"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

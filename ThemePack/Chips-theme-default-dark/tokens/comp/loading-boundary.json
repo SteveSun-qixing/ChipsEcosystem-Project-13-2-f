@@ -1,0 +1,28 @@
+{
+  "chips": {
+    "comp": {
+      "loading-boundary": {
+        "root": {
+          "surface": "{chips.sys.color.surface-raised}"
+        },
+        "fallback": {
+          "surface": "{chips.sys.color.surface-raised}"
+        },
+        "skeleton": {
+          "surface": {
+            "idle": "{chips.sys.color.surface}",
+            "active": "{chips.sys.color.surface-accent}"
+          }
+        },
+        "status": {
+          "color": {
+            "info": "{chips.sys.color.primary}"
+          }
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

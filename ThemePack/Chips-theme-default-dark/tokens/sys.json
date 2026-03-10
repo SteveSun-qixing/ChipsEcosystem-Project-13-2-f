@@ -1,0 +1,28 @@
+{
+  "chips": {
+    "sys": {
+      "color": {
+        "canvas": "{chips.ref.color.gray-950}",
+        "surface": "{chips.ref.color.gray-900}",
+        "surface-raised": "{chips.ref.color.gray-800}",
+        "surface-elevated": "{chips.ref.color.gray-700}",
+        "surface-accent": "#14263d",
+        "on-surface": "{chips.ref.color.gray-0}",
+        "on-surface-muted": "{chips.ref.color.gray-100}",
+        "on-surface-soft": "{chips.ref.color.gray-200}",
+        "primary": "{chips.ref.color.blue-600}",
+        "primary-hover": "{chips.ref.color.blue-500}",
+        "primary-active": "{chips.ref.color.blue-700}",
+        "primary-contrast": "{chips.ref.color.gray-0}",
+        "focus-ring": "{chips.ref.color.blue-400}",
+        "border-subtle": "{chips.ref.color.gray-600}",
+        "border-strong": "{chips.ref.color.gray-500}",
+        "shadow": "rgba(0, 0, 0, 0.46)",
+        "error": "{chips.ref.color.red-500}"
+      },
+      "radius": {
+        "container": "{chips.ref.radius.md}"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "chips": {
+    "comp": {
+      "skeleton": {
+        "root": {
+          "surface": "{chips.sys.color.surface-raised}"
+        },
+        "item": {
+          "surface": {
+            "idle": "{chips.sys.color.surface}",
+            "active": "{chips.sys.color.surface-accent}"
+          }
+        },
+        "status": {
+          "color": {
+            "info": "{chips.sys.color.primary}"
+          }
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

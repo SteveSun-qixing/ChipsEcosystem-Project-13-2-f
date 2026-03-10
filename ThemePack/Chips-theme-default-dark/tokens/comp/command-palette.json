@@ -1,0 +1,33 @@
+{
+  "chips": {
+    "comp": {
+      "command-palette": {
+        "root": {
+          "surface": "{chips.sys.color.surface-elevated}"
+        },
+        "search": {
+          "surface": {
+            "idle": "{chips.sys.color.surface}"
+          },
+          "border": {
+            "idle": "{chips.sys.color.border-subtle}"
+          }
+        },
+        "result": {
+          "surface": {
+            "active": "{chips.sys.color.surface-accent}"
+          },
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "shortcut": {
+          "color": "{chips.sys.color.on-surface-soft}"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

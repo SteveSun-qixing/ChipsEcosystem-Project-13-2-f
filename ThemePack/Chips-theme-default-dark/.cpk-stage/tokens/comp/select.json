@@ -1,0 +1,26 @@
+{
+  "chips": {
+    "comp": {
+      "select": {
+        "trigger": {
+          "radius": "{chips.sys.radius.container}",
+          "surface": {
+            "idle": "{chips.sys.color.surface-raised}",
+            "focus": "{chips.sys.color.surface-elevated}"
+          },
+          "border": {
+            "idle": "{chips.sys.color.border-subtle}"
+          }
+        },
+        "option": {
+          "surface": {
+            "selected": "{chips.sys.color.surface-accent}"
+          },
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "chips": {
+    "comp": {
+      "dialog": {
+        "backdrop": {
+          "surface": "{chips.sys.color.canvas}"
+        },
+        "content": {
+          "radius": "{chips.sys.radius.container}",
+          "surface": "{chips.sys.color.surface-elevated}"
+        },
+        "title": {
+          "color": "{chips.sys.color.on-surface}"
+        },
+        "close": {
+          "color": "{chips.sys.color.on-surface-muted}"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

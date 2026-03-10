@@ -1,0 +1,24 @@
+{
+  "chips": {
+    "comp": {
+      "menu": {
+        "content": {
+          "radius": "{chips.sys.radius.container}",
+          "surface": "{chips.sys.color.surface-elevated}"
+        },
+        "item": {
+          "surface": {
+            "hover": "{chips.sys.color.surface-raised}",
+            "active": "{chips.sys.color.surface-accent}"
+          },
+          "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "focus": {
+          "outline": "{chips.sys.color.focus-ring}"
+        }
+      }
+    }
+  }
+}

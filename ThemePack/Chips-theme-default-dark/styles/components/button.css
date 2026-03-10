@@ -1,0 +1,61 @@
+/* Button 根节点 */
+[data-scope="button"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--chips-base-space-2);
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  border-radius: var(--chips-comp-button-root-radius, var(--chips-base-radius-md));
+  border: none;
+  cursor: pointer;
+  background-color: var(--chips-comp-button-root-surface-idle);
+  color: var(--chips-comp-button-label-color-idle);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    transform var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="button"][data-part="root"][data-state="hover"],
+[data-scope="button"][data-part="root"]:hover {
+  background-color: var(--chips-comp-button-root-surface-hover, var(--chips-comp-button-root-surface-idle));
+}
+
+[data-scope="button"][data-part="root"][data-state="active"],
+[data-scope="button"][data-part="root"]:active {
+  background-color: var(--chips-comp-button-root-surface-active, var(--chips-comp-button-root-surface-idle));
+  transform: translateY(0.5px);
+}
+
+[data-scope="button"][data-part="root"][data-state="disabled"],
+[data-scope="button"][data-part="root"][aria-disabled="true"],
+[data-scope="button"][data-part="root"]:disabled {
+  background-color: var(--chips-comp-button-root-surface-disabled, var(--chips-comp-button-root-surface-idle));
+  color: var(--chips-comp-button-label-color-disabled, var(--chips-comp-button-label-color-idle));
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+[data-scope="button"][data-part="root"][data-state="focus"],
+[data-scope="button"][data-part="root"]:focus-visible {
+  outline: 2px solid var(--chips-comp-button-focus-outline);
+  outline-offset: 2px;
+}
+
+/* Button 文本标签 */
+[data-scope="button"][data-part="label"] {
+  color: inherit;
+}
+
+/* Button 加载指示与状态区域保持简洁占位，不追加额外装饰 */
+[data-scope="button"][data-part="spinner"],
+[data-scope="button"][data-part="status"] {
+  display: inline-flex;
+  align-items: center;
+}

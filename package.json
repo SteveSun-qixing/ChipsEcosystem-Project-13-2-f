@@ -19,5 +19,9 @@
   ],
   "scripts": {
     "verify:workspace": "node ./scripts/verify-ecosystem-workspace.mjs"
+  },
+  "devDependencies": {
+    "chips-host": "0.1.0",
+    "chips-sdk": "0.1.0"
   }
 }

@@ -92,8 +92,9 @@ npm install
 
 在生态工作区内：
 
-- `chips-sdk`、`@chips/component-library` 等一方依赖统一声明为正式 semver 版本，由根工作区自动链接到本地包；
-- 各工作区 `package.json` 必须通过 `volta.extends` 指向生态根 `package.json`，使 Volta 在子工程目录也能解析根工作区 hoist 的 `chipsdev`；
+- `chips-sdk`、`chips-host`、`@chips/component-library` 等一方依赖统一声明为正式 semver 版本，由根工作区自动链接到本地包；
+- 生态根 `package.json` 必须显式声明根级工具依赖 `chips-sdk` 与 `chips-host`，确保 Volta 在根目录执行 `chipsdev` / `chips` 时命中当前工作区实现，而不是回退到旧的全局工具；
+- 各工作区 `package.json` 必须通过 `volta.extends` 指向生态根 `package.json`，使 Volta 在子工程目录也能解析根工作区 hoist 的 `chipsdev` / `chips`；
 - 禁止继续使用 `file:` 或 `npm link`；
 - 安装完成后，可在工程目录直接执行 `chipsdev build`、`chipsdev test`、`chipsdev run` 等命令。
 

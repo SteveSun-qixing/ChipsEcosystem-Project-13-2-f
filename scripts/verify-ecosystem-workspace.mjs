@@ -49,6 +49,11 @@ const requiredRootVolta = {
   npm: "10.9.3"
 };
 
+const requiredRootToolDependencies = {
+  "devDependencies.chips-host": "0.1.0",
+  "devDependencies.chips-sdk": "0.1.0"
+};
+
 const requiredTemplateFiles = new Map([
   ["Chips-Scaffold/chips-scaffold-basecard/templates/card-standard", [
     "vitest.config.mts.tpl",
@@ -161,6 +166,13 @@ for (const pattern of expectedWorkspacePatterns) {
 for (const [field, expectedValue] of Object.entries(requiredRootVolta)) {
   if (rootPackage.volta?.[field] !== expectedValue) {
     errors.push(`根 package.json 的 volta.${field} 应为 ${expectedValue}，当前为 ${String(rootPackage.volta?.[field])}`);
+  }
+}
+
+for (const [fieldPath, expectedValue] of Object.entries(requiredRootToolDependencies)) {
+  const actualValue = getByPath(rootPackage, fieldPath);
+  if (actualValue !== expectedValue) {
+    errors.push(`根 package.json 的 ${fieldPath} 应为 ${expectedValue}，当前为 ${String(actualValue)}`);
   }
 }
 

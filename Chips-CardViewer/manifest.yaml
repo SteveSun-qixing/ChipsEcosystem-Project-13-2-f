@@ -37,8 +37,4 @@ ui:
   window:
     chrome:
       backgroundColor: "#ffffff"
-      titleBarStyle: hidden
-      titleBarOverlay:
-        color: "#ffffff00"
-        symbolColor: "#667085"
-        height: 44
+      titleBarStyle: default

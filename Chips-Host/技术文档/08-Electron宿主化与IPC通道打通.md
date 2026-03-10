@@ -115,9 +115,21 @@
 - `tests/integration/host-services.test.ts`
   - 覆盖文件关联命中插件处理器、插件会话打开窗口链路
 - `tests/e2e/cli.test.ts`
-  - 已覆盖 `chips host open` 入口链路
+  - 已覆盖 `chips open` 入口链路
 
 验证结果（2026-03-03）：
 
 - `npm run build`：通过
 - `npm test`：通过（17 文件 / 53 用例）
+
+## 5. 主题预加载同步补充（2026-03-10）
+
+插件窗口 preload 现在承担正式主题同步职责：
+
+- 在文档就绪后调用 `theme.getCurrent/getAllCss/resolve`；
+- 将主题 CSS 写入 `#chips-plugin-theme-style`；
+- 将 `data-chips-theme-id` 与 `data-chips-theme-version` 写入 `document.documentElement`；
+- 将解析后的 token 变量直接注入文档根节点；
+- 订阅 `theme.changed`，在主题切换后重新同步上述内容。
+
+这意味着应用入口可以直接从文档注入状态读取初始主题，而不需要先写死一个默认主题再等待异步修正。

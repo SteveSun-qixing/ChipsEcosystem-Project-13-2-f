@@ -127,3 +127,12 @@
 - 自动化测试覆盖所有核心命令，SDK/CLI 仓库 CI 全绿；
 - 不依赖 Host CLI 即可独立工作。
 
+## 7. 2026-03-10 补充收敛
+
+本阶段文档在原有基础上补充以下已落地能力：
+
+- `chipsdev` 不再只覆盖工程创建、构建、测试与 `run`，而是正式补齐开发工作区的 Host 管理命令；
+- 开发者现在可以在 `.chips-host-dev` 中使用 `chipsdev start/stop/status/config/logs/plugin/theme/update/doctor/open`；
+- 上述命令与 `chips` 复用同一套 Host 管理能力，但通过开发工作区路径与 `CHIPS_WORKSPACE_KIND=dev` 严格隔离用户工作区；
+- 主题调试链路已经收敛为：开发工作区安装主题插件 -> 启用主题插件 -> 应用主题 -> `chipsdev run` 验证查看器与卡片内容区；
+- 这使 `chipsdev` 成为开发态唯一正式入口，不再需要手工操作开发工作区文件补链。

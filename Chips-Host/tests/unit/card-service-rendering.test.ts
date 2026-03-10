@@ -56,13 +56,16 @@ const createCardArchive = async (): Promise<string> => {
   return cardFile;
 };
 
-const loadThemeRenderContext = async (): Promise<{ theme: ReturnType<typeof toRenderThemeSnapshot>; themeCssText: string }> => {
-  const themeRoot = path.resolve(process.cwd(), '../ThemePack/Chips-default');
+const loadThemeRenderContext = async (
+  themeDir = '../ThemePack/Chips-default',
+  themeId = 'chips-official.default-theme'
+): Promise<{ theme: ReturnType<typeof toRenderThemeSnapshot>; themeCssText: string }> => {
+  const themeRoot = path.resolve(process.cwd(), themeDir);
   const tokens = JSON.parse(await fs.readFile(path.join(themeRoot, 'dist', 'tokens.json'), 'utf-8')) as Record<string, unknown>;
   const themeCssText = await fs.readFile(path.join(themeRoot, 'dist', 'theme.css'), 'utf-8');
-  const resolved = resolveThemeFromLayers(mergeThemeLayers([{ id: 'chips-official.default-theme', tokens }]));
+  const resolved = resolveThemeFromLayers(mergeThemeLayers([{ id: themeId, tokens }]));
   return {
-    theme: toRenderThemeSnapshot('chips-official.default-theme', resolved),
+    theme: toRenderThemeSnapshot(themeId, resolved),
     themeCssText
   };
 };
@@ -127,5 +130,30 @@ describe('CardService rendering', () => {
     expect(view.target).toBe('offscreen-render');
     expect(view.consistency?.consistent).toBe(true);
     expect(view.body).toContain('data-target="offscreen-render"');
+  }, 30_000);
+
+  it('preserves dark theme color-scheme from theme package css', async () => {
+    const cardFile = await createCardArchive();
+    const themeContext = await loadThemeRenderContext(
+      '../ThemePack/Chips-theme-default-dark',
+      'chips-official.default-dark-theme'
+    );
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-dark-theme'
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardFile, {
+      target: 'card-iframe',
+      ...themeContext
+    });
+
+    expect(view.body).toContain('color-scheme: dark;');
+    expect(view.body).not.toContain('color-scheme: light;');
   }, 30_000);
 });

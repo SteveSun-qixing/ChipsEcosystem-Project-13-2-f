@@ -39,6 +39,7 @@ const parseBridgeContext = (): BridgeContextOptions => {
 
 const THEME_STYLE_ELEMENT_ID = 'chips-plugin-theme-style';
 const THEME_ID_ATTRIBUTE = 'data-chips-theme-id';
+const THEME_VERSION_ATTRIBUTE = 'data-chips-theme-version';
 
 const getDomGlobals = (): { document?: any; window?: any } => {
   return globalThis as { document?: any; window?: any };
@@ -86,6 +87,7 @@ const syncThemeToDocument = async (): Promise<void> => {
   const styleEl = ensureThemeStyleElement(document);
   styleEl.textContent = cssResult.css;
   root.setAttribute(THEME_ID_ATTRIBUTE, current.themeId);
+  root.setAttribute(THEME_VERSION_ATTRIBUTE, current.version);
   applyThemeVariables(root, resolved.tokens);
 };
 

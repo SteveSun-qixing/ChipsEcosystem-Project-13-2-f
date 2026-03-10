@@ -21,6 +21,16 @@ const COMMANDS = new Set([
   'help',
   'init',
   'create',
+  'start',
+  'stop',
+  'status',
+  'config',
+  'logs',
+  'plugin',
+  'theme',
+  'update',
+  'doctor',
+  'open',
   'server',
   'debug',
   'build',
@@ -33,6 +43,19 @@ const COMMANDS = new Set([
   'publish',
   'version',
   'run'
+]);
+
+const HOST_MANAGED_COMMANDS = new Set([
+  'start',
+  'stop',
+  'status',
+  'config',
+  'logs',
+  'plugin',
+  'theme',
+  'update',
+  'doctor',
+  'open'
 ]);
 
 const log = (value) => {
@@ -52,6 +75,10 @@ const logError = (value) => {
 };
 
 const toErrorPayload = (error) => {
+  if (error && typeof error === 'object' && error.__alreadyLogged === true) {
+    return null;
+  }
+
   if (error instanceof Error) {
     return {
       error: error.message,
@@ -80,6 +107,16 @@ const printHelp = () => {
       '可用命令：',
       '  init        初始化项目级开发配置（chips.config.mjs）',
       '  create      从官方脚手架模板创建新工程',
+      '  start       启动开发工作区 Host 状态管理',
+      '  stop        停止开发工作区 Host 状态管理',
+      '  status      查看开发工作区状态',
+      '  config      管理开发工作区配置',
+      '  logs        导出开发工作区日志',
+      '  plugin      管理开发工作区插件',
+      '  theme       管理开发工作区主题',
+      '  update      查看或安装开发工具更新信息',
+      '  doctor      检查开发工作区健康状态',
+      '  open        在开发工作区链路中打开目标文件',
       '  server      启动 Vite 开发服务器',
       '  debug       以调试模式启动目标项目（与 server 行为一致，可扩展调试预设）',
       '  build       使用 Vite 构建插件工程',
@@ -299,12 +336,50 @@ const hasCliTool = (projectRoot, binName) => {
   );
 };
 
+const hasNewerSourceArtifact = (artifactPath, candidateDirs, packageJsonPath) => {
+  if (!fs.existsSync(artifactPath)) {
+    return true;
+  }
+
+  const artifactMtime = fs.statSync(artifactPath).mtimeMs;
+  if (fs.existsSync(packageJsonPath) && fs.statSync(packageJsonPath).mtimeMs > artifactMtime) {
+    return true;
+  }
+
+  const stack = candidateDirs.filter((dir) => fs.existsSync(dir));
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === 'dist' || entry.name === 'node_modules' || entry.name === '.git') {
+        continue;
+      }
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (fs.statSync(fullPath).mtimeMs > artifactMtime) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 const ensurePackageBuildArtifact = async (packageDir, artifactPath, packageLabel) => {
-  if (fs.existsSync(artifactPath)) {
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  const sourceDirs = ['src', 'packages', 'cli', 'scripts']
+    .map((segment) => path.join(packageDir, segment));
+
+  if (!hasNewerSourceArtifact(artifactPath, sourceDirs, packageJsonPath)) {
     return;
   }
 
-  const packageJsonPath = path.join(packageDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     throw new Error(`未找到 ${packageLabel} 的 package.json：${packageJsonPath}`);
   }
@@ -1047,6 +1122,119 @@ const resolveEcosystemRoot = () => {
   return toRealPathIfExists(path.resolve(__dirname, '..', '..'));
 };
 
+const resolveHostCliPath = async (projectRoot) => {
+  const ecosystemRoot = resolveEcosystemRoot();
+  const hostPackageDir = path.join(ecosystemRoot, 'Chips-Host');
+  const hostCliPath = path.join(hostPackageDir, 'dist', 'src', 'main', 'cli', 'index.js');
+  await ensurePackageBuildArtifact(hostPackageDir, hostCliPath, 'Chips-Host');
+  return {
+    ecosystemRoot,
+    hostPackageDir,
+    hostCliPath
+  };
+};
+
+const runHostCliCommand = async (projectRoot, workspacePath, args, extraEnv = {}) => {
+  const { hostCliPath } = await resolveHostCliPath(projectRoot);
+  await new Promise((resolve, reject) => {
+    const child = childProcess.spawn(process.execPath, [hostCliPath, ...args], {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      env: {
+        ...makeBinEnv(projectRoot),
+        ...extraEnv,
+        CHIPS_HOME: workspacePath
+      }
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code, signal) => {
+      if (code === 0) {
+        resolve(undefined);
+        return;
+      }
+
+      reject({
+        __alreadyLogged: true,
+        error:
+          typeof code === 'number'
+            ? `host cli exited with code ${code}`
+            : `host cli exited with signal ${signal ?? 'UNKNOWN'}`
+      });
+    });
+  });
+};
+
+const loadRuntimePluginRecords = async (workspacePath) => {
+  return loadJsonFile(path.join(workspacePath, 'plugin-runtime.json'), []);
+};
+
+const hasEnabledThemePlugin = (records) =>
+  records.some(
+    (record) =>
+      record &&
+      typeof record === 'object' &&
+      record.enabled === true &&
+      record.manifest &&
+      record.manifest.type === 'theme'
+  );
+
+const ensureDevWorkspaceThemeBootstrap = async (projectRoot, workspacePath) => {
+  const records = await loadRuntimePluginRecords(workspacePath);
+  if (hasEnabledThemePlugin(records)) {
+    return;
+  }
+
+  const ecosystemRoot = resolveEcosystemRoot();
+  const defaultThemePackageDir = path.join(ecosystemRoot, 'ThemePack', 'Chips-default');
+  const defaultThemeManifestPath = path.join(ecosystemRoot, 'ThemePack', 'Chips-default', 'manifest.yaml');
+  await ensurePackageBuildArtifact(
+    defaultThemePackageDir,
+    path.join(defaultThemePackageDir, 'dist', 'theme.css'),
+    'Chips 默认主题包'
+  );
+  const defaultThemePluginId = 'theme.theme.chips-official-default-theme';
+  const defaultThemeId = 'chips-official.default-theme';
+  const hasDefaultThemeInstalled = records.some(
+    (record) =>
+      record &&
+      typeof record === 'object' &&
+      record.manifest &&
+      record.manifest.id === defaultThemePluginId
+  );
+
+  if (!hasDefaultThemeInstalled) {
+    await runHostCliCommand(projectRoot, workspacePath, ['plugin', 'install', defaultThemeManifestPath], {
+      CHIPS_WORKSPACE_KIND: 'dev'
+    });
+  }
+
+  await runHostCliCommand(projectRoot, workspacePath, ['plugin', 'enable', defaultThemePluginId], {
+    CHIPS_WORKSPACE_KIND: 'dev'
+  });
+
+  const config = await loadJsonFile(path.join(workspacePath, 'config.json'), {});
+  if (typeof config['ui.theme'] !== 'string' || config['ui.theme'].trim().length === 0) {
+    await runHostCliCommand(projectRoot, workspacePath, ['theme', 'apply', defaultThemeId], {
+      CHIPS_WORKSPACE_KIND: 'dev'
+    });
+  }
+};
+
+const delegateHostManagedCommand = async (command, args) => {
+  const projectRoot = resolveProjectRoot();
+  const workspacePath = await resolveDevWorkspace(projectRoot);
+  const requiresThemeBootstrap = new Set(['theme', 'run', 'open']);
+
+  if (requiresThemeBootstrap.has(command)) {
+    await ensureDevWorkspaceThemeBootstrap(projectRoot, workspacePath);
+  }
+
+  await runHostCliCommand(projectRoot, workspacePath, [command, ...args], {
+    CHIPS_WORKSPACE_KIND: 'dev'
+  });
+};
+
 const adaptWorkspaceDependencies = async (targetDir) => {
   const pkgJsonPath = path.join(targetDir, 'package.json');
   if (!fs.existsSync(pkgJsonPath)) {
@@ -1320,7 +1508,9 @@ const main = async () => {
   }
 
   try {
-    if (command === 'init') {
+    if (HOST_MANAGED_COMMANDS.has(command)) {
+      await delegateHostManagedCommand(command, args);
+    } else if (command === 'init') {
       await handleInit();
     } else if (command === 'server') {
       await handleServer('server');
@@ -1357,7 +1547,10 @@ const main = async () => {
 
     process.exitCode = 0;
   } catch (error) {
-    logError(toErrorPayload(error));
+    const payload = toErrorPayload(error);
+    if (payload) {
+      logError(payload);
+    }
     process.exitCode = 1;
   }
 };
@@ -1377,8 +1570,8 @@ const handleRun = async () => {
   await handleBuild();
 
   const workspacePath = await resolveDevWorkspace(projectRoot);
-  const ecosystemRoot = resolveEcosystemRoot();
-  const hostPackageDir = path.join(ecosystemRoot, 'Chips-Host');
+  await ensureDevWorkspaceThemeBootstrap(projectRoot, workspacePath);
+  const { ecosystemRoot, hostPackageDir } = await resolveHostCliPath(projectRoot);
   const hostRunnerPath = path.join(hostPackageDir, 'dist', 'src', 'main', 'electron', 'dev-run-app.js');
 
   await ensurePackageBuildArtifact(hostPackageDir, hostRunnerPath, 'Chips-Host');

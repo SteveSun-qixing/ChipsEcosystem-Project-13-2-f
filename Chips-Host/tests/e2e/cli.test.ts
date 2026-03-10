@@ -91,6 +91,7 @@ describe('chips cli', () => {
   it('supports theme management commands', async () => {
     const { runCli } = await import('../../src/main/cli/index');
     expect(await runCli(['plugin', 'install', themeManifestPath])).toBe(0);
+    expect(await runCli(['plugin', 'enable', 'theme.theme.chips-official-default-theme'])).toBe(0);
 
     expect(await runCli(['theme', 'list'])).toBe(0);
     expect(await runCli(['theme', 'current'])).toBe(0);
@@ -100,6 +101,7 @@ describe('chips cli', () => {
   it('opens .card file through file association entry', async () => {
     const { runCli } = await import('../../src/main/cli/index');
     expect(await runCli(['plugin', 'install', themeManifestPath])).toBe(0);
+    expect(await runCli(['plugin', 'enable', 'theme.theme.chips-official-default-theme'])).toBe(0);
     const cardSourceDir = path.join(workspace, 'demo-card-source');
     await fs.mkdir(path.join(cardSourceDir, '.card'), { recursive: true });
     await fs.writeFile(path.join(cardSourceDir, '.card/metadata.yaml'), 'id: demo.card\nname: Demo Card\n', 'utf-8');

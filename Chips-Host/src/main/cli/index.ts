@@ -12,6 +12,11 @@ import { toStandardError } from '../../shared/errors';
 const stateFile = (workspace: string) => path.join(workspace, 'host-state.json');
 const pluginFile = (workspace: string) => path.join(workspace, 'plugins.json');
 const getWorkspace = (): string => process.env.CHIPS_HOME ?? path.join(os.homedir(), '.chips-host');
+const getWorkspaceKind = (): 'user' | 'dev' => (process.env.CHIPS_WORKSPACE_KIND === 'dev' ? 'dev' : 'user');
+const getWorkspaceSummary = (workspace: string) => ({
+  kind: getWorkspaceKind(),
+  path: workspace
+});
 
 const ensureWorkspace = async (workspace: string): Promise<void> => {
   await fs.mkdir(workspace, { recursive: true });
@@ -105,7 +110,10 @@ export const runCli = async (argv: string[]): Promise<number> => {
 
     if (command === 'status') {
       const state = await readJson(stateFile(workspace), { running: false });
-      print(state);
+      print({
+        workspace: getWorkspaceSummary(workspace),
+        state
+      });
       return 0;
     }
 
@@ -347,7 +355,10 @@ export const runCli = async (argv: string[]): Promise<number> => {
           .then(() => true)
           .catch(() => false)
       };
-      print({ checks });
+      print({
+        workspace: getWorkspaceSummary(workspace),
+        checks
+      });
       return 0;
     }
 

@@ -60,6 +60,7 @@
   - 必填：`config.title/config.width/config.height`
   - 可选：`config.url`（插件入口）、`config.pluginId`（插件标识）、`config.sessionId`（会话标识）
   - 当 `url` 为本地 HTML 路径时由主机加载本地入口；为 `http(s)/file/chips` URL 时按 URL 方式加载
+  - 当调用方未显式提供 `config.chrome.backgroundColor` 且窗口不是透明窗口时，Host 会从当前主题 token 中推导原生窗口背景
 - `dialog.saveFile(options)`：
   - 桥接到主机动作：`platform.dialogSaveFile`
   - `defaultPath` 存在时返回该路径并确保目录可写
@@ -99,7 +100,15 @@
 
 > 具体动作列表以对应服务文档与契约清单为准；本节只冻结公开命名空间与动作命名规则。
 
-### 3.1 card.render（L9 统一渲染入口）补充基线
+### 3.1 theme / plugin / window 运行时补充基线
+
+- `theme.list/getCurrent/getAllCss/resolve/apply` 只面向当前工作区中已启用的主题插件；
+- 主题插件的 `install/enable/disable/uninstall` 会刷新 Host 主题运行时状态；
+- preload 会把当前主题写入文档根节点的 `data-chips-theme-id` 与 `data-chips-theme-version`；
+- `theme.changed` 事件是应用壳层、主题运行时和复合卡片窗口同步刷新的统一事件源；
+- `window.open` 在未传入背景色时使用当前主题 token 推导窗口背景。
+
+### 3.2 card.render（L9 统一渲染入口）补充基线
 
 - 动作：`card.render`
 - 必填入参：
@@ -142,6 +151,7 @@ interface RenderNodeDiagnostic {
 
 - 事件名必须使用点语义（例如 `theme.changed`、`plugin.enabled`）。
 - 事件载荷建议包含：`id/name/source/data/timestamp/metadata`。
+- 当前 `theme.changed` 基线载荷至少包含：`previousThemeId`、`themeId`、`timestamp`。
 
 ## 4.2 错误语义
 
@@ -192,7 +202,8 @@ interface StandardError {
 - 配置管理：`config list/set/reset`
 - 运行观察：`logs/doctor`
 - 文件入口：`open <target-file>`
-- 插件管理：`plugin install/uninstall/list`
+- 插件管理：`plugin install/uninstall/list/enable/disable/query`
+- 主题管理：`theme list/current/apply/resolve/contract/validate`
 - 更新管理：`update check/install`
 
 CLI 应满足：

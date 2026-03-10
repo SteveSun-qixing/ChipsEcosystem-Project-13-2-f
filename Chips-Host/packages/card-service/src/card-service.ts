@@ -220,10 +220,10 @@ const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
     .map(([key, value]) => `  --${key.replaceAll('.', '-')}: ${String(value)};`);
 
   if (declarations.length === 0) {
-    return ':root { color-scheme: light; }';
+    return ':root {}';
   }
 
-  return [':root {', '  color-scheme: light;', ...declarations, '}'].join('\n');
+  return [':root {', ...declarations, '}'].join('\n');
 };
 
 const joinStyleBlocks = (...blocks: Array<string | undefined>): string => {

@@ -7,6 +7,31 @@ import { useChipsClient } from "./hooks/useChipsClient";
 import { appConfig } from "../config/app-config";
 import { createLogger, createTraceId } from "../config/logging";
 
+interface AppThemeState {
+  themeId: string;
+  version: string;
+}
+
+const DEFAULT_THEME_STATE: AppThemeState = {
+  themeId: "chips-official.default-theme",
+  version: "1.0.0",
+};
+
+function readDocumentThemeState(): AppThemeState {
+  if (typeof document === "undefined") {
+    return DEFAULT_THEME_STATE;
+  }
+
+  const root = document.documentElement;
+  const themeId = root.getAttribute("data-chips-theme-id");
+  const version = root.getAttribute("data-chips-theme-version");
+
+  return {
+    themeId: typeof themeId === "string" && themeId.trim().length > 0 ? themeId : DEFAULT_THEME_STATE.themeId,
+    version: typeof version === "string" && version.trim().length > 0 ? version : DEFAULT_THEME_STATE.version,
+  };
+}
+
 function resolveErrorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
@@ -32,6 +57,7 @@ export function App() {
   const client = useChipsClient(traceId);
   const [cardFile, setCardFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [themeState, setThemeState] = useState<AppThemeState>(() => readDocumentThemeState());
 
   useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -62,6 +88,30 @@ export function App() {
       error,
     });
   }, [error, logger]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    client.theme
+      .getCurrent()
+      .then((currentTheme) => {
+        if (cancelled) {
+          return;
+        }
+
+        setThemeState({
+          themeId: currentTheme.themeId,
+          version: currentTheme.version,
+        });
+      })
+      .catch((runtimeError) => {
+        logger.warn("读取当前主题失败，继续使用文档已注入的主题快照", runtimeError);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, logger]);
 
   const handleOpenCard = useCallback(async () => {
     try {
@@ -120,8 +170,8 @@ export function App() {
 
   return (
     <ChipsThemeProvider
-      themeId="chips-official.default-theme"
-      version="1.0.0"
+      themeId={themeState.themeId}
+      version={themeState.version}
       eventSource={themeEventSource}
       eventName="theme.changed"
     >

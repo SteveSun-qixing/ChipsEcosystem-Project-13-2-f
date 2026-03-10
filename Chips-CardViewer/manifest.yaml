@@ -36,5 +36,4 @@ ui:
     baseWidth: 1024
   window:
     chrome:
-      backgroundColor: "#ffffff"
       titleBarStyle: default

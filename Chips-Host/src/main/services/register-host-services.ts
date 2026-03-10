@@ -345,7 +345,7 @@ const loadThemeRecordFromPlugin = async (plugin: ReturnType<PluginRuntime['query
 };
 
 const loadInstalledThemes = async (runtime: PluginRuntime): Promise<ThemeRecord[]> => {
-  const plugins = runtime.query({ type: 'theme' });
+  const plugins = runtime.query({ type: 'theme' }).filter((plugin) => plugin.enabled);
   const loaded = await Promise.all(plugins.map((plugin) => loadThemeRecordFromPlugin(plugin)));
   return loaded.sort((left, right) => {
     if (left.isDefault !== right.isDefault) {
@@ -432,6 +432,48 @@ const syncCurrentThemeState = (state: RuntimeState): void => {
 
   if (fallbackTheme) {
     state.currentThemeId = fallbackTheme.id;
+  }
+};
+
+const resolveThemedWindowChrome = (
+  state: RuntimeState,
+  chrome: WindowChromeOptions | undefined
+): WindowChromeOptions | undefined => {
+  const nextChrome = chrome ? deepClone(chrome) : undefined;
+  if (nextChrome?.transparent === true || typeof nextChrome?.backgroundColor === 'string') {
+    return nextChrome;
+  }
+
+  try {
+    const context = resolveThemeContext(state, []);
+    const backgroundColor =
+      asString(context.resolvedTheme.variables['chips.sys.color.canvas']) ??
+      asString(context.resolvedTheme.variables['chips.sys.color.surface']);
+
+    if (!backgroundColor) {
+      return nextChrome;
+    }
+
+    return {
+      ...(nextChrome ?? {}),
+      backgroundColor
+    };
+  } catch {
+    return nextChrome;
+  }
+};
+
+const syncInstalledThemes = async (ctx: HostServiceContext, state: RuntimeState): Promise<void> => {
+  const previousThemeId = state.currentThemeId;
+  state.themes = await loadInstalledThemes(ctx.runtime);
+  syncCurrentThemeState(state);
+
+  if (state.currentThemeId !== previousThemeId && state.themes.length > 0) {
+    await ctx.kernel.events.emit('theme.changed', 'theme-service', {
+      previousThemeId,
+      themeId: state.currentThemeId,
+      timestamp: Date.now()
+    });
   }
 };
 
@@ -1034,7 +1076,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.open', async (input) => {
-            const window = await ctx.pal.window.create({ ...input.config });
+            const window = await ctx.pal.window.create({
+              ...input.config,
+              chrome: resolveThemedWindowChrome(state, input.config.chrome)
+            });
             await ctx.kernel.events.emit('window.opened', 'window-service', window);
             return { window };
           })
@@ -1120,6 +1165,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'plugin.install', async (input) => {
             const record = await ctx.runtime.install(input.manifestPath);
+            if (record.manifest.type === 'theme') {
+              await syncInstalledThemes(ctx, state);
+            }
             await ctx.kernel.events.emit('plugin.installed', 'plugin-service', { pluginId: record.manifest.id });
             return { pluginId: record.manifest.id };
           })
@@ -1133,7 +1181,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.enable', async (input) => {
+            const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.enable(input.pluginId);
+            if (plugin.manifest.type === 'theme') {
+              await syncInstalledThemes(ctx, state);
+            }
             await ctx.kernel.events.emit('plugin.enabled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })
@@ -1147,7 +1199,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.disable', async (input) => {
+            const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.disable(input.pluginId);
+            if (plugin.manifest.type === 'theme') {
+              await syncInstalledThemes(ctx, state);
+            }
             await ctx.kernel.events.emit('plugin.disabled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })
@@ -1161,7 +1217,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'plugin.uninstall', async (input) => {
+            const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.uninstall(input.pluginId);
+            if (plugin.manifest.type === 'theme') {
+              await syncInstalledThemes(ctx, state);
+            }
             await ctx.kernel.events.emit('plugin.uninstalled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
           })

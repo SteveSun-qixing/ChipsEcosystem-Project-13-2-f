@@ -71,8 +71,13 @@ async function removeDirIfExists(dir) {
         (0, vitest_1.expect)(result.templateId).toBe("card-standard");
         (0, vitest_1.expect)(result.filesCreated).toBeGreaterThan(0);
         const manifest = await node_fs_1.promises.readFile(path.join(targetDir, "manifest.yaml"), "utf8");
+        const pkg = JSON.parse(await node_fs_1.promises.readFile(path.join(targetDir, "package.json"), "utf8"));
         (0, vitest_1.expect)(manifest).toMatch(/type:\s+card/);
         (0, vitest_1.expect)(manifest).toMatch(/capabilities:/);
+        await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
+        (0, vitest_1.expect)(pkg.devDependencies.eslint).toBe("^8.57.1");
+        (0, vitest_1.expect)(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
+        (0, vitest_1.expect)(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
         const readme = await node_fs_1.promises.readFile(path.join(targetDir, "README.md"), "utf8");
         (0, vitest_1.expect)(readme).toMatch(/Standard Basecard Plugin/);
     });

@@ -19,7 +19,8 @@ beforeEach(async () => {
     themeId: 'chips-official.default-theme'
   });
   await bootstrapRuntime.load();
-  await bootstrapRuntime.install(path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'));
+  const defaultTheme = await bootstrapRuntime.install(path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'));
+  await bootstrapRuntime.enable(defaultTheme.manifest.id);
   app = new HostApplication({ workspacePath: workspace });
   await app.start();
   runtime = new RuntimeClient(app.createBridge(), {
@@ -69,6 +70,19 @@ describe('Host services integration', () => {
     await runtime.invoke('theme.apply', { id: list.themes[0]!.id });
     const current = await runtime.invoke<{ themeId: string }>('theme.getCurrent', {});
     expect(current.themeId).toBe(list.themes[0]!.id);
+  });
+
+  it('only exposes enabled themes to theme service', async () => {
+    const darkInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../ThemePack/Chips-theme-default-dark/manifest.yaml')
+    });
+
+    const beforeEnable = await runtime.invoke<{ themes: Array<{ id: string }> }>('theme.list', {});
+    expect(beforeEnable.themes.some((theme) => theme.id === 'chips-official.default-dark-theme')).toBe(false);
+
+    await runtime.invoke('plugin.enable', { pluginId: darkInstall.pluginId });
+    const afterEnable = await runtime.invoke<{ themes: Array<{ id: string }> }>('theme.list', {});
+    expect(afterEnable.themes.some((theme) => theme.id === 'chips-official.default-dark-theme')).toBe(true);
   });
 
   it('resolves theme token chain and enforces max depth', async () => {
@@ -172,6 +186,19 @@ describe('Host services integration', () => {
 
     const focused = await runtime.invoke('window.focus', { windowId: opened.window.id });
     expect(focused).toMatchObject({ ack: true });
+  });
+
+  it('fills themed window background color when caller does not provide one', async () => {
+    const opened = await runtime.invoke<{ window: { chrome?: { backgroundColor?: string } } }>('window.open', {
+      config: {
+        title: 'Theme Window',
+        width: 640,
+        height: 480
+      }
+    });
+
+    expect(opened.window.chrome?.backgroundColor).toBeTypeOf('string');
+    expect(opened.window.chrome?.backgroundColor?.length).toBeGreaterThan(0);
   });
 
   it('writes and queries logs', async () => {

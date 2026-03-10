@@ -154,6 +154,13 @@ interface ThemeService {
 }
 ```
 
+**运行时补充（2026-03-10）**：
+
+- `theme.list/getCurrent/getAllCss/resolve/apply` 只面向当前工作区中“已启用”的主题插件，不再把“仅安装未启用”的主题视为可用主题；
+- 主题插件发生 `install/enable/disable/uninstall` 后，Host 必须同步刷新 `state.themes` 与当前主题状态；
+- `theme.apply` 成功后发布 `theme.changed` 事件，供 preload、应用壳层和复合卡片窗口统一刷新；
+- `getAllCss` 返回值同时携带 `css` 与 `themeId`，供调用方建立显式主题快照。
+
 ### 5. i18n 服务
 
 | 项目 | 内容 |
@@ -177,6 +184,11 @@ interface ThemeService {
 | 幂等性 | focus 幂等 |
 | 权限边界 | `window.control` |
 | 典型错误 | `WINDOW_NOT_FOUND` |
+
+**窗口主题补充（2026-03-10）**：
+
+- 当调用方未显式传入 `chrome.backgroundColor`，且窗口不是透明窗口时，Host 应从当前主题解析结果中优先读取 `chips.sys.color.canvas`，其次读取 `chips.sys.color.surface` 作为原生窗口背景；
+- 应用不能再通过硬编码白色背景覆盖主题系统。
 
 ### 7. plugin 服务
 
@@ -251,6 +263,12 @@ interface ThemeService {
 | 幂等性 | parse/validate 幂等 |
 | 权限边界 | `card.read` / `card.write` |
 | 典型错误 | `CARD_SCHEMA_INVALID` |
+
+**卡片渲染补充（2026-03-10）**：
+
+- `card.render` 生成复合卡片和基础卡片文档时，必须同时注入主题包 CSS 与解析后的变量；
+- 渲染服务不得追加固定 `color-scheme: light` 或其他会覆盖主题包色彩模式声明的样式；
+- 复合卡片主题变更后的刷新由上层窗口组件基于主题运行时缓存键触发，`card` 服务负责输出纯净、可重建的主题化文档。
 
 ### 13. box 服务
 

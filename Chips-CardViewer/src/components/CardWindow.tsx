@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useThemeRuntime } from "@chips/component-library";
 import type { FrameRenderResult } from "chips-sdk";
 import { useChipsClient } from "../hooks/useChipsClient";
 import { createScopedLogger } from "../../config/logging";
@@ -9,6 +10,7 @@ interface CardWindowProps {
 }
 
 export function CardWindow({ cardFile, traceId }: CardWindowProps) {
+  const themeRuntime = useThemeRuntime();
   const logger = useMemo(
     () =>
       createScopedLogger({
@@ -28,6 +30,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
     const cleanupTasks: Array<() => void> = [];
     logger.info("准备渲染复合卡片窗口", {
       cardFile,
+      themeCacheKey: themeRuntime.cacheKey,
     });
     const api = client.card.compositeWindow as {
       render: (options: { cardFile: string; mode?: "view" | "preview" }) => Promise<FrameRenderResult>;
@@ -162,7 +165,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
       }
       frameRef.current = null;
     };
-  }, [cardFile, client, logger]);
+  }, [cardFile, client, logger, themeRuntime.cacheKey]);
 
   return (
     <div

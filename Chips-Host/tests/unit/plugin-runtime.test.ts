@@ -215,6 +215,17 @@ describe('PluginRuntime', () => {
     await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
   }, 15_000);
 
+  it('normalizes theme plugin governance metadata during install', async () => {
+    const record = await runtime.install(path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'));
+    expect(record.manifest.theme).toMatchObject({
+      themeId: 'chips-official.default-theme',
+      displayName: '薯片官方 · 默认主题',
+      isDefault: true,
+      tokensPath: 'dist/tokens.json',
+      themeCssPath: 'dist/theme.css'
+    });
+  });
+
   it('requires signature for non-local plugin source', async () => {
     const manifestPath = path.join(workspace, 'signed.plugin.json');
     await fs.writeFile(

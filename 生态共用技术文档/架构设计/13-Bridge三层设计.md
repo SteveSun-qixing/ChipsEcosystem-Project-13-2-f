@@ -377,7 +377,7 @@ interface ThemeClient {
   list(publisher?: string): Promise<ThemeMeta[]>;
   apply(id: string): Promise<void>;
   getCurrent(appId?: string, pluginId?: string): Promise<ThemeState>;
-  getAllCss(): Promise<string>;
+  getAllCss(): Promise<{ css: string; themeId: string }>;
   resolve(chain: string[]): Promise<ResolvedTokens>;
   contract.get(component?: string): Promise<ThemeContract>;
 }

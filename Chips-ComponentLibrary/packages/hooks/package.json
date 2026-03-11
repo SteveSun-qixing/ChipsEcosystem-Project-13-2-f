@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
   "peerDependencies": {
     "react": ">=18.0.0"
   },
   "volta": {
     "extends": "../../../package.json"
-  }
+  },
+  "types": "./src/index.d.ts"
 }

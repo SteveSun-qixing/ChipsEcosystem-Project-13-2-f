@@ -51,6 +51,17 @@ SDK 必须提供统一入口（命名示意）：
 - `resolveCoverFrame({ cardId, cardFile, cardName, signal })`
 - `resolveCompositeWindow({ cardFile, mode, signal })`
 
+正式类型入口：
+
+- 主定义入口：`@chips/card-runtime`
+- 聚合转发入口：`@chips/component-library`
+- 允许直接消费的类型/常量包括：
+  - `CardDisplayAdapter`
+  - `CompositeWindowMode`
+  - `loadCoverFrameData`
+  - `loadCompositeWindowData`
+  - `validateCardDisplayAdapter`
+
 组件库适配器校验约束：
 
 - `resolveCompositeWindow.mode` 非 `view | preview` 直接阻断并返回标准错误。
@@ -86,7 +97,7 @@ SDK 处理流程：
 - 基础卡片插件必须通过 manifest 与契约校验。
 - SDK 显示接口跨应用行为必须一致。
 - 单插件失败不得拖垮复合窗口整体展示。
-- 接口升级需保持向后兼容或提供升级方案。
+- 当前首版阶段不为历史口径保留兼容层；接口调整必须先在生态级文档中完成收口，再统一落地。
 
 ## 8. SDK 阻断项记录
 

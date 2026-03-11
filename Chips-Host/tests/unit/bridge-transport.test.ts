@@ -26,6 +26,11 @@ describe('BridgeTransport', () => {
       return { ok: true } as any;
     });
 
+    await bridge.plugin.list();
+    await bridge.plugin.get('plugin-1');
+    await bridge.plugin.getSelf();
+    await bridge.plugin.getCardPlugin('RichTextCard');
+    await bridge.plugin.getLayoutPlugin('grid-layout');
     await bridge.window.open({ title: 'demo' });
     await bridge.window.getState('w1');
     await bridge.plugin.query();
@@ -37,6 +42,11 @@ describe('BridgeTransport', () => {
     await bridge.ipc.listChannels();
 
     expect(actions).toEqual([
+      'plugin.list',
+      'plugin.get',
+      'plugin.getSelf',
+      'plugin.getCardPlugin',
+      'plugin.getLayoutPlugin',
       'window.open',
       'window.getState',
       'plugin.query',

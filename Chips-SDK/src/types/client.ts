@@ -52,7 +52,7 @@ export interface EventsApi {
 }
 
 export interface CoreClient {
-  readonly config: Readonly<ClientConfig>;
+  readonly clientConfig: Readonly<ClientConfig>;
   invoke<I, O>(action: string, payload: I): Promise<O>;
   events: EventsApi;
 }
@@ -78,4 +78,3 @@ export interface InvocationContext {
   attempt: number;
   error?: StandardError;
 }
-

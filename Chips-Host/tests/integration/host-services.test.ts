@@ -284,8 +284,88 @@ describe('Host services integration', () => {
     const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: cpkPath });
     expect(installed.pluginId).toBe('chips.runtime.cpk');
 
-    const queried = await runtime.invoke<{ plugins: Array<{ id: string; manifestPath: string }> }>('plugin.query', {});
-    expect(queried.plugins.some((plugin) => plugin.id === 'chips.runtime.cpk')).toBe(true);
+    const queried = await runtime.invoke<{
+      plugins: Array<{ id: string; manifestPath: string; name: string; version: string; enabled: boolean }>;
+    }>('plugin.query', {});
+    expect(queried.plugins).toContainEqual(
+      expect.objectContaining({
+        id: 'chips.runtime.cpk',
+        name: 'Runtime CPK Plugin',
+        version: '1.0.0',
+        enabled: false
+      })
+    );
+  });
+
+  it('exposes plugin governance metadata through list/get/query', async () => {
+    const darkInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../ThemePack/Chips-theme-default-dark/manifest.yaml')
+    });
+
+    const listed = await runtime.invoke<{
+      plugins: Array<{
+        id: string;
+        name: string;
+        version: string;
+        type: string;
+        theme?: {
+          themeId: string;
+          displayName: string;
+          isDefault: boolean;
+        };
+      }>;
+    }>('plugin.list', { type: 'theme' });
+    expect(listed.plugins).toContainEqual(
+      expect.objectContaining({
+        id: darkInstall.pluginId,
+        name: '薯片官方 · 暗夜主题',
+        version: '1.0.0',
+        type: 'theme',
+        theme: expect.objectContaining({
+          themeId: 'chips-official.default-dark-theme',
+          displayName: '薯片官方 · 暗夜主题',
+          isDefault: false
+        })
+      })
+    );
+
+    const queried = await runtime.invoke<{
+      plugins: Array<{
+        id: string;
+        enabled: boolean;
+        theme?: {
+          themeId: string;
+          displayName: string;
+        };
+      }>;
+    }>('plugin.query', { type: 'theme' });
+    expect(queried.plugins).toContainEqual(
+      expect.objectContaining({
+        id: darkInstall.pluginId,
+        enabled: false,
+        theme: expect.objectContaining({
+          themeId: 'chips-official.default-dark-theme',
+          displayName: '薯片官方 · 暗夜主题'
+        })
+      })
+    );
+
+    const fetched = await runtime.invoke<{
+      plugin: {
+        id: string;
+        name: string;
+        theme?: {
+          themeId: string;
+        };
+      };
+    }>('plugin.get', { pluginId: darkInstall.pluginId });
+    expect(fetched.plugin).toMatchObject({
+      id: darkInstall.pluginId,
+      name: '薯片官方 · 暗夜主题',
+      theme: {
+        themeId: 'chips-official.default-dark-theme'
+      }
+    });
   });
 
   it('uses plugin handler when opening associated card file', async () => {

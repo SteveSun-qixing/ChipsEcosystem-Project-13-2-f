@@ -1,0 +1,45 @@
+id: com.chips.eco-settings-panel
+name: 生态设置面板
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态与 Host 的统一运行时设置面板，负责主题、多语言、应用插件与组件展示治理。
+
+author:
+  name: sevenstars
+  email: eco-settings-panel@chips.local
+
+keywords:
+  - chips
+  - settings
+  - theme
+  - i18n
+  - plugin
+
+permissions:
+  - theme.read
+  - theme.write
+  - i18n.read
+  - i18n.write
+  - plugin.read
+  - plugin.manage
+  - platform.read
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1280
+  window:
+    chrome:
+      frame: true
+      titleBarStyle: default

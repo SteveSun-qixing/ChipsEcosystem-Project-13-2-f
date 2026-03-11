@@ -374,6 +374,72 @@ describe('Host services PAL routing', () => {
     expect(state.dialogConfirmArgs).toHaveLength(1);
   });
 
+  it('keeps interactive dialog routes open beyond the generic 2 second timeout window', async () => {
+    const state: PalState = {
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
+      dialogOpenArgs: [],
+      dialogSaveArgs: [],
+      dialogMessageArgs: [],
+      dialogConfirmArgs: [],
+      shellOpenPath: [],
+      shellOpenExternal: [],
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false,
+      ipcChannels: new Map()
+    };
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+
+    const pal = createPal(state);
+    pal.dialog.openFile = async (options) => {
+      state.dialogOpenArgs.push(options ?? null);
+      await new Promise((resolve) => setTimeout(resolve, 2_100));
+      return ['/virtual/slow-opened.txt'];
+    };
+    pal.dialog.showConfirm = async (options) => {
+      state.dialogConfirmArgs.push(options);
+      await new Promise((resolve) => setTimeout(resolve, 2_100));
+      return true;
+    };
+
+    await registerHostServices({
+      kernel,
+      pal,
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const context = createContextFactory();
+    const platformRead = ['platform.read'];
+
+    await expect(
+      kernel.invoke<{ options: { title: string } }, { filePaths: string[] | null }>(
+        'platform.dialogOpenFile',
+        { options: { title: 'slow picker' } },
+        context(platformRead)
+      )
+    ).resolves.toEqual({ filePaths: ['/virtual/slow-opened.txt'] });
+
+    await expect(
+      kernel.invoke<{ options: { message: string } }, { confirmed: boolean }>(
+        'platform.dialogShowConfirm',
+        { options: { message: 'confirm after wait' } },
+        context(platformRead)
+      )
+    ).resolves.toEqual({ confirmed: true });
+  });
+
   it('forwards clipboard and shell routes to PAL clipboard/shell implementation', async () => {
     const state: PalState = {
       clipboardText: '',

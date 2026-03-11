@@ -150,6 +150,7 @@ plugin子域提供插件信息查询能力，采用 vNext 冻结动作口径：
 | `plugin.get({ pluginId })` | 获取指定插件信息 | 是 |
 | `plugin.getCardPlugin({ cardType })` | 根据卡片类型获取渲染插件 | 是 |
 | `plugin.getLayoutPlugin({ layoutType })` | 根据布局类型获取布局插件 | 是 |
+| `plugin.query({ type?, capability? })` | 按治理视角查询已安装插件运行时记录 | 是 |
 
 **插件信息结构**：
 

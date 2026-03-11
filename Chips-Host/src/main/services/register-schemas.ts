@@ -128,6 +128,11 @@ export const registerHostSchemas = (): void => {
   registerPair('platform.ipcCloseChannel', ['channelId']);
   registerPair('platform.ipcListChannels', []);
 
+  registerPair('plugin.list', []);
+  registerPair('plugin.get', ['pluginId']);
+  registerPair('plugin.getSelf', []);
+  registerPair('plugin.getCardPlugin', ['cardType']);
+  registerPair('plugin.getLayoutPlugin', ['layoutType']);
   registerPair('plugin.install', ['manifestPath']);
   registerPair('plugin.enable', ['pluginId']);
   registerPair('plugin.disable', ['pluginId']);

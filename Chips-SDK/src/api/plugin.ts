@@ -25,23 +25,34 @@ export interface PluginUiConfig {
   };
 }
 
+export interface ThemePluginInfo {
+  themeId: string;
+  displayName: string;
+  publisher?: string;
+  parentTheme?: string;
+  isDefault: boolean;
+}
+
+export interface LayoutPluginInfo {
+  layoutType?: string;
+  displayName: string;
+}
+
 export interface PluginInfo {
   id: string;
+  manifestPath: string;
+  enabled: boolean;
   version: string;
   type: PluginType;
   name: string;
   description?: string;
   installPath: string;
   capabilities?: string[];
+  theme?: ThemePluginInfo;
+  layout?: LayoutPluginInfo;
 }
 
-export interface PluginRecord {
-  id: string;
-  manifestPath: string;
-  installPath: string;
-  enabled: boolean;
-  type: PluginType;
-  capabilities: string[];
+export interface PluginRecord extends PluginInfo {
   entry?: string | Record<string, string>;
   ui?: PluginUiConfig;
   installedAt: number;
@@ -67,22 +78,33 @@ export interface PluginApi {
 export function createPluginApi(client: CoreClient): PluginApi {
   return {
     async getSelf() {
-      return client.invoke("plugin.getSelf", {});
+      const result = await client.invoke<Record<string, never>, { plugin: PluginInfo }>("plugin.getSelf", {});
+      return result.plugin;
     },
     async list(options) {
-      return client.invoke("plugin.list", options ?? {});
+      const result = await client.invoke<
+        { type?: PluginType; capability?: string },
+        { plugins: PluginInfo[] }
+      >("plugin.list", options ?? {});
+      return result.plugins;
     },
     async get(pluginId) {
-      const list = await client.invoke<{ pluginId: string }, PluginInfo | undefined>("plugin.get", {
+      const result = await client.invoke<{ pluginId: string }, { plugin?: PluginInfo }>("plugin.get", {
         pluginId,
       });
-      return list;
+      return result.plugin;
     },
     async getCardPlugin(cardType) {
-      return client.invoke("plugin.getCardPlugin", { cardType });
+      const result = await client.invoke<{ cardType: string }, { plugin?: PluginInfo }>("plugin.getCardPlugin", {
+        cardType,
+      });
+      return result.plugin;
     },
     async getLayoutPlugin(layoutType) {
-      return client.invoke("plugin.getLayoutPlugin", { layoutType });
+      const result = await client.invoke<{ layoutType: string }, { plugin?: PluginInfo }>("plugin.getLayoutPlugin", {
+        layoutType,
+      });
+      return result.plugin;
     },
     async install(manifestPath) {
       if (!manifestPath) {

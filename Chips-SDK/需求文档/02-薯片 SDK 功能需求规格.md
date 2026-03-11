@@ -227,7 +227,7 @@
   client.theme.list(publisher?: string): Promise<ThemeMeta[]>;
   client.theme.apply(themeId: string): Promise<void>;
   client.theme.getCurrent(options?: { appId?: string; pluginId?: string }): Promise<ThemeState>;
-  client.theme.getAllCss(): Promise<string>;
+  client.theme.getAllCss(): Promise<{ css: string; themeId: string }>;
   client.theme.resolve(chain: string[]): Promise<ResolvedTheme>;
   client.theme.contract.get(component?: string): Promise<ThemeContract>;
   ```
@@ -273,8 +273,8 @@
   ```
 
 - `PluginInfo` 与 `PluginRecord` 分别对应：
-  - 生态共用文档中对插件元信息的定义；
-  - Host `plugin.query` 暴露的运行时插件记录结构。
+  - Host 插件读取接口暴露的正式插件元信息结构（包含 `name/version/description` 与类型专属元数据）；
+  - Host `plugin.query` 暴露的运行时插件记录结构（在元信息基础上补齐 `manifestPath/enabled/installedAt` 等运行时字段）。
 
 ### FR-SDK-PLUGIN-002 模块与窗口辅助能力
 

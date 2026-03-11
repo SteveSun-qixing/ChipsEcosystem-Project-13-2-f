@@ -56,6 +56,7 @@
   - `defaultPath` 存在时优先直接返回该路径（用于自动化与无头场景）
   - `mode` 支持 `file | directory`
   - `allowMultiple` 控制多选
+  - 该类交互式对话框必须使用人工操作级 Host 路由超时，不能使用 2 秒级短超时
 - `window.open(payload)`：
   - 必填：`config.title/config.width/config.height`
   - 可选：`config.url`（插件入口）、`config.pluginId`（插件标识）、`config.sessionId`（会话标识）
@@ -64,6 +65,7 @@
 - `dialog.saveFile(options)`：
   - 桥接到主机动作：`platform.dialogSaveFile`
   - `defaultPath` 存在时返回该路径并确保目录可写
+  - 该类交互式对话框必须使用人工操作级 Host 路由超时，不能使用 2 秒级短超时
 - `plugin.install(payload)`：
   - 入参字段：`manifestPath`（兼容字段名）
   - 支持路径类型：插件目录、`.cpk` 包、`manifest.yaml/yml/json` 清单文件
@@ -103,6 +105,7 @@
 ### 3.1 theme / plugin / window 运行时补充基线
 
 - `theme.list/getCurrent/getAllCss/resolve/apply` 只面向当前工作区中已启用的主题插件；
+- `plugin.list/get/query` 读取链路统一返回 Host 已安装插件元数据；其中 `plugin.query` 在运行时记录基础上补齐 `name/version/description` 与类型专属治理字段；
 - 主题插件的 `install/enable/disable/uninstall` 会刷新 Host 主题运行时状态；
 - preload 会把当前主题写入文档根节点的 `data-chips-theme-id` 与 `data-chips-theme-version`；
 - `theme.changed` 事件是应用壳层、主题运行时和复合卡片窗口同步刷新的统一事件源；

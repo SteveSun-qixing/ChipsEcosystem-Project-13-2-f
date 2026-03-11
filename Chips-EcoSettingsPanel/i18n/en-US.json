@@ -1,0 +1,484 @@
+{
+  "settingsPanel": {
+    "app": {
+      "eyebrow": "Chips Host Runtime",
+      "title": "Eco Settings Panel",
+      "subtitle": "Manage themes, languages, app plugins, and component theme verification from one place.",
+      "currentTheme": "Current theme",
+      "currentLocale": "Current language",
+      "loading": "Syncing Host runtime state…",
+      "retry": "Retry"
+    },
+    "menu": {
+      "ariaLabel": "Settings menu",
+      "mobileLabel": "Current section",
+      "mobileAriaLabel": "Mobile settings section switcher",
+      "themes": {
+        "title": "Themes",
+        "summary": "Install, switch, and remove theme packages"
+      },
+      "languages": {
+        "title": "Languages",
+        "summary": "Switch the active locale and validate live refresh"
+      },
+      "appPlugins": {
+        "title": "App Plugins",
+        "summary": "Install, enable, disable, and remove app plugins"
+      },
+      "gallery": {
+        "title": "Component Gallery",
+        "summary": "Preview real components with the active theme"
+      }
+    },
+    "feedback": {
+      "ariaLabel": "Runtime feedback",
+      "runtimeErrorTitle": "Runtime connection error"
+    },
+    "common": {
+      "notAvailable": "N/A",
+      "open": "Open",
+      "details": "Details",
+      "close": "Close"
+    },
+    "errors": {
+      "runtimeState": "Failed to read Host runtime state.",
+      "runtimeThemeRefresh": "Failed to refresh current theme state.",
+      "runtimeLocaleRefresh": "Failed to refresh current locale state.",
+      "themeList": "Failed to load the theme list.",
+      "themeInstall": "Failed to install the theme package.",
+      "themeApply": "Failed to switch the theme.",
+      "themeUninstall": "Failed to uninstall the theme.",
+      "languageList": "Failed to load the language list.",
+      "languageSwitch": "Failed to switch the language.",
+      "appPluginList": "Failed to load the app plugin list.",
+      "appPluginInstall": "Failed to install the app plugin.",
+      "appPluginToggle": "Failed to update the app plugin state.",
+      "appPluginUninstall": "Failed to uninstall the app plugin.",
+      "filePicker": "Failed to open the file picker.",
+      "dragPathUnavailable": "This environment cannot resolve dragged file paths. Please use the file picker instead."
+    },
+    "themes": {
+      "title": "Theme Management",
+      "subtitle": "Combine installed theme records, enabled theme collection, and the current active theme into one governance list.",
+      "loading": "Loading themes…",
+      "searchPlaceholder": "Search by name, theme ID, or publisher",
+      "actions": {
+        "install": "Install Theme",
+        "apply": "Switch",
+        "uninstall": "Uninstall"
+      },
+      "dropzone": {
+        "title": "Drop a theme package here to install",
+        "description": "Supports .cpk archives, theme directories, and manifest inputs. Host performs the installation."
+      },
+      "empty": {
+        "ariaLabel": "Empty theme state",
+        "title": "No extra themes installed yet",
+        "description": "Install a new theme package from the action button or drag-and-drop area."
+      },
+      "fields": {
+        "themeId": "Theme ID",
+        "version": "Version",
+        "publisher": "Publisher",
+        "installPath": "Install path"
+      },
+      "badges": {
+        "current": "Current",
+        "enabled": "Enabled",
+        "default": "Default"
+      },
+      "feedback": {
+        "installTitle": "Theme installation",
+        "installSuccess": "The theme package was installed and the list was refreshed.",
+        "switchTitle": "Theme switched",
+        "switchSuccess": "Switched to {name}.",
+        "uninstallTitle": "Theme uninstalled",
+        "uninstallSuccess": "Removed {name}."
+      },
+      "dialogs": {
+        "filePickerTitle": "Install theme package",
+        "filePickerFilter": "Theme package",
+        "currentThemeTitle": "Cannot uninstall the active theme",
+        "currentThemeMessage": "Switch to another theme before uninstalling the currently active one.",
+        "currentThemeDetail": "The settings panel follows the formal governance contract and does not downgrade this flow in the UI.",
+        "uninstallTitle": "Confirm theme removal",
+        "uninstallMessage": "Remove the theme “{name}”?",
+        "uninstallDetail": "Host will refresh theme runtime records immediately after removal.",
+        "detailTitle": "Theme details: {name}",
+        "detailDescription": "Review the full governance details for this theme record."
+      },
+      "listAriaLabel": "Theme governance list",
+      "columns": {
+        "theme": "Theme",
+        "status": "Status",
+        "meta": "Metadata",
+        "actions": "Actions"
+      }
+    },
+    "languages": {
+      "title": "Languages",
+      "subtitle": "Read installed locales from Host and refresh the UI through the formal runtime event.",
+      "loading": "Loading languages…",
+      "actions": {
+        "apply": "Apply language"
+      },
+      "empty": {
+        "ariaLabel": "Empty language state",
+        "title": "No languages available",
+        "description": "The Host language service did not return any switchable locales."
+      },
+      "fields": {
+        "locale": "Locale",
+        "nativeName": "Native name"
+      },
+      "badges": {
+        "current": "Current",
+        "available": "Available"
+      },
+      "feedback": {
+        "switchTitle": "Language switched",
+        "switchSuccess": "The active language is now {locale}."
+      },
+      "listAriaLabel": "Language governance list",
+      "columns": {
+        "language": "Language",
+        "status": "Status",
+        "meta": "Metadata",
+        "actions": "Actions"
+      },
+      "dialogs": {
+        "detailTitle": "Language details: {name}",
+        "detailDescription": "Review the full details for this language record."
+      }
+    },
+    "appPlugins": {
+      "title": "App Plugins",
+      "subtitle": "Read Host governance records for app plugins and manage installation, enablement, disablement, and removal.",
+      "loading": "Loading app plugins…",
+      "searchPlaceholder": "Search by plugin name, plugin ID, or version",
+      "actions": {
+        "install": "Install App Plugin",
+        "enable": "Enable",
+        "disable": "Disable",
+        "uninstall": "Uninstall"
+      },
+      "dropzone": {
+        "title": "Drop an app plugin package here to install",
+        "description": "Supports .cpk archives, plugin directories, and manifest inputs."
+      },
+      "empty": {
+        "ariaLabel": "Empty app plugin state",
+        "title": "No extra app plugins installed",
+        "description": "Import a new app plugin package through the formal installation entry."
+      },
+      "fields": {
+        "pluginId": "Plugin ID",
+        "version": "Version",
+        "capabilities": "Capabilities",
+        "installPath": "Install path",
+        "installedAt": "Installed at"
+      },
+      "badges": {
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "currentApp": "Current app"
+      },
+      "selfManaged": {
+        "description": "The settings panel plugin cannot disable or uninstall itself from its own governance UI, so the runtime settings entry remains available."
+      },
+      "feedback": {
+        "installTitle": "App plugin installation",
+        "installSuccess": "The app plugin was installed and the list was refreshed.",
+        "enableTitle": "App plugin enabled",
+        "enableSuccess": "Enabled {name}.",
+        "disableTitle": "App plugin disabled",
+        "disableSuccess": "Disabled {name}.",
+        "selfManagedBlockedTitle": "Current app protection",
+        "selfManagedBlockedMessage": "The settings panel plugin cannot disable or uninstall itself from its own UI.",
+        "uninstallTitle": "App plugin uninstalled",
+        "uninstallSuccess": "Removed {name}."
+      },
+      "dialogs": {
+        "filePickerTitle": "Install app plugin",
+        "filePickerFilter": "App plugin",
+        "uninstallTitle": "Confirm app plugin removal",
+        "uninstallMessage": "Remove the app plugin “{name}”?",
+        "uninstallDetail": "Host emits plugin.uninstalled immediately after removal.",
+        "detailTitle": "App plugin details: {name}",
+        "detailDescription": "Review the full governance details for this app plugin record."
+      },
+      "listAriaLabel": "App plugin governance list",
+      "columns": {
+        "plugin": "Plugin",
+        "status": "Status",
+        "meta": "Metadata",
+        "actions": "Actions"
+      }
+    },
+    "gallery": {
+      "title": "Component Gallery",
+      "subtitle": "Active theme: {theme}",
+      "description": "This page renders the formal Chips component library exports directly, so theme acceptance and visual regression can be verified against real components.",
+      "groups": {
+        "foundation": "Foundation",
+        "forms": "Forms & Lists",
+        "advancedData": "Advanced Data",
+        "workbench": "Workbench",
+        "systemUx": "System UX"
+      },
+      "groupDescriptions": {
+        "foundation": "Validate primary actions, inputs, and short feedback states under the active theme.",
+        "forms": "Cover fields, grouped forms, and long-list patterns used in everyday settings flows.",
+        "advancedData": "Check how complex data entry, search, and tree structures render with the theme.",
+        "workbench": "Simulate workbench layouts used when settings pages coordinate with Host tool panels.",
+        "systemUx": "Verify error, loading, notification, and empty-state system experience components."
+      },
+      "sectionCount": "{count} components",
+      "components": {
+        "button": {
+          "summary": "Primary and secondary action buttons for install, switch, and confirm flows."
+        },
+        "input": {
+          "summary": "Single-line text input for names, search terms, and other basic entry points."
+        },
+        "checkbox": {
+          "summary": "Boolean multi-select control for additive configuration states."
+        },
+        "radioGroup": {
+          "summary": "Mutually exclusive option group for mode and strategy selection."
+        },
+        "switch": {
+          "summary": "Toggle control that emphasizes immediate enable and disable behavior."
+        },
+        "select": {
+          "summary": "Controlled select for theme modes and policy collections."
+        },
+        "dialog": {
+          "summary": "Modal surface for confirmations and installation flows."
+        },
+        "popover": {
+          "summary": "Lightweight contextual layer for help text and inline explanations."
+        },
+        "tabs": {
+          "summary": "Switch between multiple related views inside the same surface."
+        },
+        "menu": {
+          "summary": "Contextual action list for toolbars and more-actions entry points."
+        },
+        "tooltip": {
+          "summary": "Immediate helper text for icons and compact actions."
+        },
+        "formField": {
+          "summary": "Shared field frame for labels, descriptions, and controls."
+        },
+        "formGroup": {
+          "summary": "Compose a related batch of settings inside one semantic block."
+        },
+        "virtualList": {
+          "summary": "Maintain stable rendering and scrolling for long list scenarios."
+        },
+        "dataGrid": {
+          "summary": "Render structured tables such as theme tokens or plugin metadata."
+        },
+        "tree": {
+          "summary": "Represent hierarchical setting structures and grouped navigation."
+        },
+        "dateTime": {
+          "summary": "Handle scheduling and time-window input in a formal control."
+        },
+        "commandPalette": {
+          "summary": "Global command search and quick entry for power-user workflows."
+        },
+        "splitPane": {
+          "summary": "Validate resizable two-panel workbench relationships."
+        },
+        "dockPanel": {
+          "summary": "Simulate a docked workspace with summary and log panels."
+        },
+        "inspector": {
+          "summary": "Render inspector-style sections and collapsible property groups."
+        },
+        "panelHeader": {
+          "summary": "Unified title, description, and action strip for page modules."
+        },
+        "cardShell": {
+          "summary": "Reusable shell container for card-like acceptance scenarios."
+        },
+        "toolWindow": {
+          "summary": "Simulate floating or fixed tool surfaces in the Host workspace."
+        },
+        "errorBoundary": {
+          "summary": "Verify formal error fallback rendering and messaging."
+        },
+        "loadingBoundary": {
+          "summary": "Verify loading placeholders and stable content transitions."
+        },
+        "notification": {
+          "summary": "List-style runtime feedback suitable for settings results."
+        },
+        "toast": {
+          "summary": "Transient overlay feedback for short runtime updates."
+        },
+        "emptyState": {
+          "summary": "Clear guidance for scenarios without data or results."
+        },
+        "skeleton": {
+          "summary": "Structural placeholders that preserve rhythm during loading."
+        }
+      },
+      "preview": {
+        "button": {
+          "action": "Run action"
+        },
+        "input": {
+          "value": "Preview input",
+          "placeholder": "Enter a setting value"
+        },
+        "checkbox": {
+          "label": "Enable card preview"
+        },
+        "radio": {
+          "compact": "Compact",
+          "comfortable": "Comfortable"
+        },
+        "switch": {
+          "label": "Enable animation"
+        },
+        "select": {
+          "placeholder": "Select mode",
+          "light": "Light",
+          "dark": "Dark",
+          "system": "Follow system"
+        },
+        "dialog": {
+          "trigger": "Open dialog",
+          "title": "Install package",
+          "description": "This sample validates the dialog surface and content structure.",
+          "confirm": "Confirm install"
+        },
+        "popover": {
+          "trigger": "Open popover",
+          "title": "Popover content",
+          "description": "Used for local guidance and supplemental information."
+        },
+        "tabs": {
+          "themeLabel": "Theme",
+          "themeContent": "Theme preview content",
+          "layoutLabel": "Layout",
+          "layoutContent": "Layout preview content"
+        },
+        "menu": {
+          "trigger": "Open menu",
+          "rename": "Rename",
+          "duplicate": "Duplicate"
+        },
+        "tooltip": {
+          "trigger": "Hover target",
+          "content": "Immediate helper guidance appears here."
+        },
+        "formField": {
+          "label": "Workspace name",
+          "description": "Used by the Host window title.",
+          "value": "Studio"
+        },
+        "formGroup": {
+          "legend": "Startup behavior",
+          "description": "Applies when Host launches.",
+          "restoreTheme": "Restore last theme",
+          "openDashboard": "Open plugin dashboard"
+        },
+        "virtualList": {
+          "item": "Preset item {index}"
+        },
+        "dataGrid": {
+          "ariaLabel": "Theme token preview grid",
+          "token": "Token",
+          "value": "Value",
+          "surface": "Surface",
+          "primary": "Primary"
+        },
+        "tree": {
+          "ariaLabel": "Settings tree",
+          "appearance": "Appearance",
+          "theme": "Theme",
+          "language": "Language",
+          "plugins": "Plugins"
+        },
+        "dateTime": {
+          "label": "Scheduled time"
+        },
+        "commandPalette": {
+          "trigger": "Open command palette",
+          "searchPlaceholder": "Search commands",
+          "openTheme": "Open theme settings",
+          "managePlugins": "Manage plugins",
+          "keywordTheme": "theme",
+          "keywordAppearance": "appearance",
+          "keywordPlugins": "plugins",
+          "keywordInstall": "install"
+        },
+        "splitPane": {
+          "ariaLabel": "Split preview",
+          "menu": "Menu",
+          "content": "Content"
+        },
+        "dockPanel": {
+          "ariaLabel": "Dock panel preview",
+          "summary": "Summary",
+          "summaryContent": "Runtime summary",
+          "logs": "Logs",
+          "logsContent": "Logs stream"
+        },
+        "inspector": {
+          "ariaLabel": "Inspector preview",
+          "surface": "Surface",
+          "surfaceContent": "Surface tokens",
+          "text": "Text",
+          "textContent": "Typography tokens"
+        },
+        "panelHeader": {
+          "title": "Theme audit",
+          "subtitle": "Current token coverage",
+          "action": "Export"
+        },
+        "cardShell": {
+          "title": "Theme card",
+          "badge": "Preview",
+          "action": "Action",
+          "content": "Reusable shell container."
+        },
+        "toolWindow": {
+          "title": "Inspector",
+          "ariaLabel": "Inspector tool window",
+          "content": "Persistent tool surface."
+        },
+        "errorBoundary": {
+          "fallback": "Preview fallback",
+          "title": "Something failed",
+          "content": "Normal content"
+        },
+        "loadingBoundary": {
+          "loadingText": "Loading preview",
+          "content": "Ready content"
+        },
+        "notification": {
+          "ariaLabel": "Notification preview",
+          "title": "Theme applied",
+          "message": "The active theme was updated successfully."
+        },
+        "toast": {
+          "ariaLabel": "Toast preview",
+          "message": "Host connection restored."
+        },
+        "emptyState": {
+          "ariaLabel": "Empty state preview",
+          "title": "No packages installed",
+          "description": "Drop a package to start."
+        },
+        "skeleton": {
+          "ariaLabel": "Skeleton preview"
+        }
+      }
+    }
+  }
+}

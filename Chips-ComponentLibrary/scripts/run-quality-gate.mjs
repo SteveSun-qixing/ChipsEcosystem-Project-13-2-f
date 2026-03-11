@@ -10,6 +10,7 @@ fs.mkdirSync(reportsDir, { recursive: true });
 const steps = [
   { name: "lint", command: process.execPath, args: ["scripts/run-lint.mjs"] },
   { name: "typecheck", command: process.execPath, args: ["scripts/run-typecheck.mjs"] },
+  { name: "test:types", command: "npm", args: ["run", "test:types"] },
   { name: "test", command: "npm", args: ["run", "test"] },
   { name: "test:contracts", command: "npm", args: ["run", "test:contracts"] },
   { name: "test:a11y", command: process.execPath, args: ["scripts/run-a11y-tests.mjs"] },

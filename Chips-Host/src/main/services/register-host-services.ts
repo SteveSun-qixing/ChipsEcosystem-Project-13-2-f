@@ -11,7 +11,6 @@ import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
 import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
-import { parseYamlLite } from '../../shared/yaml-lite';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
@@ -29,7 +28,32 @@ interface HostServiceContext {
   runtime: PluginRuntime;
 }
 
-interface PluginRecord {
+interface ThemePluginView {
+  themeId: string;
+  displayName: string;
+  publisher?: string;
+  parentTheme?: string;
+  isDefault: boolean;
+}
+
+interface LayoutPluginView {
+  layoutType?: string;
+  displayName: string;
+}
+
+interface PluginInfoView {
+  id: string;
+  name: string;
+  version: string;
+  type: 'app' | 'card' | 'layout' | 'module' | 'theme';
+  description?: string;
+  installPath: string;
+  capabilities: string[];
+  theme?: ThemePluginView;
+  layout?: LayoutPluginView;
+}
+
+interface PluginRecordView extends PluginInfoView {
   id: string;
   manifestPath: string;
   installPath: string;
@@ -144,6 +168,8 @@ const descriptor = <I, O>(
   retries,
   handler
 });
+
+const INTERACTIVE_DIALOG_ROUTE_TIMEOUT_MS = 30 * 60_000;
 
 const buildState = (): RuntimeState => ({
   configDefaults: new Map<string, unknown>([
@@ -304,40 +330,29 @@ const readThemeContract = async (installPath: string, contractPath?: string): Pr
 };
 
 const loadThemeRecordFromPlugin = async (plugin: ReturnType<PluginRuntime['query']>[number]): Promise<ThemeRecord> => {
-  const rawManifest = parseYamlLite(await fs.readFile(plugin.manifestPath, 'utf-8')) as Record<string, unknown>;
-  const themeId = asString(rawManifest.themeId) ?? plugin.manifest.id;
-  const displayName = asString(rawManifest.displayName) ?? plugin.manifest.name;
-  const publisher = asString(rawManifest.publisher);
-  const parentTheme = asString(rawManifest.parentTheme);
-  const isDefault = rawManifest.isDefault === true;
-  const entry = isRecord(rawManifest.entry) ? rawManifest.entry : {};
-  const tokensPath = asString(entry.tokens);
-  const themeCssPath = asString(entry.themeCss);
-  const layout = isRecord(rawManifest.ui) && isRecord(rawManifest.ui.layout) ? rawManifest.ui.layout : undefined;
-  const contractPath = asString(layout?.contract);
-
-  if (!tokensPath || !themeCssPath) {
-    throw createError('THEME_LOAD_FAILED', 'Theme manifest is missing entry.tokens or entry.themeCss', {
+  const themeMeta = plugin.manifest.theme;
+  if (!themeMeta) {
+    throw createError('THEME_LOAD_FAILED', 'Theme plugin metadata is missing from runtime record', {
       manifestPath: plugin.manifestPath,
       pluginId: plugin.manifest.id
     });
   }
 
-  const resolvedTokensPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(tokensPath));
-  const resolvedThemeCssPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(themeCssPath));
+  const resolvedTokensPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(themeMeta.tokensPath));
+  const resolvedThemeCssPath = path.resolve(plugin.installPath, normalizeThemeAssetPath(themeMeta.themeCssPath));
   const [tokens, css, contract] = await Promise.all([
     readJsonRecord(resolvedTokensPath),
     fs.readFile(resolvedThemeCssPath, 'utf-8'),
-    readThemeContract(plugin.installPath, contractPath)
+    readThemeContract(plugin.installPath, themeMeta.contractPath)
   ]);
 
   return {
-    id: themeId,
-    displayName,
+    id: themeMeta.themeId,
+    displayName: themeMeta.displayName,
     version: plugin.manifest.version,
-    publisher,
-    parentTheme,
-    isDefault,
+    publisher: themeMeta.publisher,
+    parentTheme: themeMeta.parentTheme,
+    isDefault: themeMeta.isDefault,
     css,
     tokens,
     contract
@@ -357,6 +372,71 @@ const loadInstalledThemes = async (runtime: PluginRuntime): Promise<ThemeRecord[
 
 const findThemeRecord = (state: RuntimeState, themeId: string): ThemeRecord | undefined => {
   return state.themes.find((theme) => theme.id === themeId);
+};
+
+const toPluginInfoView = (record: ReturnType<PluginRuntime['query']>[number]): PluginInfoView => {
+  return {
+    id: record.manifest.id,
+    name: record.manifest.name,
+    version: record.manifest.version,
+    type: record.manifest.type,
+    description: record.manifest.description,
+    installPath: record.installPath,
+    capabilities: [...(record.manifest.capabilities ?? [])],
+    theme: record.manifest.theme
+      ? {
+          themeId: record.manifest.theme.themeId,
+          displayName: record.manifest.theme.displayName,
+          publisher: record.manifest.theme.publisher,
+          parentTheme: record.manifest.theme.parentTheme,
+          isDefault: record.manifest.theme.isDefault
+        }
+      : undefined,
+    layout: record.manifest.layout
+      ? {
+          layoutType: record.manifest.layout.layoutType,
+          displayName: record.manifest.layout.displayName
+        }
+      : undefined
+  };
+};
+
+const toPluginRecordView = (record: ReturnType<PluginRuntime['query']>[number]): PluginRecordView => {
+  return {
+    ...toPluginInfoView(record),
+    manifestPath: record.manifestPath,
+    enabled: record.enabled,
+    entry: record.manifest.entry,
+    ui: record.manifest.ui ? deepClone(record.manifest.ui) : undefined,
+    installedAt: record.installedAt
+  };
+};
+
+const buildCardTypeCandidates = (cardType: string): string[] => {
+  const trimmed = cardType.trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  const stripped = compact.replace(/Card$/i, '');
+  const normalized = stripped.replace(/[^A-Za-z0-9]+/g, '');
+  const lower = normalized.toLowerCase();
+
+  const candidates = new Set<string>();
+  if (trimmed) {
+    candidates.add(trimmed);
+    candidates.add(trimmed.toLowerCase());
+  }
+  if (compact) {
+    candidates.add(compact);
+    candidates.add(compact.toLowerCase());
+  }
+  if (stripped) {
+    candidates.add(stripped);
+    candidates.add(stripped.toLowerCase());
+  }
+  if (lower) {
+    candidates.add(`base.${lower}`);
+  }
+
+  return [...candidates];
 };
 
 const resolveThemeChain = (state: RuntimeState, inputIds: string[]): ThemeRecord[] => {
@@ -1156,6 +1236,91 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
   const pluginService: ServiceRegistration = {
     name: 'plugin',
     actions: {
+      list: {
+        descriptor: descriptor<{ type?: string; capability?: string }, { plugins: PluginInfoView[] }>(
+          'plugin.list',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.list', async (input) => {
+            const records = ctx.runtime.query({
+              type: input.type as PluginInfoView['type'] | undefined,
+              capability: input.capability
+            });
+            return {
+              plugins: records.map((record) => toPluginInfoView(record))
+            };
+          })
+        )
+      },
+      get: {
+        descriptor: descriptor<{ pluginId: string }, { plugin?: PluginInfoView }>(
+          'plugin.get',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.get', async (input) => {
+            const record = ctx.runtime.query().find((item) => item.manifest.id === input.pluginId);
+            return { plugin: record ? toPluginInfoView(record) : undefined };
+          })
+        )
+      },
+      getSelf: {
+        descriptor: descriptor<Record<string, unknown>, { plugin: PluginInfoView }>(
+          'plugin.getSelf',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.getSelf', async (_input, routeContext) => {
+            const pluginId = routeContext.caller.pluginId;
+            if (!pluginId) {
+              throw createError('PLUGIN_CONTEXT_MISSING', 'plugin.getSelf requires a plugin caller context');
+            }
+            const record = ctx.runtime.get(pluginId);
+            return { plugin: toPluginInfoView(record) };
+          })
+        )
+      },
+      getCardPlugin: {
+        descriptor: descriptor<{ cardType: string }, { plugin?: PluginInfoView }>(
+          'plugin.getCardPlugin',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.getCardPlugin', async (input) => {
+            const candidates = buildCardTypeCandidates(input.cardType);
+            const plugin = ctx.runtime
+              .query({ type: 'card' })
+              .filter((record) => record.enabled && typeof record.manifest.entry === 'string' && record.manifest.entry.length > 0)
+              .find((record) => {
+                const capabilities = new Set(record.manifest.capabilities ?? []);
+                return candidates.some((candidate) => capabilities.has(candidate));
+              });
+            return { plugin: plugin ? toPluginInfoView(plugin) : undefined };
+          })
+        )
+      },
+      getLayoutPlugin: {
+        descriptor: descriptor<{ layoutType: string }, { plugin?: PluginInfoView }>(
+          'plugin.getLayoutPlugin',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.getLayoutPlugin', async (input) => {
+            const normalizedLayoutType = input.layoutType.trim().toLowerCase();
+            const plugin = ctx.runtime
+              .query({ type: 'layout' })
+              .filter((record) => record.enabled)
+              .find((record) => (record.manifest.layout?.layoutType ?? '').trim().toLowerCase() === normalizedLayoutType);
+            return { plugin: plugin ? toPluginInfoView(plugin) : undefined };
+          })
+        )
+      },
       install: {
         descriptor: descriptor<{ manifestPath: string }, { pluginId: string }>(
           'plugin.install',
@@ -1228,29 +1393,19 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       query: {
-        descriptor: descriptor<{ type?: string; capability?: string }, { plugins: PluginRecord[] }>(
+        descriptor: descriptor<{ type?: string; capability?: string }, { plugins: PluginRecordView[] }>(
           'plugin.query',
-          ['plugin.manage'],
+          ['plugin.read'],
           3_000,
           true,
           0,
           withMetrics(state, 'plugin.query', async (input) => {
             const records = ctx.runtime.query({
-              type: input.type as PluginRecord['type'] | undefined,
+              type: input.type as PluginRecordView['type'] | undefined,
               capability: input.capability
             });
             return {
-              plugins: records.map((record) => ({
-                id: record.manifest.id,
-                manifestPath: record.manifestPath,
-                installPath: record.installPath,
-                enabled: record.enabled,
-                type: record.manifest.type,
-                capabilities: record.manifest.capabilities ?? [],
-                entry: record.manifest.entry,
-                ui: record.manifest.ui ? deepClone(record.manifest.ui) : undefined,
-                installedAt: record.installedAt
-              }))
+              plugins: records.map((record) => toPluginRecordView(record))
             };
           })
         )
@@ -1419,7 +1574,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         descriptor: descriptor<{ options?: Record<string, unknown> }, { filePaths: string[] | null }>(
           'platform.dialogOpenFile',
           ['platform.read'],
-          2_000,
+          INTERACTIVE_DIALOG_ROUTE_TIMEOUT_MS,
           true,
           0,
           withMetrics(state, 'platform.dialogOpenFile', async (input) => {
@@ -1432,7 +1587,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         descriptor: descriptor<{ options?: Record<string, unknown> }, { filePath: string | null }>(
           'platform.dialogSaveFile',
           ['platform.read'],
-          2_000,
+          INTERACTIVE_DIALOG_ROUTE_TIMEOUT_MS,
           true,
           0,
           withMetrics(state, 'platform.dialogSaveFile', async (input) => {
@@ -1445,7 +1600,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         descriptor: descriptor<{ options: Record<string, unknown> }, { response: number }>(
           'platform.dialogShowMessage',
           ['platform.read'],
-          2_000,
+          INTERACTIVE_DIALOG_ROUTE_TIMEOUT_MS,
           true,
           0,
           withMetrics(state, 'platform.dialogShowMessage', async (input) => {
@@ -1465,7 +1620,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         descriptor: descriptor<{ options: Record<string, unknown> }, { confirmed: boolean }>(
           'platform.dialogShowConfirm',
           ['platform.read'],
-          2_000,
+          INTERACTIVE_DIALOG_ROUTE_TIMEOUT_MS,
           true,
           0,
           withMetrics(state, 'platform.dialogShowConfirm', async (input) => {

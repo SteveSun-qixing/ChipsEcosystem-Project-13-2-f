@@ -107,7 +107,7 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
   };
 
   return {
-    config: coreConfig,
+    clientConfig: coreConfig,
     invoke,
     events,
   };
@@ -158,4 +158,3 @@ export function createClient(config: ClientConfig = {}): Client {
     resource: createResourceApi(core),
   };
 }
-

@@ -5,7 +5,7 @@ import { createError } from "../src/types/errors";
 
 function createStubClient(invokeImpl: CoreClient["invoke"]): CoreClient {
   return {
-    config: {},
+    clientConfig: {},
     invoke: invokeImpl,
     events: {
       on: () => () => {},

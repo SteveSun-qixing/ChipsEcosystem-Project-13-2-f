@@ -1,0 +1,484 @@
+{
+  "settingsPanel": {
+    "app": {
+      "eyebrow": "Chips Host Runtime",
+      "title": "生态设置面板",
+      "subtitle": "统一管理主题、多语言、应用插件与组件主题验收。",
+      "currentTheme": "当前主题",
+      "currentLocale": "当前语言",
+      "loading": "正在同步 Host 运行时状态…",
+      "retry": "重新加载"
+    },
+    "menu": {
+      "ariaLabel": "设置菜单",
+      "mobileLabel": "当前分类",
+      "mobileAriaLabel": "移动端设置分类切换",
+      "themes": {
+        "title": "主题管理",
+        "summary": "安装、切换、卸载主题包"
+      },
+      "languages": {
+        "title": "多语言",
+        "summary": "切换当前语言并验证即时刷新"
+      },
+      "appPlugins": {
+        "title": "应用插件",
+        "summary": "安装、启停、卸载应用插件"
+      },
+      "gallery": {
+        "title": "组件展示",
+        "summary": "用真实组件验证当前主题效果"
+      }
+    },
+    "feedback": {
+      "ariaLabel": "运行反馈",
+      "runtimeErrorTitle": "运行时连接异常"
+    },
+    "common": {
+      "notAvailable": "暂无",
+      "open": "打开",
+      "details": "详情",
+      "close": "关闭"
+    },
+    "errors": {
+      "runtimeState": "读取 Host 运行时状态失败。",
+      "runtimeThemeRefresh": "刷新当前主题状态失败。",
+      "runtimeLocaleRefresh": "刷新当前语言状态失败。",
+      "themeList": "读取主题列表失败。",
+      "themeInstall": "安装主题失败。",
+      "themeApply": "切换主题失败。",
+      "themeUninstall": "卸载主题失败。",
+      "languageList": "读取语言列表失败。",
+      "languageSwitch": "切换语言失败。",
+      "appPluginList": "读取应用插件列表失败。",
+      "appPluginInstall": "安装应用插件失败。",
+      "appPluginToggle": "更新应用插件状态失败。",
+      "appPluginUninstall": "卸载应用插件失败。",
+      "filePicker": "打开文件选择器失败。",
+      "dragPathUnavailable": "当前环境无法解析拖拽文件路径，请改用文件选择器。"
+    },
+    "themes": {
+      "title": "主题管理",
+      "subtitle": "读取已安装主题、当前可切换主题与当前生效主题，形成正式治理列表。",
+      "loading": "正在加载主题列表…",
+      "searchPlaceholder": "搜索主题名称、主题 ID 或发布者",
+      "actions": {
+        "install": "安装主题",
+        "apply": "切换",
+        "uninstall": "卸载"
+      },
+      "dropzone": {
+        "title": "将主题包拖到此处即可安装",
+        "description": "支持 .cpk、主题目录或 manifest 文件输入，安装动作统一交给 Host。"
+      },
+      "empty": {
+        "ariaLabel": "主题空状态",
+        "title": "还没有安装额外主题",
+        "description": "可以通过右上角按钮或拖拽区域安装新的主题包。"
+      },
+      "fields": {
+        "themeId": "主题 ID",
+        "version": "版本",
+        "publisher": "发布者",
+        "installPath": "安装路径"
+      },
+      "badges": {
+        "current": "当前生效",
+        "enabled": "可切换",
+        "default": "默认主题"
+      },
+      "feedback": {
+        "installTitle": "主题安装",
+        "installSuccess": "主题包已安装，列表已刷新。",
+        "switchTitle": "主题切换",
+        "switchSuccess": "已切换到 {name}。",
+        "uninstallTitle": "主题卸载",
+        "uninstallSuccess": "已卸载 {name}。"
+      },
+      "dialogs": {
+        "filePickerTitle": "安装主题包",
+        "filePickerFilter": "主题包",
+        "currentThemeTitle": "无法卸载当前主题",
+        "currentThemeMessage": "请先切换到其他主题，再卸载当前正在使用的主题。",
+        "currentThemeDetail": "设置面板不会在前端做降级处理，当前主题卸载必须遵循正式治理口径。",
+        "uninstallTitle": "确认卸载主题",
+        "uninstallMessage": "确定要卸载主题“{name}”吗？",
+        "uninstallDetail": "卸载后 Host 会立即刷新主题运行时记录。",
+        "detailTitle": "主题详情：{name}",
+        "detailDescription": "查看当前主题条目的完整治理信息。"
+      },
+      "listAriaLabel": "主题治理列表",
+      "columns": {
+        "theme": "主题",
+        "status": "状态",
+        "meta": "元信息",
+        "actions": "操作"
+      }
+    },
+    "languages": {
+      "title": "多语言",
+      "subtitle": "读取 Host 已安装语言并通过正式事件刷新整个界面文案。",
+      "loading": "正在加载语言列表…",
+      "actions": {
+        "apply": "切换语言"
+      },
+      "empty": {
+        "ariaLabel": "语言空状态",
+        "title": "未发现可用语言",
+        "description": "Host 语言服务当前没有返回可切换语言。"
+      },
+      "fields": {
+        "locale": "语言代码",
+        "nativeName": "原生名称"
+      },
+      "badges": {
+        "current": "当前语言",
+        "available": "可切换"
+      },
+      "feedback": {
+        "switchTitle": "语言切换",
+        "switchSuccess": "当前语言已切换为 {locale}。"
+      },
+      "listAriaLabel": "语言治理列表",
+      "columns": {
+        "language": "语言",
+        "status": "状态",
+        "meta": "元信息",
+        "actions": "操作"
+      },
+      "dialogs": {
+        "detailTitle": "语言详情：{name}",
+        "detailDescription": "查看当前语言条目的完整信息。"
+      }
+    },
+    "appPlugins": {
+      "title": "应用插件",
+      "subtitle": "统一读取 Host 应用插件治理记录，管理安装、启停与卸载。",
+      "loading": "正在加载应用插件列表…",
+      "searchPlaceholder": "搜索插件名称、插件 ID 或版本",
+      "actions": {
+        "install": "安装应用插件",
+        "enable": "启用",
+        "disable": "停用",
+        "uninstall": "卸载"
+      },
+      "dropzone": {
+        "title": "将应用插件包拖到此处即可安装",
+        "description": "支持 .cpk、应用插件目录或 manifest 文件输入。"
+      },
+      "empty": {
+        "ariaLabel": "应用插件空状态",
+        "title": "尚未安装额外应用插件",
+        "description": "使用正式安装入口导入新的应用插件包。"
+      },
+      "fields": {
+        "pluginId": "插件 ID",
+        "version": "版本",
+        "capabilities": "能力标记",
+        "installPath": "安装路径",
+        "installedAt": "安装时间"
+      },
+      "badges": {
+        "enabled": "已启用",
+        "disabled": "已停用",
+        "currentApp": "当前应用"
+      },
+      "selfManaged": {
+        "description": "当前设置面板插件不能在自身界面中停用或卸载，以保证运行时治理入口始终可用。"
+      },
+      "feedback": {
+        "installTitle": "应用插件安装",
+        "installSuccess": "应用插件已安装，列表已刷新。",
+        "enableTitle": "应用插件启用",
+        "enableSuccess": "已启用 {name}。",
+        "disableTitle": "应用插件停用",
+        "disableSuccess": "已停用 {name}。",
+        "selfManagedBlockedTitle": "当前应用保护",
+        "selfManagedBlockedMessage": "当前设置面板插件不能在自身界面中停用或卸载。",
+        "uninstallTitle": "应用插件卸载",
+        "uninstallSuccess": "已卸载 {name}。"
+      },
+      "dialogs": {
+        "filePickerTitle": "安装应用插件",
+        "filePickerFilter": "应用插件",
+        "uninstallTitle": "确认卸载应用插件",
+        "uninstallMessage": "确定要卸载应用插件“{name}”吗？",
+        "uninstallDetail": "卸载后 Host 会立即发出 plugin.uninstalled 事件。",
+        "detailTitle": "应用插件详情：{name}",
+        "detailDescription": "查看当前应用插件条目的完整治理信息。"
+      },
+      "listAriaLabel": "应用插件治理列表",
+      "columns": {
+        "plugin": "插件",
+        "status": "状态",
+        "meta": "元信息",
+        "actions": "操作"
+      }
+    },
+    "gallery": {
+      "title": "组件展示",
+      "subtitle": "当前主题：{theme}",
+      "description": "展示页直接使用薯片组件库正式导出的组件，作为主题验收和视觉回归的真实基线。",
+      "groups": {
+        "foundation": "基础交互",
+        "forms": "表单与列表",
+        "advancedData": "高级数据",
+        "workbench": "工作台",
+        "systemUx": "系统体验"
+      },
+      "groupDescriptions": {
+        "foundation": "验证基础交互控件在当前主题下的主操作、输入与短反馈状态。",
+        "forms": "覆盖字段、分组和长列表等高频表单编排场景。",
+        "advancedData": "用于检查复杂数据录入、检索和树形结构在主题中的表现。",
+        "workbench": "模拟设置与 Host 工具面板协作时的工作台结构与层级。",
+        "systemUx": "验证错误、加载、通知和空状态等系统体验组件。"
+      },
+      "sectionCount": "共 {count} 个组件",
+      "components": {
+        "button": {
+          "summary": "主次操作按钮，用于触发安装、切换和确认动作。"
+        },
+        "input": {
+          "summary": "单行文本输入，用于设置名称、搜索关键字等基础输入场景。"
+        },
+        "checkbox": {
+          "summary": "布尔开关型复选项，适合表达可叠加的配置状态。"
+        },
+        "radioGroup": {
+          "summary": "互斥选项组，用于布局模式或策略选择。"
+        },
+        "switch": {
+          "summary": "强调即时启停效果的切换控件。"
+        },
+        "select": {
+          "summary": "受控下拉选择器，用于主题模式和策略集合选择。"
+        },
+        "dialog": {
+          "summary": "承载确认与安装等关键流程的模态对话层。"
+        },
+        "popover": {
+          "summary": "用于局部解释、辅助提示和轻量补充信息。"
+        },
+        "tabs": {
+          "summary": "在同一区域内切换多个关联内容视图。"
+        },
+        "menu": {
+          "summary": "承载上下文动作列表，适合工具栏与更多操作入口。"
+        },
+        "tooltip": {
+          "summary": "为图标或缩写动作提供即时补充说明。"
+        },
+        "formField": {
+          "summary": "统一字段标题、说明和控件承载结构。"
+        },
+        "formGroup": {
+          "summary": "把一组相关设置编排到同一个语义块中。"
+        },
+        "virtualList": {
+          "summary": "在长列表场景中保持稳定滚动与渲染性能。"
+        },
+        "dataGrid": {
+          "summary": "用于主题 token 或插件元数据等表格化信息展示。"
+        },
+        "tree": {
+          "summary": "表达层级化设置结构与分组导航。"
+        },
+        "dateTime": {
+          "summary": "处理计划执行时间与时间窗口等日期时间输入。"
+        },
+        "commandPalette": {
+          "summary": "面向高级用户的全局命令检索与快速入口。"
+        },
+        "splitPane": {
+          "summary": "验证左右分栏内容在工作台布局中的伸缩关系。"
+        },
+        "dockPanel": {
+          "summary": "模拟日志、概览等多面板停靠工作区。"
+        },
+        "inspector": {
+          "summary": "用于展示属性检查器和折叠面板结构。"
+        },
+        "panelHeader": {
+          "summary": "为页内模块提供统一标题、说明和操作区。"
+        },
+        "cardShell": {
+          "summary": "通用卡片容器，用于承载主题验收中的业务卡片。"
+        },
+        "toolWindow": {
+          "summary": "模拟浮动工具窗或固定工具面板表面。"
+        },
+        "errorBoundary": {
+          "summary": "验证错误降级 UI 与正式错误信息的呈现。"
+        },
+        "loadingBoundary": {
+          "summary": "验证加载态占位与内容切换的稳定性。"
+        },
+        "notification": {
+          "summary": "承载列表型运行反馈，适合设置操作结果提示。"
+        },
+        "toast": {
+          "summary": "承载短暂浮层提醒，用于即时状态反馈。"
+        },
+        "emptyState": {
+          "summary": "在缺少数据或结果时给出明确的下一步提示。"
+        },
+        "skeleton": {
+          "summary": "用于加载过程中的结构占位与节奏保持。"
+        }
+      },
+      "preview": {
+        "button": {
+          "action": "执行操作"
+        },
+        "input": {
+          "value": "预览输入内容",
+          "placeholder": "输入设置值"
+        },
+        "checkbox": {
+          "label": "启用卡片预览"
+        },
+        "radio": {
+          "compact": "紧凑",
+          "comfortable": "舒展"
+        },
+        "switch": {
+          "label": "启用动画"
+        },
+        "select": {
+          "placeholder": "选择模式",
+          "light": "浅色",
+          "dark": "深色",
+          "system": "跟随系统"
+        },
+        "dialog": {
+          "trigger": "打开对话框",
+          "title": "安装插件包",
+          "description": "这个示例用于验证对话层表面与内容结构。",
+          "confirm": "确认安装"
+        },
+        "popover": {
+          "trigger": "查看浮层",
+          "title": "浮层内容",
+          "description": "用于展示局部说明与补充信息。"
+        },
+        "tabs": {
+          "themeLabel": "主题",
+          "themeContent": "主题预览内容",
+          "layoutLabel": "布局",
+          "layoutContent": "布局预览内容"
+        },
+        "menu": {
+          "trigger": "打开菜单",
+          "rename": "重命名",
+          "duplicate": "复制"
+        },
+        "tooltip": {
+          "trigger": "悬停目标",
+          "content": "这里展示即时帮助说明。"
+        },
+        "formField": {
+          "label": "工作区名称",
+          "description": "用于 Host 窗口标题。",
+          "value": "创作空间"
+        },
+        "formGroup": {
+          "legend": "启动行为",
+          "description": "在 Host 启动时应用。",
+          "restoreTheme": "恢复上次主题",
+          "openDashboard": "打开插件面板"
+        },
+        "virtualList": {
+          "item": "预设项 {index}"
+        },
+        "dataGrid": {
+          "ariaLabel": "主题 token 预览表格",
+          "token": "Token",
+          "value": "值",
+          "surface": "背景面",
+          "primary": "主色"
+        },
+        "tree": {
+          "ariaLabel": "设置树",
+          "appearance": "外观",
+          "theme": "主题",
+          "language": "语言",
+          "plugins": "插件"
+        },
+        "dateTime": {
+          "label": "计划执行时间"
+        },
+        "commandPalette": {
+          "trigger": "打开命令面板",
+          "searchPlaceholder": "搜索命令",
+          "openTheme": "打开主题设置",
+          "managePlugins": "管理插件",
+          "keywordTheme": "主题",
+          "keywordAppearance": "外观",
+          "keywordPlugins": "插件",
+          "keywordInstall": "安装"
+        },
+        "splitPane": {
+          "ariaLabel": "分栏预览",
+          "menu": "菜单",
+          "content": "内容"
+        },
+        "dockPanel": {
+          "ariaLabel": "停靠面板预览",
+          "summary": "概览",
+          "summaryContent": "运行时概览",
+          "logs": "日志",
+          "logsContent": "日志流"
+        },
+        "inspector": {
+          "ariaLabel": "检查器预览",
+          "surface": "表面",
+          "surfaceContent": "表面 token",
+          "text": "文本",
+          "textContent": "排版 token"
+        },
+        "panelHeader": {
+          "title": "主题巡检",
+          "subtitle": "当前 token 覆盖情况",
+          "action": "导出"
+        },
+        "cardShell": {
+          "title": "主题卡片",
+          "badge": "预览",
+          "action": "操作",
+          "content": "可复用的卡片承载容器。"
+        },
+        "toolWindow": {
+          "title": "检查器",
+          "ariaLabel": "检查器工具窗",
+          "content": "持续存在的工具表面。"
+        },
+        "errorBoundary": {
+          "fallback": "预览降级内容",
+          "title": "发生错误",
+          "content": "正常内容"
+        },
+        "loadingBoundary": {
+          "loadingText": "正在加载预览",
+          "content": "已加载内容"
+        },
+        "notification": {
+          "ariaLabel": "通知预览",
+          "title": "主题已应用",
+          "message": "当前主题已成功更新。"
+        },
+        "toast": {
+          "ariaLabel": "Toast 预览",
+          "message": "Host 连接已恢复。"
+        },
+        "emptyState": {
+          "ariaLabel": "空状态预览",
+          "title": "尚未安装任何包",
+          "description": "拖入一个插件包开始。"
+        },
+        "skeleton": {
+          "ariaLabel": "骨架屏预览"
+        }
+      }
+    }
+  }
+}

@@ -11,7 +11,8 @@ export interface I18nApi {
 export function createI18nApi(client: CoreClient): I18nApi {
   return {
     async getCurrent() {
-      return client.invoke("i18n.getCurrent", {});
+      const result = await client.invoke<Record<string, never>, { locale: string }>("i18n.getCurrent", {});
+      return result.locale;
     },
     async setCurrent(locale) {
       if (!locale) {
@@ -23,11 +24,15 @@ export function createI18nApi(client: CoreClient): I18nApi {
       if (!key) {
         throw createError("INVALID_ARGUMENT", "i18n.translate: key is required.");
       }
-      return client.invoke("i18n.translate", { key, params });
+      const result = await client.invoke<{ key: string; params?: Record<string, unknown> }, { text: string }>(
+        "i18n.translate",
+        { key, params },
+      );
+      return result.text;
     },
     async listLocales() {
-      return client.invoke("i18n.listLocales", {});
+      const result = await client.invoke<Record<string, never>, { locales: string[] }>("i18n.listLocales", {});
+      return result.locales;
     },
   };
 }
-

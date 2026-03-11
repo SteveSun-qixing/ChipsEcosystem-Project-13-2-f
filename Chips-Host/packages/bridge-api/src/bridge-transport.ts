@@ -32,6 +32,11 @@ export interface ChipsBridge {
     showConfirm(options: unknown): Promise<boolean>;
   };
   plugin: {
+    list(filter?: unknown): Promise<unknown>;
+    get(pluginId: string): Promise<unknown>;
+    getSelf(): Promise<unknown>;
+    getCardPlugin(cardType: string): Promise<unknown>;
+    getLayoutPlugin(layoutType: string): Promise<unknown>;
     install(manifestPath: string): Promise<unknown>;
     enable(pluginId: string): Promise<void>;
     disable(pluginId: string): Promise<void>;
@@ -55,6 +60,7 @@ export interface ChipsBridge {
     openExternal(url: string): Promise<void>;
     powerGetState(): Promise<unknown>;
     powerSetPreventSleep(prevent: boolean): Promise<boolean>;
+    getPathForFile?(file: unknown): string;
   };
   notification: {
     show(options: { title: string; body: string; icon?: string; silent?: boolean }): Promise<void>;
@@ -125,6 +131,11 @@ export class BridgeTransport implements ChipsBridge {
     };
 
     this.plugin = {
+      list: async (filter) => this.invoke<unknown>('plugin.list', filter ?? {}),
+      get: async (pluginId) => this.invoke<unknown>('plugin.get', { pluginId }),
+      getSelf: async () => this.invoke<unknown>('plugin.getSelf', {}),
+      getCardPlugin: async (cardType) => this.invoke<unknown>('plugin.getCardPlugin', { cardType }),
+      getLayoutPlugin: async (layoutType) => this.invoke<unknown>('plugin.getLayoutPlugin', { layoutType }),
       install: async (manifestPath) => this.invoke<unknown>('plugin.install', { manifestPath }),
       enable: async (pluginId) => {
         await this.invoke('plugin.enable', { pluginId });

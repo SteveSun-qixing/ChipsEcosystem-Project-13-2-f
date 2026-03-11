@@ -22,6 +22,11 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     showConfirm: async () => true
   },
   plugin: {
+    list: async () => ([]),
+    get: async () => ({}),
+    getSelf: async () => ({}),
+    getCardPlugin: async () => ({}),
+    getLayoutPlugin: async () => ({}),
     install: async () => ({}),
     enable: async () => undefined,
     disable: async () => undefined,

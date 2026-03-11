@@ -198,6 +198,18 @@
     "plugin.enable": {
       "action": "plugin.enable"
     },
+    "plugin.get": {
+      "action": "plugin.get"
+    },
+    "plugin.getCardPlugin": {
+      "action": "plugin.getCardPlugin"
+    },
+    "plugin.getLayoutPlugin": {
+      "action": "plugin.getLayoutPlugin"
+    },
+    "plugin.getSelf": {
+      "action": "plugin.getSelf"
+    },
     "plugin.handshake.complete": {
       "action": "plugin.handshake.complete"
     },
@@ -206,6 +218,9 @@
     },
     "plugin.install": {
       "action": "plugin.install"
+    },
+    "plugin.list": {
+      "action": "plugin.list"
     },
     "plugin.query": {
       "action": "plugin.query"

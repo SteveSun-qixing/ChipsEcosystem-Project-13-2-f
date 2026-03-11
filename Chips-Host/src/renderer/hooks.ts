@@ -20,7 +20,7 @@ export interface ThemeClient {
   list(publisher?: string): Promise<unknown>;
   apply(id: string): Promise<void>;
   getCurrent(appId?: string, pluginId?: string): Promise<unknown>;
-  getAllCss(): Promise<string>;
+  getAllCss(): Promise<{ css: string; themeId: string }>;
   resolve(chain: string[]): Promise<unknown>;
   contractGet(component?: string): Promise<unknown>;
 }
@@ -57,6 +57,11 @@ export interface WindowClient {
 }
 
 export interface PluginClient {
+  list(filter?: { type?: string; capability?: string }): Promise<unknown>;
+  get(pluginId: string): Promise<unknown>;
+  getSelf(): Promise<unknown>;
+  getCardPlugin(cardType: string): Promise<unknown>;
+  getLayoutPlugin(layoutType: string): Promise<unknown>;
   install(manifestPath: string): Promise<unknown>;
   enable(pluginId: string): Promise<void>;
   disable(pluginId: string): Promise<void>;
@@ -78,10 +83,7 @@ export const useTheme = (runtime: RuntimeClient): ThemeClient => {
       await runtime.invoke('theme.apply', { id });
     },
     getCurrent: async (appId, pluginId) => runtime.invoke('theme.getCurrent', { appId, pluginId }),
-    getAllCss: async () => {
-      const result = await runtime.invoke<{ css: string; themeId: string }>('theme.getAllCss', {});
-      return result.css;
-    },
+    getAllCss: async () => runtime.invoke<{ css: string; themeId: string }>('theme.getAllCss', {}),
     resolve: async (chain) => runtime.invoke('theme.resolve', { chain }),
     contractGet: async (component) => runtime.invoke('theme.contract.get', { component })
   };
@@ -130,6 +132,11 @@ export const useWindow = (runtime: RuntimeClient): WindowClient => {
 
 export const usePlugin = (runtime: RuntimeClient): PluginClient => {
   return {
+    list: async (filter) => runtime.invoke('plugin.list', filter ?? {}),
+    get: async (pluginId) => runtime.invoke('plugin.get', { pluginId }),
+    getSelf: async () => runtime.invoke('plugin.getSelf', {}),
+    getCardPlugin: async (cardType) => runtime.invoke('plugin.getCardPlugin', { cardType }),
+    getLayoutPlugin: async (layoutType) => runtime.invoke('plugin.getLayoutPlugin', { layoutType }),
     install: async (manifestPath) => runtime.invoke('plugin.install', { manifestPath }),
     enable: async (pluginId) => {
       await runtime.invoke('plugin.enable', { pluginId });

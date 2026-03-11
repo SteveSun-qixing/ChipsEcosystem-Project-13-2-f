@@ -10,6 +10,7 @@
   "scripts": {
     "lint": "node scripts/run-lint.mjs",
     "typecheck": "node scripts/run-typecheck.mjs",
+    "test:types": "node scripts/run-types-smoke.mjs",
     "build:tokens": "node scripts/build-tokens.mjs",
     "validate:tokens": "node scripts/validate-tokens.mjs",
     "validate:contracts": "node scripts/validate-theme-contracts.mjs",
@@ -22,7 +23,7 @@
     "release:check": "node scripts/check-release-readiness.mjs --bundle releases/0.1.0/release-bundle.json",
     "validate:ecosystem-acceptance": "node scripts/validate-ecosystem-acceptance.mjs --report reports/ecosystem/ecosystem-acceptance-template.json",
     "quality:gate": "node scripts/run-quality-gate.mjs",
-    "verify": "npm run validate:tokens && npm run build:tokens && npm run validate:contracts && npm run test"
+    "verify": "npm run validate:tokens && npm run build:tokens && npm run validate:contracts && npm run test:types && npm run test"
   },
   "devDependencies": {
     "react": "^18.2.0"

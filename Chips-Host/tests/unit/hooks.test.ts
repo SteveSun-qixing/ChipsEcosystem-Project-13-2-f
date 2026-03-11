@@ -20,6 +20,11 @@ describe('renderer hooks', () => {
 
     await windowClient.open({ title: 'Demo', width: 800, height: 600 });
     await windowClient.focus('w1');
+    await pluginClient.list({ type: 'app' });
+    await pluginClient.get('chips.demo');
+    await pluginClient.getSelf();
+    await pluginClient.getCardPlugin('RichTextCard');
+    await pluginClient.getLayoutPlugin('grid-layout');
     await pluginClient.install('/tmp/demo.plugin.json');
     await pluginClient.query({ type: 'app' });
     await configClient.set('editor.autoSave', true);
@@ -30,6 +35,11 @@ describe('renderer hooks', () => {
       config: { title: 'Demo', width: 800, height: 600 }
     });
     expect(invoke).toHaveBeenCalledWith('window.focus', { windowId: 'w1' });
+    expect(invoke).toHaveBeenCalledWith('plugin.list', { type: 'app' });
+    expect(invoke).toHaveBeenCalledWith('plugin.get', { pluginId: 'chips.demo' });
+    expect(invoke).toHaveBeenCalledWith('plugin.getSelf', {});
+    expect(invoke).toHaveBeenCalledWith('plugin.getCardPlugin', { cardType: 'RichTextCard' });
+    expect(invoke).toHaveBeenCalledWith('plugin.getLayoutPlugin', { layoutType: 'grid-layout' });
     expect(invoke).toHaveBeenCalledWith('plugin.install', { manifestPath: '/tmp/demo.plugin.json' });
     expect(invoke).toHaveBeenCalledWith('plugin.query', { type: 'app' });
     expect(invoke).toHaveBeenCalledWith('config.set', { key: 'editor.autoSave', value: true });

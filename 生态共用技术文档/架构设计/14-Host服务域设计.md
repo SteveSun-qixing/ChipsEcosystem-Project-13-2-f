@@ -195,12 +195,12 @@ interface ThemeService {
 | 项目 | 内容 |
 |------|------|
 | 服务名 | `plugin` |
-| 核心动作 | install/enable/disable/uninstall/query |
+| 核心动作 | list/get/getSelf/getCardPlugin/getLayoutPlugin/install/enable/disable/uninstall/query |
 | 输入基线 | pluginManifest |
-| 输出基线 | status |
-| 幂等性 | query 幂等 |
-| 权限边界 | `plugin.manage` |
-| 典型错误 | `PLUGIN_INVALID`, `PLUGIN_PERMISSION_DENIED` |
+| 输出基线 | pluginInfo / pluginRecord / status |
+| 幂等性 | list/get/getSelf/getCardPlugin/getLayoutPlugin/query 幂等 |
+| 权限边界 | `plugin.read` / `plugin.manage` |
+| 典型错误 | `PLUGIN_INVALID`, `PLUGIN_PERMISSION_DENIED`, `PLUGIN_CONTEXT_MISSING` |
 
 ### 8. module 服务
 
@@ -236,7 +236,7 @@ interface ThemeService {
 | 核心动作 | write/query/export |
 | 输入基线 | record/filter |
 | 输出基线 | ack/bundle |
-| 幂等性 | query 幂等 |
+| 幂等性 | list/get/getSelf/getCardPlugin/getLayoutPlugin/query 幂等 |
 | 权限边界 | `log.write` / `log.read` |
 | 典型错误 | `LOG_EXPORT_FAILED` |
 

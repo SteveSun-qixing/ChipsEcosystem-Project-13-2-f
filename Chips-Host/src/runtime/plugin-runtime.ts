@@ -12,6 +12,22 @@ export type PluginType = 'app' | 'card' | 'layout' | 'module' | 'theme';
 
 export type PluginEntry = string | Record<string, string>;
 
+export interface ThemePluginManifestMeta {
+  themeId: string;
+  displayName: string;
+  publisher?: string;
+  parentTheme?: string;
+  isDefault: boolean;
+  tokensPath: string;
+  themeCssPath: string;
+  contractPath?: string;
+}
+
+export interface LayoutPluginManifestMeta {
+  layoutType?: string;
+  displayName: string;
+}
+
 export interface PluginManifest {
   id: string;
   version: string;
@@ -25,6 +41,8 @@ export interface PluginManifest {
   source?: 'official' | 'third-party' | 'local';
   signature?: string;
   ui?: PluginUiConfig;
+  theme?: ThemePluginManifestMeta;
+  layout?: LayoutPluginManifestMeta;
 }
 
 export interface PluginRecord {
@@ -105,6 +123,10 @@ const normalizeAssetPath = (value: string): string => {
   return path.normalize(value.trim()).replace(/^[.][\\/]/, '');
 };
 
+const asOptionalString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+};
+
 const collectManifestAssetPaths = (record: Record<string, unknown>, manifestPath: string): { entry?: PluginEntry; assets: string[] } => {
   const assets: string[] = [];
   const rawEntry = record.entry;
@@ -183,9 +205,15 @@ export class PluginRuntime {
     try {
       const raw = await fs.readFile(filePath, 'utf-8');
       const parsed = JSON.parse(raw) as PluginRecord[];
+      let shouldPersist = false;
       for (const record of parsed) {
+        const manifestNeedsRefresh =
+          (record.manifest.type === 'theme' && typeof record.manifest.theme === 'undefined') ||
+          (record.manifest.type === 'layout' && typeof record.manifest.layout === 'undefined');
+        const manifest = manifestNeedsRefresh ? await this.readManifest(record.manifestPath) : record.manifest;
         const normalized: PluginRecord = {
           ...record,
+          manifest,
           installPath:
             typeof record.installPath === 'string' && record.installPath.length > 0
               ? record.installPath
@@ -193,6 +221,10 @@ export class PluginRuntime {
         };
         this.plugins.set(normalized.manifest.id, normalized);
         this.quotaByPlugin.set(normalized.manifest.id, defaultQuota);
+        shouldPersist ||= manifestNeedsRefresh;
+      }
+      if (shouldPersist) {
+        await this.persist();
       }
     } catch {
       await this.persist();
@@ -707,6 +739,9 @@ export class PluginRuntime {
 
     const { entry, assets } = collectManifestAssetPaths(record, manifestPath);
 
+    const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;
+    const layout = record.type === 'layout' ? this.parseLayoutManifestMeta(record) : undefined;
+
     return {
       id: record.id,
       version: record.version,
@@ -719,7 +754,58 @@ export class PluginRuntime {
       assets,
       source,
       signature,
-      ui: parsePluginUiConfig(record.ui, manifestPath)
+      ui: parsePluginUiConfig(record.ui, manifestPath),
+      theme,
+      layout
+    };
+  }
+
+  private parseThemeManifestMeta(record: Record<string, unknown>, manifestPath: string): ThemePluginManifestMeta {
+    const themeId = asOptionalString(record.themeId) ?? asOptionalString(record.id);
+    if (!themeId) {
+      throw createError('PLUGIN_INVALID', 'Theme plugin must declare themeId', {
+        manifestPath,
+        field: 'themeId'
+      });
+    }
+
+    const displayName = asOptionalString(record.displayName) ?? asOptionalString(record.name);
+    if (!displayName) {
+      throw createError('PLUGIN_INVALID', 'Theme plugin must declare displayName or name', {
+        manifestPath,
+        field: 'displayName'
+      });
+    }
+
+    const entry = isRecord(record.entry) ? record.entry : undefined;
+    const tokensPath = asOptionalString(entry?.tokens);
+    const themeCssPath = asOptionalString(entry?.themeCss);
+    if (!tokensPath || !themeCssPath) {
+      throw createError('PLUGIN_INVALID', 'Theme plugin entry must provide tokens and themeCss', {
+        manifestPath,
+        field: 'entry'
+      });
+    }
+
+    const ui = isRecord(record.ui) ? record.ui : undefined;
+    const layout = ui && isRecord(ui.layout) ? ui.layout : undefined;
+
+    return {
+      themeId,
+      displayName,
+      publisher: asOptionalString(record.publisher),
+      parentTheme: asOptionalString(record.parentTheme),
+      isDefault: record.isDefault === true,
+      tokensPath,
+      themeCssPath,
+      contractPath: asOptionalString(layout?.contract)
+    };
+  }
+
+  private parseLayoutManifestMeta(record: Record<string, unknown>): LayoutPluginManifestMeta {
+    return {
+      layoutType: asOptionalString(record.layoutType),
+      displayName: asOptionalString(record.displayName) ?? String(record.name)
     };
   }
 

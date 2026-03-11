@@ -42,7 +42,7 @@ interface Client {
     once<T>(event: string, handler: (payload: T) => void): void;
     emit<T>(event: string, payload: T): Promise<void>;
   };
-  config: Readonly<ClientConfig>;
+  clientConfig: Readonly<ClientConfig>;
 }
 ``>
 
@@ -156,4 +156,3 @@ interface BridgeAdapter {
 ## 7. 小结
 
 本设计为 `Chips-SDK` 提供了稳定、可扩展的客户端内核与 Bridge 适配层，为上层能力域封装提供统一的调用与错误模型。实现时必须严格遵守本设计，不得在能力域内绕过 Core Client 直接访问 `window.chips` 或 Transport。
-

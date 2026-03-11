@@ -31,7 +31,7 @@ export interface ThemeApi {
   list(publisher?: string): Promise<ThemeMeta[]>;
   apply(themeId: string): Promise<void>;
   getCurrent(options?: { appId?: string; pluginId?: string }): Promise<ThemeState>;
-  getAllCss(): Promise<string>;
+  getAllCss(): Promise<{ css: string; themeId: string }>;
   resolve(chain: string[]): Promise<ResolvedTheme>;
   contract: {
     get(component?: string): Promise<ThemeContract>;
@@ -56,11 +56,10 @@ export function createThemeApi(client: CoreClient): ThemeApi {
       return client.invoke<{ appId?: string; pluginId?: string }, ThemeState>("theme.getCurrent", options ?? {});
     },
     async getAllCss() {
-      const result = await client.invoke<Record<string, never>, { css: string; themeId?: string }>(
+      return client.invoke<Record<string, never>, { css: string; themeId: string }>(
         "theme.getAllCss",
         {},
       );
-      return result.css;
     },
     async resolve(chain) {
       if (!Array.isArray(chain)) {

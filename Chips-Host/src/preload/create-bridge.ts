@@ -34,6 +34,7 @@ export const HOST_INTERNAL_PERMISSIONS = [
   'theme.write',
   'i18n.read',
   'i18n.write',
+  'plugin.read',
   'window.control',
   'plugin.manage',
   'module.manage',

@@ -10,12 +10,46 @@ export interface ChipsBridge {
   on(event: string, handler: (payload: unknown) => void): () => void;
   once(event: string, handler: (payload: unknown) => void): void;
   emit(event: string, payload?: unknown): Promise<void>;
+  platform?: {
+    getPathForFile?(file: unknown): string;
+  };
 }
 
 declare global {
   interface Window {
     chips?: ChipsBridge;
   }
+}
+
+const CHIPS_IPC_ERROR_PREFIX = "__chips_ipc_error__:";
+
+function unwrapBridgeError(error: unknown, fallbackMessage: string): StandardError {
+  if (isStandardError(error)) {
+    return error;
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown; details?: unknown; retryable?: unknown } | null;
+  if (typeof candidate?.code === "string" && typeof candidate.message === "string") {
+    return createError(candidate.code, candidate.message, candidate.details, candidate.retryable === true);
+  }
+
+  if (typeof candidate?.message === "string" && candidate.message.startsWith(CHIPS_IPC_ERROR_PREFIX)) {
+    const encoded = candidate.message.slice(CHIPS_IPC_ERROR_PREFIX.length);
+    try {
+      const decoded = JSON.parse(encoded) as StandardError;
+      if (isStandardError(decoded)) {
+        return decoded;
+      }
+    } catch {
+      return createError("INTERNAL_ERROR", fallbackMessage, error);
+    }
+  }
+
+  return createError(
+    typeof candidate?.code === "string" ? candidate.code : "INTERNAL_ERROR",
+    typeof candidate?.message === "string" ? candidate.message : fallbackMessage,
+    error,
+  );
 }
 
 export function createPluginBridgeAdapter(): BridgeAdapter {
@@ -36,15 +70,7 @@ export function createPluginBridgeAdapter(): BridgeAdapter {
         const result = await bridge.invoke(action, payload);
         return result as O;
       } catch (err) {
-        if (isStandardError(err)) {
-          throw err;
-        }
-        const e = err as any;
-        throw createError(
-          e?.code ?? "INTERNAL_ERROR",
-          e?.message ?? "Unknown error from Bridge API.",
-          e,
-        );
+        throw unwrapBridgeError(err, "Unknown error from Bridge API.");
       }
     },
     on<T>(event: string, handler: (payload: T) => void): () => void {
@@ -70,15 +96,7 @@ export function createTransportAdapter(
         const result = await transport(action, payload);
         return result as O;
       } catch (err) {
-        if (isStandardError(err)) {
-          throw err;
-        }
-        const e = err as any;
-        throw createError(
-          e?.code ?? "INTERNAL_ERROR",
-          e?.message ?? "Unknown error from custom transport.",
-          e,
-        );
+        throw unwrapBridgeError(err, "Unknown error from custom transport.");
       }
     },
     on<T>(event: string, handler: (payload: T) => void): () => void {
@@ -108,4 +126,3 @@ export function createTransportAdapter(
     },
   };
 }
-

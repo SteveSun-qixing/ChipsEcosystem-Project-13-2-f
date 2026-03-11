@@ -4,13 +4,20 @@
   "type": "module",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./states": "./src/states.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./states": {
+      "types": "./src/states.d.ts",
+      "default": "./src/states.js"
+    }
   },
   "peerDependencies": {
     "react": ">=18.0.0"
   },
   "volta": {
     "extends": "../../../package.json"
-  }
+  },
+  "types": "./src/index.d.ts"
 }

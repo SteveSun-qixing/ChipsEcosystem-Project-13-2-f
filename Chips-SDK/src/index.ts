@@ -19,7 +19,14 @@ export type {
 export type { ThemeApi, ThemeMeta, ThemeState, ResolvedTheme, ThemeContract } from "./api/theme";
 export type { ConfigApi } from "./api/config";
 export type { I18nApi } from "./api/i18n";
-export type { PluginApi, PluginInfo, PluginType, PluginRecord } from "./api/plugin";
+export type {
+  PluginApi,
+  PluginInfo,
+  PluginType,
+  PluginRecord,
+  ThemePluginInfo,
+  LayoutPluginInfo,
+} from "./api/plugin";
 export type { ModuleApi, ModuleState } from "./api/module";
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type { PlatformApi, PlatformInfo, PlatformCapabilities } from "./api/platform";

@@ -42,11 +42,30 @@ chipsdev run
 
 - React + `@chips/component-library` + `chips-sdk`
 - 统一卡片显示接口：`client.card.compositeWindow.render({ cardFile, mode: 'view' })`
+- `manifest.yaml` 已声明 `file-handler:.card` 与 `ui.launcher`，可同时接入文件关联与系统快捷方式链路
 - 应用壳层、拖拽区、加载态与错误态统一消费主题变量
 - 主题切换时应用壳层与卡片内容区同步刷新
+- 启动时通过 `client.platform.getLaunchContext()` 恢复 `targetPath` 等启动参数
 - 日志统一包含 `scope`、`traceId` 和必要上下文
 
-## 5. 调试建议
+## 5. 快捷方式与文件关联链路
+
+卡片查看器当前接入了两条正式启动链路：
+
+1. **系统快捷方式**
+   - Host 读取 `ui.launcher.displayName/icon`
+   - Windows 生成桌面快捷方式，macOS 生成启动台入口
+   - 用户点击后统一回到 `plugin.launch`
+   - 启动上下文包含 `trigger: 'app-shortcut'`
+
+2. **文件关联 / 文件入口**
+   - Host 或 `chips open <file>` 命中 `.card` 文件时，优先查找声明 `file-handler:.card` 的已启用应用插件
+   - 若命中本插件，则通过 `plugin.launch` 打开卡片查看器
+   - 启动上下文包含 `trigger: 'file-association'` 与 `targetPath`
+
+应用入口当前会在首次渲染时读取 `launchContext.launchParams.targetPath`，若存在则直接恢复为当前待显示卡片文件。
+
+## 6. 调试建议
 
 开发态调试主题问题时，优先使用：
 

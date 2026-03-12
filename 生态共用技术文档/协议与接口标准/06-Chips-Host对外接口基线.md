@@ -106,10 +106,28 @@
 
 - `theme.list/getCurrent/getAllCss/resolve/apply` 只面向当前工作区中已启用的主题插件；
 - `plugin.list/get/query` 读取链路统一返回 Host 已安装插件元数据；其中 `plugin.query` 在运行时记录基础上补齐 `name/version/description` 与类型专属治理字段；
+- `plugin.launch` 仅用于启动 `type: app` 插件，并统一走 Host 正式会话初始化链路；
+- `plugin.getShortcut/createShortcut/removeShortcut` 是应用插件系统快捷方式的唯一正式治理入口；
+- 应用插件快捷方式在 Host 侧按工作区记录状态，Host 当前使用 `plugin-shortcuts.json` 保存 `pluginId -> launcherPath` 映射；
+- 快捷方式显示名优先取 `manifest.ui.launcher.displayName`，回退到 `manifest.name`；
 - 主题插件的 `install/enable/disable/uninstall` 会刷新 Host 主题运行时状态；
 - preload 会把当前主题写入文档根节点的 `data-chips-theme-id` 与 `data-chips-theme-version`；
+- preload 同时会把当前窗口的 `launchContext` 暴露给 `window.chips.platform.getLaunchContext()`；
 - `theme.changed` 事件是应用壳层、主题运行时和复合卡片窗口同步刷新的统一事件源；
-- `window.open` 在未传入背景色时使用当前主题 token 推导窗口背景。
+- `window.open` 在未传入背景色时使用当前主题 token 推导窗口背景；
+- 在 Electron Host 中，当全部插件窗口关闭后，Host 继续后台常驻，不因 `window-all-closed` 自动退出。
+
+快捷方式平台映射基线：
+
+- Windows：桌面 `.lnk`
+- macOS：`~/Applications/Chips Apps/*.app`，显示为启动台入口
+
+Host 快捷方式启动参数基线：
+
+- 统一指向 Host Electron `app-entry`
+- 必须带上 `--workspace=<workspacePath>`
+- 必须带上 `--chips-launch-plugin=<pluginId>`
+- 若未来需要扩展额外启动参数，应通过 `--chips-launch-payload=<base64url-json>` 承载
 
 ### 3.2 card.render（L9 统一渲染入口）补充基线
 
@@ -212,10 +230,15 @@ interface StandardError {
 CLI 应满足：
 
 - 不再暴露 `chips host` 二级命令；
-
 - 支持脚本化调用与非交互执行。
 - 支持 JSON 输出用于自动化集成。
 - 命令失败返回非 0 状态码并输出标准错误信息。
+
+文件入口与快捷方式入口补充基线：
+
+- `chips open <target-file>` 在命中 `file-handler:<扩展名>` 的已启用应用插件时，必须统一转发到 `plugin.launch`；
+- `plugin.launch` 的 `launchParams.trigger` 需标记真实来源，当前至少包括 `file-association`、`app-shortcut`、`chipsdev.run`；
+- 快捷方式入口与文件入口都必须能够把目标会话恢复到正确工作区。
 
 ---
 

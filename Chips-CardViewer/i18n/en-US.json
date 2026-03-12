@@ -1,11 +1,27 @@
 {
   "card-viewer": {
     "actions": {
-      "open": "Open card"
+      "open": "Open Card"
+    },
+    "dialogs": {
+      "openCardTitle": "Open Card File"
+    },
+    "dropzone": {
+      "ariaLabel": "Import card",
+      "title": "Drop a card file",
+      "description": "Drop a .card file into this window or choose one with the action button. The viewer switches to full-window mode after import."
+    },
+    "viewer": {
+      "loading": "Loading card…",
+      "containerError": "The card container is unavailable.",
+      "fatalError": "A fatal error occurred while rendering the card.",
+      "renderError": "Failed to render the card window."
+    },
+    "errors": {
+      "hostActionFailed": "The action failed. Check Host logs and the bridge chain."
     },
     "bridge": {
       "themeLabel": "Current theme"
     }
   }
 }
-

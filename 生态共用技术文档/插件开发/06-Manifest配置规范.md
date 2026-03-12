@@ -153,6 +153,63 @@ ui:
 
 > 该能力属于 Host 正式窗口契约，应用插件不得绕过 Host 私自改 Electron 窗口参数。
 
+## 应用启动入口配置字段
+
+应用插件可以在 `manifest.yaml` 中声明系统启动入口元数据，供 Host 在创建应用快捷方式时使用。
+
+`ui.launcher` 字段定义应用启动入口展示名与图标资源：
+
+| 字段 | 说明 | 可选值 |
+|------|------|--------|
+| displayName | 快捷方式/启动台中显示的应用名称 | 非空字符串 |
+| icon | 应用启动入口图标，相对插件根目录路径 | 例如 `assets/icons/app-icon.ico` |
+
+示例：
+
+```yaml
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 卡片查看器
+    icon: assets/icons/app-icon.ico
+  window:
+    chrome:
+      titleBarStyle: default
+```
+
+约束要求：
+
+- 仅 `type: app` 插件允许声明 `ui.launcher`；
+- `icon` 必须指向随插件一起发布的正式资源文件；
+- Windows 快捷方式优先使用 `.ico`，macOS 启动台入口会由 Host 转换或复制为系统可识别图标资源；
+- 应用插件不得自行创建系统级快捷方式，必须通过 Host 正式接口完成。
+
+Host 当前正式行为补充如下：
+
+- `displayName` 优先作为系统快捷方式显示名，同时也作为 `plugin.launch` 打开的窗口标题；未声明时回退到 `manifest.name`；
+- `icon` 会在插件安装时按普通静态资源一起复制到插件安装目录，Host 创建快捷方式时优先读取该声明路径；
+- 若未声明 `ui.launcher.icon`，Host 会按约定文件名探测图标，当前探测顺序为：
+  - `assets/icons/app-icon.ico`
+  - `assets/icons/app-icon.icns`
+  - `assets/icons/app-icon.png`
+  - `assets/icons/app-icon.svg`
+  - `assets/icons/icon.ico`
+  - `assets/icons/icon.icns`
+  - `assets/icons/icon.png`
+  - `assets/icons/icon.svg`
+- Windows 当前正式落点是当前用户桌面 `.lnk`；
+- macOS 当前正式落点是 `~/Applications/Chips Apps/<displayName>.app`，系统索引后在启动台显示；
+- Host 为快捷方式写入的启动参数固定包含当前工作区与目标插件标识，因此同一插件在不同工作区中的快捷方式状态是按工作区隔离的。
+
+推荐约定：
+
+- 正式应用插件统一将启动图标放在 `assets/icons/app-icon.ico`；
+- `displayName` 应稳定、可读，不应在发布后频繁变更；
+- 快捷方式图标不应依赖运行时下载或外部绝对路径，必须随插件包一起交付。
+
 ## 验证规则
 
 系统对manifest进行验证：

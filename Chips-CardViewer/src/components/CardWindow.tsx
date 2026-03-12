@@ -7,9 +7,20 @@ import { createScopedLogger } from "../../config/logging";
 interface CardWindowProps {
   cardFile: string;
   traceId?: string;
+  loadingLabel: string;
+  containerErrorLabel: string;
+  fatalErrorFallback: string;
+  renderErrorFallback: string;
 }
 
-export function CardWindow({ cardFile, traceId }: CardWindowProps) {
+export function CardWindow({
+  cardFile,
+  traceId,
+  loadingLabel,
+  containerErrorLabel,
+  fatalErrorFallback,
+  renderErrorFallback,
+}: CardWindowProps) {
   const themeRuntime = useThemeRuntime();
   const logger = useMemo(
     () =>
@@ -48,7 +59,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
     const container = containerRef.current;
     if (!container) {
       logger.error("找不到卡片窗口容器");
-      setError("找不到卡片窗口容器");
+      setError(containerErrorLabel);
       return;
     }
 
@@ -123,7 +134,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
               if (!cancelled) {
                 logger.error("收到复合卡片 fatal-error 事件", fatal);
                 setIsLoading(false);
-                setError(fatal.message || "卡片窗口发生严重错误");
+                setError(fatal.message || fatalErrorFallback);
               }
             }),
           );
@@ -145,7 +156,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
         if (!cancelled) {
           logger.error("SDK 复合卡片渲染失败", err);
           setIsLoading(false);
-          setError(err?.message || "卡片窗口渲染失败");
+          setError(err?.message || renderErrorFallback);
         }
       });
 
@@ -194,7 +205,7 @@ export function CardWindow({ cardFile, traceId }: CardWindowProps) {
             color: "var(--chips-sys-color-on-surface, #111111)",
           }}
         >
-          正在加载卡片…
+          {loadingLabel}
         </div>
       )}
       {error && (

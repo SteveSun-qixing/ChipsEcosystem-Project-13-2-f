@@ -7,6 +7,10 @@ interface DropZoneProps {
   onOpenCard: () => void;
   error?: string | null;
   traceId?: string;
+  ariaLabel: string;
+  title: string;
+  description: string;
+  openLabel: string;
 }
 
 function resolveNativeFilePath(file: File): string {
@@ -25,7 +29,16 @@ function resolveNativeFilePath(file: File): string {
   return (file as File & { path?: string }).path ?? "";
 }
 
-export function DropZone({ onCardFile, onOpenCard, error = null, traceId }: DropZoneProps) {
+export function DropZone({
+  onCardFile,
+  onOpenCard,
+  error = null,
+  traceId,
+  ariaLabel,
+  title,
+  description,
+  openLabel,
+}: DropZoneProps) {
   const logger = useMemo(
     () =>
       createScopedLogger({
@@ -123,7 +136,7 @@ export function DropZone({ onCardFile, onOpenCard, error = null, traceId }: Drop
       }}
     >
       <section
-        aria-label="导入卡片"
+        aria-label={ariaLabel}
         style={{
           width: "min(560px, 100%)",
           borderRadius: 24,
@@ -159,7 +172,7 @@ export function DropZone({ onCardFile, onOpenCard, error = null, traceId }: Drop
           .card
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.2 }}>拖入卡片文件</h1>
+          <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.2 }}>{title}</h1>
           <p
             style={{
               margin: 0,
@@ -168,12 +181,12 @@ export function DropZone({ onCardFile, onOpenCard, error = null, traceId }: Drop
               color: "color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 70%, transparent)",
             }}
           >
-            将 .card 文件拖到当前窗口，或者点击下方按钮选择导入卡片。导入后会直接进入全窗口查看模式。
+            {description}
           </p>
         </div>
         <div style={{ display: "flex", justifyContent: "center", WebkitAppRegion: "no-drag" }}>
           <ChipsButton variant="secondary" onClick={onOpenCard}>
-            选择导入卡片
+            {openLabel}
           </ChipsButton>
         </div>
         {error ? (

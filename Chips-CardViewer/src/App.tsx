@@ -3,7 +3,9 @@ import { ChipsThemeProvider } from "@chips/component-library";
 import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
 import { CardWindow } from "./components/CardWindow";
+import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsClient } from "./hooks/useChipsClient";
+import { useChipsBridge } from "./hooks/useChipsBridge";
 import { appConfig } from "../config/app-config";
 import { createLogger, createTraceId } from "../config/logging";
 
@@ -32,7 +34,7 @@ function readDocumentThemeState(): AppThemeState {
   };
 }
 
-function resolveErrorMessage(error: unknown): string {
+function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string" && message.trim().length > 0) {
@@ -40,10 +42,11 @@ function resolveErrorMessage(error: unknown): string {
     }
   }
 
-  return "操作失败，请检查 Host 日志与桥接链路。";
+  return fallbackMessage;
 }
 
 export function App() {
+  const bridge = useChipsBridge();
   const themeEventSource = typeof window !== "undefined" ? (window as any).chips : undefined;
   const traceId = useMemo(() => createTraceId("card-viewer"), []);
   const logger = useMemo(
@@ -58,6 +61,11 @@ export function App() {
   const [cardFile, setCardFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [themeState, setThemeState] = useState<AppThemeState>(() => readDocumentThemeState());
+  const [locale, setLocale] = useState(() => resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined));
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>) => formatMessage(locale, key, params),
+    [locale],
+  );
 
   useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -92,9 +100,8 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    client.theme
-      .getCurrent()
-      .then((currentTheme) => {
+    Promise.all([client.theme.getCurrent(), client.i18n.getCurrent()])
+      .then(([currentTheme, currentLocale]) => {
         if (cancelled) {
           return;
         }
@@ -103,6 +110,7 @@ export function App() {
           themeId: currentTheme.themeId,
           version: currentTheme.version,
         });
+        setLocale(resolveLocale(currentLocale));
       })
       .catch((runtimeError) => {
         logger.warn("读取当前主题失败，继续使用文档已注入的主题快照", runtimeError);
@@ -128,6 +136,23 @@ export function App() {
     }
   }, [client, logger]);
 
+  useEffect(() => {
+    const unsubscribe = bridge.on("language.changed", (payload: unknown) => {
+      const nextLocale = typeof payload === "string"
+        ? payload
+        : payload && typeof payload === "object" && "locale" in payload && typeof (payload as { locale?: unknown }).locale === "string"
+          ? (payload as { locale: string }).locale
+          : null;
+      if (nextLocale) {
+        setLocale(resolveLocale(nextLocale));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [bridge]);
+
   const handleOpenCard = useCallback(async () => {
     try {
       setError(null);
@@ -144,7 +169,7 @@ export function App() {
         { filePaths: string[] | null }
       >("platform.dialogOpenFile", {
         options: {
-          title: "打开卡片文件",
+          title: t("card-viewer.dialogs.openCardTitle"),
           mode: "file",
           allowMultiple: false,
           mustExist: true,
@@ -161,9 +186,9 @@ export function App() {
       }
     } catch (runtimeError) {
       logger.error("通过按钮导入卡片失败", runtimeError);
-      setError(resolveErrorMessage(runtimeError));
+      setError(resolveErrorMessage(runtimeError, t("card-viewer.errors.hostActionFailed")));
     }
-  }, [client, logger]);
+  }, [client, logger, t]);
 
   const content =
     cardFile === null ? (
@@ -171,6 +196,10 @@ export function App() {
         error={error}
         onOpenCard={handleOpenCard}
         traceId={traceId}
+        ariaLabel={t("card-viewer.dropzone.ariaLabel")}
+        title={t("card-viewer.dropzone.title")}
+        description={t("card-viewer.dropzone.description")}
+        openLabel={t("card-viewer.actions.open")}
         onCardFile={(nextCardFile) => {
           logger.info("拖拽导入已选定卡片文件", {
             cardFile: nextCardFile,
@@ -180,7 +209,14 @@ export function App() {
         }}
       />
     ) : (
-      <CardWindow cardFile={cardFile} traceId={traceId} />
+      <CardWindow
+        cardFile={cardFile}
+        traceId={traceId}
+        loadingLabel={t("card-viewer.viewer.loading")}
+        containerErrorLabel={t("card-viewer.viewer.containerError")}
+        fatalErrorFallback={t("card-viewer.viewer.fatalError")}
+        renderErrorFallback={t("card-viewer.viewer.renderError")}
+      />
     );
 
   return (

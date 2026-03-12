@@ -16,13 +16,21 @@ describe("App（卡片查看器根组件）", () => {
     const html = renderToString(<App />);
 
     expect(html).toContain("拖入卡片文件");
-    expect(html).toContain("选择导入卡片");
+    expect(html).toContain("打开卡片");
     expect(html).not.toContain("卡片查看器");
-    expect(html).not.toContain("打开卡片");
   });
 
   it("卡片窗口组件应当以全窗口承载内容而不是卡片式外壳", () => {
-    const html = renderToString(<CardWindow cardFile="/tmp/demo.card" traceId="test-trace" />);
+    const html = renderToString(
+      <CardWindow
+        cardFile="/tmp/demo.card"
+        traceId="test-trace"
+        loadingLabel="正在加载卡片…"
+        containerErrorLabel="容器不可用"
+        fatalErrorFallback="严重错误"
+        renderErrorFallback="渲染失败"
+      />,
+    );
 
     expect(html).toContain('data-chips-app="card-viewer.window"');
     expect(html).not.toContain("border-radius:8px");

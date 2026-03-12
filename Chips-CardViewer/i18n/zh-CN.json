@@ -3,9 +3,25 @@
     "actions": {
       "open": "打开卡片"
     },
+    "dialogs": {
+      "openCardTitle": "打开卡片文件"
+    },
+    "dropzone": {
+      "ariaLabel": "导入卡片",
+      "title": "拖入卡片文件",
+      "description": "将 .card 文件拖到当前窗口，或者点击下方按钮选择导入卡片。导入后会直接进入全窗口查看模式。"
+    },
+    "viewer": {
+      "loading": "正在加载卡片…",
+      "containerError": "找不到卡片窗口容器",
+      "fatalError": "卡片窗口发生严重错误",
+      "renderError": "卡片窗口渲染失败"
+    },
+    "errors": {
+      "hostActionFailed": "操作失败，请检查 Host 日志与桥接链路。"
+    },
     "bridge": {
       "themeLabel": "当前主题"
     }
   }
 }
-

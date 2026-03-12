@@ -32,6 +32,9 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1024
+  launcher:
+    displayName: {{ DISPLAY_NAME }}
+    icon: assets/icons/app-icon.ico
   window:
     chrome:
       backgroundColor: "#ffffff"

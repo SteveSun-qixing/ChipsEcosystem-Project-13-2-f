@@ -41,6 +41,10 @@ export interface ChipsBridge {
     enable(pluginId: string): Promise<void>;
     disable(pluginId: string): Promise<void>;
     uninstall(pluginId: string): Promise<void>;
+    launch(pluginId: string, launchParams?: Record<string, unknown>): Promise<unknown>;
+    getShortcut(pluginId: string): Promise<unknown>;
+    createShortcut(pluginId: string, replace?: boolean): Promise<unknown>;
+    removeShortcut(pluginId: string): Promise<unknown>;
     query(filter?: unknown): Promise<unknown>;
   };
   clipboard: {
@@ -61,6 +65,11 @@ export interface ChipsBridge {
     powerGetState(): Promise<unknown>;
     powerSetPreventSleep(prevent: boolean): Promise<boolean>;
     getPathForFile?(file: unknown): string;
+    getLaunchContext?(): {
+      pluginId?: string;
+      sessionId?: string;
+      launchParams: Record<string, unknown>;
+    };
   };
   notification: {
     show(options: { title: string; body: string; icon?: string; silent?: boolean }): Promise<void>;
@@ -146,6 +155,10 @@ export class BridgeTransport implements ChipsBridge {
       uninstall: async (pluginId) => {
         await this.invoke('plugin.uninstall', { pluginId });
       },
+      launch: async (pluginId, launchParams) => this.invoke<unknown>('plugin.launch', { pluginId, launchParams }),
+      getShortcut: async (pluginId) => this.invoke<unknown>('plugin.getShortcut', { pluginId }),
+      createShortcut: async (pluginId, replace) => this.invoke<unknown>('plugin.createShortcut', { pluginId, replace }),
+      removeShortcut: async (pluginId) => this.invoke<unknown>('plugin.removeShortcut', { pluginId }),
       query: async (filter) => this.invoke<unknown>('plugin.query', filter ?? {})
     };
 

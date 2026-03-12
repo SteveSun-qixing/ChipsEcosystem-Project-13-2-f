@@ -26,6 +26,7 @@ export interface WindowOptions {
   pluginId?: string;
   sessionId?: string;
   permissions?: string[];
+  launchParams?: Record<string, unknown>;
   chrome?: WindowChromeOptions;
 }
 
@@ -203,6 +204,33 @@ export interface PALShortcut {
   clear(): Promise<void>;
 }
 
+export type LauncherLocation = 'desktop' | 'launchpad';
+
+export interface LauncherCreateOptions {
+  pluginId: string;
+  name: string;
+  executablePath: string;
+  args: string[];
+  iconPath?: string;
+}
+
+export interface LauncherRecord {
+  pluginId: string;
+  name: string;
+  location: LauncherLocation;
+  launcherPath: string;
+  executablePath: string;
+  args: string[];
+  iconPath?: string;
+}
+
+export interface PALLauncher {
+  getDefaultPath(name: string): Promise<{ launcherPath: string; location: LauncherLocation }>;
+  create(options: LauncherCreateOptions & { launcherPath?: string }): Promise<LauncherRecord>;
+  getRecord(options: { pluginId: string; name: string; launcherPath?: string }): Promise<LauncherRecord>;
+  remove(options: { pluginId: string; name: string; launcherPath?: string }): Promise<{ removed: boolean; launcherPath: string; location: LauncherLocation }>;
+}
+
 export interface PALPower {
   getState(): Promise<PowerState>;
   setPreventSleep(prevent: boolean): Promise<boolean>;
@@ -253,6 +281,7 @@ export interface PALAdapter {
   tray: PALTray;
   notification: PALNotification;
   shortcut: PALShortcut;
+  launcher: PALLauncher;
   power: PALPower;
   ipc: PALIPC;
 }

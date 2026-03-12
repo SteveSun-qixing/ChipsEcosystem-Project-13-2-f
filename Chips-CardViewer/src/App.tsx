@@ -113,6 +113,21 @@ export function App() {
     };
   }, [client, logger]);
 
+  useEffect(() => {
+    const launchContext = client.platform.getLaunchContext();
+    const targetPath = typeof launchContext.launchParams.targetPath === "string"
+      ? launchContext.launchParams.targetPath
+      : "";
+    if (targetPath) {
+      logger.info("从启动上下文恢复目标卡片文件", {
+        targetPath,
+        trigger: launchContext.launchParams.trigger,
+      });
+      setCardFile(targetPath);
+      setError(null);
+    }
+  }, [client, logger]);
+
   const handleOpenCard = useCallback(async () => {
     try {
       setError(null);

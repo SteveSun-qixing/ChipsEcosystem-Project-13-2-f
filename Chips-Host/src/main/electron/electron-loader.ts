@@ -21,8 +21,23 @@ export interface ElectronContextBridgeLike {
 
 export interface ElectronAppLike {
   whenReady(): Promise<void>;
-  on(event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void): void;
-  off(event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void): void;
+  on(
+    event: 'before-quit' | 'window-all-closed' | 'activate',
+    listener: () => void
+  ): void;
+  on(
+    event: 'second-instance',
+    listener: (event: unknown, argv: string[], workingDirectory: string) => void
+  ): void;
+  off(
+    event: 'before-quit' | 'window-all-closed' | 'activate',
+    listener: () => void
+  ): void;
+  off(
+    event: 'second-instance',
+    listener: (event: unknown, argv: string[], workingDirectory: string) => void
+  ): void;
+  requestSingleInstanceLock?(): boolean;
   quit(): void;
 }
 

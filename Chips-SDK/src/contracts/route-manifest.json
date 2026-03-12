@@ -192,6 +192,9 @@
     "platform.traySet": {
       "action": "platform.traySet"
     },
+    "plugin.createShortcut": {
+      "action": "plugin.createShortcut"
+    },
     "plugin.disable": {
       "action": "plugin.disable"
     },
@@ -210,6 +213,9 @@
     "plugin.getSelf": {
       "action": "plugin.getSelf"
     },
+    "plugin.getShortcut": {
+      "action": "plugin.getShortcut"
+    },
     "plugin.handshake.complete": {
       "action": "plugin.handshake.complete"
     },
@@ -219,11 +225,17 @@
     "plugin.install": {
       "action": "plugin.install"
     },
+    "plugin.launch": {
+      "action": "plugin.launch"
+    },
     "plugin.list": {
       "action": "plugin.list"
     },
     "plugin.query": {
       "action": "plugin.query"
+    },
+    "plugin.removeShortcut": {
+      "action": "plugin.removeShortcut"
     },
     "plugin.uninstall": {
       "action": "plugin.uninstall"

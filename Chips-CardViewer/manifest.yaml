@@ -15,6 +15,9 @@ keywords:
   - card
   - viewer
 
+capabilities:
+  - file-handler:.card
+
 permissions:
   - card.read
   - platform.read
@@ -34,6 +37,9 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1024
+  launcher:
+    displayName: 卡片查看器
+    icon: assets/icons/app-icon.ico
   window:
     chrome:
       titleBarStyle: default

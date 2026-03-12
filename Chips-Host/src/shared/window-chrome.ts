@@ -20,8 +20,14 @@ export interface PluginWindowUiConfig {
   chrome?: WindowChromeOptions;
 }
 
+export interface PluginLauncherUiConfig {
+  displayName?: string;
+  icon?: string;
+}
+
 export interface PluginUiConfig {
   window?: PluginWindowUiConfig;
+  launcher?: PluginLauncherUiConfig;
 }
 
 const titleBarStyles: WindowChromeTitleBarStyle[] = ['default', 'hidden', 'hiddenInset', 'customButtonsOnHover'];
@@ -207,14 +213,37 @@ export const parsePluginUiConfig = (value: unknown, manifestPath: string): Plugi
           });
         })();
 
-  if (!window?.chrome) {
+  const launcher = isRecord(value.launcher)
+    ? {
+        displayName: asNonEmptyString(value.launcher.displayName, manifestPath, 'ui.launcher.displayName'),
+        icon: asNonEmptyString(value.launcher.icon, manifestPath, 'ui.launcher.icon')
+      }
+    : typeof value.launcher === 'undefined'
+      ? undefined
+      : (() => {
+          throw createError('PLUGIN_INVALID', 'ui.launcher must be an object', {
+            manifestPath,
+            field: 'ui.launcher'
+          });
+        })();
+
+  if (!window?.chrome && !launcher) {
     return undefined;
   }
 
   return {
-    window: {
-      chrome: cloneWindowChromeOptions(window.chrome)
-    }
+    window: window?.chrome
+      ? {
+          chrome: cloneWindowChromeOptions(window.chrome)
+        }
+      : undefined,
+    launcher:
+      launcher && (launcher.displayName || launcher.icon)
+        ? {
+            displayName: launcher.displayName,
+            icon: launcher.icon
+          }
+        : undefined
   };
 };
 

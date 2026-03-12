@@ -189,9 +189,17 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
 
 type ExposedPlatformBridge = ChipsBridge['platform'] & {
   getPathForFile(file: unknown): string;
+  getLaunchContext(): {
+    pluginId?: string;
+    sessionId?: string;
+    launchParams: Record<string, unknown>;
+  };
 };
 
-const createExposedPlatformBridge = (platform: ChipsBridge['platform']): ExposedPlatformBridge => {
+const createExposedPlatformBridge = (
+  platform: ChipsBridge['platform'],
+  launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> }
+): ExposedPlatformBridge => {
   return {
     ...platform,
     getPathForFile(file: unknown): string {
@@ -205,11 +213,22 @@ const createExposedPlatformBridge = (platform: ChipsBridge['platform']): Exposed
       } catch {
         return '';
       }
+    },
+    getLaunchContext() {
+      return {
+        pluginId: launchContext?.pluginId,
+        sessionId: launchContext?.sessionId,
+        launchParams: launchContext?.launchParams ? { ...launchContext.launchParams } : {}
+      };
     }
   };
 };
 
-export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips'): void => {
+export const exposeBridgeToMainWorld = (
+  bridge: BridgeTransport,
+  name = 'chips',
+  launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> }
+): void => {
   const exposed: ChipsBridge & { platform: ExposedPlatformBridge } = {
     invoke: bridge.invoke.bind(bridge),
     on: bridge.on.bind(bridge),
@@ -220,7 +239,7 @@ export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips')
     plugin: bridge.plugin,
     clipboard: bridge.clipboard,
     shell: bridge.shell,
-    platform: createExposedPlatformBridge(bridge.platform),
+    platform: createExposedPlatformBridge(bridge.platform, launchContext),
     notification: bridge.notification,
     tray: bridge.tray,
     shortcut: bridge.shortcut,
@@ -238,9 +257,12 @@ export const exposeBridgeToMainWorld = (bridge: BridgeTransport, name = 'chips')
 
 export const createAndExposeBridgeForKernel = (
   kernel: Kernel | null,
-  options?: BridgeContextOptions & { exposeName?: string }
+  options?: BridgeContextOptions & {
+    exposeName?: string;
+    launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> };
+  }
 ): BridgeTransport => {
   const bridge = createBridgeForKernel(kernel, options);
-  exposeBridgeToMainWorld(bridge, options?.exposeName ?? 'chips');
+  exposeBridgeToMainWorld(bridge, options?.exposeName ?? 'chips', options?.launchContext);
   return bridge;
 };

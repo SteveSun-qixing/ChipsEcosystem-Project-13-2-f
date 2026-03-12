@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "commonjs",
+  "main": "dist/src/main/electron/app-entry.js",
   "bin": {
     "chips": "dist/src/main/cli/index.js"
   },

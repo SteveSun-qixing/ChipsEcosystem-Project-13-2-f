@@ -76,6 +76,63 @@ describe('PluginRuntime', () => {
     await expect(fs.access(path.join(record.installPath, 'dist', 'assets', 'entry.js'))).resolves.toBeUndefined();
   });
 
+  it('keeps launcher icon assets for app plugins and rejects launcher metadata on non-app plugins', async () => {
+    const appDir = path.join(workspace, 'launcher-app');
+    await fs.mkdir(path.join(appDir, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(appDir, 'assets', 'icons'), { recursive: true });
+    await fs.writeFile(path.join(appDir, 'dist', 'index.html'), '<!doctype html>', 'utf-8');
+    await fs.writeFile(path.join(appDir, 'assets', 'icons', 'app-icon.ico'), 'icon-binary', 'utf-8');
+    await fs.writeFile(
+      path.join(appDir, 'manifest.yaml'),
+      [
+        'id: chips.launcher.app',
+        'version: "1.0.0"',
+        'type: app',
+        'name: Launcher App',
+        'permissions:',
+        '  - file.read',
+        'entry: dist/index.html',
+        'ui:',
+        '  launcher:',
+        '    displayName: Launcher App',
+        '    icon: assets/icons/app-icon.ico'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const appRecord = await runtime.install(path.join(appDir, 'manifest.yaml'));
+    expect(appRecord.manifest.ui?.launcher).toMatchObject({
+      displayName: 'Launcher App',
+      icon: 'assets/icons/app-icon.ico'
+    });
+    await expect(fs.access(path.join(appRecord.installPath, 'assets', 'icons', 'app-icon.ico'))).resolves.toBeUndefined();
+
+    const cardManifestPath = path.join(workspace, 'invalid-launcher.card.json');
+    await fs.writeFile(
+      cardManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.launcher.card',
+          version: '1.0.0',
+          type: 'card',
+          name: 'Invalid Launcher Card',
+          permissions: [],
+          ui: {
+            launcher: {
+              displayName: 'Invalid'
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(runtime.install(cardManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID'
+    });
+  });
+
   it('creates and completes plugin-init handshake sessions', async () => {
     const manifestPath = path.join(workspace, 'session.plugin.json');
     await fs.writeFile(

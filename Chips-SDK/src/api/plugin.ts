@@ -23,6 +23,10 @@ export interface PluginUiConfig {
   window?: {
     chrome?: WindowChromeOptions;
   };
+  launcher?: {
+    displayName?: string;
+    icon?: string;
+  };
 }
 
 export interface ThemePluginInfo {
@@ -58,6 +62,17 @@ export interface PluginRecord extends PluginInfo {
   installedAt: number;
 }
 
+export interface PluginShortcutRecord {
+  pluginId: string;
+  name: string;
+  location: "desktop" | "launchpad";
+  launcherPath: string;
+  executablePath: string;
+  args: string[];
+  iconPath?: string;
+  exists: boolean;
+}
+
 export interface PluginApi {
   getSelf(): Promise<PluginInfo>;
   list(options?: { type?: PluginType; capability?: string }): Promise<PluginInfo[]>;
@@ -68,6 +83,13 @@ export interface PluginApi {
   enable(pluginId: string): Promise<void>;
   disable(pluginId: string): Promise<void>;
   uninstall(pluginId: string): Promise<void>;
+  launch(pluginId: string, launchParams?: Record<string, unknown>): Promise<{
+    window: { id: string };
+    session: { sessionId: string; sessionNonce: string; permissions: string[] };
+  }>;
+  getShortcut(pluginId: string): Promise<PluginShortcutRecord>;
+  createShortcut(pluginId: string, options?: { replace?: boolean }): Promise<PluginShortcutRecord>;
+  removeShortcut(pluginId: string): Promise<{ removed: boolean; launcherPath: string; location: "desktop" | "launchpad" }>;
   /**
    * 查询当前主机已安装插件的运行时记录。
    * 该接口直接映射 Host `plugin.query` 动作。
@@ -131,6 +153,54 @@ export function createPluginApi(client: CoreClient): PluginApi {
         throw createError("INVALID_ARGUMENT", "plugin.uninstall: pluginId is required.");
       }
       await client.invoke("plugin.uninstall", { pluginId });
+    },
+    async launch(pluginId, launchParams) {
+      if (!pluginId) {
+        throw createError("INVALID_ARGUMENT", "plugin.launch: pluginId is required.");
+      }
+      return client.invoke<
+        { pluginId: string; launchParams?: Record<string, unknown> },
+        {
+          window: { id: string };
+          session: { sessionId: string; sessionNonce: string; permissions: string[] };
+        }
+      >("plugin.launch", {
+        pluginId,
+        launchParams: launchParams ?? {},
+      });
+    },
+    async getShortcut(pluginId) {
+      if (!pluginId) {
+        throw createError("INVALID_ARGUMENT", "plugin.getShortcut: pluginId is required.");
+      }
+      const result = await client.invoke<{ pluginId: string }, { shortcut: PluginShortcutRecord }>("plugin.getShortcut", {
+        pluginId,
+      });
+      return result.shortcut;
+    },
+    async createShortcut(pluginId, options) {
+      if (!pluginId) {
+        throw createError("INVALID_ARGUMENT", "plugin.createShortcut: pluginId is required.");
+      }
+      const result = await client.invoke<
+        { pluginId: string; replace?: boolean },
+        { shortcut: PluginShortcutRecord }
+      >("plugin.createShortcut", {
+        pluginId,
+        replace: options?.replace === true,
+      });
+      return result.shortcut;
+    },
+    async removeShortcut(pluginId) {
+      if (!pluginId) {
+        throw createError("INVALID_ARGUMENT", "plugin.removeShortcut: pluginId is required.");
+      }
+      return client.invoke<
+        { pluginId: string },
+        { removed: boolean; launcherPath: string; location: "desktop" | "launchpad" }
+      >("plugin.removeShortcut", {
+        pluginId,
+      });
     },
     async query(options) {
       const result = await client.invoke<

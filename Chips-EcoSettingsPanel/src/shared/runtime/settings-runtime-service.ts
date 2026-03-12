@@ -1,4 +1,4 @@
-import type { Client, PluginRecord, PluginType, ThemeMeta, ThemeState } from "chips-sdk";
+import type { Client, PluginRecord, PluginShortcutRecord, PluginType, ThemeMeta, ThemeState } from "chips-sdk";
 import { appConfig } from "../../../config/app-config";
 import { getChipsClient } from "./client";
 import { normalizeSettingsError, type SettingsPanelError } from "./errors";
@@ -35,6 +35,7 @@ export interface AppPluginGovernanceRecord {
   installPath: string;
   installedAt: number;
   capabilities: string[];
+  shortcut: PluginShortcutRecord;
 }
 
 interface OpenFileDialogResult {
@@ -191,20 +192,36 @@ export class SettingsRuntimeService {
   public async listAppPlugins(): Promise<AppPluginGovernanceRecord[]> {
     try {
       const installed = await this.client.plugin.query({ type: "app" });
+      const appRecords = installed.filter((record) => record.type === "app");
+      const shortcuts = await Promise.all(
+        appRecords.map(async (record) => {
+          const shortcut = await this.client.plugin.getShortcut(record.id);
+          return [record.id, shortcut] as const;
+        }),
+      );
+      const shortcutMap = new Map(shortcuts);
+
       return sortByName(
-        installed
-          .filter((record) => record.type === "app")
-          .map((record) => ({
+        appRecords.map((record) => ({
+          pluginId: record.id,
+          name: record.name,
+          description: record.description,
+          version: record.version,
+          enabled: record.enabled,
+          selfManaged: record.id === appConfig.appId,
+          installPath: record.installPath,
+          installedAt: record.installedAt,
+          capabilities: [...(record.capabilities ?? [])],
+          shortcut: shortcutMap.get(record.id) ?? {
             pluginId: record.id,
             name: record.name,
-            description: record.description,
-            version: record.version,
-            enabled: record.enabled,
-            selfManaged: record.id === appConfig.appId,
-            installPath: record.installPath,
-            installedAt: record.installedAt,
-            capabilities: [...(record.capabilities ?? [])],
-          })),
+            location: "desktop",
+            launcherPath: "",
+            executablePath: "",
+            args: [],
+            exists: false,
+          },
+        })),
       ).sort((left, right) => {
         if (left.enabled !== right.enabled) {
           return left.enabled ? -1 : 1;
@@ -237,6 +254,38 @@ export class SettingsRuntimeService {
       await this.client.plugin.disable(pluginId);
     } catch (error) {
       throw toSettingsError(error, "Failed to disable app plugin.");
+    }
+  }
+
+  public async launchPlugin(pluginId: string): Promise<void> {
+    try {
+      await this.client.plugin.launch(pluginId, {});
+    } catch (error) {
+      throw toSettingsError(error, "Failed to launch app plugin.");
+    }
+  }
+
+  public async createPluginShortcut(pluginId: string, replace = false): Promise<PluginShortcutRecord> {
+    try {
+      return await this.client.plugin.createShortcut(pluginId, { replace });
+    } catch (error) {
+      throw toSettingsError(error, "Failed to create app shortcut.");
+    }
+  }
+
+  public async removePluginShortcut(pluginId: string): Promise<{ removed: boolean; launcherPath: string; location: "desktop" | "launchpad" }> {
+    try {
+      return await this.client.plugin.removeShortcut(pluginId);
+    } catch (error) {
+      throw toSettingsError(error, "Failed to remove app shortcut.");
+    }
+  }
+
+  public async revealPath(path: string): Promise<void> {
+    try {
+      await this.client.invoke("platform.shellShowItemInFolder", { path });
+    } catch (error) {
+      throw toSettingsError(error, "Failed to reveal shortcut path.");
     }
   }
 

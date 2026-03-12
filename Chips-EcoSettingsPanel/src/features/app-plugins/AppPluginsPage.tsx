@@ -36,6 +36,10 @@ export function AppPluginsPage(): React.ReactElement {
     installFromDroppedFiles,
     togglePluginEnabled,
     uninstallPlugin,
+    launchPlugin,
+    createPluginShortcut,
+    removePluginShortcut,
+    revealPluginShortcut,
     refresh,
     feedback,
     dismissFeedback,
@@ -81,15 +85,20 @@ export function AppPluginsPage(): React.ReactElement {
           <GovernanceList
             ariaLabel={t("settingsPanel.appPlugins.listAriaLabel")}
             columns={[
-              { id: "plugin", label: t("settingsPanel.appPlugins.columns.plugin"), width: "minmax(0, 2.6fr)" },
+              { id: "plugin", label: t("settingsPanel.appPlugins.columns.plugin"), width: "minmax(0, 2.8fr)" },
               { id: "status", label: t("settingsPanel.appPlugins.columns.status"), width: "minmax(0, 1.2fr)" },
-              { id: "meta", label: t("settingsPanel.appPlugins.columns.meta"), width: "minmax(0, 1.8fr)" },
+              { id: "shortcut", label: t("settingsPanel.appPlugins.columns.shortcut"), width: "minmax(0, 1.4fr)" },
               { id: "actions", label: t("settingsPanel.appPlugins.columns.actions"), width: "auto", align: "end" },
             ]}
           >
             {plugins.map((plugin) => {
               const busy = activeActionId === plugin.pluginId;
               const installedAtLabel = formatInstalledAt(locale, plugin.installedAt);
+              const shortcut = plugin.shortcut ?? {
+                exists: false,
+                location: "desktop" as const,
+                launcherPath: "",
+              };
 
               return (
                 <GovernanceListRow key={plugin.pluginId}>
@@ -115,15 +124,28 @@ export function AppPluginsPage(): React.ReactElement {
                       ) : null}
                     </div>
                   </GovernanceListCell>
-                  <GovernanceListCell label={t("settingsPanel.appPlugins.columns.meta")}>
-                    <div className="governance-meta">
-                      <span>{t("settingsPanel.appPlugins.fields.pluginId")}: {plugin.pluginId}</span>
-                      <span>{t("settingsPanel.appPlugins.fields.version")}: {plugin.version}</span>
-                      <span>{t("settingsPanel.appPlugins.fields.installedAt")}: {installedAtLabel}</span>
+                  <GovernanceListCell label={t("settingsPanel.appPlugins.columns.shortcut")}>
+                    <div className="governance-status">
+                      {shortcut.exists ? (
+                        <StatusBadge tone="positive" label={t("settingsPanel.appPlugins.badges.shortcutReady")} />
+                      ) : (
+                        <StatusBadge tone="neutral" label={t("settingsPanel.appPlugins.badges.shortcutMissing")} />
+                      )}
+                      <div className="governance-item__summary">
+                        {shortcut.exists
+                          ? t(`settingsPanel.appPlugins.shortcut.location.${shortcut.location}`)
+                          : t("settingsPanel.appPlugins.shortcut.empty")}
+                      </div>
                     </div>
                   </GovernanceListCell>
                   <GovernanceListCell label={t("settingsPanel.appPlugins.columns.actions")} align="end">
                     <div className="action-row action-row--tight">
+                      <ChipsButton disabled={busy || !plugin.enabled} onPress={() => void launchPlugin(plugin)}>
+                        {t("settingsPanel.appPlugins.actions.launch")}
+                      </ChipsButton>
+                      <ChipsButton disabled={busy} onPress={() => void createPluginShortcut(plugin)}>
+                        {t("settingsPanel.appPlugins.actions.createDesktopShortcut")}
+                      </ChipsButton>
                       <RecordDetailDialog
                         triggerLabel={t("settingsPanel.common.details")}
                         title={t("settingsPanel.appPlugins.dialogs.detailTitle", { name: plugin.name })}
@@ -139,8 +161,20 @@ export function AppPluginsPage(): React.ReactElement {
                           },
                           { label: t("settingsPanel.appPlugins.fields.installPath"), value: plugin.installPath },
                           { label: t("settingsPanel.appPlugins.fields.installedAt"), value: installedAtLabel },
+                          {
+                            label: t("settingsPanel.appPlugins.fields.shortcut"),
+                            value: shortcut.exists
+                              ? shortcut.launcherPath
+                              : t("settingsPanel.common.notAvailable"),
+                          },
                         ]}
                       />
+                      <ChipsButton disabled={busy || !shortcut.exists} onPress={() => void revealPluginShortcut(plugin)}>
+                        {t("settingsPanel.appPlugins.actions.revealShortcut")}
+                      </ChipsButton>
+                      <ChipsButton disabled={busy || !shortcut.exists} onPress={() => void removePluginShortcut(plugin)}>
+                        {t("settingsPanel.appPlugins.actions.removeShortcut")}
+                      </ChipsButton>
                       <ChipsButton disabled={busy || plugin.selfManaged} onPress={() => void togglePluginEnabled(plugin)}>
                         {plugin.enabled
                           ? t("settingsPanel.appPlugins.actions.disable")

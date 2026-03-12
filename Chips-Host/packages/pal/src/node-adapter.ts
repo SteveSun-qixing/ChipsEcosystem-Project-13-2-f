@@ -27,6 +27,7 @@ import type {
   PALDialog,
   PALFileSystem,
   PALIPC,
+  PALLauncher,
   PALNotification,
   PALPlatform,
   PALPower,
@@ -43,6 +44,9 @@ import type {
   NotificationOptions,
   PowerState,
   ScreenInfo,
+  LauncherCreateOptions,
+  LauncherLocation,
+  LauncherRecord,
   TrayOptions,
   TrayState,
   WindowChromeOptions,
@@ -51,6 +55,11 @@ import type {
 } from './types';
 
 const quoteAppleScript = (value: string): string => value.replaceAll('"', '\\"');
+const quoteShellArg = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+const sanitizeLauncherName = (value: string): string => {
+  const sanitized = value.replace(/[\\/:*?"<>|]/g, '-').trim();
+  return sanitized.length > 0 ? sanitized : 'Chips App';
+};
 
 const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined): WindowChromeOptions | undefined => {
   if (!chrome) {
@@ -399,7 +408,9 @@ class NodeWindowManager implements PALWindow {
 
     const payload = {
       pluginId: options.pluginId,
-      permissions: options.permissions ?? []
+      permissions: options.permissions ?? [],
+      sessionId: options.sessionId,
+      launchParams: options.launchParams ?? {}
     };
 
     return [
@@ -1049,6 +1060,272 @@ class NodeShortcut implements PALShortcut {
   }
 }
 
+class NodeLauncher implements PALLauncher {
+  public async getDefaultPath(name: string): Promise<{ launcherPath: string; location: LauncherLocation }> {
+    const normalizedName = sanitizeLauncherName(name);
+    if (process.platform === 'win32') {
+      const desktopDir = await this.resolveWindowsDesktopDir();
+      return {
+        launcherPath: path.join(desktopDir, `${normalizedName}.lnk`),
+        location: 'desktop'
+      };
+    }
+
+    if (process.platform === 'darwin') {
+      const applicationsDir = path.join(os.homedir(), 'Applications', 'Chips Apps');
+      return {
+        launcherPath: path.join(applicationsDir, `${normalizedName}.app`),
+        location: 'launchpad'
+      };
+    }
+
+    return {
+      launcherPath: path.join(os.homedir(), 'Desktop', `${normalizedName}.desktop`),
+      location: 'desktop'
+    };
+  }
+
+  public async create(options: LauncherCreateOptions & { launcherPath?: string }): Promise<LauncherRecord> {
+    const target = options.launcherPath ? await this.resolveExplicitTarget(options.launcherPath) : await this.getDefaultPath(options.name);
+
+    if (process.platform === 'win32') {
+      await this.createWindowsLauncher(target.launcherPath, options);
+    } else if (process.platform === 'darwin') {
+      await this.createDarwinLauncher(target.launcherPath, options);
+    } else {
+      await this.createFreedesktopLauncher(target.launcherPath, options);
+    }
+
+    return this.getRecord({
+      pluginId: options.pluginId,
+      name: options.name,
+      launcherPath: target.launcherPath
+    });
+  }
+
+  public async getRecord(options: { pluginId: string; name: string; launcherPath?: string }): Promise<LauncherRecord> {
+    const target = options.launcherPath ? await this.resolveExplicitTarget(options.launcherPath) : await this.getDefaultPath(options.name);
+    const iconPath = await this.resolveExistingIconPath(target.launcherPath);
+
+    return {
+      pluginId: options.pluginId,
+      name: options.name,
+      location: target.location,
+      launcherPath: target.launcherPath,
+      executablePath: '',
+      args: [],
+      iconPath
+    };
+  }
+
+  public async remove(options: {
+    pluginId: string;
+    name: string;
+    launcherPath?: string;
+  }): Promise<{ removed: boolean; launcherPath: string; location: LauncherLocation }> {
+    const target = options.launcherPath ? await this.resolveExplicitTarget(options.launcherPath) : await this.getDefaultPath(options.name);
+    const existing = await statSafe(target.launcherPath);
+    if (!existing) {
+      return {
+        removed: false,
+        launcherPath: target.launcherPath,
+        location: target.location
+      };
+    }
+
+    await fs.rm(target.launcherPath, { recursive: true, force: true });
+    return {
+      removed: true,
+      launcherPath: target.launcherPath,
+      location: target.location
+    };
+  }
+
+  private async resolveExplicitTarget(launcherPath: string): Promise<{ launcherPath: string; location: LauncherLocation }> {
+    const normalizedPath = path.resolve(launcherPath);
+    return {
+      launcherPath: normalizedPath,
+      location: process.platform === 'darwin' ? 'launchpad' : 'desktop'
+    };
+  }
+
+  private async resolveWindowsDesktopDir(): Promise<string> {
+    const preferred = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'Desktop') : path.join(os.homedir(), 'Desktop');
+    if (await statSafe(preferred)) {
+      return preferred;
+    }
+
+    try {
+      const result = await runCommand('powershell', [
+        '-NoProfile',
+        '-Command',
+        '[Environment]::GetFolderPath("Desktop")'
+      ]);
+      const resolved = result.trim();
+      if (resolved.length > 0) {
+        return resolved;
+      }
+    } catch {
+      // ignore and fall back to home desktop path
+    }
+
+    return preferred;
+  }
+
+  private async createWindowsLauncher(launcherPath: string, options: LauncherCreateOptions): Promise<void> {
+    await fs.mkdir(path.dirname(launcherPath), { recursive: true });
+    const argumentsLiteral = options.args
+      .map((item) => (/\s/.test(item) ? `"${item.replaceAll('"', '`"')}"` : item.replaceAll('"', '`"')))
+      .join(' ');
+    const iconLiteral = options.iconPath ? `\n$shortcut.IconLocation = "${options.iconPath.replaceAll('"', '`"')}";` : '';
+    const script = [
+      '$wshell = New-Object -ComObject WScript.Shell;',
+      `$shortcut = $wshell.CreateShortcut("${launcherPath.replaceAll('"', '`"')}");`,
+      `$shortcut.TargetPath = "${options.executablePath.replaceAll('"', '`"')}";`,
+      `$shortcut.Arguments = "${argumentsLiteral.replaceAll('"', '`"')}";`,
+      `$shortcut.WorkingDirectory = "${path.dirname(options.executablePath).replaceAll('"', '`"')}";`,
+      `$shortcut.Description = "${options.name.replaceAll('"', '`"')}";`,
+      iconLiteral,
+      '$shortcut.Save();'
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    await runCommand('powershell', ['-NoProfile', '-Command', script]);
+  }
+
+  private async createDarwinLauncher(launcherPath: string, options: LauncherCreateOptions): Promise<void> {
+    const appName = path.basename(launcherPath, '.app');
+    const contentsDir = path.join(launcherPath, 'Contents');
+    const macOSDir = path.join(contentsDir, 'MacOS');
+    const resourcesDir = path.join(contentsDir, 'Resources');
+    const executableName = sanitizeLauncherName(appName).replace(/\s+/g, '-');
+    const executablePath = path.join(macOSDir, executableName);
+    const bundleId = `chips.launcher.${options.pluginId.replace(/[^a-zA-Z0-9.-]/g, '-')}`;
+
+    await fs.rm(launcherPath, { recursive: true, force: true });
+    await fs.mkdir(macOSDir, { recursive: true });
+    await fs.mkdir(resourcesDir, { recursive: true });
+
+    let iconFileName = '';
+    if (options.iconPath) {
+      const copiedIcon = await this.materializeDarwinIcon(options.iconPath, resourcesDir);
+      if (copiedIcon) {
+        iconFileName = copiedIcon;
+      }
+    }
+
+    const infoPlist = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+      '<plist version="1.0">',
+      '<dict>',
+      '  <key>CFBundleDevelopmentRegion</key>',
+      '  <string>zh_CN</string>',
+      '  <key>CFBundleExecutable</key>',
+      `  <string>${executableName}</string>`,
+      '  <key>CFBundleIdentifier</key>',
+      `  <string>${bundleId}</string>`,
+      '  <key>CFBundleName</key>',
+      `  <string>${appName}</string>`,
+      '  <key>CFBundlePackageType</key>',
+      '  <string>APPL</string>',
+      '  <key>CFBundleVersion</key>',
+      '  <string>1</string>',
+      '  <key>LSApplicationCategoryType</key>',
+      '  <string>public.app-category.productivity</string>',
+      iconFileName ? '  <key>CFBundleIconFile</key>' : '',
+      iconFileName ? `  <string>${iconFileName}</string>` : '',
+      '</dict>',
+      '</plist>',
+      ''
+    ]
+      .filter(Boolean)
+      .join('\n');
+    await fs.writeFile(path.join(contentsDir, 'Info.plist'), infoPlist, 'utf-8');
+
+    const commandArgs = [options.executablePath, ...options.args].map((item) => quoteShellArg(item)).join(' ');
+    const shellScript = [
+      '#!/bin/sh',
+      `exec ${commandArgs} >/dev/null 2>&1 &`,
+      ''
+    ].join('\n');
+    await fs.writeFile(executablePath, shellScript, 'utf-8');
+    await fs.chmod(executablePath, 0o755);
+  }
+
+  private async createFreedesktopLauncher(launcherPath: string, options: LauncherCreateOptions): Promise<void> {
+    await fs.mkdir(path.dirname(launcherPath), { recursive: true });
+    const desktopEntry = [
+      '[Desktop Entry]',
+      'Type=Application',
+      `Name=${options.name}`,
+      `Exec=${[options.executablePath, ...options.args].map((item) => quoteShellArg(item)).join(' ')}`,
+      options.iconPath ? `Icon=${options.iconPath}` : '',
+      'Terminal=false',
+      ''
+    ]
+      .filter(Boolean)
+      .join('\n');
+    await fs.writeFile(launcherPath, desktopEntry, 'utf-8');
+    await fs.chmod(launcherPath, 0o755);
+  }
+
+  private async materializeDarwinIcon(sourcePath: string, resourcesDir: string): Promise<string | null> {
+    const normalizedSource = path.resolve(sourcePath);
+    const extension = path.extname(normalizedSource).toLowerCase();
+    if (extension === '.icns') {
+      const targetName = 'AppIcon.icns';
+      await fs.copyFile(normalizedSource, path.join(resourcesDir, targetName));
+      return targetName;
+    }
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-iconset-'));
+    try {
+      const iconsetDir = path.join(tempDir, 'AppIcon.iconset');
+      await fs.mkdir(iconsetDir, { recursive: true });
+      const pngPath = path.join(tempDir, 'AppIcon.png');
+
+      await runCommand('sips', ['-s', 'format', 'png', normalizedSource, '--out', pngPath]);
+
+      const sizes = [
+        ['icon_16x16.png', '16'],
+        ['icon_16x16@2x.png', '32'],
+        ['icon_32x32.png', '32'],
+        ['icon_32x32@2x.png', '64'],
+        ['icon_128x128.png', '128'],
+        ['icon_128x128@2x.png', '256'],
+        ['icon_256x256.png', '256'],
+        ['icon_256x256@2x.png', '512'],
+        ['icon_512x512.png', '512'],
+        ['icon_512x512@2x.png', '1024']
+      ] as const;
+
+      for (const [fileName, size] of sizes) {
+        await runCommand('sips', ['-z', size, size, pngPath, '--out', path.join(iconsetDir, fileName)]);
+      }
+
+      const targetName = 'AppIcon.icns';
+      await runCommand('iconutil', ['-c', 'icns', iconsetDir, '-o', path.join(resourcesDir, targetName)]);
+      return targetName;
+    } catch {
+      return null;
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  }
+
+  private async resolveExistingIconPath(launcherPath: string): Promise<string | undefined> {
+    if (process.platform === 'darwin') {
+      const iconPath = path.join(launcherPath, 'Contents', 'Resources', 'AppIcon.icns');
+      const existing = await statSafe(iconPath);
+      return existing?.isFile ? iconPath : undefined;
+    }
+
+    return undefined;
+  }
+}
+
 class NodePower implements PALPower {
   private readonly electron = loadElectronModule();
   private blockerId: number | null = null;
@@ -1372,6 +1649,7 @@ export class NodePalAdapter implements PALAdapter {
   public readonly tray: PALTray = new NodeTray();
   public readonly notification: PALNotification = new NodeNotification();
   public readonly shortcut: PALShortcut = new NodeShortcut();
+  public readonly launcher: PALLauncher = new NodeLauncher();
   public readonly power: PALPower = new NodePower();
   public readonly ipc: PALIPC = new NodeIPC();
 

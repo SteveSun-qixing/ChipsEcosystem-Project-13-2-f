@@ -2,13 +2,27 @@ import { createAndExposeBridgeForKernel, type BridgeContextOptions } from './cre
 
 const CHIPS_BRIDGE_CONTEXT_ARG_PREFIX = '--chips-bridge-context=';
 
-const parseBridgeContext = (): BridgeContextOptions => {
+interface ParsedBridgeContext {
+  bridge: BridgeContextOptions;
+  launchContext: {
+    pluginId?: string;
+    sessionId?: string;
+    launchParams: Record<string, unknown>;
+  };
+}
+
+const parseBridgeContext = (): ParsedBridgeContext => {
   const targetArg = process.argv.find((value) => value.startsWith(CHIPS_BRIDGE_CONTEXT_ARG_PREFIX));
   if (!targetArg) {
     return {
-      callerId: 'plugin-preload',
-      callerType: 'plugin',
-      permissions: []
+      bridge: {
+        callerId: 'plugin-preload',
+        callerType: 'plugin',
+        permissions: []
+      },
+      launchContext: {
+        launchParams: {}
+      }
     };
   }
 
@@ -17,22 +31,39 @@ const parseBridgeContext = (): BridgeContextOptions => {
     const decoded = Buffer.from(encoded, 'base64url').toString('utf-8');
     const parsed = JSON.parse(decoded) as {
       pluginId?: unknown;
+      sessionId?: unknown;
       permissions?: unknown;
+      launchParams?: unknown;
     };
 
     return {
-      callerId: 'plugin-preload',
-      callerType: 'plugin',
-      pluginId: typeof parsed.pluginId === 'string' ? parsed.pluginId : undefined,
-      permissions: Array.isArray(parsed.permissions)
-        ? parsed.permissions.filter((item): item is string => typeof item === 'string')
-        : []
+      bridge: {
+        callerId: 'plugin-preload',
+        callerType: 'plugin',
+        pluginId: typeof parsed.pluginId === 'string' ? parsed.pluginId : undefined,
+        permissions: Array.isArray(parsed.permissions)
+          ? parsed.permissions.filter((item): item is string => typeof item === 'string')
+          : []
+      },
+      launchContext: {
+        pluginId: typeof parsed.pluginId === 'string' ? parsed.pluginId : undefined,
+        sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : undefined,
+        launchParams:
+          parsed.launchParams && typeof parsed.launchParams === 'object' && !Array.isArray(parsed.launchParams)
+            ? { ...(parsed.launchParams as Record<string, unknown>) }
+            : {}
+      }
     };
   } catch {
     return {
-      callerId: 'plugin-preload',
-      callerType: 'plugin',
-      permissions: []
+      bridge: {
+        callerId: 'plugin-preload',
+        callerType: 'plugin',
+        permissions: []
+      },
+      launchContext: {
+        launchParams: {}
+      }
     };
   }
 };
@@ -66,7 +97,11 @@ const ensureThemeStyleElement = (documentRef: any): any => {
   return styleEl;
 };
 
-const bridge = createAndExposeBridgeForKernel(null, parseBridgeContext());
+const parsedBridgeContext = parseBridgeContext();
+const bridge = createAndExposeBridgeForKernel(null, {
+  ...parsedBridgeContext.bridge,
+  launchContext: parsedBridgeContext.launchContext
+});
 
 const syncThemeToDocument = async (): Promise<void> => {
   const { document, window } = getDomGlobals();

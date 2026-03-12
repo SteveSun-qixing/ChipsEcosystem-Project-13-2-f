@@ -36,10 +36,10 @@ describe('HostMainProcess lifecycle', () => {
 
     const electronApp = {
       whenReady,
-      on: (event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void) => {
+      on: (event: string, listener: (...args: unknown[]) => void) => {
         appEvents.on(event, listener);
       },
-      off: (event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void) => {
+      off: (event: string, listener: (...args: unknown[]) => void) => {
         appEvents.off(event, listener);
       },
       quit
@@ -48,7 +48,7 @@ describe('HostMainProcess lifecycle', () => {
     const main = new HostMainProcess({
       hostApplication: fakeHost,
       processRef,
-      electronApp
+      electronApp: electronApp as any
     });
 
     await main.start();
@@ -65,7 +65,14 @@ describe('HostMainProcess lifecycle', () => {
     );
 
     appEvents.emit('window-all-closed');
-    expect(quit).toHaveBeenCalledTimes(process.platform === 'darwin' ? 0 : 1);
+    expect(quit).toHaveBeenCalledTimes(0);
+    expect(loggerWrite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'info',
+        action: 'window-all-closed',
+        result: 'success'
+      })
+    );
 
     await main.stop();
     expect(stop).toHaveBeenCalledTimes(1);
@@ -88,10 +95,10 @@ describe('HostMainProcess lifecycle', () => {
     const appEvents = new EventEmitter();
     const electronApp = {
       whenReady: vi.fn(async () => {}),
-      on: (event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void) => {
+      on: (event: string, listener: (...args: unknown[]) => void) => {
         appEvents.on(event, listener);
       },
-      off: (event: 'before-quit' | 'window-all-closed' | 'activate', listener: () => void) => {
+      off: (event: string, listener: (...args: unknown[]) => void) => {
         appEvents.off(event, listener);
       },
       quit: vi.fn(() => {})
@@ -100,7 +107,7 @@ describe('HostMainProcess lifecycle', () => {
     const main = new HostMainProcess({
       hostApplication: fakeHost,
       processRef,
-      electronApp
+      electronApp: electronApp as any
     });
 
     await main.start();

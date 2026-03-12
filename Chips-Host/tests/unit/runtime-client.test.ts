@@ -31,6 +31,10 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     enable: async () => undefined,
     disable: async () => undefined,
     uninstall: async () => undefined,
+    launch: async () => ({}),
+    getShortcut: async () => ({}),
+    createShortcut: async () => ({}),
+    removeShortcut: async () => ({}),
     query: async () => ({})
   },
   clipboard: {
@@ -49,7 +53,8 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     listScreens: async () => [],
     openExternal: async () => undefined,
     powerGetState: async () => ({}),
-    powerSetPreventSleep: async () => false
+    powerSetPreventSleep: async () => false,
+    getLaunchContext: () => ({ launchParams: {} })
   },
   notification: {
     show: async () => undefined

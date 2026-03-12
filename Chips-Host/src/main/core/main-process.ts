@@ -44,9 +44,14 @@ export class HostMainProcess {
   };
 
   private readonly onWindowAllClosed = () => {
-    if (process.platform !== 'darwin') {
-      this.electronApp?.quit();
-    }
+    this.hostApplication.logger.write({
+      level: 'info',
+      message: 'All plugin windows closed; Host remains resident in background',
+      requestId: 'window-all-closed',
+      namespace: 'host-main',
+      action: 'window-all-closed',
+      result: 'success'
+    });
   };
 
   private readonly onActivate = () => {

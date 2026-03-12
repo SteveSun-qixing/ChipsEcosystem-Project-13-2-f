@@ -3,8 +3,6 @@ import path from 'node:path';
 import process from 'node:process';
 import { bootstrapHostMainProcess } from '../core/main-process';
 import { RuntimeClient } from '../../renderer/runtime-client';
-import type { PluginUiConfig } from '../../shared/window-chrome';
-import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { parseYamlLite } from '../../shared/yaml-lite';
 
 interface ParsedArgs {
@@ -20,9 +18,6 @@ interface ManifestSummary {
 interface PluginQueryResponse {
   plugins: Array<{
     id: string;
-    installPath?: string;
-    entry?: string | Record<string, string>;
-    ui?: PluginUiConfig;
   }>;
 }
 
@@ -30,15 +25,7 @@ interface PluginInstallResponse {
   pluginId: string;
 }
 
-interface PluginInitResponse {
-  session: {
-    sessionId: string;
-    sessionNonce: string;
-    permissions: string[];
-  };
-}
-
-interface WindowOpenResponse {
+interface PluginLaunchResponse {
   window: {
     id: string;
   };
@@ -75,7 +62,7 @@ const parseArgs = (argv: string[]): ParsedArgs => {
   };
 };
 
-const resolveWindowId = (opened: WindowOpenResponse): string => {
+const resolveWindowId = (opened: PluginLaunchResponse): string => {
   if (!opened.window || typeof opened.window.id !== 'string' || opened.window.id.length === 0) {
     throw new Error('window.open 未返回有效窗口 ID');
   }
@@ -109,37 +96,11 @@ const run = async (): Promise<void> => {
 
     await runtime.invoke('plugin.enable', { pluginId });
 
-    const initResult = await runtime.invoke<PluginInitResponse>('plugin.init', {
+    const opened = await runtime.invoke<PluginLaunchResponse>('plugin.launch', {
       pluginId,
       launchParams: {
+        displayName: manifest.name,
         trigger: 'chipsdev.run'
-      }
-    });
-
-    await runtime.invoke('plugin.handshake.complete', {
-      sessionId: initResult.session.sessionId,
-      nonce: initResult.session.sessionNonce
-    });
-
-    const queryResult = await runtime.invoke<PluginQueryResponse>('plugin.query', {
-      type: 'app'
-    });
-    const record = queryResult.plugins.find((item) => item.id === pluginId);
-    const url =
-      record && record.installPath && typeof record.entry === 'string'
-        ? path.resolve(record.installPath, record.entry)
-        : undefined;
-
-    const opened = await runtime.invoke<WindowOpenResponse>('window.open', {
-      config: {
-        title: manifest.name || pluginId,
-        width: 1280,
-        height: 800,
-        pluginId,
-        sessionId: initResult.session.sessionId,
-        permissions: initResult.session.permissions,
-        url,
-        chrome: resolveManifestWindowChrome(record?.ui)
       }
     });
 

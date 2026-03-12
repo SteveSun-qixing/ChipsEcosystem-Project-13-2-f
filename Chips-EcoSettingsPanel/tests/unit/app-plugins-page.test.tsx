@@ -26,6 +26,15 @@ vi.mock("../../src/features/app-plugins/useAppPluginGovernance", () => ({
           installPath: "/plugins/settings",
           installedAt: 1,
           capabilities: ["settings"],
+          shortcut: {
+            pluginId: "com.chips.eco-settings-panel",
+            name: "Eco Settings Panel",
+            location: "desktop",
+            launcherPath: "/shortcuts/settings.lnk",
+            executablePath: "/Applications/Chips Host",
+            args: ["--chips-launch-plugin=com.chips.eco-settings-panel"],
+            exists: true,
+          },
         },
       ],
       loading: false,
@@ -37,6 +46,10 @@ vi.mock("../../src/features/app-plugins/useAppPluginGovernance", () => ({
       installFromDroppedFiles: async () => undefined,
       togglePluginEnabled: async () => undefined,
       uninstallPlugin: async () => undefined,
+      launchPlugin: async () => undefined,
+      createPluginShortcut: async () => undefined,
+      removePluginShortcut: async () => undefined,
+      revealPluginShortcut: async () => undefined,
       refresh: async () => undefined,
       feedback: [],
       dismissFeedback: () => undefined,
@@ -59,6 +72,9 @@ describe("AppPluginsPage", () => {
     expect(markup).toContain("settingsPanel.appPlugins.badges.currentApp");
     expect(markup).toContain("settingsPanel.appPlugins.selfManaged.description");
     expect(markup).toContain("disabled");
+    expect(markup).toContain("settingsPanel.appPlugins.actions.launch");
+    expect(markup).toContain("settingsPanel.appPlugins.actions.createDesktopShortcut");
+    expect(markup).not.toContain("settingsPanel.appPlugins.columns.meta");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("settingsPanel.appPlugins.actions.disable");
     expect(markup).toContain("settingsPanel.appPlugins.actions.uninstall");

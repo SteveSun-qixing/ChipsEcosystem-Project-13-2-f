@@ -163,11 +163,15 @@ const collectManifestAssetPaths = (record: Record<string, unknown>, manifestPath
 
   const ui = isRecord(record.ui) ? record.ui : undefined;
   const layout = ui && isRecord(ui.layout) ? ui.layout : undefined;
+  const launcher = ui && isRecord(ui.launcher) ? ui.launcher : undefined;
   for (const field of ['contract', 'minFunctionalSet']) {
     const value = layout?.[field];
     if (typeof value === 'string' && value.trim().length > 0) {
       assets.push(value.trim());
     }
+  }
+  if (typeof launcher?.icon === 'string' && launcher.icon.trim().length > 0) {
+    assets.push(launcher.icon.trim());
   }
 
   const preview = record.preview;
@@ -739,6 +743,15 @@ export class PluginRuntime {
 
     const { entry, assets } = collectManifestAssetPaths(record, manifestPath);
 
+    const ui = parsePluginUiConfig(record.ui, manifestPath);
+    if (record.type !== 'app' && ui?.launcher) {
+      throw createError('PLUGIN_INVALID', 'ui.launcher is only supported for app plugins', {
+        manifestPath,
+        field: 'ui.launcher',
+        type: record.type
+      });
+    }
+
     const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;
     const layout = record.type === 'layout' ? this.parseLayoutManifestMeta(record) : undefined;
 
@@ -754,7 +767,7 @@ export class PluginRuntime {
       assets,
       source,
       signature,
-      ui: parsePluginUiConfig(record.ui, manifestPath),
+      ui,
       theme,
       layout
     };

@@ -54,8 +54,12 @@
       "appPluginInstall": "Failed to install the app plugin.",
       "appPluginToggle": "Failed to update the app plugin state.",
       "appPluginUninstall": "Failed to uninstall the app plugin.",
+      "appPluginShortcutCreate": "Failed to create the app shortcut.",
+      "appPluginShortcutRemove": "Failed to remove the app shortcut.",
+      "appPluginShortcutReveal": "Failed to reveal the app shortcut.",
       "filePicker": "Failed to open the file picker.",
-      "dragPathUnavailable": "This environment cannot resolve dragged file paths. Please use the file picker instead."
+      "dragPathUnavailable": "This environment cannot resolve dragged file paths. Please use the file picker instead.",
+      "appPluginLaunch": "Failed to launch app plugin."
     },
     "themes": {
       "title": "Theme Management",
@@ -160,7 +164,13 @@
         "install": "Install App Plugin",
         "enable": "Enable",
         "disable": "Disable",
-        "uninstall": "Uninstall"
+        "uninstall": "Uninstall",
+        "createShortcut": "Create Shortcut",
+        "rebuildShortcut": "Rebuild Shortcut",
+        "revealShortcut": "Reveal",
+        "removeShortcut": "Remove Shortcut",
+        "launch": "Launch",
+        "createDesktopShortcut": "Create Desktop Shortcut"
       },
       "dropzone": {
         "title": "Drop an app plugin package here to install",
@@ -176,12 +186,22 @@
         "version": "Version",
         "capabilities": "Capabilities",
         "installPath": "Install path",
-        "installedAt": "Installed at"
+        "installedAt": "Installed at",
+        "shortcut": "Shortcut"
       },
       "badges": {
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "currentApp": "Current app"
+        "currentApp": "Current app",
+        "shortcutReady": "Ready",
+        "shortcutMissing": "Missing"
+      },
+      "shortcut": {
+        "empty": "No system entry created yet",
+        "location": {
+          "desktop": "Windows desktop entry",
+          "launchpad": "macOS Launchpad entry"
+        }
       },
       "selfManaged": {
         "description": "The settings panel plugin cannot disable or uninstall itself from its own governance UI, so the runtime settings entry remains available."
@@ -196,7 +216,11 @@
         "selfManagedBlockedTitle": "Current app protection",
         "selfManagedBlockedMessage": "The settings panel plugin cannot disable or uninstall itself from its own UI.",
         "uninstallTitle": "App plugin uninstalled",
-        "uninstallSuccess": "Removed {name}."
+        "uninstallSuccess": "Removed {name}.",
+        "shortcutCreateTitle": "Shortcut created",
+        "shortcutCreateSuccess": "Created the system shortcut for {name}.",
+        "shortcutRemoveTitle": "Shortcut removed",
+        "shortcutRemoveSuccess": "Removed the system shortcut for {name}."
       },
       "dialogs": {
         "filePickerTitle": "Install app plugin",
@@ -212,6 +236,7 @@
         "plugin": "Plugin",
         "status": "Status",
         "meta": "Metadata",
+        "shortcut": "Shortcut",
         "actions": "Actions"
       }
     },

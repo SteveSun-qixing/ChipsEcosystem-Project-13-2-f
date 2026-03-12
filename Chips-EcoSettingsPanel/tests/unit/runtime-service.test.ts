@@ -31,6 +31,10 @@ function createClientMock(): Client {
       enable: vi.fn(),
       disable: vi.fn(),
       uninstall: vi.fn(),
+      launch: vi.fn(),
+      getShortcut: vi.fn(),
+      createShortcut: vi.fn(),
+      removeShortcut: vi.fn(),
       list: vi.fn(),
       get: vi.fn(),
       getSelf: vi.fn(),
@@ -198,6 +202,15 @@ describe("SettingsRuntimeService", () => {
         capabilities: ["alpha"],
       },
     ] as never);
+    vi.mocked(client.plugin.getShortcut).mockImplementation(async (pluginId: string) => ({
+      pluginId,
+      name: String(pluginId),
+      location: "desktop",
+      launcherPath: `/shortcuts/${pluginId}.lnk`,
+      executablePath: "/Applications/Chips Host",
+      args: [`--chips-launch-plugin=${pluginId}`],
+      exists: pluginId !== "app.disabled",
+    }));
 
     const service = new SettingsRuntimeService(client);
     const plugins = await service.listAppPlugins();
@@ -245,5 +258,22 @@ describe("SettingsRuntimeService", () => {
         ],
       },
     });
+  });
+
+  it("launches app plugins through the formal Host route", async () => {
+    const client = createClientMock();
+    vi.mocked(client.plugin.launch).mockResolvedValue({
+      window: { id: "window-1" },
+      session: {
+        sessionId: "session-1",
+        sessionNonce: "nonce-1",
+        permissions: [],
+      },
+    } as never);
+
+    const service = new SettingsRuntimeService(client);
+    await service.launchPlugin("app.viewer");
+
+    expect(client.plugin.launch).toHaveBeenCalledWith("app.viewer", {});
   });
 });

@@ -25,6 +25,7 @@ permissions:
   - plugin.read
   - plugin.manage
   - platform.read
+  - platform.external
 
 engines:
   chips: "^1.0.0"
@@ -39,6 +40,9 @@ ui:
     owner: page
     unit: cpx
     baseWidth: 1280
+  launcher:
+    displayName: 生态设置面板
+    icon: assets/icons/app-icon.ico
   window:
     chrome:
       frame: true

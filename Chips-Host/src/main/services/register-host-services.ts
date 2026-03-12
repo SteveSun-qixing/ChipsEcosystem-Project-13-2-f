@@ -10,6 +10,7 @@ import { buildThemeContractsView, type ThemeContract, validateThemeContractWithT
 import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
 import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
+import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
@@ -63,6 +64,17 @@ interface PluginRecordView extends PluginInfoView {
   entry?: string | Record<string, string>;
   ui?: PluginUiConfig;
   installedAt: number;
+}
+
+interface PluginShortcutView {
+  pluginId: string;
+  name: string;
+  location: 'desktop' | 'launchpad';
+  launcherPath: string;
+  executablePath: string;
+  args: string[];
+  iconPath?: string;
+  exists: boolean;
 }
 
 interface ModuleRecord {
@@ -410,6 +422,285 @@ const toPluginRecordView = (record: ReturnType<PluginRuntime['query']>[number]):
     ui: record.manifest.ui ? deepClone(record.manifest.ui) : undefined,
     installedAt: record.installedAt
   };
+};
+
+const shortcutRegistryPath = (workspacePath: string): string => path.join(workspacePath, 'plugin-shortcuts.json');
+
+const readShortcutRegistry = async (workspacePath: string): Promise<Record<string, string>> => {
+  try {
+    const raw = await fs.readFile(shortcutRegistryPath(workspacePath), 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0)
+    );
+  } catch {
+    return {};
+  }
+};
+
+const writeShortcutRegistry = async (workspacePath: string, registry: Record<string, string>): Promise<void> => {
+  await fs.mkdir(path.dirname(shortcutRegistryPath(workspacePath)), { recursive: true });
+  await fs.writeFile(shortcutRegistryPath(workspacePath), JSON.stringify(registry, null, 2), 'utf-8');
+};
+
+const getPreferredLauncherIconExtensions = (): string[] => {
+  if (process.platform === 'darwin') {
+    return ['.icns', '.png', '.ico', '.svg'];
+  }
+  if (process.platform === 'win32') {
+    return ['.ico', '.png', '.svg', '.icns'];
+  }
+  return ['.png', '.svg', '.ico', '.icns'];
+};
+
+const resolveExistingIconCandidate = async (candidates: string[]): Promise<string | undefined> => {
+  for (const candidate of candidates) {
+    try {
+      const stats = await fs.stat(candidate);
+      if (stats.isFile()) {
+        return candidate;
+      }
+    } catch {
+      // continue probing candidates
+    }
+  }
+
+  return undefined;
+};
+
+const resolvePluginIconPath = async (record: ReturnType<PluginRuntime['get']>): Promise<string | undefined> => {
+  const declaredIconPath = record.manifest.ui?.launcher?.icon;
+  if (typeof declaredIconPath === 'string' && declaredIconPath.trim().length > 0) {
+    const resolvedDeclaredPath = path.resolve(record.installPath, declaredIconPath);
+    const preferredDeclaredVariants = [
+      ...getPreferredLauncherIconExtensions().map((extension) => {
+        return `${resolvedDeclaredPath.slice(0, resolvedDeclaredPath.length - path.extname(resolvedDeclaredPath).length)}${extension}`;
+      }),
+      resolvedDeclaredPath
+    ];
+    const resolvedDeclaredCandidate = await resolveExistingIconCandidate([...new Set(preferredDeclaredVariants)]);
+    if (resolvedDeclaredCandidate) {
+      return resolvedDeclaredCandidate;
+    }
+  }
+
+  const candidates = [
+    ...['app-icon', 'icon'].flatMap((name) => {
+      return getPreferredLauncherIconExtensions().map((extension) => `assets/icons/${name}${extension}`);
+    })
+  ].map((relativePath) => path.join(record.installPath, relativePath));
+
+  return resolveExistingIconCandidate(candidates);
+};
+
+const resolveAppEntryPath = (): string => {
+  const candidates = [
+    path.resolve(__dirname, '../electron/app-entry.js'),
+    path.resolve(__dirname, '../electron/app-entry.ts')
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const stats = require('node:fs').statSync(candidate) as { isFile(): boolean };
+      if (stats.isFile()) {
+        return candidate;
+      }
+    } catch {
+      // continue probing
+    }
+  }
+
+  throw createError('HOST_APP_ENTRY_NOT_FOUND', 'Host electron app entry is unavailable', { candidates });
+};
+
+const resolveLaunchExecutable = (): { executablePath: string; argsPrefix: string[] } => {
+  const executablePath = process.execPath;
+  const appEntryPath = resolveAppEntryPath();
+
+  return {
+    executablePath,
+    argsPrefix: [appEntryPath]
+  };
+};
+
+const buildPluginShortcutArgs = (workspacePath: string, pluginId: string): string[] => {
+  const target = resolveLaunchExecutable();
+  return [...target.argsPrefix, `--workspace=${workspacePath}`, `--chips-launch-plugin=${pluginId}`];
+};
+
+const openPluginWindow = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  launchParams: Record<string, unknown> = {}
+): Promise<{
+  window: { id: string; chrome?: WindowChromeOptions };
+  session: { sessionId: string; sessionNonce: string; permissions: string[] };
+}> => {
+  const plugin = ctx.runtime.get(pluginId);
+  if (plugin.manifest.type !== 'app') {
+    throw createError('PLUGIN_TYPE_UNSUPPORTED', `Only app plugins can be launched: ${pluginId}`);
+  }
+  if (!plugin.enabled) {
+    throw createError('PLUGIN_DISABLED', `Plugin disabled: ${pluginId}`);
+  }
+
+  const session = ctx.runtime.pluginInit(pluginId, launchParams);
+  await ctx.kernel.events.emit('plugin.init', 'plugin-service', { pluginId, sessionId: session.sessionId });
+  ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
+  await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId, sessionId: session.sessionId });
+
+  const chrome = resolveManifestWindowChrome(plugin.manifest.ui);
+  const defaultWidth = Number(state.configUser.get('window.defaultWidth') ?? state.configWorkspace.get('window.defaultWidth') ?? 1280);
+  const defaultHeight = Number(state.configUser.get('window.defaultHeight') ?? state.configWorkspace.get('window.defaultHeight') ?? 800);
+  const url =
+    plugin.installPath && typeof plugin.manifest.entry === 'string'
+      ? path.resolve(plugin.installPath, plugin.manifest.entry)
+      : undefined;
+  const windowTitle = plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+
+  const window = await ctx.pal.window.create({
+    title: windowTitle,
+    width: Number.isFinite(defaultWidth) ? defaultWidth : 1280,
+    height: Number.isFinite(defaultHeight) ? defaultHeight : 800,
+    pluginId,
+    sessionId: session.sessionId,
+    permissions: session.permissions,
+    launchParams: session.launchParams,
+    url,
+    chrome
+  });
+
+  await ctx.kernel.events.emit('window.opened', 'plugin-service', window);
+  await ctx.kernel.events.emit('plugin.launched', 'plugin-service', {
+    pluginId,
+    sessionId: session.sessionId,
+    windowId: window.id
+  });
+
+  return {
+    window: {
+      id: window.id,
+      chrome
+    },
+    session: {
+      sessionId: session.sessionId,
+      sessionNonce: session.sessionNonce,
+      permissions: [...session.permissions]
+    }
+  };
+};
+
+const readPluginShortcut = async (
+  ctx: HostServiceContext,
+  pluginId: string
+): Promise<PluginShortcutView> => {
+  const plugin = ctx.runtime.get(pluginId);
+  if (plugin.manifest.type !== 'app') {
+    throw createError('PLUGIN_TYPE_UNSUPPORTED', `Only app plugins can own shortcuts: ${pluginId}`);
+  }
+
+  const shortcutName = plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+  const registry = await readShortcutRegistry(ctx.workspacePath);
+  const storedPath = registry[pluginId];
+  const target = storedPath
+    ? await ctx.pal.launcher.getRecord({
+        pluginId,
+        name: shortcutName,
+        launcherPath: storedPath
+      })
+    : await ctx.pal.launcher.getRecord({
+        pluginId,
+        name: shortcutName
+      });
+  const iconPath = await resolvePluginIconPath(plugin);
+  const existing = await fs
+    .stat(target.launcherPath)
+    .then((stats) => stats.isFile() || stats.isDirectory())
+    .catch(() => false);
+
+  return {
+    pluginId,
+    name: plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name,
+    location: target.location,
+    launcherPath: target.launcherPath,
+    executablePath: resolveLaunchExecutable().executablePath,
+    args: buildPluginShortcutArgs(ctx.workspacePath, pluginId),
+    iconPath,
+    exists: existing
+  };
+};
+
+const createPluginShortcut = async (
+  ctx: HostServiceContext,
+  pluginId: string,
+  replace = false
+): Promise<PluginShortcutView> => {
+  const plugin = ctx.runtime.get(pluginId);
+  if (plugin.manifest.type !== 'app') {
+    throw createError('PLUGIN_TYPE_UNSUPPORTED', `Only app plugins can own shortcuts: ${pluginId}`);
+  }
+
+  const shortcutName = plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+  const registry = await readShortcutRegistry(ctx.workspacePath);
+  const existingPath = registry[pluginId];
+  const current = await readPluginShortcut(ctx, pluginId);
+  if (current.exists && existingPath && !replace) {
+    return current;
+  }
+
+  const launchTarget = resolveLaunchExecutable();
+  const iconPath = await resolvePluginIconPath(plugin);
+  const created = await ctx.pal.launcher.create({
+    pluginId,
+    name: shortcutName,
+    launcherPath: existingPath,
+    executablePath: launchTarget.executablePath,
+    args: buildPluginShortcutArgs(ctx.workspacePath, pluginId),
+    iconPath
+  });
+
+  registry[pluginId] = created.launcherPath;
+  await writeShortcutRegistry(ctx.workspacePath, registry);
+  await ctx.kernel.events.emit('plugin.shortcut.changed', 'plugin-service', {
+    pluginId,
+    launcherPath: created.launcherPath,
+    exists: true
+  });
+
+  return {
+    ...created,
+    executablePath: launchTarget.executablePath,
+    args: buildPluginShortcutArgs(ctx.workspacePath, pluginId),
+    iconPath,
+    exists: true
+  };
+};
+
+const removePluginShortcut = async (
+  ctx: HostServiceContext,
+  pluginId: string
+): Promise<{ removed: boolean; launcherPath: string; location: 'desktop' | 'launchpad' }> => {
+  const plugin = ctx.runtime.get(pluginId);
+  if (plugin.manifest.type !== 'app') {
+    throw createError('PLUGIN_TYPE_UNSUPPORTED', `Only app plugins can own shortcuts: ${pluginId}`);
+  }
+
+  const shortcutName = plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+  const registry = await readShortcutRegistry(ctx.workspacePath);
+  const removed = await ctx.pal.launcher.remove({
+    pluginId,
+    name: shortcutName,
+    launcherPath: registry[pluginId]
+  });
+  delete registry[pluginId];
+  await writeShortcutRegistry(ctx.workspacePath, registry);
+  await ctx.kernel.events.emit('plugin.shortcut.changed', 'plugin-service', {
+    pluginId,
+    launcherPath: removed.launcherPath,
+    exists: false
+  });
+  return removed;
 };
 
 const buildCardTypeCandidates = (cardType: string): string[] => {
@@ -1383,12 +1674,71 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'plugin.uninstall', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
+            if (plugin.manifest.type === 'app') {
+              await removePluginShortcut(ctx, input.pluginId).catch(() => undefined);
+            }
             await ctx.runtime.uninstall(input.pluginId);
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
             await ctx.kernel.events.emit('plugin.uninstalled', 'plugin-service', { pluginId: input.pluginId });
             return { ack: true };
+          })
+        )
+      },
+      launch: {
+        descriptor: descriptor<
+          { pluginId: string; launchParams?: Record<string, unknown> },
+          {
+            window: { id: string; chrome?: WindowChromeOptions };
+            session: { sessionId: string; sessionNonce: string; permissions: string[] };
+          }
+        >(
+          'plugin.launch',
+          ['plugin.manage'],
+          6_000,
+          false,
+          0,
+          withMetrics(state, 'plugin.launch', async (input) => {
+            return openPluginWindow(ctx, state, input.pluginId, input.launchParams ?? {});
+          })
+        )
+      },
+      getShortcut: {
+        descriptor: descriptor<{ pluginId: string }, { shortcut: PluginShortcutView }>(
+          'plugin.getShortcut',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'plugin.getShortcut', async (input) => {
+            const shortcut = await readPluginShortcut(ctx, input.pluginId);
+            return { shortcut };
+          })
+        )
+      },
+      createShortcut: {
+        descriptor: descriptor<{ pluginId: string; replace?: boolean }, { shortcut: PluginShortcutView }>(
+          'plugin.createShortcut',
+          ['plugin.manage'],
+          8_000,
+          false,
+          0,
+          withMetrics(state, 'plugin.createShortcut', async (input) => {
+            const shortcut = await createPluginShortcut(ctx, input.pluginId, input.replace === true);
+            return { shortcut };
+          })
+        )
+      },
+      removeShortcut: {
+        descriptor: descriptor<{ pluginId: string }, { removed: boolean; launcherPath: string; location: 'desktop' | 'launchpad' }>(
+          'plugin.removeShortcut',
+          ['plugin.manage'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'plugin.removeShortcut', async (input) => {
+            return removePluginShortcut(ctx, input.pluginId);
           })
         )
       },

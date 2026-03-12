@@ -1,8 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createError } from '../../shared/errors';
-import type { PluginUiConfig } from '../../shared/window-chrome';
-import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import type { RuntimeClient } from '../../renderer/runtime-client';
 
 interface PluginQueryResponse {
@@ -11,18 +9,7 @@ interface PluginQueryResponse {
     enabled: boolean;
     type: 'app' | 'card' | 'layout' | 'module' | 'theme';
     capabilities: string[];
-    installPath?: string;
-    entry?: string | Record<string, string>;
-    ui?: PluginUiConfig;
   }>;
-}
-
-interface PluginInitResponse {
-  session: {
-    sessionId: string;
-    sessionNonce: string;
-    permissions: string[];
-  };
 }
 
 interface WindowOpenResponse {
@@ -49,7 +36,7 @@ const resolveWindowId = (opened: WindowOpenResponse): string => {
 const findEnabledHandlerPlugin = async (
   runtime: RuntimeClient,
   extension: string
-): Promise<{ id: string; installPath?: string; entry?: string | Record<string, string>; ui?: PluginUiConfig } | undefined> => {
+): Promise<{ id: string } | undefined> => {
   const capability = `file-handler:${extension}`;
   const queried = await runtime.invoke<PluginQueryResponse>('plugin.query', {
     type: 'app',
@@ -60,51 +47,27 @@ const findEnabledHandlerPlugin = async (
     return undefined;
   }
   return {
-    id: candidate.id,
-    installPath: candidate.installPath,
-    entry: candidate.entry,
-    ui: candidate.ui
+    id: candidate.id
   };
 };
 
 const openByPlugin = async (
   runtime: RuntimeClient,
-  plugin: { id: string; installPath?: string; entry?: string | Record<string, string>; ui?: PluginUiConfig },
+  plugin: { id: string },
   targetPath: string,
-  defaultTitle: string
+  mode: 'card' | 'box'
 ): Promise<{ pluginId: string; windowId: string }> => {
-  const initialized = await runtime.invoke<PluginInitResponse>('plugin.init', {
+  const launched = await runtime.invoke<{ pluginId: string; window: { id: string } }>('plugin.launch', {
     pluginId: plugin.id,
     launchParams: {
       targetPath,
+      fileOpenMode: mode,
       trigger: 'file-association'
-    }
-  });
-  await runtime.invoke('plugin.handshake.complete', {
-    sessionId: initialized.session.sessionId,
-    nonce: initialized.session.sessionNonce
-  });
-
-  const url =
-    plugin.installPath && typeof plugin.entry === 'string'
-      ? path.resolve(plugin.installPath, plugin.entry)
-      : undefined;
-
-  const opened = await runtime.invoke<WindowOpenResponse>('window.open', {
-    config: {
-      title: `${defaultTitle} - ${path.basename(targetPath)}`,
-      width: 1280,
-      height: 800,
-      pluginId: plugin.id,
-      sessionId: initialized.session.sessionId,
-      permissions: initialized.session.permissions,
-      url,
-      chrome: resolveManifestWindowChrome(plugin.ui)
     }
   });
   return {
     pluginId: plugin.id,
-    windowId: resolveWindowId(opened)
+    windowId: launched.window.id
   };
 };
 
@@ -120,7 +83,7 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
     await runtime.invoke('card.render', { cardFile: targetPath });
     const plugin = await findEnabledHandlerPlugin(runtime, extension);
     if (plugin) {
-      const opened = await openByPlugin(runtime, plugin, targetPath, 'Card Viewer');
+      const opened = await openByPlugin(runtime, plugin, targetPath, 'card');
       return {
         targetPath,
         extension,
@@ -148,7 +111,7 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
     await runtime.invoke('box.inspect', { boxFile: targetPath });
     const plugin = await findEnabledHandlerPlugin(runtime, extension);
     if (plugin) {
-      const opened = await openByPlugin(runtime, plugin, targetPath, 'Box Viewer');
+      const opened = await openByPlugin(runtime, plugin, targetPath, 'box');
       return {
         targetPath,
         extension,

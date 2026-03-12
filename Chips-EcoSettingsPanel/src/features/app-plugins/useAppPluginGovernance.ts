@@ -156,6 +156,66 @@ export function useAppPluginGovernance() {
     }
   }, [feedback, refresh, service, t]);
 
+  const createPluginShortcut = React.useCallback(async (plugin: AppPluginGovernanceRecord) => {
+    setActiveActionId(plugin.pluginId);
+    try {
+      await service.createPluginShortcut(plugin.pluginId, plugin.shortcut.exists);
+      feedback.push({
+        tone: "success",
+        title: t("settingsPanel.appPlugins.feedback.shortcutCreateTitle"),
+        message: t("settingsPanel.appPlugins.feedback.shortcutCreateSuccess", { name: plugin.name }),
+      });
+      await refresh();
+    } catch (nextError) {
+      setError(normalizeSettingsError(nextError, t("settingsPanel.errors.appPluginShortcutCreate")));
+    } finally {
+      setActiveActionId(null);
+    }
+  }, [feedback, refresh, service, t]);
+
+  const launchPlugin = React.useCallback(async (plugin: AppPluginGovernanceRecord) => {
+    setActiveActionId(plugin.pluginId);
+    try {
+      await service.launchPlugin(plugin.pluginId);
+    } catch (nextError) {
+      setError(normalizeSettingsError(nextError, t("settingsPanel.errors.appPluginLaunch")));
+    } finally {
+      setActiveActionId(null);
+    }
+  }, [service, t]);
+
+  const removePluginShortcut = React.useCallback(async (plugin: AppPluginGovernanceRecord) => {
+    setActiveActionId(plugin.pluginId);
+    try {
+      await service.removePluginShortcut(plugin.pluginId);
+      feedback.push({
+        tone: "success",
+        title: t("settingsPanel.appPlugins.feedback.shortcutRemoveTitle"),
+        message: t("settingsPanel.appPlugins.feedback.shortcutRemoveSuccess", { name: plugin.name }),
+      });
+      await refresh();
+    } catch (nextError) {
+      setError(normalizeSettingsError(nextError, t("settingsPanel.errors.appPluginShortcutRemove")));
+    } finally {
+      setActiveActionId(null);
+    }
+  }, [feedback, refresh, service, t]);
+
+  const revealPluginShortcut = React.useCallback(async (plugin: AppPluginGovernanceRecord) => {
+    if (!plugin.shortcut.launcherPath) {
+      return;
+    }
+
+    setActiveActionId(plugin.pluginId);
+    try {
+      await service.revealPath(plugin.shortcut.launcherPath);
+    } catch (nextError) {
+      setError(normalizeSettingsError(nextError, t("settingsPanel.errors.appPluginShortcutReveal")));
+    } finally {
+      setActiveActionId(null);
+    }
+  }, [service, t]);
+
   return {
     plugins,
     loading,
@@ -165,6 +225,10 @@ export function useAppPluginGovernance() {
     installFromDroppedFiles,
     togglePluginEnabled,
     uninstallPlugin,
+    launchPlugin,
+    createPluginShortcut,
+    removePluginShortcut,
+    revealPluginShortcut,
     refresh,
     feedback: feedback.items,
     dismissFeedback: feedback.remove,

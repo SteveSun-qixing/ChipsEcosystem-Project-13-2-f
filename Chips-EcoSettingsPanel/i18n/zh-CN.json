@@ -54,8 +54,12 @@
       "appPluginInstall": "安装应用插件失败。",
       "appPluginToggle": "更新应用插件状态失败。",
       "appPluginUninstall": "卸载应用插件失败。",
+      "appPluginShortcutCreate": "创建应用快捷方式失败。",
+      "appPluginShortcutRemove": "移除应用快捷方式失败。",
+      "appPluginShortcutReveal": "定位应用快捷方式失败。",
       "filePicker": "打开文件选择器失败。",
-      "dragPathUnavailable": "当前环境无法解析拖拽文件路径，请改用文件选择器。"
+      "dragPathUnavailable": "当前环境无法解析拖拽文件路径，请改用文件选择器。",
+      "appPluginLaunch": "启动应用插件失败"
     },
     "themes": {
       "title": "主题管理",
@@ -160,7 +164,13 @@
         "install": "安装应用插件",
         "enable": "启用",
         "disable": "停用",
-        "uninstall": "卸载"
+        "uninstall": "卸载",
+        "createShortcut": "创建快捷方式",
+        "rebuildShortcut": "重建快捷方式",
+        "revealShortcut": "显示位置",
+        "removeShortcut": "移除快捷方式",
+        "launch": "启动",
+        "createDesktopShortcut": "创建桌面快捷方式"
       },
       "dropzone": {
         "title": "将应用插件包拖到此处即可安装",
@@ -176,12 +186,22 @@
         "version": "版本",
         "capabilities": "能力标记",
         "installPath": "安装路径",
-        "installedAt": "安装时间"
+        "installedAt": "安装时间",
+        "shortcut": "快捷方式"
       },
       "badges": {
         "enabled": "已启用",
         "disabled": "已停用",
-        "currentApp": "当前应用"
+        "currentApp": "当前应用",
+        "shortcutReady": "已创建",
+        "shortcutMissing": "未创建"
+      },
+      "shortcut": {
+        "empty": "尚未创建系统入口",
+        "location": {
+          "desktop": "Windows 桌面入口",
+          "launchpad": "macOS 启动台入口"
+        }
       },
       "selfManaged": {
         "description": "当前设置面板插件不能在自身界面中停用或卸载，以保证运行时治理入口始终可用。"
@@ -196,7 +216,11 @@
         "selfManagedBlockedTitle": "当前应用保护",
         "selfManagedBlockedMessage": "当前设置面板插件不能在自身界面中停用或卸载。",
         "uninstallTitle": "应用插件卸载",
-        "uninstallSuccess": "已卸载 {name}。"
+        "uninstallSuccess": "已卸载 {name}。",
+        "shortcutCreateTitle": "快捷方式创建",
+        "shortcutCreateSuccess": "已为 {name} 创建系统快捷方式。",
+        "shortcutRemoveTitle": "快捷方式移除",
+        "shortcutRemoveSuccess": "已移除 {name} 的系统快捷方式。"
       },
       "dialogs": {
         "filePickerTitle": "安装应用插件",
@@ -212,6 +236,7 @@
         "plugin": "插件",
         "status": "状态",
         "meta": "元信息",
+        "shortcut": "快捷方式",
         "actions": "操作"
       }
     },

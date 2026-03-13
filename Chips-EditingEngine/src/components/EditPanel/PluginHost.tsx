@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import { DefaultEditor } from './DefaultEditor';
 import './PluginHost.css';
@@ -123,13 +122,13 @@ export function PluginHost({
         <div className="plugin-host__error">
           <div className="plugin-host__error-icon">⚠️</div>
           <p className="plugin-host__error-text">{errorText}</p>
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="plugin-host__retry-btn"
-            onPress={handleReload}
+            onClick={handleReload}
           >
             {t('plugin_host.retry') || '重试'}
-          </ChipsButton>
+          </button>
         </div>
       )}
 

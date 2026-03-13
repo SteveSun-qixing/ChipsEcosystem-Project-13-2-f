@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../../hooks/useTranslation';
 import './ThemePanel.css';
 

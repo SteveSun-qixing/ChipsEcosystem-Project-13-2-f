@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChipsButton, ChipsInput } from '@chips/component-library';
+import { ChipsInput } from '@chips/component-library';
 import { FileTree } from './FileTree';
 import { ContextMenu } from './ContextMenu';
 import { workspaceService } from '../../services/workspace-service';
@@ -168,32 +168,32 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
             {/* Toolbar */}
             <div className="file-manager__toolbar">
                 <div className="file-manager__toolbar-left">
-                    <ChipsButton
+                    <button
+                        type="button"
                         className="file-manager__btn file-manager__btn--icon"
                         title={t('file_manager.new_card') || '新建卡片'}
-                        variant="ghost"
-                        onPress={() => handleContextMenuAction('new-card', [])}
+                        onClick={() => handleContextMenuAction('new-card', [])}
                     >
                         🃏
-                    </ChipsButton>
-                    <ChipsButton
+                    </button>
+                    <button
+                        type="button"
                         className="file-manager__btn file-manager__btn--icon"
                         title={t('file_manager.new_box') || '新建盒子'}
-                        variant="ghost"
-                        onPress={() => handleContextMenuAction('new-box', [])}
+                        onClick={() => handleContextMenuAction('new-box', [])}
                     >
                         📦
-                    </ChipsButton>
+                    </button>
                 </div>
 
-                <ChipsButton
+                <button
+                    type="button"
                     className="file-manager__btn file-manager__btn--icon"
                     title={t('file_manager.search_placeholder') || '搜索'}
-                    variant="ghost"
-                    onPress={toggleSearch}
+                    onClick={toggleSearch}
                 >
                     🔍
-                </ChipsButton>
+                </button>
             </div>
 
             {/* Search Input Row */}
@@ -206,13 +206,13 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                         placeholder={t('file_manager.search_placeholder') || '搜索文件...'}
                         onValueChange={setSearchQuery}
                     />
-                    <ChipsButton
+                    <button
+                        type="button"
                         className="file-manager__search-close"
-                        variant="ghost"
-                        onPress={toggleSearch}
+                        onClick={toggleSearch}
                     >
                         ✕
-                    </ChipsButton>
+                    </button>
                 </div>
             )}
 
@@ -236,9 +236,9 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                             </span>
                         )}
                         {isSearching && (
-                            <ChipsButton variant="ghost" onPress={() => setSearchQuery('')}>
+                            <button type="button" onClick={() => setSearchQuery('')}>
                                 {t('file_manager.clear_search')}
-                            </ChipsButton>
+                            </button>
                         )}
                     </div>
                 ) : (

@@ -73,6 +73,10 @@ export const registerHostSchemas = (): void => {
   registerPair('file.stat', ['path']);
   registerPair('file.list', ['dir']);
   registerPair('file.watch', ['path']);
+  registerPair('file.mkdir', ['path']);
+  registerPair('file.delete', ['path']);
+  registerPair('file.move', ['sourcePath', 'destPath']);
+  registerPair('file.copy', ['sourcePath', 'destPath']);
 
   registerPair('resource.resolve', ['resourceId']);
   registerPair('resource.readMetadata', ['resourceId']);

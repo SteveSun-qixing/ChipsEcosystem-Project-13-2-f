@@ -27,6 +27,10 @@ export interface BridgeContextOptions {
 export const HOST_INTERNAL_PERMISSIONS = [
   'file.read',
   'file.write',
+  'file.mkdir',
+  'file.delete',
+  'file.move',
+  'file.copy',
   'resource.read',
   'config.read',
   'config.write',

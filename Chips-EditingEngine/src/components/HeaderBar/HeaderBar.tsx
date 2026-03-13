@@ -1,5 +1,4 @@
 import React from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useEditor } from '../../context/EditorContext';
 import { useUI } from '../../context/UIContext';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -35,20 +34,22 @@ export function HeaderBar() {
             </div>
 
             <div className="header-bar__right">
-                <ChipsButton
+                <button
+                    type="button"
                     className="header-bar__action"
-                    onPress={handleToggleLayout}
+                    onClick={handleToggleLayout}
                     aria-label={t('header_bar.toggle_layout')}
                 >
                     {currentLayout === 'infinite-canvas' ? '📝' : '♾️'}
-                </ChipsButton>
-                <ChipsButton
+                </button>
+                <button
+                    type="button"
                     className="header-bar__action"
-                    onPress={handleToggleTheme}
+                    onClick={handleToggleTheme}
                     aria-label={t('header_bar.toggle_theme')}
                 >
                     {theme.includes('dark') ? '☀️' : '🌙'}
-                </ChipsButton>
+                </button>
             </div>
         </div>
     );

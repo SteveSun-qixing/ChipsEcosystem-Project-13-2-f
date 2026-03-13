@@ -1,5 +1,4 @@
 import React from "react";
-import { ChipsButton } from "@chips/component-library";
 
 interface ExamplePanelProps {
   title: string;
@@ -19,7 +18,7 @@ export function ExamplePanel({ title }: ExamplePanelProps) {
       <p style={{ fontSize: 12, marginBottom: 12 }}>
         这是由脚手架生成的示例面板组件，你可以在此基础上扩展业务 UI。
       </p>
-      <ChipsButton variant="secondary">了解更多</ChipsButton>
+      <button type="button">了解更多</button>
     </section>
   );
 }

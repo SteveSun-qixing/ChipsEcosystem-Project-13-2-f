@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import './WindowMenu.css';
 
 export interface WindowMenuProps {
@@ -106,33 +105,33 @@ export function WindowMenu({
 
             <div className="window-menu__right">
                 {showLock && (
-                    <ChipsButton
-                        variant="ghost"
+                    <button
+                        type="button"
                         className={`window-menu__button ${isEditing ? 'window-menu__button--active' : ''}`}
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onToggleEdit?.(); }}
                     >
                         <span className="window-menu__button-icon">{isEditing ? '🔓' : '🔒'}</span>
-                    </ChipsButton>
+                    </button>
                 )}
 
                 {showCover && (
-                    <ChipsButton
-                        variant="ghost"
+                    <button
+                        type="button"
                         className="window-menu__button"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSwitchToCover?.(); }}
                     >
                         <span className="window-menu__button-icon">🖼️</span>
-                    </ChipsButton>
+                    </button>
                 )}
 
                 {showSettings && (
-                    <ChipsButton
-                        variant="ghost"
+                    <button
+                        type="button"
                         className="window-menu__button"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSettings?.(); }}
                     >
                         <span className="window-menu__button-icon">⚙️</span>
-                    </ChipsButton>
+                    </button>
                 )}
             </div>
         </div>

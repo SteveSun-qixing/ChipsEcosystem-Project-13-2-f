@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useSettings } from '../../context/SettingsContext';
 import './EngineSettingsDialog.css';
 
 interface EngineSettingsDialogProps {
@@ -9,13 +9,11 @@ interface EngineSettingsDialogProps {
   onClose: () => void;
 }
 
-// Stub for now. Will be connected to SettingsContext or Store
-const mockedCategories = [
+const categories = [
   { id: 'general', labelKey: 'engine_settings.category_general', icon: '⚙️' },
   { id: 'appearance', labelKey: 'engine_settings.category_appearance', icon: '🎨' },
   { id: 'shortcuts', labelKey: 'engine_settings.category_shortcuts', icon: '⌨️' },
 ];
-const mockedGroups = [mockedCategories];
 
 export function EngineSettingsDialog({
   visible,
@@ -23,6 +21,7 @@ export function EngineSettingsDialog({
   onClose,
 }: EngineSettingsDialogProps) {
   const { t } = useTranslation();
+  const { registeredPanels, getSetting, setSetting } = useSettings();
   const [activeCategoryId, setActiveCategoryId] = useState<string>('');
 
   useEffect(() => {
@@ -30,7 +29,7 @@ export function EngineSettingsDialog({
       if (initialCategory) {
         setActiveCategoryId(initialCategory);
       } else {
-        setActiveCategoryId(mockedCategories[0].id);
+        setActiveCategoryId(categories[0].id);
       }
     }
   }, [visible, initialCategory]);
@@ -60,6 +59,73 @@ export function EngineSettingsDialog({
     };
   }, [visible]);
 
+  const categoryGroups = useMemo(() => {
+    const allCategories = [...categories];
+    registeredPanels.forEach(panel => {
+      allCategories.push({
+        id: panel.id,
+        labelKey: panel.name,
+        icon: '📋',
+      });
+    });
+    return [allCategories];
+  }, [registeredPanels]);
+
+  const renderCategoryContent = () => {
+    switch (activeCategoryId) {
+      case 'general':
+        return (
+          <div className="engine-settings-dialog__content">
+            <div className="engine-settings-dialog__section">
+              <h3>{t('engine_settings.general_section_workspace') || '工作区'}</h3>
+              <label>
+                <span>{t('engine_settings.default_workspace') || '默认工作区路径'}</span>
+                <input
+                  type="text"
+                  value={getSetting<string>('defaultWorkspacePath', '') || ''}
+                  onChange={(e) => setSetting('defaultWorkspacePath', e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        );
+      case 'appearance':
+        return (
+          <div className="engine-settings-dialog__content">
+            <div className="engine-settings-dialog__section">
+              <h3>{t('engine_settings.appearance_section_theme') || '主题'}</h3>
+              <label>
+                <span>{t('engine_settings.theme') || '主题'}</span>
+                <select
+                  value={getSetting<string>('theme', 'default') || 'default'}
+                  onChange={(e) => setSetting('theme', e.target.value)}
+                >
+                  <option value="default">{t('engine_settings.theme_default') || '默认'}</option>
+                  <option value="dark">{t('engine_settings.theme_dark') || '深色'}</option>
+                  <option value="light">{t('engine_settings.theme_light') || '浅色'}</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        );
+      case 'shortcuts':
+        return (
+          <div className="engine-settings-dialog__content">
+            <div className="engine-settings-dialog__section">
+              <h3>{t('engine_settings.shortcuts_section') || '快捷键'}</h3>
+              <p>{t('engine_settings.shortcuts_hint') || '快捷键设置'}</p>
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="engine-settings-dialog__content">
+            <p>{t('engine_settings.select_category') || '请选择一个类别'}</p>
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="engine-settings-overlay" onClick={handleOverlayClick}>
       <div className="engine-settings-dialog">
@@ -76,62 +142,44 @@ export function EngineSettingsDialog({
         </div>
 
         <div className="engine-settings-dialog__body">
-          <nav className="engine-settings-dialog__nav">
-            {mockedGroups.map((group, groupIndex) => (
-              <React.Fragment key={groupIndex}>
-                {groupIndex > 0 && <div className="engine-settings-dialog__nav-divider" />}
+          <div className="engine-settings-dialog__sidebar">
+            {categoryGroups.map((group, groupIndex) => (
+              <div key={groupIndex} className="engine-settings-dialog__category-group">
                 {group.map((category) => (
                   <button
                     key={category.id}
                     type="button"
-                    className={`engine-settings-dialog__nav-item ${
-                      activeCategoryId === category.id ? 'engine-settings-dialog__nav-item--active' : ''
-                    }`}
+                    className={`engine-settings-dialog__category-btn ${activeCategoryId === category.id ? 'active' : ''}`}
                     onClick={() => setActiveCategoryId(category.id)}
                   >
-                    {category.icon && (
-                      <span className="engine-settings-dialog__nav-icon">{category.icon}</span>
-                    )}
-                    <span className="engine-settings-dialog__nav-label">
-                      {t(category.labelKey) || category.id}
-                    </span>
+                    <span className="engine-settings-dialog__category-icon">{category.icon}</span>
+                    <span className="engine-settings-dialog__category-label">{t(category.labelKey)}</span>
                   </button>
                 ))}
-              </React.Fragment>
+              </div>
             ))}
-          </nav>
+          </div>
 
-          <div className="engine-settings-dialog__content">
-            {activeCategoryId ? (
-              <div className="engine-settings-dialog__panel-placeholder">
-                <p>设置项渲染占位: {activeCategoryId}</p>
-              </div>
-            ) : (
-              <div className="engine-settings-dialog__empty">
-                <p className="engine-settings-dialog__empty-text">
-                  {t('engine_settings.no_settings') || '暂无设置项'}
-                </p>
-              </div>
-            )}
+          <div className="engine-settings-dialog__main">
+            {renderCategoryContent()}
           </div>
         </div>
 
         <div className="engine-settings-dialog__footer">
-          <ChipsButton
-            variant="ghost"
-            className="engine-settings-dialog__btn engine-settings-dialog__btn--reset"
-            onPress={handleResetCategory}
+          <button
+            type="button"
+            className="engine-settings-dialog__btn"
+            onClick={handleResetCategory}
           >
-            {t('engine_settings.reset') || '恢复默认'}
-          </ChipsButton>
-          <div className="engine-settings-dialog__footer-spacer" />
-          <ChipsButton
-            variant="primary"
-            className="engine-settings-dialog__btn engine-settings-dialog__btn--close"
-            onPress={onClose}
+            {t('engine_settings.reset') || '重置'}
+          </button>
+          <button
+            type="button"
+            className="engine-settings-dialog__btn"
+            onClick={onClose}
           >
-            {t('engine_settings.close') || '关闭'}
-          </ChipsButton>
+            {t('engine_settings.done') || '完成'}
+          </button>
         </div>
       </div>
     </div>

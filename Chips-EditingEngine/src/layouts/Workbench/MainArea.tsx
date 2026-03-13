@@ -1,5 +1,4 @@
 import React from 'react';
-import { ChipsButton } from '@chips/component-library';
 import './MainArea.css';
 
 export interface TabInfo {
@@ -65,8 +64,8 @@ export function MainArea({
                             <span className="main-area__tab-title">{tab.title}</span>
                             {tab.modified && <span className="main-area__tab-indicator">●</span>}
                             {tab.closable && (
-                                <ChipsButton
-                                    variant="ghost"
+                                <button
+                                    type="button"
                                     className="main-area__tab-close"
                                     onClick={(e: React.MouseEvent) => {
                                         e.stopPropagation();
@@ -74,7 +73,7 @@ export function MainArea({
                                     }}
                                 >
                                     ×
-                                </ChipsButton>
+                                </button>
                             )}
                         </div>
                     ))}

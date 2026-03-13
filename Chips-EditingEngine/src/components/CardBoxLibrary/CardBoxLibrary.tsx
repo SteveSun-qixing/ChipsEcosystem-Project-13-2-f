@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { CardTypeGrid } from './CardTypeGrid';
 import { LayoutTypeGrid } from './LayoutTypeGrid';
 import { cardTypes as allCardTypes, layoutTypes as allLayoutTypes } from './data';
@@ -25,24 +24,24 @@ export default function CardBoxLibrary() {
       <div className="card-box-library">
         {/* Tabs */}
         <div className="card-box-library__tabs">
-          <ChipsButton
+          <button
+            type="button"
             className={`card-box-library__tab ${activeTab === 'cards' ? 'card-box-library__tab--active' : ''}`}
-            variant="ghost"
-            onPress={() => setActiveTab('cards')}
+            onClick={() => setActiveTab('cards')}
           >
             <span className="card-box-library__tab-icon">🃏</span>
             <span className="card-box-library__tab-label">{t('card_box.tab_cards') || '基础卡片'}</span>
             <span className="card-box-library__tab-count">{currentCardCount}</span>
-          </ChipsButton>
-          <ChipsButton
+          </button>
+          <button
+            type="button"
             className={`card-box-library__tab ${activeTab === 'boxes' ? 'card-box-library__tab--active' : ''}`}
-            variant="ghost"
-            onPress={() => setActiveTab('boxes')}
+            onClick={() => setActiveTab('boxes')}
           >
             <span className="card-box-library__tab-icon">📦</span>
             <span className="card-box-library__tab-label">{t('card_box.tab_boxes') || '布局盒子'}</span>
             <span className="card-box-library__tab-count">{currentLayoutCount}</span>
-          </ChipsButton>
+          </button>
         </div>
 
         {/* Content */}

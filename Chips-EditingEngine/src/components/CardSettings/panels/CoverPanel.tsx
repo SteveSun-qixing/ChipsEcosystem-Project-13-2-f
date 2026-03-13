@@ -1,5 +1,4 @@
 import React from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../../hooks/useTranslation';
 import './CoverPanel.css';
 
@@ -17,10 +16,10 @@ export function CoverPanel({ onOpenCoverMaker }: CoverPanelProps) {
       </p>
 
       <div className="cover-panel__options">
-        <ChipsButton
-          variant="ghost"
+        <button
+          type="button"
           className="cover-panel__option-card"
-          onPress={onOpenCoverMaker}
+          onClick={onOpenCoverMaker}
         >
           <div className="cover-panel__option-inner">
             <span className="cover-panel__option-icon" aria-hidden="true">🎨</span>
@@ -33,7 +32,7 @@ export function CoverPanel({ onOpenCoverMaker }: CoverPanelProps) {
               </span>
             </div>
           </div>
-        </ChipsButton>
+        </button>
       </div>
 
       <div className="cover-panel__hint">

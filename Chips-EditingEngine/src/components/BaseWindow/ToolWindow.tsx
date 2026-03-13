@@ -54,7 +54,14 @@ export function ToolWindow({ config }: ToolWindowProps) {
         >
             <div className="tool-window__content">
                 <Suspense fallback={<div className="tool-window__loading">加载中...</div>}>
-                    {ToolComponent ? <ToolComponent /> : <div>组件 {config.component} 未找到</div>}
+                    {ToolComponent ? (
+                        React.createElement(ToolComponent as any, { 
+                            visible: true, 
+                            onClose: handleClose 
+                        })
+                    ) : (
+                        <div>组件 {config.component} 未找到</div>
+                    )}
                 </Suspense>
             </div>
         </BaseWindow>

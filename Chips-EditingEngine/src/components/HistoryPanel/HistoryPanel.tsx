@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChipsButton } from '@chips/component-library';
-// import { useCommandManager } from '@/core/command-manager';
-// import { useEditorStore } from '@/core/state';
-// import type { CommandHistory } from '@/core/command-manager';
+import { getCommandManager } from '../../core/command-manager';
 import { useTranslation } from '../../hooks/useTranslation';
 import './HistoryPanel.css';
 
@@ -30,10 +27,7 @@ export function HistoryPanel({
   onRedo,
 }: HistoryPanelProps) {
   const { t } = useTranslation();
-
-  // Mocks for internal command manager
-  // const commandManager = useCommandManager();
-  // const editorStore = useEditorStore();
+  const commandManager = getCommandManager();
 
   const [undoHistory, setUndoHistory] = useState<CommandHistory[]>([]);
   const [redoHistory, setRedoHistory] = useState<CommandHistory[]>([]);
@@ -41,8 +35,8 @@ export function HistoryPanel({
 
   const currentIndex = useMemo(() => (undoHistory.length > 0 ? undoHistory.length - 1 : -1), [undoHistory]);
 
-  const canUndo = useMemo(() => undoHistory.length > 0, [undoHistory]); // commandManager.canUndo()
-  const canRedo = useMemo(() => redoHistory.length > 0, [redoHistory]); // commandManager.canRedo()
+  const canUndo = useMemo(() => undoHistory.length > 0, [undoHistory]);
+  const canRedo = useMemo(() => redoHistory.length > 0, [redoHistory]);
 
   const displayHistory = useMemo(() => {
     const redo = redoHistory.map((h, i) => ({
@@ -62,7 +56,6 @@ export function HistoryPanel({
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    // return date.toLocaleTimeString(editorStore.locale || undefined, {
     return date.toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
@@ -105,16 +98,16 @@ export function HistoryPanel({
   };
 
   const updateHistory = useCallback(() => {
-    // undoHistory.value = commandManager.getHistory(props.maxItems);
-    // redoHistory.value = commandManager.getRedoHistory();
-  }, []);
+    setUndoHistory(commandManager.getHistory(maxItems));
+    setRedoHistory(commandManager.getRedoHistory());
+  }, [commandManager, maxItems]);
 
   const handleUndo = async () => {
     if (!canUndo || isLoading) return;
 
     setIsLoading(true);
     try {
-      // await commandManager.undo();
+      await commandManager.undo();
       if (onUndo) onUndo();
     } finally {
       setIsLoading(false);
@@ -127,7 +120,7 @@ export function HistoryPanel({
 
     setIsLoading(true);
     try {
-      // await commandManager.redo();
+      await commandManager.redo();
       if (onRedo) onRedo();
     } finally {
       setIsLoading(false);
@@ -140,7 +133,7 @@ export function HistoryPanel({
 
     setIsLoading(true);
     try {
-      // await commandManager.goToHistory(historyId);
+      await commandManager.goToHistory(historyId);
       if (onGoto) onGoto(historyId);
     } finally {
       setIsLoading(false);
@@ -149,30 +142,19 @@ export function HistoryPanel({
   };
 
   const handleClear = () => {
-    // commandManager.clear();
+    commandManager.clear();
     updateHistory();
   };
 
   useEffect(() => {
     updateHistory();
 
-    /*
-    const handleStateChange = () => updateHistory();
-    commandManager.on('state:changed', handleStateChange);
-    commandManager.on('command:executed', handleStateChange);
-    commandManager.on('command:undone', handleStateChange);
-    commandManager.on('command:redone', handleStateChange);
-    commandManager.on('history:cleared', handleStateChange);
+    const unsubscribe = commandManager.subscribe(() => {
+      updateHistory();
+    });
 
-    return () => {
-      commandManager.off('state:changed', handleStateChange);
-      commandManager.off('command:executed', handleStateChange);
-      commandManager.off('command:undone', handleStateChange);
-      commandManager.off('command:redone', handleStateChange);
-      commandManager.off('history:cleared', handleStateChange);
-    };
-    */
-  }, [updateHistory]);
+    return unsubscribe;
+  }, [commandManager, updateHistory]);
 
   return (
     <div className={`history-panel ${compact ? 'compact' : ''}`}>

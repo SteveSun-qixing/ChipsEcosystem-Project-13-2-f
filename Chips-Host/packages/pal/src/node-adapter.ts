@@ -512,6 +512,52 @@ class NodeFileSystem implements PALFileSystem {
       }
     };
   }
+
+  public async mkdir(inputPath: string, options?: { recursive?: boolean }): Promise<void> {
+    const normalizedPath = this.normalize(inputPath);
+    await fs.mkdir(normalizedPath, { recursive: options?.recursive ?? false });
+  }
+
+  public async delete(inputPath: string, options?: { recursive?: boolean }): Promise<void> {
+    const normalizedPath = this.normalize(inputPath);
+    const stats = await fs.stat(normalizedPath);
+    if (stats.isDirectory()) {
+      await fs.rm(normalizedPath, { recursive: options?.recursive ?? false });
+    } else {
+      await fs.unlink(normalizedPath);
+    }
+  }
+
+  public async move(sourcePath: string, destPath: string): Promise<void> {
+    const normalizedSource = this.normalize(sourcePath);
+    const normalizedDest = this.normalize(destPath);
+    await fs.rename(normalizedSource, normalizedDest);
+  }
+
+  public async copy(sourcePath: string, destPath: string): Promise<void> {
+    const normalizedSource = this.normalize(sourcePath);
+    const normalizedDest = this.normalize(destPath);
+    const stats = await fs.stat(normalizedSource);
+    if (stats.isDirectory()) {
+      await this.copyDirectory(normalizedSource, normalizedDest);
+    } else {
+      await fs.copyFile(normalizedSource, normalizedDest);
+    }
+  }
+
+  private async copyDirectory(sourcePath: string, destPath: string): Promise<void> {
+    await fs.mkdir(destPath, { recursive: true });
+    const entries = await fs.readdir(sourcePath, { withFileTypes: true });
+    for (const entry of entries) {
+      const src = path.join(sourcePath, entry.name);
+      const dest = path.join(destPath, entry.name);
+      if (entry.isDirectory()) {
+        await this.copyDirectory(src, dest);
+      } else {
+        await fs.copyFile(src, dest);
+      }
+    }
+  }
 }
 
 class NodeDialog implements PALDialog {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChipsButton, ChipsSelect } from '@chips/component-library';
+import { ChipsSelect } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import './ZoomControl.css';
 
@@ -65,15 +65,15 @@ export function ZoomControl({
             onMouseLeave={() => setIsExpanded(false)}
         >
             {/* 基础控件：缩小按钮 */}
-            <ChipsButton
+            <button
+                type="button"
                 className="zoom-control__button"
                 disabled={!canZoomOut}
                 title={t('zoom_control.zoom_out') || '缩小'}
-                variant="ghost"
-                onPress={onZoomOut}
+                onClick={onZoomOut}
             >
                 −
-            </ChipsButton>
+            </button>
 
             {/* 基础控件：缩放滑块 */}
             <div className="zoom-control__slider-container">
@@ -89,25 +89,25 @@ export function ZoomControl({
             </div>
 
             {/* 基础控件：放大按钮 */}
-            <ChipsButton
+            <button
+                type="button"
                 className="zoom-control__button"
                 disabled={!canZoomIn}
                 title={t('zoom_control.zoom_in') || '放大'}
-                variant="ghost"
-                onPress={onZoomIn}
+                onClick={onZoomIn}
             >
                 +
-            </ChipsButton>
+            </button>
 
             {/* 更多按钮 */}
-            <ChipsButton
+            <button
+                type="button"
                 className={`zoom-control__button zoom-control__more ${isExpanded ? 'zoom-control__more--active' : ''}`}
                 title={t('zoom_control.more') || '更多'}
-                variant="ghost"
-                onPress={() => setIsExpanded(!isExpanded)}
+                onClick={() => setIsExpanded(!isExpanded)}
             >
                 ⋯
-            </ChipsButton>
+            </button>
 
             {/* 展开内容 */}
             {isExpanded && (
@@ -123,24 +123,24 @@ export function ZoomControl({
                     </div>
 
                     {/* 重置按钮 */}
-                    <ChipsButton
+                    <button
+                        type="button"
                         className="zoom-control__button zoom-control__button--text"
                         title={t('zoom_control.reset') || '重置视图'}
-                        variant="ghost"
-                        onPress={onReset}
+                        onClick={onReset}
                     >
                         {t('zoom_control.reset_label') || '100%'}
-                    </ChipsButton>
+                    </button>
 
                     {/* 适应内容按钮 */}
-                    <ChipsButton
+                    <button
+                        type="button"
                         className="zoom-control__button zoom-control__button--text"
                         title={t('zoom_control.fit') || '适应视图'}
-                        variant="ghost"
-                        onPress={onFit}
+                        onClick={onFit}
                     >
                         {t('zoom_control.fit_label') || '适应'}
-                    </ChipsButton>
+                    </button>
                 </div>
             )}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, KeyboardEvent } from 'react';
-import { ChipsButton, ChipsInput, ChipsTag } from '@chips/component-library';
+import { ChipsInput } from '@chips/component-library';
 import { useTranslation } from '../../../hooks/useTranslation';
 import './BasicInfoPanel.css';
 
@@ -132,24 +132,24 @@ export function BasicInfoPanel({
             onKeyDown={handleKeydown}
             className="basic-info-panel__tag-input"
           />
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="basic-info-panel__tag-add-btn"
-            onPress={addTag}
+            onClick={addTag}
           >
             {t('card_settings.tag_add') || '添加'}
-          </ChipsButton>
+          </button>
         </div>
         {editTags.length > 0 && (
           <div className="basic-info-panel__tag-list">
             {editTags.map((tag, index) => (
-              <ChipsTag
+              <span
                 key={index}
-                isClosable
-                onClose={() => removeTag(index)}
+                className="basic-info-panel__tag"
               >
                 {tag}
-              </ChipsTag>
+                <button type="button" onClick={() => removeTag(index)}>×</button>
+              </span>
             ))}
           </div>
         )}

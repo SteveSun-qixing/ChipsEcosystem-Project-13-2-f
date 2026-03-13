@@ -1,14 +1,12 @@
 import { getChipsClient } from './bridge-client';
-import type { FileStat, FileReadOptions, FileContent, FileEntry } from 'chips-sdk';
+import type { FileStat, FileEntry } from 'chips-sdk';
 
 /**
  * 文件服务 — 封装 Chips Host 提供的文件操作路由。
  *
  * Host 支持的路由（来自 register-schemas.ts / register-host-services.ts）：
  *   file.read, file.write, file.stat, file.list, file.watch
- *
- * 注意：Host 未暴露 mkdir / delete / move / copy 路由。
- * 需要这类操作须通过 platform.shellOpenPath 或设计工作区时避免依赖这些能力。
+ *   file.mkdir, file.delete, file.move, file.copy
  */
 export const fileService = {
     async readText(path: string): Promise<string> {
@@ -41,14 +39,12 @@ export const fileService = {
 
     async list(dir: string): Promise<FileEntry[]> {
         const result = await getChipsClient().file.list(dir);
-        // SDK list returns entries directly or wrapped in { entries }
         const entries = (result as any)?.entries ?? result;
         return Array.isArray(entries) ? entries : [];
     },
 
     async stat(path: string): Promise<FileStat> {
         const result = await getChipsClient().file.stat(path);
-        // SDK stat returns meta directly or wrapped in { meta }
         return ((result as any)?.meta ?? result) as FileStat;
     },
 
@@ -61,46 +57,26 @@ export const fileService = {
         }
     },
 
-    /**
-     * Host 不支持 mkdir 路由。
-     * 当需要创建目录时，可通过 file.write 写入一个占位文件来隐式创建父目录（仅对支持的平台有效），
-     * 或者在设计上要求工作区目录已经存在。
-     * 此处提供一个 no-op 实现，确保现有调用不会崩溃。
-     */
-    async mkdir(_path: string): Promise<void> {
-        // Host does not expose file.mkdir route.
-        // Workspace directories should be pre-created or selected by the user.
-        console.warn('[FileService] mkdir is not supported via Host IPC. Path:', _path);
+    async mkdir(path: string): Promise<void> {
+        await getChipsClient().file.mkdir(path);
     },
 
-    /**
-     * 确保目录存在。如果不存在，记录警告但不抛出错误。
-     */
     async ensureDir(path: string): Promise<void> {
         const exists = await this.exists(path);
         if (!exists) {
-            console.warn('[FileService] Directory does not exist and cannot be created via Host IPC:', path);
+            await this.mkdir(path);
         }
     },
 
-    /**
-     * Host 不支持 delete 路由 — no-op with warning。
-     */
-    async delete(_path: string): Promise<void> {
-        console.warn('[FileService] delete is not supported via Host IPC. Path:', _path);
+    async delete(path: string): Promise<void> {
+        await getChipsClient().file.delete(path);
     },
 
-    /**
-     * Host 不支持 move 路由 — no-op with warning。
-     */
-    async move(_sourcePath: string, _destPath: string): Promise<void> {
-        console.warn('[FileService] move is not supported via Host IPC.');
+    async move(sourcePath: string, destPath: string): Promise<void> {
+        await getChipsClient().file.move(sourcePath, destPath);
     },
 
-    /**
-     * Host 不支持 copy 路由 — no-op with warning。
-     */
-    async copy(_sourcePath: string, _destPath: string): Promise<void> {
-        console.warn('[FileService] copy is not supported via Host IPC.');
+    async copy(sourcePath: string, destPath: string): Promise<void> {
+        await getChipsClient().file.copy(sourcePath, destPath);
     },
 };

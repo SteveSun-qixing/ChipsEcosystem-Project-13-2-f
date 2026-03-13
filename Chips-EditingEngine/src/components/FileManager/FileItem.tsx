@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ChipsButton, ChipsInput } from '@chips/component-library';
+import { ChipsInput } from '@chips/component-library';
 import type { WorkspaceFile } from '../../types/workspace';
 import './FileItem.css';
 
@@ -106,15 +106,15 @@ export function FileItem({
             onDragStart={(e) => onDragStart(file, e)}
         >
             {file.isDirectory ? (
-                <ChipsButton
+                <button
+                    type="button"
                     className="file-item__toggle"
-                    variant="ghost"
-                    onPress={(e: any) => onToggle(file, e)}
+                    onClick={(e: React.MouseEvent) => onToggle(file, e)}
                 >
                     <span className={`file-item__arrow ${file.expanded ? 'file-item__arrow--expanded' : ''}`}>
                         ▶
                     </span>
-                </ChipsButton>
+                </button>
             ) : (
                 <span className="file-item__toggle-placeholder"></span>
             )}

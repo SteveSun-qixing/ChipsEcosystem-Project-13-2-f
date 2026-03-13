@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useCard } from '../../context/CardContext';
 import { PluginHost } from './PluginHost';
 import './EditPanel.css';
 
@@ -18,10 +18,12 @@ export default function EditPanel({
 }: EditPanelProps) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  
-  // To be replaced with actual active card and selected base card from context
-  const selectedBaseCardId = null; // e.g. from useCardStore()
-  const selectedBaseCard = null; // e.g. from useCardStore()
+  const { activeCardId, selectedBaseCardId, getCard } = useCard();
+
+  const activeCard = activeCardId ? getCard(activeCardId) : null;
+  const selectedBaseCard = activeCard && selectedBaseCardId
+    ? activeCard.structure.basicCards.find(bc => bc.id === selectedBaseCardId)
+    : null;
 
   const toggleExpand = () => setIsExpanded(!isExpanded);
 
@@ -36,28 +38,23 @@ export default function EditPanel({
     `edit-panel--${position}`,
   ].join(' ');
 
-  // New state for the updated header and body
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [title, setTitle] = useState(t('edit_panel.title') || '属性编辑');
   const [subtitle, setSubtitle] = useState(selectedBaseCardId || t('edit_panel.no_selection') || '未选择卡片');
-  const [isCollapsed, setIsCollapsed] = useState(!isExpanded); // Use !isExpanded to match initial state
-  
-  // Mock actions for the header
+  const [isCollapsed, setIsCollapsed] = useState(!isExpanded);
+
   const actions = [
     { icon: '⚙️', tooltip: t('common.settings') || '设置', onClick: () => console.log('Settings clicked') },
-    { icon: '🗑️', tooltip: t('common.delete') || '删除', onClick: () => console.log('Delete clicked'), disabled: false },
+    { icon: '🗑️', tooltip: t('common.delete') || '删除', onClick: () => console.log('Delete clicked'), disabled: !selectedBaseCardId },
   ];
 
-  // Update subtitle when selectedBaseCardId changes
   React.useEffect(() => {
     setSubtitle(selectedBaseCardId || t('edit_panel.no_selection') || '未选择卡片');
   }, [selectedBaseCardId, t]);
 
-  // Update isCollapsed when isExpanded changes
   React.useEffect(() => {
     setIsCollapsed(!isExpanded);
   }, [isExpanded]);
-
 
   return (
     <div className={panelClass} style={panelStyle} role="complementary" aria-label={t('edit_panel.title') || '编辑面板'}>
@@ -86,34 +83,34 @@ export default function EditPanel({
         
         <div className="edit-panel__header-actions">
           {actions.map((action, index) => (
-            <ChipsButton
+            <button
+              type="button"
               key={index}
-              variant="ghost"
               className="edit-panel__header-btn"
-              onPress={action.onClick}
+              onClick={action.onClick}
               title={action.tooltip}
-              isDisabled={action.disabled}
+              disabled={action.disabled}
             >
               <span className="edit-panel__header-btn-icon">{action.icon}</span>
-            </ChipsButton>
+            </button>
           ))}
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="edit-panel__header-btn edit-panel__header-btn--collapse"
-            onPress={() => setIsCollapsed(!isCollapsed)}
+            onClick={() => setIsCollapsed(!isCollapsed)}
             title={isCollapsed ? (t('common.expand') || '展开') : (t('common.collapse') || '折叠')}
           >
             <span className={`edit-panel__header-btn-icon ${isCollapsed ? 'collapsed' : ''}`}>▼</span>
-          </ChipsButton>
+          </button>
         </div>
       </div>
       
       <div className={`edit-panel__body ${isCollapsed ? 'edit-panel__body--hidden' : ''}`}>
-        {selectedBaseCard ? ( // Conditional rendering based on active card type
+        {selectedBaseCard ? (
           <PluginHost 
-            cardType="RichTextCard" // This should be dynamic based on selectedBaseCard.type
-            baseCardId="mock-card-id" // This should be dynamic based on selectedBaseCard.id
-            config={{}} // This should be dynamic based on selectedBaseCard.config
+            cardType={selectedBaseCard.type}
+            baseCardId={selectedBaseCard.id}
+            config={selectedBaseCard.data}
           />
         ) : (
           <div className="edit-panel__empty">

@@ -81,7 +81,11 @@ const createPal = (): PALAdapter => ({
         id: 'watch-1',
         async close() { }
       };
-    }
+    },
+    async mkdir() { },
+    async delete() { },
+    async move() { },
+    async copy() { }
   },
   dialog: {
     async openFile() {

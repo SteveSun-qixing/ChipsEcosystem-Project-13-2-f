@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { ChipsThemeProvider } from '@chips/component-library';
 import { AppProviders } from './context';
 import { useEditor } from './context/EditorContext';
@@ -7,25 +7,33 @@ import { i18nService } from './services/i18n-service';
 import { workspaceService } from './services/workspace-service';
 import { InfiniteCanvas } from './layouts/InfiniteCanvas';
 import { Workbench } from './layouts/Workbench';
-import { HeaderBar } from './components/HeaderBar/HeaderBar';
 import { Dock } from './components/Dock/Dock';
 import { useUI } from './context/UIContext';
 import { generateScopedId } from './utils/id';
 import { useTranslation } from './hooks/useTranslation';
 
+const EngineSettingsDialog = lazy(() => import('./components/EngineSettings/EngineSettingsDialog').then(m => ({ default: m.EngineSettingsDialog })));
+
 function MainWorkspace() {
   const { currentLayout, setState } = useEditor();
   const { addWindow, windows } = useUI();
   const { t } = useTranslation();
+  const [settingsVisible, setSettingsVisible] = useState(false);
+
+  const openSettings = useCallback(() => {
+    setSettingsVisible(true);
+  }, []);
+
+  const closeSettings = useCallback(() => {
+    setSettingsVisible(false);
+  }, []);
 
   const initDefaultTools = () => {
-    // Only init if no windows exist
     if (windows.length > 0) return;
 
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    // File Manager
     addWindow({
       id: generateScopedId('tool'),
       type: 'tool',
@@ -40,9 +48,8 @@ function MainWorkspace() {
       draggable: true,
       closable: false,
       minimizable: true,
-    });
+    } as any);
 
-    // Edit Panel
     addWindow({
       id: generateScopedId('tool'),
       type: 'tool',
@@ -57,9 +64,8 @@ function MainWorkspace() {
       draggable: true,
       closable: false,
       minimizable: true,
-    });
+    } as any);
 
-    // Card Box Library
     addWindow({
       id: generateScopedId('tool'),
       type: 'tool',
@@ -74,7 +80,7 @@ function MainWorkspace() {
       draggable: true,
       closable: false,
       minimizable: true,
-    });
+    } as any);
   };
 
   useEffect(() => {
@@ -82,40 +88,40 @@ function MainWorkspace() {
       try {
         setState('loading');
 
-        // 1. 初始化 SDK
         getChipsClient();
-
-        // 2. 从 Host 读取系统 locale，初始化本地 i18n
         await i18nService.initLocale();
-
-        // 3. 初始化工作区（不会抛出，失败时进入无工作区状态）
         await workspaceService.initialize();
-
-        // 4. 初始化默认工具窗口
         initDefaultTools();
 
         setState('ready');
       } catch (e) {
-        // 此处不再会被 workspaceService 触发，只有更深层的意外错误才会到达这里
         console.error('[App] Unexpected init error:', e);
-        setState('ready'); // 仍然进入 ready 状态，让用户能看到界面
+        setState('ready');
       }
     }
 
     init();
-  }, [setState]);
+  }, [setState, windows.length, t]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-      <HeaderBar />
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {currentLayout === 'infinite-canvas' ? (
           <InfiniteCanvas />
         ) : (
           <Workbench />
         )}
-        <Dock onOpenSettings={() => console.log('Open Settings')} />
+        <Dock onOpenSettings={openSettings} />
       </div>
+      
+      {settingsVisible && (
+        <Suspense fallback={null}>
+          <EngineSettingsDialog
+            visible={settingsVisible}
+            onClose={closeSettings}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -126,18 +132,16 @@ export function App() {
   useEffect(() => {
     const client = getChipsClient();
 
-    // 初始同步主题
     client.theme?.getCurrent?.().then(themeInfo => {
       if (themeInfo?.themeId) setThemeId(themeInfo.themeId);
     }).catch(e => console.warn('[App] Failed to get initial theme:', e));
 
-    // 订阅主题变更（如果 SDK 支持事件）
     const handleThemeChange = (payload: any) => {
       if (payload?.themeId) {
         setThemeId(payload.themeId);
       }
     };
-    void handleThemeChange; // 当 SDK 事件 API 就绪时接入
+    void handleThemeChange;
   }, []);
 
   return (

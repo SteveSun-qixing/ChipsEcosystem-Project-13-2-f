@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChipsButton, ChipsTabs } from '@chips/component-library';
+import { ChipsTabs } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useCard } from '../../context/CardContext';
 import { BasicInfoPanel } from './panels/BasicInfoPanel';
 import { CoverPanel } from './panels/CoverPanel';
 import { ThemePanel } from './panels/ThemePanel';
@@ -21,20 +22,12 @@ export function CardSettingsDialog({
   onSave,
 }: CardSettingsDialogProps) {
   const { t } = useTranslation();
+  const { getCard, updateCard } = useCard();
   const [activeTab, setActiveTab] = useState('basic');
-  const [theme, setTheme] = useState('default-light');
 
-  // Mocks for card info
-  const mockCardInfo = {
-    metadata: {
-      name: 'Test Card',
-      tags: ['test', 'tag'],
-      created_at: Date.now(),
-      modified_at: Date.now(),
-      theme,
-    },
-    structure: [],
-  };
+  const card = getCard(cardId);
+  const theme = card?.metadata.themeId || 'default-light';
+  const cardInfo = card as any;
 
   useEffect(() => {
     if (visible) {
@@ -63,6 +56,31 @@ export function CardSettingsDialog({
     };
   }, [visible]);
 
+  const handleUpdateName = (name: string) => {
+    if (card) {
+      updateCard(cardId, {
+        ...card,
+        metadata: { ...card.metadata, name },
+      } as any);
+    }
+  };
+
+  const handleUpdateTags = (tags: string[]) => {
+    if (card) {
+      updateCard(cardId, {
+        ...card,
+        metadata: { ...card.metadata, tags },
+      } as any);
+    }
+  };
+
+  const handleSave = async () => {
+    await saveCard(cardId);
+    onSave();
+  };
+
+  const { saveCard } = useCard();
+
   return (
     <div className="card-settings-overlay" onClick={handleOverlayClick}>
       <div className="card-settings-dialog">
@@ -90,9 +108,9 @@ export function CardSettingsDialog({
                   <div className="card-settings-dialog__panel">
                     <BasicInfoPanel 
                       cardId={cardId} 
-                      cardInfo={mockCardInfo} 
-                      onUpdateName={(name) => console.log('Name:', name)}
-                      onUpdateTags={(tags) => console.log('Tags:', tags)}
+                      cardInfo={cardInfo}
+                      onUpdateName={handleUpdateName}
+                      onUpdateTags={handleUpdateTags}
                     />
                   </div>
                 ),
@@ -111,7 +129,14 @@ export function CardSettingsDialog({
                 label: t('card_settings.tab_theme') || '主题',
                 content: (
                   <div className="card-settings-dialog__panel">
-                    <ThemePanel value={theme} onChange={setTheme} />
+                    <ThemePanel value={theme} onChange={(newTheme) => {
+                      if (card) {
+                        updateCard(cardId, {
+                          ...card,
+                          metadata: { ...card.metadata, themeId: newTheme },
+                        } as any);
+                      }
+                    }} />
                   </div>
                 ),
               },
@@ -120,7 +145,7 @@ export function CardSettingsDialog({
                 label: t('card_settings.tab_export') || '导出',
                 content: (
                   <div className="card-settings-dialog__panel">
-                    <ExportPanel cardId={cardId} cardInfo={mockCardInfo} />
+                    <ExportPanel cardId={cardId} cardInfo={cardInfo} />
                   </div>
                 ),
               },
@@ -129,23 +154,20 @@ export function CardSettingsDialog({
         </div>
 
         <div className="card-settings-dialog__footer">
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="card-settings-dialog__btn card-settings-dialog__btn--cancel"
-            onPress={onClose}
+            onClick={onClose}
           >
             {t('card_settings.cancel') || '取消'}
-          </ChipsButton>
-          <ChipsButton
-            variant="primary"
+          </button>
+          <button
+            type="button"
             className="card-settings-dialog__btn card-settings-dialog__btn--save"
-            onPress={() => {
-              onSave();
-              onClose();
-            }}
+            onClick={handleSave}
           >
             {t('card_settings.save') || '保存'}
-          </ChipsButton>
+          </button>
         </div>
       </div>
     </div>

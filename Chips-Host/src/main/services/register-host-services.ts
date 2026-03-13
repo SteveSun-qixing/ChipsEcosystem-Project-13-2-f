@@ -1050,6 +1050,58 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             return { event };
           })
         )
+      },
+      mkdir: {
+        descriptor: descriptor<{ path: string; options?: { recursive?: boolean } }, { ack: true }>(
+          'file.mkdir',
+          ['file.write'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'file.mkdir', async (input) => {
+            await ctx.pal.fs.mkdir(input.path, input.options);
+            return { ack: true };
+          })
+        )
+      },
+      delete: {
+        descriptor: descriptor<{ path: string; options?: { recursive?: boolean } }, { ack: true }>(
+          'file.delete',
+          ['file.write'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'file.delete', async (input) => {
+            await ctx.pal.fs.delete(input.path, input.options);
+            return { ack: true };
+          })
+        )
+      },
+      move: {
+        descriptor: descriptor<{ sourcePath: string; destPath: string }, { ack: true }>(
+          'file.move',
+          ['file.write'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'file.move', async (input) => {
+            await ctx.pal.fs.move(input.sourcePath, input.destPath);
+            return { ack: true };
+          })
+        )
+      },
+      copy: {
+        descriptor: descriptor<{ sourcePath: string; destPath: string }, { ack: true }>(
+          'file.copy',
+          ['file.write'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'file.copy', async (input) => {
+            await ctx.pal.fs.copy(input.sourcePath, input.destPath);
+            return { ack: true };
+          })
+        )
       }
     }
   };

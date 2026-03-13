@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
 import type { CardWindowConfig, Position, Size } from '../../types/window';
 import './CardWindowBase.css';
@@ -165,31 +164,31 @@ export function CardWindowBase({
                     {actionsSlot || (
                         <>
                             {config.minimizable !== false && (
-                                <ChipsButton
-                                    variant="ghost"
+                                <button
+                                    type="button"
                                     className="card-window-base__action"
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onMinimize?.(); }}
                                 >
                                     <span className="card-window-base__action-icon">−</span>
-                                </ChipsButton>
+                                </button>
                             )}
-                            <ChipsButton
-                                variant="ghost"
+                            <button
+                                type="button"
                                 className="card-window-base__action"
                                 onClick={(e: React.MouseEvent) => { e.stopPropagation(); onCollapse?.(); }}
                             >
                                 <span className="card-window-base__action-icon">
                                     {config.state === 'collapsed' ? '▽' : '△'}
                                 </span>
-                            </ChipsButton>
+                            </button>
                             {config.closable !== false && (
-                                <ChipsButton
-                                    variant="ghost"
+                                <button
+                                    type="button"
                                     className="card-window-base__action card-window-base__action--close"
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onClose?.(); }}
                                 >
                                     <span className="card-window-base__action-icon">×</span>
-                                </ChipsButton>
+                                </button>
                             )}
                         </>
                     )}

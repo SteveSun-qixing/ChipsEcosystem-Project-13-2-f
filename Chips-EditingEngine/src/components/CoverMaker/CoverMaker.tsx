@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChipsButton, ChipsInput } from '@chips/component-library';
+import { ChipsInput } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import type {
   CoverCreationMode,

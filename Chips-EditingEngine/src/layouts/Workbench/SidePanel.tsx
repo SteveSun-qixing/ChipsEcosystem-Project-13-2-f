@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, ReactNode } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import './SidePanel.css';
 
 export type SidePanelPosition = 'left' | 'right';
@@ -128,16 +127,15 @@ export function SidePanel({
             {(title || headerSlot) && (
                 <header className="side-panel__header">
                     {headerSlot || <span className="side-panel__title">{title}</span>}
-                    <ChipsButton
-                        variant="ghost"
-                        size="small"
+                    <button
+                        type="button"
                         className="side-panel__toggle"
                         onClick={toggleExpand}
                     >
                         <span className="side-panel__toggle-icon">
                             {isExpanded ? (position === 'left' ? '◀' : '▶') : (position === 'left' ? '▶' : '◀')}
                         </span>
-                    </ChipsButton>
+                    </button>
                 </header>
             )}
 

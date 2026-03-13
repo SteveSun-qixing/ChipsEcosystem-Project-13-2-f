@@ -112,6 +112,28 @@ const createPal = (state: PalState): PALAdapter => {
           id: 'watch-1',
           async close() { }
         };
+      },
+      async mkdir(inputPath) {
+        await fs.mkdir(inputPath, { recursive: true });
+      },
+      async delete(inputPath, options) {
+        const stats = await fs.stat(inputPath);
+        if (stats.isDirectory()) {
+          await fs.rm(inputPath, { recursive: options?.recursive ?? false });
+        } else {
+          await fs.unlink(inputPath);
+        }
+      },
+      async move(sourcePath, destPath) {
+        await fs.rename(sourcePath, destPath);
+      },
+      async copy(sourcePath, destPath) {
+        const stats = await fs.stat(sourcePath);
+        if (stats.isDirectory()) {
+          await fs.cp(sourcePath, destPath, { recursive: true });
+        } else {
+          await fs.copyFile(sourcePath, destPath);
+        }
       }
     },
     dialog: {

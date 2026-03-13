@@ -8,4 +8,6 @@ export const ToolComponentRegistry: Record<string, React.LazyExoticComponent<any
     FileManager: lazy(() => import('./FileManager/FileManager')),
     EditPanel: lazy(() => import('./EditPanel/EditPanel')),
     CardBoxLibrary: lazy(() => import('./CardBoxLibrary/CardBoxLibrary')),
+    EngineSettings: lazy(() => import('./EngineSettings/EngineSettingsDialog').then(m => ({ default: m.EngineSettingsDialog }))),
+    CardSettings: lazy(() => import('./CardSettings/CardSettingsDialog').then(m => ({ default: m.CardSettingsDialog }))),
 };

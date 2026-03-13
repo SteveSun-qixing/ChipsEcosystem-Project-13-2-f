@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import type { AnyWindowConfig, BaseWindowConfig, Position, Size } from '../../types/window';
 import './BaseWindow.css';
 
@@ -156,31 +155,31 @@ export function BaseWindow({
                     {actionsSlot || (
                         <>
                             {config.minimizable !== false && (
-                                <ChipsButton
-                                    variant="ghost"
+                                <button
+                                    type="button"
                                     className="base-window__action"
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onMinimize?.(); }}
                                 >
                                     <span className="base-window__action-icon">−</span>
-                                </ChipsButton>
+                                </button>
                             )}
-                            <ChipsButton
-                                variant="ghost"
+                            <button
+                                type="button"
                                 className="base-window__action"
                                 onClick={(e: React.MouseEvent) => { e.stopPropagation(); onCollapse?.(); }}
                             >
                                 <span className="base-window__action-icon">
                                     {config.state === 'collapsed' ? '▽' : '△'}
                                 </span>
-                            </ChipsButton>
+                            </button>
                             {config.closable !== false && (
-                                <ChipsButton
-                                    variant="ghost"
+                                <button
+                                    type="button"
                                     className="base-window__action base-window__action--close"
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onClose?.(); }}
                                 >
                                     <span className="base-window__action-icon">×</span>
-                                </ChipsButton>
+                                </button>
                             )}
                         </>
                     )}

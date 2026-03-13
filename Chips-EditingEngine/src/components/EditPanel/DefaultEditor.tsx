@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { ChipsButton } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import './DefaultEditor.css';
 
@@ -187,32 +186,32 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
           <span className="default-editor__id">{baseCard.id}</span>
         </div>
         <div className="default-editor__actions">
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="default-editor__btn default-editor__btn--mode"
             title={currentMode === 'json' ? (t('default_editor.switch_to_form') || '切换到表单') : (t('default_editor.switch_to_json') || '切换到 JSON')}
-            onPress={toggleMode}
+            onClick={toggleMode}
           >
             {currentMode === 'json' ? '📝' : '{ }'}
-          </ChipsButton>
+          </button>
           {currentMode === 'json' && (
-            <ChipsButton
-              variant="ghost"
+            <button
+              type="button"
               className="default-editor__btn"
               title={t('default_editor.format_json') || '格式化 JSON'}
-              onPress={formatJson}
+              onClick={formatJson}
             >
               ✨
-            </ChipsButton>
+            </button>
           )}
-          <ChipsButton
-            variant="ghost"
+          <button
+            type="button"
             className="default-editor__btn"
             title={t('default_editor.reset_config') || '重置配置'}
-            onPress={resetConfig}
+            onClick={resetConfig}
           >
             ↺
-          </ChipsButton>
+          </button>
         </div>
       </div>
 

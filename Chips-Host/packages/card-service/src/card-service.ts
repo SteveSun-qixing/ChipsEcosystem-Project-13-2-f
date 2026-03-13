@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
 import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import { parseYamlLite } from '../../../src/shared/yaml-lite';
@@ -22,6 +23,15 @@ export interface CardRenderOptions {
   theme?: ThemeSnapshot;
   themeCssText?: string;
   verifyConsistency?: boolean;
+  mode?: 'view' | 'preview';
+}
+
+export interface CardEditorRenderOptions {
+  cardType: string;
+  initialConfig?: Record<string, unknown>;
+  baseCardId?: string;
+  theme?: ThemeSnapshot;
+  themeCssText?: string;
 }
 
 export interface RenderedCardView {
@@ -32,6 +42,14 @@ export interface RenderedCardView {
   semanticHash: string;
   diagnostics: RenderNodeDiagnostic[];
   consistency?: RenderConsistencyResult;
+}
+
+export interface RenderedCardEditorView {
+  title: string;
+  body: string;
+  cardType: string;
+  pluginId: string;
+  baseCardId?: string;
 }
 
 export interface CardServiceOptions {
@@ -79,6 +97,11 @@ interface RenderedBaseCardNode {
 
 interface BaseCardPluginModule {
   renderBasecardView?: (ctx: { container: unknown; config: unknown; themeCssText?: string }) => unknown;
+  renderBasecardEditor?: (ctx: {
+    container: unknown;
+    initialConfig: unknown;
+    onChange: (next: unknown) => void;
+  }) => unknown;
 }
 
 interface RenderablePluginRecord extends PluginRecord {
@@ -109,6 +132,17 @@ const createConsistencySnapshot = (semanticHash: string): RenderConsistencyResul
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+};
+
+const parseCardYamlRecord = (raw: string, filePath: string): Record<string, unknown> => {
+  try {
+    return asRecord(yaml.parse(raw));
+  } catch (error) {
+    throw createError('CARD_SCHEMA_INVALID', `Failed to parse card YAML: ${filePath}`, {
+      filePath,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 const asString = (value: unknown): string | undefined => {
@@ -282,6 +316,66 @@ const createBasecardThemeCss = (theme: ThemeSnapshot, themeCssText?: string): st
   );
 };
 
+const createBasecardEditorThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
+  return joinStyleBlocks(
+    themeCssText,
+    createThemeVariablesCss(theme),
+    [
+      'html, body { margin: 0; padding: 0; min-height: 100%; background: transparent; }',
+      'body {',
+      '  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+      '  color: var(--chips-sys-color-on-surface, #111111);',
+      '  background: var(--chips-sys-color-surface, #ffffff);',
+      '}',
+      '#chips-basecard-editor-root { min-height: 100%; box-sizing: border-box; }',
+      '.chips-basecard-editor {',
+      '  box-sizing: border-box;',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  gap: 16px;',
+      '  min-height: 100%;',
+      '  padding: 20px;',
+      '  background: var(--chips-sys-color-surface, #ffffff);',
+      '}',
+      '.chips-basecard-editor__form { display: flex; flex-direction: column; gap: 14px; }',
+      '.chips-basecard-editor__label { display: flex; flex-direction: column; gap: 8px; font-weight: 600; }',
+      '.chips-basecard-editor__input,',
+      '.chips-basecard-editor__richtext,',
+      '.chips-basecard-editor__block-select,',
+      '.chips-basecard-editor__fontsize-select,',
+      '.chips-basecard-editor__color-input {',
+      '  font: inherit;',
+      '  color: inherit;',
+      '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
+      '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '  border-radius: 12px;',
+      '}',
+      '.chips-basecard-editor__input { min-height: 42px; padding: 0 14px; }',
+      '.chips-basecard-editor__richtext { min-height: 240px; padding: 14px; outline: none; }',
+      '.chips-basecard-editor__toolbar { display: flex; flex-wrap: wrap; gap: 8px; }',
+      '.chips-basecard-editor__toolbar-button {',
+      '  min-width: 36px;',
+      '  min-height: 36px;',
+      '  padding: 0 10px;',
+      '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '  border-radius: 10px;',
+      '  background: var(--chips-sys-color-surface, #ffffff);',
+      '  color: inherit;',
+      '  cursor: pointer;',
+      '}',
+      '.chips-basecard-editor__toolbar-button:hover {',
+      '  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 8%, var(--chips-sys-color-surface, #ffffff));',
+      '}',
+      '.chips-basecard-editor__errors {',
+      '  border-radius: 12px;',
+      '  padding: 12px 14px;',
+      '  background: color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 10%, var(--chips-sys-color-surface, #ffffff));',
+      '  color: var(--chips-sys-color-error, #d92d20);',
+      '}'
+    ].join('\n')
+  );
+};
+
 const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
   return joinStyleBlocks(
     themeCssText,
@@ -289,11 +383,13 @@ const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): s
     [
       'html, body { margin: 0; padding: 0; min-height: 100%; }',
       'body {',
+      '  display: grid;',
+      '  justify-items: center;',
       '  background: var(--chips-sys-color-surface, #ffffff);',
       '  color: var(--chips-sys-color-on-surface, #111111);',
       '  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
       '}',
-      '.chips-composite { max-width: 980px; margin: 0 auto; padding: 28px 22px 40px; box-sizing: border-box; }',
+      '.chips-composite { width: min(calc(100% - 44px), 980px); max-width: 980px; margin: 0 auto; padding: 28px 22px 40px; box-sizing: border-box; }',
       '.chips-composite__header { margin-bottom: 18px; }',
       '.chips-composite__title { margin: 0; font-size: 30px; line-height: 1.2; color: var(--chips-sys-color-on-surface, #111111); }',
       '.chips-composite__meta { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 68%, white 32%); }',
@@ -304,6 +400,17 @@ const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): s
       '  border-radius: 18px;',
       '  overflow: hidden;',
       '  box-shadow: 0 10px 30px rgba(17, 17, 17, 0.08);',
+      '}',
+      'body[data-mode="preview"] .chips-composite__node[data-state="ready"],',
+      'body[data-mode="preview"] .chips-composite__node[data-state="degraded"] {',
+      '  cursor: pointer;',
+      '  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;',
+      '}',
+      'body[data-mode="preview"] .chips-composite__node[data-state="ready"]:hover,',
+      'body[data-mode="preview"] .chips-composite__node[data-state="degraded"]:hover {',
+      '  transform: translateY(-1px);',
+      '  border-color: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 52%, var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16)) 48%);',
+      '  box-shadow: 0 16px 36px rgba(17, 17, 17, 0.12);',
       '}',
       '.chips-composite__frame { display: block; width: 100%; min-height: 96px; border: 0; background: transparent; }',
       '.chips-composite__degraded { padding: 22px 24px; color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 72%, white 28%); }',
@@ -347,14 +454,110 @@ const createChildFrameDocument = (nodeId: string, cardType: string, title: strin
     '        );',
     "        window.parent?.postMessage({ type: 'chips.basecard:height', payload: { nodeId, height } }, '*');",
     '      };',
+    '      const emitSelect = (source) => {',
+    "        window.parent?.postMessage({ type: 'chips.basecard:select', payload: { nodeId, source } }, '*');",
+    '      };',
     "      window.addEventListener('load', () => {",
     '        emitHeight();',
     '        window.setTimeout(emitHeight, 50);',
     '        window.setTimeout(emitHeight, 200);',
     '      });',
+    "      document.addEventListener('pointerdown', () => emitSelect('pointer'), { capture: true });",
     "      if ('ResizeObserver' in window && document.body) {",
     '        const observer = new ResizeObserver(() => emitHeight());',
     '        observer.observe(document.body);',
+    '      }',
+    '    })();',
+    '  </script>',
+    '</body>',
+    '</html>'
+  ].join('\n');
+};
+
+const createEditorFrameDocument = (options: {
+  cardType: string;
+  title: string;
+  pluginBundleCode: string;
+  initialConfig: Record<string, unknown>;
+  pluginId: string;
+  baseCardId?: string;
+  themeCssText: string;
+}): string => {
+  const {
+    cardType,
+    title,
+    pluginBundleCode,
+    initialConfig,
+    pluginId,
+    baseCardId,
+    themeCssText
+  } = options;
+
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '  <meta charset="utf-8" />',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    `  <title>${escapeHtml(title)}</title>`,
+    `  <style>${themeCssText}</style>`,
+    '</head>',
+    `<body data-card-type="${escapeHtml(cardType)}" data-plugin-id="${escapeHtml(pluginId)}" data-base-card-id="${escapeHtml(baseCardId ?? '')}">`,
+    '  <div id="chips-basecard-editor-root"></div>',
+    '  <script>',
+    pluginBundleCode,
+    '  </script>',
+    '  <script>',
+    '    (() => {',
+    `      const initialConfig = ${escapeInlineJson(initialConfig)};`,
+    `      const cardType = ${JSON.stringify(cardType)};`,
+    `      const pluginId = ${JSON.stringify(pluginId)};`,
+    `      const baseCardId = ${JSON.stringify(baseCardId ?? '')};`,
+    '      const container = document.getElementById("chips-basecard-editor-root");',
+    '      const emit = (type, payload) => {',
+    "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      const emitHeight = () => {',
+    '        const height = Math.max(',
+    '          240,',
+    '          document.documentElement?.scrollHeight ?? 0,',
+    '          document.body?.scrollHeight ?? 0,',
+    '          document.documentElement?.offsetHeight ?? 0,',
+    '          document.body?.offsetHeight ?? 0',
+    '        );',
+    "        emit('chips.card-editor:resize', { baseCardId, height });",
+    '      };',
+    '      try {',
+    '        const plugin = globalThis.ChipsBasecardPlugin || {};',
+    '        if (typeof plugin.renderBasecardEditor !== "function") {',
+    "          throw new Error('Plugin does not export renderBasecardEditor.');",
+    '        }',
+    '        plugin.renderBasecardEditor({',
+    '          container,',
+    '          initialConfig,',
+    '          onChange(next) {',
+    "            emit('chips.card-editor:change', { baseCardId, cardType, pluginId, config: next });",
+    '            window.setTimeout(emitHeight, 0);',
+    '          }',
+    '        });',
+    "        emit('chips.card-editor:ready', { baseCardId, cardType, pluginId });",
+    '        emitHeight();',
+    "        if ('ResizeObserver' in window && document.body) {",
+    '          const observer = new ResizeObserver(() => emitHeight());',
+    '          observer.observe(document.body);',
+    '        }',
+    '      } catch (error) {',
+    '        const message = error instanceof Error ? error.message : String(error);',
+    "        emit('chips.card-editor:error', { baseCardId, cardType, pluginId, code: 'CARD_EDITOR_RENDER_FAILED', message });",
+    '        const pre = document.createElement("pre");',
+    '        pre.textContent = message;',
+    '        pre.style.margin = "0";',
+    '        pre.style.padding = "20px";',
+    '        pre.style.whiteSpace = "pre-wrap";',
+    '        pre.style.color = "var(--chips-sys-color-error, #d92d20)";',
+    '        container?.replaceChildren(pre);',
+    '        emitHeight();',
     '      }',
     '    })();',
     '  </script>',
@@ -369,7 +572,8 @@ const createCompositeDocument = (
   semanticHash: string,
   theme: ThemeSnapshot,
   themeCssText: string | undefined,
-  nodes: RenderedBaseCardNode[]
+  nodes: RenderedBaseCardNode[],
+  mode: 'view' | 'preview'
 ): string => {
   const nodeMarkup = nodes
     .map((node) => {
@@ -407,7 +611,7 @@ const createCompositeDocument = (
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${createCompositeThemeCss(theme, themeCssText)}</style>`,
     '</head>',
-    `<body data-target="${escapeHtml(target)}" data-semantic-hash="${escapeHtml(semanticHash)}">`,
+    `<body data-target="${escapeHtml(target)}" data-semantic-hash="${escapeHtml(semanticHash)}" data-mode="${escapeHtml(mode)}">`,
     '  <main class="chips-composite">',
     '    <header class="chips-composite__header">',
     `      <h1 class="chips-composite__title">${escapeHtml(title)}</h1>`,
@@ -420,11 +624,40 @@ const createCompositeDocument = (
     '    (() => {',
     '      const frameList = Array.from(document.querySelectorAll(".chips-composite__frame"));',
     '      const frameByNodeId = new Map(frameList.map((frame) => [frame.dataset.nodeId ?? "", frame]));',
+    '      const nodeById = new Map(Array.from(document.querySelectorAll(".chips-composite__node")).map((node) => [node.dataset.nodeId ?? "", node]));',
     '      const errorPayload = JSON.parse(document.getElementById("__chips-node-errors")?.textContent ?? "[]");',
+    '      const totalNodeCount = nodeById.size;',
+    '      const failedNodePayloads = new Map(errorPayload.map((payload) => [typeof payload?.nodeId === "string" ? payload.nodeId : "", payload]).filter(([nodeId]) => Boolean(nodeId)));',
+    '      const failedNodeIds = new Set(failedNodePayloads.keys());',
+    '      const isPreviewMode = document.body.dataset.mode === "preview";',
     '      let remaining = frameList.length;',
     '      let readySent = false;',
+    '      let fatalSent = false;',
     '      const emit = (type, payload) => {',
     "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      const emitFatalIfAllNodesFailed = () => {',
+    '        if (fatalSent || totalNodeCount === 0 || failedNodeIds.size !== totalNodeCount) {',
+    '          return;',
+    '        }',
+    '        fatalSent = true;',
+    "        emit('chips.composite:fatal-error', { code: 'CARD_RENDER_FAILED', message: 'Composite card failed to render all nodes.', details: Array.from(failedNodePayloads.values()) });",
+    '      };',
+    '      const emitNodeSelect = (nodeId, source = "composite") => {',
+    '        if (!isPreviewMode || !nodeId) {',
+    '          return;',
+    '        }',
+    '        const node = nodeById.get(nodeId);',
+    '        if (!node) {',
+    '          return;',
+    '        }',
+    '        emit("chips.composite:node-select", {',
+    '          nodeId,',
+    '          cardType: node.dataset.cardType ?? "",',
+    '          pluginId: node.dataset.pluginId || undefined,',
+    '          state: node.dataset.state ?? "ready",',
+    '          source,',
+    '        });',
     '      };',
     '      const markFrameSettled = () => {',
     '        remaining = Math.max(0, remaining - 1);',
@@ -436,9 +669,7 @@ const createCompositeDocument = (
     '      for (const payload of errorPayload) {',
     "        emit('chips.composite:node-error', payload);",
     '      }',
-    '      if (errorPayload.length > 0 && errorPayload.length === Math.max(frameList.length, errorPayload.length)) {',
-    "        emit('chips.composite:fatal-error', { code: 'CARD_RENDER_FAILED', message: 'Composite card failed to render all nodes.', details: errorPayload });",
-    '      }',
+    '      emitFatalIfAllNodesFailed();',
     '      for (const frame of frameList) {',
     '        frame.addEventListener("load", () => {',
     '          if (frame.dataset.loaded === "true") {',
@@ -449,7 +680,19 @@ const createCompositeDocument = (
     '        });',
     '        frame.addEventListener("error", () => {',
     '          const nodeId = frame.dataset.nodeId ?? "";',
-    "          emit('chips.composite:node-error', { nodeId, code: 'IFRAME_LOAD_FAILED', message: 'Base card iframe failed to load.', stage: 'render-commit' });",
+    '          const node = nodeById.get(nodeId);',
+    '          if (node) {',
+    '            node.dataset.state = "degraded";',
+    '          }',
+    '          if (nodeId) {',
+    '            failedNodeIds.add(nodeId);',
+    '          }',
+    "          const payload = { nodeId, code: 'IFRAME_LOAD_FAILED', message: 'Base card iframe failed to load.', stage: 'render-commit' };",
+    '          if (nodeId) {',
+    '            failedNodePayloads.set(nodeId, payload);',
+    '          }',
+    "          emit('chips.composite:node-error', payload);",
+    '          emitFatalIfAllNodesFailed();',
     '          if (frame.dataset.loaded === "true") {',
     '            return;',
     '          }',
@@ -461,22 +704,40 @@ const createCompositeDocument = (
     '        readySent = true;',
     "        emit('chips.composite:ready', { nodeCount: 0 });",
     '      }',
+    '      if (isPreviewMode) {',
+    '        for (const node of nodeById.values()) {',
+    '          if (node.dataset.state === "degraded") {',
+    '            node.addEventListener("click", () => {',
+    '              emitNodeSelect(node.dataset.nodeId ?? "", "degraded");',
+    '            });',
+    '          }',
+    '        }',
+    '      }',
     '      window.addEventListener("message", (event) => {',
     '        const data = event.data;',
-    '        if (!data || typeof data !== "object" || data.type !== "chips.basecard:height") {',
+    '        if (!data || typeof data !== "object") {',
     '          return;',
     '        }',
-    '        const payload = data.payload ?? {};',
-    '        const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
-    '        const height = Number(payload.height);',
-    '        if (!nodeId || !Number.isFinite(height)) {',
+    '        if (data.type === "chips.basecard:height") {',
+    '          const payload = data.payload ?? {};',
+    '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
+    '          const height = Number(payload.height);',
+    '          if (!nodeId || !Number.isFinite(height)) {',
+    '            return;',
+    '          }',
+    '          const frame = frameByNodeId.get(nodeId);',
+    '          if (!frame) {',
+    '            return;',
+    '          }',
+    '          frame.style.height = `${Math.max(96, Math.ceil(height))}px`;',
     '          return;',
     '        }',
-    '        const frame = frameByNodeId.get(nodeId);',
-    '        if (!frame) {',
-    '          return;',
+    '        if (data.type === "chips.basecard:select") {',
+    '          const payload = data.payload ?? {};',
+    '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
+    '          const source = typeof payload.source === "string" ? payload.source : "basecard";',
+    '          emitNodeSelect(nodeId, source);',
     '        }',
-    '        frame.style.height = `${Math.max(96, Math.ceil(height))}px`;',
     '      });',
     '      window.setTimeout(() => {',
     '        if (!readySent) {',
@@ -545,6 +806,7 @@ export class CardService {
   private readonly runtime?: Pick<PluginRuntime, 'query'>;
   private readonly workspaceRoot: string;
   private readonly moduleCache = new Map<string, Promise<BaseCardPluginModule>>();
+  private readonly browserBundleCache = new Map<string, Promise<string>>();
 
   public constructor(
     options: CardServiceOptions = {},
@@ -555,6 +817,23 @@ export class CardService {
   }
 
   public async validate(cardFile: string): Promise<{ valid: boolean; errors: string[] }> {
+    const cardStats = await this.safeStat(cardFile);
+    if (cardStats?.isDirectory()) {
+      const required = ['.card/metadata.yaml', '.card/structure.yaml', '.card/cover.html'];
+      const errors: string[] = [];
+      for (const requiredPath of required) {
+        const absolutePath = path.join(cardFile, requiredPath);
+        const exists = await this.safeStat(absolutePath);
+        if (!exists?.isFile()) {
+          errors.push(requiredPath);
+        }
+      }
+      return {
+        valid: errors.length === 0,
+        errors
+      };
+    }
+
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-'));
     try {
       await this.zip.extract(cardFile, tempDir);
@@ -591,6 +870,7 @@ export class CardService {
       const title = asString(ctx.metadata.name) ?? 'Untitled Card';
       const cardId = asString(ctx.metadata.card_id) ?? asString(ctx.metadata.id) ?? createId();
       const target = options?.target ?? 'card-iframe';
+      const mode = options?.mode ?? 'view';
       const theme = options?.theme;
       if (!theme) {
         throw createError('THEME_NOT_FOUND', 'Card render requires a resolved theme snapshot.');
@@ -617,7 +897,7 @@ export class CardService {
         }))
       };
       const semanticHash = crypto.createHash('sha256').update(JSON.stringify(semanticModel)).digest('hex');
-      const body = createCompositeDocument(title, target, semanticHash, theme, themeCssText, renderedNodes);
+      const body = createCompositeDocument(title, target, semanticHash, theme, themeCssText, renderedNodes, mode);
 
       return {
         title,
@@ -629,6 +909,46 @@ export class CardService {
         consistency: options?.verifyConsistency ? createConsistencySnapshot(semanticHash) : undefined
       };
     });
+  }
+
+  public async renderEditor(options: CardEditorRenderOptions): Promise<RenderedCardEditorView> {
+    const cardType = options.cardType.trim();
+    if (!cardType) {
+      throw createError('INVALID_ARGUMENT', 'cardType is required for card editor render.');
+    }
+
+    const theme = options.theme;
+    if (!theme) {
+      throw createError('THEME_NOT_FOUND', 'Card editor render requires a resolved theme snapshot.');
+    }
+
+    const plugin = this.resolveCardPlugin(cardType);
+    if (!plugin) {
+      throw createError('CARD_PLUGIN_NOT_FOUND', `No enabled base card plugin can edit ${cardType}.`, {
+        cardType
+      });
+    }
+
+    const initialConfig = this.normalizeEditorInitialConfig(cardType, options.initialConfig);
+    const pluginBundleCode = await this.bundlePluginForBrowser(plugin);
+    const baseCardId = asString(options.baseCardId) ?? asString(initialConfig.id);
+    const title = `${asString(initialConfig.title) ?? cardType} Editor`;
+
+    return {
+      title,
+      body: createEditorFrameDocument({
+        cardType,
+        title,
+        pluginBundleCode,
+        initialConfig,
+        pluginId: plugin.manifest.id,
+        baseCardId,
+        themeCssText: createBasecardEditorThemeCss(theme, options.themeCssText)
+      }),
+      cardType,
+      pluginId: plugin.manifest.id,
+      baseCardId
+    };
   }
 
   private async renderStructureNode(
@@ -767,12 +1087,63 @@ export class CardService {
     };
 
     if (plugin.manifest.id === 'chips.basecard.richtext') {
+      if (
+        typeof rawConfig.title === 'string' &&
+        typeof rawConfig.body === 'string' &&
+        !asString(rawConfig.content_text)
+      ) {
+        return {
+          id: file.id,
+          title: rawConfig.title,
+          body: rawConfig.body,
+          locale: asString(rawConfig.locale) ?? 'zh-CN'
+        };
+      }
+
       const richTextHtml = await loadHtmlFromRichTextConfig(rawConfig, file, cardRoot);
       const normalized = extractRichTextTitle(richTextHtml);
       return {
         id: file.id,
         title: normalized.title || file.id,
         body: normalized.body || richTextHtml,
+        locale: asString(rawConfig.locale) ?? 'zh-CN'
+      };
+    }
+
+    return rawConfig;
+  }
+
+  private normalizeEditorInitialConfig(
+    cardType: string,
+    input: Record<string, unknown> | undefined
+  ): Record<string, unknown> {
+    const rawConfig = {
+      ...(input ?? {})
+    };
+
+    if (
+      cardType === 'RichTextCard' ||
+      cardType === 'base.richtext' ||
+      asString(rawConfig.card_type) === 'RichTextCard'
+    ) {
+      if (typeof rawConfig.title === 'string' && typeof rawConfig.body === 'string') {
+        return {
+          ...rawConfig,
+          locale: asString(rawConfig.locale) ?? 'zh-CN'
+        };
+      }
+
+      const richTextHtml =
+        typeof rawConfig.body === 'string'
+          ? rawConfig.body
+          : typeof rawConfig.content_text === 'string'
+            ? rawConfig.content_text
+            : '';
+      const normalized = extractRichTextTitle(richTextHtml);
+      return {
+        id: asString(rawConfig.id) ?? createId(),
+        title: normalized.title || asString(rawConfig.title) || '',
+        body: normalized.body || richTextHtml || '<p></p>',
         locale: asString(rawConfig.locale) ?? 'zh-CN'
       };
     }
@@ -887,6 +1258,45 @@ export class CardService {
     return pending;
   }
 
+  private async bundlePluginForBrowser(plugin: RenderablePluginRecord): Promise<string> {
+    const entryPath = await this.resolvePluginEntryPath(plugin);
+    const cacheKey = `${plugin.manifest.id}:${entryPath}:browser`;
+    const cached = this.browserBundleCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = (async () => {
+      const { build } = require('esbuild') as {
+        build: (options: Record<string, unknown>) => Promise<{ outputFiles?: Array<{ text: string }> }>;
+      };
+
+      const result = await build({
+        entryPoints: [entryPath],
+        bundle: true,
+        platform: 'browser',
+        format: 'iife',
+        globalName: 'ChipsBasecardPlugin',
+        write: false,
+        absWorkingDir: plugin.installPath,
+        logLevel: 'silent'
+      });
+
+      const code = result.outputFiles?.[0]?.text;
+      if (!code) {
+        throw createError('CARD_PLUGIN_BUNDLE_FAILED', `Failed to bundle plugin ${plugin.manifest.id} for browser runtime.`, {
+          pluginId: plugin.manifest.id,
+          entryPath
+        });
+      }
+
+      return code;
+    })();
+
+    this.browserBundleCache.set(cacheKey, pending);
+    return pending;
+  }
+
   private async resolvePluginEntryPath(plugin: RenderablePluginRecord): Promise<string> {
     const declaredEntryPath = path.resolve(plugin.installPath, plugin.manifest.entry);
     const declaredStats = await this.safeStat(declaredEntryPath);
@@ -984,24 +1394,41 @@ export class CardService {
       throw createError('CARD_SCHEMA_INVALID', 'Card format validation failed', check.errors);
     }
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-parse-'));
+    const resolvedRoot = await this.resolveCardRoot(cardFile);
     try {
-      await this.zip.extract(cardFile, tempDir);
-      const metadata = asRecord(parseYamlLite(await fs.readFile(path.join(tempDir, '.card/metadata.yaml'), 'utf-8')));
-      const structure = asRecord(parseYamlLite(await fs.readFile(path.join(tempDir, '.card/structure.yaml'), 'utf-8')));
-      const contentFiles = await this.readFiles(path.join(tempDir, 'content'));
-      const contentByNodeId = await this.readContentFiles(tempDir, contentFiles);
+      const metadataPath = path.join(resolvedRoot.rootDir, '.card/metadata.yaml');
+      const structurePath = path.join(resolvedRoot.rootDir, '.card/structure.yaml');
+      const metadata = parseCardYamlRecord(await fs.readFile(metadataPath, 'utf-8'), metadataPath);
+      const structure = parseCardYamlRecord(await fs.readFile(structurePath, 'utf-8'), structurePath);
+      const contentFiles = await this.readFiles(path.join(resolvedRoot.rootDir, 'content'));
+      const contentByNodeId = await this.readContentFiles(resolvedRoot.rootDir, contentFiles);
 
       return await task({
-        rootDir: tempDir,
+        rootDir: resolvedRoot.rootDir,
         metadata,
         structure,
         contentFiles,
         contentByNodeId
       });
     } finally {
-      await fs.rm(tempDir, { recursive: true, force: true });
+      await resolvedRoot.cleanup?.();
     }
+  }
+
+  private async resolveCardRoot(cardFile: string): Promise<{ rootDir: string; cleanup?: () => Promise<void> }> {
+    const fileStats = await this.safeStat(cardFile);
+    if (fileStats?.isDirectory()) {
+      return { rootDir: cardFile };
+    }
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-parse-'));
+    await this.zip.extract(cardFile, tempDir);
+    return {
+      rootDir: tempDir,
+      cleanup: async () => {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    };
   }
 
   private async readContentFiles(rootDir: string, contentFiles: string[]): Promise<Map<string, ParsedContentFile>> {
@@ -1014,7 +1441,7 @@ export class CardService {
         path: relativePath,
         absolutePath,
         raw,
-        parsed: asRecord(parseYamlLite(raw))
+        parsed: parseCardYamlRecord(raw, absolutePath)
       });
     }
     return result;

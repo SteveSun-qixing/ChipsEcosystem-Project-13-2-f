@@ -147,6 +147,10 @@ export interface PALFileSystem {
   stat(path: string): Promise<FileStat>;
   list(path: string, options?: FileListOptions): Promise<string[]>;
   watch(path: string, onEvent: (event: FileWatchEvent) => void): Promise<FileWatchSubscription>;
+  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
+  delete(path: string, options?: { recursive?: boolean }): Promise<void>;
+  move(sourcePath: string, destPath: string): Promise<void>;
+  copy(sourcePath: string, destPath: string): Promise<void>;
 }
 
 export interface PALDialog {

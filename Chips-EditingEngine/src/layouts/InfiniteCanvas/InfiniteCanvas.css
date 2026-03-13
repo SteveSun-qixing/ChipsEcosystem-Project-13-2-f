@@ -1,0 +1,50 @@
+.infinite-canvas {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--chips-sys-color-background, #fafafa);
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.infinite-canvas--drag-over {
+    background-color: var(--chips-sys-color-primary-container, rgba(24, 144, 255, 0.05));
+}
+
+.infinite-canvas__grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-image:
+        linear-gradient(to right, var(--chips-sys-color-border, #e0e0e0) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--chips-sys-color-border, #e0e0e0) 1px, transparent 1px);
+}
+
+.infinite-canvas__insert-indicator {
+    position: absolute;
+    height: 3px;
+    transform: translateY(-50%) scaleY(var(--chips-insert-indicator-scale, 1));
+    transform-origin: center;
+    background: linear-gradient(90deg,
+            var(--chips-sys-color-primary-hover, rgba(43, 165, 255, 0.92)) 0%,
+            var(--chips-sys-color-primary, rgba(24, 144, 255, 1)) 50%,
+            var(--chips-sys-color-primary-hover, rgba(43, 165, 255, 0.92)) 100%);
+    border-radius: 999px;
+    box-shadow:
+        0 0 0 1px rgba(24, 144, 255, 0.35),
+        0 3px 10px rgba(24, 144, 255, 0.22);
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.infinite-canvas__insert-indicator::before {
+    content: '';
+    position: absolute;
+    inset: -4px 0;
+    border-radius: 999px;
+    background: var(--chips-sys-color-primary-container, rgba(24, 144, 255, 0.12));
+}

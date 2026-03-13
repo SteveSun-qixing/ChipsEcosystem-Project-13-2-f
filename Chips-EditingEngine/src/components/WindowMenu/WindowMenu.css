@@ -1,0 +1,82 @@
+.window-menu {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 4px;
+    min-height: 24px;
+}
+
+.window-menu__left {
+    flex: 1;
+    min-width: 0;
+}
+
+.window-menu__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--chips-sys-color-on-surface, #1a1a1a);
+    cursor: text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 4px 0;
+}
+
+.window-menu__title:hover {
+    color: var(--chips-sys-color-primary, #3b82f6);
+}
+
+.window-menu__title-input {
+    width: 100%;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    background: var(--chips-sys-color-surface, #ffffff);
+    border-radius: 4px;
+    padding: 4px 8px;
+    outline: none;
+    color: var(--chips-sys-color-on-surface, #1a1a1a);
+}
+
+.window-menu__title-input:focus {
+    box-shadow: 0 0 0 2px var(--chips-sys-color-primary, #3b82f6);
+}
+
+.window-menu__right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.window-menu__button {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+}
+
+.window-menu__button:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.window-menu__button--active {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.window-menu__button--active:hover {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.window-menu__button-icon {
+    font-size: 14px;
+    line-height: 1;
+}

@@ -1,0 +1,105 @@
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-xs, 4px);
+  padding: var(--chips-spacing-xs, 4px) var(--chips-spacing-sm, 8px);
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--chips-radius-sm, 4px);
+  transition: background-color 0.15s ease;
+  height: 28px;
+}
+
+.file-item:hover {
+  background-color: var(--chips-color-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.file-item--selected {
+  background-color: var(--chips-color-primary-light, #e3f2fd) !important;
+}
+
+.file-item--selected:hover {
+  background-color: var(--chips-color-primary-lighter, #bbdefb) !important;
+}
+
+.file-item__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 0 !important;
+}
+
+.file-item__toggle:hover {
+  background-color: var(--chips-color-bg-hover, rgba(0, 0, 0, 0.1)) !important;
+  border-radius: var(--chips-radius-sm, 2px) !important;
+}
+
+.file-item__toggle-placeholder {
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.file-item__arrow {
+  font-size: 8px;
+  color: var(--chips-color-text-secondary, #666);
+  transition: transform 0.15s ease;
+  line-height: 1;
+}
+
+.file-item__arrow--expanded {
+  transform: rotate(90deg);
+}
+
+.file-item__icon {
+  font-size: var(--chips-font-size-md, 16px);
+  flex-shrink: 0;
+}
+
+.file-item__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--chips-font-size-sm, 14px);
+  color: var(--chips-color-text-primary, #1a1a1a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-item__rename-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-item__rename-input :deep(.chips-input__inner),
+.file-item__rename-input input {
+  padding: 2px 4px;
+  font-size: var(--chips-font-size-sm, 14px);
+  border: 1px solid var(--chips-color-primary, #1890ff);
+  border-radius: var(--chips-radius-sm, 2px);
+  outline: none;
+  background-color: var(--chips-color-bg-primary, #fff);
+  height: 24px;
+}
+
+.file-item__badge {
+  font-size: var(--chips-font-size-xs, 12px);
+  color: var(--chips-color-text-tertiary, #999);
+  background-color: var(--chips-color-bg-secondary, #f5f5f5);
+  padding: 0 6px;
+  border-radius: var(--chips-radius-full, 9999px);
+}
+
+/* 搜索高亮 */
+.file-item__highlight {
+  background-color: var(--chips-color-warning-light, #fff3cd);
+  color: var(--chips-color-warning-dark, #856404);
+  padding: 0 2px;
+  border-radius: 2px;
+}

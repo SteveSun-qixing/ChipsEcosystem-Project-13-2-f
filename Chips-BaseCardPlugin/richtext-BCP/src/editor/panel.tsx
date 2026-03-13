@@ -8,6 +8,10 @@ export interface BasecardEditorProps {
   onChange: (next: BasecardConfig) => void;
 }
 
+type DraftConfig = Pick<BasecardConfig, "title" | "body">;
+
+const EMIT_DEBOUNCE_MS = 120;
+
 function ensureEditorFocus(editor: HTMLElement): void {
   if (document.activeElement !== editor) {
     editor.focus();
@@ -86,7 +90,6 @@ export function createBasecardEditorRoot(
   const form = document.createElement("form");
   form.className = "chips-basecard-editor__form";
 
-  // 标题
   const titleLabel = document.createElement("label");
   titleLabel.textContent = t("basecard.title");
   titleLabel.className = "chips-basecard-editor__label";
@@ -98,14 +101,109 @@ export function createBasecardEditorRoot(
   titleLabel.appendChild(titleInput);
   form.appendChild(titleLabel);
 
-  // 内容标签
   const bodyLabel = document.createElement("label");
   bodyLabel.textContent = t("basecard.body");
   bodyLabel.className = "chips-basecard-editor__label";
 
-  // 工具栏
   const toolbar = document.createElement("div");
   toolbar.className = "chips-basecard-editor__toolbar";
+
+  const bodyEditor = document.createElement("div");
+  bodyEditor.className = "chips-basecard-editor__richtext";
+  bodyEditor.contentEditable = "true";
+  bodyEditor.innerHTML = props.initialConfig.body ?? "";
+
+  const errorBox = document.createElement("div");
+  errorBox.className = "chips-basecard-editor__errors";
+
+  let draft: DraftConfig = {
+    title: props.initialConfig.title ?? "",
+    body: props.initialConfig.body ?? "",
+  };
+  let lastCommittedSignature = JSON.stringify(draft);
+  let emitTimer: number | null = null;
+
+  function collectDraftFromDom(): DraftConfig {
+    return {
+      title: titleInput.value,
+      body: bodyEditor.innerHTML,
+    };
+  }
+
+  function renderValidation(showErrors: boolean, textContent: string): void {
+    errorBox.textContent = "";
+    if (!showErrors) {
+      return;
+    }
+
+    const errors: string[] = [];
+    if (!isNonEmptyString(textContent)) {
+      errors.push(t("basecard.validation.bodyRequired"));
+    }
+
+    if (errors.length === 0) {
+      return;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "chips-basecard-editor__errors-list";
+    for (const msg of errors) {
+      const li = document.createElement("li");
+      li.textContent = msg;
+      list.appendChild(li);
+    }
+    errorBox.appendChild(list);
+  }
+
+  function validateAndEmit(showErrors = false): void {
+    const nextDraft = collectDraftFromDom();
+    const rawBodyHtml = nextDraft.body;
+    const safeBodyHtml = sanitizeRichTextHtml(rawBodyHtml);
+
+    if (safeBodyHtml !== rawBodyHtml) {
+      bodyEditor.innerHTML = safeBodyHtml;
+    }
+
+    draft = {
+      title: nextDraft.title,
+      body: safeBodyHtml,
+    };
+
+    renderValidation(showErrors, bodyEditor.textContent ?? "");
+
+    const next: BasecardConfig = {
+      ...defaultBasecardConfig,
+      ...props.initialConfig,
+      title: draft.title,
+      body: safeBodyHtml,
+    };
+
+    const signature = JSON.stringify(draft);
+    if (signature === lastCommittedSignature) {
+      return;
+    }
+
+    lastCommittedSignature = signature;
+    props.onChange(next);
+  }
+
+  function scheduleValidateAndEmit(showErrors = false): void {
+    if (emitTimer !== null) {
+      window.clearTimeout(emitTimer);
+    }
+    emitTimer = window.setTimeout(() => {
+      emitTimer = null;
+      validateAndEmit(showErrors);
+    }, EMIT_DEBOUNCE_MS);
+  }
+
+  function flushValidateAndEmit(showErrors = true): void {
+    if (emitTimer !== null) {
+      window.clearTimeout(emitTimer);
+      emitTimer = null;
+    }
+    validateAndEmit(showErrors);
+  }
 
   function createToolbarButton(
     text: string,
@@ -120,11 +218,11 @@ export function createBasecardEditorRoot(
     button.addEventListener("click", (event) => {
       event.preventDefault();
       onClick();
+      validateAndEmit(false);
     });
     return button;
   }
 
-  // 文本格式
   const boldButton = createToolbarButton("B", "加粗", () =>
     execEditorCommand(bodyEditor, "bold")
   );
@@ -156,7 +254,6 @@ export function createBasecardEditorRoot(
   toolbar.appendChild(subscriptButton);
   toolbar.appendChild(codeButton);
 
-  // 标题 / 段落类型选择
   const blockSelect = document.createElement("select");
   blockSelect.className = "chips-basecard-editor__block-select";
   const blockOptions: Array<{ value: string; label: string }> = [
@@ -182,11 +279,10 @@ export function createBasecardEditorRoot(
     } else {
       document.execCommand("formatBlock", false, value);
     }
-    validateAndEmit();
+    validateAndEmit(false);
   });
   toolbar.appendChild(blockSelect);
 
-  // 列表与引用
   const orderedListButton = createToolbarButton("1.", "有序列表", () =>
     execEditorCommand(bodyEditor, "insertOrderedList")
   );
@@ -200,7 +296,6 @@ export function createBasecardEditorRoot(
   toolbar.appendChild(unorderedListButton);
   toolbar.appendChild(blockquoteButton);
 
-  // 对齐
   const alignLeftButton = createToolbarButton("左", "左对齐", () =>
     execEditorCommand(bodyEditor, "justifyLeft")
   );
@@ -218,7 +313,6 @@ export function createBasecardEditorRoot(
   toolbar.appendChild(alignRightButton);
   toolbar.appendChild(alignJustifyButton);
 
-  // 颜色与字号
   const colorInput = document.createElement("input");
   colorInput.type = "color";
   colorInput.className = "chips-basecard-editor__color-input";
@@ -226,7 +320,7 @@ export function createBasecardEditorRoot(
   colorInput.addEventListener("input", () => {
     if (!colorInput.value) return;
     execEditorCommand(bodyEditor, "foreColor", colorInput.value);
-    validateAndEmit();
+    validateAndEmit(false);
   });
   toolbar.appendChild(colorInput);
 
@@ -237,7 +331,7 @@ export function createBasecardEditorRoot(
   bgColorInput.addEventListener("input", () => {
     if (!bgColorInput.value) return;
     execEditorCommand(bodyEditor, "hiliteColor", bgColorInput.value);
-    validateAndEmit();
+    validateAndEmit(false);
   });
   toolbar.appendChild(bgColorInput);
 
@@ -261,19 +355,16 @@ export function createBasecardEditorRoot(
     if (!Number.isFinite(size)) return;
     ensureEditorFocus(bodyEditor);
     wrapSelectionWithStyle(`font-size: ${size}px`);
-    validateAndEmit();
+    validateAndEmit(false);
     fontSizeSelect.value = "";
   });
   toolbar.appendChild(fontSizeSelect);
 
-  // 清除格式
   const clearFormatButton = createToolbarButton("清除", "清除格式", () => {
     execEditorCommand(bodyEditor, "removeFormat");
-    validateAndEmit();
   });
   toolbar.appendChild(clearFormatButton);
 
-  // 插入链接
   const linkButton = createToolbarButton("链接", "插入链接", () => {
     ensureEditorFocus(bodyEditor);
     const selection = window.getSelection();
@@ -298,11 +389,9 @@ export function createBasecardEditorRoot(
       .replace(/>/g, "&gt;");
     const linkHtml = `<a href="${escapedUrl}" target="_blank" rel="noopener">${escapedText}</a>`;
     insertHtmlAtSelection(bodyEditor, linkHtml);
-    validateAndEmit();
   });
   toolbar.appendChild(linkButton);
 
-  // 插入图片
   const imageButton = createToolbarButton("图片", "插入图片", () => {
     ensureEditorFocus(bodyEditor);
     const src = window.prompt("输入图片地址", "https://") || "";
@@ -324,79 +413,27 @@ export function createBasecardEditorRoot(
     }
     const imgHtml = `<img ${parts.join(" ")} />`;
     insertHtmlAtSelection(bodyEditor, imgHtml);
-    validateAndEmit();
   });
   toolbar.appendChild(imageButton);
 
-  // 插入水平线
   const hrButton = createToolbarButton("分隔线", "插入水平线", () => {
     execEditorCommand(bodyEditor, "insertHorizontalRule");
-    validateAndEmit();
   });
   toolbar.appendChild(hrButton);
 
   bodyLabel.appendChild(toolbar);
-
-  // 富文本编辑区域
-  const bodyEditor = document.createElement("div");
-  bodyEditor.className = "chips-basecard-editor__richtext";
-  bodyEditor.contentEditable = "true";
-  bodyEditor.innerHTML = props.initialConfig.body ?? "";
   bodyLabel.appendChild(bodyEditor);
   form.appendChild(bodyLabel);
-
-  // 错误区域
-  const errorBox = document.createElement("div");
-  errorBox.className = "chips-basecard-editor__errors";
   form.appendChild(errorBox);
 
-  function validateAndEmit(): void {
-    const rawBodyHtml = bodyEditor.innerHTML;
-    const safeBodyHtml = sanitizeRichTextHtml(rawBodyHtml);
-
-    if (safeBodyHtml !== rawBodyHtml) {
-      bodyEditor.innerHTML = safeBodyHtml;
-    }
-
-    const next: BasecardConfig = {
-      ...defaultBasecardConfig,
-      ...props.initialConfig,
-      title: titleInput.value,
-      body: safeBodyHtml,
-    };
-
-    const errors: string[] = [];
-    if (!isNonEmptyString(next.title)) {
-      errors.push(t("basecard.validation.titleRequired"));
-    }
-
-    const textContent = bodyEditor.textContent ?? "";
-    if (!isNonEmptyString(textContent)) {
-      errors.push(t("basecard.validation.bodyRequired"));
-    }
-
-    errorBox.textContent = "";
-    if (errors.length > 0) {
-      const list = document.createElement("ul");
-      list.className = "chips-basecard-editor__errors-list";
-      for (const msg of errors) {
-        const li = document.createElement("li");
-        li.textContent = msg;
-        list.appendChild(li);
-      }
-      errorBox.appendChild(list);
-      return;
-    }
-
-    props.onChange(next);
-  }
-
   titleInput.addEventListener("input", () => {
-    validateAndEmit();
+    draft = collectDraftFromDom();
+    scheduleValidateAndEmit(false);
   });
 
   bodyEditor.addEventListener("input", () => {
-    validateAndEmit();
+    draft = collectDraftFromDom();
+    scheduleValidateAndEmit(false);
   });
 
   bodyEditor.addEventListener("keydown", (event) => {
@@ -408,21 +445,32 @@ export function createBasecardEditorRoot(
     if (key === "b") {
       event.preventDefault();
       execEditorCommand(bodyEditor, "bold");
-      validateAndEmit();
+      draft = collectDraftFromDom();
+      scheduleValidateAndEmit(false);
     } else if (key === "i") {
       event.preventDefault();
       execEditorCommand(bodyEditor, "italic");
-      validateAndEmit();
+      draft = collectDraftFromDom();
+      scheduleValidateAndEmit(false);
     } else if (key === "u") {
       event.preventDefault();
       execEditorCommand(bodyEditor, "underline");
-      validateAndEmit();
+      draft = collectDraftFromDom();
+      scheduleValidateAndEmit(false);
     }
+  });
+
+  form.addEventListener("focusout", (event) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && form.contains(nextTarget)) {
+      return;
+    }
+    flushValidateAndEmit(true);
   });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    validateAndEmit();
+    flushValidateAndEmit(true);
   });
 
   root.appendChild(form);

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createCardApi } from "../src/api/card";
 import type { CoreClient } from "../src/types/client";
 import { createError } from "../src/types/errors";
@@ -110,7 +110,6 @@ describe("CardApi", () => {
 
     const previousWindow = (globalThis as any).window;
     const previousDocument = (globalThis as any).document;
-
     try {
       (globalThis as any).window = { location: { origin: "https://example.test" } };
       const created: any[] = [];
@@ -140,10 +139,76 @@ describe("CardApi", () => {
       expect(created.length).toBe(1);
       const frame = created[0];
       expect(frame.tagName).toBe("IFRAME");
-      expect(frame.attrs.sandbox).toBe("allow-same-origin allow-scripts allow-forms");
+      expect(frame.attrs.sandbox).toBe("allow-scripts allow-forms");
       expect(frame.attrs.loading).toBe("lazy");
       expect(frame.title).toBe("My Card");
       expect(frame.srcdoc).toBe("<div>cover</div>");
+      expect(frame.src).toBeUndefined();
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("passes card editor options into card.renderEditor for editorPanel.render", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          view: {
+            title: "RichTextCard Editor",
+            body: "<div>editor</div>",
+            cardType: "RichTextCard",
+            pluginId: "chips.basecard.richtext",
+            baseCardId: "base-1",
+          },
+        } as any;
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+    try {
+      (globalThis as any).window = { location: { origin: "https://example.test" } };
+      const created: any[] = [];
+      (globalThis as any).document = {
+        createElement: (tag: string) => {
+          const el: any = {
+            tagName: tag.toUpperCase(),
+            attrs: {} as Record<string, string>,
+            setAttribute(name: string, value: string) {
+              this.attrs[name] = value;
+            },
+          };
+          created.push(el);
+          return el;
+        },
+      };
+
+      const result = await api.editorPanel.render({
+        cardType: "RichTextCard",
+        baseCardId: "base-1",
+        initialConfig: {
+          title: "Hello",
+          body: "<p>World</p>",
+        },
+      });
+
+      expect(calls.length).toBe(1);
+      expect(calls[0]?.action).toBe("card.renderEditor");
+      expect(calls[0]?.payload).toEqual({
+        cardType: "RichTextCard",
+        baseCardId: "base-1",
+        initialConfig: {
+          title: "Hello",
+          body: "<p>World</p>",
+        },
+      });
+      expect(result.origin).toBe("https://example.test");
+      expect(created[0]?.title).toBe("RichTextCard Editor");
+      expect(created[0]?.srcdoc).toBe("<div>editor</div>");
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -176,6 +241,7 @@ describe("CardApi", () => {
       const frame = { contentWindow } as unknown as HTMLIFrameElement;
 
       let readyCount = 0;
+      let nodeSelectPayload: unknown = null;
       let nodeErrorPayload: unknown = null;
       let fatalErrorPayload: unknown = null;
 
@@ -185,6 +251,10 @@ describe("CardApi", () => {
 
       api.compositeWindow.onNodeError(frame, (payload) => {
         nodeErrorPayload = payload;
+      });
+
+      api.compositeWindow.onNodeSelect(frame, (payload) => {
+        nodeSelectPayload = payload;
       });
 
       api.compositeWindow.onFatalError(frame, (error) => {
@@ -214,10 +284,39 @@ describe("CardApi", () => {
       dispatch({ type: "chips.composite:ready" });
       expect(readyCount).toBe(1);
 
+      const nodeSelect = {
+        type: "chips.composite:node-select",
+        payload: {
+          nodeId: "n1",
+          cardType: "RichTextCard",
+          pluginId: "chips.basecard.richtext",
+          state: "ready",
+          source: "pointer",
+        },
+      };
+      dispatch(nodeSelect);
+      expect(nodeSelectPayload).toEqual(nodeSelect.payload);
+
       // node-error payload
       const nodeError = { type: "chips.composite:node-error", payload: { nodeId: "n1", code: "E", message: "m" } };
       dispatch(nodeError);
       expect(nodeErrorPayload).toEqual(nodeError.payload);
+
+      // sandboxed blob iframes use opaque origin and must still be accepted
+      const nullOriginNodeSelect = {
+        type: "chips.composite:node-select",
+        payload: {
+          nodeId: "n2",
+          cardType: "RichTextCard",
+          source: "basecard",
+        },
+      };
+      dispatch(nullOriginNodeSelect, "null");
+      expect(nodeSelectPayload).toEqual(nullOriginNodeSelect.payload);
+
+      const nullOriginNodeError = { type: "chips.composite:node-error", payload: { nodeId: "n2", code: "NULL", message: "opaque origin" } };
+      dispatch(nullOriginNodeError, "null");
+      expect(nodeErrorPayload).toEqual(nullOriginNodeError.payload);
 
       // fatal-error payload normalized to StandardError
       const rawFatal = { type: "chips.composite:fatal-error", payload: { code: "X", message: "boom" } };
@@ -275,6 +374,99 @@ describe("CardApi", () => {
       loadListeners[0]!();
       expect(readyCount).toBe(1);
       expect(listeners.length).toBeGreaterThan(0);
+    } finally {
+      (globalThis as any).window = previousWindow;
+    }
+  });
+
+  it("editorPanel events respect origin and type filters", () => {
+    const api = createCardApi(
+      createStubClient(async () => {
+        throw new Error("should not be called");
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const contentWindow = {};
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      };
+
+      const frame = { contentWindow } as unknown as HTMLIFrameElement;
+      let readyCount = 0;
+      let changePayload: unknown = null;
+      let errorPayload: unknown = null;
+
+      api.editorPanel.onReady(frame, () => {
+        readyCount += 1;
+      });
+      api.editorPanel.onChange(frame, (payload) => {
+        changePayload = payload;
+      });
+      api.editorPanel.onError(frame, (payload) => {
+        errorPayload = payload;
+      });
+
+      const dispatch = (data: any, origin = "https://example.test", source: unknown = contentWindow) => {
+        for (const listener of listeners) {
+          listener({
+            source,
+            origin,
+            data,
+          } as MessageEvent);
+        }
+      };
+
+      dispatch({ type: "chips.card-editor:ready" }, "https://ignored.test");
+      dispatch({ type: "chips.card-editor:change", payload: { ignored: true } }, "https://example.test", {});
+      dispatch({ type: "chips.card-editor:unknown", payload: { ignored: true } });
+
+      dispatch({ type: "chips.card-editor:ready", payload: { pluginId: "chips.basecard.richtext" } });
+      dispatch({
+        type: "chips.card-editor:change",
+        payload: {
+          cardType: "RichTextCard",
+          pluginId: "chips.basecard.richtext",
+          baseCardId: "base-1",
+          config: { title: "Updated" },
+        },
+      });
+      dispatch({
+        type: "chips.card-editor:error",
+        payload: {
+          cardType: "RichTextCard",
+          pluginId: "chips.basecard.richtext",
+          baseCardId: "base-1",
+          code: "CARD_EDITOR_RENDER_FAILED",
+          message: "failed",
+        },
+      });
+      dispatch({ type: "chips.card-editor:ready", payload: { pluginId: "chips.basecard.richtext" } }, "null");
+
+      expect(readyCount).toBe(2);
+      expect(changePayload).toEqual({
+        cardType: "RichTextCard",
+        pluginId: "chips.basecard.richtext",
+        baseCardId: "base-1",
+        config: { title: "Updated" },
+      });
+      expect(errorPayload).toEqual({
+        cardType: "RichTextCard",
+        pluginId: "chips.basecard.richtext",
+        baseCardId: "base-1",
+        code: "CARD_EDITOR_RENDER_FAILED",
+        message: "failed",
+      });
     } finally {
       (globalThis as any).window = previousWindow;
     }

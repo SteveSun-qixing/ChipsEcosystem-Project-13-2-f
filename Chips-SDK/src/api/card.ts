@@ -68,6 +68,24 @@ export interface CardRenderResult {
   view: CardRenderView;
 }
 
+export interface CardEditorRenderOptions {
+  cardType: string;
+  initialConfig?: Record<string, unknown>;
+  baseCardId?: string;
+}
+
+export interface CardEditorView {
+  title: string;
+  body: string;
+  cardType: string;
+  pluginId: string;
+  baseCardId?: string;
+}
+
+export interface CardEditorRenderResult {
+  view: CardEditorView;
+}
+
 export interface FrameRenderResult {
   frame: HTMLIFrameElement;
   origin: string;
@@ -83,6 +101,29 @@ export interface CompositeNodeError {
   details?: unknown;
 }
 
+export interface CompositeNodeSelectPayload {
+  nodeId: string;
+  cardType: string;
+  pluginId?: string;
+  state?: "ready" | "degraded";
+  source?: string;
+}
+
+export interface CardEditorChangePayload {
+  baseCardId?: string;
+  cardType: string;
+  pluginId: string;
+  config: Record<string, unknown>;
+}
+
+export interface CardEditorErrorPayload {
+  baseCardId?: string;
+  cardType: string;
+  pluginId: string;
+  code: string;
+  message: string;
+}
+
 export interface CardApi {
   parse(cardFile: string): Promise<CardDocument>;
   validate(card: CardDocument): Promise<ValidationResult>;
@@ -93,11 +134,21 @@ export interface CardApi {
   compositeWindow: {
     render(options: { cardFile: string; mode?: CompositeMode }): Promise<FrameRenderResult>;
     onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onNodeSelect(
+      frame: HTMLIFrameElement,
+      handler: (payload: CompositeNodeSelectPayload) => void,
+    ): () => void;
     onNodeError(
       frame: HTMLIFrameElement,
       handler: (payload: CompositeNodeError) => void,
     ): () => void;
     onFatalError(frame: HTMLIFrameElement, handler: (error: import("../types/errors").StandardError) => void): () => void;
+  };
+  editorPanel: {
+    render(options: CardEditorRenderOptions): Promise<FrameRenderResult>;
+    onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onChange(frame: HTMLIFrameElement, handler: (payload: CardEditorChangePayload) => void): () => void;
+    onError(frame: HTMLIFrameElement, handler: (payload: CardEditorErrorPayload) => void): () => void;
   };
 }
 
@@ -144,16 +195,7 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        const frame = document.createElement("iframe");
-        frame.setAttribute("sandbox", "allow-same-origin allow-scripts allow-forms");
-        frame.setAttribute("loading", "lazy");
-        frame.title = cardName ?? view.title ?? "Card Cover";
-        frame.srcdoc = view.body;
-
-        return {
-          frame,
-          origin: window.location.origin,
-        };
+        return createFrameFromView(view.body, cardName ?? view.title ?? "Card Cover");
       },
     },
     compositeWindow: {
@@ -189,19 +231,17 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        const frame = document.createElement("iframe");
-        frame.setAttribute("sandbox", "allow-same-origin allow-scripts allow-forms");
-        frame.setAttribute("loading", "lazy");
-        frame.title = view.title ?? "Card";
-        frame.srcdoc = view.body;
-
-        return {
-          frame,
-          origin: window.location.origin,
-        };
+        return createFrameFromView(view.body, view.title ?? "Card");
       },
       onReady(frame, handler) {
         return subscribeToCompositeReady(frame, handler);
+      },
+      onNodeSelect(frame, handler) {
+        return subscribeToCompositeEvent<CompositeNodeSelectPayload>(
+          frame,
+          "chips.composite:node-select",
+          handler,
+        );
       },
       onNodeError(frame, handler) {
         return subscribeToCompositeEvent<CompositeNodeError>(
@@ -221,6 +261,56 @@ export function createCardApi(client: CoreClient): CardApi {
         );
       },
     },
+    editorPanel: {
+      async render({ cardType, initialConfig, baseCardId }) {
+        if (!cardType) {
+          throw createError(
+            "INVALID_ARGUMENT",
+            "card.editorPanel.render: cardType is required.",
+          );
+        }
+
+        const { view } = await client.invoke<CardEditorRenderOptions, CardEditorRenderResult>(
+          "card.renderEditor",
+          {
+            cardType,
+            initialConfig: initialConfig ?? {},
+            baseCardId,
+          },
+        );
+
+        if (typeof document === "undefined") {
+          throw createError(
+            "RUNTIME_ENV_UNSUPPORTED",
+            "card.editorPanel.render requires a DOM environment.",
+          );
+        }
+
+        return createFrameFromView(view.body, view.title ?? `${cardType} Editor`);
+      },
+      onReady(frame, handler) {
+        return subscribeToFrameMessage(frame, "chips.card-editor:ready", () => handler());
+      },
+      onChange(frame, handler) {
+        return subscribeToFrameMessage<CardEditorChangePayload>(frame, "chips.card-editor:change", handler);
+      },
+      onError(frame, handler) {
+        return subscribeToFrameMessage<CardEditorErrorPayload>(frame, "chips.card-editor:error", handler);
+      },
+    },
+  };
+}
+
+function createFrameFromView(body: string, title: string): FrameRenderResult {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("sandbox", "allow-scripts allow-forms");
+  frame.setAttribute("loading", "lazy");
+  frame.title = title;
+  frame.srcdoc = body;
+
+  return {
+    frame,
+    origin: window.location.origin,
   };
 }
 
@@ -278,10 +368,18 @@ function subscribeToCompositeEvent<T = void>(
   type: string,
   handler: (payload: T) => void,
 ): () => void {
+  return subscribeToFrameMessage(frame, type, handler);
+}
+
+function subscribeToFrameMessage<T = void>(
+  frame: HTMLIFrameElement,
+  type: string,
+  handler: (payload: T) => void,
+): () => void {
   if (typeof window === "undefined") {
     throw createError(
       "RUNTIME_ENV_UNSUPPORTED",
-      "Composite window events require a DOM environment.",
+      "Frame events require a DOM environment.",
     );
   }
 
@@ -290,7 +388,7 @@ function subscribeToCompositeEvent<T = void>(
 
   const listener = (event: MessageEvent) => {
     if (!event || event.source !== contentWindow) return;
-    if (event.origin !== expectedOrigin) return;
+    if (event.origin !== expectedOrigin && event.origin !== "null") return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const record = data as { type?: string; payload?: unknown };

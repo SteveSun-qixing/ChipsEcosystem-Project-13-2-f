@@ -72,6 +72,7 @@
 - 每个基础卡片节点在复合文档内部保持独立 iframe，以便失败隔离和尺寸回传；
 - 节点加载完成后向复合窗口回传高度；
 - 全部节点就绪后发送 `chips.composite:ready`；
+- 复合卡片处于 `mode: 'preview'` 时，基础卡片节点被点击后必须发送 `chips.composite:node-select`；
 - 单节点失败时发送 `chips.composite:node-error`，同时在对应位置输出降级内容；
 - 整体严重错误时发送 `chips.composite:fatal-error`。
 
@@ -81,3 +82,23 @@
 - 主题切换后，卡片内容区与应用壳层的刷新结果必须一致；
 - 原生窗口背景不得与内容窗口主题脱节；
 - 不再保留旧版适配器兼容路径作为正式方案。
+
+## 10. 编辑器配套链路
+
+复合卡片显示链路的正式配套链路是基础卡片编辑器面板链路。
+
+标准流程：
+
+1. 编辑引擎卡片窗口统一使用 `client.card.compositeWindow.render({ cardFile, mode: 'preview' })`；
+2. 编辑引擎编辑面板统一使用 `client.card.editorPanel.render({ cardType, initialConfig, baseCardId })`；
+3. Host 通过 `card.renderEditor` 路由到对应基础卡片插件；
+4. 基础卡片插件导出 `renderBasecardEditor`，由 Host 装载到独立 iframe；
+5. 编辑模式下，复合卡片 iframe 通过 `chips.composite:node-select` 把基础卡片选中事件回传给应用壳层；
+6. 编辑器通过 `chips.card-editor:*` 事件与应用壳层通信。
+
+约束：
+
+- 编辑器链路与显示链路必须共享同一插件能力匹配规则；
+- 编辑引擎壳层只负责容器、选中态与数据保存，不负责插件源码装载；
+- 编辑引擎应直接消费 `chips.composite:node-select`，不应在复合卡片旁再维护一套重复的基础卡片列表作为正式交互入口；
+- 不允许编辑引擎额外实现一套脱离 Host/SDK 的编辑器运行时。

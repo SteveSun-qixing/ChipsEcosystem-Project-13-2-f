@@ -129,6 +129,12 @@ client.card.compositeWindow.render({
   cardFile: string,
   mode?: 'view' | 'preview'
 }): Promise<IframeWindow>
+
+client.card.editorPanel.render({
+  cardType: string,
+  initialConfig?: Record<string, unknown>,
+  baseCardId?: string
+}): Promise<IframeWindow>
 ```
 
 说明：
@@ -136,7 +142,64 @@ client.card.compositeWindow.render({
 - `coverFrame` 返回卡片封面 iframe（下方显示卡片名称）。
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
+- `compositeWindow.mode = 'preview'` 时，可通过事件订阅接收基础卡片节点选中事件。
+- `editorPanel` 返回基础卡片编辑器 iframe，正式用于编辑引擎编辑面板、嵌套编辑场景等。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
+
+复合卡片预览模式推荐事件订阅接口：
+
+```typescript
+const preview = await client.card.compositeWindow.render({
+  cardFile: '/workspace/demo.card',
+  mode: 'preview',
+});
+
+const disposeNodeSelect = client.card.compositeWindow.onNodeSelect(preview.frame, (payload) => {
+  console.log(payload.nodeId, payload.cardType, payload.pluginId);
+});
+```
+
+### 基础卡片编辑器面板
+
+正式编辑链路如下：
+
+1. 应用确定当前基础卡片 `cardType/baseCardId/config`；
+2. 调用 `client.card.editorPanel.render(...)`；
+3. Host 路由到对应基础卡片插件的 `renderBasecardEditor`；
+4. Host 返回完整编辑器文档并由 SDK 封装为 iframe；
+5. 应用通过事件订阅接收编辑器状态与配置变更。
+
+推荐事件订阅接口：
+
+```typescript
+const result = await client.card.editorPanel.render({
+  cardType: 'RichTextCard',
+  baseCardId: 'base-1',
+  initialConfig: {
+    title: 'Hello',
+    body: '<p>World</p>',
+  },
+});
+
+const disposeReady = client.card.editorPanel.onReady(result.frame, () => {
+  console.log('editor ready');
+});
+
+const disposeChange = client.card.editorPanel.onChange(result.frame, (payload) => {
+  console.log(payload.baseCardId, payload.config);
+});
+
+const disposeError = client.card.editorPanel.onError(result.frame, (payload) => {
+  console.error(payload.code, payload.message);
+});
+```
+
+约束：
+
+- 应用层不得保留本地默认编辑器作为正式路径兜底；
+- 应用层不得绕过 SDK/Host 直接 import 基础卡片插件源码；
+- 编辑引擎等应用在预览模式下应优先消费 `client.card.compositeWindow.onNodeSelect(...)` 作为基础卡片选中入口；
+- 主题与多语言上下文必须由 Host 注入并沿正式链路进入编辑器 iframe。
 
 ## 插件管理
 

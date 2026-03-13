@@ -113,6 +113,7 @@ card 子域采用 vNext 动作口径：
 | `card.parse({ cardFile })` | 解析卡片结构并返回 AST | 是 |
 | `card.validate({ cardFile })` | 验证卡片格式合法性 | 是 |
 | `card.render({ cardFile, options? })` | 调用 Host L9 统一渲染链路并返回渲染结果 | 否 |
+| `card.renderEditor({ cardType, initialConfig?, baseCardId? })` | 调用 Host 基础卡片编辑器装载链路并返回编辑器文档 | 否 |
 
 `card.render.options` 推荐字段：
 
@@ -128,6 +129,50 @@ card 子域采用 vNext 动作口径：
 - `verifyConsistency`（若提供）必须为布尔值。
 
 `card.render` 返回 `view.semanticHash` 与可选 `view.diagnostics/view.consistency`，用于一致性比对与诊断。
+
+`card.renderEditor` 返回 `view.title/body/cardType/pluginId/baseCardId`，用于编辑面板装载正式基础卡片编辑器 iframe。
+
+正式约束：
+
+- 编辑引擎和其他应用不得自行扫描插件目录后直接 import 编辑器模块；
+- 基础卡片编辑器必须通过 `card.renderEditor` 由 Host 按 `capabilities.cardTypes` 路由；
+- `initialConfig` 由应用层提供当前基础卡片内容快照，Host 负责注入插件编辑器运行时；
+- `baseCardId` 用于编辑器事件回传与上层状态同步。
+
+复合卡片预览 iframe 事件协议：
+
+- `chips.composite:ready`
+- `chips.composite:node-select`
+- `chips.composite:node-error`
+- `chips.composite:fatal-error`
+
+其中 `node-select` 在 `mode: 'preview'` 下触发，必须至少包含：
+
+```ts
+{
+  nodeId: string;
+  cardType: string;
+  pluginId?: string;
+}
+```
+
+编辑器 iframe 事件协议：
+
+- `chips.card-editor:ready`
+- `chips.card-editor:change`
+- `chips.card-editor:error`
+- `chips.card-editor:resize`
+
+其中 `change` 事件必须至少包含：
+
+```ts
+{
+  baseCardId?: string;
+  cardType: string;
+  pluginId: string;
+  config: Record<string, unknown>;
+}
+```
 
 ### storage子域
 

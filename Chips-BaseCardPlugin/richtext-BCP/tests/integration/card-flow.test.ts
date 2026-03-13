@@ -1,10 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountBasecardView } from "../../src/render/runtime";
 import { mountBasecardEditor } from "../../src/editor/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
 describe("basecard integration flow (text basic)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("updates view when editor emits valid config", () => {
+    vi.useFakeTimers();
+
     const container = document.createElement("div");
     const editorContainer = document.createElement("div");
 
@@ -44,9 +50,9 @@ describe("basecard integration flow (text basic)", () => {
 
     titleInput.value = "Updated";
     titleInput.dispatchEvent(new Event("input"));
+    vi.advanceTimersByTime(130);
 
     const titleEl = container.querySelector(".chips-basecard__title");
     expect(titleEl?.textContent).toBe("Updated");
   });
 });
-

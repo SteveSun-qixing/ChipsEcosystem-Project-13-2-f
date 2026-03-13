@@ -1,0 +1,155 @@
+.file-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--chips-color-bg-secondary, #f8f9fa);
+  user-select: none;
+}
+
+/* 工具栏 */
+.file-manager__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--chips-spacing-sm, 8px);
+  padding: var(--chips-spacing-sm, 8px) var(--chips-spacing-md, 12px);
+  background-color: var(--chips-color-bg-primary, #fff);
+  border-bottom: 1px solid var(--chips-color-border-light, #f0f0f0);
+  flex-wrap: nowrap;
+}
+
+.file-manager__toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-xs, 4px);
+  flex-shrink: 0;
+}
+
+.file-manager__btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  border-radius: var(--chips-radius-sm, 4px) !important;
+  cursor: pointer;
+  font-size: 16px !important;
+  min-width: 0 !important;
+}
+
+.file-manager__btn:hover {
+  background-color: var(--chips-color-bg-hover, rgba(0, 0, 0, 0.05)) !important;
+}
+
+/* 搜索框行 */
+.file-manager__search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-sm, 8px);
+  padding: var(--chips-spacing-sm, 8px) var(--chips-spacing-md, 12px);
+  background-color: var(--chips-color-bg-primary, #fff);
+  border-bottom: 1px solid var(--chips-color-border-light, #f0f0f0);
+}
+
+.file-manager__search-input {
+  flex: 1;
+}
+
+.file-manager__search-input input {
+  height: 28px;
+  font-size: 13px;
+}
+
+.file-manager__search-close {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  font-size: 14px !important;
+  color: var(--chips-color-text-secondary, #666);
+  min-width: 0 !important;
+}
+
+/* 内容区 */
+.file-manager__content {
+  flex: 1;
+  overflow: hidden;
+  background-color: var(--chips-color-bg-primary, #fff);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 加载状态 */
+.file-manager__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--chips-spacing-sm, 8px);
+  color: var(--chips-color-text-tertiary, #999);
+}
+
+.file-manager__loading-spinner {
+  font-size: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 状态栏 */
+.file-manager__statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-xs, 4px);
+  padding: var(--chips-spacing-xs, 4px) var(--chips-spacing-sm, 8px);
+  background-color: var(--chips-color-bg-secondary, #f8f9fa);
+  border-top: 1px solid var(--chips-color-border-light, #f0f0f0);
+  font-size: var(--chips-font-size-xs, 12px);
+  color: var(--chips-color-text-tertiary, #999);
+}
+
+.file-manager__statusbar-count {
+  font-weight: var(--chips-font-weight-medium, 500);
+  color: var(--chips-color-text-secondary, #666);
+}
+
+/* 空状态 */
+.file-manager__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--chips-spacing-sm, 8px);
+  padding: var(--chips-spacing-xl, 32px);
+  color: var(--chips-color-text-tertiary, #999);
+}
+
+.file-manager__empty-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.file-manager__empty-title {
+  font-size: var(--chips-font-size-md, 16px);
+  font-weight: var(--chips-font-weight-medium, 500);
+  color: var(--chips-color-text-secondary, #666);
+}
+
+.file-manager__empty-hint {
+  font-size: var(--chips-font-size-sm, 14px);
+  text-align: center;
+  line-height: 1.5;
+  color: var(--chips-color-text-tertiary, #999);
+}

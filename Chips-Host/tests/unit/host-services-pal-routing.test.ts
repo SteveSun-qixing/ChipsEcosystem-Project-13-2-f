@@ -17,6 +17,7 @@ interface PalState {
   clipboardText: string;
   clipboardImageBase64: string | null;
   clipboardFiles: string[];
+  windowCreateArgs: unknown[];
   dialogOpenArgs: unknown[];
   dialogSaveArgs: unknown[];
   dialogMessageArgs: unknown[];
@@ -59,6 +60,7 @@ const createPal = (state: PalState): PALAdapter => {
     } as any,
     window: {
       async create(options) {
+        state.windowCreateArgs.push(options);
         return {
           id: 'window-1',
           title: options.title,
@@ -341,6 +343,7 @@ describe('Host services PAL routing', () => {
       clipboardText: '',
       clipboardImageBase64: null,
       clipboardFiles: [],
+      windowCreateArgs: [],
       dialogOpenArgs: [],
       dialogSaveArgs: [],
       dialogMessageArgs: [],
@@ -407,6 +410,7 @@ describe('Host services PAL routing', () => {
       clipboardText: '',
       clipboardImageBase64: null,
       clipboardFiles: [],
+      windowCreateArgs: [],
       dialogOpenArgs: [],
       dialogSaveArgs: [],
       dialogMessageArgs: [],
@@ -473,6 +477,7 @@ describe('Host services PAL routing', () => {
       clipboardText: '',
       clipboardImageBase64: null,
       clipboardFiles: [],
+      windowCreateArgs: [],
       dialogOpenArgs: [],
       dialogSaveArgs: [],
       dialogMessageArgs: [],
@@ -579,5 +584,90 @@ describe('Host services PAL routing', () => {
     expect(received.message.encoding).toBe('base64');
     expect(received.message.transport).toBe('shared-memory');
     expect(listed.channels.map((item) => item.channelId)).toContain(createdChannel.channel.channelId);
+  });
+
+  it('injects the current Host workspace into app launch params when opening a plugin window', async () => {
+    const state: PalState = {
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
+      windowCreateArgs: [],
+      dialogOpenArgs: [],
+      dialogSaveArgs: [],
+      dialogMessageArgs: [],
+      dialogConfirmArgs: [],
+      shellOpenPath: [],
+      shellOpenExternal: [],
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false,
+      ipcChannels: new Map()
+    };
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'launchable.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.launchable.plugin',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Launchable Plugin',
+          permissions: ['file.read'],
+          entry: 'dist/index.html'
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>plugin</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.launchable.plugin');
+
+    const context = createContextFactory();
+    const launched = await kernel.invoke<
+      { pluginId: string; launchParams: Record<string, unknown> },
+      { window: { id: string }; session: { sessionId: string; permissions: string[] } }
+    >(
+      'plugin.launch',
+      {
+        pluginId: 'chips.launchable.plugin',
+        launchParams: {
+          source: 'card-box-library'
+        }
+      },
+      context(['plugin.manage'])
+    );
+
+    expect(launched.window.id).toBe('window-1');
+    expect(launched.session.permissions).toEqual(['file.read']);
+    expect(state.windowCreateArgs).toHaveLength(1);
+    expect(state.windowCreateArgs[0]).toEqual(
+      expect.objectContaining({
+        pluginId: 'chips.launchable.plugin',
+        launchParams: expect.objectContaining({
+          source: 'card-box-library',
+          workspacePath: workspace
+        })
+      })
+    );
   });
 });

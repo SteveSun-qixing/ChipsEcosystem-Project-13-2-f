@@ -77,6 +77,12 @@ interface PluginShortcutView {
   exists: boolean;
 }
 
+interface FileListEntryView {
+  path: string;
+  isFile: boolean;
+  isDirectory: boolean;
+}
+
 interface ModuleRecord {
   slot: string;
   module: Record<string, unknown>;
@@ -523,6 +529,30 @@ const resolveLaunchExecutable = (): { executablePath: string; argsPrefix: string
   };
 };
 
+const resolveListedPath = (dir: string, entry: string): string => {
+  return path.isAbsolute(entry) ? path.normalize(entry) : path.join(dir, entry);
+};
+
+const toFileListEntries = async (pal: PALAdapter, dir: string, entries: string[]): Promise<FileListEntryView[]> => {
+  const resolved = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = resolveListedPath(dir, entry);
+      try {
+        const stat = await pal.fs.stat(entryPath);
+        return {
+          path: entryPath,
+          isFile: stat.isFile,
+          isDirectory: stat.isDirectory
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return resolved.filter((entry): entry is FileListEntryView => entry !== null);
+};
+
 const buildPluginShortcutArgs = (workspacePath: string, pluginId: string): string[] => {
   const target = resolveLaunchExecutable();
   return [...target.argsPrefix, `--workspace=${workspacePath}`, `--chips-launch-plugin=${pluginId}`];
@@ -545,7 +575,10 @@ const openPluginWindow = async (
     throw createError('PLUGIN_DISABLED', `Plugin disabled: ${pluginId}`);
   }
 
-  const session = ctx.runtime.pluginInit(pluginId, launchParams);
+  const session = ctx.runtime.pluginInit(pluginId, {
+    ...launchParams,
+    workspacePath: ctx.workspacePath
+  });
   await ctx.kernel.events.emit('plugin.init', 'plugin-service', { pluginId, sessionId: session.sessionId });
   ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
   await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId, sessionId: session.sessionId });
@@ -997,14 +1030,15 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       list: {
-        descriptor: descriptor<{ dir: string; options?: { recursive?: boolean } }, { entries: string[] }>(
+        descriptor: descriptor<{ dir: string; options?: { recursive?: boolean } }, { entries: FileListEntryView[] }>(
           'file.list',
           ['file.read'],
           5_000,
           true,
           0,
           withMetrics(state, 'file.list', async (input) => {
-            const entries = await ctx.pal.fs.list(input.dir, input.options);
+            const listed = await ctx.pal.fs.list(input.dir, input.options);
+            const entries = await toFileListEntries(ctx.pal, input.dir, listed);
             return { entries };
           })
         )
@@ -2607,6 +2641,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             cardFile: string;
             options?: {
               target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render';
+              mode?: 'view' | 'preview';
               viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
               verifyConsistency?: boolean;
             };
@@ -2622,6 +2657,33 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const themeContext = resolveThemeContext(state, []);
             const view = await ctx.getCardService().render(input.cardFile, {
               ...input.options,
+              theme: themeContext.renderTheme,
+              themeCssText: themeContext.css
+            });
+            return { view };
+          })
+        )
+      },
+      renderEditor: {
+        descriptor: descriptor<
+          {
+            cardType: string;
+            initialConfig?: Record<string, unknown>;
+            baseCardId?: string;
+          },
+          { view: unknown }
+        >(
+          'card.renderEditor',
+          ['card.write'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'card.renderEditor', async (input) => {
+            const themeContext = resolveThemeContext(state, []);
+            const view = await ctx.getCardService().renderEditor({
+              cardType: input.cardType,
+              initialConfig: input.initialConfig,
+              baseCardId: input.baseCardId,
               theme: themeContext.renderTheme,
               themeCssText: themeContext.css
             });

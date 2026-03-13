@@ -1,7 +1,6 @@
 import React, { ReactNode } from 'react';
 import { useUI } from '../../context/UIContext';
 import { ToolWindow } from '../../components/BaseWindow/ToolWindow';
-import { Dock } from '../../components/Dock/Dock';
 import './WindowLayer.css';
 
 interface WindowLayerProps {
@@ -11,6 +10,7 @@ interface WindowLayerProps {
 
 export function WindowLayer({ onOpenSettings }: WindowLayerProps) {
     const { windows } = useUI();
+    void onOpenSettings;
 
     // Filter windows to render in this layer (non-minimized tool windows)
     const visibleToolWindows = windows.filter(
@@ -23,9 +23,6 @@ export function WindowLayer({ onOpenSettings }: WindowLayerProps) {
             {visibleToolWindows.map((window) => (
                 <ToolWindow key={window.id} config={window as any} />
             ))}
-
-            {/* Program Dock */}
-            <Dock onOpenSettings={onOpenSettings || (() => {})} />
         </div>
     );
 }

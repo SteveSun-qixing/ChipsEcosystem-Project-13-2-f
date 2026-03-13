@@ -22,11 +22,11 @@ export function CardSettingsDialog({
   onSave,
 }: CardSettingsDialogProps) {
   const { t } = useTranslation();
-  const { getCard, updateCard } = useCard();
+  const { getCard, saveCard, updateCardMetadata } = useCard();
   const [activeTab, setActiveTab] = useState('basic');
 
   const card = getCard(cardId);
-  const theme = card?.metadata.themeId || 'default-light';
+  const theme = card?.metadata.themeId || 'chips-official.default-theme';
   const cardInfo = card as any;
 
   useEffect(() => {
@@ -58,19 +58,13 @@ export function CardSettingsDialog({
 
   const handleUpdateName = (name: string) => {
     if (card) {
-      updateCard(cardId, {
-        ...card,
-        metadata: { ...card.metadata, name },
-      } as any);
+      updateCardMetadata(cardId, { name });
     }
   };
 
   const handleUpdateTags = (tags: string[]) => {
     if (card) {
-      updateCard(cardId, {
-        ...card,
-        metadata: { ...card.metadata, tags },
-      } as any);
+      updateCardMetadata(cardId, { tags });
     }
   };
 
@@ -78,8 +72,6 @@ export function CardSettingsDialog({
     await saveCard(cardId);
     onSave();
   };
-
-  const { saveCard } = useCard();
 
   return (
     <div className="card-settings-overlay" onClick={handleOverlayClick}>
@@ -131,10 +123,7 @@ export function CardSettingsDialog({
                   <div className="card-settings-dialog__panel">
                     <ThemePanel value={theme} onChange={(newTheme) => {
                       if (card) {
-                        updateCard(cardId, {
-                          ...card,
-                          metadata: { ...card.metadata, themeId: newTheme },
-                        } as any);
+                        updateCardMetadata(cardId, { themeId: newTheme });
                       }
                     }} />
                   </div>

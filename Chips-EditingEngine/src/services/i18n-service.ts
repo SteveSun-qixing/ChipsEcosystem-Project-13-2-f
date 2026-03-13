@@ -8,7 +8,7 @@
  * - 应用内 UI 文案由 src/i18n/ 本地字典管理，通过 useTranslation hook 访问。
  */
 import { getChipsClient } from './bridge-client';
-import { setLocale } from '../i18n';
+import { getLocale, setLocale } from '../i18n';
 
 export const i18nService = {
     /**
@@ -21,7 +21,7 @@ export const i18nService = {
             if (locale) {
                 setLocale(locale);
             }
-            return locale || 'zh-CN';
+            return getLocale();
         } catch (e) {
             console.warn('[i18n] Failed to get locale from Host, using default zh-CN', e);
             return 'zh-CN';

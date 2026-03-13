@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { getChipsClient } from '../../../services/bridge-client';
 import './ThemePanel.css';
-
-// import { getEditorSdk } from '@/services/sdk-service';
 
 export interface ThemePanelProps {
   value: string;
@@ -11,72 +10,96 @@ export interface ThemePanelProps {
 
 export function ThemePanel({ value, onChange }: ThemePanelProps) {
   const { t } = useTranslation();
+  const clientRef = useRef(getChipsClient());
+  const onChangeRef = useRef(onChange);
 
-  const DEFAULT_THEME_ID = 'default-light';
+  const DEFAULT_THEME_ID = 'chips-official.default-theme';
 
   const THEME_NAME_KEY_MAP: Record<string, string> = {
-    'default-light': 'card_settings.theme_default_light',
-    'default-dark': 'card_settings.theme_default_dark',
+    'chips-official.default-theme': 'card_settings.theme_default_light',
+    'chips-official.default-dark-theme': 'card_settings.theme_default_dark',
   };
 
-  const [themes, setThemes] = useState<{ id: string; name: string; installed: boolean }[]>([]);
+  const [themes, setThemes] = useState<Array<{ id: string; name: string; installed: boolean; version?: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const selectedTheme = value || DEFAULT_THEME_ID;
 
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   const selectTheme = (themeId: string) => {
-    onChange(themeId);
+    onChangeRef.current(themeId);
   };
 
-  const loadThemes = async () => {
-    setIsLoading(true);
-    try {
-      // Mock SDK response
-      // const sdk = await getEditorSdk();
-      // const themeList = sdk.themes.listThemes();
-      const themeList = [
-        { id: 'default-light', name: '默认浅色', installed: true },
-        { id: 'default-dark', name: '默认深色', installed: true },
-      ];
+  useEffect(() => {
+    let active = true;
 
-      if (themeList.length > 0) {
-        setThemes(themeList.map(theme => ({
-          ...theme,
-          name: t(THEME_NAME_KEY_MAP[theme.id]) || theme.name,
-        })));
-      } else {
+    async function loadThemes(): Promise<void> {
+      setIsLoading(true);
+      try {
+        const [themeList, currentTheme] = await Promise.all([
+          clientRef.current.theme.list(),
+          clientRef.current.theme.getCurrent(),
+        ]);
+
+        const nextThemes = themeList.length > 0
+          ? themeList.map((theme) => ({
+              id: theme.id,
+              name: t(THEME_NAME_KEY_MAP[theme.id]) || theme.displayName || theme.id,
+              installed: true,
+              version: theme.version,
+            }))
+          : [{
+              id: currentTheme.themeId || DEFAULT_THEME_ID,
+              name: t(THEME_NAME_KEY_MAP[currentTheme.themeId]) || currentTheme.displayName || currentTheme.themeId || DEFAULT_THEME_ID,
+              installed: true,
+              version: currentTheme.version,
+            }];
+
+        if (!active) {
+          return;
+        }
+
+        setThemes(nextThemes);
+
+        if (!value && currentTheme.themeId) {
+          onChangeRef.current(currentTheme.themeId);
+          return;
+        }
+
+        if (value && !nextThemes.some((theme) => theme.id === value)) {
+          onChangeRef.current(nextThemes[0]?.id ?? DEFAULT_THEME_ID);
+        }
+      } catch (error) {
+        console.error('Failed to load themes:', error);
+        if (!active) {
+          return;
+        }
         setThemes([{
           id: DEFAULT_THEME_ID,
           name: t('card_settings.theme_default_light') || '默认浅色',
           installed: true,
         }]);
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Failed to load themes:', error);
-      setThemes([{
-        id: DEFAULT_THEME_ID,
-        name: t('card_settings.theme_default_light') || '默认浅色',
-        installed: true,
-      }]);
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  useEffect(() => {
-    loadThemes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void loadThemes();
+
+    return () => {
+      active = false;
+    };
+  }, [t, value]);
 
   useEffect(() => {
     if (themes.length > 0 && !themes.some(th => th.id === selectedTheme)) {
-      selectTheme(themes[0].id);
+      selectTheme(themes[0]?.id ?? DEFAULT_THEME_ID);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themes, selectedTheme]);
-
-  const handleUploadTheme = () => {
-    alert(t('card_settings.theme_upload_coming') || '主体上传功能开发中...');
-  };
 
   return (
     <div className="theme-panel">
@@ -84,13 +107,6 @@ export function ThemePanel({ value, onChange }: ThemePanelProps) {
         <label className="theme-panel__label">
           {t('card_settings.theme_select') || '选择主题'}
         </label>
-        <button
-          type="button"
-          className="theme-panel__upload-btn"
-          onClick={handleUploadTheme}
-        >
-          📤 {t('card_settings.theme_upload') || '导入主题'}
-        </button>
       </div>
 
       {isLoading ? (
@@ -109,7 +125,9 @@ export function ThemePanel({ value, onChange }: ThemePanelProps) {
               onClick={() => selectTheme(theme.id)}
             >
               <span className="theme-panel__item-preview" />
-              <span className="theme-panel__item-name">{theme.name}</span>
+              <span className="theme-panel__item-name">
+                {theme.version ? `${theme.name} ${theme.version}` : theme.name}
+              </span>
               {selectedTheme === theme.id && (
                 <span
                   className="theme-panel__item-check"

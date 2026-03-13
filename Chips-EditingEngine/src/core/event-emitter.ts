@@ -4,7 +4,7 @@
  * @description 提供完整的事件发布/订阅功能
  */
 
-export type EventHandler<T = unknown> = (payload: T) => void;
+export type EventHandler<T = unknown> = (payload: T) => void | Promise<void>;
 
 export interface Subscription {
     id: string;
@@ -86,7 +86,12 @@ export function createEventEmitter(): EventEmitter {
 
             allSubs.forEach(sub => {
                 try {
-                    sub.handler(payload);
+                    const result = sub.handler(payload);
+                    if (result && typeof (result as PromiseLike<void>).then === 'function') {
+                        void (result as Promise<void>).catch((error) => {
+                            console.error(`[EventEmitter] Async handler error for ${event}:`, error);
+                        });
+                    }
                     if (sub.once) {
                         const targetEvent = subs.includes(sub) ? event : '*';
                         toRemove.push({ event: targetEvent, id: sub.id });

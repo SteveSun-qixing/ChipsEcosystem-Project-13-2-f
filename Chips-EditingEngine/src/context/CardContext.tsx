@@ -14,6 +14,7 @@ export interface CardContextType extends CardState {
     setActiveCard: (cardId: string | null) => void;
     setSelectedBaseCard: (baseCardId: string | null) => void;
     updateCard: (cardId: string, updates: Partial<CompositeCard>) => void;
+    updateCardMetadata: (cardId: string, metadata: Partial<CompositeCard['metadata']>) => void;
     createCard: (name: string, initialBasicCard?: { type: string; data?: Record<string, unknown> }) => Promise<CompositeCard>;
     saveCard: (id: string) => Promise<void>;
     addBasicCard: (cardId: string, type: string, data?: Record<string, unknown>, position?: number) => void;
@@ -93,6 +94,10 @@ export function CardProvider({ children }: { children: ReactNode }) {
         return cardService.createCard(name, initialBasicCard);
     }, [cardService]);
 
+    const updateCardMetadata = useCallback((cardId: string, metadata: Partial<CompositeCard['metadata']>) => {
+        cardService.updateCardMetadata(cardId, metadata);
+    }, [cardService]);
+
     const saveCard = useCallback(async (id: string) => {
         return cardService.saveCard(id);
     }, [cardService]);
@@ -121,15 +126,24 @@ export function CardProvider({ children }: { children: ReactNode }) {
         return cardService.getCard(id);
     }, [cardService]);
 
+    const setActiveCard = useCallback((cardId: string | null) => {
+        cardService.selectCard(cardId);
+    }, [cardService]);
+
+    const setSelectedBaseCard = useCallback((baseCardId: string | null) => {
+        cardService.selectBasicCard(baseCardId);
+    }, [cardService]);
+
     const value: CardContextType = {
         openCards,
         activeCardId,
         selectedBaseCardId,
         openCard,
         closeCard,
-        setActiveCard: setActiveCardId,
-        setSelectedBaseCard: setSelectedBaseCardId,
+        setActiveCard,
+        setSelectedBaseCard,
         updateCard,
+        updateCardMetadata,
         createCard,
         saveCard,
         addBasicCard,

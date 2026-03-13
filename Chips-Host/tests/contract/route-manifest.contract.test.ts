@@ -104,6 +104,7 @@ describe('route manifest contract', () => {
       'credential.rotate',
       'card.parse',
       'card.render',
+      'card.renderEditor',
       'card.validate',
       'box.pack',
       'box.unpack',

@@ -6,6 +6,7 @@ const registerPair = (action: string, requestKeys: string[], responseKeys: strin
 };
 
 const RENDER_TARGETS = new Set(['app-root', 'card-iframe', 'module-slot', 'offscreen-render']);
+const CARD_RENDER_MODES = new Set(['view', 'preview']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -33,6 +34,11 @@ const validateCardRenderRequest: SchemaValidator = (input: unknown) => {
       const verifyConsistency = input.options.verifyConsistency;
       if (typeof verifyConsistency !== 'undefined' && typeof verifyConsistency !== 'boolean') {
         errors.push('options.verifyConsistency must be a boolean');
+      }
+
+      const mode = input.options.mode;
+      if (typeof mode !== 'undefined' && (typeof mode !== 'string' || !CARD_RENDER_MODES.has(mode))) {
+        errors.push('options.mode is invalid');
       }
 
       const viewport = input.options.viewport;
@@ -65,6 +71,27 @@ const validateCardRenderRequest: SchemaValidator = (input: unknown) => {
     };
   }
   return { valid: true };
+};
+
+const validateCardRenderEditorRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.cardType !== 'string' || input.cardType.trim().length === 0) {
+    errors.push('cardType must be a non-empty string');
+  }
+
+  if (typeof input.baseCardId !== 'undefined' && (typeof input.baseCardId !== 'string' || input.baseCardId.trim().length === 0)) {
+    errors.push('baseCardId must be a non-empty string when provided');
+  }
+
+  if (typeof input.initialConfig !== 'undefined' && !isRecord(input.initialConfig)) {
+    errors.push('initialConfig must be an object when provided');
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
 export const registerHostSchemas = (): void => {
@@ -172,6 +199,8 @@ export const registerHostSchemas = (): void => {
   registerPair('card.parse', ['cardFile']);
   schemaRegistry.register('schemas/card.render.request.json', validateCardRenderRequest);
   schemaRegistry.register('schemas/card.render.response.json', objectWithKeys(['view']));
+  schemaRegistry.register('schemas/card.renderEditor.request.json', validateCardRenderEditorRequest);
+  schemaRegistry.register('schemas/card.renderEditor.response.json', objectWithKeys(['view']));
   registerPair('card.validate', ['cardFile']);
 
   registerPair('box.pack', ['boxDir', 'outputPath']);

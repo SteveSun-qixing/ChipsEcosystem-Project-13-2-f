@@ -110,6 +110,35 @@ describe('Host services integration', () => {
     expect(translated.text).toBe('System ready');
   });
 
+  it('returns structured file entries from file.list', async () => {
+    const cardsDir = path.join(workspace, 'cards');
+    const cardPath = path.join(cardsDir, 'demo.card');
+    await fs.mkdir(cardsDir, { recursive: true });
+    await fs.writeFile(cardPath, 'demo', 'utf-8');
+
+    const rootListed = await runtime.invoke<{
+      entries: Array<{ path: string; isFile: boolean; isDirectory: boolean }>;
+    }>('file.list', { dir: workspace });
+    const nestedListed = await runtime.invoke<{
+      entries: Array<{ path: string; isFile: boolean; isDirectory: boolean }>;
+    }>('file.list', { dir: cardsDir });
+
+    expect(rootListed.entries).toContainEqual(
+      expect.objectContaining({
+        path: cardsDir,
+        isDirectory: true,
+        isFile: false
+      })
+    );
+    expect(nestedListed.entries).toContainEqual(
+      expect.objectContaining({
+        path: cardPath,
+        isFile: true,
+        isDirectory: false
+      })
+    );
+  });
+
   it('renders card through unified rendering target options', async () => {
     const install = await runtime.invoke<{ pluginId: string }>('plugin.install', {
       manifestPath: path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP/manifest.yaml')

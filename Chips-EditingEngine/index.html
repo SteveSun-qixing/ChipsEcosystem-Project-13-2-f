@@ -8,7 +8,8 @@
     Content-Security-Policy:
     - 'unsafe-eval' is required by Chips Host's electron-loader.ts which uses indirect
       eval to load the electron module in the sandboxed renderer process.
-    - 'unsafe-inline' is needed for runtime CSS variable injection by the theme system.
+    - 'unsafe-inline' is required because the formal Host card/editor iframe chain
+      generates controlled inline bootstrap scripts inside sandboxed documents.
     - file: and blob: are allowed for local asset loading within the Electron context.
     This policy is suitable for a trusted desktop app environment.
   -->
@@ -16,7 +17,7 @@
     http-equiv="Content-Security-Policy"
     content="
       default-src 'self' file: blob:;
-      script-src 'self' 'unsafe-eval';
+      script-src 'self' 'unsafe-eval' 'unsafe-inline';
       style-src 'self' 'unsafe-inline';
       img-src 'self' file: data: blob: https:;
       font-src 'self' file: data:;

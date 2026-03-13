@@ -15,6 +15,9 @@
     "card.render": {
       "action": "card.render"
     },
+    "card.renderEditor": {
+      "action": "card.renderEditor"
+    },
     "card.validate": {
       "action": "card.validate"
     },

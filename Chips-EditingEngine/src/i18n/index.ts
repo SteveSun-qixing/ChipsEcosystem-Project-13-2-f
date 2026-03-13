@@ -15,25 +15,38 @@ const LOCALES: Record<string, Record<string, string>> = {
 
 /** 当前激活的语言 */
 let currentLocale = 'zh-CN';
+const listeners = new Set<() => void>();
+
+function resolveLocale(locale: string): string {
+    if (LOCALES[locale]) {
+        return locale;
+    }
+
+    const prefix = locale.split('-')[0];
+    const match = Object.keys(LOCALES).find(key => key.startsWith(prefix));
+    return match ?? currentLocale;
+}
 
 /** 设置当前语言（由 App 初始化时从 Host 读取并设定） */
 export function setLocale(locale: string): void {
-    if (LOCALES[locale]) {
-        currentLocale = locale;
-    } else {
-        // 尝试语言代码前缀匹配（如 'zh' 匹配 'zh-CN'）
-        const prefix = locale.split('-')[0];
-        const match = Object.keys(LOCALES).find(key => key.startsWith(prefix));
-        if (match) {
-            currentLocale = match;
-        }
-        // 无匹配时保持当前语言
+    const nextLocale = resolveLocale(locale);
+    if (nextLocale === currentLocale) {
+        return;
     }
+    currentLocale = nextLocale;
+    listeners.forEach((listener) => listener());
 }
 
 /** 获取当前语言代码 */
 export function getLocale(): string {
     return currentLocale;
+}
+
+export function subscribeLocaleChange(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+        listeners.delete(listener);
+    };
 }
 
 /**
@@ -42,8 +55,8 @@ export function getLocale(): string {
  * @param params 插值参数，如 { name: 'World' } 替换 {name}
  * @returns 翻译后的字符串，找不到则返回 key 本身
  */
-export function t(key: string, params?: Record<string, string | number>): string {
-    const table = LOCALES[currentLocale] ?? LOCALES['zh-CN'] ?? {};
+export function translate(key: string, params?: Record<string, string | number>, locale = currentLocale): string {
+    const table = LOCALES[resolveLocale(locale)] ?? LOCALES['zh-CN'] ?? {};
     let text = table[key] ?? key;
 
     if (params) {
@@ -53,4 +66,8 @@ export function t(key: string, params?: Record<string, string | number>): string
     }
 
     return text;
+}
+
+export function t(key: string, params?: Record<string, string | number>): string {
+    return translate(key, params, currentLocale);
 }

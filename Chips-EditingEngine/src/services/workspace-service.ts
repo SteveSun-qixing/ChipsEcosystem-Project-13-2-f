@@ -6,6 +6,24 @@ import { generateId62 } from '../utils/id';
 import type { WorkspaceState, WorkspaceFile } from '../types/workspace';
 import yaml from 'yaml';
 
+export interface WorkspaceOpenOptions {
+    windowPosition?: { x: number; y: number };
+    isEditing?: boolean;
+}
+
+const HOST_RUNTIME_ROOT_ENTRIES = new Set([
+    'plugins',
+    'plugins.json',
+    'plugin-runtime.json',
+    'plugin-shortcuts.json',
+    'route-manifest.json',
+    'credentials.enc.json',
+    'config.json',
+    'config.workspace.json',
+    'config.system.json',
+    'host-state.json',
+]);
+
 function joinPath(...parts: string[]): string {
     return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
 }
@@ -27,18 +45,25 @@ export class WorkspaceService {
     };
 
     async initialize(): Promise<void> {
-        if (this.state.initialized) return;
+        if (this.state.initialized && this.state.rootPath) return;
 
         try {
             const client = getChipsClient();
             let workspacePath = '';
 
             try {
-                // Native launch context provides workspacePath via launchParams when the app
-                // is opened with a specific workspace. In dev mode or first launch, it may be absent.
-                const ctx = (client as any).platform?.getLaunchContext?.();
-                if (ctx?.launchParams?.workspacePath) {
-                    workspacePath = ctx.launchParams.workspacePath as string;
+                const launchContext = client.platform?.getLaunchContext?.();
+                const launchParams = launchContext?.launchParams ?? {};
+
+                const candidate =
+                    typeof launchParams.workspacePath === 'string'
+                        ? launchParams.workspacePath
+                        : typeof launchParams.workspace === 'string'
+                            ? launchParams.workspace
+                            : '';
+
+                if (candidate.trim()) {
+                    workspacePath = candidate.trim();
                 }
             } catch (e) {
                 console.warn('[WorkspaceService] Could not read workspace path from launch context', e);
@@ -47,7 +72,7 @@ export class WorkspaceService {
             if (!workspacePath) {
                 // No workspace provided — enter "uninitialized" state without crashing.
                 // The user may open a workspace later via the Dock / menu.
-                console.info('[WorkspaceService] No workspace path provided. Waiting for user to open a workspace.');
+                console.info('[WorkspaceService] No workspace path provided by Host launch context. Waiting for workspace binding.');
                 this.state.initialized = true;
                 this.state.rootPath = '';
                 this.state.files = [];
@@ -116,12 +141,14 @@ export class WorkspaceService {
     async buildTree(basePath: string): Promise<WorkspaceFile[]> {
         const entries = await fileService.list(basePath);
         const result: WorkspaceFile[] = [];
+        const isWorkspaceRoot = basePath === this.state.rootPath;
 
         for (const entry of entries) {
-            if (entry.path.split('/').pop()?.startsWith('.')) continue;
+            const fileName = entry.path.split('/').pop() || '';
+            if (fileName.startsWith('.')) continue;
+            if (isWorkspaceRoot && HOST_RUNTIME_ROOT_ENTRIES.has(fileName)) continue;
 
             const entryPath = entry.path;
-            const fileName = entryPath.split('/').pop() || '';
 
             try {
                 const stat = await fileService.stat(entryPath);
@@ -236,7 +263,8 @@ export class WorkspaceService {
         name: string,
         initialContent?: BasicCardConfig,
         cardId?: string,
-        parentPath?: string
+        parentPath?: string,
+        openOptions?: WorkspaceOpenOptions
     ): Promise<WorkspaceFile> {
         const id = cardId || generateId62();
         const parent = parentPath || this.state.rootPath;
@@ -250,7 +278,7 @@ export class WorkspaceService {
         await this.refresh();
         const file = this.getFile(id);
         if (file) {
-            this.eventEmitter.emit('workspace:file-created', { file, content: initialContent });
+            this.eventEmitter.emit('workspace:file-created', { file, content: initialContent, openOptions });
             return file;
         }
 

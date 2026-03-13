@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useThemeRuntime } from '@chips/component-library';
 import { CardWindowBase } from '../CardWindowBase/CardWindowBase';
 import { WindowMenu } from '../WindowMenu/WindowMenu';
 import { useCard } from '../../context/CardContext';
+import { getChipsClient } from '../../services/bridge-client';
 import { workspaceService } from '../../services/workspace-service';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -21,15 +23,24 @@ export function CardWindow({
     onClose,
     onFocus
 }: CardWindowProps) {
-    const { openCards, selectedBaseCardId, setActiveCard, setSelectedBaseCard } = useCard();
+    const { openCards, activeCardId, selectedBaseCardId, setActiveCard, setSelectedBaseCard } = useCard();
     const canvasContext = useCanvas();
+    const themeRuntime = useThemeRuntime();
     const { t } = useTranslation();
 
     const cardInfo = openCards.get(config.cardId);
     const isEditing = !!config.isEditing;
     const windowState = config.state;
+    const clientRef = useRef(getChipsClient());
+    const previewHostRef = useRef<HTMLDivElement | null>(null);
+    const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const persistedRevision = cardInfo?.persistedRevision ?? 0;
+    const visibleBaseCards = cardInfo?.structure.basicCards ?? [];
+    const visibleBaseCardIds = visibleBaseCards.map((baseCard) => baseCard.id).join('|');
 
     const [isCoverDragging, setIsCoverDragging] = useState(false);
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
     const [coverRenderPosition, setCoverRenderPosition] = useState(config.position);
 
     const coverDragStart = useRef({ x: 0, y: 0 });
@@ -49,11 +60,12 @@ export function CardWindow({
     const handleUpdatePosition = (pos: Position) => onUpdateConfig({ position: pos });
     const handleUpdateSize = (size: Size) => onUpdateConfig({ size });
 
-    const handleUpdateTitle = (title: string) => {
-        // We would update the store metadata, but we'll leave it as a placeholder here for the future metadata mutation
-        // cardStore.updateCardMetadata(config.cardId, { name: title });
-        workspaceService.renameFile(config.cardId, `${title}.card`);
-        console.warn('[CardWindow] 更新卡片名称:', title, 'ID:', config.cardId);
+    const handleUpdateTitle = async (title: string) => {
+        try {
+            await workspaceService.renameFile(config.cardId, `${title}.card`);
+        } catch (error) {
+            console.error('[CardWindow] Failed to rename card metadata.', error);
+        }
     };
 
     const handleMinimize = () => onUpdateConfig({ state: 'minimized' });
@@ -63,9 +75,14 @@ export function CardWindow({
         onUpdateConfig({ state: newState });
     };
 
-    const selectBaseCard = (baseCardId: string) => {
+    const selectBaseCard = useCallback((baseCardId: string) => {
         setActiveCard(config.cardId);
         setSelectedBaseCard(baseCardId);
+    }, [config.cardId, setActiveCard, setSelectedBaseCard]);
+
+    const handleWindowFocus = () => {
+        setActiveCard(config.cardId);
+        onFocus();
     };
 
     const handleCoverMouseDown = (event: React.MouseEvent) => {
@@ -118,6 +135,133 @@ export function CardWindow({
         };
     }, [isCoverDragging, handleCoverMouseMove, handleCoverMouseUp]);
 
+    useEffect(() => {
+        const host = previewHostRef.current;
+        if (!host) {
+            return;
+        }
+
+        while (host.firstChild) {
+            host.removeChild(host.firstChild);
+        }
+
+        previewFrameRef.current = null;
+
+        if (!cardInfo || windowState === 'cover' || visibleBaseCards.length === 0) {
+            setIsPreviewLoading(false);
+            setPreviewError(null);
+            return;
+        }
+
+        let disposed = false;
+        const cleanupTasks: Array<() => void> = [];
+
+        setIsPreviewLoading(true);
+        setPreviewError(null);
+
+        clientRef.current.card.compositeWindow.render({
+            cardFile: cardInfo.path,
+            mode: isEditing ? 'preview' : 'view',
+        }).then((result) => {
+            if (disposed) {
+                return;
+            }
+
+            const frame = result.frame;
+            previewFrameRef.current = frame;
+            frame.style.width = '100%';
+            frame.style.height = '100%';
+            frame.style.border = 'none';
+            frame.style.display = 'block';
+            frame.style.background = 'transparent';
+            host.appendChild(frame);
+
+            const handleNativeLoad = () => {
+                if (!disposed) {
+                    setIsPreviewLoading(false);
+                }
+            };
+
+            frame.addEventListener('load', handleNativeLoad);
+            cleanupTasks.push(() => {
+                frame.removeEventListener('load', handleNativeLoad);
+            });
+
+            cleanupTasks.push(
+                clientRef.current.card.compositeWindow.onNodeSelect(frame, (payload) => {
+                    if (disposed || !isEditing || !payload.nodeId) {
+                        return;
+                    }
+                    if (!visibleBaseCards.some((baseCard) => baseCard.id === payload.nodeId)) {
+                        return;
+                    }
+                    selectBaseCard(payload.nodeId);
+                }),
+            );
+
+            cleanupTasks.push(
+                clientRef.current.card.compositeWindow.onReady(frame, () => {
+                    if (!disposed) {
+                        setIsPreviewLoading(false);
+                    }
+                }),
+            );
+
+            cleanupTasks.push(
+                clientRef.current.card.compositeWindow.onFatalError(frame, (error) => {
+                    if (!disposed) {
+                        console.error('[CardWindow] Composite preview fatal error.', {
+                            cardId: config.cardId,
+                            cardFile: cardInfo?.path,
+                            mode: isEditing ? 'preview' : 'view',
+                            error,
+                        });
+                        setIsPreviewLoading(false);
+                        setPreviewError(error.message || (t('plugin_host.error') || '加载失败'));
+                    }
+                }),
+            );
+
+            cleanupTasks.push(
+                clientRef.current.card.compositeWindow.onNodeError(frame, (payload) => {
+                    console.warn('[CardWindow] Composite node degraded.', payload);
+                }),
+            );
+        }).catch((error: unknown) => {
+            if (disposed) {
+                return;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('[CardWindow] Failed to render composite preview.', {
+                cardId: config.cardId,
+                cardFile: cardInfo?.path,
+                mode: isEditing ? 'preview' : 'view',
+                error,
+            });
+            setIsPreviewLoading(false);
+            setPreviewError(message || (t('plugin_host.error') || '加载失败'));
+        });
+
+        return () => {
+            disposed = true;
+            cleanupTasks.forEach((cleanup) => cleanup());
+            const frame = previewFrameRef.current;
+            if (frame && frame.parentElement) {
+                frame.parentElement.removeChild(frame);
+            }
+            previewFrameRef.current = null;
+        };
+    }, [
+        cardInfo?.path,
+        isEditing,
+        persistedRevision,
+        selectBaseCard,
+        themeRuntime.cacheKey,
+        t,
+        visibleBaseCardIds,
+        windowState,
+    ]);
+
     const coverStyle = {
         transform: `translate(${coverRenderPosition.x}px, ${coverRenderPosition.y}px)`
     };
@@ -147,7 +291,7 @@ export function CardWindow({
             config={config}
             onUpdatePosition={handleUpdatePosition}
             onUpdateSize={handleUpdateSize}
-            onFocus={onFocus}
+            onFocus={handleWindowFocus}
             onClose={onClose}
             onMinimize={handleMinimize}
             onCollapse={handleCollapse}
@@ -171,32 +315,33 @@ export function CardWindow({
                         <span className="card-window__loading-icon">⏳</span>
                         <span className="card-window__loading-text">{t('card_window.loading')}</span>
                     </div>
-                ) : (
-                    <div className="card-window__body">
-                        {(!cardInfo.structure || !cardInfo.structure.structure || cardInfo.structure.structure.length === 0) ? (
-                            <div className="card-window__empty">
-                                <span className="card-window__empty-icon">📄</span>
-                                <span className="card-window__empty-text">{t('card_window.empty')}</span>
-                                {isEditing && (
-                                    <span className="card-window__empty-hint">{t('card_window.empty_hint')}</span>
-                                )}
-                            </div>
-                        ) : (
-                            cardInfo.structure.structure.map((baseCard: any, idx: number) => (
-                                <div
-                                    key={baseCard.id}
-                                    className={`card-window__base-card ${selectedBaseCardId === baseCard.id ? 'card-window__base-card--selected' : ''} ${isEditing ? 'card-window__base-card--editing' : ''}`}
-                                    onClick={() => selectBaseCard(baseCard.id)}
-                                >
-                                    <div className="card-window__base-card-content">
-                                        <div className="card-window__base-card-placeholder">
-                                            <span className="card-window__base-card-type-icon">📄</span>
-                                            <span>{baseCard.type}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
+                ) : visibleBaseCards.length === 0 ? (
+                    <div className="card-window__empty">
+                        <span className="card-window__empty-icon">📄</span>
+                        <span className="card-window__empty-text">{t('card_window.empty')}</span>
+                        {isEditing && (
+                            <span className="card-window__empty-hint">{t('card_window.empty_hint')}</span>
                         )}
+                    </div>
+                ) : (
+                    <div className="card-window__workspace">
+                        <div className="card-window__preview">
+                            <div ref={previewHostRef} className="card-window__preview-frame" />
+
+                            {isPreviewLoading && (
+                                <div className="card-window__overlay">
+                                    <span className="card-window__loading-icon">⏳</span>
+                                    <span className="card-window__loading-text">{t('card_window.loading')}</span>
+                                </div>
+                            )}
+
+                            {previewError && (
+                                <div className="card-window__overlay card-window__overlay--error">
+                                    <span className="card-window__empty-icon">⚠️</span>
+                                    <span className="card-window__empty-text">{previewError}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

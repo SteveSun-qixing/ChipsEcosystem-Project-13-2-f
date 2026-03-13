@@ -3,10 +3,11 @@ import { ChipsInput } from '@chips/component-library';
 import { useTranslation } from '../../../hooks/useTranslation';
 import './BasicInfoPanel.css';
 
-// Mock CardInfo interface
 export interface CardMetaData {
   name?: string;
   tags?: (string | string[])[];
+  createdAt?: string | number;
+  modifiedAt?: string | number;
   created_at?: string | number;
   modified_at?: string | number;
 }
@@ -96,12 +97,12 @@ export function BasicInfoPanel({
     },
     {
       label: t('card_settings.created_at') || '创建时间',
-      value: formatDateTime(cardInfo?.metadata?.created_at),
+      value: formatDateTime(cardInfo?.metadata?.createdAt ?? cardInfo?.metadata?.created_at),
       mono: false,
     },
     {
       label: t('card_settings.modified_at') || '修改时间',
-      value: formatDateTime(cardInfo?.metadata?.modified_at),
+      value: formatDateTime(cardInfo?.metadata?.modifiedAt ?? cardInfo?.metadata?.modified_at),
       mono: false,
     },
   ], [cardId, cardInfo, t]);

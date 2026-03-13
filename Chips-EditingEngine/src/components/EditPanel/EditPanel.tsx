@@ -18,12 +18,15 @@ export default function EditPanel({
 }: EditPanelProps) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const { activeCardId, selectedBaseCardId, getCard } = useCard();
+  const { activeCardId, selectedBaseCardId, getCard, removeBasicCard, updateBasicCard } = useCard();
 
   const activeCard = activeCardId ? getCard(activeCardId) : null;
   const selectedBaseCard = activeCard && selectedBaseCardId
     ? activeCard.structure.basicCards.find(bc => bc.id === selectedBaseCardId)
     : null;
+  const selectedBaseCardLabel = typeof selectedBaseCard?.data.title === 'string' && selectedBaseCard.data.title.trim().length > 0
+    ? selectedBaseCard.data.title
+    : selectedBaseCard?.type;
 
   const toggleExpand = () => setIsExpanded(!isExpanded);
 
@@ -40,17 +43,22 @@ export default function EditPanel({
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [title, setTitle] = useState(t('edit_panel.title') || '属性编辑');
-  const [subtitle, setSubtitle] = useState(selectedBaseCardId || t('edit_panel.no_selection') || '未选择卡片');
+  const subtitle = selectedBaseCardLabel || selectedBaseCardId || t('edit_panel.no_selection') || '未选择卡片';
   const [isCollapsed, setIsCollapsed] = useState(!isExpanded);
 
   const actions = [
     { icon: '⚙️', tooltip: t('common.settings') || '设置', onClick: () => console.log('Settings clicked') },
-    { icon: '🗑️', tooltip: t('common.delete') || '删除', onClick: () => console.log('Delete clicked'), disabled: !selectedBaseCardId },
+    {
+      icon: '🗑️',
+      tooltip: t('common.delete') || '删除',
+      onClick: () => {
+        if (activeCard && selectedBaseCard) {
+          removeBasicCard(activeCard.id, selectedBaseCard.id);
+        }
+      },
+      disabled: !selectedBaseCardId,
+    },
   ];
-
-  React.useEffect(() => {
-    setSubtitle(selectedBaseCardId || t('edit_panel.no_selection') || '未选择卡片');
-  }, [selectedBaseCardId, t]);
 
   React.useEffect(() => {
     setIsCollapsed(!isExpanded);
@@ -111,6 +119,11 @@ export default function EditPanel({
             cardType={selectedBaseCard.type}
             baseCardId={selectedBaseCard.id}
             config={selectedBaseCard.data}
+            onConfigChange={(nextConfig) => {
+              if (activeCard) {
+                updateBasicCard(activeCard.id, selectedBaseCard.id, nextConfig);
+              }
+            }}
           />
         ) : (
           <div className="edit-panel__empty">

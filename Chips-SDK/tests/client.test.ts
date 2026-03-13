@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createClient } from "../src/core/client";
 import type { StandardError } from "../src/types/errors";
+import type { CardEditorRenderOptions, CardEditorRenderResult } from "../src/api/card";
 
 describe("createClient", () => {
   it("uses custom transport when provided", async () => {
@@ -20,6 +21,32 @@ describe("createClient", () => {
     const result = await client.file.read("/test.txt");
     expect(result).toBe("content");
     expect(calls[0]?.action).toBe("file.read");
+    expect(calls[0]?.payload).toEqual({
+      path: "/test.txt",
+      options: undefined,
+    });
+  });
+
+  it("sends nested read options for file.read", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        return "content";
+      },
+    });
+
+    await client.file.read("/test.txt", { encoding: "utf-8" });
+
+    expect(calls[0]?.action).toBe("file.read");
+    expect(calls[0]?.payload).toEqual({
+      path: "/test.txt",
+      options: {
+        encoding: "utf-8",
+      },
+    });
   });
 
   it("wraps non-standard errors as StandardError", async () => {
@@ -115,6 +142,39 @@ describe("createClient", () => {
     await expect(client.plugin.getSelf()).resolves.toEqual(plugin);
     await expect(client.plugin.getCardPlugin("RichTextCard")).resolves.toBeUndefined();
     await expect(client.plugin.getLayoutPlugin("grid-layout")).resolves.toBeUndefined();
+  });
+
+  it("renders card editor panels through the formal Host route", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async (action) => {
+        if (action === "card.renderEditor") {
+          return {
+            view: {
+              title: "RichTextCard Editor",
+              body: "<html><body><div id='root'></div></body></html>",
+              cardType: "RichTextCard",
+              pluginId: "chips.basecard.richtext",
+              baseCardId: "base-1",
+            },
+          };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    const result = await client.invoke<CardEditorRenderOptions, CardEditorRenderResult>(
+      "card.renderEditor",
+      {
+        cardType: "RichTextCard",
+        initialConfig: { title: "Hello", body: "<p>World</p>" },
+        baseCardId: "base-1",
+      },
+    );
+
+    expect(result.view.pluginId).toBe("chips.basecard.richtext");
+    expect(result.view.cardType).toBe("RichTextCard");
+    expect(result.view.baseCardId).toBe("base-1");
   });
 
   it("throws BRIDGE_UNAVAILABLE when no transport and no window.chips", async () => {

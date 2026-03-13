@@ -17,6 +17,9 @@
     "dev": "tsx src/main/cli/index.ts",
     "perf:l9": "tsx scripts/benchmark-unified-rendering.ts"
   },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  },
   "devDependencies": {
     "@types/node": "^22.13.10",
     "electron": "^40.8.0",

@@ -1,12 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { startTransition, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
-import { DefaultEditor } from './DefaultEditor';
+import { getChipsClient } from '../../services/bridge-client';
 import './PluginHost.css';
-
-// --- Stubs for internal context managers (Pinia/Stores and Plugin System) ---
-// import { useCardStore, useEditorStore } from '@/core/state';
-// import { getEditorComponent } from '@/services/plugin-service';
-// import { getEditorConnector } from '@/services/sdk-service';
 
 export interface PluginHostProps {
   cardType: string;
@@ -26,84 +21,138 @@ export function PluginHost({
   onPluginError,
 }: PluginHostProps) {
   const { t } = useTranslation();
-  
+  const clientRef = useRef(getChipsClient());
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const latestConfigRef = useRef<Record<string, unknown>>(config);
+  const onConfigChangeRef = useRef(onConfigChange);
+  const onPluginLoadedRef = useRef(onPluginLoaded);
+  const onPluginErrorRef = useRef(onPluginError);
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
-  
-  // Stubs for Vue state mapping
-  const currentPlugin = useRef<any>(null);
-  const currentEditorComponent = useRef<React.ComponentType<any> | null>(null);
-  const [useDefaultEditor, setUseDefaultEditor] = useState(false);
-  
-  const [localConfig, setLocalConfig] = useState<Record<string, unknown>>(config);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const saveTimeoutRef = useRef<number | null>(null);
+  const [renderRevision, setRenderRevision] = useState(0);
 
-  // Mocking the card object logic that would come from a Redux or Context store
-  const mockBaseCard = useMemo(() => ({
-    id: baseCardId,
-    type: cardType,
-    config: localConfig,
-  }), [baseCardId, cardType, localConfig]);
+  useEffect(() => {
+    latestConfigRef.current = config;
+  }, [config]);
 
-  const loadPlugin = useCallback(async () => {
+  useEffect(() => {
+    onConfigChangeRef.current = onConfigChange;
+  }, [onConfigChange]);
+
+  useEffect(() => {
+    onPluginLoadedRef.current = onPluginLoaded;
+  }, [onPluginLoaded]);
+
+  useEffect(() => {
+    onPluginErrorRef.current = onPluginError;
+  }, [onPluginError]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      const error = new Error('Editor panel container is unavailable.');
+      setLoadError(error);
+      onPluginErrorRef.current?.(error);
+      return;
+    }
+
+    let disposed = false;
+    const cleanupTasks: Array<() => void> = [];
+
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
+
     setIsLoading(true);
     setLoadError(null);
-    try {
-      // Simulate plugin fetching
-      // const component = await getEditorComponent(cardType);
-      const component = null;
 
-      if (component) {
-        currentEditorComponent.current = component;
-        setUseDefaultEditor(false);
-        onPluginLoaded?.(component);
-      } else {
-        currentEditorComponent.current = null;
-        setUseDefaultEditor(true);
-        onPluginLoaded?.(null);
+    clientRef.current.card.editorPanel.render({
+      cardType,
+      baseCardId,
+      initialConfig: latestConfigRef.current,
+    }).then((result) => {
+      if (disposed) {
+        return;
       }
-      setLocalConfig({ ...config });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      setLoadError(err);
-      onPluginError?.(err);
-    } finally {
+
+      const frame = result.frame;
+      frameRef.current = frame;
+      frame.style.width = '100%';
+      frame.style.height = '100%';
+      frame.style.border = 'none';
+      frame.style.display = 'block';
+      frame.style.background = 'transparent';
+      container.appendChild(frame);
+
+      const handleNativeLoad = () => {
+        if (!disposed) {
+          setIsLoading(false);
+        }
+      };
+
+      frame.addEventListener('load', handleNativeLoad);
+      cleanupTasks.push(() => {
+        frame.removeEventListener('load', handleNativeLoad);
+      });
+
+      cleanupTasks.push(
+        clientRef.current.card.editorPanel.onReady(frame, () => {
+          if (disposed) {
+            return;
+          }
+          setIsLoading(false);
+          setLoadError(null);
+          onPluginLoadedRef.current?.({
+            cardType,
+            baseCardId,
+          });
+        }),
+      );
+
+      cleanupTasks.push(
+        clientRef.current.card.editorPanel.onChange(frame, (payload) => {
+          if (disposed) {
+            return;
+          }
+          startTransition(() => {
+            onConfigChangeRef.current?.(payload.config);
+          });
+        }),
+      );
+
+      cleanupTasks.push(
+        clientRef.current.card.editorPanel.onError(frame, (payload) => {
+          if (disposed) {
+            return;
+          }
+          const error = new Error(payload.message);
+          setIsLoading(false);
+          setLoadError(error);
+          onPluginErrorRef.current?.(error);
+        }),
+      );
+    }).catch((error: unknown) => {
+      if (disposed) {
+        return;
+      }
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
       setIsLoading(false);
-    }
-  }, [cardType, config, onPluginError, onPluginLoaded]);
+      setLoadError(normalizedError);
+      onPluginErrorRef.current?.(normalizedError);
+    });
 
-  useEffect(() => {
-    loadPlugin();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardType, baseCardId]);
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) {
-      setLocalConfig({ ...config });
-    }
-  }, [config, hasUnsavedChanges]);
-
-  // Debounced Config Commit
-  const debouncedEmitChange = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = window.setTimeout(() => {
-      onConfigChange?.({ ...localConfig });
-      setHasUnsavedChanges(false);
-    }, 300);
-  }, [localConfig, onConfigChange]);
-
-  const handleDefaultConfigChange = (newConfig: Record<string, unknown>) => {
-    setLocalConfig(newConfig);
-    setHasUnsavedChanges(true);
-    debouncedEmitChange();
-  };
-
-  const handleReload = () => {
-    loadPlugin();
-  };
+    return () => {
+      disposed = true;
+      cleanupTasks.forEach((cleanup) => cleanup());
+      const frame = frameRef.current;
+      if (frame && frame.parentElement) {
+        frame.parentElement.removeChild(frame);
+      }
+      frameRef.current = null;
+    };
+  }, [baseCardId, cardType, renderRevision]);
 
   const showLoading = isLoading;
   const loadingText = t('plugin_host.loading') || '加载中...';
@@ -111,6 +160,8 @@ export function PluginHost({
 
   return (
     <div className="plugin-host">
+      <div ref={containerRef} className="plugin-host__container" />
+
       {showLoading && (
         <div className="plugin-host__loading">
           <div className="plugin-host__spinner"></div>
@@ -125,34 +176,10 @@ export function PluginHost({
           <button
             type="button"
             className="plugin-host__retry-btn"
-            onClick={handleReload}
+            onClick={() => setRenderRevision((current) => current + 1)}
           >
             {t('plugin_host.retry') || '重试'}
           </button>
-        </div>
-      )}
-
-      {/* Renders registered editor component if present */}
-      {!isLoading && !loadError && !useDefaultEditor && currentEditorComponent.current && (
-        <div className="plugin-host__editor-component">
-          <p>Mock Plugin Editor Instance</p>
-        </div>
-      )}
-
-      {/* Fallback internal editor */}
-      {!isLoading && !loadError && useDefaultEditor && (
-        <div className="plugin-host__default-editor">
-          <DefaultEditor
-            baseCard={mockBaseCard}
-            mode="form"
-            onConfigChange={handleDefaultConfigChange}
-          />
-        </div>
-      )}
-
-      {hasUnsavedChanges && (
-        <div className="plugin-host__unsaved-indicator" title={t('plugin_host.unsaved') || '有未保存更改'}>
-          <span className="plugin-host__unsaved-dot"></span>
         </div>
       )}
     </div>

@@ -51,6 +51,12 @@ const createPal = (state: PalState): PALAdapter => {
   let ipcSequence = 0;
 
   return {
+    launcher: {
+      async launch() { },
+      async getStatus() { return { pid: 0, status: 'stopped' }; },
+      async kill() { },
+      async execute() { return { stdout: '', stderr: '', code: 0 }; }
+    } as any,
     window: {
       async create(options) {
         return {
@@ -62,9 +68,9 @@ const createPal = (state: PalState): PALAdapter => {
           state: 'normal'
         };
       },
-      async focus() {},
-      async resize() {},
-      async setState() {},
+      async focus() { },
+      async resize() { },
+      async setState() { },
       async getState() {
         return {
           id: 'window-1',
@@ -75,7 +81,7 @@ const createPal = (state: PalState): PALAdapter => {
           state: 'normal'
         };
       },
-      async close() {}
+      async close() { }
     },
     fs: {
       normalize: (inputPath) => path.normalize(inputPath),
@@ -104,7 +110,7 @@ const createPal = (state: PalState): PALAdapter => {
       async watch(_inputPath, _onEvent) {
         return {
           id: 'watch-1',
-          async close() {}
+          async close() { }
         };
       }
     },

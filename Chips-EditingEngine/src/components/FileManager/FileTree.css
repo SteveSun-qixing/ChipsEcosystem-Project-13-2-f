@@ -1,0 +1,28 @@
+.file-tree {
+  flex: 1;
+  overflow: auto;
+  outline: none;
+}
+
+.file-tree:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--chips-color-primary-light, rgba(24, 144, 255, 0.3));
+}
+
+.file-tree__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--chips-spacing-xl, 32px);
+  color: var(--chips-color-text-tertiary, #999);
+}
+
+.file-tree__empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--chips-spacing-sm, 8px);
+  opacity: 0.5;
+}
+
+.file-tree__empty-text {
+  font-size: var(--chips-font-size-sm, 14px);
+}

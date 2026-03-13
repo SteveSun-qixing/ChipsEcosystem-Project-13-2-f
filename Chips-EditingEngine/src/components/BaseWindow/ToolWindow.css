@@ -1,0 +1,38 @@
+.tool-window__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.tool-window__icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.tool-window__title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--chips-color-text-primary, #1a1a1a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-window__content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.tool-window__loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--chips-color-text-secondary, #666);
+    font-size: 13px;
+}

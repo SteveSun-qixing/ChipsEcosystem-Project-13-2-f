@@ -1,0 +1,56 @@
+id: chips-official.editing-engine
+name: 编辑引擎
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态卡片编辑引擎，基于 React 构建。
+
+author:
+  name: Chips Ecosystem
+  email: support@chips-ecosystem.com
+
+keywords:
+  - chips
+  - app
+  - editor
+  - engine
+
+permissions:
+  - theme.read
+  - i18n.read
+  - file.read
+  - file.write
+  - config.read
+  - config.write
+  - window.control
+  - platform.read
+  - platform.external
+  - plugin.read
+  - card.read
+  - card.write
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 编辑引擎
+    icon: assets/icons/app-icon.ico
+  window:
+    chrome:
+      backgroundColor: "#fafafa"
+      titleBarStyle: hidden
+      titleBarOverlay:
+        color: "#ffffff00"
+        symbolColor: "#667085"
+        height: 44

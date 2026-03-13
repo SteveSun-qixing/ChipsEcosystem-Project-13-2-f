@@ -1,0 +1,16 @@
+.workbench {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    background: var(--chips-sys-color-background, #fafafa);
+    overflow: hidden;
+}
+
+.workbench .side-panel {
+    transition: width var(--chips-sys-motion-duration-medium, 0.25s) ease;
+}
+
+.workbench .main-area {
+    flex: 1;
+    min-width: 300px;
+}

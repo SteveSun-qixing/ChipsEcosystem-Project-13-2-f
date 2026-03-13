@@ -123,7 +123,15 @@ const run = async (): Promise<void> => {
 };
 
 void run().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
+  let message = String(error);
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (error && typeof error === 'object' && 'message' in error) {
+    message = String((error as any).message);
+    if ('code' in error) {
+      message = `[${(error as any).code}] ${message}`;
+    }
+  }
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

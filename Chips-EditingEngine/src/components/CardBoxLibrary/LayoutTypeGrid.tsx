@@ -1,0 +1,45 @@
+import React, { useMemo } from 'react';
+import type { LayoutTypeDefinition, LayoutLibraryDragData } from './types';
+import { layoutTypes as allLayoutTypes } from './data';
+import { useTranslation } from '../../hooks/useTranslation';
+import { useDrag } from './DragContext';
+import './CardTypeGrid.css'; // Reusing CardTypeGrid styles for unified appearance
+
+interface LayoutTypeGridProps {
+  types?: LayoutTypeDefinition[];
+}
+
+export function LayoutTypeGrid({ types }: LayoutTypeGridProps) {
+  const { t } = useTranslation();
+  const { startDrag } = useDrag();
+
+  const displayTypes = useMemo(() => types ?? allLayoutTypes, [types]);
+
+  const handleDragStart = (type: LayoutTypeDefinition, event: React.DragEvent) => {
+    const data: LayoutLibraryDragData = {
+      type: 'layout',
+      typeId: type.id,
+      name: t(type.name) || type.name,
+    };
+    startDrag(data, event);
+  };
+
+  return (
+    <div className="card-type-grid">
+      <div className="card-type-grid__items">
+        {displayTypes.map((type) => (
+          <div
+            key={type.id}
+            className="card-type-grid__item"
+            draggable
+            title={t(type.description) || type.description}
+            onDragStart={(e) => handleDragStart(type, e)}
+          >
+            <span className="card-type-grid__item-icon">{type.icon}</span>
+            <span className="card-type-grid__item-name">{t(type.name) || type.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

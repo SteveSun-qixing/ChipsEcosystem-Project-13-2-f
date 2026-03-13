@@ -1,0 +1,189 @@
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--chips-color-surface, #ffffff);
+  border: 1px solid var(--chips-color-border, #e0e0e0);
+  border-radius: var(--chips-radius-md, 8px);
+  overflow: hidden;
+}
+
+.history-panel.compact {
+  font-size: var(--chips-font-size-sm, 12px);
+}
+
+/* 工具栏 */
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-xs, 4px);
+  padding: var(--chips-spacing-sm, 8px);
+  border-bottom: 1px solid var(--chips-color-border, #e0e0e0);
+  background: var(--chips-color-background, #f5f5f5);
+}
+
+.history-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-xs, 4px);
+  padding: var(--chips-spacing-xs, 4px) var(--chips-spacing-sm, 8px);
+  border: none;
+  border-radius: var(--chips-radius-sm, 4px);
+  background: var(--chips-color-surface, #ffffff);
+  color: var(--chips-color-text, #333333);
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.history-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--chips-color-text) 6%, transparent);
+}
+
+.history-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.history-btn-icon {
+  font-size: var(--chips-font-size-sm, 14px);
+}
+
+.history-btn-text {
+  font-size: var(--chips-font-size-sm, 12px);
+}
+
+.history-btn-clear {
+  background: transparent;
+}
+
+.history-btn-clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--chips-color-error) 15%, transparent);
+  color: var(--chips-color-error, #f44336);
+}
+
+.history-toolbar-spacer {
+  flex: 1;
+}
+
+/* 历史列表 */
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--chips-spacing-xs, 4px);
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-sm, 8px);
+  padding: var(--chips-spacing-sm, 8px);
+  border-radius: var(--chips-radius-sm, 4px);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.history-item:hover {
+  background: color-mix(in srgb, var(--chips-color-text) 4%, transparent);
+}
+
+.history-item--current {
+  background: color-mix(in srgb, var(--chips-color-primary) 12%, transparent);
+}
+
+.history-item--current:hover {
+  background: color-mix(in srgb, var(--chips-color-primary) 12%, transparent);
+}
+
+.history-item--redo {
+  opacity: 0.6;
+}
+
+.history-item-indicator {
+  width: 16px;
+  text-align: center;
+  color: var(--chips-color-text-secondary, #666666);
+}
+
+.current-marker {
+  color: var(--chips-color-primary, #2196f3);
+}
+
+.history-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-description {
+  font-size: var(--chips-font-size-sm, 12px);
+  color: var(--chips-color-text, #333333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-time {
+  font-size: 10px;
+  color: var(--chips-color-text-disabled, #999999);
+  margin-top: 2px;
+}
+
+.history-item-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--chips-color-warning) 18%, transparent);
+  color: var(--chips-color-warning, #ff9800);
+  border-radius: var(--chips-radius-sm, 4px);
+}
+
+/* 空状态 */
+.history-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--chips-color-text-disabled, #999999);
+}
+
+.history-empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--chips-spacing-sm, 8px);
+}
+
+.history-empty-text {
+  font-size: var(--chips-font-size-sm, 12px);
+}
+
+/* 状态栏 */
+.history-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--chips-spacing-sm, 8px);
+  padding: var(--chips-spacing-xs, 4px) var(--chips-spacing-sm, 8px);
+  border-top: 1px solid var(--chips-color-border, #e0e0e0);
+  background: var(--chips-color-background, #f5f5f5);
+  font-size: 10px;
+  color: var(--chips-color-text-disabled, #999999);
+}
+
+.history-status-divider {
+  color: var(--chips-color-border, #e0e0e0);
+}
+
+/* 紧凑模式调整 */
+.compact .history-toolbar {
+  padding: var(--chips-spacing-xs, 4px);
+}
+
+.compact .history-btn {
+  padding: 2px 6px;
+}
+
+.compact .history-item {
+  padding: var(--chips-spacing-xs, 4px);
+}
+
+.compact .history-status {
+  padding: 2px var(--chips-spacing-xs, 4px);
+}

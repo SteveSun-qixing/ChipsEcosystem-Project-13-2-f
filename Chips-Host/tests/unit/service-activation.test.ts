@@ -24,6 +24,12 @@ const createContext = (permissions: string[]): RouteInvocationContext => ({
 });
 
 const createPal = (): PALAdapter => ({
+  launcher: {
+    async launch() { },
+    async getStatus() { return { pid: 0, status: 'stopped' }; },
+    async kill() { },
+    async execute() { return { stdout: '', stderr: '', code: 0 }; }
+  } as any,
   window: {
     async create(options) {
       return {
@@ -38,9 +44,9 @@ const createPal = (): PALAdapter => ({
         sessionId: options.sessionId
       };
     },
-    async focus() {},
-    async resize() {},
-    async setState() {},
+    async focus() { },
+    async resize() { },
+    async setState() { },
     async getState() {
       return {
         id: 'window-1',
@@ -51,14 +57,14 @@ const createPal = (): PALAdapter => ({
         state: 'normal'
       };
     },
-    async close() {}
+    async close() { }
   },
   fs: {
     normalize: (inputPath) => path.normalize(inputPath),
     async readFile() {
       return Buffer.from('');
     },
-    async writeFile() {},
+    async writeFile() { },
     async stat() {
       return {
         isFile: true,
@@ -73,7 +79,7 @@ const createPal = (): PALAdapter => ({
     async watch() {
       return {
         id: 'watch-1',
-        async close() {}
+        async close() { }
       };
     }
   },
@@ -95,12 +101,12 @@ const createPal = (): PALAdapter => ({
     async read() {
       return '';
     },
-    async write() {}
+    async write() { }
   },
   shell: {
-    async openPath() {},
-    async openExternal() {},
-    async showItemInFolder() {}
+    async openPath() { },
+    async openExternal() { },
+    async showItemInFolder() { }
   },
   platform: {
     async getInfo() {
@@ -144,26 +150,26 @@ const createPal = (): PALAdapter => ({
     async set() {
       return { active: true };
     },
-    async clear() {},
+    async clear() { },
     async getState() {
       return { active: false };
     }
   },
   notification: {
-    async show() {}
+    async show() { }
   },
   shortcut: {
     async register() {
       return true;
     },
-    async unregister() {},
+    async unregister() { },
     async isRegistered() {
       return false;
     },
     async list() {
       return [];
     },
-    async clear() {}
+    async clear() { }
   },
   power: {
     async getState() {
@@ -184,7 +190,7 @@ const createPal = (): PALAdapter => ({
         transport: options.transport
       };
     },
-    async send() {},
+    async send() { },
     async receive() {
       return {
         channelId: 'ipc-1',
@@ -193,7 +199,7 @@ const createPal = (): PALAdapter => ({
         receivedAt: Date.now()
       };
     },
-    async closeChannel() {},
+    async closeChannel() { },
     async listChannels() {
       return [];
     }
@@ -244,8 +250,8 @@ describe('Service activation and lazy heavy service creation', () => {
       inspect: async () => ({ files: [] as string[] })
     } as unknown as BoxService;
     const fakeZipService = {
-      compress: async () => {},
-      extract: async () => {},
+      compress: async () => { },
+      extract: async () => { },
       list: async () => [] as string[]
     } as unknown as StoreZipService;
 

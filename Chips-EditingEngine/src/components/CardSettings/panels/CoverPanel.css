@@ -1,0 +1,86 @@
+.cover-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chips-spacing-lg, 20px);
+}
+
+.cover-panel__desc {
+  font-size: var(--chips-font-size-sm, 14px);
+  color: var(--chips-color-text-secondary, #6b7280);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.cover-panel__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chips-spacing-sm, 8px);
+}
+
+.cover-panel__option-card {
+  width: 100%;
+  padding: 0;
+  border: 2px solid var(--chips-color-border, #e5e7eb) !important;
+  border-radius: var(--chips-radius-md, 8px) !important;
+  background: var(--chips-color-surface, #ffffff) !important;
+  cursor: pointer;
+  transition: border-color var(--chips-transition-fast, 150ms ease),
+    background-color var(--chips-transition-fast, 150ms ease) !important;
+  text-align: left;
+  display: block; /* To override ChipsButton flex center if needed */
+}
+
+.cover-panel__option-card:hover {
+  border-color: var(--chips-color-primary, #3b82f6) !important;
+  background: color-mix(in srgb, var(--chips-color-primary) 3%, transparent) !important;
+}
+
+.cover-panel__option-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-spacing-md, 16px);
+  padding: var(--chips-spacing-md, 16px) var(--chips-spacing-lg, 20px);
+}
+
+.cover-panel__option-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.cover-panel__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cover-panel__option-title {
+  font-size: var(--chips-font-size-sm, 14px);
+  font-weight: var(--chips-font-weight-medium, 500);
+  color: var(--chips-color-text, #111827);
+}
+
+.cover-panel__option-desc {
+  font-size: 13px;
+  color: var(--chips-color-text-secondary, #6b7280);
+}
+
+.cover-panel__hint {
+  margin-top: var(--chips-spacing-xs, 4px);
+  display: flex;
+  gap: 12px;
+  padding: var(--chips-spacing-md, 16px);
+  background: color-mix(in srgb, var(--chips-color-primary) 5%, transparent);
+  border-radius: var(--chips-radius-md, 8px);
+}
+
+.cover-panel__hint-icon {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.cover-panel__hint-message {
+  font-size: 13px;
+  color: var(--chips-color-text-secondary, #6b7280);
+  line-height: 1.5;
+}

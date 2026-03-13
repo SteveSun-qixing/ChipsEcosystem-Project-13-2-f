@@ -11,6 +11,7 @@ const compositeWindowApi = {
     origin: 'http://localhost',
   })),
   onReady: vi.fn(() => () => {}),
+  onResize: vi.fn(() => () => {}),
   onNodeSelect: vi.fn(),
   onFatalError: vi.fn(() => () => {}),
   onNodeError: vi.fn(() => () => {}),
@@ -102,6 +103,7 @@ describe('CardWindow', () => {
 
     compositeWindowApi.render.mockClear();
     compositeWindowApi.onReady.mockClear();
+    compositeWindowApi.onResize.mockClear();
     compositeWindowApi.onNodeSelect.mockClear();
     compositeWindowApi.onFatalError.mockClear();
     compositeWindowApi.onNodeError.mockClear();
@@ -160,5 +162,90 @@ describe('CardWindow', () => {
     });
 
     expect(setSelectedBaseCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies composite resize payloads to the preview container height', async () => {
+    let resizeHandler:
+      | ((payload: { height: number; nodeCount: number; reason: string }) => void)
+      | undefined;
+
+    compositeWindowApi.onResize.mockImplementation((_frame, handler) => {
+      resizeHandler = handler;
+      return () => {};
+    });
+
+    await act(async () => {
+      root.render(
+        <CardWindow
+          config={{
+            id: 'window-2',
+            type: 'card',
+            cardId: 'card-1',
+            position: { x: 0, y: 0 },
+            size: { width: 640, height: 480 },
+            state: 'normal',
+            isEditing: true,
+            title: 'Demo Card',
+          }}
+          onUpdateConfig={() => undefined}
+          onClose={() => undefined}
+          onFocus={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(compositeWindowApi.onResize.mock.calls.length).toBeGreaterThan(0);
+    expect(resizeHandler).toBeTypeOf('function');
+
+    await act(async () => {
+      resizeHandler?.({ height: 912.2, nodeCount: 1, reason: 'node-height' });
+      await Promise.resolve();
+    });
+
+    const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
+    expect(preview?.style.height).toBe('913px');
+    expect(preview?.style.minHeight).toBe('913px');
+  });
+
+  it('keeps short composite cards content-driven in expanded mode', async () => {
+    let resizeHandler:
+      | ((payload: { height: number; nodeCount: number; reason: string }) => void)
+      | undefined;
+
+    compositeWindowApi.onResize.mockImplementation((_frame, handler) => {
+      resizeHandler = handler;
+      return () => {};
+    });
+
+    await act(async () => {
+      root.render(
+        <CardWindow
+          config={{
+            id: 'window-3',
+            type: 'card',
+            cardId: 'card-1',
+            position: { x: 0, y: 0 },
+            size: { width: 640, height: 480 },
+            state: 'normal',
+            isEditing: true,
+            title: 'Demo Card',
+          }}
+          onUpdateConfig={() => undefined}
+          onClose={() => undefined}
+          onFocus={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      resizeHandler?.({ height: 128.1, nodeCount: 1, reason: 'node-height' });
+      await Promise.resolve();
+    });
+
+    const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
+    expect(preview?.style.height).toBe('129px');
+    expect(preview?.style.minHeight).toBe('129px');
   });
 });

@@ -11,6 +11,14 @@ import { toRenderThemeSnapshot } from '../../src/main/theme-runtime/render-bridg
 
 type JsdomWindowLike = typeof globalThis & {
   parent?: unknown;
+  dispatchEvent?: (event: unknown) => boolean;
+  document?: {
+    querySelector?: (selector: string) => {
+      style?: {
+        height?: string;
+      };
+    } | null;
+  };
 };
 type JSDOMInstance = {
   window: JsdomWindowLike & { close: () => void };
@@ -385,6 +393,89 @@ describe('CardService rendering', () => {
 
       expect(postedMessages.some((message) => message.type === 'chips.composite:node-error')).toBe(true);
       expect(postedMessages.some((message) => message.type === 'chips.composite:fatal-error')).toBe(false);
+    } finally {
+      dom.window.close();
+    }
+  }, 30_000);
+
+  it('emits composite resize messages when the composite layout height changes', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      ...themeContext,
+    });
+
+    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
+    const dom = new JSDOM(view.body, {
+      runScripts: 'dangerously',
+      beforeParse(window: JsdomWindowLike) {
+        Object.defineProperty(window, 'parent', {
+          configurable: true,
+          value: {
+            postMessage(message: { type?: string; payload?: unknown }) {
+              postedMessages.push(message);
+            },
+          },
+        });
+      },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const initialResize = postedMessages.find((message) => message.type === 'chips.composite:resize');
+      expect(initialResize).toBeTruthy();
+      expect(initialResize?.payload).toMatchObject({
+        nodeCount: 2,
+        reason: 'initial',
+      });
+
+      postedMessages.length = 0;
+
+      const dispatchMessage = dom.window.dispatchEvent;
+      if (!dispatchMessage) {
+        throw new Error('JSDOM window does not expose dispatchEvent.');
+      }
+
+      dispatchMessage.call(
+        dom.window,
+        new dom.window.MessageEvent('message', {
+          data: {
+            type: 'chips.basecard:height',
+            payload: {
+              nodeId: 'intro',
+              height: 512,
+            },
+          },
+          origin: 'null',
+        }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const introFrame = dom.window.document?.querySelector?.(
+        '.chips-composite__frame[data-node-id="intro"]',
+      );
+      expect(introFrame?.style?.height).toBe('512px');
+
+      const resizeMessage = postedMessages.find((message) => message.type === 'chips.composite:resize');
+      expect(resizeMessage?.payload).toMatchObject({
+        nodeCount: 2,
+        reason: 'node-height',
+      });
+      expect((resizeMessage?.payload as { height: number }).height).toBeGreaterThanOrEqual(240);
     } finally {
       dom.window.close();
     }

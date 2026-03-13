@@ -32,6 +32,7 @@ export function CardWindow({
     const isEditing = !!config.isEditing;
     const windowState = config.state;
     const clientRef = useRef(getChipsClient());
+    const translationRef = useRef(t);
     const previewHostRef = useRef<HTMLDivElement | null>(null);
     const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
     const persistedRevision = cardInfo?.persistedRevision ?? 0;
@@ -41,11 +42,16 @@ export function CardWindow({
     const [isCoverDragging, setIsCoverDragging] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
+    const [previewHeight, setPreviewHeight] = useState<number | null>(null);
     const [coverRenderPosition, setCoverRenderPosition] = useState(config.position);
 
     const coverDragStart = useRef({ x: 0, y: 0 });
     const coverInitialPosition = useRef({ x: 0, y: 0 });
     const coverDragMoved = useRef(false);
+
+    useEffect(() => {
+        translationRef.current = t;
+    }, [t]);
 
     useEffect(() => {
         if (!isCoverDragging) {
@@ -150,6 +156,7 @@ export function CardWindow({
         if (!cardInfo || windowState === 'cover' || visibleBaseCards.length === 0) {
             setIsPreviewLoading(false);
             setPreviewError(null);
+            setPreviewHeight(null);
             return;
         }
 
@@ -158,6 +165,7 @@ export function CardWindow({
 
         setIsPreviewLoading(true);
         setPreviewError(null);
+        setPreviewHeight(null);
 
         clientRef.current.card.compositeWindow.render({
             cardFile: cardInfo.path,
@@ -186,6 +194,16 @@ export function CardWindow({
             cleanupTasks.push(() => {
                 frame.removeEventListener('load', handleNativeLoad);
             });
+
+            cleanupTasks.push(
+                clientRef.current.card.compositeWindow.onResize(frame, (payload) => {
+                    if (disposed) {
+                        return;
+                    }
+                    const nextHeight = Math.max(1, Math.ceil(payload.height));
+                    setPreviewHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+                }),
+            );
 
             cleanupTasks.push(
                 clientRef.current.card.compositeWindow.onNodeSelect(frame, (payload) => {
@@ -217,7 +235,7 @@ export function CardWindow({
                             error,
                         });
                         setIsPreviewLoading(false);
-                        setPreviewError(error.message || (t('plugin_host.error') || '加载失败'));
+                        setPreviewError(error.message || (translationRef.current('plugin_host.error') || '加载失败'));
                     }
                 }),
             );
@@ -239,7 +257,7 @@ export function CardWindow({
                 error,
             });
             setIsPreviewLoading(false);
-            setPreviewError(message || (t('plugin_host.error') || '加载失败'));
+            setPreviewError(message || (translationRef.current('plugin_host.error') || '加载失败'));
         });
 
         return () => {
@@ -257,7 +275,6 @@ export function CardWindow({
         persistedRevision,
         selectBaseCard,
         themeRuntime.cacheKey,
-        t,
         visibleBaseCardIds,
         windowState,
     ]);
@@ -325,7 +342,10 @@ export function CardWindow({
                     </div>
                 ) : (
                     <div className="card-window__workspace">
-                        <div className="card-window__preview">
+                        <div
+                            className="card-window__preview"
+                            style={previewHeight ? { height: `${previewHeight}px`, minHeight: `${previewHeight}px` } : undefined}
+                        >
                             <div ref={previewHostRef} className="card-window__preview-frame" />
 
                             {isPreviewLoading && (

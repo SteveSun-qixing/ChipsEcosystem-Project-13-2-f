@@ -109,6 +109,19 @@ export interface CompositeNodeSelectPayload {
   source?: string;
 }
 
+export type CompositeResizeReason =
+  | "initial"
+  | "ready"
+  | "node-load"
+  | "node-height"
+  | "resize-observer";
+
+export interface CompositeResizePayload {
+  height: number;
+  nodeCount: number;
+  reason: CompositeResizeReason;
+}
+
 export interface CardEditorChangePayload {
   baseCardId?: string;
   cardType: string;
@@ -134,6 +147,10 @@ export interface CardApi {
   compositeWindow: {
     render(options: { cardFile: string; mode?: CompositeMode }): Promise<FrameRenderResult>;
     onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onResize(
+      frame: HTMLIFrameElement,
+      handler: (payload: CompositeResizePayload) => void,
+    ): () => void;
     onNodeSelect(
       frame: HTMLIFrameElement,
       handler: (payload: CompositeNodeSelectPayload) => void,
@@ -235,6 +252,13 @@ export function createCardApi(client: CoreClient): CardApi {
       },
       onReady(frame, handler) {
         return subscribeToCompositeReady(frame, handler);
+      },
+      onResize(frame, handler) {
+        return subscribeToCompositeEvent<CompositeResizePayload>(
+          frame,
+          "chips.composite:resize",
+          handler,
+        );
       },
       onNodeSelect(frame, handler) {
         return subscribeToCompositeEvent<CompositeNodeSelectPayload>(

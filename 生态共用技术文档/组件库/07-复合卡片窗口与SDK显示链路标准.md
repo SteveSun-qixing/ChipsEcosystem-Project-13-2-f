@@ -71,6 +71,7 @@
 - 外层只向应用层交付一个复合 iframe；
 - 每个基础卡片节点在复合文档内部保持独立 iframe，以便失败隔离和尺寸回传；
 - 节点加载完成后向复合窗口回传高度；
+- 复合文档在初始装载、节点高度变化和整体布局变化后，必须向外层发送 `chips.composite:resize`，回传整张复合卡片当前总高度；
 - 全部节点就绪后发送 `chips.composite:ready`；
 - 复合卡片处于 `mode: 'preview'` 时，基础卡片节点被点击后必须发送 `chips.composite:node-select`；
 - 单节点失败时发送 `chips.composite:node-error`，同时在对应位置输出降级内容；
@@ -94,11 +95,13 @@
 3. Host 通过 `card.renderEditor` 路由到对应基础卡片插件；
 4. 基础卡片插件导出 `renderBasecardEditor`，由 Host 装载到独立 iframe；
 5. 编辑模式下，复合卡片 iframe 通过 `chips.composite:node-select` 把基础卡片选中事件回传给应用壳层；
-6. 编辑器通过 `chips.card-editor:*` 事件与应用壳层通信。
+6. 复合卡片展开态通过 `chips.composite:resize` 把当前总高度回传给应用壳层；
+7. 编辑器通过 `chips.card-editor:*` 事件与应用壳层通信。
 
 约束：
 
 - 编辑器链路与显示链路必须共享同一插件能力匹配规则；
 - 编辑引擎壳层只负责容器、选中态与数据保存，不负责插件源码装载；
 - 编辑引擎应直接消费 `chips.composite:node-select`，不应在复合卡片旁再维护一套重复的基础卡片列表作为正式交互入口；
+- 编辑引擎、查看器等应用不得自行探测 iframe 内部 DOM 高度，必须消费正式 `chips.composite:resize` / `client.card.compositeWindow.onResize(...)`；
 - 不允许编辑引擎额外实现一套脱离 Host/SDK 的编辑器运行时。

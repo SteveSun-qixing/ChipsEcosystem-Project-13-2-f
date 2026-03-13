@@ -241,12 +241,17 @@ describe("CardApi", () => {
       const frame = { contentWindow } as unknown as HTMLIFrameElement;
 
       let readyCount = 0;
+      let resizePayload: unknown = null;
       let nodeSelectPayload: unknown = null;
       let nodeErrorPayload: unknown = null;
       let fatalErrorPayload: unknown = null;
 
       api.compositeWindow.onReady(frame, () => {
         readyCount += 1;
+      });
+
+      api.compositeWindow.onResize(frame, (payload) => {
+        resizePayload = payload;
       });
 
       api.compositeWindow.onNodeError(frame, (payload) => {
@@ -283,6 +288,17 @@ describe("CardApi", () => {
       // correct ready event
       dispatch({ type: "chips.composite:ready" });
       expect(readyCount).toBe(1);
+
+      const resize = {
+        type: "chips.composite:resize",
+        payload: {
+          height: 720,
+          nodeCount: 2,
+          reason: "node-height",
+        },
+      };
+      dispatch(resize);
+      expect(resizePayload).toEqual(resize.payload);
 
       const nodeSelect = {
         type: "chips.composite:node-select",

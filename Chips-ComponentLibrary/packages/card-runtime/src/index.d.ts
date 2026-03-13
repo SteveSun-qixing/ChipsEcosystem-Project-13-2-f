@@ -30,6 +30,19 @@ export interface CompositeCardWindowNodeErrorPayload {
   error: StandardError;
 }
 
+export type CompositeResizeReason =
+  | "initial"
+  | "ready"
+  | "node-load"
+  | "node-height"
+  | "resize-observer";
+
+export interface CompositeCardWindowResizePayload {
+  height: number;
+  nodeCount: number;
+  reason: CompositeResizeReason;
+}
+
 export interface CompositeCardWindowProps {
   cardFile: string;
   frameUrl?: string;
@@ -39,6 +52,7 @@ export interface CompositeCardWindowProps {
   sandbox?: string;
   allowedOrigins?: string[];
   onReady?: (payload: CompositeCardWindowReadyPayload) => void;
+  onResize?: (payload: CompositeCardWindowResizePayload) => void;
   onNodeError?: (payload: CompositeCardWindowNodeErrorPayload) => void;
   onFatalError?: (error: StandardError) => void;
 }
@@ -71,6 +85,13 @@ export interface CompositeFrameNodeErrorMessage {
   error: StandardError;
 }
 
+export interface CompositeFrameResizeMessage {
+  type: "resize";
+  height: number;
+  nodeCount: number;
+  reason: CompositeResizeReason;
+}
+
 export interface CompositeFrameFatalErrorMessage {
   type: "fatal-error";
   error: StandardError;
@@ -78,6 +99,7 @@ export interface CompositeFrameFatalErrorMessage {
 
 export type CompositeFrameMessage =
   | CompositeFrameReadyMessage
+  | CompositeFrameResizeMessage
   | CompositeFrameNodeErrorMessage
   | CompositeFrameFatalErrorMessage;
 
@@ -109,6 +131,7 @@ export const CardDisplayAdapterMethod: {
 export const COMPOSITE_FRAME_CHANNEL: "chips.composite";
 export const CompositeFrameEventType: {
   readonly READY: "ready";
+  readonly RESIZE: "resize";
   readonly NODE_ERROR: "node-error";
   readonly FATAL_ERROR: "fatal-error";
 };

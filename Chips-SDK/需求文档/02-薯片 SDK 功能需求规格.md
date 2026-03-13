@@ -179,6 +179,7 @@
 
 - SDK 必须为复合卡片窗口提供事件协议封装，至少包括：
   - `chips.composite:ready`
+  - `chips.composite:resize`
   - `chips.composite:node-error`
   - `chips.composite:fatal-error`
 
@@ -186,6 +187,10 @@
 
   ```ts
   client.card.compositeWindow.onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+  client.card.compositeWindow.onResize(
+    frame: HTMLIFrameElement,
+    handler: (payload: { height: number; nodeCount: number; reason: string }) => void,
+  ): () => void;
   client.card.compositeWindow.onNodeError(
     frame: HTMLIFrameElement,
     handler: (payload: CompositeNodeError) => void,

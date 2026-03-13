@@ -142,9 +142,20 @@ card 子域采用 vNext 动作口径：
 复合卡片预览 iframe 事件协议：
 
 - `chips.composite:ready`
+- `chips.composite:resize`
 - `chips.composite:node-select`
 - `chips.composite:node-error`
 - `chips.composite:fatal-error`
+
+其中 `resize` 事件必须至少包含：
+
+```ts
+{
+  height: number;
+  nodeCount: number;
+  reason: 'initial' | 'ready' | 'node-load' | 'node-height' | 'resize-observer';
+}
+```
 
 其中 `node-select` 在 `mode: 'preview'` 下触发，必须至少包含：
 

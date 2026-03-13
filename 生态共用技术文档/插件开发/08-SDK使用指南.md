@@ -143,6 +143,7 @@ client.card.editorPanel.render({
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
 - `compositeWindow.mode = 'preview'` 时，可通过事件订阅接收基础卡片节点选中事件。
+- `compositeWindow` 可通过 `onResize` 订阅整张复合卡片当前总高度，正式用于编辑引擎无限长窗口、查看器自适应容器等场景。
 - `editorPanel` 返回基础卡片编辑器 iframe，正式用于编辑引擎编辑面板、嵌套编辑场景等。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
 
@@ -152,6 +153,10 @@ client.card.editorPanel.render({
 const preview = await client.card.compositeWindow.render({
   cardFile: '/workspace/demo.card',
   mode: 'preview',
+});
+
+const disposeResize = client.card.compositeWindow.onResize(preview.frame, (payload) => {
+  console.log(payload.height, payload.reason);
 });
 
 const disposeNodeSelect = client.card.compositeWindow.onNodeSelect(preview.frame, (payload) => {

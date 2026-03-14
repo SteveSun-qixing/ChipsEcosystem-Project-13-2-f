@@ -291,9 +291,13 @@
 
   client.module.mount(slot: string, moduleId: string): Promise<ModuleState>;
   client.module.unmount(slot: string): Promise<void>;
+  client.module.query(slot: string): Promise<ModuleState | undefined>;
+  client.module.list(): Promise<ModuleState[]>;
   ```
 
 - 所有此类封装必须严格映射到 Host `window.*` 与 `module.*` 服务动作，禁止发明 SDK 自有未文档化语义。
+- `ModuleState` 至少应暴露 `slot/moduleId/entry?/capabilities?/active/mountedAt` 字段。
+- SDK 必须对 Host 的 `{ module }` / `{ modules }` 包装响应进行解包，并向调用方直接返回 `ModuleState` 或 `ModuleState[]`。
 
 ---
 

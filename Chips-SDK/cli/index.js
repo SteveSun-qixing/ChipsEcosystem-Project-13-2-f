@@ -1410,8 +1410,42 @@ const handleCreate = async (args) => {
     return;
   }
 
+  if (type === 'module') {
+    const packageDir = path.join(scaffoldRoot, 'chips-scaffold-module');
+    const modulePath = path.join(
+      packageDir,
+      'dist',
+      'src',
+      'index.js'
+    );
+    await ensurePackageBuildArtifact(packageDir, modulePath, '模块脚手架');
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const moduleScaffold = require(modulePath);
+    const projectName = deriveProjectName(targetDir);
+    const slug = slugifyForPluginId(projectName);
+    const options = {
+      projectName,
+      targetDir: path.resolve(projectRoot, targetDir),
+      templateId: 'module-standard',
+      pluginId: `chips.module.${slug.replace(/-/g, '.')}`,
+      moduleCapability: `module.${slug.replace(/-/g, '.')}`,
+      displayName: toDisplayName(projectName),
+      version: '0.1.0',
+      authorName: deriveAuthorName(),
+      authorEmail: deriveAuthorEmail(slug)
+    };
+    await moduleScaffold.createModuleProject(options);
+    await adaptWorkspaceDependencies(options.targetDir);
+    log({
+      message: '模块工程创建完成',
+      targetDir: options.targetDir,
+      templateId: options.templateId
+    });
+    return;
+  }
+
   throw new Error(
-    `不支持的 create 类型：${type}。当前支持：app、card、theme。`
+    `不支持的 create 类型：${type}。当前支持：app、card、module、theme。`
   );
 };
 

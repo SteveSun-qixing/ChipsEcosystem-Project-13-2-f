@@ -144,6 +144,41 @@ describe("createClient", () => {
     await expect(client.plugin.getLayoutPlugin("grid-layout")).resolves.toBeUndefined();
   });
 
+  it("unwraps module runtime responses", async () => {
+    const mountedModule = {
+      slot: "preview.main",
+      moduleId: "chips.module.markdown-renderer",
+      entry: "dist/index.mjs",
+      capabilities: ["markdown-renderer"],
+      active: true,
+      mountedAt: 1_710_000_000_000,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action) => {
+        if (action === "module.mount") {
+          return { module: mountedModule };
+        }
+        if (action === "module.query") {
+          return { module: mountedModule };
+        }
+        if (action === "module.list") {
+          return { modules: [mountedModule] };
+        }
+        if (action === "module.unmount") {
+          return { ack: true };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.module.mount("preview.main", mountedModule.moduleId)).resolves.toEqual(mountedModule);
+    await expect(client.module.query("preview.main")).resolves.toEqual(mountedModule);
+    await expect(client.module.list()).resolves.toEqual([mountedModule]);
+    await expect(client.module.unmount("preview.main")).resolves.toBeUndefined();
+  });
+
   it("renders card editor panels through the formal Host route", async () => {
     const client = createClient({
       environment: "node",

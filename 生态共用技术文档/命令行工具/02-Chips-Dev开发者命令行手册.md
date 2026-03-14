@@ -60,7 +60,7 @@ npm install
 ### 2. 工程命令
 
 - `chipsdev init`：初始化当前工程的 `chips.config.mjs`
-- `chipsdev create <name> --type <app|card|theme>`：创建新工程
+- `chipsdev create <app|card|module|theme> <targetDir>`：创建新工程
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
 - `chipsdev build`：执行正式构建
@@ -122,6 +122,7 @@ chipsdev theme validate
 
 - `app`
 - `card`
+- `module`
 - `theme`
 
 ## 构建、打包与校验

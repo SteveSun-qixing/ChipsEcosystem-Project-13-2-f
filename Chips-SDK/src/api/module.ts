@@ -1,9 +1,13 @@
 import type { CoreClient } from "../types/client";
+import { createError } from "../types/errors";
 
 export interface ModuleState {
   slot: string;
   moduleId: string;
+  entry?: string | Record<string, string>;
+  capabilities?: string[];
   active: boolean;
+  mountedAt: number;
   [key: string]: unknown;
 }
 
@@ -17,17 +21,34 @@ export interface ModuleApi {
 export function createModuleApi(client: CoreClient): ModuleApi {
   return {
     async mount(slot, moduleId) {
-      return client.invoke("module.mount", { slot, moduleId });
+      if (!slot) {
+        throw createError("INVALID_ARGUMENT", "module.mount: slot is required.");
+      }
+      if (!moduleId) {
+        throw createError("INVALID_ARGUMENT", "module.mount: moduleId is required.");
+      }
+      const result = await client.invoke<{ slot: string; moduleId: string }, { module: ModuleState }>(
+        "module.mount",
+        { slot, moduleId },
+      );
+      return result.module;
     },
     async unmount(slot) {
-      return client.invoke("module.unmount", { slot });
+      if (!slot) {
+        throw createError("INVALID_ARGUMENT", "module.unmount: slot is required.");
+      }
+      await client.invoke("module.unmount", { slot });
     },
     async query(slot) {
-      return client.invoke("module.query", { slot });
+      if (!slot) {
+        throw createError("INVALID_ARGUMENT", "module.query: slot is required.");
+      }
+      const result = await client.invoke<{ slot: string }, { module: ModuleState | null }>("module.query", { slot });
+      return result.module ?? undefined;
     },
     async list() {
-      return client.invoke("module.list", {});
+      const result = await client.invoke<Record<string, never>, { modules: ModuleState[] }>("module.list", {});
+      return result.modules;
     },
   };
 }
-

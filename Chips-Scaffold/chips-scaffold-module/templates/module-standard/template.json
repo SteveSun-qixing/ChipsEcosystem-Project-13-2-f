@@ -1,0 +1,12 @@
+{
+  "id": "module-standard",
+  "name": "标准模块插件模板",
+  "description": "面向 Host 共享功能模块场景的标准模块插件模板，内建 React、chips-sdk、主题/多语言运行时同步与测试骨架。",
+  "version": "1.0.0",
+  "supports": {
+    "sdk": true,
+    "react": true,
+    "themeSystem": true,
+    "i18nSystem": true
+  }
+}

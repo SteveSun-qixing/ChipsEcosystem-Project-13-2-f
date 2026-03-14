@@ -185,7 +185,7 @@ export const registerHostSchemas = (): void => {
   registerPair('plugin.init', ['pluginId']);
   registerPair('plugin.handshake.complete', ['sessionId', 'nonce']);
 
-  registerPair('module.mount', ['slot', 'module']);
+  registerPair('module.mount', ['slot', 'moduleId'], ['module']);
   registerPair('module.unmount', ['slot']);
   registerPair('module.query', ['slot']);
   registerPair('module.list', []);

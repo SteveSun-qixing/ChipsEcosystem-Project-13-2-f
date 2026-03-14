@@ -1,0 +1,4 @@
+node_modules
+dist
+tests/.tmp-module-tests
+tests/.tmp-e2e

@@ -237,7 +237,27 @@ storage子域提供本地存储能力，包括storage.get(key)读取数据，sto
 
 ### module子域
 
-module子域提供模块加载能力，包括module.load(moduleId)加载模块，module.unload(moduleId)卸载模块，module.list()获取已加载模块列表。
+module子域提供 Host 管理的共享功能模块挂载能力，采用 vNext 冻结动作口径：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `module.mount({ slot, moduleId })` | 在指定 slot 挂载已安装且已启用的模块插件，返回 `{ module }` | 否 |
+| `module.unmount({ slot })` | 卸载指定 slot 的模块挂载，返回 `{ ack: true }` | 否 |
+| `module.query({ slot })` | 查询指定 slot 的挂载状态，返回 `{ module: ModuleState \| null }` | 是 |
+| `module.list()` | 列出当前 Host 已挂载的全部模块，返回 `{ modules: ModuleState[] }` | 是 |
+
+正式约束：
+
+- `slot` 必须是非空字符串，用于表达逻辑挂载位，例如 `viewer.preview`、`editor.richtext`。
+- `moduleId` 必须是已安装、已启用且 `manifest.type === "module"` 的正式插件标识。
+- `module.mount` 在目标 slot 已被占用时必须返回 `MODULE_CONFLICT`。
+- `module.mount` 在模块不存在、类型错误或未启用时，分别返回 `MODULE_NOT_FOUND`、`MODULE_INVALID`、`MODULE_DISABLED`。
+- `ModuleState` 至少包含 `slot/moduleId/entry?/capabilities/active/mountedAt`。
+
+迁移说明：
+
+- 旧文档中的 `module.load(moduleId)` / `module.unload(moduleId)` 已归档，不再作为外部正式动作暴露。
+- SDK 对 `module.query/module.list` 的包装会把 Host 返回的 `{ module }` / `{ modules }` 解包为直接结果，便于插件侧使用。
 
 ### plugin子域
 
@@ -258,7 +278,7 @@ plugin子域提供插件信息查询能力，采用 vNext 冻结动作口径：
 interface PluginInfo {
   id: string;           // 插件唯一标识
   version: string;      // 插件版本
-  type: 'app' | 'card' | 'layout' | 'theme'; // 插件类型
+  type: 'app' | 'card' | 'layout' | 'theme' | 'module'; // 插件类型
   name: string;         // 插件显示名称
   description?: string; // 插件描述
   installPath: string;  // 安装路径

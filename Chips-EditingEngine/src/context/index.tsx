@@ -3,15 +3,18 @@ import { EditorProvider } from './EditorContext';
 import { CardProvider } from './CardContext';
 import { UIProvider } from './UIContext';
 import { SettingsProvider } from './SettingsContext';
+import { EditorRuntimeProvider } from '../editor-runtime/context';
 
 export function AppProviders({ children }: { children: ReactNode }) {
     return (
         <SettingsProvider>
             <UIProvider>
                 <EditorProvider>
-                    <CardProvider>
-                        {children}
-                    </CardProvider>
+                    <EditorRuntimeProvider>
+                        <CardProvider>
+                            {children}
+                        </CardProvider>
+                    </EditorRuntimeProvider>
                 </EditorProvider>
             </UIProvider>
         </SettingsProvider>

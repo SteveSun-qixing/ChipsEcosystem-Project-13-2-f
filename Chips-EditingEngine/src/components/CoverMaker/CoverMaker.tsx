@@ -417,8 +417,8 @@ export function CoverMaker({
           <div className="cover-maker__preview-panel">
             <div className="cover-maker__preview-header">
               <label className="cover-maker__label">{t('cover_maker.ratio') || '预览比例'}</label>
-              <select 
-                value={selectedRatio} 
+              <select
+                value={selectedRatio}
                 onChange={e => setSelectedRatio(e.target.value)}
                 className="cover-maker__select chips-select__selector"
               >

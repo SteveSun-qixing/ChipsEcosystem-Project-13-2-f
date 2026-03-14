@@ -19,6 +19,7 @@ import type { BasicCardConfig } from './core/card-initializer';
 import type { DragData } from './components/CardBoxLibrary/types';
 import { generateId62 } from './utils/id';
 import { setLocale } from './i18n';
+import { createInitialBasecardConfig, normalizeBasecardType } from './basecard-runtime/registry';
 
 const EngineSettingsDialog = lazy(() => import('./components/EngineSettings/EngineSettingsDialog').then(m => ({ default: m.EngineSettingsDialog })));
 
@@ -27,29 +28,24 @@ interface ThemeRuntimeState {
   version: string;
 }
 
-function createInitialBasicCardPayload(typeId: string): Record<string, unknown> {
-  if (typeId === 'RichTextCard' || typeId === 'base.richtext') {
-    return {
-      body: '<p></p>',
-      locale: 'zh-CN',
-    };
+function createInitialBasicCardPayload(typeId: string, baseCardId = ''): Record<string, unknown> {
+  const config = createInitialBasecardConfig(typeId, baseCardId);
+  if (baseCardId) {
+    return config;
   }
 
-  return {
-    card_type: typeId,
-  };
+  const { id: _ignoredId, ...rest } = config;
+  return rest;
 }
 
 function createInitialBasicCard(typeId: string): BasicCardConfig {
   const baseCardId = generateId62();
+  const normalizedType = normalizeBasecardType(typeId);
 
   return {
     id: baseCardId,
-    type: typeId,
-    config: {
-      id: baseCardId,
-      ...createInitialBasicCardPayload(typeId),
-    },
+    type: normalizedType,
+    config: createInitialBasicCardPayload(normalizedType, baseCardId),
   };
 }
 

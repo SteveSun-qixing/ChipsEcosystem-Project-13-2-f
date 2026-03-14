@@ -10,13 +10,13 @@ type MockEntry = {
 
 const { mockFileService } = vi.hoisted(() => ({
   mockFileService: {
-    readText: vi.fn<(path: string) => Promise<string>>(),
-    writeText: vi.fn<(path: string, content: string) => Promise<void>>(),
-    writeBinary: vi.fn<(path: string, content: Uint8Array) => Promise<void>>(),
-    exists: vi.fn<(path: string) => Promise<boolean>>(),
-    ensureDir: vi.fn<(path: string) => Promise<void>>(),
-    list: vi.fn<(path: string) => Promise<MockEntry[]>>(),
-    delete: vi.fn<(path: string) => Promise<void>>(),
+    readText: vi.fn<[string], Promise<string>>(),
+    writeText: vi.fn<[string, string], Promise<void>>(),
+    writeBinary: vi.fn<[string, Uint8Array], Promise<void>>(),
+    exists: vi.fn<[string], Promise<boolean>>(),
+    ensureDir: vi.fn<[string], Promise<void>>(),
+    list: vi.fn<[string], Promise<MockEntry[]>>(),
+    delete: vi.fn<[string], Promise<void>>(),
   },
 }));
 
@@ -178,7 +178,7 @@ describe('unpacked .card files', () => {
     expect(card.structure.basicCards).toHaveLength(2);
     expect(card.structure.basicCards[0]).toMatchObject({
       id: 'intro',
-      type: 'RichTextCard',
+      type: 'base.richtext',
       data: {
         id: 'intro',
         body: '<h1>Intro</h1><p>Hello Chips.</p>',
@@ -196,6 +196,7 @@ describe('unpacked .card files', () => {
     const persistedIntro = yaml.parse(files.get('/workspace/demo.card/content/intro.yaml') ?? '');
 
     expect(persistedStructure.structure).toHaveLength(1);
+    expect(persistedStructure.structure[0]?.type).toBe('base.richtext');
     expect(persistedIntro).toMatchObject({
       id: 'intro',
       body: '<p>已更新</p>',
@@ -260,12 +261,15 @@ describe('unpacked .card files', () => {
     expect(pendingCard?.persistedRevision ?? 0).toBe(0);
     expect(pendingCard?.pendingPersistRevision).toBe(2);
 
-    for (let attempt = 0; attempt < 20 && !releaseFirstIntroWrite; attempt += 1) {
-      await Promise.resolve();
-    }
-    expect(releaseFirstIntroWrite).toBeTypeOf('function');
-    releaseFirstIntroWrite?.();
-    await service.saveCard('demo-card');
+	    for (let attempt = 0; attempt < 20 && !releaseFirstIntroWrite; attempt += 1) {
+	      await Promise.resolve();
+	    }
+	    expect(releaseFirstIntroWrite).toBeTypeOf('function');
+	    if (!releaseFirstIntroWrite) {
+	      throw new Error('Expected pending intro write gate to be installed.');
+	    }
+	    (releaseFirstIntroWrite as () => void)();
+	    await service.saveCard('demo-card');
 
     const latestCard = service.getCard('demo-card');
     const persistedIntro = yaml.parse(files.get('/workspace/demo.card/content/intro.yaml') ?? '');

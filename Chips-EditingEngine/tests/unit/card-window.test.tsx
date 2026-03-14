@@ -4,23 +4,6 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CardWindow } from '../../src/components/CardWindow/CardWindow';
-import { globalEventEmitter } from '../../src/core/event-emitter';
-
-const compositeWindowApi = {
-  render: vi.fn(async () => ({
-    frame: document.createElement('iframe'),
-    origin: 'http://localhost',
-  })),
-  onReady: vi.fn((_frame: HTMLIFrameElement, handler: () => void) => {
-    handler();
-    return () => {};
-  }),
-  onResize: vi.fn(() => () => {}),
-  onInteraction: vi.fn(() => () => {}),
-  onNodeSelect: vi.fn(),
-  onFatalError: vi.fn(() => () => {}),
-  onNodeError: vi.fn(() => () => {}),
-};
 
 const setActiveCard = vi.fn();
 const setSelectedBaseCard = vi.fn();
@@ -28,12 +11,38 @@ const panByInput = vi.fn();
 const zoomByFactorAtPoint = vi.fn();
 const markInteractionSequence = vi.fn();
 
-vi.mock('../../src/services/bridge-client', () => ({
-  getChipsClient: () => ({
-    card: {
-      compositeWindow: compositeWindowApi,
-    },
-  }),
+let latestAssemblerProps: Record<string, unknown> | null = null;
+
+vi.mock('../../src/basecard-runtime/CompositeCardAssembler', () => ({
+  CompositeCardAssembler: (props: Record<string, any>) => {
+    latestAssemblerProps = props;
+
+    return (
+      <div data-testid="composite-assembler">
+        <button
+          type="button"
+          data-testid="select-basecard"
+          onClick={() => props.onBaseCardSelect?.('base-1')}
+        >
+          select
+        </button>
+        <button
+          type="button"
+          data-testid="height-large"
+          onClick={() => props.onHeightChange?.(913)}
+        >
+          height-large
+        </button>
+        <button
+          type="button"
+          data-testid="height-small"
+          onClick={() => props.onHeightChange?.(129)}
+        >
+          height-small
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('../../src/context/CardContext', () => ({
@@ -52,15 +61,18 @@ vi.mock('../../src/context/CardContext', () => ({
             basicCards: [
               {
                 id: 'base-1',
-                type: 'RichTextCard',
+                type: 'base.richtext',
                 data: { id: 'base-1', body: '<p>Intro</p>' },
               },
             ],
+            layout: {
+              padding: 16,
+              gap: 12,
+            },
           },
         },
       ],
     ]),
-    activeCardId: 'card-1',
     selectedBaseCardId: null,
     setActiveCard,
     setSelectedBaseCard,
@@ -136,37 +148,22 @@ describe('CardWindow', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    compositeWindowApi.render.mockClear();
-    compositeWindowApi.onReady.mockClear();
-    compositeWindowApi.onResize.mockClear();
-    compositeWindowApi.onInteraction.mockClear();
-    compositeWindowApi.onNodeSelect.mockClear();
-    compositeWindowApi.onFatalError.mockClear();
-    compositeWindowApi.onNodeError.mockClear();
+    latestAssemblerProps = null;
     setActiveCard.mockClear();
     setSelectedBaseCard.mockClear();
     panByInput.mockClear();
     zoomByFactorAtPoint.mockClear();
     markInteractionSequence.mockClear();
-    globalEventEmitter.clear();
   });
 
   afterEach(async () => {
-    vi.useRealTimers();
     await act(async () => {
       root.unmount();
     });
-    globalEventEmitter.clear();
     container.remove();
   });
 
-  it('maps composite node selection events into card selection state', async () => {
-    let nodeSelectHandler: ((payload: { nodeId: string }) => void) | undefined;
-    compositeWindowApi.onNodeSelect.mockImplementation((_frame, handler) => {
-      nodeSelectHandler = handler;
-      return () => {};
-    });
-
+  async function renderCardWindow(overrides: Partial<Record<string, unknown>> = {}) {
     await act(async () => {
       root.render(
         <CardWindow
@@ -179,7 +176,8 @@ describe('CardWindow', () => {
             state: 'normal',
             isEditing: true,
             title: 'Demo Card',
-          }}
+            ...overrides,
+          } as any}
           onUpdateConfig={() => undefined}
           onClose={() => undefined}
           onFocus={() => undefined}
@@ -187,62 +185,24 @@ describe('CardWindow', () => {
       );
       await Promise.resolve();
     });
+  }
 
-    expect(compositeWindowApi.render.mock.calls.length).toBeGreaterThan(0);
-    expect(compositeWindowApi.onNodeSelect.mock.calls.length).toBeGreaterThan(0);
-    expect(nodeSelectHandler).toBeTypeOf('function');
+  it('maps assembled base card selection into card selection state', async () => {
+    await renderCardWindow();
 
     await act(async () => {
-      nodeSelectHandler?.({ nodeId: 'base-1' });
+      (container.querySelector('[data-testid="select-basecard"]') as HTMLButtonElement).click();
     });
 
     expect(setActiveCard).toHaveBeenCalledWith('card-1');
     expect(setSelectedBaseCard).toHaveBeenCalledWith('base-1');
-
-    await act(async () => {
-      nodeSelectHandler?.({ nodeId: 'missing-node' });
-    });
-
-    expect(setSelectedBaseCard).toHaveBeenCalledTimes(1);
   });
 
-  it('applies composite resize payloads to the preview container height', async () => {
-    let resizeHandler:
-      | ((payload: { height: number; nodeCount: number; reason: string }) => void)
-      | undefined;
-
-    compositeWindowApi.onResize.mockImplementation((_frame, handler) => {
-      resizeHandler = handler;
-      return () => {};
-    });
+  it('applies assembled preview height to the preview container', async () => {
+    await renderCardWindow();
 
     await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-2',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.onResize.mock.calls.length).toBeGreaterThan(0);
-    expect(resizeHandler).toBeTypeOf('function');
-
-    await act(async () => {
-      resizeHandler?.({ height: 912.2, nodeCount: 1, reason: 'node-height' });
-      await Promise.resolve();
+      (container.querySelector('[data-testid="height-large"]') as HTMLButtonElement).click();
     });
 
     const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
@@ -253,40 +213,11 @@ describe('CardWindow', () => {
     expect(preview?.style.flex).toBe('1 1 auto');
   });
 
-  it('keeps short composite cards content-driven in expanded mode', async () => {
-    let resizeHandler:
-      | ((payload: { height: number; nodeCount: number; reason: string }) => void)
-      | undefined;
-
-    compositeWindowApi.onResize.mockImplementation((_frame, handler) => {
-      resizeHandler = handler;
-      return () => {};
-    });
+  it('keeps short assembled cards content-driven in expanded mode', async () => {
+    await renderCardWindow();
 
     await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-3',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      resizeHandler?.({ height: 128.1, nodeCount: 1, reason: 'node-height' });
-      await Promise.resolve();
+      (container.querySelector('[data-testid="height-small"]') as HTMLButtonElement).click();
     });
 
     const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
@@ -294,79 +225,22 @@ describe('CardWindow', () => {
     expect(preview?.style.minHeight).toBe('129px');
   });
 
-  it('passes the formal composite interaction policy through the preview render request', async () => {
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-policy',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
+  it('passes the preview mode and interaction policy to the assembler', async () => {
+    await renderCardWindow();
+
+    expect(latestAssemblerProps?.mode).toBe('preview');
+    expect(latestAssemblerProps?.interactionPolicy).toBe('delegate');
+    expect(latestAssemblerProps?.themeCacheKey).toBe('theme-cache-key');
+
+    await renderCardWindow({
+      state: 'collapsed',
     });
 
-    expect(compositeWindowApi.render).toHaveBeenLastCalledWith({
-      cardFile: '/workspace/demo.card',
-      mode: 'preview',
-      interactionPolicy: 'delegate',
-    });
-
-    compositeWindowApi.render.mockClear();
-
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-policy',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'collapsed',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenLastCalledWith({
-      cardFile: '/workspace/demo.card',
-      mode: 'preview',
-      interactionPolicy: 'native',
-    });
+    expect(latestAssemblerProps?.interactionPolicy).toBe('native');
   });
 
-  it('routes composite interaction events into canvas pan and anchored zoom actions', async () => {
-    let interactionHandler:
-      | ((payload: {
-        cardId: string;
-        source: 'basecard-frame' | 'composite-shell' | 'degraded-node';
-        device: 'wheel' | 'touch';
-        intent: 'scroll' | 'zoom';
-        deltaX: number;
-        deltaY: number;
-        zoomDelta?: number;
-        clientX: number;
-        clientY: number;
-        pointerCount: number;
-      }) => void)
-      | undefined;
+  it('routes assembled interaction events into canvas pan and anchored zoom actions', async () => {
+    await renderCardWindow();
 
     const frame = document.createElement('iframe');
     frame.getBoundingClientRect = vi.fn(() => ({
@@ -381,95 +255,36 @@ describe('CardWindow', () => {
       toJSON: () => ({}),
     })) as unknown as typeof frame.getBoundingClientRect;
 
-    compositeWindowApi.render.mockImplementationOnce(async () => ({
-      frame,
-      origin: 'http://localhost',
-    }));
-    compositeWindowApi.onInteraction.mockImplementationOnce((_frame, handler) => {
-      interactionHandler = handler;
-      return () => {};
-    });
-
     await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-interaction',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.onInteraction).toHaveBeenCalledTimes(1);
-    expect(interactionHandler).toBeTypeOf('function');
-
-    await act(async () => {
-      interactionHandler?.({
-        cardId: 'card-1',
-        source: 'basecard-frame',
-        device: 'wheel',
-        intent: 'scroll',
+      (latestAssemblerProps?.onInteraction as any)?.({
+        intent: 'pan',
         deltaX: 12,
         deltaY: 36,
+        zoomDelta: 0,
         clientX: 32,
         clientY: 64,
-        pointerCount: 1,
-      });
+      }, frame);
     });
 
     expect(markInteractionSequence).toHaveBeenCalledWith({ suppressDesktopZoom: true });
     expect(panByInput).toHaveBeenCalledWith(12, 36);
 
     await act(async () => {
-      interactionHandler?.({
-        cardId: 'card-1',
-        source: 'basecard-frame',
-        device: 'touch',
+      (latestAssemblerProps?.onInteraction as any)?.({
         intent: 'zoom',
         deltaX: 0,
         deltaY: 0,
         zoomDelta: 0.2,
         clientX: 50,
         clientY: 80,
-        pointerCount: 2,
-      });
+      }, frame);
     });
 
     expect(zoomByFactorAtPoint).toHaveBeenCalledWith(1.2, 170, 320);
   });
 
   it('opens the card settings dialog from the window menu settings action', async () => {
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-4',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
+    await renderCardWindow();
 
     expect(container.querySelector('[data-testid="card-settings-dialog"]')).toBeNull();
 
@@ -478,162 +293,5 @@ describe('CardWindow', () => {
     });
 
     expect(container.querySelector('[data-testid="card-settings-dialog"]')).not.toBeNull();
-  });
-
-  it('debounces preview rerenders while edit-mode updates stream in', async () => {
-    vi.useFakeTimers();
-
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-4',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      globalEventEmitter.emit('card:basic-card-updated', { cardId: 'card-1', basicCardId: 'base-1' });
-      globalEventEmitter.emit('card:basic-card-updated', { cardId: 'card-1', basicCardId: 'base-1' });
-      vi.advanceTimersByTime(319);
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the current preview visible while a background refresh is pending', async () => {
-    vi.useFakeTimers();
-
-    let renderCount = 0;
-    let resolveBackgroundRender: (() => void) | null = null;
-
-    compositeWindowApi.render.mockImplementation(async () => {
-      renderCount += 1;
-      const frame = document.createElement('iframe');
-
-      if (renderCount === 1) {
-        return {
-          frame,
-          origin: 'http://localhost',
-        };
-      }
-
-      return await new Promise<{ frame: HTMLIFrameElement; origin: string }>((resolve) => {
-        resolveBackgroundRender = () => {
-          resolve({
-            frame,
-            origin: 'http://localhost',
-          });
-        };
-      });
-    });
-
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-5',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(container.querySelector('.card-window__overlay')).toBeNull();
-
-    await act(async () => {
-      globalEventEmitter.emit('card:basic-card-updated', { cardId: 'card-1', basicCardId: 'base-1' });
-      vi.advanceTimersByTime(320);
-      await Promise.resolve();
-    });
-
-    expect(resolveBackgroundRender).toBeTypeOf('function');
-    expect(container.querySelector('.card-window__overlay')).toBeNull();
-
-    await act(async () => {
-      resolveBackgroundRender?.();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(container.querySelector('.card-window__overlay')).toBeNull();
-  });
-
-  it('waits for a longer idle window before refreshing while the editor is actively typing', async () => {
-    vi.useFakeTimers();
-
-    await act(async () => {
-      root.render(
-        <CardWindow
-          config={{
-            id: 'window-6',
-            type: 'card',
-            cardId: 'card-1',
-            position: { x: 0, y: 0 },
-            size: { width: 640, height: 480 },
-            state: 'normal',
-            isEditing: true,
-            title: 'Demo Card',
-          }}
-          onUpdateConfig={() => undefined}
-          onClose={() => undefined}
-          onFocus={() => undefined}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      globalEventEmitter.emit('card:editor-activity', { cardId: 'card-1', at: Date.now() });
-      globalEventEmitter.emit('card:basic-card-updated', { cardId: 'card-1', basicCardId: 'base-1' });
-      vi.advanceTimersByTime(1199);
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(compositeWindowApi.render).toHaveBeenCalledTimes(2);
   });
 });

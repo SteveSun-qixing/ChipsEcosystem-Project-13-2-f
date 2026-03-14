@@ -25,10 +25,10 @@ export class ResourceService {
 
     async initialize(workspacePath?: string): Promise<void> {
         if (this.initialized) return;
-        
+
         this.workspaceRoot = workspacePath || '';
         this.externalRoot = '';
-        
+
         this.initialized = true;
         globalEventEmitter.emit('resource:initialized', { workspaceRoot: this.workspaceRoot });
     }

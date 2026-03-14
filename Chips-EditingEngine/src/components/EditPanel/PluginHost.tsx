@@ -1,10 +1,6 @@
-import React, { startTransition, useEffect, useRef, useState } from 'react';
-import { globalEventEmitter } from '../../core/event-emitter';
-import { useTranslation } from '../../hooks/useTranslation';
-import { getChipsClient } from '../../services/bridge-client';
+import React from 'react';
+import { EditorHost } from '../../editor-runtime/EditorHost';
 import './PluginHost.css';
-
-const EDITOR_CONFIG_COMMIT_DEBOUNCE_MS = 260;
 
 export interface PluginHostProps {
   cardId?: string;
@@ -25,223 +21,19 @@ export function PluginHost({
   onPluginLoaded,
   onPluginError,
 }: PluginHostProps) {
-  const { t } = useTranslation();
-  const clientRef = useRef(getChipsClient());
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const latestConfigRef = useRef<Record<string, unknown>>(config);
-  const latestConfigSignatureRef = useRef(JSON.stringify(config));
-  const onConfigChangeRef = useRef(onConfigChange);
-  const onPluginLoadedRef = useRef(onPluginLoaded);
-  const onPluginErrorRef = useRef(onPluginError);
-  const pendingConfigRef = useRef<Record<string, unknown> | null>(null);
-  const pendingCommitTimerRef = useRef<number | null>(null);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<Error | null>(null);
-  const [renderRevision, setRenderRevision] = useState(0);
-
-  useEffect(() => {
-    latestConfigRef.current = config;
-    latestConfigSignatureRef.current = JSON.stringify(config);
-  }, [config]);
-
-  useEffect(() => {
-    onConfigChangeRef.current = onConfigChange;
-  }, [onConfigChange]);
-
-  useEffect(() => {
-    onPluginLoadedRef.current = onPluginLoaded;
-  }, [onPluginLoaded]);
-
-  useEffect(() => {
-    onPluginErrorRef.current = onPluginError;
-  }, [onPluginError]);
-
-  const flushPendingConfigChange = () => {
-    if (pendingCommitTimerRef.current !== null) {
-      window.clearTimeout(pendingCommitTimerRef.current);
-      pendingCommitTimerRef.current = null;
-    }
-
-    const nextConfig = pendingConfigRef.current;
-    if (!nextConfig) {
-      return;
-    }
-
-    pendingConfigRef.current = null;
-    latestConfigSignatureRef.current = JSON.stringify(nextConfig);
-    startTransition(() => {
-      onConfigChangeRef.current?.(nextConfig);
-    });
-  };
-
-  const reportEditorActivity = () => {
-    if (!cardId) {
-      return;
-    }
-
-    globalEventEmitter.emit('card:editor-activity', {
-      cardId,
-      baseCardId,
-      cardType,
-      at: Date.now(),
-    });
-  };
-
-  const queueConfigChange = (nextConfig: Record<string, unknown>) => {
-    const nextSignature = JSON.stringify(nextConfig);
-    if (
-      nextSignature === latestConfigSignatureRef.current &&
-      pendingConfigRef.current === null
-    ) {
-      return;
-    }
-
-    reportEditorActivity();
-    pendingConfigRef.current = nextConfig;
-
-    if (pendingCommitTimerRef.current !== null) {
-      window.clearTimeout(pendingCommitTimerRef.current);
-    }
-
-    pendingCommitTimerRef.current = window.setTimeout(() => {
-      flushPendingConfigChange();
-    }, EDITOR_CONFIG_COMMIT_DEBOUNCE_MS);
-  };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      const error = new Error('Editor panel container is unavailable.');
-      setLoadError(error);
-      onPluginErrorRef.current?.(error);
-      return;
-    }
-
-    let disposed = false;
-    const cleanupTasks: Array<() => void> = [];
-
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-
-    setIsLoading(true);
-    setLoadError(null);
-
-    clientRef.current.card.editorPanel.render({
-      cardType,
-      baseCardId,
-      initialConfig: latestConfigRef.current,
-    }).then((result) => {
-      if (disposed) {
-        return;
-      }
-
-      const frame = result.frame;
-      frameRef.current = frame;
-      frame.style.width = '100%';
-      frame.style.height = '100%';
-      frame.style.border = 'none';
-      frame.style.display = 'block';
-      frame.style.background = 'transparent';
-      container.appendChild(frame);
-
-      const handleNativeLoad = () => {
-        if (!disposed) {
-          setIsLoading(false);
-        }
-      };
-
-      frame.addEventListener('load', handleNativeLoad);
-      cleanupTasks.push(() => {
-        frame.removeEventListener('load', handleNativeLoad);
-      });
-
-      cleanupTasks.push(
-        clientRef.current.card.editorPanel.onReady(frame, () => {
-          if (disposed) {
-            return;
-          }
-          setIsLoading(false);
-          setLoadError(null);
-          onPluginLoadedRef.current?.({
-            cardType,
-            baseCardId,
-          });
-        }),
-      );
-
-      cleanupTasks.push(
-        clientRef.current.card.editorPanel.onChange(frame, (payload) => {
-          if (disposed) {
-            return;
-          }
-          queueConfigChange(payload.config);
-        }),
-      );
-
-      cleanupTasks.push(
-        clientRef.current.card.editorPanel.onError(frame, (payload) => {
-          if (disposed) {
-            return;
-          }
-          const error = new Error(payload.message);
-          setIsLoading(false);
-          setLoadError(error);
-          onPluginErrorRef.current?.(error);
-        }),
-      );
-    }).catch((error: unknown) => {
-      if (disposed) {
-        return;
-      }
-      const normalizedError = error instanceof Error ? error : new Error(String(error));
-      setIsLoading(false);
-      setLoadError(normalizedError);
-      onPluginErrorRef.current?.(normalizedError);
-    });
-
-    return () => {
-      disposed = true;
-      flushPendingConfigChange();
-      cleanupTasks.forEach((cleanup) => cleanup());
-      const frame = frameRef.current;
-      if (frame && frame.parentElement) {
-        frame.parentElement.removeChild(frame);
-      }
-      frameRef.current = null;
-    };
-  }, [baseCardId, cardType, renderRevision]);
-
-  const showLoading = isLoading;
-  const loadingText = t('plugin_host.loading') || '加载中...';
-  const errorText = loadError?.message || t('plugin_host.error') || '加载失败';
+  if (!cardId) {
+    return null;
+  }
 
   return (
-    <div className="plugin-host">
-      <div ref={containerRef} className="plugin-host__container" />
-
-      {showLoading && (
-        <div className="plugin-host__loading">
-          <div className="plugin-host__spinner"></div>
-          <span className="plugin-host__loading-text">{loadingText}</span>
-        </div>
-      )}
-
-      {!showLoading && loadError && (
-        <div className="plugin-host__error">
-          <div className="plugin-host__error-icon">⚠️</div>
-          <p className="plugin-host__error-text">{errorText}</p>
-          <button
-            type="button"
-            className="plugin-host__retry-btn"
-            onClick={() => setRenderRevision((current) => current + 1)}
-          >
-            {t('plugin_host.retry') || '重试'}
-          </button>
-        </div>
-      )}
-    </div>
+    <EditorHost
+      cardId={cardId}
+      cardType={cardType}
+      baseCardId={baseCardId}
+      sourceConfig={config}
+      onConfigChange={onConfigChange}
+      onPluginLoaded={onPluginLoaded}
+      onPluginError={onPluginError}
+    />
   );
 }

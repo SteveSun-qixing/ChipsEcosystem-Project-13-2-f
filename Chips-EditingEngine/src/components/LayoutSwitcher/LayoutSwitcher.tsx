@@ -39,11 +39,11 @@ export function LayoutSwitcher({
     }, [disabled, isSwitching, toggleLayout]);
 
     const currentIcon = isInfiniteCanvas ? '🎨' : '📋';
-    const currentLabel = isInfiniteCanvas 
-        ? t('layout_switcher.canvas') 
+    const currentLabel = isInfiniteCanvas
+        ? t('layout_switcher.canvas')
         : t('layout_switcher.workbench');
-    const targetLabel = isInfiniteCanvas 
-        ? t('layout_switcher.to_workbench') 
+    const targetLabel = isInfiniteCanvas
+        ? t('layout_switcher.to_workbench')
         : t('layout_switcher.to_canvas');
 
     const sizeClass = `layout-switcher__button--${size}`;

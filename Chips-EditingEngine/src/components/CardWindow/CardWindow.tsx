@@ -4,17 +4,13 @@ import type { CompositeInteractionPayload } from 'chips-sdk';
 import { CardWindowBase } from '../CardWindowBase/CardWindowBase';
 import { WindowMenu } from '../WindowMenu/WindowMenu';
 import { useCard } from '../../context/CardContext';
-import { getChipsClient } from '../../services/bridge-client';
 import { workspaceService } from '../../services/workspace-service';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { CardWindowConfig, Position, Size } from '../../types/window';
-import { globalEventEmitter } from '../../core/event-emitter';
+import { CompositeCardAssembler } from '../../basecard-runtime/CompositeCardAssembler';
 import './CardWindow.css';
 
-const EDITING_PREVIEW_REFRESH_DEBOUNCE_MS = 320;
-const ACTIVE_EDITOR_PREVIEW_REFRESH_DEBOUNCE_MS = 1200;
-const ACTIVE_EDITOR_ACTIVITY_WINDOW_MS = 3000;
 const CardSettingsDialog = lazy(() => import('../CardSettings/CardSettingsDialog').then((module) => ({ default: module.CardSettingsDialog })));
 
 export interface CardWindowProps {
@@ -39,17 +35,10 @@ export function CardWindow({
     const isEditing = !!config.isEditing;
     const windowState = config.state;
     const interactionPolicy = windowState === 'normal' ? 'delegate' : 'native';
-    const clientRef = useRef(getChipsClient());
-    const translationRef = useRef(t);
     const panByInputRef = useRef(canvasContext.panByInput);
     const zoomByFactorAtPointRef = useRef(canvasContext.zoomByFactorAtPoint);
     const markInteractionSequenceRef = useRef(canvasContext.markInteractionSequence);
-    const previewHostRef = useRef<HTMLDivElement | null>(null);
-    const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
-    const hasResolvedPreviewRef = useRef(false);
-    const lastEditorActivityAtRef = useRef(0);
     const visibleBaseCards = cardInfo?.structure.basicCards ?? [];
-    const visibleBaseCardIds = visibleBaseCards.map((baseCard) => baseCard.id).join('|');
 
     const [isCoverDragging, setIsCoverDragging] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -57,15 +46,10 @@ export function CardWindow({
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewHeight, setPreviewHeight] = useState<number | null>(null);
     const [coverRenderPosition, setCoverRenderPosition] = useState(config.position);
-    const [previewRefreshRevision, setPreviewRefreshRevision] = useState(0);
 
     const coverDragStart = useRef({ x: 0, y: 0 });
     const coverInitialPosition = useRef({ x: 0, y: 0 });
     const coverDragMoved = useRef(false);
-
-    useEffect(() => {
-        translationRef.current = t;
-    }, [t]);
 
     useEffect(() => {
         panByInputRef.current = canvasContext.panByInput;
@@ -78,76 +62,17 @@ export function CardWindow({
     ]);
 
     useEffect(() => {
-        const subscriptionId = globalEventEmitter.on<{ cardId?: string; at?: number }>('card:editor-activity', (payload) => {
-            if (payload?.cardId !== config.cardId) {
-                return;
-            }
+        if (!cardInfo || windowState === 'cover' || visibleBaseCards.length === 0) {
+            setIsPreviewLoading(false);
+            setPreviewError(null);
+            setPreviewHeight(null);
+            return;
+        }
 
-            lastEditorActivityAtRef.current = typeof payload.at === 'number' ? payload.at : Date.now();
-        });
-
-        return () => {
-            globalEventEmitter.off('card:editor-activity', subscriptionId);
-        };
-    }, [config.cardId]);
-
-    useEffect(() => {
-        let refreshTimer: number | null = null;
-        const subscriptions: Array<{ event: string; id: string }> = [];
-
-        const schedulePreviewRefresh = () => {
-            if (windowState === 'cover') {
-                return;
-            }
-
-            if (refreshTimer !== null) {
-                window.clearTimeout(refreshTimer);
-            }
-
-            if (!isEditing) {
-                setPreviewRefreshRevision((current) => current + 1);
-                return;
-            }
-
-            const lastActivityAt = lastEditorActivityAtRef.current;
-            const hasRecentEditorActivity =
-                lastActivityAt > 0 &&
-                Date.now() - lastActivityAt <= ACTIVE_EDITOR_ACTIVITY_WINDOW_MS;
-            const debounceMs = hasRecentEditorActivity
-                ? ACTIVE_EDITOR_PREVIEW_REFRESH_DEBOUNCE_MS
-                : EDITING_PREVIEW_REFRESH_DEBOUNCE_MS;
-
-            refreshTimer = window.setTimeout(() => {
-                refreshTimer = null;
-                setPreviewRefreshRevision((current) => current + 1);
-            }, debounceMs);
-        };
-
-        const subscribe = (event: string) => {
-            const id = globalEventEmitter.on<{ cardId?: string }>(event, (payload) => {
-                if (payload?.cardId !== config.cardId) {
-                    return;
-                }
-                schedulePreviewRefresh();
-            });
-            subscriptions.push({ event, id });
-        };
-
-        subscribe('card:basic-card-updated');
-        subscribe('card:basic-card-added');
-        subscribe('card:basic-card-removed');
-        subscribe('card:basic-card-moved');
-        subscribe('card:metadata-updated');
-
-        return () => {
-            if (refreshTimer !== null) {
-                window.clearTimeout(refreshTimer);
-            }
-            subscriptions.forEach(({ event, id }) => {
-                globalEventEmitter.off(event, id);
-            });
-        };
-    }, [config.cardId, isEditing, windowState]);
+        if (previewHeight === null) {
+            setIsPreviewLoading(true);
+        }
+    }, [cardInfo, previewHeight, visibleBaseCards.length, windowState]);
 
     useEffect(() => {
         if (!isCoverDragging) {
@@ -269,192 +194,6 @@ export function CardWindow({
         };
     }, [isCoverDragging, handleCoverMouseMove, handleCoverMouseUp]);
 
-    useEffect(() => {
-        const host = previewHostRef.current;
-        if (!host) {
-            return;
-        }
-
-        if (!cardInfo || windowState === 'cover' || visibleBaseCards.length === 0) {
-            while (host.firstChild) {
-                host.removeChild(host.firstChild);
-            }
-            previewFrameRef.current = null;
-            hasResolvedPreviewRef.current = false;
-            setIsPreviewLoading(false);
-            setPreviewError(null);
-            setPreviewHeight(null);
-            return;
-        }
-
-        let disposed = false;
-        const cleanupTasks: Array<() => void> = [];
-        let stagedFrame: HTMLIFrameElement | null = null;
-        const previousFrame = previewFrameRef.current;
-        const hasVisiblePreview = !!(previousFrame && previousFrame.parentElement === host);
-        const shouldShowInitialLoading = !hasVisiblePreview && !hasResolvedPreviewRef.current;
-
-        setIsPreviewLoading(shouldShowInitialLoading);
-        setPreviewError(null);
-        if (shouldShowInitialLoading) {
-            setPreviewHeight(null);
-        }
-
-        clientRef.current.card.compositeWindow.render({
-            cardFile: cardInfo.path,
-            mode: isEditing ? 'preview' : 'view',
-            interactionPolicy,
-        }).then((result) => {
-            if (disposed) {
-                return;
-            }
-
-            const frame = result.frame;
-            stagedFrame = frame;
-            frame.style.width = '100%';
-            frame.style.height = '100%';
-            frame.style.border = 'none';
-            frame.style.display = 'block';
-            frame.style.background = 'transparent';
-            frame.style.position = 'absolute';
-            frame.style.inset = '0';
-            frame.style.visibility = hasVisiblePreview ? 'hidden' : 'visible';
-            frame.style.pointerEvents = hasVisiblePreview ? 'none' : 'auto';
-            host.appendChild(frame);
-
-            let didRevealFrame = false;
-            const revealFrame = () => {
-                if (disposed || didRevealFrame) {
-                    return;
-                }
-
-                didRevealFrame = true;
-                hasResolvedPreviewRef.current = true;
-                frame.style.visibility = 'visible';
-                frame.style.pointerEvents = 'auto';
-                previewFrameRef.current = frame;
-
-                if (previousFrame && previousFrame !== frame && previousFrame.parentElement === host) {
-                    previousFrame.parentElement.removeChild(previousFrame);
-                }
-
-                setIsPreviewLoading(false);
-                setPreviewError(null);
-            };
-
-            const handleNativeLoad = () => {
-                revealFrame();
-            };
-
-            frame.addEventListener('load', handleNativeLoad);
-            cleanupTasks.push(() => {
-                frame.removeEventListener('load', handleNativeLoad);
-            });
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onResize(frame, (payload) => {
-                    if (disposed) {
-                        return;
-                    }
-                    const nextHeight = Math.max(1, Math.ceil(payload.height));
-                    setPreviewHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
-                }),
-            );
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onInteraction(frame, (payload) => {
-                    if (disposed) {
-                        return;
-                    }
-
-                    handleCompositeInteraction(frame, payload);
-                }),
-            );
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onNodeSelect(frame, (payload) => {
-                    if (disposed || !isEditing || !payload.nodeId) {
-                        return;
-                    }
-                    if (!visibleBaseCards.some((baseCard) => baseCard.id === payload.nodeId)) {
-                        return;
-                    }
-                    selectBaseCard(payload.nodeId);
-                }),
-            );
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onReady(frame, () => {
-                    revealFrame();
-                }),
-            );
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onFatalError(frame, (error) => {
-                    if (disposed) {
-                        return;
-                    }
-
-                    console.error('[CardWindow] Composite preview fatal error.', {
-                        cardId: config.cardId,
-                        cardFile: cardInfo?.path,
-                        mode: isEditing ? 'preview' : 'view',
-                        error,
-                    });
-
-                    if (frame.parentElement && frame !== previewFrameRef.current) {
-                        frame.parentElement.removeChild(frame);
-                    }
-
-                    if (shouldShowInitialLoading) {
-                        setIsPreviewLoading(false);
-                        setPreviewError(error.message || (translationRef.current('plugin_host.error') || '加载失败'));
-                    }
-                }),
-            );
-
-            cleanupTasks.push(
-                clientRef.current.card.compositeWindow.onNodeError(frame, (payload) => {
-                    console.warn('[CardWindow] Composite node degraded.', payload);
-                }),
-            );
-        }).catch((error: unknown) => {
-            if (disposed) {
-                return;
-            }
-            const message = error instanceof Error ? error.message : String(error);
-            console.error('[CardWindow] Failed to render composite preview.', {
-                cardId: config.cardId,
-                cardFile: cardInfo?.path,
-                mode: isEditing ? 'preview' : 'view',
-                error,
-            });
-
-            if (shouldShowInitialLoading) {
-                setIsPreviewLoading(false);
-                setPreviewError(message || (translationRef.current('plugin_host.error') || '加载失败'));
-            }
-        });
-
-        return () => {
-            disposed = true;
-            cleanupTasks.forEach((cleanup) => cleanup());
-            if (stagedFrame && stagedFrame.parentElement && stagedFrame !== previewFrameRef.current) {
-                stagedFrame.parentElement.removeChild(stagedFrame);
-            }
-        };
-    }, [
-        cardInfo?.path,
-        isEditing,
-        previewRefreshRevision,
-        selectBaseCard,
-        themeRuntime.cacheKey,
-        visibleBaseCardIds,
-        interactionPolicy,
-        handleCompositeInteraction,
-        windowState,
-    ]);
-
     const coverStyle = {
         transform: `translate(${coverRenderPosition.x}px, ${coverRenderPosition.y}px)`
     };
@@ -538,9 +277,37 @@ export function CardWindow({
                                 data-chips-composite-scroll-surface={interactionPolicy}
                                 style={previewContainerStyle}
                             >
-                                <div ref={previewHostRef} className="card-window__preview-frame" />
+                                <div className="card-window__preview-frame">
+                                    <CompositeCardAssembler
+                                        cardId={config.cardId}
+                                        baseCards={visibleBaseCards}
+                                        layout={cardInfo?.structure.layout}
+                                        mode={isEditing ? 'preview' : 'view'}
+                                        interactionPolicy={interactionPolicy}
+                                        selectedBaseCardId={selectedBaseCardId}
+                                        themeCacheKey={themeRuntime.cacheKey}
+                                        onHeightChange={(height) => {
+                                            setPreviewHeight((currentHeight) => currentHeight === height ? currentHeight : height);
+                                        }}
+                                        onLoadingChange={(loading) => {
+                                            setIsPreviewLoading(loading);
+                                        }}
+                                        onErrorChange={(message) => {
+                                            setPreviewError(message);
+                                        }}
+                                        onInteraction={(payload, frame) => {
+                                            handleCompositeInteraction(frame, payload);
+                                        }}
+                                        onBaseCardSelect={(baseCardId) => {
+                                            if (!isEditing) {
+                                                return;
+                                            }
+                                            selectBaseCard(baseCardId);
+                                        }}
+                                    />
+                                </div>
 
-                                {isPreviewLoading && (
+                                {isPreviewLoading && previewHeight === null && (
                                     <div className="card-window__overlay">
                                         <span className="card-window__loading-icon">⏳</span>
                                         <span className="card-window__loading-text">{t('card_window.loading')}</span>

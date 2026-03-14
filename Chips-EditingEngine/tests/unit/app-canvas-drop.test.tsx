@@ -211,7 +211,7 @@ describe('App canvas drop integration', () => {
     expect(mockState.workspaceServiceMock.createCard).toHaveBeenCalledWith(
       'Rich Text Card',
       expect.objectContaining({
-        type: 'RichTextCard',
+        type: 'base.richtext',
         config: expect.objectContaining({
           body: '<p></p>',
           locale: 'zh-CN',

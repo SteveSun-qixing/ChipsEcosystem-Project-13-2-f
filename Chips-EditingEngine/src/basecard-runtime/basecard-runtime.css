@@ -1,0 +1,59 @@
+.composite-card-assembler {
+  display: grid;
+  grid-auto-rows: max-content;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.composite-card-assembler__node {
+  position: relative;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: none;
+}
+
+.composite-card-assembler--preview .composite-card-assembler__node[data-selectable='true'] {
+  cursor: pointer;
+}
+
+.basecard-frame-host {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  background: transparent;
+}
+
+.basecard-frame-host__frame {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  border: 0;
+  background: transparent;
+}
+
+.basecard-frame-host__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(6px);
+}
+
+.basecard-frame-host__overlay[data-state='error'] {
+  color: var(--chips-sys-color-error, #d92d20);
+}
+
+.basecard-frame-host__overlay-text {
+  font-size: 13px;
+  line-height: 1.5;
+}

@@ -3,26 +3,29 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EditorRuntimeProvider } from '../../src/editor-runtime/context';
 import { PluginHost } from '../../src/components/EditPanel/PluginHost';
 
-const editorPanelApi = {
-  render: vi.fn(async () => ({
-    frame: document.createElement('iframe'),
-    origin: 'http://localhost',
-  })),
-  onReady: vi.fn((_frame: HTMLIFrameElement, handler: () => void) => {
-    handler();
-    return () => {};
-  }),
-  onChange: vi.fn(() => () => {}),
-  onError: vi.fn(() => () => {}),
-};
+const mockRenderEditor = vi.fn();
+let editorChangeHandler: ((nextConfig: Record<string, unknown>) => void) | null = null;
 
-vi.mock('../../src/services/bridge-client', () => ({
-  getChipsClient: () => ({
-    card: {
-      editorPanel: editorPanelApi,
-    },
+vi.mock('../../src/basecard-runtime/registry', () => ({
+  getBasecardDescriptor: () => ({
+    pluginId: 'mock.basecard',
+    cardType: 'base.mock',
+    displayName: 'Mock Basecard',
+    commitDebounceMs: 260,
+    createInitialConfig: (baseCardId: string) => ({ id: baseCardId }),
+    normalizeConfig: (input: Record<string, unknown>, baseCardId: string) => ({
+      ...input,
+      id: baseCardId,
+    }),
+    validateConfig: () => ({
+      valid: true,
+      errors: {},
+    }),
+    renderView: () => () => undefined,
+    renderEditor: mockRenderEditor,
   }),
 }));
 
@@ -42,10 +45,12 @@ describe('PluginHost', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    editorPanelApi.render.mockClear();
-    editorPanelApi.onReady.mockClear();
-    editorPanelApi.onChange.mockClear();
-    editorPanelApi.onError.mockClear();
+    editorChangeHandler = null;
+    mockRenderEditor.mockReset();
+    mockRenderEditor.mockImplementation(({ onChange }) => {
+      editorChangeHandler = onChange;
+      return () => undefined;
+    });
   });
 
   afterEach(async () => {
@@ -56,35 +61,32 @@ describe('PluginHost', () => {
     container.remove();
   });
 
-  it('debounces rapid editor change events before updating card state', async () => {
+  it('debounces rapid editor changes before committing card config updates', async () => {
     vi.useFakeTimers();
-
-    let changeHandler:
-      | ((payload: { config: Record<string, unknown> }) => void)
-      | undefined;
-
-    editorPanelApi.onChange.mockImplementation((_frame, handler) => {
-      changeHandler = handler;
-      return () => {};
-    });
-
     const onConfigChange = vi.fn();
 
     await act(async () => {
       root.render(
-        <PluginHost
-          cardType="RichTextCard"
-          baseCardId="base-1"
-          config={{ id: 'base-1', body: '<p>init</p>' }}
-          onConfigChange={onConfigChange}
-        />,
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', body: '<p>init</p>' }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
       );
       await Promise.resolve();
     });
 
     await act(async () => {
-      changeHandler?.({ config: { id: 'base-1', body: '<p>a</p>' } });
-      changeHandler?.({ config: { id: 'base-1', body: '<p>ab</p>' } });
+      editorChangeHandler?.({ id: 'base-1', body: '<p>a</p>' });
+      editorChangeHandler?.({ id: 'base-1', body: '<p>ab</p>' });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
       vi.advanceTimersByTime(259);
       await Promise.resolve();
     });
@@ -103,34 +105,27 @@ describe('PluginHost', () => {
     });
   });
 
-  it('flushes the last pending editor change before unmount', async () => {
+  it('flushes the last pending editor draft before unmount', async () => {
     vi.useFakeTimers();
-
-    let changeHandler:
-      | ((payload: { config: Record<string, unknown> }) => void)
-      | undefined;
-
-    editorPanelApi.onChange.mockImplementation((_frame, handler) => {
-      changeHandler = handler;
-      return () => {};
-    });
-
     const onConfigChange = vi.fn();
 
     await act(async () => {
       root.render(
-        <PluginHost
-          cardType="RichTextCard"
-          baseCardId="base-1"
-          config={{ id: 'base-1', body: '<p>init</p>' }}
-          onConfigChange={onConfigChange}
-        />,
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', body: '<p>init</p>' }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
       );
       await Promise.resolve();
     });
 
     await act(async () => {
-      changeHandler?.({ config: { id: 'base-1', body: '<p>final</p>' } });
+      editorChangeHandler?.({ id: 'base-1', body: '<p>final</p>' });
       await Promise.resolve();
     });
 
@@ -148,33 +143,57 @@ describe('PluginHost', () => {
     });
   });
 
-  it('keeps the mounted editor iframe stable when only config props change', async () => {
+  it('keeps the mounted editor stable when its own committed config is reflected back through props', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
     await act(async () => {
       root.render(
-        <PluginHost
-          cardId="card-1"
-          cardType="RichTextCard"
-          baseCardId="base-1"
-          config={{ id: 'base-1', body: '<p>init</p>' }}
-        />,
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', body: '<p>init</p>' }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
       );
       await Promise.resolve();
     });
 
-    expect(editorPanelApi.render).toHaveBeenCalledTimes(1);
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      editorChangeHandler?.({ id: 'base-1', body: '<p>updated</p>' });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(260);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledWith({
+      id: 'base-1',
+      body: '<p>updated</p>',
+    });
 
     await act(async () => {
       root.render(
-        <PluginHost
-          cardId="card-1"
-          cardType="RichTextCard"
-          baseCardId="base-1"
-          config={{ id: 'base-1', body: '<p>updated</p>' }}
-        />,
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', body: '<p>updated</p>' }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
       );
       await Promise.resolve();
     });
 
-    expect(editorPanelApi.render).toHaveBeenCalledTimes(1);
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
   });
 });

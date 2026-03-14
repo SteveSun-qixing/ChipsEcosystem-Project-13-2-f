@@ -1,0 +1,302 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { CompositeInteractionPayload } from 'chips-sdk';
+import { getBasecardDescriptor, normalizeBasecardConfig } from './registry';
+import { createBasecardFrameThemeCss } from './theme-css';
+
+export interface BasecardFrameStatus {
+  state: 'loading' | 'ready' | 'error';
+  height: number;
+  errorMessage: string | null;
+}
+
+export interface BasecardFrameHostProps {
+  baseCardId: string;
+  cardType: string;
+  config: Record<string, unknown>;
+  selectable?: boolean;
+  themeCacheKey?: string;
+  interactionPolicy: 'delegate' | 'native';
+  onSelect?: () => void;
+  onStatusChange?: (status: BasecardFrameStatus) => void;
+  onInteraction?: (payload: CompositeInteractionPayload, frame: HTMLIFrameElement) => void;
+}
+
+const DEFAULT_STATUS: BasecardFrameStatus = {
+  state: 'loading',
+  height: 96,
+  errorMessage: null,
+};
+
+function createFrameDocumentHtml(): string {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head>',
+    '<meta charset="utf-8" />',
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+    '</head>',
+    '<body></body>',
+    '</html>',
+  ].join('');
+}
+
+function measureFrameHeight(frame: HTMLIFrameElement): number {
+  const doc = frame.contentDocument;
+  if (!doc) {
+    return DEFAULT_STATUS.height;
+  }
+
+  const body = doc.body;
+  const root = doc.documentElement;
+  return Math.max(
+    1,
+    Math.ceil(
+      Math.max(
+        body?.scrollHeight ?? 0,
+        body?.offsetHeight ?? 0,
+        root?.scrollHeight ?? 0,
+        root?.offsetHeight ?? 0,
+      ),
+    ),
+  );
+}
+
+export function BasecardFrameHost({
+  baseCardId,
+  cardType,
+  config,
+  selectable = false,
+  themeCacheKey,
+  interactionPolicy,
+  onSelect,
+  onStatusChange,
+  onInteraction,
+}: BasecardFrameHostProps) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const selectableRef = useRef(selectable);
+  const onSelectRef = useRef(onSelect);
+  const onInteractionRef = useRef(onInteraction);
+  const interactionPolicyRef = useRef(interactionPolicy);
+  const [status, setStatus] = useState<BasecardFrameStatus>(DEFAULT_STATUS);
+
+  const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType]);
+  const normalizedConfig = useMemo(
+    () => normalizeBasecardConfig(cardType, baseCardId, config),
+    [baseCardId, cardType, config],
+  );
+  const configSignature = useMemo(() => JSON.stringify(normalizedConfig), [normalizedConfig]);
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [onStatusChange, status]);
+
+  useEffect(() => {
+    selectableRef.current = selectable;
+  }, [selectable]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    onInteractionRef.current = onInteraction;
+  }, [onInteraction]);
+
+  useEffect(() => {
+    interactionPolicyRef.current = interactionPolicy;
+  }, [interactionPolicy]);
+
+  useEffect(() => {
+    const frame = iframeRef.current;
+    const wrapper = wrapperRef.current;
+    if (!frame || !wrapper) {
+      return;
+    }
+
+    if (!descriptor) {
+      setStatus({
+        state: 'error',
+        height: DEFAULT_STATUS.height,
+        errorMessage: `未注册基础卡片类型: ${cardType}`,
+      });
+      return;
+    }
+
+    let disposed = false;
+    let renderCleanup: (() => void) | void;
+    const cleanupTasks: Array<() => void> = [];
+
+    setStatus({
+      state: 'loading',
+      height: DEFAULT_STATUS.height,
+      errorMessage: null,
+    });
+
+    const mountFrame = () => {
+      const doc = frame.contentDocument;
+      const frameWindow = frame.contentWindow;
+      if (!doc || !frameWindow) {
+        throw new Error('基础卡片渲染窗口未就绪。');
+      }
+
+      const container = doc.createElement('div');
+      container.setAttribute('data-chips-basecard-frame-root', 'true');
+
+      while (doc.body.firstChild) {
+        doc.body.removeChild(doc.body.firstChild);
+      }
+
+      doc.body.appendChild(container);
+      renderCleanup = descriptor.renderView({
+        container,
+        config: normalizedConfig,
+        themeCssText: createBasecardFrameThemeCss(wrapper),
+      });
+
+      const applyMeasuredHeight = () => {
+        if (disposed) {
+          return;
+        }
+
+        const nextHeight = measureFrameHeight(frame);
+        frame.style.height = `${nextHeight}px`;
+        setStatus((current) => {
+          if (
+            current.state === 'ready' &&
+            current.height === nextHeight &&
+            current.errorMessage === null
+          ) {
+            return current;
+          }
+
+          return {
+            state: 'ready',
+            height: nextHeight,
+            errorMessage: null,
+          };
+        });
+      };
+
+      const ResizeObserverCtor = (
+        frameWindow as Window & { ResizeObserver?: typeof ResizeObserver }
+      ).ResizeObserver ?? window.ResizeObserver;
+      if (ResizeObserverCtor) {
+        const resizeObserver = new ResizeObserverCtor(() => {
+          applyMeasuredHeight();
+        });
+        resizeObserver.observe(doc.body);
+        resizeObserver.observe(doc.documentElement);
+        cleanupTasks.push(() => {
+          resizeObserver.disconnect();
+        });
+      }
+
+      const selectBasecard = () => {
+        if (!selectableRef.current) {
+          return;
+        }
+        onSelectRef.current?.();
+      };
+
+      doc.addEventListener('pointerdown', selectBasecard);
+      cleanupTasks.push(() => {
+        doc.removeEventListener('pointerdown', selectBasecard);
+      });
+
+      const handleWheel = (event: WheelEvent) => {
+        if (interactionPolicyRef.current !== 'delegate' || !onInteractionRef.current) {
+          return;
+        }
+
+        event.preventDefault();
+        onInteractionRef.current(
+          {
+            cardId: baseCardId,
+            source: 'basecard-frame',
+            device: 'wheel',
+            intent: event.ctrlKey || event.metaKey ? 'zoom' : 'scroll',
+            deltaX: event.deltaX,
+            deltaY: event.deltaY,
+            zoomDelta: event.ctrlKey || event.metaKey ? Number(event.deltaY) * -0.0025 : 0,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            pointerCount: event.ctrlKey || event.metaKey ? 2 : 1,
+          },
+          frame,
+        );
+      };
+
+      doc.addEventListener('wheel', handleWheel, { passive: false });
+      cleanupTasks.push(() => {
+        doc.removeEventListener('wheel', handleWheel);
+      });
+
+      frameWindow.requestAnimationFrame(() => {
+        applyMeasuredHeight();
+      });
+    };
+
+    const handleFrameLoad = () => {
+      if (disposed) {
+        return;
+      }
+
+      try {
+        mountFrame();
+      } catch (error) {
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
+        setStatus({
+          state: 'error',
+          height: DEFAULT_STATUS.height,
+          errorMessage: normalizedError.message,
+        });
+      }
+    };
+
+    frame.addEventListener('load', handleFrameLoad);
+    cleanupTasks.push(() => {
+      frame.removeEventListener('load', handleFrameLoad);
+    });
+
+    frame.srcdoc = createFrameDocumentHtml();
+
+    return () => {
+      disposed = true;
+      cleanupTasks.forEach((cleanup) => cleanup());
+      if (typeof renderCleanup === 'function') {
+        renderCleanup();
+      }
+    };
+  }, [
+    baseCardId,
+    cardType,
+    configSignature,
+    descriptor,
+    normalizedConfig,
+    themeCacheKey,
+  ]);
+
+  return (
+    <div ref={wrapperRef} className="basecard-frame-host">
+      <iframe
+        ref={iframeRef}
+        className="basecard-frame-host__frame"
+        title={`basecard-${baseCardId}`}
+        scrolling="no"
+      />
+
+      {status.state === 'loading' && (
+        <div className="basecard-frame-host__overlay" data-state="loading">
+          <span className="basecard-frame-host__overlay-text">加载基础卡片中…</span>
+        </div>
+      )}
+
+      {status.state === 'error' && status.errorMessage && (
+        <div className="basecard-frame-host__overlay" data-state="error">
+          <span className="basecard-frame-host__overlay-text">{status.errorMessage}</span>
+        </div>
+      )}
+    </div>
+  );
+}

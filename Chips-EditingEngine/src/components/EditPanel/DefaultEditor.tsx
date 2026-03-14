@@ -49,7 +49,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
   } = props;
 
   const { t } = useTranslation();
-  
+
   const [currentMode, setCurrentMode] = useState<'json' | 'form'>(mode);
   const [jsonContent, setJsonContent] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -150,7 +150,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
   const handleFieldChange = (key: string, value: unknown) => {
     const newConfig = { ...localConfig, [key]: value };
     setLocalConfig(newConfig);
-    
+
     // Simplistic validation
     const newErrors = new Map(validationErrors);
     newErrors.delete(key);
@@ -244,7 +244,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
                   {field.label}
                   {field.required && <span className="default-editor__required">*</span>}
                 </label>
-                
+
                 {field.type === 'boolean' ? (
                   <label className="default-editor__checkbox">
                     <input

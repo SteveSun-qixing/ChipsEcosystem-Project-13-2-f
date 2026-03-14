@@ -14,6 +14,11 @@ import {
     type CardCoverResource,
 } from '../utils/card-cover';
 import { globalEventEmitter } from './event-emitter';
+import {
+    createInitialBasecardConfig,
+    normalizeBasecardConfig,
+    normalizeBasecardType,
+} from '../basecard-runtime/registry';
 
 export interface BasicCardData {
     id: string;
@@ -88,53 +93,12 @@ function asString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function normalizeRichTextCardData(id: string, rawData: Record<string, unknown>): Record<string, unknown> {
-    if (typeof rawData.body === 'string') {
-        return {
-            id,
-            body: rawData.body,
-            locale: asString(rawData.locale) ?? 'zh-CN',
-        };
-    }
-
-    if (typeof rawData.content_text === 'string') {
-        return {
-            id,
-            body: rawData.content_text,
-            locale: asString(rawData.locale) ?? 'zh-CN',
-        };
-    }
-
-    return {
-        id,
-        body: '<p></p>',
-        locale: asString(rawData.locale) ?? 'zh-CN',
-    };
-}
-
 function normalizeBasicCardData(id: string, type: string, rawData: Record<string, unknown>): Record<string, unknown> {
-    if (type === 'RichTextCard' || type === 'base.richtext' || asString(rawData.card_type) === 'RichTextCard') {
-        return normalizeRichTextCardData(id, rawData);
-    }
-    return {
-        id,
-        ...rawData,
-    };
+    return normalizeBasecardConfig(type, id, rawData);
 }
 
 function createDefaultBasicCardData(type: string, id: string): Record<string, unknown> {
-    if (type === 'RichTextCard' || type === 'base.richtext') {
-        return {
-            id,
-            body: '<p></p>',
-            locale: 'zh-CN',
-        };
-    }
-
-    return {
-        id,
-        card_type: type,
-    };
+    return createInitialBasecardConfig(type, id);
 }
 
 function cloneValue<T>(value: T): T {
@@ -289,10 +253,15 @@ export class CardService {
         const id = generateId62();
         const timestamp = now();
         const initialId = generateId62();
-        const basicCards: BasicCardData[] = initialBasicCard ? [{
+        const normalizedInitialType = initialBasicCard ? normalizeBasecardType(initialBasicCard.type) : null;
+        const basicCards: BasicCardData[] = initialBasicCard && normalizedInitialType ? [{
             id: initialId,
-            type: initialBasicCard.type,
-            data: normalizeBasicCardData(initialId, initialBasicCard.type, initialBasicCard.data ?? createDefaultBasicCardData(initialBasicCard.type, initialId)),
+            type: normalizedInitialType,
+            data: normalizeBasicCardData(
+                initialId,
+                normalizedInitialType,
+                initialBasicCard.data ?? createDefaultBasicCardData(normalizedInitialType, initialId),
+            ),
             createdAt: timestamp,
             modifiedAt: timestamp,
         }] : [];
@@ -360,7 +329,8 @@ export class CardService {
         for (const entry of structureEntries) {
             const record = asRecord(entry);
             const basicCardId = asString(record.id);
-            const type = asString(record.type);
+            const typeValue = asString(record.type);
+            const type = typeValue ? normalizeBasecardType(typeValue) : undefined;
             if (!basicCardId || !type) {
                 continue;
             }
@@ -464,10 +434,15 @@ export class CardService {
 
         const timestamp = now();
         const basicCardId = generateId62();
+        const normalizedType = normalizeBasecardType(type);
         const basicCard: BasicCardData = {
             id: basicCardId,
-            type,
-            data: normalizeBasicCardData(basicCardId, type, data ?? createDefaultBasicCardData(type, basicCardId)),
+            type: normalizedType,
+            data: normalizeBasicCardData(
+                basicCardId,
+                normalizedType,
+                data ?? createDefaultBasicCardData(normalizedType, basicCardId),
+            ),
             createdAt: timestamp,
             modifiedAt: timestamp,
         };

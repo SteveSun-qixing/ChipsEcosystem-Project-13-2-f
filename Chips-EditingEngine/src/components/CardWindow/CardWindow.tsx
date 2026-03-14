@@ -532,6 +532,9 @@ export function CardWindow({
                         <div className="card-window__workspace">
                             <div
                                 className="card-window__preview"
+                                data-chips-drop-surface="composite-preview"
+                                data-chips-card-id={config.cardId}
+                                data-chips-base-card-count={visibleBaseCards.length}
                                 data-chips-composite-scroll-surface={interactionPolicy}
                                 style={previewContainerStyle}
                             >

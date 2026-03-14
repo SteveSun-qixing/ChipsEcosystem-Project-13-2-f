@@ -7,6 +7,10 @@ import { i18nService } from './services/i18n-service';
 import { InfiniteCanvas } from './layouts/InfiniteCanvas';
 import { Workbench } from './layouts/Workbench';
 import { Dock } from './components/Dock/Dock';
+import {
+  resolveCompositeCardDropTarget,
+  type CanvasDropTarget,
+} from './layouts/InfiniteCanvas/canvas-drop-target';
 import { useUI } from './context/UIContext';
 import { useCard } from './context/CardContext';
 import { useTranslation } from './hooks/useTranslation';
@@ -23,27 +27,28 @@ interface ThemeRuntimeState {
   version: string;
 }
 
-function createInitialBasicCard(typeId: string): BasicCardConfig {
-  const baseCardId = generateId62();
-
+function createInitialBasicCardPayload(typeId: string): Record<string, unknown> {
   if (typeId === 'RichTextCard' || typeId === 'base.richtext') {
     return {
-      id: baseCardId,
-      type: typeId,
-      config: {
-        id: baseCardId,
-        body: '<p></p>',
-        locale: 'zh-CN',
-      },
+      body: '<p></p>',
+      locale: 'zh-CN',
     };
   }
+
+  return {
+    card_type: typeId,
+  };
+}
+
+function createInitialBasicCard(typeId: string): BasicCardConfig {
+  const baseCardId = generateId62();
 
   return {
     id: baseCardId,
     type: typeId,
     config: {
       id: baseCardId,
-      card_type: typeId,
+      ...createInitialBasicCardPayload(typeId),
     },
   };
 }
@@ -51,7 +56,13 @@ function createInitialBasicCard(typeId: string): BasicCardConfig {
 function MainWorkspace() {
   const { currentLayout, setState } = useEditor();
   const { createToolWindow, createCardWindow, updateWindow, focusWindow, windows } = useUI();
-  const { openCard } = useCard();
+  const {
+    addBasicCard,
+    openCard,
+    openCards,
+    setActiveCard,
+    setSelectedBaseCard,
+  } = useCard();
   const { t } = useTranslation();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const hasInitializedRef = useRef(false);
@@ -205,10 +216,46 @@ function MainWorkspace() {
     };
   }, [createCardWindow, focusWindow, openCard, updateWindow, windows]);
 
+  const handleResolveCanvasDropTarget = useCallback((options: {
+    dragData: DragData | null;
+    eventTarget: EventTarget | null;
+    screenPosition: { x: number; y: number };
+    worldPosition: { x: number; y: number };
+  }) => {
+    void options.worldPosition;
+
+    return resolveCompositeCardDropTarget({
+      dragData: options.dragData,
+      eventTarget: options.eventTarget,
+      screenPosition: options.screenPosition,
+      openCards,
+    });
+  }, [openCards]);
+
   const handleCanvasDropCreate = useCallback(async (
     data: DragData,
     worldPosition: { x: number; y: number },
+    target?: CanvasDropTarget | null,
   ) => {
+    if (data.type === 'card' && target?.type === 'composite-card-insert') {
+      const targetWindow = windows.find((window) => window.type === 'card' && window.cardId === target.cardId);
+      if (targetWindow) {
+        focusWindow(targetWindow.id);
+      }
+
+      setActiveCard(target.cardId);
+      const nextBasicCard = addBasicCard(
+        target.cardId,
+        data.typeId,
+        createInitialBasicCardPayload(data.typeId),
+        target.insertionIndex,
+      );
+      if (nextBasicCard) {
+        setSelectedBaseCard(nextBasicCard.id);
+      }
+      return;
+    }
+
     if (!workspaceService.getState().rootPath) {
       await workspaceService.initialize();
       if (!workspaceService.getState().rootPath) {
@@ -251,13 +298,23 @@ function MainWorkspace() {
     if (data.type === 'layout') {
       await workspaceService.createBox(data.name.trim() || '未命名盒子', data.typeId);
     }
-  }, [t]);
+  }, [
+    addBasicCard,
+    focusWindow,
+    setActiveCard,
+    setSelectedBaseCard,
+    t,
+    windows,
+  ]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {currentLayout === 'infinite-canvas' ? (
-          <InfiniteCanvas onDropCreate={handleCanvasDropCreate} />
+          <InfiniteCanvas
+            onDropCreate={handleCanvasDropCreate}
+            resolveDropTarget={handleResolveCanvasDropTarget}
+          />
         ) : (
           <Workbench />
         )}

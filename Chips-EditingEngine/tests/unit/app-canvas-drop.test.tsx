@@ -11,7 +11,7 @@ const mockState = vi.hoisted(() => {
 
   return {
     capturedCanvasDrop: null as
-      | ((data: unknown, worldPosition: { x: number; y: number }) => void | Promise<void>)
+      | ((data: unknown, worldPosition: { x: number; y: number }, target?: unknown) => void | Promise<void>)
       | null,
     editorState: {
       currentLayout: 'infinite-canvas' as const,
@@ -25,7 +25,11 @@ const mockState = vi.hoisted(() => {
       focusWindow: vi.fn(),
     },
     cardState: {
+      addBasicCard: vi.fn(),
       openCard: vi.fn(async () => undefined),
+      openCards: new Map<string, unknown>(),
+      setActiveCard: vi.fn(),
+      setSelectedBaseCard: vi.fn(),
     },
     workspaceListeners,
     workspaceServiceMock: {
@@ -98,7 +102,7 @@ vi.mock('../../src/services/workspace-service', () => ({
 }));
 
 vi.mock('../../src/layouts/InfiniteCanvas', () => ({
-  InfiniteCanvas: ({ onDropCreate }: { onDropCreate?: (data: unknown, worldPosition: { x: number; y: number }) => void }) => {
+  InfiniteCanvas: ({ onDropCreate }: { onDropCreate?: (data: unknown, worldPosition: { x: number; y: number }, target?: unknown) => void }) => {
     mockState.capturedCanvasDrop = onDropCreate ?? null;
     return <div className="mock-infinite-canvas" />;
   },
@@ -134,7 +138,12 @@ describe('App canvas drop integration', () => {
     mockState.uiState.createCardWindow.mockClear();
     mockState.uiState.updateWindow.mockClear();
     mockState.uiState.focusWindow.mockClear();
+    mockState.cardState.addBasicCard.mockReset();
+    mockState.cardState.addBasicCard.mockReturnValue({ id: 'base-new' });
     mockState.cardState.openCard.mockClear();
+    mockState.cardState.openCards = new Map();
+    mockState.cardState.setActiveCard.mockClear();
+    mockState.cardState.setSelectedBaseCard.mockClear();
     mockState.workspaceServiceMock.initialize.mockClear();
     mockState.workspaceServiceMock.getState.mockClear();
     mockState.workspaceServiceMock.on.mockClear();
@@ -179,6 +188,99 @@ describe('App canvas drop integration', () => {
       windowPosition: { x: 320, y: 180 },
       isEditing: true,
     });
+  });
+
+  it('creates a new composite card when a base card is dropped on the blank canvas', async () => {
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await mockState.capturedCanvasDrop?.(
+        {
+          type: 'card',
+          typeId: 'RichTextCard',
+          name: ' Rich Text Card ',
+        },
+        { x: 240, y: 160 },
+      );
+    });
+
+    expect(mockState.workspaceServiceMock.createCard).toHaveBeenCalledWith(
+      'Rich Text Card',
+      expect.objectContaining({
+        type: 'RichTextCard',
+        config: expect.objectContaining({
+          body: '<p></p>',
+          locale: 'zh-CN',
+        }),
+      }),
+      undefined,
+      undefined,
+      {
+        windowPosition: { x: 240, y: 160 },
+        isEditing: true,
+      },
+    );
+    expect(mockState.cardState.addBasicCard).not.toHaveBeenCalled();
+  });
+
+  it('inserts a dropped base card into the targeted composite card instead of creating a new workspace file', async () => {
+    mockState.uiState.windows = [
+      {
+        id: 'window-card-1',
+        type: 'card',
+        cardId: 'card-1',
+        title: 'demo.card',
+        position: { x: 20, y: 20 },
+        size: { width: 400, height: 600 },
+        state: 'normal',
+        zIndex: 10,
+      },
+    ];
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await mockState.capturedCanvasDrop?.(
+        {
+          type: 'card',
+          typeId: 'RichTextCard',
+          name: 'Rich Text',
+        },
+        { x: 420, y: 260 },
+        {
+          type: 'composite-card-insert',
+          cardId: 'card-1',
+          insertionIndex: 1,
+          indicator: {
+            left: 80,
+            top: 120,
+            width: 220,
+          },
+        },
+      );
+    });
+
+    expect(mockState.uiState.focusWindow).toHaveBeenCalledWith('window-card-1');
+    expect(mockState.cardState.setActiveCard).toHaveBeenCalledWith('card-1');
+    expect(mockState.cardState.addBasicCard).toHaveBeenCalledWith(
+      'card-1',
+      'RichTextCard',
+      {
+        body: '<p></p>',
+        locale: 'zh-CN',
+      },
+      1,
+    );
+    expect(mockState.cardState.setSelectedBaseCard).toHaveBeenCalledWith('base-new');
+    expect(mockState.workspaceServiceMock.createCard).not.toHaveBeenCalled();
   });
 
   it('repositions an already opened card window when the workspace open event includes a drop position', async () => {

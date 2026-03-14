@@ -5,7 +5,14 @@ import { DesktopLayer } from './DesktopLayer';
 import { WindowLayer } from './WindowLayer';
 import { ZoomControl } from './ZoomControl';
 import { resolveCanvasInteractionSurface } from './interaction-routing';
-import { CHIPS_DRAG_DATA_TYPE } from '../../components/CardBoxLibrary/types';
+import {
+    type CanvasDropPoint,
+    type CanvasDropTarget,
+} from './canvas-drop-target';
+import {
+    CHIPS_DRAG_DATA_TYPE,
+    type DragData,
+} from '../../components/CardBoxLibrary/types';
 import './InfiniteCanvas.css';
 
 interface InfiniteCanvasProps {
@@ -13,7 +20,17 @@ interface InfiniteCanvasProps {
     gridSize?: number;
     desktopContent?: ReactNode;
     windowContent?: ReactNode;
-    onDropCreate?: (data: any, worldPosition: { x: number; y: number }, target?: any) => void;
+    onDropCreate?: (
+        data: DragData,
+        worldPosition: { x: number; y: number },
+        target?: CanvasDropTarget | null,
+    ) => void;
+    resolveDropTarget?: (options: {
+        dragData: DragData | null;
+        eventTarget: EventTarget | null;
+        screenPosition: CanvasDropPoint;
+        worldPosition: { x: number; y: number };
+    }) => CanvasDropTarget | null;
     onOpenSettings?: () => void;
 }
 
@@ -38,12 +55,31 @@ const getTouchDistance = (first: Touch, second: Touch) => {
     return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
 };
 
+function parseDragData(dataTransfer: DataTransfer | null): DragData | null {
+    if (!dataTransfer) {
+        return null;
+    }
+
+    try {
+        const raw = dataTransfer.getData(CHIPS_DRAG_DATA_TYPE);
+        if (!raw) {
+            return null;
+        }
+
+        return JSON.parse(raw) as DragData;
+    } catch (error) {
+        console.warn('Failed to parse drop drag data', error);
+        return null;
+    }
+}
+
 export function InfiniteCanvas({
     showGrid = true,
     gridSize = 20,
     desktopContent,
     windowContent,
     onDropCreate,
+    resolveDropTarget,
     onOpenSettings,
 }: InfiniteCanvasProps) {
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -73,8 +109,29 @@ export function InfiniteCanvas({
         resetView,
         fitToContent,
         screenToWorld,
-        worldToScreen,
     } = canvasControls;
+    void onOpenSettings;
+
+    const resolveDragTarget = (event: React.DragEvent) => {
+        const dragData = parseDragData(event.dataTransfer);
+        const screenPosition = {
+            x: event.clientX,
+            y: event.clientY,
+        };
+        const worldPosition = screenToWorld(screenPosition.x, screenPosition.y);
+        const target = resolveDropTarget?.({
+            dragData,
+            eventTarget: event.target,
+            screenPosition,
+            worldPosition,
+        }) ?? null;
+
+        return {
+            dragData,
+            target,
+            worldPosition,
+        };
+    };
 
     // Register the wheel handler as a native (non-passive) event listener.
     // React 17+ makes synthetic onWheel passive, so e.preventDefault() would be
@@ -319,6 +376,9 @@ export function InfiniteCanvas({
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
+
+        const { target } = resolveDragTarget(e);
+        setInsertIndicator(target?.indicator ?? null);
     };
 
     const handleDragLeave = (e: React.DragEvent) => {
@@ -338,23 +398,12 @@ export function InfiniteCanvas({
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
+        const { dragData, target, worldPosition } = resolveDragTarget(e);
         setIsDragOver(false);
         setInsertIndicator(null);
 
-        const worldPosition = screenToWorld(e.clientX, e.clientY);
-
-        let data = null;
-        try {
-            const dropDataStr = e.dataTransfer.getData(CHIPS_DRAG_DATA_TYPE);
-            if (dropDataStr) {
-                data = JSON.parse(dropDataStr);
-            }
-        } catch (err) {
-            console.warn('Failed to parse drop drag data', err);
-        }
-
-        if (onDropCreate && data) {
-            onDropCreate(data, worldPosition);
+        if (onDropCreate && dragData) {
+            onDropCreate(dragData, worldPosition, target);
         }
     };
 

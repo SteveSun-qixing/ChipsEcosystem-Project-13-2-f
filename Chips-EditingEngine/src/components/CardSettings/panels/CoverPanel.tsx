@@ -201,7 +201,11 @@ export function CoverPanel({
           return;
         }
 
-        const blob = new Blob([resourceData], { type: guessMimeType(resourcePath) });
+        const arrayBuffer = resourceData.buffer.slice(
+          resourceData.byteOffset,
+          resourceData.byteOffset + resourceData.byteLength,
+        ) as ArrayBuffer;
+        const blob = new Blob([arrayBuffer], { type: guessMimeType(resourcePath) });
         const nextPreviewUrl = URL.createObjectURL(blob);
         revokeUrls([savedPreviewUrlRef.current]);
         savedPreviewUrlRef.current = nextPreviewUrl;

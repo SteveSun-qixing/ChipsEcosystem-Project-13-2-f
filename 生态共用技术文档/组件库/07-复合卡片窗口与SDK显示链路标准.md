@@ -2,14 +2,27 @@
 
 ## 1. 组件定义
 
-`CompositeCardWindow` 是生态统一复合卡片展示组件，最终向应用层交付一个复合 iframe 窗口。
+`CompositeCardWindow` 是生态对外公开的通用复合卡片显示组件，最终向应用层交付一个由 Host 托管的复合 iframe 窗口。
+
+适用范围：
+
+- 查看器等查看态应用；
+- 需要 Host 托管复合卡片显示的应用插件；
+- 第三方集成场景；
+- 需要消费正式 `chips.composite:*` 事件协议的场景。
+
+不适用范围：
+
+- 官方编辑引擎的编辑态复合卡片窗口。
+
+编辑引擎的正式编辑态链路遵循 `生态共用技术文档/组件库/08-编辑引擎基础卡片装配与编辑运行时标准.md`。
 
 ## 2. 链路原则
 
-- 应用层统一通过 SDK 调用卡片显示接口；
-- Host 是唯一的卡片渲染、主题解析和窗口编排执行方；
+- 通用应用层统一通过 SDK 调用卡片显示接口；
+- Host 是通用复合卡片渲染、主题解析和窗口编排的唯一执行方；
 - 主题必须贯穿应用壳层、复合卡片 iframe、基础卡片 iframe 和原生窗口；
-- 不允许应用层自行实现另一套 iframe 拼接、主题注入或兼容分支。
+- 除官方编辑引擎编辑态链路外，不允许应用层自行实现第二套复合 iframe 拼接、主题注入或兼容分支。
 
 ## 3. 标准链路
 
@@ -36,15 +49,21 @@
 
 ## 5. 基础卡片插件职责
 
-每个基础卡片插件包应包含：
+每个基础卡片插件包应完整提供：
 
-- 前端渲染模块
-- 编辑器模块
+- `renderBasecardView`
+- `renderBasecardEditor`
 - 信息与配置文件
 - 内容模板
 - 参数表与填写说明
 
 通用能力可以通过公共模块复用，但基础卡片业务代码必须在插件包内闭环。
+
+其中：
+
+- Host 通用显示链路会把插件导出包装到正式 iframe 文档中；
+- 官方编辑引擎会按 `08` 号文档定义，静态注册并消费同一组导出；
+- 普通应用和第三方集成不得自行扫描插件目录并直接 import 插件源码。
 
 ## 6. 组件契约
 
@@ -83,7 +102,7 @@
 - `native`：保持复合卡片内部原生滚动/触摸行为，不向应用壳层代理交互意图；
 - `delegate`：由 Host 复合文档统一归一化基础卡片 iframe 与复合壳层的交互意图，再通过正式协议发送给应用壳层；
 - 查看器、普通局部滚动容器等默认应使用 `native`；
-- 编辑引擎无限画布中的展开态复合卡片，为了实现“卡片滚动驱动整桌面平移/缩放”，应使用 `delegate`。
+- 需要把复合卡片内部滚动解释为外层桌面平移/缩放的通用应用场景，才使用 `delegate`。
 
 ## 9. 质量要求
 
@@ -92,25 +111,32 @@
 - 原生窗口背景不得与内容窗口主题脱节；
 - 不再保留旧版适配器兼容路径作为正式方案。
 
-## 10. 编辑器配套链路
+## 10. Host 托管编辑器面板链路
 
-复合卡片显示链路的正式配套链路是基础卡片编辑器面板链路。
+`client.card.editorPanel.render(...)` 是与 `CompositeCardWindow` 配套的 Host 托管编辑器 iframe 链路，适用于：
+
+- 第三方宿主集成；
+- 需要 Host 统一托管编辑器 iframe 的应用；
+- 调试、嵌套检查或需要严格沿 `chips.card-editor:*` 协议通信的场景。
 
 标准流程：
 
-1. 编辑引擎卡片窗口统一使用 `client.card.compositeWindow.render({ cardFile, mode: 'preview', interactionPolicy })`；
-2. 编辑引擎编辑面板统一使用 `client.card.editorPanel.render({ cardType, initialConfig, baseCardId })`；
-3. Host 通过 `card.renderEditor` 路由到对应基础卡片插件；
-4. 基础卡片插件导出 `renderBasecardEditor`，由 Host 装载到独立 iframe；
-5. 编辑模式下，复合卡片 iframe 通过 `chips.composite:node-select` 把基础卡片选中事件回传给应用壳层；
-6. 复合卡片展开态通过 `chips.composite:resize` 把当前总高度回传给应用壳层；
-7. 编辑器通过 `chips.card-editor:*` 事件与应用壳层通信。
+1. 应用调用 `client.card.editorPanel.render({ cardType, initialConfig, baseCardId })`；
+2. Host 通过 `card.renderEditor` 路由到对应基础卡片插件；
+3. Host 装载插件 `renderBasecardEditor` 并生成正式编辑器文档；
+4. SDK 把该文档封装为 iframe；
+5. 应用通过 `chips.card-editor:*` 或 SDK 事件订阅接收状态与配置变化。
 
 约束：
 
 - 编辑器链路与显示链路必须共享同一插件能力匹配规则；
-- 编辑引擎壳层只负责容器、选中态与数据保存，不负责插件源码装载；
-- 编辑引擎应直接消费 `chips.composite:node-select`，不应在复合卡片旁再维护一套重复的基础卡片列表作为正式交互入口；
-- 编辑引擎、查看器等应用不得自行探测 iframe 内部 DOM 高度，必须消费正式 `chips.composite:resize` / `client.card.compositeWindow.onResize(...)`；
-- 需要由应用壳层接管复合卡片内部滚动/触摸意图的场景，必须消费正式 `chips.composite:interaction` / `client.card.compositeWindow.onInteraction(...)`，不得私接 iframe DOM；
-- 不允许编辑引擎额外实现一套脱离 Host/SDK 的编辑器运行时。
+- 普通应用与第三方集成不得绕过 SDK/Host 直接 import 基础卡片插件源码；
+- 查看器等 Host 托管场景必须消费正式 iframe 事件协议，而不是私接 iframe 内部 DOM；
+- 官方编辑引擎不再把 `editorPanel` 作为其正式主编辑链路。
+
+## 11. 与编辑引擎链路的关系
+
+- `CompositeCardWindow + editorPanel` 仍是生态公开的通用 Host 托管链路；
+- 官方编辑引擎的编辑态链路改为“单卡 iframe 拼装 + 本地 EditorHost”，详见 `08` 号文档；
+- 两条链路共享同一套 `cardType` 匹配规则、主题 token 来源和基础卡片插件导出；
+- 编辑引擎的本地运行时是被正式定义的特例，不意味着其他应用可以自由复制第二套实现。

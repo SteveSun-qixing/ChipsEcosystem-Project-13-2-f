@@ -145,10 +145,16 @@ client.card.editorPanel.render({
 - `compositeWindow.mode` 只允许 `view | preview`。
 - `compositeWindow.interactionPolicy` 只允许 `native | delegate`，默认应保持 `native`。
 - `compositeWindow.mode = 'preview'` 时，可通过事件订阅接收基础卡片节点选中事件。
-- `compositeWindow` 可通过 `onResize` 订阅整张复合卡片当前总高度，正式用于编辑引擎无限长窗口、查看器自适应容器等场景。
+- `compositeWindow` 可通过 `onResize` 订阅整张复合卡片当前总高度，正式用于查看器、自适应容器以及仍选择 Host 托管复合 iframe 的场景。
 - `compositeWindow.interactionPolicy = 'delegate'` 时，可通过 `onInteraction` 订阅复合卡片内部滚轮、触摸滚动和捏合缩放意图，正式用于无限画布等需要外层壳层接管桌面交互的场景。
-- `editorPanel` 返回基础卡片编辑器 iframe，正式用于编辑引擎编辑面板、嵌套编辑场景等。
+- `editorPanel` 返回基础卡片编辑器 iframe，正式用于第三方宿主、调试工具和仍需 Host 托管编辑器 iframe 的场景。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
+
+适用边界补充：
+
+- `compositeWindow + editorPanel` 仍是生态对外公开的通用 SDK 接口；
+- 官方 `Chips-EditingEngine` 的编辑态正式链路不再以这两个接口作为主路径，而是改用本地基础卡片运行时；
+- 若不是官方编辑引擎，不得据此复制第二套本地运行时。
 
 复合卡片预览模式推荐事件订阅接口：
 
@@ -181,7 +187,7 @@ const disposeInteraction = client.card.compositeWindow.onInteraction(preview.fra
 
 ### 基础卡片编辑器面板
 
-正式编辑链路如下：
+Host 托管编辑器链路如下：
 
 1. 应用确定当前基础卡片 `cardType/baseCardId/config`；
 2. 调用 `client.card.editorPanel.render(...)`；
@@ -217,9 +223,15 @@ const disposeError = client.card.editorPanel.onError(result.frame, (payload) => 
 约束：
 
 - 应用层不得保留本地默认编辑器作为正式路径兜底；
-- 应用层不得绕过 SDK/Host 直接 import 基础卡片插件源码；
-- 编辑引擎等应用在预览模式下应优先消费 `client.card.compositeWindow.onNodeSelect(...)` 作为基础卡片选中入口；
+- 普通应用和第三方宿主不得绕过 SDK/Host 直接 import 基础卡片插件源码；
+- 选择 Host 托管复合 iframe 的应用，应优先消费 `client.card.compositeWindow.onNodeSelect(...)` 作为基础卡片选中入口；
 - 主题与多语言上下文必须由 Host 注入并沿正式链路进入编辑器 iframe。
+
+官方编辑引擎补充：
+
+- 官方编辑引擎的正式编辑态链路改为本地 `EditorHost`；
+- 官方编辑引擎的基础卡片预览改为单卡 iframe 拼装；
+- 这属于共享文档中正式定义的内部架构，不改变 SDK 对外公开接口。
 
 ## 插件管理
 

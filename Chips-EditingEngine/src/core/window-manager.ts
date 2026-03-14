@@ -6,13 +6,13 @@
 
 import { generateScopedId } from '../utils/id';
 import { globalEventEmitter } from './event-emitter';
-import type { 
-    CardWindowConfig, 
-    ToolWindowConfig, 
-    WindowPosition, 
-    WindowSize, 
+import type {
+    CardWindowConfig,
+    ToolWindowConfig,
+    WindowPosition,
+    WindowSize,
     WindowState,
-    AnyWindowConfig 
+    AnyWindowConfig
 } from '../types/window';
 
 export interface WindowManagerOptions {
@@ -118,7 +118,7 @@ export class WindowManager {
 
         this.setWindows([...this.state.windows, config]);
         this.focusWindow(windowId);
-        
+
         globalEventEmitter.emit('window:created', { windowId, type: 'card', cardId });
         return windowId;
     }
@@ -151,7 +151,7 @@ export class WindowManager {
 
         this.setWindows([...this.state.windows, config]);
         this.focusWindow(windowId);
-        
+
         globalEventEmitter.emit('window:created', { windowId, type: 'tool', component });
         return windowId;
     }
@@ -161,11 +161,11 @@ export class WindowManager {
         if (!window) return;
 
         this.setWindows(this.state.windows.filter(w => w.id !== windowId));
-        
+
         if (this.state.focusedWindowId === windowId) {
             this.blurWindow();
         }
-        
+
         globalEventEmitter.emit('window:closed', { windowId, type: window.type });
     }
 
@@ -175,12 +175,12 @@ export class WindowManager {
 
         const zIndex = this.getMaxZIndex() + 1;
         this.setWindows(
-            this.state.windows.map(w => 
+            this.state.windows.map(w =>
                 w.id === windowId ? { ...w, zIndex } : w
             )
         );
         this.setState({ focusedWindowId: windowId });
-        
+
         globalEventEmitter.emit('window:focused', { windowId });
     }
 
@@ -191,7 +191,7 @@ export class WindowManager {
 
     moveWindow(windowId: string, position: WindowPosition): void {
         this.setWindows(
-            this.state.windows.map(w => 
+            this.state.windows.map(w =>
                 w.id === windowId ? { ...w, position } : w
             )
         );
@@ -200,7 +200,7 @@ export class WindowManager {
 
     resizeWindow(windowId: string, size: WindowSize): void {
         this.setWindows(
-            this.state.windows.map(w => 
+            this.state.windows.map(w =>
                 w.id === windowId ? { ...w, size } : w
             )
         );
@@ -209,7 +209,7 @@ export class WindowManager {
 
     updateWindow(windowId: string, updates: Partial<AnyWindowConfig>): void {
         this.setWindows(
-            this.state.windows.map(w => 
+            this.state.windows.map(w =>
                 w.id === windowId ? { ...w, ...updates } as AnyWindowConfig : w
             )
         );
@@ -232,7 +232,7 @@ export class WindowManager {
     toggleCollapse(windowId: string): void {
         const window = this.getWindow(windowId);
         if (!window) return;
-        
+
         const newState = window.state === 'collapsed' ? 'normal' : 'collapsed';
         this.setWindowState(windowId, newState);
     }

@@ -82,7 +82,7 @@ export function ExportPanel({ cardId, cardInfo }: ExportPanelProps) {
 
     try {
       setExportProgress(10);
-      
+
       // Stub SDK behavior
       await new Promise(resolve => setTimeout(resolve, 500));
       setExportMessage(t('card_settings.export_save_card') || '正在保存卡片状态...');
@@ -145,7 +145,7 @@ export function ExportPanel({ cardId, cardInfo }: ExportPanelProps) {
       {exportStatus !== 'idle' && (
         <div className="export-panel__progress">
           <div className="export-panel__progress-bar-container">
-            <div 
+            <div
               className={`export-panel__progress-bar ${exportStatus === 'error' ? 'export-panel__progress-bar--error' : ''}`}
               style={{ width: `${exportProgress}%` }}
             />

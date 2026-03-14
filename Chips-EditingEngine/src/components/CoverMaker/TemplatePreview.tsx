@@ -69,11 +69,15 @@ export function TemplatePreview({
     return getTemplateById(templateId);
   }, [templateId]);
 
-  const updateIframeContent = () => {
-    if (!iframeRef.current) return;
+  useEffect(() => {
+    if (!iframeRef.current) {
+      return;
+    }
 
     const doc = iframeRef.current.contentDocument;
-    if (!doc) return;
+    if (!doc) {
+      return;
+    }
 
     doc.open();
     doc.write(generatedHtml);
@@ -82,12 +86,7 @@ export function TemplatePreview({
     if (templateId && config.title && onHtmlGenerated) {
       onHtmlGenerated(generatedHtml);
     }
-  };
-
-  useEffect(() => {
-    updateIframeContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generatedHtml, templateId, config.title]);
+  }, [config.title, generatedHtml, onHtmlGenerated, templateId]);
 
   return (
     <div className="template-preview">

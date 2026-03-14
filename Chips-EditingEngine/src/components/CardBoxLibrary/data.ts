@@ -139,7 +139,7 @@ export const layoutTypes: LayoutTypeDefinition[] = Object.entries(layoutManifest
 
 export function useSearchCardTypes() {
   const { t } = useTranslation();
-  
+
   return (query: string): CardTypeDefinition[] => {
     if (!query.trim()) return cardTypes;
 

@@ -37,7 +37,7 @@ export default function EditPanel({
   return (
     <div className={panelClass} style={panelStyle} role="complementary" aria-label={t('edit_panel.title') || '编辑面板'}>
       <div className="edit-panel__content">
-        {selectedBaseCard ? (
+        {activeCard && selectedBaseCard ? (
           <PluginHost
             cardId={activeCard.id}
             cardType={selectedBaseCard.type}

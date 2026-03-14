@@ -113,12 +113,12 @@ export function useLayoutSwitch(options: UseLayoutSwitchOptions = {}) {
             }
         };
 
-        globalEventEmitter.on('layout:before-switch', handleBeforeSwitch);
-        globalEventEmitter.on('layout:after-switch', handleAfterSwitch);
+        const beforeSwitchSubscriptionId = globalEventEmitter.on<{ from: LayoutType; to: LayoutType }>('layout:before-switch', handleBeforeSwitch);
+        const afterSwitchSubscriptionId = globalEventEmitter.on<{ from: LayoutType; to: LayoutType }>('layout:after-switch', handleAfterSwitch);
 
         return () => {
-            globalEventEmitter.off('layout:before-switch', handleBeforeSwitch);
-            globalEventEmitter.off('layout:after-switch', handleAfterSwitch);
+            globalEventEmitter.off('layout:before-switch', beforeSwitchSubscriptionId);
+            globalEventEmitter.off('layout:after-switch', afterSwitchSubscriptionId);
         };
     }, [onBeforeSwitch, onAfterSwitch]);
 

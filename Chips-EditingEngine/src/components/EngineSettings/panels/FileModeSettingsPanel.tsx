@@ -1,20 +1,25 @@
 import React, { useMemo } from 'react';
-import { useSettingsStore } from '../../../core/state';
+import { useSettings } from '../../../context/SettingsContext';
 import { useTranslation } from '../../../hooks/useTranslation';
-import type { FileModeSettingsData } from '../../../types';
 import './FileModeSettingsPanel.css';
 
 const CATEGORY_ID = 'fileMode';
 
+interface FileModeSettingsData {
+  fileMode: 'link' | 'copy';
+}
+
 export function FileModeSettingsPanel() {
   const { t } = useTranslation();
-  const settingsStore = useSettingsStore();
+  const { getSetting, setSetting } = useSettings();
 
   const fileModeData = useMemo<FileModeSettingsData>(() => {
-    return (settingsStore.getData<FileModeSettingsData>(CATEGORY_ID) ?? {
+    return getSetting<FileModeSettingsData>(CATEGORY_ID, {
       fileMode: 'link',
-    }) as FileModeSettingsData;
-  }, [settingsStore.getData(CATEGORY_ID)]);
+    }) ?? {
+      fileMode: 'link',
+    };
+  }, [getSetting]);
 
   const fileModes = useMemo(() => [
     {
@@ -32,7 +37,7 @@ export function FileModeSettingsPanel() {
   ], []);
 
   const handleSelectMode = (mode: 'link' | 'copy') => {
-    settingsStore.updateData<FileModeSettingsData>(CATEGORY_ID, {
+    setSetting<FileModeSettingsData>(CATEGORY_ID, {
       fileMode: mode,
     });
   };
@@ -66,7 +71,7 @@ export function FileModeSettingsPanel() {
               )}
             </div>
             <p className="file-mode-option__desc">
-              {t(mode.descKey) || (mode.id === 'link' 
+              {t(mode.descKey) || (mode.id === 'link'
                 ? '在卡片中直接使用原始文件路径引用外部文件。优点：节约磁盘空间。移动原始文件可能导致源丢失。'
                 : '在将其添加到卡片时，将原文件复制到工作区内部。优点：方便打包导出和随意移动，但增加冗余占用。')}
             </p>

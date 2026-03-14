@@ -62,7 +62,9 @@ export function mountBasecardEditor(
   const root = createBasecardEditorRoot({
     initialConfig,
     onChange,
-  });
+  }) as HTMLElement & {
+    __chipsDispose?: () => void;
+  };
 
   container.appendChild(root);
 

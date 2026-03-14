@@ -19,7 +19,7 @@ export interface CardContextType extends CardState {
     updateCardCover: (cardId: string, cover: { html: string; ratio?: string; resources?: CardCoverResource[] }) => void;
     createCard: (name: string, initialBasicCard?: { type: string; data?: Record<string, unknown> }) => Promise<CompositeCard>;
     saveCard: (id: string) => Promise<void>;
-    addBasicCard: (cardId: string, type: string, data?: Record<string, unknown>, position?: number) => void;
+    addBasicCard: (cardId: string, type: string, data?: Record<string, unknown>, position?: number) => CompositeCard['structure']['basicCards'][number] | null;
     removeBasicCard: (cardId: string, basicCardId: string) => void;
     moveBasicCard: (cardId: string, basicCardId: string, newPosition: number) => void;
     updateBasicCard: (cardId: string, basicCardId: string, data: Record<string, unknown>) => void;
@@ -109,7 +109,7 @@ export function CardProvider({ children }: { children: ReactNode }) {
     }, [cardService]);
 
     const addBasicCard = useCallback((cardId: string, type: string, data?: Record<string, unknown>, position?: number) => {
-        cardService.addBasicCard(cardId, type, data, position);
+        return cardService.addBasicCard(cardId, type, data, position);
     }, [cardService]);
 
     const removeBasicCard = useCallback((cardId: string, basicCardId: string) => {

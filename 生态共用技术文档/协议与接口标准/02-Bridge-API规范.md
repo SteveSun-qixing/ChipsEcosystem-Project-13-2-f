@@ -138,16 +138,22 @@ card 子域采用 vNext 动作口径：
 
 - `interactionPolicy = 'native'` 表示复合卡片保持原生滚动/触摸行为，不向外层应用壳层代理交互意图；
 - `interactionPolicy = 'delegate'` 表示 Host 复合文档与基础卡片文档需要把滚轮、触摸滚动、捏合缩放等交互意图正式回传为 `chips.composite:interaction`；
-- 当前编辑引擎无限画布中的“展开态复合卡片驱动整桌面滚动/缩放”场景应使用 `delegate`，其他场景默认保持 `native`。
+- 选择 Host 托管复合 iframe 的无限画布场景，应使用 `delegate`，其他场景默认保持 `native`。
 
 `card.renderEditor` 返回 `view.title/body/cardType/pluginId/baseCardId`，用于编辑面板装载正式基础卡片编辑器 iframe。
 
 正式约束：
 
-- 编辑引擎和其他应用不得自行扫描插件目录后直接 import 编辑器模块；
+- 普通应用和第三方宿主不得自行扫描插件目录后直接 import 编辑器模块；
 - 基础卡片编辑器必须通过 `card.renderEditor` 由 Host 按 `capabilities.cardTypes` 路由；
 - `initialConfig` 由应用层提供当前基础卡片内容快照，Host 负责注入插件编辑器运行时；
 - `baseCardId` 用于编辑器事件回传与上层状态同步。
+
+边界补充：
+
+- 官方 `Chips-EditingEngine` 的正式编辑态链路不再把 `card.renderEditor` 作为主路径；
+- 该应用使用共享文档中单独定义的本地基础卡片运行时；
+- `card.render/card.renderEditor` 继续作为 Bridge 对外公开的 Host 托管通用能力。
 
 复合卡片预览 iframe 事件协议：
 

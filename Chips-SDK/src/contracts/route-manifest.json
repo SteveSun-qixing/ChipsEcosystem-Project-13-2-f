@@ -15,6 +15,9 @@
     "card.render": {
       "action": "card.render"
     },
+    "card.renderCover": {
+      "action": "card.renderCover"
+    },
     "card.renderEditor": {
       "action": "card.renderEditor"
     },

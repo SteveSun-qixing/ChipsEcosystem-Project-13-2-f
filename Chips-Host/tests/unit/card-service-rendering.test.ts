@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import yaml from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardService } from '../../packages/card-service/src';
@@ -253,6 +254,21 @@ describe('CardService rendering', () => {
     expect(view.target).toBe('offscreen-render');
     expect(view.consistency?.consistent).toBe(true);
     expect(view.body).toContain('data-target="offscreen-render"');
+  }, 30_000);
+
+  it('returns a formal cover file url that points to the card cover html', async () => {
+    const cardFile = await createCardArchive();
+    const service = new CardService({ workspaceRoot: process.cwd() });
+
+    const view = await service.renderCover(cardFile);
+    const coverPath = fileURLToPath(view.coverUrl);
+    tempDirs.push(path.dirname(path.dirname(coverPath)));
+    const coverHtml = await fs.readFile(coverPath, 'utf-8');
+
+    expect(view.title).toBe('Test Card');
+    expect(view.coverUrl.startsWith('file://')).toBe(true);
+    expect(view.coverUrl.endsWith('/.card/cover.html')).toBe(true);
+    expect(coverHtml).toContain('<h1>cover</h1>');
   }, 30_000);
 
   it('emits composite node selection bridge only in preview mode', async () => {

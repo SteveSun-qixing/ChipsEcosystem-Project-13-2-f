@@ -58,6 +58,7 @@
   min-height: 440px;
   border-radius: 18px;
   overflow: hidden;
+  touch-action: none;
   background:
     linear-gradient(45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
     linear-gradient(-45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
@@ -75,6 +76,7 @@
 .cover-crop-dialog__crop-box {
   position: absolute;
   cursor: move;
+  touch-action: none;
   border: 2px solid rgba(255, 255, 255, 0.96);
   box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.56);
 }
@@ -88,22 +90,39 @@
   background-size: calc(100% / 3) calc(100% / 3);
 }
 
-.cover-crop-dialog__controls {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.cover-crop-dialog__handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  background: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
+  padding: 0;
 }
 
-.cover-crop-dialog__zoom-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 14px;
-  color: var(--chips-color-text, #111827);
+.cover-crop-dialog__handle--nw {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
 }
 
-.cover-crop-dialog__controls input[type="range"] {
-  width: 100%;
+.cover-crop-dialog__handle--ne {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+
+.cover-crop-dialog__handle--se {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+
+.cover-crop-dialog__handle--sw {
+  left: -10px;
+  bottom: -10px;
+  cursor: nesw-resize;
 }
 
 .cover-crop-dialog__footer {

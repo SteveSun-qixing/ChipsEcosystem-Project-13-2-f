@@ -2,6 +2,8 @@ export { createClient } from "./core/client";
 export type { Client, ClientConfig } from "./types/client";
 export type {
   CardApi,
+  CardCoverRenderResult,
+  CardCoverView,
   CardDocument,
   CardRenderOptions,
   CardRenderResult,

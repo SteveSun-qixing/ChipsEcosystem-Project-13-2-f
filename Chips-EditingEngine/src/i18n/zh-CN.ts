@@ -105,7 +105,7 @@ const zhCN: Record<string, string> = {
     'card_settings.cover_html_title': 'cover.html 代码',
     'card_settings.cover_html_desc': '这里输入的内容会直接写入 cover.html。',
     'card_settings.cover_crop_title': '裁剪封面',
-    'card_settings.cover_crop_desc': '拖动取景框并缩放图片，裁出和当前封面比例一致的画面。',
+    'card_settings.cover_crop_desc': '拖动选框移动位置，拖动四角调整选框大小，比例会始终保持一致。',
     'card_settings.cover_crop_zoom': '缩放',
     'card_settings.cover_crop_apply': '应用裁剪',
     'card_settings.cover_crop_action': '裁剪',

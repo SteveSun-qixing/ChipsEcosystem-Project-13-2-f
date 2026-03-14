@@ -115,3 +115,28 @@ export function extractGeneratedImageSource(html: string): string | null {
     const match = html.match(/data-chips-cover-image-source="([^"]+)"/i);
     return match?.[1] ?? null;
 }
+
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.addEventListener('load', () => {
+            if (typeof reader.result === 'string') {
+                resolve(reader.result);
+                return;
+            }
+
+            reject(new Error('Failed to convert blob to data URL.'));
+        });
+
+        reader.addEventListener('error', () => {
+            reject(reader.error ?? new Error('Failed to convert blob to data URL.'));
+        });
+
+        reader.readAsDataURL(blob);
+    });
+}
+
+export async function binaryToDataUrl(data: Uint8Array, mimeType: string): Promise<string> {
+    return blobToDataUrl(new Blob([data], { type: mimeType }));
+}

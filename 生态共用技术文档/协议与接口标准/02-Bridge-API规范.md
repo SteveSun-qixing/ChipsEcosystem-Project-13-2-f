@@ -113,6 +113,7 @@ card 子域采用 vNext 动作口径：
 | `card.parse({ cardFile })` | 解析卡片结构并返回 AST | 是 |
 | `card.validate({ cardFile })` | 验证卡片格式合法性 | 是 |
 | `card.render({ cardFile, options? })` | 调用 Host L9 统一渲染链路并返回渲染结果 | 否 |
+| `card.renderCover({ cardFile })` | 调用 Host 正式封面渲染链路并返回封面视图 | 否 |
 | `card.renderEditor({ cardType, initialConfig?, baseCardId? })` | 调用 Host 基础卡片编辑器装载链路并返回编辑器文档 | 否 |
 
 `card.render.options` 推荐字段：
@@ -133,6 +134,13 @@ card 子域采用 vNext 动作口径：
 - `interactionPolicy`（若提供）必须是 `native | delegate`。
 
 `card.render` 返回 `view.semanticHash` 与可选 `view.diagnostics/view.consistency`，用于一致性比对与诊断。
+
+`card.renderCover` 返回 `view.title/view.coverUrl/view.ratio`，正式约束如下：
+
+- `view.coverUrl` 必须指向受控的 `.card/cover.html` 入口，供 SDK 作为 iframe `src` 使用；
+- `.card/cover.html` 中的相对路径必须相对于 `.card/` 目录解析，可继续引用 `.card/cardcover/*`；
+- 封面链路不注入复合卡片壳层，也不自动注入主题 CSS、多语言文案或基础卡片节点运行时；
+- 应用层不得把 `view.coverUrl` 再改写为任意 `srcdoc` 或内联 HTML 字符串。
 
 说明：
 

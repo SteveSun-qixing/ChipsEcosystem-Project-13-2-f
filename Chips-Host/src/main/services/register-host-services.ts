@@ -2665,6 +2665,22 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           })
         )
       },
+      renderCover: {
+        descriptor: descriptor<
+          { cardFile: string },
+          { view: unknown }
+        >(
+          'card.renderCover',
+          ['card.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'card.renderCover', async (input) => {
+            const view = await ctx.getCardService().renderCover(input.cardFile);
+            return { view };
+          })
+        )
+      },
       renderEditor: {
         descriptor: descriptor<
           {

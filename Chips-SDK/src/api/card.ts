@@ -69,6 +69,16 @@ export interface CardRenderResult {
   view: CardRenderView;
 }
 
+export interface CardCoverView {
+  title: string;
+  coverUrl: string;
+  ratio?: string;
+}
+
+export interface CardCoverRenderResult {
+  view: CardCoverView;
+}
+
 export interface CardEditorRenderOptions {
   cardType: string;
   initialConfig?: Record<string, unknown>;
@@ -223,16 +233,6 @@ export function createCardApi(client: CoreClient): CardApi {
           throw createError("INVALID_ARGUMENT", "card.coverFrame.render: cardFile is required.");
         }
 
-        const { view } = await client.invoke<{ cardFile: string; options?: CardRenderOptions }, CardRenderResult>(
-          "card.render",
-          {
-            cardFile,
-            options: {
-              target: "card-iframe",
-            },
-          },
-        );
-
         if (typeof document === "undefined") {
           throw createError(
             "RUNTIME_ENV_UNSUPPORTED",
@@ -240,7 +240,18 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        return createFrameFromView(view.body, cardName ?? view.title ?? "Card Cover");
+        const { view } = await client.invoke<{ cardFile: string }, CardCoverRenderResult>(
+          "card.renderCover",
+          {
+            cardFile,
+          },
+        );
+
+        return createFrameFromUrl(
+          view.coverUrl,
+          cardName ?? view.title ?? "Card Cover",
+          "allow-scripts allow-same-origin",
+        );
       },
     },
     compositeWindow: {
@@ -381,6 +392,26 @@ function createFrameFromView(body: string, title: string): FrameRenderResult {
   return {
     frame,
     origin: window.location.origin,
+  };
+}
+
+function createFrameFromUrl(url: string, title: string, sandbox: string): FrameRenderResult {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("sandbox", sandbox);
+  frame.setAttribute("loading", "lazy");
+  frame.title = title;
+  frame.src = url;
+
+  let origin = window.location.origin;
+  try {
+    origin = new URL(url, window.location.href).origin;
+  } catch {
+    // keep the current window origin as a safe fallback for malformed urls
+  }
+
+  return {
+    frame,
+    origin,
   };
 }
 

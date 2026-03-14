@@ -94,6 +94,24 @@
     overflow: hidden;
     --chips-comp-tabs-focus-outline: transparent;
   }
+
+  .card-settings-dialog__body > [data-scope="tabs"][data-part="root"] {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .card-settings-dialog__body [data-scope="tabs"][data-part="list"] {
+    flex-shrink: 0;
+  }
+
+  .card-settings-dialog__body [data-scope="tabs"][data-part="panel"] {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
   
   /* 面板内容区内边距 */
   .card-settings-dialog__panel {

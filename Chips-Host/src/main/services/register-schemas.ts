@@ -208,6 +208,7 @@ export const registerHostSchemas = (): void => {
   registerPair('card.parse', ['cardFile']);
   schemaRegistry.register('schemas/card.render.request.json', validateCardRenderRequest);
   schemaRegistry.register('schemas/card.render.response.json', objectWithKeys(['view']));
+  registerPair('card.renderCover', ['cardFile'], ['view']);
   schemaRegistry.register('schemas/card.renderEditor.request.json', validateCardRenderEditorRequest);
   schemaRegistry.register('schemas/card.renderEditor.response.json', objectWithKeys(['view']));
   registerPair('card.validate', ['cardFile']);

@@ -155,7 +155,7 @@ describe("CardApi", () => {
     }
   });
 
-  it("renders coverFrame using card.render and returns FrameRenderResult with origin", async () => {
+  it("renders coverFrame using card.renderCover and returns a sandboxed iframe url", async () => {
     const calls: Array<{ action: string; payload: any }> = [];
 
     const api = createCardApi(
@@ -164,10 +164,8 @@ describe("CardApi", () => {
         return {
           view: {
             title: "Cover Title",
-            body: "<div>cover</div>",
-            contentFiles: [],
-            target: "card-iframe",
-            semanticHash: "hash",
+            coverUrl: "file:///workspace/.card/cover.html",
+            ratio: "3:4",
           },
         } as any;
       }),
@@ -195,20 +193,19 @@ describe("CardApi", () => {
       const result = await api.coverFrame.render({ cardFile: "/cover.card", cardName: "My Card" });
 
       expect(calls.length).toBe(1);
-      expect(calls[0]?.action).toBe("card.render");
-      const payload = calls[0]?.payload as { cardFile: string; options?: { target?: string } };
+      expect(calls[0]?.action).toBe("card.renderCover");
+      const payload = calls[0]?.payload as { cardFile: string };
       expect(payload.cardFile).toBe("/cover.card");
-      expect(payload.options?.target).toBe("card-iframe");
 
-      expect(result.origin).toBe("https://example.test");
+      expect(result.origin).toBe("null");
       expect(created.length).toBe(1);
       const frame = created[0];
       expect(frame.tagName).toBe("IFRAME");
-      expect(frame.attrs.sandbox).toBe("allow-scripts allow-forms");
+      expect(frame.attrs.sandbox).toBe("allow-scripts allow-same-origin");
       expect(frame.attrs.loading).toBe("lazy");
       expect(frame.title).toBe("My Card");
-      expect(frame.srcdoc).toBe("<div>cover</div>");
-      expect(frame.src).toBeUndefined();
+      expect(frame.src).toBe("file:///workspace/.card/cover.html");
+      expect(frame.srcdoc).toBeUndefined();
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;

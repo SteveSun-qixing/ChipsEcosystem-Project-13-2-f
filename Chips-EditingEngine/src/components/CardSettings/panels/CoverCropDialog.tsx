@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { parseCoverRatio } from '../../../utils/card-cover';
+import { blobToDataUrl } from '../../../utils/card-cover';
+import {
+  clampCropRect,
+  moveCropRect,
+  resizeCropRect,
+  resolveContainedImageBounds,
+  resolveInitialCropRect,
+  type CropPoint,
+  type CropRect,
+  type CropResizeHandle,
+} from './cover-crop-layout';
 import './CoverCropDialog.css';
 
 interface CoverCropDialogProps {
@@ -20,34 +30,6 @@ type Size = {
   height: number;
 };
 
-type Point = {
-  x: number;
-  y: number;
-};
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function centerCrop(imageBounds: { left: number; top: number; width: number; height: number }, cropSize: Size): Point {
-  return {
-    x: imageBounds.left + (imageBounds.width - cropSize.width) / 2,
-    y: imageBounds.top + (imageBounds.height - cropSize.height) / 2,
-  };
-}
-
-function clampCrop(position: Point, imageBounds: { left: number; top: number; width: number; height: number }, cropSize: Size): Point {
-  const minX = imageBounds.left;
-  const minY = imageBounds.top;
-  const maxX = imageBounds.left + imageBounds.width - cropSize.width;
-  const maxY = imageBounds.top + imageBounds.height - cropSize.height;
-
-  return {
-    x: clamp(position.x, minX, maxX),
-    y: clamp(position.y, minY, maxY),
-  };
-}
-
 export function CoverCropDialog({
   open,
   imageUrl,
@@ -57,78 +39,22 @@ export function CoverCropDialog({
 }: CoverCropDialogProps) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const interactionRef = useRef<{
+    pointerId: number;
+    mode: 'move' | 'resize';
+    startPointer: CropPoint;
+    startRect: CropRect;
+    handle?: CropResizeHandle;
+  } | null>(null);
   const hasInitializedCropRef = useRef(false);
 
   const [stageSize, setStageSize] = useState<Size>({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState<Size>({ width: 0, height: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [cropPosition, setCropPosition] = useState<Point>({ x: 0, y: 0 });
-
-  const ratioValue = useMemo(() => parseCoverRatio(ratio), [ratio]);
-
-  const cropSize = useMemo(() => {
-    if (!stageSize.width || !stageSize.height) {
-      return { width: 0, height: 0 };
-    }
-
-    const maxWidth = stageSize.width * 0.72;
-    const maxHeight = stageSize.height * 0.72;
-    const preferredWidth = Math.min(maxWidth, maxHeight * (ratioValue.width / ratioValue.height));
-    const preferredHeight = preferredWidth * (ratioValue.height / ratioValue.width);
-
-    if (preferredHeight <= maxHeight) {
-      return {
-        width: preferredWidth,
-        height: preferredHeight,
-      };
-    }
-
-    const adjustedHeight = maxHeight;
-    return {
-      width: adjustedHeight * (ratioValue.width / ratioValue.height),
-      height: adjustedHeight,
-    };
-  }, [ratioValue.height, ratioValue.width, stageSize.height, stageSize.width]);
+  const [cropRect, setCropRect] = useState<CropRect>({ x: 0, y: 0, width: 0, height: 0 });
 
   const imageBounds = useMemo(() => {
-    if (!stageSize.width || !stageSize.height || !naturalSize.width || !naturalSize.height) {
-      return {
-        left: 0,
-        top: 0,
-        width: 0,
-        height: 0,
-        scale: 1,
-      };
-    }
-
-    const baseScale = Math.min(stageSize.width / naturalSize.width, stageSize.height / naturalSize.height);
-    const displayScale = baseScale * zoom;
-    const width = naturalSize.width * displayScale;
-    const height = naturalSize.height * displayScale;
-
-    return {
-      left: (stageSize.width - width) / 2,
-      top: (stageSize.height - height) / 2,
-      width,
-      height,
-      scale: displayScale,
-    };
-  }, [naturalSize.height, naturalSize.width, stageSize.height, stageSize.width, zoom]);
-
-  const minZoom = useMemo(() => {
-    if (!cropSize.width || !cropSize.height || !naturalSize.width || !naturalSize.height || !stageSize.width || !stageSize.height) {
-      return 1;
-    }
-
-    const baseScale = Math.min(stageSize.width / naturalSize.width, stageSize.height / naturalSize.height);
-    const minScale = Math.max(cropSize.width / naturalSize.width, cropSize.height / naturalSize.height);
-    if (baseScale <= 0) {
-      return 1;
-    }
-
-    return Math.max(1, minScale / baseScale);
-  }, [cropSize.height, cropSize.width, naturalSize.height, naturalSize.width, stageSize.height, stageSize.width]);
+    return resolveContainedImageBounds(stageSize, naturalSize);
+  }, [naturalSize, stageSize]);
 
   useEffect(() => {
     if (!open) {
@@ -181,92 +107,108 @@ export function CoverCropDialog({
     }
 
     hasInitializedCropRef.current = false;
-    setZoom(1);
+    setCropRect({ x: 0, y: 0, width: 0, height: 0 });
   }, [imageUrl, open, ratio]);
 
   useEffect(() => {
-    if (!open || !cropSize.width || !cropSize.height || !imageBounds.width || !imageBounds.height) {
+    if (!open || !imageBounds.width || !imageBounds.height) {
       return;
     }
 
-    if (zoom < minZoom) {
-      setZoom(minZoom);
-    }
-  }, [cropSize.height, cropSize.width, imageBounds.height, imageBounds.width, minZoom, open, zoom]);
-
-  useEffect(() => {
-    if (!open || !cropSize.width || !cropSize.height || !imageBounds.width || !imageBounds.height) {
-      return;
-    }
-
-    setCropPosition((previous) => {
+    setCropRect((previous) => {
       if (!hasInitializedCropRef.current) {
         hasInitializedCropRef.current = true;
-        return centerCrop(imageBounds, cropSize);
+        return resolveInitialCropRect(imageBounds, ratio);
       }
 
-      return clampCrop(previous, imageBounds, cropSize);
+      return clampCropRect(previous, imageBounds, ratio);
     });
-  }, [cropSize, imageBounds, open]);
+  }, [imageBounds, open, ratio]);
 
   if (!open) {
     return null;
   }
 
-  const minZoomPercent = Math.round(minZoom * 100);
-  const maxZoomPercent = Math.max(minZoomPercent, 300);
-
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  const getStagePoint = (event: React.PointerEvent<HTMLElement>): CropPoint | null => {
     const stageRect = stageRef.current?.getBoundingClientRect();
     if (!stageRect) {
-      return;
+      return null;
     }
 
-    dragStateRef.current = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - stageRect.left - cropPosition.x,
-      offsetY: event.clientY - stageRect.top - cropPosition.y,
+    return {
+      x: event.clientX - stageRect.left,
+      y: event.clientY - stageRect.top,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
-      return;
-    }
-
+  const startInteraction = (
+    event: React.PointerEvent<HTMLElement>,
+    mode: 'move' | 'resize',
+    handle?: CropResizeHandle,
+  ) => {
+    const startPointer = getStagePoint(event);
     const stage = stageRef.current;
-    if (!stage) {
+    if (!startPointer || !stage) {
       return;
     }
 
-    const stageRect = stage.getBoundingClientRect();
-    const nextPosition = {
-      x: event.clientX - stageRect.left - dragStateRef.current.offsetX,
-      y: event.clientY - stageRect.top - dragStateRef.current.offsetY,
+    interactionRef.current = {
+      pointerId: event.pointerId,
+      mode,
+      handle,
+      startPointer,
+      startRect: cropRect,
     };
-
-    setCropPosition(clampCrop(nextPosition, imageBounds, cropSize));
+    stage.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
   };
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+  const handleStagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const interaction = interactionRef.current;
+    if (!interaction || interaction.pointerId !== event.pointerId) {
       return;
     }
 
-    dragStateRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    const pointer = getStagePoint(event);
+    if (!pointer) {
+      return;
+    }
+
+    if (interaction.mode === 'move') {
+      const delta = {
+        x: pointer.x - interaction.startPointer.x,
+        y: pointer.y - interaction.startPointer.y,
+      };
+      setCropRect(moveCropRect(interaction.startRect, delta, imageBounds));
+      return;
+    }
+
+    if (interaction.handle) {
+      setCropRect(resizeCropRect(interaction.startRect, pointer, interaction.handle, imageBounds, ratio));
+    }
+  };
+
+  const handleStagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!interactionRef.current || interactionRef.current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    interactionRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   const handleConfirm = async () => {
-    if (!naturalSize.width || !naturalSize.height || !cropSize.width || !cropSize.height || !imageBounds.scale) {
+    if (!naturalSize.width || !naturalSize.height || !cropRect.width || !cropRect.height || !imageBounds.scale) {
       return;
     }
 
-    const sourceX = Math.max(0, (cropPosition.x - imageBounds.left) / imageBounds.scale);
-    const sourceY = Math.max(0, (cropPosition.y - imageBounds.top) / imageBounds.scale);
-    const sourceWidth = Math.min(naturalSize.width - sourceX, cropSize.width / imageBounds.scale);
-    const sourceHeight = Math.min(naturalSize.height - sourceY, cropSize.height / imageBounds.scale);
+    const sourceX = Math.max(0, (cropRect.x - imageBounds.x) / imageBounds.scale);
+    const sourceY = Math.max(0, (cropRect.y - imageBounds.y) / imageBounds.scale);
+    const sourceWidth = Math.min(naturalSize.width - sourceX, cropRect.width / imageBounds.scale);
+    const sourceHeight = Math.min(naturalSize.height - sourceY, cropRect.height / imageBounds.scale);
 
     const image = new Image();
     image.src = imageUrl;
@@ -303,10 +245,9 @@ export function CoverCropDialog({
       }, 'image/png');
     });
 
-    const previewUrl = URL.createObjectURL(blob);
     onConfirm({
       data: new Uint8Array(await blob.arrayBuffer()),
-      previewUrl,
+      previewUrl: await blobToDataUrl(blob),
       mimeType: 'image/png',
     });
   };
@@ -318,7 +259,7 @@ export function CoverCropDialog({
           <div>
             <h3 className="cover-crop-dialog__title">{t('card_settings.cover_crop_title') || '裁剪封面'}</h3>
             <p className="cover-crop-dialog__subtitle">
-              {t('card_settings.cover_crop_desc') || '拖动取景框并缩放图片，裁出和当前封面比例一致的画面。'}
+              {t('card_settings.cover_crop_desc') || '拖动选框移动位置，拖动四角调整选框大小，比例会始终保持一致。'}
             </p>
           </div>
 
@@ -332,14 +273,20 @@ export function CoverCropDialog({
           </button>
         </div>
 
-        <div ref={stageRef} className="cover-crop-dialog__stage">
+        <div
+          ref={stageRef}
+          className="cover-crop-dialog__stage"
+          onPointerMove={handleStagePointerMove}
+          onPointerUp={handleStagePointerUp}
+          onPointerCancel={handleStagePointerUp}
+        >
           <img
             className="cover-crop-dialog__image"
             src={imageUrl}
             alt={t('cover_maker.preview_alt') || '预览图片'}
             style={{
-              left: `${imageBounds.left}px`,
-              top: `${imageBounds.top}px`,
+              left: `${imageBounds.x}px`,
+              top: `${imageBounds.y}px`,
               width: `${imageBounds.width}px`,
               height: `${imageBounds.height}px`,
             }}
@@ -348,32 +295,24 @@ export function CoverCropDialog({
           <div
             className="cover-crop-dialog__crop-box"
             style={{
-              left: `${cropPosition.x}px`,
-              top: `${cropPosition.y}px`,
-              width: `${cropSize.width}px`,
-              height: `${cropSize.height}px`,
+              left: `${cropRect.x}px`,
+              top: `${cropRect.y}px`,
+              width: `${cropRect.width}px`,
+              height: `${cropRect.height}px`,
             }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
+            onPointerDown={(event) => startInteraction(event, 'move')}
           >
             <div className="cover-crop-dialog__crop-grid" />
+            {(['nw', 'ne', 'se', 'sw'] as CropResizeHandle[]).map((handle) => (
+              <button
+                key={handle}
+                type="button"
+                className={`cover-crop-dialog__handle cover-crop-dialog__handle--${handle}`}
+                aria-label={`${t('card_settings.cover_crop_action') || '裁剪'} ${handle}`}
+                onPointerDown={(event) => startInteraction(event, 'resize', handle)}
+              />
+            ))}
           </div>
-        </div>
-
-        <div className="cover-crop-dialog__controls">
-          <label className="cover-crop-dialog__zoom-label">
-            <span>{t('card_settings.cover_crop_zoom') || '缩放'}</span>
-            <span>{Math.round(zoom * 100)}%</span>
-          </label>
-          <input
-            type="range"
-            min={minZoomPercent}
-            max={maxZoomPercent}
-            step={1}
-            value={Math.round(zoom * 100)}
-            onChange={(event) => setZoom(Number(event.target.value) / 100)}
-          />
         </div>
 
         <div className="cover-crop-dialog__footer">

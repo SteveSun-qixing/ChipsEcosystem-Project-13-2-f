@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChipsTabs } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCard } from '../../context/CardContext';
@@ -28,6 +29,7 @@ export function CardSettingsDialog({
   const card = getCard(cardId);
   const theme = card?.metadata.themeId || 'chips-official.default-theme';
   const cardInfo = card as any;
+  const dialogTitleId = useMemo(() => `card-settings-dialog-title-${cardId}`, [cardId]);
 
   useEffect(() => {
     if (visible) {
@@ -35,26 +37,26 @@ export function CardSettingsDialog({
     }
   }, [visible]);
 
-  if (!visible) return null;
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).classList.contains('card-settings-overlay')) {
-      onClose();
-    }
-  };
-
-  const handleGlobalKeydown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && visible) {
-      onClose();
-    }
-  };
-
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
     document.addEventListener('keydown', handleGlobalKeydown);
     return () => {
       document.removeEventListener('keydown', handleGlobalKeydown);
     };
-  }, [visible]);
+  }, [onClose, visible]);
+
+  if (!visible) {
+    return null;
+  }
 
   const handleUpdateName = (name: string) => {
     if (card) {
@@ -73,11 +75,22 @@ export function CardSettingsDialog({
     onSave();
   };
 
-  return (
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).classList.contains('card-settings-overlay')) {
+      onClose();
+    }
+  };
+
+  const dialog = (
     <div className="card-settings-overlay" onClick={handleOverlayClick}>
-      <div className="card-settings-dialog">
+      <div
+        className="card-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+      >
         <div className="card-settings-dialog__header">
-          <h2 className="card-settings-dialog__title">{t('card_settings.title') || '卡片设置'}</h2>
+          <h2 id={dialogTitleId} className="card-settings-dialog__title">{t('card_settings.title') || '卡片设置'}</h2>
           <button
             type="button"
             className="card-settings-dialog__close-btn"
@@ -161,4 +174,10 @@ export function CardSettingsDialog({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined' || !document.body) {
+    return dialog;
+  }
+
+  return createPortal(dialog, document.body);
 }

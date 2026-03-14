@@ -1,11 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createBasecardEditorRoot } from "../../src/editor/panel";
 describe("createBasecardEditorRoot (text basic)", () => {
-    it("emits changes when fields are updated and valid", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+    it("emits changes when body content is updated", () => {
+        vi.useFakeTimers();
         const initialConfig = {
             id: "test",
-            title: "Title",
-            body: "Body",
+            body: "<p>Body</p>",
             locale: "zh-CN",
         };
         let lastConfig;
@@ -15,12 +18,13 @@ describe("createBasecardEditorRoot (text basic)", () => {
                 lastConfig = next;
             },
         });
-        const titleInput = root.querySelector(".chips-basecard-editor__input");
-        if (!titleInput) {
-            throw new Error("找不到标题输入框");
+        const bodyEditor = root.querySelector(".chips-basecard-editor__richtext");
+        if (!bodyEditor) {
+            throw new Error("找不到正文编辑器");
         }
-        titleInput.value = "New Title";
-        titleInput.dispatchEvent(new Event("input"));
-        expect(lastConfig?.title).toBe("New Title");
+        bodyEditor.innerHTML = "<p>New Body</p>";
+        bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
+        vi.advanceTimersByTime(130);
+        expect(lastConfig?.body).toContain("New Body");
     });
 });

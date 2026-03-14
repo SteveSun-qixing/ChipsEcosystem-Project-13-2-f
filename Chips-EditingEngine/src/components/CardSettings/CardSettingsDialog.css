@@ -87,6 +87,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    --chips-comp-tabs-focus-outline: transparent;
   }
   
   /* 面板内容区内边距 */

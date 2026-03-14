@@ -2642,6 +2642,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             options?: {
               target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render';
               mode?: 'view' | 'preview';
+              interactionPolicy?: 'native' | 'delegate';
               viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
               verifyConsistency?: boolean;
             };

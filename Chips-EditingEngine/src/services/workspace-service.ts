@@ -380,12 +380,17 @@ export class WorkspaceService {
             .filter(Boolean) as WorkspaceFile[];
     }
 
-    openFile(id: string): void {
+    openFile(id: string, openOptions?: WorkspaceOpenOptions): void {
+        const file = this.getFile(id);
+        if (!file) {
+            return;
+        }
+
         if (!this.state.openedFiles.includes(id)) {
             this.state.openedFiles.push(id);
-            const file = this.getFile(id);
-            this.eventEmitter.emit('workspace:file-opened', { file });
         }
+
+        this.eventEmitter.emit('workspace:file-opened', { file, openOptions });
     }
 
     closeFile(id: string): void {

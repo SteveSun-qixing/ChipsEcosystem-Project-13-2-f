@@ -21,6 +21,23 @@ test("parseCompositeFrameMessage returns ready payload", () => {
   });
 });
 
+test("parseCompositeFrameMessage returns resize payload", () => {
+  const payload = parseCompositeFrameMessage({
+    channel: COMPOSITE_FRAME_CHANNEL,
+    type: CompositeFrameEventType.RESIZE,
+    height: 720,
+    nodeCount: 3,
+    reason: "node-height"
+  });
+
+  assert.deepEqual(payload, {
+    type: CompositeFrameEventType.RESIZE,
+    height: 720,
+    nodeCount: 3,
+    reason: "node-height"
+  });
+});
+
 test("parseCompositeFrameMessage maps node error to standard error", () => {
   const payload = parseCompositeFrameMessage({
     channel: COMPOSITE_FRAME_CHANNEL,

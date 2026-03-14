@@ -1,13 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountBasecardView } from "../../src/render/runtime";
 import { mountBasecardEditor } from "../../src/editor/runtime";
 describe("basecard integration flow (text basic)", () => {
-    it("updates view when editor emits valid config", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+    it("updates view when editor emits valid body content", () => {
+        vi.useFakeTimers();
         const container = document.createElement("div");
         const editorContainer = document.createElement("div");
         const initialConfig = {
             id: "test",
-            title: "Initial",
             body: "Body",
             locale: "zh-CN",
         };
@@ -27,13 +30,15 @@ describe("basecard integration flow (text basic)", () => {
                 });
             },
         });
-        const titleInput = editorContainer.querySelector(".chips-basecard-editor__input");
-        if (!titleInput) {
-            throw new Error("找不到标题输入框");
+        expect(editorContainer.querySelector(".chips-basecard-editor__input")).toBeNull();
+        const bodyEditor = editorContainer.querySelector(".chips-basecard-editor__richtext");
+        if (!bodyEditor) {
+            throw new Error("找不到正文编辑器");
         }
-        titleInput.value = "Updated";
-        titleInput.dispatchEvent(new Event("input"));
-        const titleEl = container.querySelector(".chips-basecard__title");
-        expect(titleEl?.textContent).toBe("Updated");
+        bodyEditor.innerHTML = "<p>Updated Body</p>";
+        bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
+        vi.advanceTimersByTime(130);
+        const bodyEl = container.querySelector(".chips-basecard__body");
+        expect(bodyEl?.textContent).toContain("Updated Body");
     });
 });

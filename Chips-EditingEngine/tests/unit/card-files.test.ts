@@ -80,7 +80,6 @@ describe('unpacked .card files', () => {
 
     setFile('/workspace/demo.card/content/details.yaml', yaml.stringify({
       id: 'details',
-      title: 'Details',
       body: '<p>Second node body.</p>',
       locale: 'zh-CN',
     }));
@@ -141,7 +140,6 @@ describe('unpacked .card files', () => {
       type: 'RichTextCard',
       config: {
         id: 'intro',
-        title: '欢迎',
         body: '<p>你好</p>',
         locale: 'zh-CN',
       },
@@ -158,7 +156,7 @@ describe('unpacked .card files', () => {
 
     expect(metadata.name).toBe('新卡片');
     expect(structure.structure).toHaveLength(1);
-    expect(content.title).toBe('欢迎');
+    expect(content.body).toBe('<p>你好</p>');
     expect(files.get('/workspace/new-card.card/.card/cover.html')).toContain('新卡片');
   });
 
@@ -175,7 +173,6 @@ describe('unpacked .card files', () => {
       type: 'RichTextCard',
       data: {
         id: 'intro',
-        title: '',
         body: '<h1>Intro</h1><p>Hello Chips.</p>',
         locale: 'zh-CN',
       },
@@ -183,7 +180,6 @@ describe('unpacked .card files', () => {
 
     service.removeBasicCard('demo-card', 'details');
     service.updateBasicCard('demo-card', 'intro', {
-      title: '更新后的标题',
       body: '<p>已更新</p>',
     });
     await service.saveCard('demo-card');
@@ -194,7 +190,6 @@ describe('unpacked .card files', () => {
     expect(persistedStructure.structure).toHaveLength(1);
     expect(persistedIntro).toMatchObject({
       id: 'intro',
-      title: '更新后的标题',
       body: '<p>已更新</p>',
       locale: 'zh-CN',
     });
@@ -223,11 +218,9 @@ describe('unpacked .card files', () => {
     await service.openCard('demo-card', '/workspace/demo.card');
 
     service.updateBasicCard('demo-card', 'intro', {
-      title: '第一次',
       body: '<p>first</p>',
     });
     service.updateBasicCard('demo-card', 'intro', {
-      title: '第二次',
       body: '<p>second</p>',
     });
 
@@ -250,7 +243,6 @@ describe('unpacked .card files', () => {
     expect(latestCard?.isPersisting).toBe(false);
     expect(persistedIntro).toMatchObject({
       id: 'intro',
-      title: '第二次',
       body: '<p>second</p>',
       locale: 'zh-CN',
     });

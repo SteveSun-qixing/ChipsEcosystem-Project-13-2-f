@@ -5,6 +5,12 @@ export interface CanvasContextType {
     zoom: number;
     panX: number;
     panY: number;
+    panByInput: (deltaX: number, deltaY: number) => void;
+    panByScreenDelta: (deltaX: number, deltaY: number) => void;
+    zoomByFactorAtPoint: (factor: number, screenX: number, screenY: number) => void;
+    markInteractionSequence: (options?: { suppressDesktopZoom?: boolean }) => void;
+    clearInteractionSequence: () => void;
+    isDesktopZoomSuppressed: () => boolean;
     zoomIn: () => void;
     zoomOut: () => void;
     zoomTo: (value: number) => void;

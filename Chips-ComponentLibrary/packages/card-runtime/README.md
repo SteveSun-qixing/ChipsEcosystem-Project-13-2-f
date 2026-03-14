@@ -19,6 +19,13 @@ SDK mode contract:
 - `CompositeWindowMode.VIEW`
 - `CompositeWindowMode.PREVIEW`
 
+Composite iframe event contract:
+
+- `ready`
+- `resize`
+- `node-error`
+- `fatal-error`
+
 Adapter contract (for SDK not-yet-available phase):
 
 - `resolveCoverFrame({ cardId, cardFile, cardName, signal })`

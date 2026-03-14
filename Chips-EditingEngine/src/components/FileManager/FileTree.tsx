@@ -6,6 +6,7 @@ import './FileTree.css';
 
 interface FileTreeProps {
     files: WorkspaceFile[];
+    rootPath?: string;
     selectedPaths: string[];
     renamingPath: string | null;
     searchQuery: string;
@@ -21,6 +22,7 @@ interface FileTreeProps {
 
 export function FileTree({
     files,
+    rootPath,
     selectedPaths,
     renamingPath,
     searchQuery,
@@ -36,6 +38,10 @@ export function FileTree({
     const { t } = useTranslation();
     const treeRef = useRef<HTMLDivElement>(null);
     const [focusIndex, setFocusIndex] = useState(-1);
+    const rootDepth = useMemo(
+        () => (rootPath ?? '').split('/').filter(Boolean).length,
+        [rootPath],
+    );
 
     const flattenedFiles = useMemo(() => {
         const result: WorkspaceFile[] = [];
@@ -53,7 +59,10 @@ export function FileTree({
 
     const getFileLevel = (file: WorkspaceFile): number => {
         const parts = file.path.split('/').filter(Boolean);
-        return Math.max(0, parts.length - 2);
+        if (!rootDepth) {
+            return 0;
+        }
+        return Math.max(0, parts.length - rootDepth - 1);
     };
 
     const handleFileClick = (file: WorkspaceFile, event: React.MouseEvent) => {
@@ -68,18 +77,18 @@ export function FileTree({
             } else {
                 currentPaths.push(file.path);
             }
-            
+
             newPaths = currentPaths;
             newFiles = flattenedFiles.filter(f => newPaths.includes(f.path));
         } else if (multiSelect && event.shiftKey && selectedPaths.length > 0) {
             const lastSelected = selectedPaths[selectedPaths.length - 1];
             const lastIndex = flattenedFiles.findIndex((f) => f.path === lastSelected);
             const currentIndex = flattenedFiles.findIndex((f) => f.path === file.path);
-            
+
             if (lastIndex !== -1 && currentIndex !== -1) {
                 const start = Math.min(lastIndex, currentIndex);
                 const end = Math.max(lastIndex, currentIndex);
-                
+
                 for (let i = start; i <= end; i++) {
                     const f = flattenedFiles[i];
                     newPaths.push(f.path);

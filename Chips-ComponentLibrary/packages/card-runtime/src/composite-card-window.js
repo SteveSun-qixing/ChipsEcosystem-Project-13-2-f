@@ -20,6 +20,7 @@ export function CompositeCardWindow(props) {
     sandbox = "allow-scripts allow-same-origin",
     allowedOrigins,
     onReady,
+    onResize,
     onNodeError,
     onFatalError
   } = props;
@@ -78,6 +79,17 @@ export function CompositeCardWindow(props) {
         return;
       }
 
+      if (message.type === CompositeFrameEventType.RESIZE) {
+        if (typeof onResize === "function") {
+          onResize({
+            height: message.height,
+            nodeCount: message.nodeCount,
+            reason: message.reason
+          });
+        }
+        return;
+      }
+
       if (message.type === CompositeFrameEventType.NODE_ERROR) {
         setNodeErrorCount((value) => value + 1);
         if (typeof onNodeError === "function") {
@@ -99,7 +111,7 @@ export function CompositeCardWindow(props) {
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [allowedOrigins, cardFile, onFatalError, onNodeError, onReady]);
+  }, [allowedOrigins, cardFile, onFatalError, onNodeError, onReady, onResize]);
 
   const state = resolveCompositeCardWindowState({
     disabled,

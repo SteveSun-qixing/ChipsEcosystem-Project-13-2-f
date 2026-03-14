@@ -5,6 +5,7 @@ import { ContextMenu } from './ContextMenu';
 import { workspaceService } from '../../services/workspace-service';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
+import { CHIPS_DRAG_DATA_TYPE, type WorkspaceFileDragData } from '../CardBoxLibrary/types';
 import './FileManager.css';
 
 interface FileManagerProps {
@@ -22,8 +23,8 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
-    const [hasClipboard, setHasClipboard] = useState(false); // TODO: Implement clipboard service
-    
+    const [hasClipboard, setHasClipboard] = useState(false);
+
     const searchInputRef = useRef<any>(null);
 
     // Derived State
@@ -39,7 +40,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
         return result;
     }, [files]);
 
-    const selectedFiles = useMemo(() => 
+    const selectedFiles = useMemo(() =>
         flattenedFiles.filter(f => selectedPaths.includes(f.path)),
         [flattenedFiles, selectedPaths]
     );
@@ -53,6 +54,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
     }, [flattenedFiles, searchQuery, isSearching]);
 
     const displayFiles = isSearching ? searchResults : files;
+    const rootPath = workingDirectory || workspaceService.getState().rootPath;
 
     // Initialization & Event Listeners
     useEffect(() => {
@@ -123,6 +125,24 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
         } catch (e) {
             console.error('Rename failed:', e);
         }
+    };
+
+    const handleDragStart = (file: WorkspaceFile, event: React.DragEvent) => {
+        if (!event.dataTransfer || file.type === 'folder') {
+            return;
+        }
+
+        const dragData: WorkspaceFileDragData = {
+            type: 'workspace-file',
+            fileId: file.id,
+            fileType: file.type,
+            filePath: file.path,
+            name: file.name,
+        };
+
+        event.dataTransfer.setData(CHIPS_DRAG_DATA_TYPE, JSON.stringify(dragData));
+        event.dataTransfer.setData('text/plain', file.path);
+        event.dataTransfer.effectAllowed = 'copy';
     };
 
     const handleContextMenuAction = async (actionId: string, targetFiles: WorkspaceFile[]) => {
@@ -244,6 +264,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                 ) : (
                     <FileTree
                         files={displayFiles}
+                        rootPath={rootPath}
                         selectedPaths={selectedPaths}
                         renamingPath={renamingPath}
                         searchQuery={searchQuery}
@@ -254,7 +275,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                         onToggle={handleToggle}
                         onRename={handleRename}
                         onRenameCancel={() => setRenamingPath(null)}
-                        onDragStart={(file, e) => console.log('Drag Start', file)}
+                        onDragStart={handleDragStart}
                     />
                 )}
             </div>

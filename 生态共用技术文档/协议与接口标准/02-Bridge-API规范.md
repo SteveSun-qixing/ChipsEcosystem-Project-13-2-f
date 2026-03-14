@@ -120,6 +120,8 @@ card 子域采用 vNext 动作口径：
 - `target`: `app-root | card-iframe | module-slot | offscreen-render`
 - `viewport`: `{ width?, height?, scrollTop?, scrollLeft? }`
 - `verifyConsistency`: `boolean`
+- `mode`: `view | preview`
+- `interactionPolicy`: `native | delegate`
 
 参数校验规则：
 
@@ -127,8 +129,16 @@ card 子域采用 vNext 动作口径：
 - `viewport.width/height`（若提供）必须大于 0 且为有限数值。
 - `viewport.scrollTop/scrollLeft`（若提供）必须为有限数值。
 - `verifyConsistency`（若提供）必须为布尔值。
+- `mode`（若提供）必须是 `view | preview`。
+- `interactionPolicy`（若提供）必须是 `native | delegate`。
 
 `card.render` 返回 `view.semanticHash` 与可选 `view.diagnostics/view.consistency`，用于一致性比对与诊断。
+
+说明：
+
+- `interactionPolicy = 'native'` 表示复合卡片保持原生滚动/触摸行为，不向外层应用壳层代理交互意图；
+- `interactionPolicy = 'delegate'` 表示 Host 复合文档与基础卡片文档需要把滚轮、触摸滚动、捏合缩放等交互意图正式回传为 `chips.composite:interaction`；
+- 当前编辑引擎无限画布中的“展开态复合卡片驱动整桌面滚动/缩放”场景应使用 `delegate`，其他场景默认保持 `native`。
 
 `card.renderEditor` 返回 `view.title/body/cardType/pluginId/baseCardId`，用于编辑面板装载正式基础卡片编辑器 iframe。
 
@@ -142,9 +152,21 @@ card 子域采用 vNext 动作口径：
 复合卡片预览 iframe 事件协议：
 
 - `chips.composite:ready`
+- `chips.composite:resize`
+- `chips.composite:interaction`
 - `chips.composite:node-select`
 - `chips.composite:node-error`
 - `chips.composite:fatal-error`
+
+其中 `resize` 事件必须至少包含：
+
+```ts
+{
+  height: number;
+  nodeCount: number;
+  reason: 'initial' | 'ready' | 'node-load' | 'node-height' | 'resize-observer';
+}
+```
 
 其中 `node-select` 在 `mode: 'preview'` 下触发，必须至少包含：
 
@@ -153,6 +175,25 @@ card 子域采用 vNext 动作口径：
   nodeId: string;
   cardType: string;
   pluginId?: string;
+}
+```
+
+其中 `interaction` 事件必须至少包含：
+
+```ts
+{
+  cardId: string;
+  nodeId?: string;
+  cardType?: string;
+  source: 'basecard-frame' | 'composite-shell' | 'degraded-node';
+  device: 'wheel' | 'touch';
+  intent: 'scroll' | 'zoom';
+  deltaX: number;
+  deltaY: number;
+  zoomDelta?: number;
+  clientX: number;
+  clientY: number;
+  pointerCount: number;
 }
 ```
 

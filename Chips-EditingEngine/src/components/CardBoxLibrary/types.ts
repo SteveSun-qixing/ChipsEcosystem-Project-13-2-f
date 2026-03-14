@@ -2,6 +2,8 @@
  * 卡箱库类型定义
  */
 
+export const CHIPS_DRAG_DATA_TYPE = 'application/x-chips-drag-data';
+
 export interface CardTypeDefinition {
   id: string;
   name: string;

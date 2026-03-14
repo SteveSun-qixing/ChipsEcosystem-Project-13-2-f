@@ -34,8 +34,9 @@ export function FileItem({
 }: FileItemProps) {
     const [renameValue, setRenameValue] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const isDirectory = file.type === 'folder';
 
-    const fileIcon = file.type === 'folder'
+    const fileIcon = isDirectory
         ? (file.expanded ? '📂' : '📁')
         : (file.type === 'card' ? '🃏' : file.type === 'box' ? '📦' : '📄');
 
@@ -97,15 +98,15 @@ export function FileItem({
 
     return (
         <div
-            className={`file-item ${selected ? 'file-item--selected' : ''} ${file.isDirectory ? 'file-item--directory' : ''} ${renaming ? 'file-item--renaming' : ''}`}
+            className={`file-item ${selected ? 'file-item--selected' : ''} ${isDirectory ? 'file-item--directory' : ''} ${renaming ? 'file-item--renaming' : ''}`}
             style={indentStyle}
-            draggable={!renaming && !file.isDirectory && (file.type === 'card' || file.type === 'box')}
+            draggable={!renaming && !isDirectory && (file.type === 'card' || file.type === 'box')}
             onClick={(e) => onClick(file, e)}
             onDoubleClick={() => !renaming && onDoubleClick(file)}
             onContextMenu={(e) => onContextMenu(file, e)}
             onDragStart={(e) => onDragStart(file, e)}
         >
-            {file.isDirectory ? (
+            {isDirectory ? (
                 <button
                     type="button"
                     className="file-item__toggle"
@@ -134,7 +135,7 @@ export function FileItem({
                 <span className="file-item__name">{highlightedName()}</span>
             )}
 
-            {file.isDirectory && file.children && file.children.length > 0 && (
+            {isDirectory && file.children && file.children.length > 0 && (
                 <span className="file-item__badge">{file.children.length}</span>
             )}
         </div>

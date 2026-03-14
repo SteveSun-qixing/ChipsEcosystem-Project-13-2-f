@@ -32,6 +32,7 @@ export interface CardRenderOptions {
    * 普通 `card.render` 调用可以忽略该字段。
    */
   mode?: CompositeMode;
+  interactionPolicy?: CompositeInteractionPolicy;
 }
 
 export interface RenderNodeDiagnostic {
@@ -92,6 +93,10 @@ export interface FrameRenderResult {
 }
 
 export type CompositeMode = "view" | "preview";
+export type CompositeInteractionPolicy = "native" | "delegate";
+export type CompositeInteractionIntent = "scroll" | "zoom";
+export type CompositeInteractionDevice = "wheel" | "touch";
+export type CompositeInteractionSource = "basecard-frame" | "composite-shell" | "degraded-node";
 
 export interface CompositeNodeError {
   nodeId: string;
@@ -107,6 +112,34 @@ export interface CompositeNodeSelectPayload {
   pluginId?: string;
   state?: "ready" | "degraded";
   source?: string;
+}
+
+export type CompositeResizeReason =
+  | "initial"
+  | "ready"
+  | "node-load"
+  | "node-height"
+  | "resize-observer";
+
+export interface CompositeResizePayload {
+  height: number;
+  nodeCount: number;
+  reason: CompositeResizeReason;
+}
+
+export interface CompositeInteractionPayload {
+  cardId: string;
+  nodeId?: string;
+  cardType?: string;
+  source: CompositeInteractionSource;
+  device: CompositeInteractionDevice;
+  intent: CompositeInteractionIntent;
+  deltaX: number;
+  deltaY: number;
+  zoomDelta?: number;
+  clientX: number;
+  clientY: number;
+  pointerCount: number;
 }
 
 export interface CardEditorChangePayload {
@@ -132,8 +165,20 @@ export interface CardApi {
     render(options: { cardFile: string; cardName?: string }): Promise<FrameRenderResult>;
   };
   compositeWindow: {
-    render(options: { cardFile: string; mode?: CompositeMode }): Promise<FrameRenderResult>;
+    render(options: {
+      cardFile: string;
+      mode?: CompositeMode;
+      interactionPolicy?: CompositeInteractionPolicy;
+    }): Promise<FrameRenderResult>;
     onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onResize(
+      frame: HTMLIFrameElement,
+      handler: (payload: CompositeResizePayload) => void,
+    ): () => void;
+    onInteraction(
+      frame: HTMLIFrameElement,
+      handler: (payload: CompositeInteractionPayload) => void,
+    ): () => void;
     onNodeSelect(
       frame: HTMLIFrameElement,
       handler: (payload: CompositeNodeSelectPayload) => void,
@@ -199,7 +244,7 @@ export function createCardApi(client: CoreClient): CardApi {
       },
     },
     compositeWindow: {
-      async render({ cardFile, mode = "view" }) {
+      async render({ cardFile, mode = "view", interactionPolicy }) {
         if (!cardFile) {
           throw createError(
             "INVALID_ARGUMENT",
@@ -212,6 +257,16 @@ export function createCardApi(client: CoreClient): CardApi {
             "card.compositeWindow.render: mode must be 'view' or 'preview'.",
           );
         }
+        if (
+          typeof interactionPolicy !== "undefined" &&
+          interactionPolicy !== "native" &&
+          interactionPolicy !== "delegate"
+        ) {
+          throw createError(
+            "INVALID_ARGUMENT",
+            "card.compositeWindow.render: interactionPolicy must be 'native' or 'delegate'.",
+          );
+        }
 
         const { view } = await client.invoke<{ cardFile: string; options: CardRenderOptions }, CardRenderResult>(
           "card.render",
@@ -220,6 +275,7 @@ export function createCardApi(client: CoreClient): CardApi {
             options: {
               target: "card-iframe",
               mode,
+              interactionPolicy,
             },
           },
         );
@@ -235,6 +291,20 @@ export function createCardApi(client: CoreClient): CardApi {
       },
       onReady(frame, handler) {
         return subscribeToCompositeReady(frame, handler);
+      },
+      onResize(frame, handler) {
+        return subscribeToCompositeEvent<CompositeResizePayload>(
+          frame,
+          "chips.composite:resize",
+          handler,
+        );
+      },
+      onInteraction(frame, handler) {
+        return subscribeToCompositeEvent<CompositeInteractionPayload>(
+          frame,
+          "chips.composite:interaction",
+          handler,
+        );
       },
       onNodeSelect(frame, handler) {
         return subscribeToCompositeEvent<CompositeNodeSelectPayload>(

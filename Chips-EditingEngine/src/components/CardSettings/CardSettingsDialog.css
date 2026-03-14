@@ -15,8 +15,8 @@
    * 对话框容器
    * ============================================================ */
   .card-settings-dialog {
-    width: 600px;
-    height: 640px;
+    width: min(720px, calc(100vw - 48px));
+    height: min(720px, calc(100vh - 48px));
     background: var(--chips-color-surface, #ffffff);
     border-radius: var(--chips-radius-lg, 12px);
     box-shadow: var(--chips-shadow-xl, 0 20px 25px -5px rgb(0 0 0 / 0.1));
@@ -24,6 +24,11 @@
     flex-direction: column;
     overflow: hidden;
     animation: settings-fade-in 0.2s ease;
+  }
+
+  .card-settings-dialog--cover {
+    width: min(1180px, calc(100vw - 48px));
+    height: min(820px, calc(100vh - 48px));
   }
   
   @keyframes settings-fade-in {
@@ -93,6 +98,12 @@
   /* 面板内容区内边距 */
   .card-settings-dialog__panel {
     padding: var(--chips-spacing-lg, 24px);
+    min-height: 0;
+  }
+
+  .card-settings-dialog__panel--cover {
+    height: 100%;
+    padding: 0;
   }
   
   /* ============================================================
@@ -109,4 +120,9 @@
   
   .card-settings-dialog__btn {
     margin-left: var(--chips-spacing-sm, 8px);
+  }
+
+  .card-settings-dialog__btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }

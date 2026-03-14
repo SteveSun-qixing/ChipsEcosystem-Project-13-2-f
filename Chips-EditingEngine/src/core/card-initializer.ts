@@ -1,5 +1,6 @@
 import yaml from 'yaml';
 import { fileService } from '../services/file-service';
+import { createDefaultCoverHtml, DEFAULT_COVER_RATIO } from '../utils/card-cover';
 
 export interface BasicCardConfig {
     id: string;
@@ -19,32 +20,6 @@ export interface CreateCardResult {
 
 function joinPath(...parts: string[]): string {
     return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
-}
-
-function createDefaultCoverHtml(cardName: string): string {
-    return [
-        '<!doctype html>',
-        '<html lang="zh-CN">',
-        '<head>',
-        '  <meta charset="utf-8" />',
-        '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-        '  <style>',
-        '    html, body { margin: 0; width: 100%; height: 100%; }',
-        '    body {',
-        '      display: grid;',
-        '      place-items: center;',
-        '      background: linear-gradient(135deg, #f5f7fb 0%, #eef3ff 100%);',
-        '      color: #111827;',
-        '      font: 600 24px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
-        '      text-align: center;',
-        '      padding: 24px;',
-        '      box-sizing: border-box;',
-        '    }',
-        '  </style>',
-        '</head>',
-        `<body>${cardName}</body>`,
-        '</html>',
-    ].join('\n');
 }
 
 export function createCardInitializer(config: CardInitializerConfig) {
@@ -69,6 +44,7 @@ export function createCardInitializer(config: CardInitializerConfig) {
                 created_at: timestamp,
                 modified_at: timestamp,
                 theme: '',
+                cover_ratio: DEFAULT_COVER_RATIO,
                 tags: [],
                 description: '',
             };

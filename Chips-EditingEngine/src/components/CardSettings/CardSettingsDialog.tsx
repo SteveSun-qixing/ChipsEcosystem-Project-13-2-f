@@ -4,7 +4,7 @@ import { ChipsTabs } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCard } from '../../context/CardContext';
 import { BasicInfoPanel } from './panels/BasicInfoPanel';
-import { CoverPanel } from './panels/CoverPanel';
+import { CoverPanel, type CoverPanelDraft } from './panels/CoverPanel';
 import { ThemePanel } from './panels/ThemePanel';
 import { ExportPanel } from './panels/ExportPanel';
 import './CardSettingsDialog.css';
@@ -23,8 +23,9 @@ export function CardSettingsDialog({
   onSave,
 }: CardSettingsDialogProps) {
   const { t } = useTranslation();
-  const { getCard, saveCard, updateCardMetadata } = useCard();
+  const { getCard, saveCard, updateCardMetadata, updateCardCover } = useCard();
   const [activeTab, setActiveTab] = useState('basic');
+  const [coverDraft, setCoverDraft] = useState<CoverPanelDraft | null>(null);
 
   const card = getCard(cardId);
   const theme = card?.metadata.themeId || 'chips-official.default-theme';
@@ -34,6 +35,7 @@ export function CardSettingsDialog({
   useEffect(() => {
     if (visible) {
       setActiveTab('basic');
+      setCoverDraft(null);
     }
   }, [visible]);
 
@@ -58,6 +60,8 @@ export function CardSettingsDialog({
     return null;
   }
 
+  const isSaveDisabled = activeTab === 'cover' && Boolean(coverDraft?.dirty && !coverDraft.valid);
+
   const handleUpdateName = (name: string) => {
     if (card) {
       updateCardMetadata(cardId, { name });
@@ -71,6 +75,14 @@ export function CardSettingsDialog({
   };
 
   const handleSave = async () => {
+    if (coverDraft?.dirty && coverDraft.valid) {
+      updateCardCover(cardId, {
+        html: coverDraft.html,
+        ratio: coverDraft.ratio,
+        resources: coverDraft.resources,
+      });
+    }
+
     await saveCard(cardId);
     onSave();
   };
@@ -84,7 +96,7 @@ export function CardSettingsDialog({
   const dialog = (
     <div className="card-settings-overlay" onClick={handleOverlayClick}>
       <div
-        className="card-settings-dialog"
+        className={`card-settings-dialog ${activeTab === 'cover' ? 'card-settings-dialog--cover' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
@@ -111,8 +123,8 @@ export function CardSettingsDialog({
                 label: t('card_settings.tab_basic') || '基础信息',
                 content: (
                   <div className="card-settings-dialog__panel">
-                    <BasicInfoPanel 
-                      cardId={cardId} 
+                    <BasicInfoPanel
+                      cardId={cardId}
                       cardInfo={cardInfo}
                       onUpdateName={handleUpdateName}
                       onUpdateTags={handleUpdateTags}
@@ -124,8 +136,15 @@ export function CardSettingsDialog({
                 value: 'cover',
                 label: t('card_settings.tab_cover') || '封面',
                 content: (
-                  <div className="card-settings-dialog__panel">
-                    <CoverPanel onOpenCoverMaker={() => console.log('Open Cover Maker')} />
+                  <div className="card-settings-dialog__panel card-settings-dialog__panel--cover">
+                    <CoverPanel
+                      cardId={cardId}
+                      cardPath={card?.path ?? ''}
+                      cardName={card?.metadata.name ?? (t('card_window.untitled') || '无标题卡片')}
+                      currentCoverHtml={card?.cover?.html}
+                      currentRatio={card?.cover?.ratio ?? card?.metadata.coverRatio}
+                      onDraftChange={setCoverDraft}
+                    />
                   </div>
                 ),
               },
@@ -167,6 +186,7 @@ export function CardSettingsDialog({
             type="button"
             className="card-settings-dialog__btn card-settings-dialog__btn--save"
             onClick={handleSave}
+            disabled={isSaveDisabled}
           >
             {t('card_settings.save') || '保存'}
           </button>

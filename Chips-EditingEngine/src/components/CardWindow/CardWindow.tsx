@@ -471,7 +471,7 @@ export function CardWindow({
     }
 
     if (windowState === 'cover') {
-        const rawRatio = config.coverRatio?.replace(':', '/') || '3/4';
+        const rawRatio = (cardInfo?.metadata?.coverRatio ?? config.coverRatio)?.replace(':', '/') || '3/4';
         return (
             <div
                 className={`card-cover ${isCoverDragging ? 'card-cover--dragging' : ''}`}

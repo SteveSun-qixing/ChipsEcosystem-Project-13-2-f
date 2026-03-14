@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CardSettingsDialog } from '../../src/components/CardSettings/CardSettingsDialog';
 
 const updateCardMetadata = vi.fn();
+const updateCardCover = vi.fn();
 const saveCard = vi.fn(async () => undefined);
 
 vi.mock('@chips/component-library', () => ({
@@ -34,18 +35,26 @@ vi.mock('../../src/context/CardContext', () => ({
   useCard: () => ({
     getCard: () => ({
       id: 'card-1',
+      path: '/workspace/demo.card',
       metadata: {
         name: 'Demo Card',
         themeId: 'chips-official.default-theme',
+        coverRatio: '3:4',
         tags: ['demo'],
         createdAt: '2026-03-13T10:00:00.000Z',
         modifiedAt: '2026-03-13T11:00:00.000Z',
+      },
+      cover: {
+        html: '<html><body>demo</body></html>',
+        ratio: '3:4',
+        resources: [],
       },
       structure: {
         basicCards: [],
       },
     }),
     updateCardMetadata,
+    updateCardCover,
     saveCard,
   }),
 }));
@@ -73,7 +82,36 @@ vi.mock('../../src/components/CardSettings/panels/BasicInfoPanel', () => ({
 }));
 
 vi.mock('../../src/components/CardSettings/panels/CoverPanel', () => ({
-  CoverPanel: () => <div>cover-panel</div>,
+  CoverPanel: ({
+    onDraftChange,
+  }: {
+    onDraftChange?: (draft: {
+      html: string;
+      ratio: string;
+      resources: Array<{ path: string; data: Uint8Array }>;
+      dirty: boolean;
+      valid: boolean;
+    }) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="set-cover-draft"
+      onClick={() => onDraftChange?.({
+        html: '<html><body>next-cover</body></html>',
+        ratio: '16:9',
+        resources: [
+          {
+            path: 'cardcover/cover-image.png',
+            data: new Uint8Array([1, 2, 3]),
+          },
+        ],
+        dirty: true,
+        valid: true,
+      })}
+    >
+      cover-panel
+    </button>
+  ),
 }));
 
 vi.mock('../../src/components/CardSettings/panels/ThemePanel', () => ({
@@ -98,6 +136,7 @@ describe('CardSettingsDialog', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     updateCardMetadata.mockClear();
+    updateCardCover.mockClear();
     saveCard.mockClear();
   });
 
@@ -156,6 +195,43 @@ describe('CardSettingsDialog', () => {
 
     expect(saveCard).toHaveBeenCalledWith('card-1');
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the embedded cover editor draft through the formal card cover API before saving', async () => {
+    await act(async () => {
+      root.render(
+        <CardSettingsDialog
+          cardId="card-1"
+          visible
+          onClose={() => undefined}
+          onSave={() => undefined}
+        />,
+      );
+    });
+
+    await act(async () => {
+      (document.body.querySelector('[data-testid="set-cover-draft"]') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      const buttons = Array.from(document.body.querySelectorAll('button'));
+      const saveButton = buttons.find((button) => button.textContent === '保存');
+      saveButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(updateCardCover).toHaveBeenCalledWith('card-1', {
+      html: '<html><body>next-cover</body></html>',
+      ratio: '16:9',
+      resources: [
+        {
+          path: 'cardcover/cover-image.png',
+          data: new Uint8Array([1, 2, 3]),
+        },
+      ],
+    });
+    expect(saveCard).toHaveBeenCalledWith('card-1');
   });
 
   it('can transition from hidden to visible without breaking hook order and renders into document.body', async () => {

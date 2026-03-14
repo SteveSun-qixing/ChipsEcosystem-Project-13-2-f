@@ -7,6 +7,12 @@
 import yaml from 'yaml';
 import { fileService } from '../services/file-service';
 import { generateId62 } from '../utils/id';
+import {
+    createDefaultCoverHtml,
+    DEFAULT_COVER_RATIO,
+    normalizeCoverRatio,
+    type CardCoverResource,
+} from '../utils/card-cover';
 import { globalEventEmitter } from './event-emitter';
 
 export interface BasicCardData {
@@ -40,6 +46,11 @@ export interface CompositeCard {
     id: string;
     path: string;
     metadata: CardMetadata;
+    cover?: {
+        html: string;
+        ratio: string;
+        resources: CardCoverResource[];
+    };
     structure: CardStructure;
     isDirty: boolean;
     isEditing: boolean;
@@ -126,32 +137,6 @@ function createDefaultBasicCardData(type: string, id: string): Record<string, un
     };
 }
 
-function createDefaultCoverHtml(cardName: string): string {
-    return [
-        '<!doctype html>',
-        '<html lang="zh-CN">',
-        '<head>',
-        '  <meta charset="utf-8" />',
-        '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-        '  <style>',
-        '    html, body { margin: 0; width: 100%; height: 100%; }',
-        '    body {',
-        '      display: grid;',
-        '      place-items: center;',
-        '      background: linear-gradient(135deg, #f5f7fb 0%, #eef3ff 100%);',
-        '      color: #111827;',
-        '      font: 600 24px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
-        '      text-align: center;',
-        '      padding: 24px;',
-        '      box-sizing: border-box;',
-        '    }',
-        '  </style>',
-        '</head>',
-        `<body>${cardName}</body>`,
-        '</html>',
-    ].join('\n');
-}
-
 function cloneValue<T>(value: T): T {
     if (typeof globalThis.structuredClone === 'function') {
         return globalThis.structuredClone(value);
@@ -163,6 +148,14 @@ function createPersistSnapshot(card: CompositeCard): CompositeCard {
     return {
         ...card,
         metadata: cloneValue(card.metadata),
+        cover: card.cover ? {
+            html: card.cover.html,
+            ratio: card.cover.ratio,
+            resources: card.cover.resources.map((resource) => ({
+                path: resource.path,
+                data: new Uint8Array(resource.data),
+            })),
+        } : undefined,
         structure: {
             layout: card.structure.layout ? cloneValue(card.structure.layout) : undefined,
             basicCards: card.structure.basicCards.map((basicCard) => ({
@@ -309,8 +302,14 @@ export class CardService {
             path: `/${id}.card`,
             metadata: {
                 name,
+                coverRatio: DEFAULT_COVER_RATIO,
                 createdAt: timestamp,
                 modifiedAt: timestamp,
+            },
+            cover: {
+                html: createDefaultCoverHtml(name),
+                ratio: DEFAULT_COVER_RATIO,
+                resources: [],
             },
             structure: {
                 basicCards,
@@ -347,9 +346,13 @@ export class CardService {
 
         const metadataPath = joinPath(cardPath, '.card/metadata.yaml');
         const structurePath = joinPath(cardPath, '.card/structure.yaml');
+        const coverPath = joinPath(cardPath, '.card/cover.html');
 
         const metadataRaw = yaml.parse(await fileService.readText(metadataPath)) as Record<string, unknown>;
         const structureRaw = yaml.parse(await fileService.readText(structurePath)) as Record<string, unknown>;
+        const coverHtml = await fileService.exists(coverPath)
+            ? await fileService.readText(coverPath)
+            : createDefaultCoverHtml(asString(metadataRaw.name) ?? id);
         const structureEntries = Array.isArray(structureRaw.structure) ? structureRaw.structure : [];
 
         const basicCards: BasicCardData[] = [];
@@ -384,9 +387,15 @@ export class CardService {
                 name: asString(metadataRaw.name) ?? id,
                 description: asString(metadataRaw.description),
                 themeId: asString(metadataRaw.theme),
+                coverRatio: normalizeCoverRatio(asString(metadataRaw.cover_ratio) ?? asString(metadataRaw.coverRatio)),
                 createdAt: asString(metadataRaw.created_at) ?? now(),
                 modifiedAt: asString(metadataRaw.modified_at) ?? now(),
                 tags: Array.isArray(metadataRaw.tags) ? metadataRaw.tags.map((tag) => String(tag)) : undefined,
+            },
+            cover: {
+                html: coverHtml,
+                ratio: normalizeCoverRatio(asString(metadataRaw.cover_ratio) ?? asString(metadataRaw.coverRatio)),
+                resources: [],
             },
             structure: {
                 basicCards,
@@ -576,6 +585,35 @@ export class CardService {
         globalEventEmitter.emit('card:metadata-updated', { cardId: id, metadata });
     }
 
+    updateCardCover(id: string, input: {
+        html: string;
+        ratio?: string;
+        resources?: CardCoverResource[];
+    }): void {
+        const card = this.state.openedCards.get(id);
+        if (!card) return;
+
+        const nextRatio = normalizeCoverRatio(input.ratio ?? card.metadata.coverRatio ?? card.cover?.ratio);
+        card.cover = {
+            html: input.html,
+            ratio: nextRatio,
+            resources: (input.resources ?? []).map((resource) => ({
+                path: resource.path,
+                data: new Uint8Array(resource.data),
+            })),
+        };
+        card.metadata.coverRatio = nextRatio;
+        card.metadata.modifiedAt = now();
+        this.markCardDirty(card);
+
+        this.notify();
+        void this.queuePersist(id);
+        globalEventEmitter.emit('card:cover-updated', {
+            cardId: id,
+            ratio: nextRatio,
+        });
+    }
+
     toggleEditMode(id: string): void {
         const card = this.state.openedCards.get(id);
         if (!card) return;
@@ -612,6 +650,7 @@ export class CardService {
             created_at: card.metadata.createdAt,
             modified_at: card.metadata.modifiedAt,
             theme: card.metadata.themeId ?? '',
+            cover_ratio: normalizeCoverRatio(card.metadata.coverRatio ?? card.cover?.ratio),
             description: card.metadata.description ?? '',
             tags: card.metadata.tags ?? [],
         };
@@ -632,6 +671,10 @@ export class CardService {
 
         await fileService.writeText(metadataPath, yaml.stringify(metadata));
         await fileService.writeText(structurePath, yaml.stringify(structure));
+        await fileService.writeText(
+            coverPath,
+            card.cover?.html ?? createDefaultCoverHtml(card.metadata.name),
+        );
 
         const expectedContentFiles = new Set<string>();
         for (const basicCard of card.structure.basicCards) {
@@ -640,8 +683,11 @@ export class CardService {
             await fileService.writeText(contentPath, yaml.stringify(basicCard.data));
         }
 
-        if (!(await fileService.exists(coverPath))) {
-            await fileService.writeText(coverPath, createDefaultCoverHtml(card.metadata.name));
+        for (const resource of card.cover?.resources ?? []) {
+            const resourcePath = joinPath(card.path, '.card', resource.path);
+            const resourceDir = resourcePath.split('/').slice(0, -1).join('/');
+            await fileService.ensureDir(resourceDir);
+            await fileService.writeBinary(resourcePath, resource.data);
         }
 
         for (const entry of await fileService.list(contentDir)) {

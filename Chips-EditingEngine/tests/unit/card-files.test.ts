@@ -12,6 +12,7 @@ const { mockFileService } = vi.hoisted(() => ({
   mockFileService: {
     readText: vi.fn<(path: string) => Promise<string>>(),
     writeText: vi.fn<(path: string, content: string) => Promise<void>>(),
+    writeBinary: vi.fn<(path: string, content: Uint8Array) => Promise<void>>(),
     exists: vi.fn<(path: string) => Promise<boolean>>(),
     ensureDir: vi.fn<(path: string) => Promise<void>>(),
     list: vi.fn<(path: string) => Promise<MockEntry[]>>(),
@@ -47,6 +48,7 @@ describe('unpacked .card files', () => {
       created_at: '2026-03-13T00:00:00.000Z',
       modified_at: '2026-03-13T00:00:00.000Z',
       theme: 'chips-official.default-theme',
+      cover_ratio: '3:4',
       description: '测试卡片',
       tags: ['chips'],
     }));
@@ -107,6 +109,10 @@ describe('unpacked .card files', () => {
       setFile(filePath, content);
     });
 
+    mockFileService.writeBinary.mockImplementation(async (filePath, content) => {
+      setFile(filePath, Buffer.from(content).toString('base64'));
+    });
+
     mockFileService.exists.mockImplementation(async (targetPath) => {
       return files.has(targetPath) || directories.has(targetPath);
     });
@@ -155,6 +161,7 @@ describe('unpacked .card files', () => {
     const content = yaml.parse(files.get('/workspace/new-card.card/content/intro.yaml') ?? '');
 
     expect(metadata.name).toBe('新卡片');
+    expect(metadata.cover_ratio).toBe('3:4');
     expect(structure.structure).toHaveLength(1);
     expect(content.body).toBe('<p>你好</p>');
     expect(files.get('/workspace/new-card.card/.card/cover.html')).toContain('新卡片');
@@ -167,6 +174,7 @@ describe('unpacked .card files', () => {
     const card = await service.openCard('demo-card', '/workspace/demo.card');
 
     expect(card.metadata.name).toBe('生态介绍');
+    expect(card.metadata.coverRatio).toBe('3:4');
     expect(card.structure.basicCards).toHaveLength(2);
     expect(card.structure.basicCards[0]).toMatchObject({
       id: 'intro',
@@ -196,6 +204,29 @@ describe('unpacked .card files', () => {
     expect(files.has('/workspace/demo.card/content/details.yaml')).toBe(false);
     expect(files.has('/workspace/demo.card/content/legacy-unused.yaml')).toBe(false);
     expect(files.get('/workspace/demo.card/.card/cover.html')).toContain('生态介绍');
+  });
+
+  it('persists cover html, cover ratio and uploaded cover resources into the unpacked .card structure', async () => {
+    seedCardDirectory();
+    const service = createCardService();
+    await service.openCard('demo-card', '/workspace/demo.card');
+
+    service.updateCardCover('demo-card', {
+      html: '<!doctype html><html><body><img src="./cardcover/cover-image.png" alt="" /></body></html>',
+      ratio: '16:9',
+      resources: [
+        {
+          path: 'cardcover/cover-image.png',
+          data: new Uint8Array([137, 80, 78, 71]),
+        },
+      ],
+    });
+    await service.saveCard('demo-card');
+
+    const metadata = yaml.parse(files.get('/workspace/demo.card/.card/metadata.yaml') ?? '');
+    expect(metadata.cover_ratio).toBe('16:9');
+    expect(files.get('/workspace/demo.card/.card/cover.html')).toContain('./cardcover/cover-image.png');
+    expect(files.get('/workspace/demo.card/.card/cardcover/cover-image.png')).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'));
   });
 
   it('serializes rapid base card updates and persists the latest snapshot before preview refresh signals advance', async () => {

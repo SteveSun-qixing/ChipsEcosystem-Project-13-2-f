@@ -20,6 +20,8 @@ Desktop.ini
 **/.vite/
 coverage/
 **/coverage/
+.playwright-cli/
+output/
 .chips-host-dev/
 **/node_modules/
 **/dist/

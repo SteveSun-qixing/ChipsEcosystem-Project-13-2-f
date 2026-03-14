@@ -7,6 +7,7 @@ const registerPair = (action: string, requestKeys: string[], responseKeys: strin
 
 const RENDER_TARGETS = new Set(['app-root', 'card-iframe', 'module-slot', 'offscreen-render']);
 const CARD_RENDER_MODES = new Set(['view', 'preview']);
+const CARD_INTERACTION_POLICIES = new Set(['native', 'delegate']);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -39,6 +40,14 @@ const validateCardRenderRequest: SchemaValidator = (input: unknown) => {
       const mode = input.options.mode;
       if (typeof mode !== 'undefined' && (typeof mode !== 'string' || !CARD_RENDER_MODES.has(mode))) {
         errors.push('options.mode is invalid');
+      }
+
+      const interactionPolicy = input.options.interactionPolicy;
+      if (
+        typeof interactionPolicy !== 'undefined' &&
+        (typeof interactionPolicy !== 'string' || !CARD_INTERACTION_POLICIES.has(interactionPolicy))
+      ) {
+        errors.push('options.interactionPolicy is invalid');
       }
 
       const viewport = input.options.viewport;

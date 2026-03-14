@@ -127,7 +127,8 @@ client.card.coverFrame.render({
 
 client.card.compositeWindow.render({
   cardFile: string,
-  mode?: 'view' | 'preview'
+  mode?: 'view' | 'preview',
+  interactionPolicy?: 'native' | 'delegate'
 }): Promise<IframeWindow>
 
 client.card.editorPanel.render({
@@ -142,8 +143,10 @@ client.card.editorPanel.render({
 - `coverFrame` 返回卡片封面 iframe（下方显示卡片名称）。
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
+- `compositeWindow.interactionPolicy` 只允许 `native | delegate`，默认应保持 `native`。
 - `compositeWindow.mode = 'preview'` 时，可通过事件订阅接收基础卡片节点选中事件。
 - `compositeWindow` 可通过 `onResize` 订阅整张复合卡片当前总高度，正式用于编辑引擎无限长窗口、查看器自适应容器等场景。
+- `compositeWindow.interactionPolicy = 'delegate'` 时，可通过 `onInteraction` 订阅复合卡片内部滚轮、触摸滚动和捏合缩放意图，正式用于无限画布等需要外层壳层接管桌面交互的场景。
 - `editorPanel` 返回基础卡片编辑器 iframe，正式用于编辑引擎编辑面板、嵌套编辑场景等。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
 
@@ -153,6 +156,7 @@ client.card.editorPanel.render({
 const preview = await client.card.compositeWindow.render({
   cardFile: '/workspace/demo.card',
   mode: 'preview',
+  interactionPolicy: 'delegate',
 });
 
 const disposeResize = client.card.compositeWindow.onResize(preview.frame, (payload) => {
@@ -162,7 +166,18 @@ const disposeResize = client.card.compositeWindow.onResize(preview.frame, (paylo
 const disposeNodeSelect = client.card.compositeWindow.onNodeSelect(preview.frame, (payload) => {
   console.log(payload.nodeId, payload.cardType, payload.pluginId);
 });
+
+const disposeInteraction = client.card.compositeWindow.onInteraction(preview.frame, (payload) => {
+  console.log(payload.intent, payload.deltaX, payload.deltaY, payload.zoomDelta);
+});
 ```
+
+`onInteraction` 载荷说明：
+
+- `intent = 'scroll'`：表示复合卡片内部发生了需要由外层壳层消费的滚动意图；
+- `intent = 'zoom'`：表示复合卡片内部发生了捏合或等价缩放意图；
+- `source` 用于区分事件来自基础卡片 iframe、复合壳层还是降级节点；
+- `clientX/clientY` 是相对于复合 iframe 视口的坐标，应用若要把缩放锚定到外层桌面坐标，应先加上外层 iframe 自身的 `getBoundingClientRect().left/top`。
 
 ### 基础卡片编辑器面板
 

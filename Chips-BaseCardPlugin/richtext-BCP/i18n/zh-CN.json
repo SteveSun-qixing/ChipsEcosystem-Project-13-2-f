@@ -1,6 +1,6 @@
 {
-  "basecard.title": "标题",
   "basecard.body": "内容",
+  "basecard.placeholder": "开始输入内容",
   "basecard.toolbar.bold": "加粗",
   "basecard.toolbar.italic": "斜体",
   "basecard.toolbar.underline": "下划线",
@@ -19,6 +19,8 @@
   "basecard.toolbar.textColor": "文字颜色",
   "basecard.toolbar.highlightColor": "高亮颜色",
   "basecard.toolbar.fontSize": "字号",
+  "basecard.toolbar.collapse": "收起",
+  "basecard.toolbar.expand": "展开",
   "basecard.toolbar.clear": "清除",
   "basecard.toolbar.link": "链接",
   "basecard.toolbar.image": "图片",
@@ -36,6 +38,5 @@
   "basecard.prompt.imageAlt": "输入图片说明（可选）",
   "basecard.prompt.imageWidth": "宽度（像素，可选）",
   "basecard.prompt.imageHeight": "高度（像素，可选）",
-  "basecard.validation.titleRequired": "标题不能为空。",
   "basecard.validation.bodyRequired": "内容不能为空。"
 }

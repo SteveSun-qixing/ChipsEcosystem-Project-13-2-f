@@ -30,6 +30,21 @@ type JSDOMConstructor = new (
     beforeParse?: (window: JsdomWindowLike) => void;
   },
 ) => JSDOMInstance;
+type DomRectLike = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  toJSON: () => Record<string, never>;
+};
+type FrameElementLike = {
+  contentWindow?: unknown;
+  getBoundingClientRect: () => DomRectLike;
+};
 
 const { JSDOM }: { JSDOM: JSDOMConstructor } = require('jsdom');
 
@@ -154,7 +169,6 @@ const createYamlStringifiedCardDirectory = async (): Promise<string> => {
     path.join(sourceDir, 'content/intro.yaml'),
     yaml.stringify({
       id: 'intro',
-      title: '1111',
       body: '<span style="font-weight: normal">2</span><p></p><span style="font-weight: normal">22</span><span style="font-weight: normal"><br></span><span style="font-weight: normal">2</span><span style="font-weight: normal">2</span><span style="font-weight: normal">2</span>',
       locale: 'zh-CN',
     }),
@@ -314,7 +328,6 @@ describe('CardService rendering', () => {
       baseCardId: 'intro',
       initialConfig: {
         id: 'intro',
-        title: 'Editor Title',
         body: '<p>Editor Body</p>',
         locale: 'zh-CN'
       },
@@ -327,6 +340,11 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('data-base-card-id="intro"');
     expect(view.body).toContain('renderBasecardEditor');
     expect(view.body).toContain('chips.card-editor:change');
+    expect(view.body).toContain('overflow: hidden;');
+    expect(view.body).toContain('#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }');
+    expect(view.body).toContain('.chips-basecard-editor__toolbar-shell { flex: 0 0 auto; width: 100%; }');
+    expect(view.body).not.toContain('chips-basecard-editor__floating-toolbar');
+    expect(view.body).not.toContain('chips-basecard-toolbar-offset');
   }, 30_000);
 
   it('preserves dark theme color-scheme from theme package css', async () => {
@@ -396,6 +414,30 @@ describe('CardService rendering', () => {
     } finally {
       dom.window.close();
     }
+  }, 30_000);
+
+  it('renders composite cards at full iframe width with only inner padding gutters', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      ...themeContext,
+    });
+
+    expect(view.body).toContain('html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }');
+    expect(view.body).toContain('.chips-composite { width: 100%; max-width: none; margin: 0; padding: 28px 22px 40px; box-sizing: border-box; }');
+    expect(view.body).not.toContain('width: min(calc(100% - 44px), 980px);');
   }, 30_000);
 
   it('emits composite resize messages when the composite layout height changes', async () => {
@@ -476,6 +518,216 @@ describe('CardService rendering', () => {
         reason: 'node-height',
       });
       expect((resizeMessage?.payload as { height: number }).height).toBeGreaterThanOrEqual(240);
+    } finally {
+      dom.window.close();
+    }
+  }, 30_000);
+
+  it('forwards delegated basecard interaction messages to the composite interaction bridge', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      interactionPolicy: 'delegate',
+      ...themeContext,
+    });
+
+    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
+    const dom = new JSDOM(view.body, {
+      runScripts: 'dangerously',
+      beforeParse(window: JsdomWindowLike) {
+        Object.defineProperty(window, 'parent', {
+          configurable: true,
+          value: {
+            postMessage(message: { type?: string; payload?: unknown }) {
+              postedMessages.push(message);
+            },
+          },
+        });
+      },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      postedMessages.length = 0;
+
+      const introFrame = dom.window.document?.querySelector?.(
+        '.chips-composite__frame[data-node-id="intro"]',
+      ) as FrameElementLike | null;
+      expect(introFrame).toBeTruthy();
+
+      if (!introFrame) {
+        throw new Error('Expected intro frame to exist.');
+      }
+
+      const frameWindow = introFrame.contentWindow ?? {};
+      if (!introFrame.contentWindow) {
+        Object.defineProperty(introFrame, 'contentWindow', {
+          configurable: true,
+          value: frameWindow,
+        });
+      }
+
+      introFrame.getBoundingClientRect = () =>
+        ({
+          left: 48,
+          top: 120,
+          right: 368,
+          bottom: 440,
+          width: 320,
+          height: 320,
+          x: 48,
+          y: 120,
+          toJSON() {
+            return {};
+          },
+        }) as DomRectLike;
+
+      const dispatchMessage = dom.window.dispatchEvent;
+      if (!dispatchMessage) {
+        throw new Error('JSDOM window does not expose dispatchEvent.');
+      }
+
+      dispatchMessage.call(
+        dom.window,
+        new dom.window.MessageEvent('message', {
+          data: {
+            type: 'chips.basecard:interaction',
+            payload: {
+              nodeId: 'intro',
+              cardType: 'RichTextCard',
+              device: 'wheel',
+              intent: 'scroll',
+              deltaX: 12,
+              deltaY: 60,
+              clientX: 16,
+              clientY: 24,
+              pointerCount: 1,
+            },
+          },
+          origin: 'null',
+          source: frameWindow as never,
+        }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const interactionMessage = postedMessages.find((message) => message.type === 'chips.composite:interaction');
+      expect(interactionMessage?.payload).toMatchObject({
+        cardId: 'test-card-id',
+        nodeId: 'intro',
+        cardType: 'RichTextCard',
+        source: 'basecard-frame',
+        device: 'wheel',
+        intent: 'scroll',
+        deltaX: 12,
+        deltaY: 60,
+        clientX: 64,
+        clientY: 144,
+        pointerCount: 1,
+      });
+    } finally {
+      dom.window.close();
+    }
+  }, 30_000);
+
+  it('ignores basecard interaction bridge messages when interaction delegation is disabled', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      interactionPolicy: 'native',
+      ...themeContext,
+    });
+
+    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
+    const dom = new JSDOM(view.body, {
+      runScripts: 'dangerously',
+      beforeParse(window: JsdomWindowLike) {
+        Object.defineProperty(window, 'parent', {
+          configurable: true,
+          value: {
+            postMessage(message: { type?: string; payload?: unknown }) {
+              postedMessages.push(message);
+            },
+          },
+        });
+      },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      postedMessages.length = 0;
+
+      const introFrame = dom.window.document?.querySelector?.(
+        '.chips-composite__frame[data-node-id="intro"]',
+      ) as FrameElementLike | null;
+      expect(introFrame).toBeTruthy();
+
+      if (!introFrame) {
+        throw new Error('Expected intro frame to exist.');
+      }
+
+      const frameWindow = introFrame.contentWindow ?? {};
+      if (!introFrame.contentWindow) {
+        Object.defineProperty(introFrame, 'contentWindow', {
+          configurable: true,
+          value: frameWindow,
+        });
+      }
+
+      const dispatchMessage = dom.window.dispatchEvent;
+      if (!dispatchMessage) {
+        throw new Error('JSDOM window does not expose dispatchEvent.');
+      }
+
+      dispatchMessage.call(
+        dom.window,
+        new dom.window.MessageEvent('message', {
+          data: {
+            type: 'chips.basecard:interaction',
+            payload: {
+              nodeId: 'intro',
+              cardType: 'RichTextCard',
+              device: 'wheel',
+              intent: 'scroll',
+              deltaX: 12,
+              deltaY: 60,
+              clientX: 16,
+              clientY: 24,
+              pointerCount: 1,
+            },
+          },
+          origin: 'null',
+          source: frameWindow as never,
+        }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(postedMessages.some((message) => message.type === 'chips.composite:interaction')).toBe(false);
     } finally {
       dom.window.close();
     }

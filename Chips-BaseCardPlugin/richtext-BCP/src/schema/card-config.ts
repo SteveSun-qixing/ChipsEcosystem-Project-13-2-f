@@ -5,11 +5,6 @@ export interface BasecardConfig {
   id: string;
 
   /**
-   * 富文本卡片标题（纯文本）。
-   */
-  title: string;
-
-  /**
    * 富文本内容，使用 HTML 字符串保存。
    */
   body: string;
@@ -22,7 +17,6 @@ export interface BasecardConfig {
 
 export const defaultBasecardConfig: BasecardConfig = {
   id: "",
-  title: "",
   body: "",
   locale: "zh-CN",
 };

@@ -24,6 +24,7 @@ export interface CardRenderOptions {
   themeCssText?: string;
   verifyConsistency?: boolean;
   mode?: 'view' | 'preview';
+  interactionPolicy?: 'native' | 'delegate';
 }
 
 export interface CardEditorRenderOptions {
@@ -118,6 +119,349 @@ const escapeHtml = (value: string): string => {
 };
 
 const escapeInlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+
+type CompositeInteractionPolicy = 'native' | 'delegate';
+
+const createChildInteractionBridgeScript = (
+  cardType: string,
+  interactionPolicy: CompositeInteractionPolicy
+): string => {
+  return [
+    `      const interactionPolicy = ${JSON.stringify(interactionPolicy)};`,
+    `      const cardType = ${JSON.stringify(cardType)};`,
+    '      const delegateInteractions = interactionPolicy === "delegate";',
+    '      const normalizeZoomDelta = (raw) => {',
+    '        const value = Number(raw);',
+    '        if (!Number.isFinite(value)) {',
+    '          return 0;',
+    '        }',
+    '        return Math.max(-0.45, Math.min(0.45, value));',
+    '      };',
+    '      const emitInteraction = (payload) => {',
+    '        if (!delegateInteractions) {',
+    '          return;',
+    '        }',
+    '        window.parent?.postMessage({',
+    '          type: "chips.basecard:interaction",',
+    '          payload: {',
+    '            nodeId,',
+    '            cardType,',
+    '            ...payload,',
+    '          },',
+    '        }, "*");',
+    '      };',
+    '      let singleTouchPoint = null;',
+    '      let multiTouchState = null;',
+    '      const getTouchPoint = (touch) => ({ x: Number(touch?.clientX) || 0, y: Number(touch?.clientY) || 0 });',
+    '      const getTouchCenter = (first, second) => ({',
+    '        x: ((Number(first?.clientX) || 0) + (Number(second?.clientX) || 0)) / 2,',
+    '        y: ((Number(first?.clientY) || 0) + (Number(second?.clientY) || 0)) / 2,',
+    '      });',
+    '      const getTouchDistance = (first, second) => Math.hypot(',
+    '        (Number(first?.clientX) || 0) - (Number(second?.clientX) || 0),',
+    '        (Number(first?.clientY) || 0) - (Number(second?.clientY) || 0)',
+    '      );',
+    '      if (delegateInteractions) {',
+    '        document.documentElement.style.touchAction = "none";',
+    '        document.body.style.touchAction = "none";',
+    '        document.documentElement.style.overscrollBehavior = "none";',
+    '        document.body.style.overscrollBehavior = "none";',
+    '        document.addEventListener("wheel", (event) => {',
+    '          const isZoomIntent = event.ctrlKey || event.metaKey || Math.abs(Number(event.deltaZ) || 0) > 0;',
+    '          emitInteraction({',
+    '            device: "wheel",',
+    '            intent: isZoomIntent ? "zoom" : "scroll",',
+    '            deltaX: Number(event.deltaX) || 0,',
+    '            deltaY: Number(event.deltaY) || 0,',
+    '            zoomDelta: isZoomIntent ? normalizeZoomDelta((Number(event.deltaY) || 0) * -0.0025) : undefined,',
+    '            clientX: Number(event.clientX) || 0,',
+    '            clientY: Number(event.clientY) || 0,',
+    '            pointerCount: isZoomIntent ? 2 : 1,',
+    '          });',
+    '          if (event.cancelable) {',
+    '            event.preventDefault();',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchstart", (event) => {',
+    '          if (event.touches.length === 1) {',
+    '            singleTouchPoint = getTouchPoint(event.touches[0]);',
+    '            multiTouchState = null;',
+    '            return;',
+    '          }',
+    '          if (event.touches.length >= 2) {',
+    '            const center = getTouchCenter(event.touches[0], event.touches[1]);',
+    '            multiTouchState = {',
+    '              centerX: center.x,',
+    '              centerY: center.y,',
+    '              distance: getTouchDistance(event.touches[0], event.touches[1]),',
+    '            };',
+    '            singleTouchPoint = null;',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchmove", (event) => {',
+    '          if (event.touches.length === 1) {',
+    '            const nextPoint = getTouchPoint(event.touches[0]);',
+    '            if (singleTouchPoint) {',
+    '              const deltaX = singleTouchPoint.x - nextPoint.x;',
+    '              const deltaY = singleTouchPoint.y - nextPoint.y;',
+    '              if (deltaX !== 0 || deltaY !== 0) {',
+    '                emitInteraction({',
+    '                  device: "touch",',
+    '                  intent: "scroll",',
+    '                  deltaX,',
+    '                  deltaY,',
+    '                  clientX: nextPoint.x,',
+    '                  clientY: nextPoint.y,',
+    '                  pointerCount: 1,',
+    '                });',
+    '              }',
+    '            }',
+    '            singleTouchPoint = nextPoint;',
+    '            multiTouchState = null;',
+    '            if (event.cancelable) {',
+    '              event.preventDefault();',
+    '            }',
+    '            return;',
+    '          }',
+    '          if (event.touches.length >= 2) {',
+    '            const center = getTouchCenter(event.touches[0], event.touches[1]);',
+    '            const distance = getTouchDistance(event.touches[0], event.touches[1]);',
+    '            if (multiTouchState) {',
+    '              const zoomDelta = normalizeZoomDelta(distance / Math.max(multiTouchState.distance, 1) - 1);',
+    '              const deltaX = multiTouchState.centerX - center.x;',
+    '              const deltaY = multiTouchState.centerY - center.y;',
+    '              if (Math.abs(zoomDelta) > 0.015) {',
+    '                emitInteraction({',
+    '                  device: "touch",',
+    '                  intent: "zoom",',
+    '                  deltaX: 0,',
+    '                  deltaY: 0,',
+    '                  zoomDelta,',
+    '                  clientX: center.x,',
+    '                  clientY: center.y,',
+    '                  pointerCount: 2,',
+    '                });',
+    '              } else if (deltaX !== 0 || deltaY !== 0) {',
+    '                emitInteraction({',
+    '                  device: "touch",',
+    '                  intent: "scroll",',
+    '                  deltaX,',
+    '                  deltaY,',
+    '                  clientX: center.x,',
+    '                  clientY: center.y,',
+    '                  pointerCount: 2,',
+    '                });',
+    '              }',
+    '            }',
+    '            multiTouchState = {',
+    '              centerX: center.x,',
+    '              centerY: center.y,',
+    '              distance,',
+    '            };',
+    '            singleTouchPoint = null;',
+    '            if (event.cancelable) {',
+    '              event.preventDefault();',
+    '            }',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchend", (event) => {',
+    '          if (event.touches.length === 0) {',
+    '            singleTouchPoint = null;',
+    '            multiTouchState = null;',
+    '            return;',
+    '          }',
+    '          if (event.touches.length === 1) {',
+    '            singleTouchPoint = getTouchPoint(event.touches[0]);',
+    '            multiTouchState = null;',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchcancel", () => {',
+    '          singleTouchPoint = null;',
+    '          multiTouchState = null;',
+    '        }, { passive: false, capture: true });',
+    '      }',
+  ].join('\n');
+};
+
+const createCompositeInteractionBridgeScript = (
+  cardId: string,
+  interactionPolicy: CompositeInteractionPolicy
+): string => {
+  return [
+    `      const cardId = ${JSON.stringify(cardId)};`,
+    `      const interactionPolicy = ${JSON.stringify(interactionPolicy)};`,
+    '      const delegateInteractions = interactionPolicy === "delegate";',
+    '      const normalizeZoomDelta = (raw) => {',
+    '        const value = Number(raw);',
+    '        if (!Number.isFinite(value)) {',
+    '          return 0;',
+    '        }',
+    '        return Math.max(-0.45, Math.min(0.45, value));',
+    '      };',
+    '      const emitCompositeInteraction = (payload) => {',
+    '        if (!delegateInteractions) {',
+    '          return;',
+    '        }',
+    '        emit("chips.composite:interaction", {',
+    '          cardId,',
+    '          ...payload,',
+    '        });',
+    '      };',
+    '      const resolveShellInteractionSource = (target) => {',
+    '        const node = typeof target?.closest === "function"',
+    '          ? target.closest(".chips-composite__node")',
+    '          : null;',
+    '        if (node && node.dataset?.state === "degraded") {',
+    '          return {',
+    '            source: "degraded-node",',
+    '            nodeId: node.dataset.nodeId ?? "",',
+    '            cardType: node.dataset.cardType ?? "",',
+    '          };',
+    '        }',
+    '        return {',
+    '          source: "composite-shell",',
+    '          nodeId: node?.dataset?.nodeId ?? "",',
+    '          cardType: node?.dataset?.cardType ?? "",',
+    '        };',
+    '      };',
+    '      let singleTouchPoint = null;',
+    '      let multiTouchState = null;',
+    '      const getTouchPoint = (touch) => ({ x: Number(touch?.clientX) || 0, y: Number(touch?.clientY) || 0 });',
+    '      const getTouchCenter = (first, second) => ({',
+    '        x: ((Number(first?.clientX) || 0) + (Number(second?.clientX) || 0)) / 2,',
+    '        y: ((Number(first?.clientY) || 0) + (Number(second?.clientY) || 0)) / 2,',
+    '      });',
+    '      const getTouchDistance = (first, second) => Math.hypot(',
+    '        (Number(first?.clientX) || 0) - (Number(second?.clientX) || 0),',
+    '        (Number(first?.clientY) || 0) - (Number(second?.clientY) || 0)',
+    '      );',
+    '      if (delegateInteractions) {',
+    '        document.documentElement.style.touchAction = "none";',
+    '        document.body.style.touchAction = "none";',
+    '        document.documentElement.style.overscrollBehavior = "none";',
+    '        document.body.style.overscrollBehavior = "none";',
+    '        document.addEventListener("wheel", (event) => {',
+    '          const sourceInfo = resolveShellInteractionSource(event.target);',
+    '          const isZoomIntent = event.ctrlKey || event.metaKey || Math.abs(Number(event.deltaZ) || 0) > 0;',
+    '          emitCompositeInteraction({',
+    '            ...sourceInfo,',
+    '            device: "wheel",',
+    '            intent: isZoomIntent ? "zoom" : "scroll",',
+    '            deltaX: Number(event.deltaX) || 0,',
+    '            deltaY: Number(event.deltaY) || 0,',
+    '            zoomDelta: isZoomIntent ? normalizeZoomDelta((Number(event.deltaY) || 0) * -0.0025) : undefined,',
+    '            clientX: Number(event.clientX) || 0,',
+    '            clientY: Number(event.clientY) || 0,',
+    '            pointerCount: isZoomIntent ? 2 : 1,',
+    '          });',
+    '          if (event.cancelable) {',
+    '            event.preventDefault();',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchstart", (event) => {',
+    '          if (event.touches.length === 1) {',
+    '            singleTouchPoint = getTouchPoint(event.touches[0]);',
+    '            multiTouchState = null;',
+    '            return;',
+    '          }',
+    '          if (event.touches.length >= 2) {',
+    '            const center = getTouchCenter(event.touches[0], event.touches[1]);',
+    '            multiTouchState = {',
+    '              centerX: center.x,',
+    '              centerY: center.y,',
+    '              distance: getTouchDistance(event.touches[0], event.touches[1]),',
+    '            };',
+    '            singleTouchPoint = null;',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchmove", (event) => {',
+    '          const sourceInfo = resolveShellInteractionSource(event.target);',
+    '          if (event.touches.length === 1) {',
+    '            const nextPoint = getTouchPoint(event.touches[0]);',
+    '            if (singleTouchPoint) {',
+    '              const deltaX = singleTouchPoint.x - nextPoint.x;',
+    '              const deltaY = singleTouchPoint.y - nextPoint.y;',
+    '              if (deltaX !== 0 || deltaY !== 0) {',
+    '                emitCompositeInteraction({',
+    '                  ...sourceInfo,',
+    '                  device: "touch",',
+    '                  intent: "scroll",',
+    '                  deltaX,',
+    '                  deltaY,',
+    '                  clientX: nextPoint.x,',
+    '                  clientY: nextPoint.y,',
+    '                  pointerCount: 1,',
+    '                });',
+    '              }',
+    '            }',
+    '            singleTouchPoint = nextPoint;',
+    '            multiTouchState = null;',
+    '            if (event.cancelable) {',
+    '              event.preventDefault();',
+    '            }',
+    '            return;',
+    '          }',
+    '          if (event.touches.length >= 2) {',
+    '            const center = getTouchCenter(event.touches[0], event.touches[1]);',
+    '            const distance = getTouchDistance(event.touches[0], event.touches[1]);',
+    '            if (multiTouchState) {',
+    '              const zoomDelta = normalizeZoomDelta(distance / Math.max(multiTouchState.distance, 1) - 1);',
+    '              const deltaX = multiTouchState.centerX - center.x;',
+    '              const deltaY = multiTouchState.centerY - center.y;',
+    '              if (Math.abs(zoomDelta) > 0.015) {',
+    '                emitCompositeInteraction({',
+    '                  ...sourceInfo,',
+    '                  device: "touch",',
+    '                  intent: "zoom",',
+    '                  deltaX: 0,',
+    '                  deltaY: 0,',
+    '                  zoomDelta,',
+    '                  clientX: center.x,',
+    '                  clientY: center.y,',
+    '                  pointerCount: 2,',
+    '                });',
+    '              } else if (deltaX !== 0 || deltaY !== 0) {',
+    '                emitCompositeInteraction({',
+    '                  ...sourceInfo,',
+    '                  device: "touch",',
+    '                  intent: "scroll",',
+    '                  deltaX,',
+    '                  deltaY,',
+    '                  clientX: center.x,',
+    '                  clientY: center.y,',
+    '                  pointerCount: 2,',
+    '                });',
+    '              }',
+    '            }',
+    '            multiTouchState = {',
+    '              centerX: center.x,',
+    '              centerY: center.y,',
+    '              distance,',
+    '            };',
+    '            singleTouchPoint = null;',
+    '            if (event.cancelable) {',
+    '              event.preventDefault();',
+    '            }',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchend", (event) => {',
+    '          if (event.touches.length === 0) {',
+    '            singleTouchPoint = null;',
+    '            multiTouchState = null;',
+    '            return;',
+    '          }',
+    '          if (event.touches.length === 1) {',
+    '            singleTouchPoint = getTouchPoint(event.touches[0]);',
+    '            multiTouchState = null;',
+    '          }',
+    '        }, { passive: false, capture: true });',
+    '        document.addEventListener("touchcancel", () => {',
+    '          singleTouchPoint = null;',
+    '          multiTouchState = null;',
+    '        }, { passive: false, capture: true });',
+    '      }',
+  ].join('\n');
+};
 
 const createConsistencySnapshot = (semanticHash: string): RenderConsistencyResult => ({
   consistent: true,
@@ -229,25 +573,6 @@ const loadHtmlFromRichTextConfig = async (config: Record<string, unknown>, file:
   }
 };
 
-const extractRichTextTitle = (html: string): { title: string; body: string } => {
-  const jsdom = require('jsdom') as { JSDOM: new (html?: string) => { window: any } };
-  const dom = new jsdom.JSDOM(`<!doctype html><html><body>${html}</body></html>`);
-  try {
-    const { document } = dom.window;
-    const heading = document.querySelector('h1, h2, h3, h4, h5, h6');
-    const title = heading?.textContent?.trim() ?? '';
-    if (heading) {
-      heading.remove();
-    }
-    return {
-      title,
-      body: document.body.innerHTML.trim()
-    };
-  } finally {
-    dom.window.close();
-  }
-};
-
 const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
   const declarations = Object.entries(theme.tokens)
     .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
@@ -279,12 +604,6 @@ const createBasecardThemeCss = (theme: ThemeSnapshot, themeCssText?: string): st
       '  width: 100%;',
       '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
       '  padding: 22px 24px;',
-      '}',
-      '.chips-basecard__title {',
-      '  margin: 0 0 14px;',
-      '  font-size: 24px;',
-      '  line-height: 1.3;',
-      '  color: var(--chips-sys-color-on-surface, #111111);',
       '}',
       '.chips-basecard__body { color: var(--chips-sys-color-on-surface, #111111); }',
       '.chips-basecard__body > :first-child { margin-top: 0; }',
@@ -321,46 +640,68 @@ const createBasecardEditorThemeCss = (theme: ThemeSnapshot, themeCssText?: strin
     themeCssText,
     createThemeVariablesCss(theme),
     [
-      'html, body { margin: 0; padding: 0; min-height: 100%; background: transparent; }',
+      'html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: transparent; }',
       'body {',
       '  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
       '  color: var(--chips-sys-color-on-surface, #111111);',
       '  background: var(--chips-sys-color-surface, #ffffff);',
       '}',
-      '#chips-basecard-editor-root { min-height: 100%; box-sizing: border-box; }',
+      '#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }',
       '.chips-basecard-editor {',
       '  box-sizing: border-box;',
       '  display: flex;',
       '  flex-direction: column;',
-      '  gap: 16px;',
-      '  min-height: 100%;',
-      '  padding: 20px;',
+      '  gap: 12px;',
+      '  width: 100%;',
+      '  height: 100%;',
+      '  min-height: 0;',
+      '  overflow: hidden;',
+      '  padding: 14px 16px 16px;',
       '  background: var(--chips-sys-color-surface, #ffffff);',
       '}',
-      '.chips-basecard-editor__form { display: flex; flex-direction: column; gap: 14px; }',
-      '.chips-basecard-editor__label { display: flex; flex-direction: column; gap: 8px; font-weight: 600; }',
-      '.chips-basecard-editor__input,',
+      '.chips-basecard-editor__toolbar-shell { flex: 0 0 auto; width: 100%; }',
+      '.chips-basecard-editor__toolbar-panel {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  gap: 10px;',
+      '  width: 100%;',
+      '  min-height: 56px;',
+      '  padding: 10px 12px;',
+      '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
+      '  border-radius: 18px;',
+      '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
+      '  box-shadow: 0 8px 22px rgba(17, 17, 17, 0.08);',
+      '}',
+      '.chips-basecard-editor__toolbar-header { display: flex; align-items: center; justify-content: flex-end; min-height: 32px; }',
+      '.chips-basecard-editor__toolbar-content { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-start; width: 100%; }',
+      '.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-panel { min-height: 44px; padding: 6px 10px; border-radius: 16px; }',
+      '.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-content { display: none; }',
       '.chips-basecard-editor__richtext,',
-      '.chips-basecard-editor__block-select,',
-      '.chips-basecard-editor__fontsize-select,',
-      '.chips-basecard-editor__color-input {',
+      '.chips-basecard-editor__surface,',
+      '.chips-basecard-editor__toolbar-toggle,',
+      '.chips-basecard-editor__toolbar-button,',
+      '.chips-basecard-editor__toolbar-select,',
+      '.chips-basecard-editor__toolbar-color {',
       '  font: inherit;',
       '  color: inherit;',
       '  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));',
       '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
       '  border-radius: 12px;',
       '}',
-      '.chips-basecard-editor__input { min-height: 42px; padding: 0 14px; }',
-      '.chips-basecard-editor__richtext { min-height: 240px; padding: 14px; outline: none; }',
-      '.chips-basecard-editor__toolbar { display: flex; flex-wrap: wrap; gap: 8px; }',
+      '.chips-basecard-editor__toolbar-toggle {',
+      '  min-height: 32px;',
+      '  padding: 0 10px;',
+      '  border-radius: 999px;',
+      '  cursor: pointer;',
+      '}',
+      '.chips-basecard-editor__toolbar-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }',
+      '.chips-basecard-editor__surface-frame { flex: 1; min-height: 0; width: 100%; overflow: hidden; }',
+      '.chips-basecard-editor__surface { width: 100%; height: 100%; min-height: 0; overflow: auto; }',
+      '.chips-basecard-editor__richtext { min-height: 100%; padding: 20px 24px 56px; outline: none; }',
       '.chips-basecard-editor__toolbar-button {',
       '  min-width: 36px;',
       '  min-height: 36px;',
       '  padding: 0 10px;',
-      '  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(17, 17, 17, 0.16));',
-      '  border-radius: 10px;',
-      '  background: var(--chips-sys-color-surface, #ffffff);',
-      '  color: inherit;',
       '  cursor: pointer;',
       '}',
       '.chips-basecard-editor__toolbar-button:hover {',
@@ -381,15 +722,14 @@ const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): s
     themeCssText,
     createThemeVariablesCss(theme),
     [
-      'html, body { margin: 0; padding: 0; min-height: 100%; }',
+      'html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }',
       'body {',
-      '  display: grid;',
-      '  justify-items: center;',
       '  background: var(--chips-sys-color-surface, #ffffff);',
       '  color: var(--chips-sys-color-on-surface, #111111);',
       '  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;',
+      '  overflow-x: hidden;',
       '}',
-      '.chips-composite { width: min(calc(100% - 44px), 980px); max-width: 980px; margin: 0 auto; padding: 28px 22px 40px; box-sizing: border-box; }',
+      '.chips-composite { width: 100%; max-width: none; margin: 0; padding: 28px 22px 40px; box-sizing: border-box; }',
       '.chips-composite__header { margin-bottom: 18px; }',
       '.chips-composite__title { margin: 0; font-size: 30px; line-height: 1.2; color: var(--chips-sys-color-on-surface, #111111); }',
       '.chips-composite__meta { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 68%, white 32%); }',
@@ -426,7 +766,13 @@ const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): s
   );
 };
 
-const createChildFrameDocument = (nodeId: string, cardType: string, title: string, contentHtml: string): string => {
+const createChildFrameDocument = (
+  nodeId: string,
+  cardType: string,
+  title: string,
+  contentHtml: string,
+  interactionPolicy: CompositeInteractionPolicy
+): string => {
   const safeNodeId = JSON.stringify(nodeId);
   const contentTitle = title || cardType;
 
@@ -439,7 +785,7 @@ const createChildFrameDocument = (nodeId: string, cardType: string, title: strin
     '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
     `  <title>${escapeHtml(contentTitle)}</title>`,
     '</head>',
-    `<body data-node-id="${escapeHtml(nodeId)}" data-card-type="${escapeHtml(cardType)}">`,
+    `<body data-node-id="${escapeHtml(nodeId)}" data-card-type="${escapeHtml(cardType)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
     contentHtml,
     '  <script>',
     '    (() => {',
@@ -467,6 +813,7 @@ const createChildFrameDocument = (nodeId: string, cardType: string, title: strin
     '        const observer = new ResizeObserver(() => emitHeight());',
     '        observer.observe(document.body);',
     '      }',
+    createChildInteractionBridgeScript(cardType, interactionPolicy),
     '    })();',
     '  </script>',
     '</body>',
@@ -567,13 +914,15 @@ const createEditorFrameDocument = (options: {
 };
 
 const createCompositeDocument = (
+  cardId: string,
   title: string,
   target: RenderTarget,
   semanticHash: string,
   theme: ThemeSnapshot,
   themeCssText: string | undefined,
   nodes: RenderedBaseCardNode[],
-  mode: 'view' | 'preview'
+  mode: 'view' | 'preview',
+  interactionPolicy: CompositeInteractionPolicy
 ): string => {
   const nodeMarkup = nodes
     .map((node) => {
@@ -611,7 +960,7 @@ const createCompositeDocument = (
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${createCompositeThemeCss(theme, themeCssText)}</style>`,
     '</head>',
-    `<body data-target="${escapeHtml(target)}" data-semantic-hash="${escapeHtml(semanticHash)}" data-mode="${escapeHtml(mode)}">`,
+    `<body data-target="${escapeHtml(target)}" data-card-id="${escapeHtml(cardId)}" data-semantic-hash="${escapeHtml(semanticHash)}" data-mode="${escapeHtml(mode)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
     '  <main class="chips-composite">',
     '    <header class="chips-composite__header">',
     `      <h1 class="chips-composite__title">${escapeHtml(title)}</h1>`,
@@ -638,6 +987,7 @@ const createCompositeDocument = (
     '      const emit = (type, payload) => {',
     "        window.parent?.postMessage({ type, payload }, '*');",
     '      };',
+    createCompositeInteractionBridgeScript(cardId, interactionPolicy),
     '      const getCompositeHeight = () => {',
     '        const stack = document.querySelector(".chips-composite__stack");',
     '        const main = document.querySelector(".chips-composite");',
@@ -771,6 +1121,38 @@ const createCompositeDocument = (
     '          }',
     '          frame.style.height = `${Math.max(96, Math.ceil(height))}px`;',
     '          scheduleCompositeResize("node-height");',
+    '          return;',
+    '        }',
+    '        if (data.type === "chips.basecard:interaction") {',
+    '          if (!delegateInteractions) {',
+    '            return;',
+    '          }',
+    '          const payload = data.payload ?? {};',
+    '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
+    '          const frame = frameByNodeId.get(nodeId);',
+    '          if (!frame) {',
+    '            return;',
+    '          }',
+    '          if (frame.contentWindow && event.source && event.source !== frame.contentWindow) {',
+    '            return;',
+    '          }',
+    '          const node = nodeById.get(nodeId);',
+    '          const rect = typeof frame.getBoundingClientRect === "function"',
+    '            ? frame.getBoundingClientRect()',
+    '            : { left: 0, top: 0 };',
+    '          emitCompositeInteraction({',
+    '            nodeId,',
+    '            cardType: typeof payload.cardType === "string" ? payload.cardType : (node?.dataset?.cardType ?? ""),',
+    '            source: "basecard-frame",',
+    '            device: payload.device === "touch" ? "touch" : "wheel",',
+    '            intent: payload.intent === "zoom" ? "zoom" : "scroll",',
+    '            deltaX: Number(payload.deltaX) || 0,',
+    '            deltaY: Number(payload.deltaY) || 0,',
+    '            zoomDelta: payload.intent === "zoom" ? normalizeZoomDelta(payload.zoomDelta) : undefined,',
+    '            clientX: Math.max(0, (Number(payload.clientX) || 0) + (Number(rect.left) || 0)),',
+    '            clientY: Math.max(0, (Number(payload.clientY) || 0) + (Number(rect.top) || 0)),',
+    '            pointerCount: Math.max(1, Number(payload.pointerCount) || 1),',
+    '          });',
     '          return;',
     '        }',
     '        if (data.type === "chips.basecard:select") {',
@@ -924,6 +1306,7 @@ export class CardService {
       const cardId = asString(ctx.metadata.card_id) ?? asString(ctx.metadata.id) ?? createId();
       const target = options?.target ?? 'card-iframe';
       const mode = options?.mode ?? 'view';
+      const interactionPolicy = options?.interactionPolicy ?? 'native';
       const theme = options?.theme;
       if (!theme) {
         throw createError('THEME_NOT_FOUND', 'Card render requires a resolved theme snapshot.');
@@ -932,7 +1315,7 @@ export class CardService {
       const renderedNodes: RenderedBaseCardNode[] = [];
 
       for (const node of structureNodes) {
-        renderedNodes.push(await this.renderStructureNode(node, ctx, theme, themeCssText, diagnostics));
+        renderedNodes.push(await this.renderStructureNode(node, ctx, theme, themeCssText, diagnostics, interactionPolicy));
       }
 
       const semanticModel = {
@@ -950,7 +1333,7 @@ export class CardService {
         }))
       };
       const semanticHash = crypto.createHash('sha256').update(JSON.stringify(semanticModel)).digest('hex');
-      const body = createCompositeDocument(title, target, semanticHash, theme, themeCssText, renderedNodes, mode);
+      const body = createCompositeDocument(cardId, title, target, semanticHash, theme, themeCssText, renderedNodes, mode, interactionPolicy);
 
       return {
         title,
@@ -985,7 +1368,7 @@ export class CardService {
     const initialConfig = this.normalizeEditorInitialConfig(cardType, options.initialConfig);
     const pluginBundleCode = await this.bundlePluginForBrowser(plugin);
     const baseCardId = asString(options.baseCardId) ?? asString(initialConfig.id);
-    const title = `${asString(initialConfig.title) ?? cardType} Editor`;
+    const title = `${cardType} Editor`;
 
     return {
       title,
@@ -1009,7 +1392,8 @@ export class CardService {
     ctx: CardPackageContext,
     theme: ThemeSnapshot,
     themeCssText: string | undefined,
-    diagnostics: RenderNodeDiagnostic[]
+    diagnostics: RenderNodeDiagnostic[],
+    interactionPolicy: CompositeInteractionPolicy
   ): Promise<RenderedBaseCardNode> {
     const content = ctx.contentByNodeId.get(node.id);
     const cardType = node.type || asString(content?.parsed.card_type) || 'UnknownCard';
@@ -1065,7 +1449,7 @@ export class CardService {
         cardType,
         title,
         pluginId: plugin.manifest.id,
-        frameHtml: createChildFrameDocument(node.id, cardType, title, contentHtml)
+        frameHtml: createChildFrameDocument(node.id, cardType, title, contentHtml, interactionPolicy)
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1141,24 +1525,20 @@ export class CardService {
 
     if (plugin.manifest.id === 'chips.basecard.richtext') {
       if (
-        typeof rawConfig.title === 'string' &&
         typeof rawConfig.body === 'string' &&
         !asString(rawConfig.content_text)
       ) {
         return {
           id: file.id,
-          title: rawConfig.title,
           body: rawConfig.body,
           locale: asString(rawConfig.locale) ?? 'zh-CN'
         };
       }
 
       const richTextHtml = await loadHtmlFromRichTextConfig(rawConfig, file, cardRoot);
-      const normalized = extractRichTextTitle(richTextHtml);
       return {
         id: file.id,
-        title: normalized.title || file.id,
-        body: normalized.body || richTextHtml,
+        body: richTextHtml || '<p></p>',
         locale: asString(rawConfig.locale) ?? 'zh-CN'
       };
     }
@@ -1179,9 +1559,10 @@ export class CardService {
       cardType === 'base.richtext' ||
       asString(rawConfig.card_type) === 'RichTextCard'
     ) {
-      if (typeof rawConfig.title === 'string' && typeof rawConfig.body === 'string') {
+      if (typeof rawConfig.body === 'string') {
         return {
-          ...rawConfig,
+          id: asString(rawConfig.id) ?? createId(),
+          body: rawConfig.body,
           locale: asString(rawConfig.locale) ?? 'zh-CN'
         };
       }
@@ -1192,11 +1573,9 @@ export class CardService {
           : typeof rawConfig.content_text === 'string'
             ? rawConfig.content_text
             : '';
-      const normalized = extractRichTextTitle(richTextHtml);
       return {
         id: asString(rawConfig.id) ?? createId(),
-        title: normalized.title || asString(rawConfig.title) || '',
-        body: normalized.body || richTextHtml || '<p></p>',
+        body: richTextHtml || '<p></p>',
         locale: asString(rawConfig.locale) ?? 'zh-CN'
       };
     }

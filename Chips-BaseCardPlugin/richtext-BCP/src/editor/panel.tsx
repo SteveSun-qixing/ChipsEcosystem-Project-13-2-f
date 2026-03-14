@@ -8,7 +8,11 @@ export interface BasecardEditorProps {
   onChange: (next: BasecardConfig) => void;
 }
 
-type DraftConfig = Pick<BasecardConfig, "title" | "body">;
+type EditorRoot = HTMLElement & {
+  __chipsDispose?: () => void;
+};
+
+type DraftConfig = Pick<BasecardConfig, "body">;
 
 const EMIT_DEBOUNCE_MS = 120;
 const EMPTY_BODY_HTML = "<p></p>";
@@ -25,16 +29,35 @@ const BLOCK_TAGS = new Set([
 ]);
 
 const EDITOR_STYLE_TEXT = `
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--chips-sys-color-surface, #ffffff);
+}
+
+#chips-basecard-editor-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .chips-basecard-editor {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
-  height: 100%;
-  padding: 16px;
   gap: 12px;
-  background: var(--chips-color-surface, #ffffff);
-  color: var(--chips-color-text, #111827);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 16px 16px;
+  background: var(--chips-sys-color-surface, #ffffff);
+  color: var(--chips-sys-color-on-surface, #111827);
   font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -44,133 +67,114 @@ const EDITOR_STYLE_TEXT = `
   box-sizing: border-box;
 }
 
-.chips-basecard-editor__form {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.chips-basecard-editor__field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.chips-basecard-editor__label-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--chips-color-text-secondary, #475467);
-}
-
-.chips-basecard-editor__input {
+.chips-basecard-editor__toolbar-shell {
+  flex: 0 0 auto;
   width: 100%;
-  min-width: 0;
-  border: 1px solid var(--chips-color-border, #d0d5dd);
-  border-radius: 12px;
+}
+
+.chips-basecard-editor__toolbar-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
   padding: 10px 12px;
-  background: var(--chips-color-surface, #ffffff);
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 18px;
+  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.chips-basecard-editor__toolbar-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+}
+
+.chips-basecard-editor__toolbar-toggle {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 999px;
+  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
   color: inherit;
   font: inherit;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
-.chips-basecard-editor__input:focus {
-  border-color: var(--chips-color-primary, #1570ef);
-  box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.12);
+.chips-basecard-editor__toolbar-toggle:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(239, 246, 255, 0.92);
 }
 
-.chips-basecard-editor__editor-shell {
+.chips-basecard-editor__toolbar-toggle:focus-visible {
+  border-color: rgba(37, 99, 235, 0.85);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.chips-basecard-editor__toolbar-content {
   display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--chips-color-border, #d0d5dd);
-  border-radius: 16px;
-  background: var(--chips-color-surface, #ffffff);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: flex-start;
+  width: 100%;
 }
 
-.chips-basecard-editor__toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-panel {
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 16px;
+}
+
+.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-content {
+  display: none;
+}
+
+.chips-basecard-editor__toolbar-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid var(--chips-color-border, #eaecf0);
-  background: color-mix(
-    in srgb,
-    var(--chips-color-surface, #ffffff) 92%,
-    var(--chips-color-primary, #1570ef) 8%
-  );
 }
 
-.chips-basecard-editor__toolbar-button,
-.chips-basecard-editor__toolbar-select,
-.chips-basecard-editor__toolbar-color {
-  border: 1px solid var(--chips-color-border, #d0d5dd);
-  border-radius: 10px;
-  background: var(--chips-color-surface, #ffffff);
-  color: inherit;
-  font: inherit;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-}
-
-.chips-basecard-editor__toolbar-button {
-  min-width: 36px;
-  padding: 7px 10px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.chips-basecard-editor__toolbar-button:hover,
-.chips-basecard-editor__toolbar-select:hover,
-.chips-basecard-editor__toolbar-color:hover {
-  border-color: var(--chips-color-primary, #1570ef);
-}
-
-.chips-basecard-editor__toolbar-button:focus-visible,
-.chips-basecard-editor__toolbar-select:focus-visible,
-.chips-basecard-editor__toolbar-color:focus-visible {
-  border-color: var(--chips-color-primary, #1570ef);
-  box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.12);
-}
-
-.chips-basecard-editor__toolbar-select {
-  min-width: 108px;
-  padding: 7px 10px;
-}
-
-.chips-basecard-editor__toolbar-color {
-  width: 38px;
-  height: 38px;
-  padding: 4px;
-  cursor: pointer;
-}
-
-.chips-basecard-editor__body-scroll {
+.chips-basecard-editor__surface-frame {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.chips-basecard-editor__surface {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
-  padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(255, 255, 255, 0) 32px),
-    var(--chips-color-surface, #ffffff);
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 22px;
+  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overscroll-behavior: contain;
 }
 
 .chips-basecard-editor__richtext {
   min-height: 100%;
+  padding: 20px 24px 56px;
   outline: none;
   color: inherit;
   word-break: break-word;
+}
+
+.chips-basecard-editor__richtext[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
 }
 
 .chips-basecard-editor__richtext > :first-child {
@@ -196,13 +200,13 @@ const EDITOR_STYLE_TEXT = `
 
 .chips-basecard-editor__richtext blockquote {
   margin-left: 0;
-  padding-left: 12px;
-  border-left: 3px solid var(--chips-color-border, #d0d5dd);
-  color: var(--chips-color-text-secondary, #667085);
+  padding-left: 14px;
+  border-left: 3px solid rgba(37, 99, 235, 0.28);
+  color: #475467;
 }
 
 .chips-basecard-editor__richtext code {
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.08);
   font-family: "SFMono-Regular", Consolas, monospace;
@@ -212,12 +216,66 @@ const EDITOR_STYLE_TEXT = `
 .chips-basecard-editor__richtext img {
   max-width: 100%;
   height: auto;
+  border-radius: 12px;
+}
+
+.chips-basecard-editor__toolbar-button,
+.chips-basecard-editor__toolbar-select,
+.chips-basecard-editor__toolbar-color {
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 10px;
+  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
+  color: inherit;
+  font: inherit;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.chips-basecard-editor__toolbar-button {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.chips-basecard-editor__toolbar-select {
+  min-width: 108px;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.chips-basecard-editor__toolbar-color {
+  width: 38px;
+  height: 38px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.chips-basecard-editor__toolbar-button:hover,
+.chips-basecard-editor__toolbar-select:hover,
+.chips-basecard-editor__toolbar-color:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  transform: translateY(-1px);
+}
+
+.chips-basecard-editor__toolbar-button:focus-visible,
+.chips-basecard-editor__toolbar-select:focus-visible,
+.chips-basecard-editor__toolbar-color:focus-visible {
+  border-color: rgba(37, 99, 235, 0.85);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .chips-basecard-editor__errors {
-  min-height: 20px;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 10px 16px 14px;
   font-size: 13px;
-  color: var(--chips-color-error, #d92d20);
+  color: var(--chips-sys-color-error, #d92d20);
 }
 
 .chips-basecard-editor__errors-list {
@@ -257,6 +315,10 @@ function normalizeEditorHtml(html: string): string {
   return sanitized;
 }
 
+function createSanitizedDraftBody(editor: HTMLElement): string {
+  return normalizeEditorHtml(editor.innerHTML);
+}
+
 function isRangeInsideEditor(range: Range, editor: HTMLElement): boolean {
   const container = range.commonAncestorContainer;
   return container === editor || editor.contains(container);
@@ -291,10 +353,7 @@ function placeCaretAtEnd(editor: HTMLElement): Range {
   return range;
 }
 
-function restoreEditorSelection(
-  editor: HTMLElement,
-  savedRange: Range | null
-): Range {
+function restoreEditorSelection(editor: HTMLElement, savedRange: Range | null): Range {
   ensureEditorFocus(editor);
 
   const selection = window.getSelection();
@@ -466,10 +525,7 @@ function getCurrentBlockTag(editor: HTMLElement): string {
   return "p";
 }
 
-function createValidatedFragmentHtml(
-  html: string,
-  requiredSelector?: string
-): string {
+function createValidatedFragmentHtml(html: string, requiredSelector?: string): string {
   const safeHtml = sanitizeRichTextHtml(html).trim();
   if (!safeHtml) {
     return "";
@@ -484,52 +540,53 @@ function createValidatedFragmentHtml(
   return template.content.querySelector(requiredSelector) ? safeHtml : "";
 }
 
-export function createBasecardEditorRoot(
-  props: BasecardEditorProps
-): HTMLElement {
+function createToolbarGroup(...children: HTMLElement[]): HTMLDivElement {
+  const group = document.createElement("div");
+  group.className = "chips-basecard-editor__toolbar-group";
+  children.forEach((child) => {
+    group.appendChild(child);
+  });
+  return group;
+}
+
+export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElement {
   const t = createTranslator(props.initialConfig.locale);
 
-  const root = document.createElement("div");
+  const root = document.createElement("div") as EditorRoot;
   root.className = "chips-basecard-editor chips-basecard-editor--richtext";
+  root.setAttribute("data-toolbar-state", "expanded");
 
   const style = document.createElement("style");
   style.textContent = EDITOR_STYLE_TEXT;
   root.appendChild(style);
 
-  const form = document.createElement("form");
-  form.className = "chips-basecard-editor__form";
+  const toolbarShell = document.createElement("div");
+  toolbarShell.className = "chips-basecard-editor__toolbar-shell";
 
-  const titleField = document.createElement("label");
-  titleField.className = "chips-basecard-editor__field";
+  const toolbarPanel = document.createElement("div");
+  toolbarPanel.className = "chips-basecard-editor__toolbar-panel";
 
-  const titleLabelText = document.createElement("span");
-  titleLabelText.className = "chips-basecard-editor__label-text";
-  titleLabelText.textContent = t("basecard.title");
-  titleField.appendChild(titleLabelText);
+  const toolbarHeader = document.createElement("div");
+  toolbarHeader.className = "chips-basecard-editor__toolbar-header";
 
-  const titleInput = document.createElement("input");
-  titleInput.type = "text";
-  titleInput.className = "chips-basecard-editor__input";
-  titleInput.value = props.initialConfig.title ?? "";
-  titleField.appendChild(titleInput);
-  form.appendChild(titleField);
+  const toolbarToggle = document.createElement("button");
+  toolbarToggle.type = "button";
+  toolbarToggle.className = "chips-basecard-editor__toolbar-toggle";
 
-  const bodyField = document.createElement("section");
-  bodyField.className = "chips-basecard-editor__field";
+  const toolbarContent = document.createElement("div");
+  toolbarContent.className = "chips-basecard-editor__toolbar-content";
 
-  const bodyLabelText = document.createElement("span");
-  bodyLabelText.className = "chips-basecard-editor__label-text";
-  bodyLabelText.textContent = t("basecard.body");
-  bodyField.appendChild(bodyLabelText);
+  toolbarHeader.appendChild(toolbarToggle);
+  toolbarPanel.appendChild(toolbarHeader);
+  toolbarPanel.appendChild(toolbarContent);
+  toolbarShell.appendChild(toolbarPanel);
+  root.appendChild(toolbarShell);
 
-  const editorShell = document.createElement("div");
-  editorShell.className = "chips-basecard-editor__editor-shell";
+  const surfaceFrame = document.createElement("div");
+  surfaceFrame.className = "chips-basecard-editor__surface-frame";
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "chips-basecard-editor__toolbar";
-
-  const bodyScroll = document.createElement("div");
-  bodyScroll.className = "chips-basecard-editor__body-scroll";
+  const surface = document.createElement("div");
+  surface.className = "chips-basecard-editor__surface";
 
   const bodyEditor = document.createElement("div");
   bodyEditor.className = "chips-basecard-editor__richtext";
@@ -537,25 +594,47 @@ export function createBasecardEditorRoot(
   bodyEditor.spellcheck = true;
   bodyEditor.setAttribute("role", "textbox");
   bodyEditor.setAttribute("aria-multiline", "true");
+  bodyEditor.setAttribute("aria-label", t("basecard.body"));
+  bodyEditor.setAttribute("data-placeholder", t("basecard.placeholder"));
   bodyEditor.innerHTML = normalizeEditorHtml(props.initialConfig.body ?? "");
-  bodyScroll.appendChild(bodyEditor);
+  surface.appendChild(bodyEditor);
+  surfaceFrame.appendChild(surface);
+  root.appendChild(surfaceFrame);
 
   const errorBox = document.createElement("div");
   errorBox.className = "chips-basecard-editor__errors";
+  root.appendChild(errorBox);
 
   let draft: DraftConfig = {
-    title: props.initialConfig.title ?? "",
     body: normalizeEditorHtml(props.initialConfig.body ?? ""),
   };
   let lastCommittedSignature = JSON.stringify(draft);
   let emitTimer: number | null = null;
   let savedSelection: Range | null = null;
+  let isToolbarCollapsed = false;
+  let isComposingText = false;
+  let didConfigureParagraphBehavior = false;
+
+  function ensureParagraphBehavior(): void {
+    if (didConfigureParagraphBehavior) {
+      return;
+    }
+
+    executeDocumentCommand("defaultParagraphSeparator", "p");
+    didConfigureParagraphBehavior = true;
+  }
 
   function rememberSelection(): void {
     savedSelection = cloneEditorSelection(bodyEditor);
   }
 
-  function restoreSelection(): Range {
+  function resolveSelection(preferLiveSelection = false): Range {
+    if (preferLiveSelection) {
+      const liveSelection = cloneEditorSelection(bodyEditor);
+      if (liveSelection) {
+        return restoreEditorSelection(bodyEditor, liveSelection);
+      }
+    }
     return restoreEditorSelection(bodyEditor, savedSelection);
   }
 
@@ -563,10 +642,27 @@ export function createBasecardEditorRoot(
     blockSelect.value = getCurrentBlockTag(bodyEditor);
   }
 
+  function syncPlaceholderState(): void {
+    bodyEditor.setAttribute(
+      "data-empty",
+      hasMeaningfulEditorContent(bodyEditor) ? "false" : "true"
+    );
+  }
+
+  function applyToolbarState(): void {
+    const state = isToolbarCollapsed ? "collapsed" : "expanded";
+    root.setAttribute("data-toolbar-state", state);
+    toolbarContent.hidden = isToolbarCollapsed;
+    toolbarToggle.textContent = isToolbarCollapsed
+      ? t("basecard.toolbar.expand")
+      : t("basecard.toolbar.collapse");
+    toolbarToggle.setAttribute("aria-label", toolbarToggle.textContent);
+    toolbarToggle.setAttribute("aria-expanded", String(!isToolbarCollapsed));
+  }
+
   function collectDraftFromDom(): DraftConfig {
     return {
-      title: titleInput.value,
-      body: normalizeEditorHtml(bodyEditor.innerHTML),
+      body: createSanitizedDraftBody(bodyEditor),
     };
   }
 
@@ -587,34 +683,33 @@ export function createBasecardEditorRoot(
 
     const list = document.createElement("ul");
     list.className = "chips-basecard-editor__errors-list";
-    for (const msg of errors) {
-      const li = document.createElement("li");
-      li.textContent = msg;
-      list.appendChild(li);
-    }
+    errors.forEach((message) => {
+      const item = document.createElement("li");
+      item.textContent = message;
+      list.appendChild(item);
+    });
     errorBox.appendChild(list);
   }
 
-  function validateAndEmit(showErrors = false): void {
+  function validateAndEmit(showErrors = false, normalizeDom = false): void {
     const nextDraft = collectDraftFromDom();
     const safeBodyHtml = normalizeEditorHtml(nextDraft.body);
 
-    if (safeBodyHtml !== bodyEditor.innerHTML) {
+    if (normalizeDom && safeBodyHtml !== bodyEditor.innerHTML) {
       bodyEditor.innerHTML = safeBodyHtml;
     }
+    syncPlaceholderState();
 
     draft = {
-      title: nextDraft.title,
       body: safeBodyHtml,
     };
 
     renderValidation(showErrors);
 
     const next: BasecardConfig = {
-      ...defaultBasecardConfig,
-      ...props.initialConfig,
-      title: draft.title,
+      id: props.initialConfig.id || defaultBasecardConfig.id,
       body: safeBodyHtml,
+      locale: props.initialConfig.locale ?? defaultBasecardConfig.locale,
     };
 
     const signature = JSON.stringify(draft);
@@ -626,27 +721,47 @@ export function createBasecardEditorRoot(
     props.onChange(next);
   }
 
-  function scheduleValidateAndEmit(showErrors = false): void {
+  function scheduleValidateAndEmit(showErrors = false, normalizeDom = false): void {
     if (emitTimer !== null) {
       window.clearTimeout(emitTimer);
     }
     emitTimer = window.setTimeout(() => {
       emitTimer = null;
-      validateAndEmit(showErrors);
+      validateAndEmit(showErrors, normalizeDom);
     }, EMIT_DEBOUNCE_MS);
   }
 
-  function flushValidateAndEmit(showErrors = true): void {
+  function flushValidateAndEmit(showErrors = true, normalizeDom = true): void {
     if (emitTimer !== null) {
       window.clearTimeout(emitTimer);
       emitTimer = null;
     }
-    validateAndEmit(showErrors);
+    validateAndEmit(showErrors, normalizeDom);
   }
 
   function runEditorCommand(command: string, value?: string): void {
-    restoreSelection();
+    resolveSelection();
     executeDocumentCommand(command, value);
+    rememberSelection();
+    syncToolbarState();
+  }
+
+  function insertParagraphBreak(): void {
+    ensureParagraphBehavior();
+    resolveSelection(true);
+    if (!executeDocumentCommand("insertParagraph")) {
+      replaceSelectionWithHtml(bodyEditor, "<p><br></p>");
+    }
+    rememberSelection();
+    syncToolbarState();
+  }
+
+  function insertLineBreak(): void {
+    ensureParagraphBehavior();
+    resolveSelection(true);
+    if (!executeDocumentCommand("insertLineBreak")) {
+      replaceSelectionWithHtml(bodyEditor, "<br>");
+    }
     rememberSelection();
     syncToolbarState();
   }
@@ -697,25 +812,16 @@ export function createBasecardEditorRoot(
     () => runEditorCommand("subscript")
   );
   const codeButton = createToolbarButton("Code", t("basecard.toolbar.code"), () => {
-    restoreSelection();
+    resolveSelection();
     wrapSelectionWithTag(bodyEditor, "code");
     rememberSelection();
   });
-
-  toolbar.appendChild(boldButton);
-  toolbar.appendChild(italicButton);
-  toolbar.appendChild(underlineButton);
-  toolbar.appendChild(strikeButton);
-  toolbar.appendChild(superscriptButton);
-  toolbar.appendChild(subscriptButton);
-  toolbar.appendChild(codeButton);
 
   const blockSelect = document.createElement("select");
   blockSelect.className = "chips-basecard-editor__toolbar-select";
   blockSelect.title = t("basecard.toolbar.block");
   blockSelect.setAttribute("aria-label", t("basecard.toolbar.block"));
-
-  const blockOptions: Array<{ value: string; label: string }> = [
+  [
     { value: "p", label: t("basecard.block.paragraph") },
     { value: "h1", label: t("basecard.block.h1") },
     { value: "h2", label: t("basecard.block.h2") },
@@ -723,15 +829,12 @@ export function createBasecardEditorRoot(
     { value: "h4", label: t("basecard.block.h4") },
     { value: "h5", label: t("basecard.block.h5") },
     { value: "h6", label: t("basecard.block.h6") },
-  ];
-
-  for (const opt of blockOptions) {
+  ].forEach((option) => {
     const optionEl = document.createElement("option");
-    optionEl.value = opt.value;
-    optionEl.textContent = opt.label;
+    optionEl.value = option.value;
+    optionEl.textContent = option.label;
     blockSelect.appendChild(optionEl);
-  }
-
+  });
   blockSelect.addEventListener("mousedown", () => {
     rememberSelection();
   });
@@ -740,7 +843,6 @@ export function createBasecardEditorRoot(
     runEditorCommand("formatBlock", value === "p" ? "p" : value);
     validateAndEmit(false);
   });
-  toolbar.appendChild(blockSelect);
 
   const orderedListButton = createToolbarButton(
     "1.",
@@ -757,9 +859,6 @@ export function createBasecardEditorRoot(
     t("basecard.toolbar.blockquote"),
     () => runEditorCommand("formatBlock", "blockquote")
   );
-  toolbar.appendChild(orderedListButton);
-  toolbar.appendChild(unorderedListButton);
-  toolbar.appendChild(blockquoteButton);
 
   const alignLeftButton = createToolbarButton("L", t("basecard.toolbar.alignLeft"), () =>
     runEditorCommand("justifyLeft")
@@ -777,10 +876,6 @@ export function createBasecardEditorRoot(
     t("basecard.toolbar.alignJustify"),
     () => runEditorCommand("justifyFull")
   );
-  toolbar.appendChild(alignLeftButton);
-  toolbar.appendChild(alignCenterButton);
-  toolbar.appendChild(alignRightButton);
-  toolbar.appendChild(alignJustifyButton);
 
   const colorInput = document.createElement("input");
   colorInput.type = "color";
@@ -797,7 +892,6 @@ export function createBasecardEditorRoot(
     runEditorCommand("foreColor", colorInput.value);
     validateAndEmit(false);
   });
-  toolbar.appendChild(colorInput);
 
   const bgColorInput = document.createElement("input");
   bgColorInput.type = "color";
@@ -814,52 +908,41 @@ export function createBasecardEditorRoot(
     runEditorCommand("hiliteColor", bgColorInput.value);
     validateAndEmit(false);
   });
-  toolbar.appendChild(bgColorInput);
 
   const fontSizeSelect = document.createElement("select");
   fontSizeSelect.className = "chips-basecard-editor__toolbar-select";
   fontSizeSelect.title = t("basecard.toolbar.fontSize");
   fontSizeSelect.setAttribute("aria-label", t("basecard.toolbar.fontSize"));
-
-  const fontSizes = [12, 14, 16, 18, 24, 32];
   const defaultFontSizeOption = document.createElement("option");
   defaultFontSizeOption.value = "";
   defaultFontSizeOption.textContent = t("basecard.toolbar.fontSize");
   fontSizeSelect.appendChild(defaultFontSizeOption);
-  for (const size of fontSizes) {
+  [12, 14, 16, 18, 24, 32].forEach((size) => {
     const optionEl = document.createElement("option");
     optionEl.value = String(size);
     optionEl.textContent = `${size}px`;
     fontSizeSelect.appendChild(optionEl);
-  }
+  });
   fontSizeSelect.addEventListener("mousedown", () => {
     rememberSelection();
   });
   fontSizeSelect.addEventListener("change", () => {
-    const value = fontSizeSelect.value;
-    if (!value) {
+    const selected = Number.parseInt(fontSizeSelect.value, 10);
+    if (!Number.isFinite(selected)) {
       return;
     }
-
-    const size = Number.parseInt(value, 10);
-    if (!Number.isFinite(size)) {
-      return;
-    }
-
-    restoreSelection();
-    wrapSelectionWithStyle(bodyEditor, `font-size: ${size}px`);
+    resolveSelection();
+    wrapSelectionWithStyle(bodyEditor, `font-size: ${selected}px`);
     rememberSelection();
     validateAndEmit(false);
     fontSizeSelect.value = "";
   });
-  toolbar.appendChild(fontSizeSelect);
 
   const clearFormatButton = createToolbarButton(
     t("basecard.toolbar.clear"),
     t("basecard.toolbar.clear"),
     () => runEditorCommand("removeFormat")
   );
-  toolbar.appendChild(clearFormatButton);
 
   const linkButton = createToolbarButton(
     t("basecard.toolbar.link"),
@@ -868,9 +951,7 @@ export function createBasecardEditorRoot(
       const selectionRange = cloneEditorSelection(bodyEditor);
       const selectedText = selectionRange?.toString() ?? "";
       const defaultUrl =
-        selectedText && selectedText.startsWith("http")
-          ? selectedText
-          : "https://";
+        selectedText && selectedText.startsWith("http") ? selectedText : "https://";
 
       const url = (window.prompt(t("basecard.prompt.linkUrl"), defaultUrl) ?? "").trim();
       if (!url) {
@@ -878,8 +959,11 @@ export function createBasecardEditorRoot(
       }
 
       const text = (
-        selectedText || window.prompt(t("basecard.prompt.linkText"), url) || url
+        selectedText ||
+        window.prompt(t("basecard.prompt.linkText"), url) ||
+        url
       ).trim();
+
       const linkHtml = createValidatedFragmentHtml(
         `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`,
         'a[href]'
@@ -893,7 +977,6 @@ export function createBasecardEditorRoot(
       rememberSelection();
     }
   );
-  toolbar.appendChild(linkButton);
 
   const imageButton = createToolbarButton(
     t("basecard.toolbar.image"),
@@ -909,20 +992,19 @@ export function createBasecardEditorRoot(
       const width = (window.prompt(t("basecard.prompt.imageWidth"), "") ?? "").trim();
       const height = (window.prompt(t("basecard.prompt.imageHeight"), "") ?? "").trim();
 
-      const parts: string[] = [];
-      parts.push(`src="${escapeHtml(src)}"`);
+      const attributes: string[] = [`src="${escapeHtml(src)}"`];
       if (alt) {
-        parts.push(`alt="${escapeHtml(alt)}"`);
+        attributes.push(`alt="${escapeHtml(alt)}"`);
       }
       if (width) {
-        parts.push(`width="${escapeHtml(width)}"`);
+        attributes.push(`width="${escapeHtml(width)}"`);
       }
       if (height) {
-        parts.push(`height="${escapeHtml(height)}"`);
+        attributes.push(`height="${escapeHtml(height)}"`);
       }
 
       const imageHtml = createValidatedFragmentHtml(
-        `<img ${parts.join(" ")} />`,
+        `<img ${attributes.join(" ")} />`,
         "img[src]"
       );
       if (!imageHtml) {
@@ -934,27 +1016,54 @@ export function createBasecardEditorRoot(
       rememberSelection();
     }
   );
-  toolbar.appendChild(imageButton);
 
   const hrButton = createToolbarButton(
     t("basecard.toolbar.divider"),
     t("basecard.toolbar.divider"),
     () => runEditorCommand("insertHorizontalRule")
   );
-  toolbar.appendChild(hrButton);
 
-  editorShell.appendChild(toolbar);
-  editorShell.appendChild(bodyScroll);
-  bodyField.appendChild(editorShell);
-  form.appendChild(bodyField);
-  form.appendChild(errorBox);
+  toolbarContent.appendChild(
+    createToolbarGroup(
+      boldButton,
+      italicButton,
+      underlineButton,
+      strikeButton,
+      superscriptButton,
+      subscriptButton,
+      codeButton
+    )
+  );
+  toolbarContent.appendChild(
+    createToolbarGroup(blockSelect, orderedListButton, unorderedListButton, blockquoteButton)
+  );
+  toolbarContent.appendChild(
+    createToolbarGroup(
+      alignLeftButton,
+      alignCenterButton,
+      alignRightButton,
+      alignJustifyButton,
+      colorInput,
+      bgColorInput,
+      fontSizeSelect
+    )
+  );
+  toolbarContent.appendChild(
+    createToolbarGroup(clearFormatButton, linkButton, imageButton, hrButton)
+  );
 
-  titleInput.addEventListener("input", () => {
-    draft = collectDraftFromDom();
-    scheduleValidateAndEmit(false);
+  toolbarToggle.addEventListener("mousedown", (event) => {
+    rememberSelection();
+    event.preventDefault();
+  });
+  toolbarToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    isToolbarCollapsed = !isToolbarCollapsed;
+    applyToolbarState();
   });
 
   bodyEditor.addEventListener("focus", () => {
+    ensureParagraphBehavior();
     rememberSelection();
     syncToolbarState();
   });
@@ -970,10 +1079,27 @@ export function createBasecardEditorRoot(
   });
 
   bodyEditor.addEventListener("input", () => {
+    if (isComposingText) {
+      syncPlaceholderState();
+      return;
+    }
     rememberSelection();
     syncToolbarState();
+    syncPlaceholderState();
     draft = collectDraftFromDom();
-    scheduleValidateAndEmit(false);
+    scheduleValidateAndEmit(false, false);
+  });
+
+  bodyEditor.addEventListener("compositionstart", () => {
+    isComposingText = true;
+  });
+
+  bodyEditor.addEventListener("compositionend", () => {
+    isComposingText = false;
+    rememberSelection();
+    syncToolbarState();
+    syncPlaceholderState();
+    scheduleValidateAndEmit(false, false);
   });
 
   bodyEditor.addEventListener("paste", (event) => {
@@ -982,6 +1108,7 @@ export function createBasecardEditorRoot(
     const clipboardData = event.clipboardData;
     const pastedHtml = clipboardData?.getData("text/html") ?? "";
     const pastedText = clipboardData?.getData("text/plain") ?? "";
+
     const normalizedHtml = pastedHtml
       ? sanitizeRichTextHtml(pastedHtml).trim()
       : plainTextToRichTextHtml(pastedText);
@@ -991,14 +1118,36 @@ export function createBasecardEditorRoot(
     }
 
     rememberSelection();
-    restoreSelection();
+    resolveSelection();
     replaceSelectionWithHtml(bodyEditor, normalizedHtml);
     rememberSelection();
     syncToolbarState();
-    scheduleValidateAndEmit(false);
+    syncPlaceholderState();
+    scheduleValidateAndEmit(false, false);
   });
 
   bodyEditor.addEventListener("keydown", (event) => {
+    if (isComposingText || event.isComposing) {
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      if (event.shiftKey) {
+        insertLineBreak();
+      } else {
+        insertParagraphBreak();
+      }
+      syncPlaceholderState();
+      scheduleValidateAndEmit(false, false);
+      return;
+    }
+
     if (!(event.ctrlKey || event.metaKey)) {
       return;
     }
@@ -1006,33 +1155,41 @@ export function createBasecardEditorRoot(
     const key = event.key.toLowerCase();
     if (key === "b") {
       event.preventDefault();
-      runEditorCommand("bold");
-      scheduleValidateAndEmit(false);
+      resolveSelection(true);
+      executeDocumentCommand("bold");
+      rememberSelection();
+      syncToolbarState();
+      scheduleValidateAndEmit(false, false);
     } else if (key === "i") {
       event.preventDefault();
-      runEditorCommand("italic");
-      scheduleValidateAndEmit(false);
+      resolveSelection(true);
+      executeDocumentCommand("italic");
+      rememberSelection();
+      syncToolbarState();
+      scheduleValidateAndEmit(false, false);
     } else if (key === "u") {
       event.preventDefault();
-      runEditorCommand("underline");
-      scheduleValidateAndEmit(false);
+      resolveSelection(true);
+      executeDocumentCommand("underline");
+      rememberSelection();
+      syncToolbarState();
+      scheduleValidateAndEmit(false, false);
     }
   });
 
-  form.addEventListener("focusout", (event) => {
+  root.addEventListener("focusout", (event) => {
     const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && form.contains(nextTarget)) {
+    if (nextTarget instanceof Node && root.contains(nextTarget)) {
       return;
     }
-    flushValidateAndEmit(true);
-  });
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    flushValidateAndEmit(true);
+    flushValidateAndEmit(true, true);
   });
 
   syncToolbarState();
-  root.appendChild(form);
+  syncPlaceholderState();
+  applyToolbarState();
+
+  root.__chipsDispose = () => undefined;
+
   return root;
 }

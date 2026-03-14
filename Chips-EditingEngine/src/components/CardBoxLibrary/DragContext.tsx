@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
-import type { DragData, DragState } from './types';
+import { CHIPS_DRAG_DATA_TYPE, type DragData, type DragState } from './types';
 
 interface DragContextType {
     dragState: DragState;
@@ -10,7 +10,6 @@ interface DragContextType {
 
 const DragContext = createContext<DragContextType | undefined>(undefined);
 
-const DRAG_DATA_TYPE = 'application/x-chips-drag-data';
 let transparentDragImage: HTMLImageElement | null = null;
 
 function getTransparentDragImage(): HTMLImageElement {
@@ -44,10 +43,10 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (event.dataTransfer) {
-            event.dataTransfer.setData(DRAG_DATA_TYPE, JSON.stringify(data));
+            event.dataTransfer.setData(CHIPS_DRAG_DATA_TYPE, JSON.stringify(data));
             event.dataTransfer.setData('text/plain', data.name);
             event.dataTransfer.effectAllowed = 'copy';
-            
+
             const img = getTransparentDragImage();
             event.dataTransfer.setDragImage(img, 0, 0);
         }

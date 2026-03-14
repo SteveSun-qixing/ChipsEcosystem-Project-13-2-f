@@ -4,6 +4,8 @@ import { CanvasProvider } from './CanvasContext';
 import { DesktopLayer } from './DesktopLayer';
 import { WindowLayer } from './WindowLayer';
 import { ZoomControl } from './ZoomControl';
+import { resolveCanvasInteractionSurface } from './interaction-routing';
+import { CHIPS_DRAG_DATA_TYPE } from '../../components/CardBoxLibrary/types';
 import './InfiniteCanvas.css';
 
 interface InfiniteCanvasProps {
@@ -15,6 +17,27 @@ interface InfiniteCanvasProps {
     onOpenSettings?: () => void;
 }
 
+interface TouchGestureState {
+    surface: 'desktop-background' | 'composite-delegate';
+    lastPoint: { x: number; y: number } | null;
+    lastCenter: { x: number; y: number } | null;
+    lastDistance: number | null;
+}
+
+const getTouchPoint = (touch: Touch) => ({
+    x: Number(touch.clientX) || 0,
+    y: Number(touch.clientY) || 0,
+});
+
+const getTouchCenter = (first: Touch, second: Touch) => ({
+    x: (first.clientX + second.clientX) / 2,
+    y: (first.clientY + second.clientY) / 2,
+});
+
+const getTouchDistance = (first: Touch, second: Touch) => {
+    return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+};
+
 export function InfiniteCanvas({
     showGrid = true,
     gridSize = 20,
@@ -24,10 +47,11 @@ export function InfiniteCanvas({
     onOpenSettings,
 }: InfiniteCanvasProps) {
     const canvasRef = useRef<HTMLDivElement>(null);
+    const touchGestureRef = useRef<TouchGestureState | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [insertIndicator, setInsertIndicator] = useState<{ left: number; top: number; width: number } | null>(null);
 
-    const canvasControls = useCanvasControls();
+    const canvasControls = useCanvasControls({ viewportRef: canvasRef });
     const {
         zoom,
         panX,
@@ -37,6 +61,12 @@ export function InfiniteCanvas({
         handleMouseDown,
         handleMouseMove,
         handleMouseUp,
+        panByInput,
+        panByScreenDelta,
+        zoomByFactorAtPoint,
+        markInteractionSequence,
+        clearInteractionSequence,
+        isDesktopZoomSuppressed,
         zoomIn,
         zoomOut,
         zoomTo,
@@ -57,24 +87,40 @@ export function InfiniteCanvas({
         const handler = buildNativeWheelHandler(el);
 
         const onWheel = (e: WheelEvent) => {
-            const target = e.target as HTMLElement;
+            const surface = resolveCanvasInteractionSurface(e.target, el);
 
-            const isDesktopBackground =
-                target === el ||
-                target.classList.contains('infinite-canvas__grid') ||
-                target.classList.contains('desktop-layer');
+            if (surface === 'local-window' || surface === 'ignore') {
+                return;
+            }
 
-            const isToolWindow = Boolean(target.closest('.base-window'));
-            const isCardWindow = Boolean(target.closest('.card-window-base') || target.closest('.card-cover'));
-            const isCardContentWheel = isCardWindow && !isToolWindow;
+            if (e.ctrlKey || e.metaKey) {
+                if (surface === 'desktop-background' && isDesktopZoomSuppressed()) {
+                    e.preventDefault();
+                    return;
+                }
 
-            if (e.ctrlKey || e.metaKey || isDesktopBackground) {
+                if (surface === 'composite-delegate') {
+                    markInteractionSequence({ suppressDesktopZoom: true });
+                }
+
                 handler(e);
                 return;
             }
 
-            // Let card windows handle their own scroll unless pinch-to-zoom
-            if (isCardContentWheel) {
+            if (surface === 'desktop-background') {
+                if (isDesktopZoomSuppressed()) {
+                    e.preventDefault();
+                    return;
+                }
+
+                handler(e);
+                return;
+            }
+
+            if (surface === 'composite-delegate') {
+                markInteractionSequence({ suppressDesktopZoom: true });
+                panByInput(e.deltaX, e.deltaY);
+                e.preventDefault();
                 return;
             }
         };
@@ -83,7 +129,157 @@ export function InfiniteCanvas({
         return () => {
             el.removeEventListener('wheel', onWheel);
         };
-    }, [buildNativeWheelHandler]);
+    }, [
+        buildNativeWheelHandler,
+        isDesktopZoomSuppressed,
+        markInteractionSequence,
+        panByInput,
+    ]);
+
+    useEffect(() => {
+        const el = canvasRef.current;
+        if (!el) {
+            return;
+        }
+
+        const onTouchStart = (event: TouchEvent) => {
+            const surface = resolveCanvasInteractionSurface(event.target, el);
+            if (surface !== 'desktop-background' && surface !== 'composite-delegate') {
+                touchGestureRef.current = null;
+                return;
+            }
+
+            if (surface === 'composite-delegate') {
+                markInteractionSequence({ suppressDesktopZoom: true });
+            }
+
+            if (event.touches.length === 1) {
+                touchGestureRef.current = {
+                    surface,
+                    lastPoint: getTouchPoint(event.touches[0] as Touch),
+                    lastCenter: null,
+                    lastDistance: null,
+                };
+                return;
+            }
+
+            if (event.touches.length >= 2) {
+                const first = event.touches[0] as Touch;
+                const second = event.touches[1] as Touch;
+                touchGestureRef.current = {
+                    surface,
+                    lastPoint: null,
+                    lastCenter: getTouchCenter(first, second),
+                    lastDistance: getTouchDistance(first, second),
+                };
+            }
+        };
+
+        const onTouchMove = (event: TouchEvent) => {
+            const gesture = touchGestureRef.current;
+            if (!gesture) {
+                return;
+            }
+
+            if (gesture.surface === 'composite-delegate') {
+                markInteractionSequence({ suppressDesktopZoom: true });
+            }
+
+            if (event.touches.length === 1) {
+                const nextPoint = getTouchPoint(event.touches[0] as Touch);
+                if (gesture.lastPoint) {
+                    panByScreenDelta(
+                        nextPoint.x - gesture.lastPoint.x,
+                        nextPoint.y - gesture.lastPoint.y,
+                    );
+                }
+
+                gesture.lastPoint = nextPoint;
+                gesture.lastCenter = null;
+                gesture.lastDistance = null;
+                event.preventDefault();
+                return;
+            }
+
+            if (event.touches.length >= 2) {
+                const first = event.touches[0] as Touch;
+                const second = event.touches[1] as Touch;
+                const center = getTouchCenter(first, second);
+                const distance = getTouchDistance(first, second);
+
+                if (gesture.lastCenter && gesture.lastDistance && gesture.lastDistance > 0) {
+                    const zoomFactor = Math.max(0.67, Math.min(1.5, distance / gesture.lastDistance));
+                    if (Math.abs(zoomFactor - 1) > 0.015) {
+                        zoomByFactorAtPoint(zoomFactor, center.x, center.y);
+                    } else {
+                        panByScreenDelta(
+                            center.x - gesture.lastCenter.x,
+                            center.y - gesture.lastCenter.y,
+                        );
+                    }
+                }
+
+                gesture.lastPoint = null;
+                gesture.lastCenter = center;
+                gesture.lastDistance = distance;
+                event.preventDefault();
+            }
+        };
+
+        const onTouchEnd = (event: TouchEvent) => {
+            const gesture = touchGestureRef.current;
+            if (!gesture) {
+                return;
+            }
+
+            if (event.touches.length === 0) {
+                if (gesture.surface === 'composite-delegate') {
+                    clearInteractionSequence();
+                }
+                touchGestureRef.current = null;
+                return;
+            }
+
+            if (event.touches.length === 1) {
+                gesture.lastPoint = getTouchPoint(event.touches[0] as Touch);
+                gesture.lastCenter = null;
+                gesture.lastDistance = null;
+                return;
+            }
+
+            if (event.touches.length >= 2) {
+                const first = event.touches[0] as Touch;
+                const second = event.touches[1] as Touch;
+                gesture.lastPoint = null;
+                gesture.lastCenter = getTouchCenter(first, second);
+                gesture.lastDistance = getTouchDistance(first, second);
+            }
+        };
+
+        const onTouchCancel = () => {
+            if (touchGestureRef.current?.surface === 'composite-delegate') {
+                clearInteractionSequence();
+            }
+            touchGestureRef.current = null;
+        };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: false });
+        el.addEventListener('touchmove', onTouchMove, { passive: false });
+        el.addEventListener('touchend', onTouchEnd, { passive: false });
+        el.addEventListener('touchcancel', onTouchCancel, { passive: false });
+
+        return () => {
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchmove', onTouchMove);
+            el.removeEventListener('touchend', onTouchEnd);
+            el.removeEventListener('touchcancel', onTouchCancel);
+        };
+    }, [
+        clearInteractionSequence,
+        markInteractionSequence,
+        panByScreenDelta,
+        zoomByFactorAtPoint,
+    ]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -149,7 +345,7 @@ export function InfiniteCanvas({
 
         let data = null;
         try {
-            const dropDataStr = e.dataTransfer.getData('application/x-chips-drag-data');
+            const dropDataStr = e.dataTransfer.getData(CHIPS_DRAG_DATA_TYPE);
             if (dropDataStr) {
                 data = JSON.parse(dropDataStr);
             }

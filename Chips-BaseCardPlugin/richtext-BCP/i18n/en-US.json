@@ -1,6 +1,6 @@
 {
-  "basecard.title": "Title",
   "basecard.body": "Content",
+  "basecard.placeholder": "Start typing",
   "basecard.toolbar.bold": "Bold",
   "basecard.toolbar.italic": "Italic",
   "basecard.toolbar.underline": "Underline",
@@ -19,6 +19,8 @@
   "basecard.toolbar.textColor": "Text color",
   "basecard.toolbar.highlightColor": "Highlight color",
   "basecard.toolbar.fontSize": "Font size",
+  "basecard.toolbar.collapse": "Collapse",
+  "basecard.toolbar.expand": "Expand",
   "basecard.toolbar.clear": "Clear",
   "basecard.toolbar.link": "Link",
   "basecard.toolbar.image": "Image",
@@ -36,6 +38,5 @@
   "basecard.prompt.imageAlt": "Enter image description (optional)",
   "basecard.prompt.imageWidth": "Width in pixels (optional)",
   "basecard.prompt.imageHeight": "Height in pixels (optional)",
-  "basecard.validation.titleRequired": "Title is required.",
   "basecard.validation.bodyRequired": "Content is required."
 }

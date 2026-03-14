@@ -78,10 +78,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function normalizeRichTextCardData(id: string, rawData: Record<string, unknown>): Record<string, unknown> {
-    if (typeof rawData.title === 'string' && typeof rawData.body === 'string') {
+    if (typeof rawData.body === 'string') {
         return {
             id,
-            title: rawData.title,
             body: rawData.body,
             locale: asString(rawData.locale) ?? 'zh-CN',
         };
@@ -90,7 +89,6 @@ function normalizeRichTextCardData(id: string, rawData: Record<string, unknown>)
     if (typeof rawData.content_text === 'string') {
         return {
             id,
-            title: asString(rawData.title) ?? '',
             body: rawData.content_text,
             locale: asString(rawData.locale) ?? 'zh-CN',
         };
@@ -98,7 +96,6 @@ function normalizeRichTextCardData(id: string, rawData: Record<string, unknown>)
 
     return {
         id,
-        title: '',
         body: '<p></p>',
         locale: asString(rawData.locale) ?? 'zh-CN',
     };
@@ -118,7 +115,6 @@ function createDefaultBasicCardData(type: string, id: string): Record<string, un
     if (type === 'RichTextCard' || type === 'base.richtext') {
         return {
             id,
-            title: '',
             body: '<p></p>',
             locale: 'zh-CN',
         };

@@ -1,9 +1,13 @@
 import React, { startTransition, useEffect, useRef, useState } from 'react';
+import { globalEventEmitter } from '../../core/event-emitter';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getChipsClient } from '../../services/bridge-client';
 import './PluginHost.css';
 
+const EDITOR_CONFIG_COMMIT_DEBOUNCE_MS = 260;
+
 export interface PluginHostProps {
+  cardId?: string;
   cardType: string;
   baseCardId: string;
   config: Record<string, unknown>;
@@ -13,6 +17,7 @@ export interface PluginHostProps {
 }
 
 export function PluginHost({
+  cardId,
   cardType,
   baseCardId,
   config,
@@ -25,9 +30,12 @@ export function PluginHost({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const latestConfigRef = useRef<Record<string, unknown>>(config);
+  const latestConfigSignatureRef = useRef(JSON.stringify(config));
   const onConfigChangeRef = useRef(onConfigChange);
   const onPluginLoadedRef = useRef(onPluginLoaded);
   const onPluginErrorRef = useRef(onPluginError);
+  const pendingConfigRef = useRef<Record<string, unknown> | null>(null);
+  const pendingCommitTimerRef = useRef<number | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
@@ -35,6 +43,7 @@ export function PluginHost({
 
   useEffect(() => {
     latestConfigRef.current = config;
+    latestConfigSignatureRef.current = JSON.stringify(config);
   }, [config]);
 
   useEffect(() => {
@@ -48,6 +57,58 @@ export function PluginHost({
   useEffect(() => {
     onPluginErrorRef.current = onPluginError;
   }, [onPluginError]);
+
+  const flushPendingConfigChange = () => {
+    if (pendingCommitTimerRef.current !== null) {
+      window.clearTimeout(pendingCommitTimerRef.current);
+      pendingCommitTimerRef.current = null;
+    }
+
+    const nextConfig = pendingConfigRef.current;
+    if (!nextConfig) {
+      return;
+    }
+
+    pendingConfigRef.current = null;
+    latestConfigSignatureRef.current = JSON.stringify(nextConfig);
+    startTransition(() => {
+      onConfigChangeRef.current?.(nextConfig);
+    });
+  };
+
+  const reportEditorActivity = () => {
+    if (!cardId) {
+      return;
+    }
+
+    globalEventEmitter.emit('card:editor-activity', {
+      cardId,
+      baseCardId,
+      cardType,
+      at: Date.now(),
+    });
+  };
+
+  const queueConfigChange = (nextConfig: Record<string, unknown>) => {
+    const nextSignature = JSON.stringify(nextConfig);
+    if (
+      nextSignature === latestConfigSignatureRef.current &&
+      pendingConfigRef.current === null
+    ) {
+      return;
+    }
+
+    reportEditorActivity();
+    pendingConfigRef.current = nextConfig;
+
+    if (pendingCommitTimerRef.current !== null) {
+      window.clearTimeout(pendingCommitTimerRef.current);
+    }
+
+    pendingCommitTimerRef.current = window.setTimeout(() => {
+      flushPendingConfigChange();
+    }, EDITOR_CONFIG_COMMIT_DEBOUNCE_MS);
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -116,9 +177,7 @@ export function PluginHost({
           if (disposed) {
             return;
           }
-          startTransition(() => {
-            onConfigChangeRef.current?.(payload.config);
-          });
+          queueConfigChange(payload.config);
         }),
       );
 
@@ -145,6 +204,7 @@ export function PluginHost({
 
     return () => {
       disposed = true;
+      flushPendingConfigChange();
       cleanupTasks.forEach((cleanup) => cleanup());
       const frame = frameRef.current;
       if (frame && frame.parentElement) {

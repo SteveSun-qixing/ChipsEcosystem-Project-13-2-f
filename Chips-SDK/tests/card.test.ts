@@ -43,6 +43,21 @@ describe("CardApi", () => {
     });
   });
 
+  it("rejects invalid compositeWindow interactionPolicy", async () => {
+    const api = createCardApi(
+      createStubClient(async () => {
+        throw new Error("should not be called");
+      }),
+    );
+
+    await expect(
+      // @ts-expect-error intentional invalid interactionPolicy for runtime check
+      api.compositeWindow.render({ cardFile: "/test.card", interactionPolicy: "invalid" }),
+    ).rejects.toMatchObject<ReturnType<typeof createError>>({
+      code: "INVALID_ARGUMENT",
+    });
+  });
+
   it("passes mode into card.render options for compositeWindow.render", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 
@@ -84,6 +99,56 @@ describe("CardApi", () => {
       expect(payload.cardFile).toBe("/test.card");
       expect(payload.options?.target).toBe("card-iframe");
       expect(payload.options?.mode).toBe("preview");
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("passes interactionPolicy into card.render options for compositeWindow.render", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          view: {
+            title: "Test Card",
+            body: "<div>content</div>",
+            contentFiles: [],
+            target: "card-iframe",
+            semanticHash: "hash",
+          },
+        } as any;
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+
+    try {
+      (globalThis as any).window = { location: { origin: "https://example.test" }, addEventListener: () => {}, removeEventListener: () => {} };
+      (globalThis as any).document = {
+        createElement: (tag: string) => ({
+          tagName: tag.toUpperCase(),
+          attrs: {} as Record<string, string>,
+          setAttribute(name: string, value: string) {
+            this.attrs[name] = value;
+          },
+        }),
+      };
+
+      await api.compositeWindow.render({
+        cardFile: "/test.card",
+        mode: "preview",
+        interactionPolicy: "delegate",
+      });
+
+      const payload = calls[0]?.payload as {
+        cardFile: string;
+        options?: { mode?: string; target?: string; interactionPolicy?: string };
+      };
+      expect(payload.options?.interactionPolicy).toBe("delegate");
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -242,6 +307,7 @@ describe("CardApi", () => {
 
       let readyCount = 0;
       let resizePayload: unknown = null;
+      let interactionPayload: unknown = null;
       let nodeSelectPayload: unknown = null;
       let nodeErrorPayload: unknown = null;
       let fatalErrorPayload: unknown = null;
@@ -252,6 +318,10 @@ describe("CardApi", () => {
 
       api.compositeWindow.onResize(frame, (payload) => {
         resizePayload = payload;
+      });
+
+      api.compositeWindow.onInteraction(frame, (payload) => {
+        interactionPayload = payload;
       });
 
       api.compositeWindow.onNodeError(frame, (payload) => {
@@ -299,6 +369,25 @@ describe("CardApi", () => {
       };
       dispatch(resize);
       expect(resizePayload).toEqual(resize.payload);
+
+      const interaction = {
+        type: "chips.composite:interaction",
+        payload: {
+          cardId: "card-1",
+          nodeId: "n1",
+          cardType: "RichTextCard",
+          source: "basecard-frame",
+          device: "wheel",
+          intent: "scroll",
+          deltaX: 10,
+          deltaY: 24,
+          clientX: 160,
+          clientY: 240,
+          pointerCount: 1,
+        },
+      };
+      dispatch(interaction);
+      expect(interactionPayload).toEqual(interaction.payload);
 
       const nodeSelect = {
         type: "chips.composite:node-select",

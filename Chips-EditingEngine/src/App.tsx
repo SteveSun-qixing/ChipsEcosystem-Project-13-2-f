@@ -32,7 +32,6 @@ function createInitialBasicCard(typeId: string): BasicCardConfig {
       type: typeId,
       config: {
         id: baseCardId,
-        title: '',
         body: '<p></p>',
         locale: 'zh-CN',
       },
@@ -51,7 +50,7 @@ function createInitialBasicCard(typeId: string): BasicCardConfig {
 
 function MainWorkspace() {
   const { currentLayout, setState } = useEditor();
-  const { createToolWindow, createCardWindow, updateWindow, windows } = useUI();
+  const { createToolWindow, createCardWindow, updateWindow, focusWindow, windows } = useUI();
   const { openCard } = useCard();
   const { t } = useTranslation();
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -155,13 +154,34 @@ function MainWorkspace() {
 
       await openCard(file.id, file.path);
       const existingWindow = windows.find((window) => window.type === 'card' && window.cardId === file.id);
-      if (!existingWindow) {
-        createCardWindow(file.id, {
-          title: file.name ?? file.path.split('/').pop() ?? file.id,
-          isEditing: payload.openOptions?.isEditing ?? true,
-          position: payload.openOptions?.windowPosition,
-        });
+      if (existingWindow) {
+        const updates: Record<string, unknown> = {};
+
+        if (payload.openOptions?.windowPosition) {
+          updates.position = payload.openOptions.windowPosition;
+        }
+
+        if (typeof payload.openOptions?.isEditing === 'boolean') {
+          updates.isEditing = payload.openOptions.isEditing;
+        }
+
+        if (existingWindow.state !== 'normal') {
+          updates.state = 'normal';
+        }
+
+        if (Object.keys(updates).length > 0) {
+          updateWindow(existingWindow.id, updates);
+        }
+
+        focusWindow(existingWindow.id);
+        return;
       }
+
+      createCardWindow(file.id, {
+        title: file.name ?? file.path.split('/').pop() ?? file.id,
+        isEditing: payload.openOptions?.isEditing ?? true,
+        position: payload.openOptions?.windowPosition,
+      });
     };
 
     const handleOpenWorkspaceFileSafe = (payload: {
@@ -183,7 +203,7 @@ function MainWorkspace() {
       workspaceService.off('workspace:file-opened', handleOpenWorkspaceFileSafe);
       workspaceService.off('workspace:file-created', handleOpenWorkspaceFileSafe);
     };
-  }, [createCardWindow, openCard, windows]);
+  }, [createCardWindow, focusWindow, openCard, updateWindow, windows]);
 
   const handleCanvasDropCreate = useCallback(async (
     data: DragData,
@@ -212,6 +232,22 @@ function MainWorkspace() {
       return;
     }
 
+    if (data.type === 'workspace-file') {
+      if (data.fileType !== 'card') {
+        console.warn('[App] Unsupported workspace file drop target type.', {
+          fileId: data.fileId,
+          fileType: data.fileType,
+        });
+        return;
+      }
+
+      workspaceService.openFile(data.fileId, {
+        windowPosition: worldPosition,
+        isEditing: true,
+      });
+      return;
+    }
+
     if (data.type === 'layout') {
       await workspaceService.createBox(data.name.trim() || '未命名盒子', data.typeId);
     }
@@ -227,7 +263,7 @@ function MainWorkspace() {
         )}
         <Dock onOpenSettings={openSettings} />
       </div>
-      
+
       {settingsVisible && (
         <Suspense fallback={null}>
           <EngineSettingsDialog

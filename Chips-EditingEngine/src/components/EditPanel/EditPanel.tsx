@@ -39,6 +39,7 @@ export default function EditPanel({
       <div className="edit-panel__content">
         {selectedBaseCard ? (
           <PluginHost
+            cardId={activeCard.id}
             cardType={selectedBaseCard.type}
             baseCardId={selectedBaseCard.id}
             config={selectedBaseCard.data}

@@ -120,12 +120,12 @@ describe('CardSettingsDialog', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="created-at"]')?.textContent).toBe('2026-03-13T10:00:00.000Z');
+    expect(document.body.querySelector('[data-testid="created-at"]')?.textContent).toBe('2026-03-13T10:00:00.000Z');
 
     await act(async () => {
-      (container.querySelector('[data-testid="rename-card"]') as HTMLButtonElement).click();
-      (container.querySelector('[data-testid="retag-card"]') as HTMLButtonElement).click();
-      (container.querySelector('[data-testid="apply-theme"]') as HTMLButtonElement).click();
+      (document.body.querySelector('[data-testid="rename-card"]') as HTMLButtonElement).click();
+      (document.body.querySelector('[data-testid="retag-card"]') as HTMLButtonElement).click();
+      (document.body.querySelector('[data-testid="apply-theme"]') as HTMLButtonElement).click();
     });
 
     expect(updateCardMetadata).toHaveBeenCalledWith('card-1', { name: 'Renamed Card' });
@@ -148,7 +148,7 @@ describe('CardSettingsDialog', () => {
     });
 
     await act(async () => {
-      const buttons = Array.from(container.querySelectorAll('button'));
+      const buttons = Array.from(document.body.querySelectorAll('button'));
       const saveButton = buttons.find((button) => button.textContent === '保存');
       saveButton?.click();
       await Promise.resolve();
@@ -156,5 +156,34 @@ describe('CardSettingsDialog', () => {
 
     expect(saveCard).toHaveBeenCalledWith('card-1');
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('can transition from hidden to visible without breaking hook order and renders into document.body', async () => {
+    await act(async () => {
+      root.render(
+        <CardSettingsDialog
+          cardId="card-1"
+          visible={false}
+          onClose={() => undefined}
+          onSave={() => undefined}
+        />,
+      );
+    });
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+
+    await act(async () => {
+      root.render(
+        <CardSettingsDialog
+          cardId="card-1"
+          visible
+          onClose={() => undefined}
+          onSave={() => undefined}
+        />,
+      );
+    });
+
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('.card-settings-overlay')).not.toBeNull();
   });
 });

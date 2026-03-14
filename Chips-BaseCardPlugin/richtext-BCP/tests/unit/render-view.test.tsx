@@ -3,20 +3,17 @@ import { createBasecardViewRoot } from "../../src/render/view";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
 describe("createBasecardViewRoot (text basic)", () => {
-  it("renders title and body", () => {
+  it("renders body without a separate title node", () => {
     const config: BasecardConfig = {
       id: "test",
-      title: "Hello",
       body: "World",
       locale: "zh-CN",
     };
 
     const root = createBasecardViewRoot(config);
-    const titleEl = root.querySelector(".chips-basecard__title");
     const bodyEl = root.querySelector(".chips-basecard__body");
 
-    expect(titleEl?.textContent).toBe("Hello");
+    expect(root.querySelector(".chips-basecard__title")).toBeNull();
     expect(bodyEl?.textContent).toBe("World");
   });
 });
-

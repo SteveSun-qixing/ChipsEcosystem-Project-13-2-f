@@ -6,6 +6,8 @@ export type {
   CardRenderOptions,
   CardRenderResult,
   CardRenderView,
+  CompositeInteractionPayload,
+  CompositeInteractionPolicy,
   CompositeMode,
   FrameRenderResult,
 } from "./api/card";

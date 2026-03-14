@@ -53,6 +53,12 @@ export interface RenderedCardEditorView {
   baseCardId?: string;
 }
 
+export interface RenderedCardCoverView {
+  title: string;
+  coverUrl: string;
+  ratio?: string;
+}
+
 export interface CardServiceOptions {
   runtime?: Pick<PluginRuntime, 'query'>;
   workspaceRoot?: string;
@@ -94,6 +100,12 @@ interface RenderedBaseCardNode {
   pluginId?: string;
   frameHtml?: string;
   error?: FrameErrorPayload;
+}
+
+interface PersistentCardRootCacheEntry {
+  rootDir: string;
+  sourceMtimeMs: number;
+  sourceSize: number;
 }
 
 interface BaseCardPluginModule {
@@ -1242,6 +1254,7 @@ export class CardService {
   private readonly workspaceRoot: string;
   private readonly moduleCache = new Map<string, Promise<BaseCardPluginModule>>();
   private readonly browserBundleCache = new Map<string, Promise<string>>();
+  private readonly persistentCardRootCache = new Map<string, PersistentCardRootCacheEntry>();
 
   public constructor(
     options: CardServiceOptions = {},
@@ -1345,6 +1358,31 @@ export class CardService {
         consistency: options?.verifyConsistency ? createConsistencySnapshot(semanticHash) : undefined
       };
     });
+  }
+
+  public async renderCover(cardFile: string): Promise<RenderedCardCoverView> {
+    const check = await this.validate(cardFile);
+    if (!check.valid) {
+      throw createError('CARD_SCHEMA_INVALID', 'Card format validation failed', check.errors);
+    }
+
+    const resolvedRoot = await this.resolveCardRoot(cardFile, { persistArchive: true });
+    try {
+      const metadataPath = path.join(resolvedRoot.rootDir, '.card/metadata.yaml');
+      const coverPath = path.join(resolvedRoot.rootDir, '.card/cover.html');
+      const metadata = parseCardYamlRecord(await fs.readFile(metadataPath, 'utf-8'), metadataPath);
+      const title = asString(metadata.name) ?? 'Untitled Card';
+      const ratio = asString(metadata.cover_ratio);
+      const coverUrl = pathToFileURL(path.resolve(coverPath)).href;
+
+      return {
+        title,
+        coverUrl,
+        ratio,
+      };
+    } finally {
+      await resolvedRoot.cleanup?.();
+    }
   }
 
   public async renderEditor(options: CardEditorRenderOptions): Promise<RenderedCardEditorView> {
@@ -1847,10 +1885,17 @@ export class CardService {
     }
   }
 
-  private async resolveCardRoot(cardFile: string): Promise<{ rootDir: string; cleanup?: () => Promise<void> }> {
+  private async resolveCardRoot(
+    cardFile: string,
+    options: { persistArchive?: boolean } = {},
+  ): Promise<{ rootDir: string; cleanup?: () => Promise<void> }> {
     const fileStats = await this.safeStat(cardFile);
     if (fileStats?.isDirectory()) {
       return { rootDir: cardFile };
+    }
+
+    if (options.persistArchive) {
+      return this.resolvePersistentCardRoot(path.resolve(cardFile), fileStats);
     }
 
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-parse-'));
@@ -1861,6 +1906,41 @@ export class CardService {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     };
+  }
+
+  private async resolvePersistentCardRoot(
+    cardFile: string,
+    fileStats?: import('node:fs').Stats,
+  ): Promise<{ rootDir: string }> {
+    const stats = fileStats ?? await this.safeStat(cardFile);
+    if (!stats?.isFile()) {
+      throw createError('CARD_FILE_NOT_FOUND', `Card file does not exist: ${cardFile}`);
+    }
+
+    const cached = this.persistentCardRootCache.get(cardFile);
+    if (cached) {
+      const cachedRootStats = await this.safeStat(cached.rootDir);
+      if (
+        cachedRootStats?.isDirectory() &&
+        cached.sourceMtimeMs === stats.mtimeMs &&
+        cached.sourceSize === stats.size
+      ) {
+        return { rootDir: cached.rootDir };
+      }
+
+      await fs.rm(cached.rootDir, { recursive: true, force: true });
+      this.persistentCardRootCache.delete(cardFile);
+    }
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-cover-'));
+    await this.zip.extract(cardFile, tempDir);
+    this.persistentCardRootCache.set(cardFile, {
+      rootDir: tempDir,
+      sourceMtimeMs: stats.mtimeMs,
+      sourceSize: stats.size,
+    });
+
+    return { rootDir: tempDir };
   }
 
   private async readContentFiles(rootDir: string, contentFiles: string[]): Promise<Map<string, ParsedContentFile>> {

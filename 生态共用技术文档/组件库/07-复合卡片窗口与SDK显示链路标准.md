@@ -10,6 +10,7 @@
 - Host 是唯一的卡片渲染、主题解析和窗口编排执行方；
 - 主题必须贯穿应用壳层、复合卡片 iframe、基础卡片 iframe 和原生窗口；
 - 不允许应用层自行实现另一套 iframe 拼接、主题注入或兼容分支。
+- 封面显示属于并列的正式链路，统一由 `CardCoverFrame` + `card.renderCover` 负责，不复用复合卡片 `card.render` 文档。
 
 ## 3. 标准链路
 

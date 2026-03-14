@@ -4,5 +4,6 @@ export type {
   CardRenderOptions,
   CardEditorRenderOptions,
   RenderedCardView,
-  RenderedCardEditorView
+  RenderedCardEditorView,
+  RenderedCardCoverView,
 } from './card-service';

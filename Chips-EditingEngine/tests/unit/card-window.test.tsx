@@ -22,6 +22,17 @@ const compositeWindowApi = {
   onNodeError: vi.fn(() => () => {}),
 };
 
+const coverFrameApi = {
+  render: vi.fn(async () => {
+    const frame = document.createElement('iframe');
+    frame.src = 'file:///workspace/.card/cover.html';
+    return {
+      frame,
+      origin: 'null',
+    };
+  }),
+};
+
 const setActiveCard = vi.fn();
 const setSelectedBaseCard = vi.fn();
 const panByInput = vi.fn();
@@ -31,6 +42,7 @@ const markInteractionSequence = vi.fn();
 vi.mock('../../src/services/bridge-client', () => ({
   getChipsClient: () => ({
     card: {
+      coverFrame: coverFrameApi,
       compositeWindow: compositeWindowApi,
     },
   }),
@@ -143,6 +155,7 @@ describe('CardWindow', () => {
     compositeWindowApi.onNodeSelect.mockClear();
     compositeWindowApi.onFatalError.mockClear();
     compositeWindowApi.onNodeError.mockClear();
+    coverFrameApi.render.mockClear();
     setActiveCard.mockClear();
     setSelectedBaseCard.mockClear();
     panByInput.mockClear();
@@ -447,6 +460,39 @@ describe('CardWindow', () => {
     });
 
     expect(zoomByFactorAtPoint).toHaveBeenCalledWith(1.2, 170, 320);
+  });
+
+  it('renders the formal cover iframe in cover mode instead of the local placeholder', async () => {
+    await act(async () => {
+      root.render(
+        <CardWindow
+          config={{
+            id: 'window-cover',
+            type: 'card',
+            cardId: 'card-1',
+            position: { x: 0, y: 0 },
+            size: { width: 640, height: 480 },
+            state: 'cover',
+            isEditing: false,
+            title: 'Demo Card',
+          }}
+          onUpdateConfig={() => undefined}
+          onClose={() => undefined}
+          onFocus={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(coverFrameApi.render).toHaveBeenCalledWith({
+      cardFile: '/workspace/demo.card',
+      cardName: 'Demo Card',
+    });
+    expect(compositeWindowApi.render).not.toHaveBeenCalled();
+    expect(container.querySelector('.card-cover__frame-host iframe')).not.toBeNull();
+    expect(container.querySelector('.card-cover__title')).toBeNull();
+    expect(container.querySelector('.card-cover__placeholder')).toBeNull();
   });
 
   it('opens the card settings dialog from the window menu settings action', async () => {

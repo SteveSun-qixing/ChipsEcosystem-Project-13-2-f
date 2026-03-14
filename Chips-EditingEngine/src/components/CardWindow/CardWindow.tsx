@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useThemeRuntime } from '@chips/component-library';
 import type { CompositeInteractionPayload } from 'chips-sdk';
 import { CardWindowBase } from '../CardWindowBase/CardWindowBase';
@@ -44,6 +44,9 @@ export function CardWindow({
     const panByInputRef = useRef(canvasContext.panByInput);
     const zoomByFactorAtPointRef = useRef(canvasContext.zoomByFactorAtPoint);
     const markInteractionSequenceRef = useRef(canvasContext.markInteractionSequence);
+    const coverHostRef = useRef<HTMLDivElement | null>(null);
+    const coverFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const hasResolvedCoverRef = useRef(false);
     const previewHostRef = useRef<HTMLDivElement | null>(null);
     const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
     const hasResolvedPreviewRef = useRef(false);
@@ -52,11 +55,14 @@ export function CardWindow({
     const visibleBaseCardIds = visibleBaseCards.map((baseCard) => baseCard.id).join('|');
 
     const [isCoverDragging, setIsCoverDragging] = useState(false);
+    const [isCoverLoading, setIsCoverLoading] = useState(false);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [coverError, setCoverError] = useState<string | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewHeight, setPreviewHeight] = useState<number | null>(null);
     const [coverRenderPosition, setCoverRenderPosition] = useState(config.position);
+    const [coverRefreshRevision, setCoverRefreshRevision] = useState(0);
     const [previewRefreshRevision, setPreviewRefreshRevision] = useState(0);
 
     const coverDragStart = useRef({ x: 0, y: 0 });
@@ -88,6 +94,22 @@ export function CardWindow({
 
         return () => {
             globalEventEmitter.off('card:editor-activity', subscriptionId);
+        };
+    }, [config.cardId]);
+
+    useEffect(() => {
+        const subscriptionId = globalEventEmitter.on<{ cardId?: string }>('card:persisted', (payload) => {
+            if (payload?.cardId !== config.cardId) {
+                return;
+            }
+
+            startTransition(() => {
+                setCoverRefreshRevision((current) => current + 1);
+            });
+        });
+
+        return () => {
+            globalEventEmitter.off('card:persisted', subscriptionId);
         };
     }, [config.cardId]);
 
@@ -268,6 +290,136 @@ export function CardWindow({
             document.removeEventListener('mouseup', handleCoverMouseUp);
         };
     }, [isCoverDragging, handleCoverMouseMove, handleCoverMouseUp]);
+
+    useEffect(() => {
+        const host = coverHostRef.current;
+        if (!host) {
+            return;
+        }
+
+        if (!cardInfo || windowState !== 'cover') {
+            while (host.firstChild) {
+                host.removeChild(host.firstChild);
+            }
+            coverFrameRef.current = null;
+            hasResolvedCoverRef.current = false;
+            setIsCoverLoading(false);
+            setCoverError(null);
+            return;
+        }
+
+        let disposed = false;
+        const cleanupTasks: Array<() => void> = [];
+        let stagedFrame: HTMLIFrameElement | null = null;
+        const previousFrame = coverFrameRef.current;
+        const hasVisibleCover = !!(previousFrame && previousFrame.parentElement === host);
+        const shouldShowInitialLoading = !hasVisibleCover && !hasResolvedCoverRef.current;
+
+        setIsCoverLoading(shouldShowInitialLoading);
+        setCoverError(null);
+
+        clientRef.current.card.coverFrame.render({
+            cardFile: cardInfo.path,
+            cardName: cardInfo.metadata?.name || translationRef.current('card_window.untitled') || '无标题卡片',
+        }).then((result) => {
+            if (disposed) {
+                return;
+            }
+
+            const frame = result.frame;
+            stagedFrame = frame;
+            frame.style.width = '100%';
+            frame.style.height = '100%';
+            frame.style.border = 'none';
+            frame.style.display = 'block';
+            frame.style.background = 'transparent';
+            frame.style.position = 'absolute';
+            frame.style.inset = '0';
+            frame.style.pointerEvents = 'none';
+            frame.style.visibility = hasVisibleCover ? 'hidden' : 'visible';
+            host.appendChild(frame);
+
+            let didRevealFrame = false;
+            const revealFrame = () => {
+                if (disposed || didRevealFrame) {
+                    return;
+                }
+
+                didRevealFrame = true;
+                hasResolvedCoverRef.current = true;
+                frame.style.visibility = 'visible';
+                coverFrameRef.current = frame;
+
+                if (previousFrame && previousFrame !== frame && previousFrame.parentElement === host) {
+                    previousFrame.parentElement.removeChild(previousFrame);
+                }
+
+                setIsCoverLoading(false);
+                setCoverError(null);
+            };
+
+            const handleFrameLoad = () => {
+                revealFrame();
+            };
+
+            const handleFrameError = () => {
+                if (disposed) {
+                    return;
+                }
+
+                if (frame.parentElement && frame !== coverFrameRef.current) {
+                    frame.parentElement.removeChild(frame);
+                }
+
+                if (!hasVisibleCover) {
+                    setIsCoverLoading(false);
+                    setCoverError(translationRef.current('plugin_host.error') || '加载失败');
+                }
+            };
+
+            frame.addEventListener('load', handleFrameLoad);
+            frame.addEventListener('error', handleFrameError);
+            cleanupTasks.push(() => {
+                frame.removeEventListener('load', handleFrameLoad);
+                frame.removeEventListener('error', handleFrameError);
+            });
+
+            if (frame.src.startsWith('file:') || frame.src.startsWith('data:')) {
+                queueMicrotask(() => {
+                    revealFrame();
+                });
+            }
+        }).catch((error: unknown) => {
+            if (disposed) {
+                return;
+            }
+
+            console.error('[CardWindow] Failed to render card cover.', {
+                cardId: config.cardId,
+                cardFile: cardInfo?.path,
+                error,
+            });
+
+            if (shouldShowInitialLoading) {
+                setIsCoverLoading(false);
+                setCoverError(translationRef.current('plugin_host.error') || '加载失败');
+            }
+        });
+
+        return () => {
+            disposed = true;
+            cleanupTasks.forEach((cleanup) => cleanup());
+            if (stagedFrame && stagedFrame.parentElement && stagedFrame !== coverFrameRef.current) {
+                stagedFrame.parentElement.removeChild(stagedFrame);
+            }
+        };
+    }, [
+        cardInfo?.metadata?.name,
+        cardInfo?.path,
+        config.cardId,
+        coverRefreshRevision,
+        windowState,
+    ]);
 
     useEffect(() => {
         const host = previewHostRef.current;
@@ -478,13 +630,16 @@ export function CardWindow({
                 style={coverStyle}
                 onMouseDown={handleCoverMouseDown}
             >
-                <div className="card-cover__image" style={{ aspectRatio: rawRatio }}>
-                    <div className="card-cover__placeholder">
-                        {cardInfo?.metadata?.name || t('card_window.untitled')}
-                    </div>
-                </div>
-                <div className="card-cover__title">
-                    {cardInfo?.metadata?.name || t('card_window.untitled')}
+                <div className="card-cover__surface" style={{ aspectRatio: rawRatio }}>
+                    <div ref={coverHostRef} className="card-cover__frame-host" />
+                    {isCoverLoading && <div className="card-cover__status card-cover__status--loading" aria-hidden="true" />}
+                    {coverError && (
+                        <div
+                            className="card-cover__status card-cover__status--error"
+                            aria-label={coverError}
+                            title={coverError}
+                        />
+                    )}
                 </div>
             </div>
         );

@@ -104,7 +104,7 @@ const enUS: Record<string, string> = {
     'card_settings.cover_html_title': 'cover.html Code',
     'card_settings.cover_html_desc': 'Everything entered here will be written directly to cover.html.',
     'card_settings.cover_crop_title': 'Crop Cover',
-    'card_settings.cover_crop_desc': 'Drag the frame and zoom the image to crop an area that matches the current cover ratio.',
+    'card_settings.cover_crop_desc': 'Drag the frame to move it, then drag the corners to resize it while keeping the current ratio.',
     'card_settings.cover_crop_zoom': 'Zoom',
     'card_settings.cover_crop_apply': 'Apply Crop',
     'card_settings.cover_crop_action': 'Crop',

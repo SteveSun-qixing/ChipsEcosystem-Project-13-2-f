@@ -2,6 +2,8 @@ import React, { startTransition, useDeferredValue, useEffect, useRef, useState }
 import { fileService } from '../../../services/file-service';
 import { useTranslation } from '../../../hooks/useTranslation';
 import {
+  binaryToDataUrl,
+  blobToDataUrl,
   createDefaultCoverHtml,
   createImageCoverHtml,
   DEFAULT_COVER_RATIO,
@@ -10,6 +12,7 @@ import {
   swapCoverRatio,
   type CardCoverResource,
 } from '../../../utils/card-cover';
+import { resolveCoverPreviewFrameSize } from './cover-panel-layout';
 import { CoverCropDialog } from './CoverCropDialog';
 import './CoverPanel.css';
 
@@ -96,7 +99,9 @@ function getImageExtension(fileName: string, mimeType: string): string {
 function revokeUrls(urls: Array<string | null | undefined>): void {
   const uniqueUrls = new Set(urls.filter((url): url is string => Boolean(url)));
   uniqueUrls.forEach((url) => {
-    URL.revokeObjectURL(url);
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
   });
 }
 
@@ -137,6 +142,7 @@ export function CoverPanel({
   const { t } = useTranslation();
   const imageDraftRef = useRef<ImageDraft | null>(null);
   const savedPreviewUrlRef = useRef<string | null>(null);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
 
   const initialHtml = currentCoverHtml?.trim() ? currentCoverHtml : createDefaultCoverHtml(cardName);
   const initialRatio = normalizeCoverRatio(currentRatio ?? DEFAULT_COVER_RATIO);
@@ -152,6 +158,7 @@ export function CoverPanel({
   const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null);
   const [savedImagePreviewUrl, setSavedImagePreviewUrl] = useState<string | null>(null);
   const [isCropDialogOpen, setIsCropDialogOpen] = useState(false);
+  const [previewFrameSize, setPreviewFrameSize] = useState({ width: 0, height: 0 });
   const deferredHtmlCode = useDeferredValue(htmlCode);
 
   useEffect(() => {
@@ -201,8 +208,7 @@ export function CoverPanel({
           return;
         }
 
-        const blob = new Blob([resourceData], { type: guessMimeType(resourcePath) });
-        const nextPreviewUrl = URL.createObjectURL(blob);
+        const nextPreviewUrl = await binaryToDataUrl(resourceData, guessMimeType(resourcePath));
         revokeUrls([savedPreviewUrlRef.current]);
         savedPreviewUrlRef.current = nextPreviewUrl;
         setSavedImagePreviewUrl(nextPreviewUrl);
@@ -262,6 +268,32 @@ export function CoverPanel({
     });
   }, [activeRatio, draftHtml, imageDraft, isDraftDirty, isDraftValid, mode, onDraftChange]);
 
+  useEffect(() => {
+    const viewport = previewViewportRef.current;
+    if (!viewport) {
+      return undefined;
+    }
+
+    const updatePreviewFrameSize = () => {
+      setPreviewFrameSize(resolveCoverPreviewFrameSize({
+        ratio: activeRatio,
+        containerWidth: viewport.clientWidth,
+        containerHeight: viewport.clientHeight,
+      }));
+    };
+
+    updatePreviewFrameSize();
+
+    const observer = new ResizeObserver(() => {
+      updatePreviewFrameSize();
+    });
+
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeRatio]);
+
   const ratioOptions = COVER_RATIO_PRESETS.map((item) => ({
     ...item,
     label: t(item.labelKey) || item.fallbackLabel,
@@ -286,7 +318,7 @@ export function CoverPanel({
 
     const fileData = new Uint8Array(await file.arrayBuffer());
     const extension = getImageExtension(file.name, file.type);
-    const sourceUrl = URL.createObjectURL(file);
+    const sourceUrl = await blobToDataUrl(file);
     const nextDraft: ImageDraft = {
       fileName: file.name,
       sourceUrl,
@@ -334,21 +366,14 @@ export function CoverPanel({
   return (
     <div className="cover-panel">
       <div className="cover-panel__preview-pane">
-        <div className="cover-panel__preview-header">
-          <div>
-            <h3 className="cover-panel__section-title">{t('card_settings.cover_preview_title') || '封面预览'}</h3>
-            <p className="cover-panel__section-desc">
-              {t('card_settings.cover_preview_desc') || '左侧窗口实时显示当前 cover.html 的效果。'}
-            </p>
-          </div>
-
-          <span className="cover-panel__preview-ratio">
-            {(t('card_settings.cover_preview_ratio') || '比例 {ratio}').replace('{ratio}', activeRatio)}
-          </span>
-        </div>
-
-        <div className="cover-panel__preview-shell">
-          <div className="cover-panel__preview-frame" style={{ aspectRatio: activeRatio.replace(':', ' / ') }}>
+        <div ref={previewViewportRef} className="cover-panel__preview-viewport">
+          <div
+            className="cover-panel__preview-frame"
+            style={{
+              width: `${previewFrameSize.width}px`,
+              height: `${previewFrameSize.height}px`,
+            }}
+          >
             {previewHtml ? (
               <iframe
                 key={`${mode}-${activeRatio}-${Boolean(activeImagePreviewUrl)}`}
@@ -357,23 +382,7 @@ export function CoverPanel({
                 sandbox="allow-scripts"
                 srcDoc={previewHtml}
               />
-            ) : (
-              <div className="cover-panel__preview-empty">
-                <span className="cover-panel__preview-empty-title">
-                  {t('card_settings.cover_preview_empty_title') || '等待生成封面'}
-                </span>
-                <span className="cover-panel__preview-empty-text">
-                  {mode === 'image'
-                    ? (t('card_settings.cover_preview_empty_image') || '上传图片后会在这里实时预览。')
-                    : (t('card_settings.cover_preview_empty_html') || '输入 HTML 代码后会在这里实时预览。')}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="cover-panel__preview-caption">
-            <span>{cardName}</span>
-            <span>{t('card_settings.cover_preview_runtime_note') || '封面最终以 cover.html 独立输出，不继承主题和多语言。'}</span>
+            ) : null}
           </div>
         </div>
       </div>

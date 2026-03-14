@@ -39,6 +39,19 @@ SDK封装了生态的核心能力，提供给开发者使用。
 
 事件机制支持异步通知。模块可以发布事件，其他模块可以订阅事件。事件用于状态变化通知、用户操作反馈等场景。
 
+卡片显示相关的正式协议分为三条并列链路：
+
+- `card.render` / `client.card.compositeWindow.render(...)`：复合卡片显示链路
+- `card.renderCover` / `client.card.coverFrame.render(...)`：封面显示链路
+- `card.renderEditor` / `client.card.editorPanel.render(...)`：基础卡片编辑器链路
+
+其中封面显示链路的正式约束是：
+
+- Host 读取 `.card/cover.html` 并返回受控 `coverUrl`
+- SDK 使用 `coverUrl` 创建 iframe,不允许把封面 HTML 直接当作字符串注入
+- 封面内容只由 `cover.html` 决定,不自动接入主题和多语言系统
+- `.card/cover.html` 中的相对路径按 `.card/` 目录解析
+
 ## 集成使用场景
 
 SDK 支持多种集成使用场景：

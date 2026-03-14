@@ -140,7 +140,11 @@ client.card.editorPanel.render({
 
 说明：
 
-- `coverFrame` 返回卡片封面 iframe（下方显示卡片名称）。
+- `coverFrame` 返回卡片封面 iframe（下方显示卡片名称），其正式链路为 `Host card.renderCover -> SDK coverFrame.render -> iframe src=coverUrl`。
+- `coverFrame` 内部必须使用受控 `coverUrl` 创建 iframe，不允许把封面 HTML 作为 `srcdoc` 或字符串直接注入。
+- `coverFrame` 默认应使用 `sandbox="allow-scripts allow-same-origin"`，以支持 `.card/cover.html` 及其相对资源稳定加载。
+- 封面 iframe 的内容完全由 `.card/cover.html` 决定；Host/SDK 不会为封面文档自动注入主题系统、多语言系统或复合卡片壳层结构。
+- `.card/cover.html` 内引用的相对路径按 `.card/` 目录解析，可继续访问 `.card/cardcover/*`。
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
 - `compositeWindow.interactionPolicy` 只允许 `native | delegate`，默认应保持 `native`。
@@ -149,6 +153,23 @@ client.card.editorPanel.render({
 - `compositeWindow.interactionPolicy = 'delegate'` 时，可通过 `onInteraction` 订阅复合卡片内部滚轮、触摸滚动和捏合缩放意图，正式用于无限画布等需要外层壳层接管桌面交互的场景。
 - `editorPanel` 返回基础卡片编辑器 iframe，正式用于编辑引擎编辑面板、嵌套编辑场景等。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
+
+封面窗口推荐使用方式：
+
+```typescript
+const cover = await client.card.coverFrame.render({
+  cardFile: '/workspace/demo.card',
+  cardName: 'Demo Card',
+});
+
+container.replaceChildren(cover.frame);
+```
+
+说明：
+
+- `cover.frame.src` 来自 Host 返回的正式 `coverUrl`；
+- 应用层负责承载 iframe、显示卡片名称、处理点击/打开卡片等业务外壳；
+- 应用层不负责改写 `.card/cover.html` 的内容，也不负责拼接额外 HTML 壳层。
 
 复合卡片预览模式推荐事件订阅接口：
 

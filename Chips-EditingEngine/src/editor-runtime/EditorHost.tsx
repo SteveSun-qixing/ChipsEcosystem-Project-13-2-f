@@ -2,21 +2,67 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getBasecardDescriptor } from '../basecard-runtime/registry';
 import { globalEventEmitter } from '../core/event-emitter';
 import { useTranslation } from '../hooks/useTranslation';
+import { fileService } from '../services/file-service';
+import type { BasecardPendingResourceImport, BasecardResourceOperations } from '../basecard-runtime/contracts';
 import type { EditorSessionSnapshot } from './contracts';
 import { useEditorRuntime } from './context';
 
+function joinPath(...parts: string[]): string {
+  return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
+}
+
+function normalizeResourcePath(resourcePath: string): string | null {
+  const normalized = resourcePath.replace(/\\/g, '/').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\.?\//, '')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    return null;
+  }
+
+  return segments.join('/');
+}
+
+function sanitizeImportedFileName(fileName: string): string {
+  const normalizedPath = normalizeResourcePath(fileName);
+  const candidate = normalizedPath?.split('/').pop() ?? fileName.trim();
+  const sanitized = candidate
+    .replace(/[\u0000-\u001f]/g, '')
+    .replace(/[<>:"/\\|?*]/g, '')
+    .trim();
+
+  return sanitized.length > 0 ? sanitized : 'resource';
+}
+
+function createObjectUrl(resource: BasecardPendingResourceImport): string {
+  const type = resource.mimeType?.trim() || 'application/octet-stream';
+  const buffer = new ArrayBuffer(resource.data.byteLength);
+  new Uint8Array(buffer).set(resource.data);
+  return URL.createObjectURL(new Blob([buffer], { type }));
+}
+
 export interface EditorHostProps {
   cardId: string;
+  cardPath: string;
   cardType: string;
   baseCardId: string;
   sourceConfig: Record<string, unknown>;
-  onConfigChange?: (config: Record<string, unknown>) => void;
+  onConfigChange?: (
+    config: Record<string, unknown>,
+    resourceOperations?: BasecardResourceOperations,
+  ) => Promise<void> | void;
   onPluginLoaded?: (pluginInfo: { cardType: string; baseCardId: string }) => void;
   onPluginError?: (error: Error) => void;
 }
 
 export function EditorHost({
   cardId,
+  cardPath,
   cardType,
   baseCardId,
   sourceConfig,
@@ -48,10 +94,36 @@ export function EditorHost({
   const [isLoading, setIsLoading] = useState(true);
   const [renderRevision, setRenderRevision] = useState(0);
   const mountRevision = snapshot?.mountRevision ?? 0;
+  const resolvedResourceUrlsRef = useRef(new Map<string, string>());
+  const pendingResourceResolvesRef = useRef(new Map<string, Promise<string>>());
 
   const syncSnapshot = useCallback(() => {
     setSnapshot(store.getSnapshot(sessionKey));
   }, [sessionKey, store]);
+
+  const releaseResolvedResourceUrl = useCallback((resourcePath: string) => {
+    const url = resolvedResourceUrlsRef.current.get(resourcePath);
+    if (!url) {
+      return;
+    }
+
+    URL.revokeObjectURL(url);
+    resolvedResourceUrlsRef.current.delete(resourcePath);
+  }, []);
+
+  const releaseAllResolvedResourceUrls = useCallback(() => {
+    resolvedResourceUrlsRef.current.forEach((url) => {
+      URL.revokeObjectURL(url);
+    });
+    resolvedResourceUrlsRef.current.clear();
+    pendingResourceResolvesRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      releaseAllResolvedResourceUrls();
+    };
+  }, [releaseAllResolvedResourceUrls, sessionKey, cardPath]);
 
   useEffect(() => {
     if (!descriptor) {
@@ -87,33 +159,152 @@ export function EditorHost({
       return;
     }
 
-    await store.commit(sessionKey, descriptor, async (nextConfig) => {
+    await store.commit(sessionKey, descriptor, async ({ config, resourceOperations }) => {
       reportEditorActivity();
-      onConfigChange(nextConfig);
+      const hasResourceOperations =
+        resourceOperations.imports.length > 0 || resourceOperations.deletions.length > 0;
+      await onConfigChange(config, hasResourceOperations ? resourceOperations : undefined);
     });
   }, [descriptor, onConfigChange, reportEditorActivity, sessionKey, snapshot?.dirty, snapshot?.validation.valid, store]);
+
+  const resolveResourceUrl = useCallback(async (resourcePath: string) => {
+    const normalizedResourcePath = normalizeResourcePath(resourcePath);
+    if (!normalizedResourcePath) {
+      throw new Error(`资源路径无效: ${resourcePath}`);
+    }
+
+    const cached = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
+    if (cached) {
+      return cached;
+    }
+
+    const pendingResolve = pendingResourceResolvesRef.current.get(normalizedResourcePath);
+    if (pendingResolve) {
+      return pendingResolve;
+    }
+
+    const resolver = (async () => {
+      const pendingImport = store.getPendingResourceImport(sessionKey, normalizedResourcePath);
+      const nextUrl = pendingImport
+        ? createObjectUrl(pendingImport)
+        : createObjectUrl({
+            path: normalizedResourcePath,
+            data: await fileService.readBinary(joinPath(cardPath, normalizedResourcePath)),
+          });
+
+      releaseResolvedResourceUrl(normalizedResourcePath);
+      resolvedResourceUrlsRef.current.set(normalizedResourcePath, nextUrl);
+      return nextUrl;
+    })().finally(() => {
+      pendingResourceResolvesRef.current.delete(normalizedResourcePath);
+    });
+
+    pendingResourceResolvesRef.current.set(normalizedResourcePath, resolver);
+    return resolver;
+  }, [cardPath, releaseResolvedResourceUrl, sessionKey, store]);
+
+  const pickAvailableResourcePath = useCallback(async (fileName: string) => {
+    const sanitizedName = sanitizeImportedFileName(fileName);
+    const dotIndex = sanitizedName.lastIndexOf('.');
+    const basename = dotIndex > 0 ? sanitizedName.slice(0, dotIndex) : sanitizedName;
+    const extension = dotIndex > 0 ? sanitizedName.slice(dotIndex) : '';
+
+    let counter = 1;
+    let candidate = sanitizedName;
+
+    while (true) {
+      const pendingImport = store.getPendingResourceImport(sessionKey, candidate);
+      const pendingDelete = store.hasPendingResourceDeletion(sessionKey, candidate);
+      const existsOnDisk = pendingDelete ? false : await fileService.exists(joinPath(cardPath, candidate));
+      if (!pendingImport && !existsOnDisk) {
+        return candidate;
+      }
+
+      counter += 1;
+      candidate = `${basename}-${counter}${extension}`;
+    }
+  }, [cardPath, sessionKey, store]);
+
+  const importResource = useCallback(async (input: { file: File; preferredPath?: string }) => {
+    const nextPath = await pickAvailableResourcePath(input.preferredPath ?? input.file.name);
+    const arrayBuffer = await input.file.arrayBuffer();
+    releaseResolvedResourceUrl(nextPath);
+    store.queueResourceImport(sessionKey, {
+      path: nextPath,
+      data: new Uint8Array(arrayBuffer),
+      mimeType: input.file.type || undefined,
+    });
+
+    return {
+      path: nextPath,
+    };
+  }, [pickAvailableResourcePath, releaseResolvedResourceUrl, sessionKey, store]);
+
+  const deleteResource = useCallback(async (resourcePath: string) => {
+    const normalizedResourcePath = normalizeResourcePath(resourcePath);
+    if (!normalizedResourcePath) {
+      throw new Error(`资源路径无效: ${resourcePath}`);
+    }
+
+    releaseResolvedResourceUrl(normalizedResourcePath);
+    store.queueResourceDeletion(sessionKey, normalizedResourcePath);
+  }, [releaseResolvedResourceUrl, sessionKey, store]);
 
   useEffect(() => {
     if (!descriptor || !snapshot?.dirty || !snapshot.validation.valid) {
       return;
     }
 
+    const commitDelayMs = snapshot.hasPendingResourceChanges
+      ? 0
+      : snapshot.commitDebounceMs;
     const timerId = window.setTimeout(() => {
       void commitSession().catch((error) => {
         const normalizedError = error instanceof Error ? error : new Error(String(error));
         setLoadError(normalizedError);
         onPluginError?.(normalizedError);
       });
-    }, snapshot.commitDebounceMs);
+    }, commitDelayMs);
 
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [commitSession, descriptor, onPluginError, snapshot?.commitDebounceMs, snapshot?.dirty, snapshot?.revision, snapshot?.validation.valid]);
+  }, [
+    commitSession,
+    descriptor,
+    onPluginError,
+    snapshot?.commitDebounceMs,
+    snapshot?.dirty,
+    snapshot?.hasPendingResourceChanges,
+    snapshot?.revision,
+    snapshot?.validation.valid,
+  ]);
 
   useEffect(() => {
     return () => {
       void commitSession().catch(() => undefined);
+    };
+  }, [commitSession]);
+
+  useEffect(() => {
+    const flushPendingSession = () => {
+      void commitSession().catch(() => undefined);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushPendingSession();
+      }
+    };
+
+    window.addEventListener('pagehide', flushPendingSession);
+    window.addEventListener('beforeunload', flushPendingSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', flushPendingSession);
+      window.removeEventListener('beforeunload', flushPendingSession);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [commitSession]);
 
@@ -165,6 +356,17 @@ export function EditorHost({
           reportEditorActivity();
           store.updateDraft(sessionKey, descriptor, nextConfig);
         },
+        resolveResourceUrl,
+        releaseResourceUrl(resourcePath) {
+          const normalizedResourcePath = normalizeResourcePath(resourcePath);
+          if (!normalizedResourcePath) {
+            return;
+          }
+
+          releaseResolvedResourceUrl(normalizedResourcePath);
+        },
+        importResource,
+        deleteResource,
       });
 
       setIsLoading(false);
@@ -197,6 +399,10 @@ export function EditorHost({
     onPluginLoaded,
     renderRevision,
     reportEditorActivity,
+    resolveResourceUrl,
+    importResource,
+    deleteResource,
+    releaseResolvedResourceUrl,
     sessionKey,
     mountRevision,
     store,

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CompositeInteractionPayload } from 'chips-sdk';
+import type { BasecardPendingResourceImport } from './contracts';
 import { getBasecardDescriptor, normalizeBasecardConfig } from './registry';
 import { createBasecardFrameThemeCss } from './theme-css';
 
@@ -13,6 +14,8 @@ export interface BasecardFrameHostProps {
   baseCardId: string;
   cardType: string;
   config: Record<string, unknown>;
+  resourceBaseUrl?: string;
+  pendingResourceImports?: Map<string, BasecardPendingResourceImport>;
   selectable?: boolean;
   themeCacheKey?: string;
   interactionPolicy: 'delegate' | 'native';
@@ -27,13 +30,39 @@ const DEFAULT_STATUS: BasecardFrameStatus = {
   errorMessage: null,
 };
 
-function createFrameDocumentHtml(): string {
+function normalizeResourcePath(resourcePath: string): string | null {
+  const normalized = resourcePath.replace(/\\/g, '/').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\.?\//, '')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    return null;
+  }
+
+  return segments.join('/');
+}
+
+function createObjectUrl(resource: BasecardPendingResourceImport): string {
+  const type = resource.mimeType?.trim() || 'application/octet-stream';
+  const buffer = new ArrayBuffer(resource.data.byteLength);
+  new Uint8Array(buffer).set(resource.data);
+  return URL.createObjectURL(new Blob([buffer], { type }));
+}
+
+function createFrameDocumentHtml(resourceBaseUrl?: string): string {
   return [
     '<!doctype html>',
     '<html>',
     '<head>',
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+    ...(resourceBaseUrl ? [`<base href="${resourceBaseUrl}" />`] : []),
     '</head>',
     '<body></body>',
     '</html>',
@@ -65,6 +94,8 @@ export function BasecardFrameHost({
   baseCardId,
   cardType,
   config,
+  resourceBaseUrl,
+  pendingResourceImports,
   selectable = false,
   themeCacheKey,
   interactionPolicy,
@@ -78,6 +109,7 @@ export function BasecardFrameHost({
   const onSelectRef = useRef(onSelect);
   const onInteractionRef = useRef(onInteraction);
   const interactionPolicyRef = useRef(interactionPolicy);
+  const resolvedResourceUrlsRef = useRef(new Map<string, string>());
   const [status, setStatus] = useState<BasecardFrameStatus>(DEFAULT_STATUS);
 
   const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType]);
@@ -86,6 +118,10 @@ export function BasecardFrameHost({
     [baseCardId, cardType, config],
   );
   const configSignature = useMemo(() => JSON.stringify(normalizedConfig), [normalizedConfig]);
+  const readyMinHeightStyle = useMemo(
+    () => ({ minHeight: status.state === 'ready' ? '0px' : `${DEFAULT_STATUS.height}px` }),
+    [status.state],
+  );
 
   useEffect(() => {
     onStatusChange?.(status);
@@ -108,6 +144,15 @@ export function BasecardFrameHost({
   }, [interactionPolicy]);
 
   useEffect(() => {
+    return () => {
+      resolvedResourceUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      resolvedResourceUrlsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     const frame = iframeRef.current;
     const wrapper = wrapperRef.current;
     if (!frame || !wrapper) {
@@ -126,6 +171,44 @@ export function BasecardFrameHost({
     let disposed = false;
     let renderCleanup: (() => void) | void;
     const cleanupTasks: Array<() => void> = [];
+    const resolveResourceUrl = async (resourcePath: string): Promise<string> => {
+      const normalizedResourcePath = normalizeResourcePath(resourcePath);
+      if (!normalizedResourcePath) {
+        throw new Error(`资源路径无效: ${resourcePath}`);
+      }
+
+      const pendingImport = pendingResourceImports?.get(normalizedResourcePath);
+      if (pendingImport) {
+        const cachedUrl = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
+        if (cachedUrl) {
+          return cachedUrl;
+        }
+
+        const nextUrl = createObjectUrl(pendingImport);
+        resolvedResourceUrlsRef.current.set(normalizedResourcePath, nextUrl);
+        return nextUrl;
+      }
+
+      if (resourceBaseUrl) {
+        return new URL(normalizedResourcePath, resourceBaseUrl).toString();
+      }
+
+      return normalizedResourcePath;
+    };
+    const releaseResourceUrl = (resourcePath: string): void => {
+      const normalizedResourcePath = normalizeResourcePath(resourcePath);
+      if (!normalizedResourcePath) {
+        return;
+      }
+
+      const currentUrl = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
+      if (!currentUrl) {
+        return;
+      }
+
+      URL.revokeObjectURL(currentUrl);
+      resolvedResourceUrlsRef.current.delete(normalizedResourcePath);
+    };
 
     setStatus({
       state: 'loading',
@@ -152,6 +235,8 @@ export function BasecardFrameHost({
         container,
         config: normalizedConfig,
         themeCssText: createBasecardFrameThemeCss(wrapper),
+        resolveResourceUrl,
+        releaseResourceUrl,
       });
 
       const applyMeasuredHeight = () => {
@@ -259,11 +344,15 @@ export function BasecardFrameHost({
       frame.removeEventListener('load', handleFrameLoad);
     });
 
-    frame.srcdoc = createFrameDocumentHtml();
+    frame.srcdoc = createFrameDocumentHtml(resourceBaseUrl);
 
     return () => {
       disposed = true;
       cleanupTasks.forEach((cleanup) => cleanup());
+      resolvedResourceUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      resolvedResourceUrlsRef.current.clear();
       if (typeof renderCleanup === 'function') {
         renderCleanup();
       }
@@ -274,16 +363,23 @@ export function BasecardFrameHost({
     configSignature,
     descriptor,
     normalizedConfig,
+    pendingResourceImports,
+    resourceBaseUrl,
     themeCacheKey,
   ]);
 
   return (
-    <div ref={wrapperRef} className="basecard-frame-host">
+    <div
+      ref={wrapperRef}
+      className="basecard-frame-host"
+      style={readyMinHeightStyle}
+    >
       <iframe
         ref={iframeRef}
         className="basecard-frame-host__frame"
         title={`basecard-${baseCardId}`}
         scrolling="no"
+        style={readyMinHeightStyle}
       />
 
       {status.state === 'loading' && (

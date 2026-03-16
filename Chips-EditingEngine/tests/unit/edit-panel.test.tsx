@@ -67,6 +67,7 @@ describe('EditPanel', () => {
 
     expect(container.querySelector('.edit-panel__header')).toBeNull();
     expect(container.querySelector('.edit-panel__content')).not.toBeNull();
+    expect((container.querySelector('.edit-panel') as HTMLDivElement | null)?.style.width).toBe('');
 
     const pluginHost = container.querySelector('[data-testid="plugin-host-stub"]') as HTMLDivElement | null;
     expect(pluginHost?.dataset.cardType).toBe('RichTextCard');

@@ -5,6 +5,7 @@ import { defaultBasecardConfig } from '../../../../Chips-BaseCardPlugin/richtext
 import { sanitizeRichTextHtml } from '../../../../Chips-BaseCardPlugin/richtext-BCP/src/shared/utils';
 
 const EMPTY_RICH_TEXT_BODY = '<p></p>';
+const INITIAL_RICH_TEXT_BODY = '<p>123456789</p>';
 
 function asNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -77,7 +78,7 @@ export const richtextBasecardDescriptor: BasecardDescriptor = {
   createInitialConfig(baseCardId) {
     return normalizeRichtextConfig({
       ...defaultBasecardConfig,
-      body: EMPTY_RICH_TEXT_BODY,
+      body: INITIAL_RICH_TEXT_BODY,
     }, baseCardId);
   },
   normalizeConfig: normalizeRichtextConfig,

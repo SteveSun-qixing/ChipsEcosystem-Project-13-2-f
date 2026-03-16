@@ -138,5 +138,7 @@ export async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 export async function binaryToDataUrl(data: Uint8Array, mimeType: string): Promise<string> {
-    return blobToDataUrl(new Blob([data], { type: mimeType }));
+    const buffer = new ArrayBuffer(data.byteLength);
+    new Uint8Array(buffer).set(data);
+    return blobToDataUrl(new Blob([buffer], { type: mimeType }));
 }

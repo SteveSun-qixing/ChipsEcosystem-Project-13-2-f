@@ -58,6 +58,14 @@ SDK封装了生态的核心能力，提供给开发者使用。
 - 封面内容只由 `cover.html` 决定,不自动接入主题和多语言系统
 - `.card/cover.html` 中的相对路径按 `.card/` 目录解析
 
+其中编辑器链路的正式资源约束是：
+
+- 编辑器内部资源操作通过 `chips.card-editor:resource-request/resource-response/resource-release` 协议完成
+- `resourcePath` 一律使用相对于卡片根目录的路径
+- 当前正式动作只有 `resolve | import | delete`
+- `import` 返回的 `path` 也是卡片根目录相对路径,例如 `cover.png`
+- SDK `editorPanel.render({ resources })` 可以在本地桥接这组资源协议,但 `resources` 本身不进入 Host 正式 `card.renderEditor` 路由输入
+
 ## 集成使用场景
 
 SDK 支持多种集成使用场景：

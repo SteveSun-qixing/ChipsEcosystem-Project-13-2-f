@@ -13,6 +13,7 @@ const { mockFileService } = vi.hoisted(() => ({
     readText: vi.fn<[string], Promise<string>>(),
     writeText: vi.fn<[string, string], Promise<void>>(),
     writeBinary: vi.fn<[string, Uint8Array], Promise<void>>(),
+    stat: vi.fn<[string], Promise<{ path: string; size: number; isFile: boolean; isDirectory: boolean; mtimeMs: number }>>(),
     exists: vi.fn<[string], Promise<boolean>>(),
     ensureDir: vi.fn<[string], Promise<void>>(),
     list: vi.fn<[string], Promise<MockEntry[]>>(),
@@ -111,6 +112,34 @@ describe('unpacked .card files', () => {
 
     mockFileService.writeBinary.mockImplementation(async (filePath, content) => {
       setFile(filePath, Buffer.from(content).toString('base64'));
+    });
+
+    mockFileService.stat.mockImplementation(async (targetPath) => {
+      const fileContent = files.get(targetPath);
+      if (fileContent !== undefined) {
+        const isTextFile = /\.(ya?ml|html|md|json|txt)$/i.test(targetPath);
+        return {
+          path: targetPath,
+          size: isTextFile
+            ? Buffer.byteLength(fileContent, 'utf-8')
+            : Buffer.from(fileContent, 'base64').byteLength,
+          isFile: true,
+          isDirectory: false,
+          mtimeMs: Date.now(),
+        };
+      }
+
+      if (directories.has(targetPath)) {
+        return {
+          path: targetPath,
+          size: 0,
+          isFile: false,
+          isDirectory: true,
+          mtimeMs: Date.now(),
+        };
+      }
+
+      throw new Error(`Missing path: ${targetPath}`);
     });
 
     mockFileService.exists.mockImplementation(async (targetPath) => {
@@ -228,6 +257,55 @@ describe('unpacked .card files', () => {
     expect(metadata.cover_ratio).toBe('16:9');
     expect(files.get('/workspace/demo.card/.card/cover.html')).toContain('./cardcover/cover-image.png');
     expect(files.get('/workspace/demo.card/.card/cardcover/cover-image.png')).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'));
+  });
+
+  it('writes imported base card resources into the card root and finalizes deletions on save', async () => {
+    seedCardDirectory();
+    setFile('/workspace/demo.card/legacy-photo.png', Buffer.from([1, 2, 3]).toString('base64'));
+
+    const service = createCardService();
+    await service.openCard('demo-card', '/workspace/demo.card');
+
+    service.updateBasicCard(
+      'demo-card',
+      'intro',
+      {
+        id: 'intro',
+        locale: 'zh-CN',
+        images: [
+          {
+            id: 'img-1',
+            source: 'file',
+            file_path: 'hero-photo.png',
+          },
+        ],
+      },
+      {
+        imports: [
+          {
+            path: 'hero-photo.png',
+            data: new Uint8Array([137, 80, 78, 71]),
+            mimeType: 'image/png',
+          },
+        ],
+        deletions: ['legacy-photo.png'],
+      },
+    );
+
+    await service.saveCard('demo-card');
+
+    const structure = yaml.parse(files.get('/workspace/demo.card/.card/structure.yaml') ?? '');
+
+    expect(files.get('/workspace/demo.card/hero-photo.png')).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'));
+    expect(files.has('/workspace/demo.card/legacy-photo.png')).toBe(false);
+    expect(structure.manifest.resource_count).toBe(1);
+    expect(structure.manifest.resources).toEqual([
+      {
+        path: 'hero-photo.png',
+        size: 4,
+        type: 'image/png',
+      },
+    ]);
   });
 
   it('serializes rapid base card updates and persists the latest snapshot before preview refresh signals advance', async () => {

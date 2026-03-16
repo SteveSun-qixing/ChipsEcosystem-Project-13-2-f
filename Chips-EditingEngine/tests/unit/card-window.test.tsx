@@ -10,8 +10,40 @@ const setSelectedBaseCard = vi.fn();
 const panByInput = vi.fn();
 const zoomByFactorAtPoint = vi.fn();
 const markInteractionSequence = vi.fn();
+const coverFrameRender = vi.fn();
+const { mockOpenCards } = vi.hoisted(() => ({
+  mockOpenCards: new Map<string, any>(),
+}));
 
 let latestAssemblerProps: Record<string, unknown> | null = null;
+
+function createMockBaseCards(count = 1) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `base-${index + 1}`,
+    type: 'base.richtext',
+    data: { id: `base-${index + 1}`, body: `<p>Intro ${index + 1}</p>` },
+  }));
+}
+
+function resetMockOpenCards(baseCards = createMockBaseCards()) {
+  mockOpenCards.clear();
+  mockOpenCards.set('card-1', {
+    id: 'card-1',
+    path: '/workspace/demo.card',
+    metadata: {
+      name: 'Demo Card',
+      coverRatio: '3:4',
+      modifiedAt: '2026-03-13T00:00:00.000Z',
+    },
+    structure: {
+      basicCards: baseCards,
+      layout: {
+        padding: 16,
+        gap: 12,
+      },
+    },
+  });
+}
 
 vi.mock('../../src/basecard-runtime/CompositeCardAssembler', () => ({
   CompositeCardAssembler: (props: Record<string, any>) => {
@@ -47,32 +79,7 @@ vi.mock('../../src/basecard-runtime/CompositeCardAssembler', () => ({
 
 vi.mock('../../src/context/CardContext', () => ({
   useCard: () => ({
-    openCards: new Map([
-      [
-        'card-1',
-        {
-          id: 'card-1',
-          path: '/workspace/demo.card',
-          metadata: {
-            name: 'Demo Card',
-            modifiedAt: '2026-03-13T00:00:00.000Z',
-          },
-          structure: {
-            basicCards: [
-              {
-                id: 'base-1',
-                type: 'base.richtext',
-                data: { id: 'base-1', body: '<p>Intro</p>' },
-              },
-            ],
-            layout: {
-              padding: 16,
-              gap: 12,
-            },
-          },
-        },
-      ],
-    ]),
+    openCards: mockOpenCards,
     selectedBaseCardId: null,
     setActiveCard,
     setSelectedBaseCard,
@@ -138,6 +145,16 @@ vi.mock('../../src/services/workspace-service', () => ({
   },
 }));
 
+vi.mock('../../src/services/bridge-client', () => ({
+  getChipsClient: () => ({
+    card: {
+      coverFrame: {
+        render: coverFrameRender,
+      },
+    },
+  }),
+}));
+
 describe('CardWindow', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -149,11 +166,17 @@ describe('CardWindow', () => {
     root = createRoot(container);
 
     latestAssemblerProps = null;
+    resetMockOpenCards();
     setActiveCard.mockClear();
     setSelectedBaseCard.mockClear();
     panByInput.mockClear();
     zoomByFactorAtPoint.mockClear();
     markInteractionSequence.mockClear();
+    coverFrameRender.mockReset();
+    coverFrameRender.mockResolvedValue({
+      frame: document.createElement('iframe'),
+      origin: 'null',
+    });
   });
 
   afterEach(async () => {
@@ -239,6 +262,33 @@ describe('CardWindow', () => {
     expect(latestAssemblerProps?.interactionPolicy).toBe('native');
   });
 
+  it('marks populated preview surfaces as insert targets only while editing', async () => {
+    await renderCardWindow();
+
+    const editablePreview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
+    expect(editablePreview?.dataset.chipsDropSurface).toBe('composite-preview');
+    expect(editablePreview?.dataset.chipsDropAccept).toBe('true');
+
+    await renderCardWindow({
+      isEditing: false,
+    });
+
+    const readonlyPreview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
+    expect(readonlyPreview?.dataset.chipsDropAccept).toBe('false');
+  });
+
+  it('exposes the empty card state as a first-slot drop surface in edit mode', async () => {
+    resetMockOpenCards([]);
+
+    await renderCardWindow();
+
+    const emptyState = container.querySelector('.card-window__empty') as HTMLDivElement | null;
+    expect(emptyState?.dataset.chipsDropSurface).toBe('composite-preview');
+    expect(emptyState?.dataset.chipsCardId).toBe('card-1');
+    expect(emptyState?.dataset.chipsBaseCardCount).toBe('0');
+    expect(emptyState?.dataset.chipsDropAccept).toBe('true');
+  });
+
   it('routes assembled interaction events into canvas pan and anchored zoom actions', async () => {
     await renderCardWindow();
 
@@ -293,5 +343,43 @@ describe('CardWindow', () => {
     });
 
     expect(container.querySelector('[data-testid="card-settings-dialog"]')).not.toBeNull();
+  });
+
+  it('renders the formal cover iframe in cover mode without placeholder text chrome', async () => {
+    const coverFrame = document.createElement('iframe');
+    coverFrameRender.mockResolvedValue({
+      frame: coverFrame,
+      origin: 'null',
+    });
+
+    await renderCardWindow({
+      state: 'cover',
+      coverRatio: '9:19.5',
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(coverFrameRender).toHaveBeenCalledWith({
+      cardFile: '/workspace/demo.card',
+      cardName: 'Demo Card',
+    });
+
+    const cover = container.querySelector('.card-cover') as HTMLDivElement | null;
+    const frameHost = container.querySelector('.card-cover__frame-host') as HTMLDivElement | null;
+    expect(cover).not.toBeNull();
+    expect(frameHost?.contains(coverFrame)).toBe(true);
+    expect(container.querySelector('.card-cover__title')).toBeNull();
+    expect(container.querySelector('.card-cover__placeholder')).toBeNull();
+    expect(coverFrame.style.pointerEvents).toBe('none');
+    expect(parseFloat(cover?.style.width ?? '0')).toBe(208);
+
+    await act(async () => {
+      coverFrame.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.card-cover__status--loading')).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import './basecard-runtime.css';
 export interface CompositeCardAssemblerProps {
   cardId: string;
   baseCards: BasicCardData[];
+  resourceBaseUrl?: string;
   layout?: CardStructure['layout'];
   mode: 'view' | 'preview';
   interactionPolicy: 'delegate' | 'native';
@@ -19,9 +20,23 @@ export interface CompositeCardAssemblerProps {
   onBaseCardSelect?: (baseCardId: string) => void;
 }
 
+function measureCompositeLayoutHeight(container: HTMLDivElement): number {
+  return Math.max(
+    1,
+    Math.ceil(
+      Math.max(
+        container.scrollHeight,
+        container.offsetHeight,
+        container.clientHeight,
+      ),
+    ),
+  );
+}
+
 export function CompositeCardAssembler({
   cardId,
   baseCards,
+  resourceBaseUrl,
   layout,
   mode,
   interactionPolicy,
@@ -60,7 +75,7 @@ export function CompositeCardAssembler({
     }
 
     const emitHeight = () => {
-      const nextHeight = Math.max(1, Math.ceil(container.getBoundingClientRect().height));
+      const nextHeight = measureCompositeLayoutHeight(container);
       onHeightChange?.(nextHeight);
     };
 
@@ -131,6 +146,8 @@ export function CompositeCardAssembler({
             baseCardId={baseCard.id}
             cardType={baseCard.type}
             config={baseCard.data}
+            resourceBaseUrl={resourceBaseUrl}
+            pendingResourceImports={baseCard.pendingResourceImports}
             selectable={mode === 'preview'}
             themeCacheKey={themeCacheKey}
             interactionPolicy={interactionPolicy}

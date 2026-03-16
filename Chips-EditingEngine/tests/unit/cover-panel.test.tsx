@@ -83,31 +83,31 @@ describe('CoverPanel', () => {
     if (clientWidthDescriptor) {
       Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor);
     } else {
-      delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth;
+      Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
     }
 
     if (clientHeightDescriptor) {
       Object.defineProperty(HTMLElement.prototype, 'clientHeight', clientHeightDescriptor);
     } else {
-      delete (HTMLElement.prototype as Partial<HTMLElement>).clientHeight;
+      Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
     }
 
     if (originalResizeObserver) {
       globalThis.ResizeObserver = originalResizeObserver;
     } else {
-      delete (globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
+      Reflect.deleteProperty(globalThis, 'ResizeObserver');
     }
 
     if (originalCreateObjectURL) {
       URL.createObjectURL = originalCreateObjectURL;
     } else {
-      delete (URL as typeof URL & { createObjectURL?: typeof URL.createObjectURL }).createObjectURL;
+      Reflect.deleteProperty(URL, 'createObjectURL');
     }
 
     if (originalRevokeObjectURL) {
       URL.revokeObjectURL = originalRevokeObjectURL;
     } else {
-      delete (URL as typeof URL & { revokeObjectURL?: typeof URL.revokeObjectURL }).revokeObjectURL;
+      Reflect.deleteProperty(URL, 'revokeObjectURL');
     }
   });
 

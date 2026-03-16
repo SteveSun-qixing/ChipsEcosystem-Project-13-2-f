@@ -213,7 +213,7 @@ describe('App canvas drop integration', () => {
       expect.objectContaining({
         type: 'base.richtext',
         config: expect.objectContaining({
-          body: '<p></p>',
+          body: '<p>123456789</p>',
           locale: 'zh-CN',
         }),
       }),
@@ -274,7 +274,7 @@ describe('App canvas drop integration', () => {
       'card-1',
       'RichTextCard',
       {
-        body: '<p></p>',
+        body: '<p>123456789</p>',
         locale: 'zh-CN',
       },
       1,

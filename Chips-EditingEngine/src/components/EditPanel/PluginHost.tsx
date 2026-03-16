@@ -1,19 +1,25 @@
 import React from 'react';
+import type { BasecardResourceOperations } from '../../basecard-runtime/contracts';
 import { EditorHost } from '../../editor-runtime/EditorHost';
 import './PluginHost.css';
 
 export interface PluginHostProps {
   cardId?: string;
+  cardPath: string;
   cardType: string;
   baseCardId: string;
   config: Record<string, unknown>;
-  onConfigChange?: (config: Record<string, unknown>) => void;
+  onConfigChange?: (
+    config: Record<string, unknown>,
+    resourceOperations?: BasecardResourceOperations,
+  ) => void | Promise<void>;
   onPluginLoaded?: (pluginInfo: any) => void;
   onPluginError?: (error: Error) => void;
 }
 
 export function PluginHost({
   cardId,
+  cardPath,
   cardType,
   baseCardId,
   config,
@@ -28,6 +34,7 @@ export function PluginHost({
   return (
     <EditorHost
       cardId={cardId}
+      cardPath={cardPath}
       cardType={cardType}
       baseCardId={baseCardId}
       sourceConfig={config}

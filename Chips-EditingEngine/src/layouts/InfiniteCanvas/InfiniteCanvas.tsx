@@ -57,18 +57,37 @@ const getTouchDistance = (first: Touch, second: Touch) => {
 
 function parseDragData(dataTransfer: DataTransfer | null): DragData | null {
     if (!dataTransfer) {
-        return null;
+        return parseGlobalLibraryDragData();
     }
 
     try {
         const raw = dataTransfer.getData(CHIPS_DRAG_DATA_TYPE);
         if (!raw) {
-            return null;
+            return parseGlobalLibraryDragData();
         }
 
         return JSON.parse(raw) as DragData;
     } catch (error) {
         console.warn('Failed to parse drop drag data', error);
+        return parseGlobalLibraryDragData();
+    }
+}
+
+function parseGlobalLibraryDragData(): DragData | null {
+    const body = document.body;
+    if (!body || body.dataset.chipsLibraryDragging !== 'true') {
+        return null;
+    }
+
+    const rawPayload = body.dataset.chipsLibraryDragPayload;
+    if (!rawPayload) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(rawPayload) as DragData;
+    } catch (error) {
+        console.warn('Failed to parse global library drag data', error);
         return null;
     }
 }
@@ -419,12 +438,18 @@ export function InfiniteCanvas({
 
     const canvasCursor = isPanning ? 'grabbing' : 'grab';
 
-    const indicatorStyle = insertIndicator ? {
-        left: `${screenToWorld(insertIndicator.left, insertIndicator.top).x}px`,
-        top: `${screenToWorld(insertIndicator.left, insertIndicator.top).y}px`,
-        width: `${insertIndicator.width / zoom}px`,
-        '--chips-insert-indicator-scale': `${1 / Math.max(zoom, 0.001)}`,
-    } : undefined;
+    const indicatorStyle = (() => {
+        if (!insertIndicator || !canvasRef.current) {
+            return undefined;
+        }
+
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        return {
+            left: `${insertIndicator.left - canvasRect.left}px`,
+            top: `${insertIndicator.top - canvasRect.top}px`,
+            width: `${insertIndicator.width}px`,
+        } as React.CSSProperties;
+    })();
 
     return (
         <CanvasProvider value={canvasControls}>
@@ -446,18 +471,19 @@ export function InfiniteCanvas({
                 )}
 
                 <DesktopLayer style={desktopStyle}>
-                    {indicatorStyle && (
-                        <div
-                            className="infinite-canvas__insert-indicator"
-                            style={indicatorStyle}
-                        />
-                    )}
                     {desktopContent}
                 </DesktopLayer>
 
                 <WindowLayer>
                     {windowContent}
                 </WindowLayer>
+
+                {indicatorStyle && (
+                    <div
+                        className="infinite-canvas__insert-indicator"
+                        style={indicatorStyle}
+                    />
+                )}
 
                 <ZoomControl
                     zoom={zoom}

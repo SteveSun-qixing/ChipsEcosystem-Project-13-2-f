@@ -63,8 +63,20 @@
     "file.list": {
       "action": "file.list"
     },
+    "file.mkdir": {
+      "action": "file.mkdir"
+    },
     "file.read": {
       "action": "file.read"
+    },
+    "file.delete": {
+      "action": "file.delete"
+    },
+    "file.move": {
+      "action": "file.move"
+    },
+    "file.copy": {
+      "action": "file.copy"
     },
     "file.stat": {
       "action": "file.stat"

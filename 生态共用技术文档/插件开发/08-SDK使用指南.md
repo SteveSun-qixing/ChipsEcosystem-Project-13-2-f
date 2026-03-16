@@ -134,7 +134,14 @@ client.card.compositeWindow.render({
 client.card.editorPanel.render({
   cardType: string,
   initialConfig?: Record<string, unknown>,
-  baseCardId?: string
+  baseCardId?: string,
+  resources?: {
+    rootPath?: string,
+    resolveResourceUrl?(resourcePath: string): Promise<string> | string,
+    releaseResourceUrl?(resourcePath: string): Promise<void> | void,
+    importResource?(input: { file: File, preferredPath?: string }): Promise<{ path: string }> | { path: string },
+    deleteResource?(resourcePath: string): Promise<void> | void
+  }
 }): Promise<IframeWindow>
 ```
 
@@ -148,7 +155,15 @@ client.card.editorPanel.render({
 - `compositeWindow` 可通过 `onResize` 订阅整张复合卡片当前总高度，正式用于查看器、自适应容器以及仍选择 Host 托管复合 iframe 的场景。
 - `compositeWindow.interactionPolicy = 'delegate'` 时，可通过 `onInteraction` 订阅复合卡片内部滚轮、触摸滚动和捏合缩放意图，正式用于无限画布等需要外层壳层接管桌面交互的场景。
 - `editorPanel` 返回基础卡片编辑器 iframe，正式用于第三方宿主、调试工具和仍需 Host 托管编辑器 iframe 的场景。
+- `editorPanel.resources` 是 SDK 本地资源桥配置，不会进入 `card.renderEditor` 正式路由负载。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
+
+`editorPanel.resources` 规则：
+
+- `resourcePath` 一律使用相对于卡片根目录的路径；
+- 只读场景可只传 `rootPath`，SDK 会用它为 `resolveResourceUrl` 生成 `file://` URL；
+- 若编辑器支持导入或删除卡片内部资源，宿主必须实现 `importResource/deleteResource`；
+- 若宿主返回 `blob:` URL，应负责在适当时机响应 `releaseResourceUrl` 释放临时资源。
 
 适用边界补充：
 
@@ -193,7 +208,8 @@ Host 托管编辑器链路如下：
 2. 调用 `client.card.editorPanel.render(...)`；
 3. Host 路由到对应基础卡片插件的 `renderBasecardEditor`；
 4. Host 返回完整编辑器文档并由 SDK 封装为 iframe；
-5. 应用通过事件订阅接收编辑器状态与配置变更。
+5. 若应用传入 `resources`，SDK 负责在本地桥接编辑器 iframe 的资源请求；
+6. 应用通过事件订阅接收编辑器状态与配置变更。
 
 推荐事件订阅接口：
 
@@ -219,6 +235,53 @@ const disposeError = client.card.editorPanel.onError(result.frame, (payload) => 
   console.error(payload.code, payload.message);
 });
 ```
+
+资源型编辑器示例：
+
+```typescript
+const result = await client.card.editorPanel.render({
+  cardType: 'base.image',
+  baseCardId: 'image-1',
+  initialConfig: {
+    card_type: 'ImageCard',
+    images: [
+      {
+        id: 'image-1',
+        source: 'file',
+        file_path: 'cover.png',
+        title: '封面图',
+        alt: '卡片封面图',
+      },
+    ],
+    layout_type: 'single',
+    layout_options: {
+      spacing_mode: 'comfortable',
+      single_width_percent: 100,
+      single_alignment: 'center',
+    },
+  },
+  resources: {
+    rootPath: '/workspace/cards/demo',
+    async importResource({ file, preferredPath }) {
+      return saveIntoCardRoot(file, preferredPath);
+    },
+    async deleteResource(resourcePath) {
+      await removeFromCardRoot(resourcePath);
+    },
+    releaseResourceUrl(resourcePath) {
+      releaseBlobUrl(resourcePath);
+    },
+  },
+});
+```
+
+资源桥接说明：
+
+- Host 托管编辑器 iframe 通过 `chips.card-editor:resource-request/resource-response/resource-release` 协议请求资源操作；
+- SDK 负责把这些请求桥接到 `editorPanel.resources`；
+- `importResource(...)` 返回的 `path` 必须是卡片根目录相对路径，例如 `cover.png`；
+- 若宿主按官方资源链路保存内部文件，应把文件直接写入卡片根目录，而不是写入 `content/`；
+- `resources` 只在当前应用进程内生效，不进入 Host 正式 `card.renderEditor` 路由契约。
 
 约束：
 

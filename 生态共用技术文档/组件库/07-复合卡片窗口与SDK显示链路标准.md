@@ -89,6 +89,7 @@
 
 - 外层只向应用层交付一个复合 iframe；
 - 每个基础卡片节点在复合文档内部保持独立 iframe，以便失败隔离和尺寸回传；
+- 对引用卡片内部资源的基础卡片，Host 必须向单卡文档提供可解析卡片根目录相对路径的资源基准地址；
 - 节点加载完成后向复合窗口回传高度；
 - 复合文档在初始装载、节点高度变化和整体布局变化后，必须向外层发送 `chips.composite:resize`，回传整张复合卡片当前总高度；
 - 全部节点就绪后发送 `chips.composite:ready`；
@@ -121,15 +122,18 @@
 
 标准流程：
 
-1. 应用调用 `client.card.editorPanel.render({ cardType, initialConfig, baseCardId })`；
+1. 应用调用 `client.card.editorPanel.render({ cardType, initialConfig, baseCardId, resources? })`；
 2. Host 通过 `card.renderEditor` 路由到对应基础卡片插件；
 3. Host 装载插件 `renderBasecardEditor` 并生成正式编辑器文档；
-4. SDK 把该文档封装为 iframe；
-5. 应用通过 `chips.card-editor:*` 或 SDK 事件订阅接收状态与配置变化。
+4. 编辑器文档通过正式 `chips.card-editor:resource-*` 协议向外请求资源解析、导入、删除和释放；
+5. SDK 把该文档封装为 iframe，并在应用提供 `resources` 时挂接本地资源桥；
+6. 应用通过 `chips.card-editor:*` 或 SDK 事件订阅接收状态与配置变化。
 
 约束：
 
 - 编辑器链路与显示链路必须共享同一插件能力匹配规则；
+- `resourcePath` 一律使用相对于卡片根目录的路径；
+- `resources` 属于 SDK 本地桥配置，不进入 Host `card.renderEditor` 正式输入契约；
 - 普通应用与第三方集成不得绕过 SDK/Host 直接 import 基础卡片插件源码；
 - 查看器等 Host 托管场景必须消费正式 iframe 事件协议，而不是私接 iframe 内部 DOM；
 - 官方编辑引擎不再把 `editorPanel` 作为其正式主编辑链路。

@@ -226,6 +226,7 @@ describe('CardService rendering', () => {
     expect(view.semanticHash.length).toBeGreaterThan(10);
     expect(view.body).toContain('data-target="card-iframe"');
     expect(view.body).toContain('data-mode="view"');
+    expect(view.body).toContain('&lt;base href=&quot;file://');
     expect(view.body).toContain('Intro');
     expect(view.body).toContain('Hello Chips.');
     expect(view.body).toContain('chips.basecard.richtext');
@@ -323,6 +324,7 @@ describe('CardService rendering', () => {
 
     expect(view.title).toBe('Test Card');
     expect(view.body).toContain('data-target="card-iframe"');
+    expect(view.body).toContain('&lt;base href=&quot;file://');
     expect(view.body).toContain('Second node body.');
     expect(view.contentFiles).toEqual(['details.yaml', 'intro.yaml']);
   }, 30_000);
@@ -356,6 +358,13 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('data-base-card-id="intro"');
     expect(view.body).toContain('renderBasecardEditor');
     expect(view.body).toContain('chips.card-editor:change');
+    expect(view.body).toContain('chips.card-editor:resource-request');
+    expect(view.body).toContain('chips.card-editor:resource-response');
+    expect(view.body).toContain('chips.card-editor:resource-release');
+    expect(view.body).toContain("resolveResourceUrl(resourcePath)");
+    expect(view.body).toContain("requestResource('import'");
+    expect(view.body).toContain("requestResource('delete'");
+    expect(view.body).toContain("img-src file: http: https: data: blob:");
     expect(view.body).toContain('overflow: hidden;');
     expect(view.body).toContain('#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }');
     expect(view.body).toContain('.chips-basecard-editor__toolbar-shell { flex: 0 0 auto; width: 100%; }');

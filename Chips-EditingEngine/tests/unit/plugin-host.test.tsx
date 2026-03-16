@@ -8,6 +8,9 @@ import { PluginHost } from '../../src/components/EditPanel/PluginHost';
 
 const mockRenderEditor = vi.fn();
 let editorChangeHandler: ((nextConfig: Record<string, unknown>) => void) | null = null;
+let editorImportResource:
+  | ((input: { file: File; preferredPath?: string }) => Promise<{ path: string }>)
+  | null = null;
 
 vi.mock('../../src/basecard-runtime/registry', () => ({
   getBasecardDescriptor: () => ({
@@ -35,6 +38,13 @@ vi.mock('../../src/hooks/useTranslation', () => ({
   }),
 }));
 
+vi.mock('../../src/services/file-service', () => ({
+  fileService: {
+    readBinary: vi.fn(async () => new Uint8Array([1, 2, 3])),
+    exists: vi.fn(async () => false),
+  },
+}));
+
 describe('PluginHost', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -46,9 +56,11 @@ describe('PluginHost', () => {
     root = createRoot(container);
 
     editorChangeHandler = null;
+    editorImportResource = null;
     mockRenderEditor.mockReset();
-    mockRenderEditor.mockImplementation(({ onChange }) => {
+    mockRenderEditor.mockImplementation(({ onChange, importResource }) => {
       editorChangeHandler = onChange;
+      editorImportResource = importResource;
       return () => undefined;
     });
   });
@@ -70,6 +82,7 @@ describe('PluginHost', () => {
         <EditorRuntimeProvider>
           <PluginHost
             cardId="card-1"
+            cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
             config={{ id: 'base-1', body: '<p>init</p>' }}
@@ -99,10 +112,13 @@ describe('PluginHost', () => {
     });
 
     expect(onConfigChange).toHaveBeenCalledTimes(1);
-    expect(onConfigChange).toHaveBeenLastCalledWith({
-      id: 'base-1',
-      body: '<p>ab</p>',
-    });
+    expect(onConfigChange).toHaveBeenLastCalledWith(
+      {
+        id: 'base-1',
+        body: '<p>ab</p>',
+      },
+      undefined,
+    );
   });
 
   it('flushes the last pending editor draft before unmount', async () => {
@@ -114,6 +130,7 @@ describe('PluginHost', () => {
         <EditorRuntimeProvider>
           <PluginHost
             cardId="card-1"
+            cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
             config={{ id: 'base-1', body: '<p>init</p>' }}
@@ -137,10 +154,82 @@ describe('PluginHost', () => {
     });
 
     expect(onConfigChange).toHaveBeenCalledTimes(1);
-    expect(onConfigChange).toHaveBeenCalledWith({
-      id: 'base-1',
-      body: '<p>final</p>',
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        body: '<p>final</p>',
+      },
+      undefined,
+    );
+  });
+
+  it('commits immediately after a draft starts referencing newly imported resources', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', images: [] }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
     });
+
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+
+    await act(async () => {
+      const imported = await editorImportResource?.({
+        file,
+        preferredPath: 'photo.png',
+      });
+      editorChangeHandler?.({
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: imported?.path ?? 'photo.png',
+          },
+        ],
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'photo.png',
+          },
+        ],
+      },
+      {
+        imports: [
+          expect.objectContaining({
+            path: 'photo.png',
+            mimeType: 'image/png',
+          }),
+        ],
+        deletions: [],
+      },
+    );
   });
 
   it('keeps the mounted editor stable when its own committed config is reflected back through props', async () => {
@@ -152,6 +241,7 @@ describe('PluginHost', () => {
         <EditorRuntimeProvider>
           <PluginHost
             cardId="card-1"
+            cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
             config={{ id: 'base-1', body: '<p>init</p>' }}
@@ -174,16 +264,20 @@ describe('PluginHost', () => {
       await Promise.resolve();
     });
 
-    expect(onConfigChange).toHaveBeenCalledWith({
-      id: 'base-1',
-      body: '<p>updated</p>',
-    });
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        body: '<p>updated</p>',
+      },
+      undefined,
+    );
 
     await act(async () => {
       root.render(
         <EditorRuntimeProvider>
           <PluginHost
             cardId="card-1"
+            cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
             config={{ id: 'base-1', body: '<p>updated</p>' }}

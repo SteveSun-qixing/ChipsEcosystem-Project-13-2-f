@@ -363,7 +363,14 @@ export class WorkspaceService {
             metadata.modified_at = new Date().toISOString();
             await fileService.writeText(metadataPath, yaml.stringify(metadata));
             await this.refresh();
-            this.eventEmitter.emit('workspace:file-renamed', { file });
+            this.eventEmitter.emit('workspace:file-renamed', {
+                previousFile: file,
+                file: {
+                    ...file,
+                    name: `${cleanName}${extension}`,
+                    modifiedAt: String(metadata.modified_at),
+                },
+            });
             return;
         }
 
@@ -371,7 +378,15 @@ export class WorkspaceService {
         const newPath = joinPath(parent, trimmed);
         await fileService.move(file.path, newPath);
         await this.refresh();
-        this.eventEmitter.emit('workspace:file-renamed', { file });
+        this.eventEmitter.emit('workspace:file-renamed', {
+            previousFile: file,
+            file: {
+                ...file,
+                id: newPath,
+                name: trimmed,
+                path: newPath,
+            },
+        });
     }
 
     getOpenedFiles(): WorkspaceFile[] {

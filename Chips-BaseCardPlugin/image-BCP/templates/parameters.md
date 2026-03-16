@@ -1,0 +1,46 @@
+# 图片基础卡片配置参数说明
+
+本文件说明 [default-card-config.yaml](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/templates/default-card-config.yaml) 中各字段的正式含义与填写约束。
+
+- `card_type`
+  - 固定为 `"ImageCard"`。
+- `theme`
+  - 可选主题标识；留空时继承上层主题。
+- `images`
+  - 图片数组，可为空。每一项都必须包含唯一 `id`。
+- `images[*].source`
+  - 图片来源，可选 `file` 或 `url`。
+- `images[*].file_path`
+  - 当 `source = file` 时必填。
+  - 记录相对于卡片根目录的资源路径，例如 `cover.png`。
+  - 不允许写入 `blob:`、`data:`、绝对路径或 `../` 形式的越级路径。
+- `images[*].url`
+  - 当 `source = url` 时必填。
+  - 只允许 `http:`、`https:` 或 `data:image/*`。
+- `images[*].title`
+  - 可选图片标题。
+  - 当前编辑器图片网格不提供逐张标题编辑入口，如需写入需通过正式配置生成链路处理。
+- `images[*].alt`
+  - 可选无障碍替代文本。
+  - 当前编辑器图片网格不提供逐张替代文本编辑入口，如需写入需通过正式配置生成链路处理。
+- `layout_type`
+  - 正式布局类型，可选：
+    - `single`
+    - `grid`
+    - `long-scroll`
+    - `horizontal-scroll`
+  - 注意：渲染时如果图片数量小于等于 `1`，插件会自动以单图模式展示。
+  - 注意：当图片数量大于 `1` 时，正式多图布局只允许 `grid`、`long-scroll`、`horizontal-scroll`；归一化阶段会把非法的多图 `single` 请求改写为 `grid`。
+- `layout_options.grid_mode`
+  - 当 `layout_type = grid` 时使用。
+  - 可选 `2x2`、`3x3`、`3-column-infinite`。
+- `layout_options.single_width_percent`
+  - 当 `layout_type = single` 时使用。
+  - 合法范围为 `10-100`。
+- `layout_options.single_alignment`
+  - 当 `layout_type = single` 时使用。
+  - 可选 `left`、`center`、`right`。
+- `layout_options.spacing_mode`
+  - 图片间距模式，可选 `none`、`comfortable`。
+  - `none` 表示零间距且图片无圆角。
+  - `comfortable` 表示适当间距且图片使用小圆角。

@@ -71,7 +71,10 @@ permissions字段声明插件需要的系统能力。数组形式，每个元素
 
 capabilities字段声明插件提供的具体能力，不同类型插件有不同结构。
 
-应用插件可以声明提供的功能如可打开的文件类型。卡片插件声明支持的卡片类型如VideoCard、ImageCard。布局插件声明布局标识如grid-layout。
+- 应用插件可以声明提供的功能如可打开的文件类型；
+- 卡片插件正式使用对象结构：`capabilities.cardTypes`；
+- 模块插件当前正式使用字符串数组结构，例如 `capabilities: ["module.markdown-renderer"]`；
+- 布局插件可以声明布局标识如 `grid-layout`。
 
 ## 环境字段
 

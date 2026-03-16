@@ -288,6 +288,87 @@ describe('Host services integration', () => {
     expect(completed.session.status).toBe('running');
   });
 
+  it('mounts enabled module plugins through the formal module service', async () => {
+    const moduleProjectDir = path.join(workspace, 'markdown-module');
+    await fs.mkdir(path.join(moduleProjectDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(moduleProjectDir, 'manifest.yaml'),
+      [
+        'id: chips.module.markdown-renderer',
+        'version: "1.0.0"',
+        'type: module',
+        'name: Markdown Renderer Module',
+        'description: Shared markdown rendering module',
+        'permissions: []',
+        'capabilities:',
+        '  - markdown-renderer',
+        'entry: dist/index.mjs'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(moduleProjectDir, 'dist/index.mjs'),
+      'export const createMarkdownRenderer = () => "markdown-renderer";\n',
+      'utf-8'
+    );
+
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.join(moduleProjectDir, 'manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+
+    const mounted = await runtime.invoke<{
+      module: {
+        slot: string;
+        moduleId: string;
+        entry?: string;
+        capabilities: string[];
+        active: boolean;
+      };
+    }>('module.mount', {
+      slot: 'preview.main',
+      moduleId: installed.pluginId
+    });
+
+    expect(mounted.module).toMatchObject({
+      slot: 'preview.main',
+      moduleId: 'chips.module.markdown-renderer',
+      entry: 'dist/index.mjs',
+      active: true
+    });
+    expect(mounted.module.capabilities).toContain('markdown-renderer');
+
+    const queried = await runtime.invoke<{
+      module: {
+        slot: string;
+        moduleId: string;
+        active: boolean;
+      } | null;
+    }>('module.query', { slot: 'preview.main' });
+    expect(queried.module).toMatchObject({
+      slot: 'preview.main',
+      moduleId: 'chips.module.markdown-renderer',
+      active: true
+    });
+
+    const listed = await runtime.invoke<{
+      modules: Array<{
+        slot: string;
+        moduleId: string;
+      }>;
+    }>('module.list', {});
+    expect(listed.modules).toContainEqual(
+      expect.objectContaining({
+        slot: 'preview.main',
+        moduleId: 'chips.module.markdown-renderer'
+      })
+    );
+
+    await runtime.invoke('module.unmount', { slot: 'preview.main' });
+    const afterUnmount = await runtime.invoke<{ module: null }>('module.query', { slot: 'preview.main' });
+    expect(afterUnmount.module).toBeNull();
+  });
+
   it('installs plugin from .cpk package', async () => {
     const packageDir = path.join(workspace, 'demo-cpk-plugin');
     await fs.mkdir(path.join(packageDir, 'dist'), { recursive: true });

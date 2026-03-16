@@ -85,7 +85,10 @@ interface FileListEntryView {
 
 interface ModuleRecord {
   slot: string;
-  module: Record<string, unknown>;
+  moduleId: string;
+  entry?: string | Record<string, string>;
+  capabilities: string[];
+  active: boolean;
   mountedAt: number;
 }
 
@@ -1881,19 +1884,62 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'module',
     actions: {
       mount: {
-        descriptor: descriptor<{ slot: string; module: Record<string, unknown> }, { ack: true }>(
+        descriptor: descriptor<{ slot: string; moduleId: string }, { module: ModuleRecord }>(
           'module.mount',
           ['module.manage'],
           3_000,
           false,
           0,
           withMetrics(state, 'module.mount', async (input) => {
-            state.modules.set(input.slot, {
-              slot: input.slot,
-              module: input.module,
+            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
+            const moduleId = typeof input.moduleId === 'string' ? input.moduleId.trim() : '';
+            if (slot.length === 0) {
+              throw createError('MODULE_INVALID', 'module.mount requires a non-empty slot');
+            }
+            if (moduleId.length === 0) {
+              throw createError('MODULE_INVALID', 'module.mount requires a non-empty moduleId');
+            }
+            if (state.modules.has(slot)) {
+              throw createError('MODULE_CONFLICT', `Module slot already mounted: ${slot}`, {
+                slot
+              });
+            }
+
+            let plugin;
+            try {
+              plugin = ctx.runtime.get(moduleId);
+            } catch (error) {
+              const standardError = error as { code?: string; message?: string } | undefined;
+              if (standardError?.code === 'PLUGIN_NOT_FOUND') {
+                throw createError('MODULE_NOT_FOUND', `Module plugin not found: ${moduleId}`, {
+                  moduleId
+                });
+              }
+              throw error;
+            }
+
+            if (plugin.manifest.type !== 'module') {
+              throw createError('MODULE_INVALID', `Plugin is not a module plugin: ${moduleId}`, {
+                moduleId,
+                type: plugin.manifest.type
+              });
+            }
+            if (!plugin.enabled) {
+              throw createError('MODULE_DISABLED', `Module plugin is disabled: ${moduleId}`, {
+                moduleId
+              });
+            }
+
+            const moduleRecord: ModuleRecord = {
+              slot,
+              moduleId,
+              entry: plugin.manifest.entry ? deepClone(plugin.manifest.entry) : undefined,
+              capabilities: [...(plugin.manifest.capabilities ?? [])],
+              active: true,
               mountedAt: Date.now()
-            });
-            return { ack: true };
+            };
+            state.modules.set(slot, moduleRecord);
+            return { module: deepClone(moduleRecord) };
           })
         )
       },
@@ -1905,7 +1951,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'module.unmount', async (input) => {
-            state.modules.delete(input.slot);
+            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
+            if (slot.length === 0) {
+              throw createError('MODULE_INVALID', 'module.unmount requires a non-empty slot');
+            }
+            state.modules.delete(slot);
             return { ack: true };
           })
         )
@@ -1918,8 +1968,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'module.query', async (input) => {
-            const module = state.modules.get(input.slot) ?? null;
-            return { module };
+            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
+            if (slot.length === 0) {
+              throw createError('MODULE_INVALID', 'module.query requires a non-empty slot');
+            }
+            const module = state.modules.get(slot) ?? null;
+            return { module: module ? deepClone(module) : null };
           })
         )
       },
@@ -1931,7 +1985,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'module.list', async () => {
-            return { modules: [...state.modules.values()] };
+            return { modules: [...state.modules.values()].map((item) => deepClone(item)) };
           })
         )
       }

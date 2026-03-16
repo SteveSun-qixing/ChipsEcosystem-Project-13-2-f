@@ -208,11 +208,18 @@ interface ThemeService {
 |------|------|
 | 服务名 | `module` |
 | 核心动作 | mount/unmount/query/list |
-| 输入基线 | slot + module |
-| 输出基线 | state |
+| 输入基线 | slot + moduleId |
+| 输出基线 | moduleState（Bridge 返回包装对象，SDK 解包后暴露直接状态） |
 | 幂等性 | query/list 幂等 |
 | 权限边界 | `module.manage` |
 | 典型错误 | `MODULE_CONFLICT` |
+
+补充说明：
+
+- `module.mount` 正式输入为 `{ slot, moduleId }`，返回 `{ module }`；
+- `module.unmount` 正式输入为 `{ slot }`，返回 `{ ack: true }`；
+- `module.query` 返回 `{ module: ModuleState | null }`；
+- `module.list` 返回 `{ modules: ModuleState[] }`。
 
 ### 9. platform 服务
 

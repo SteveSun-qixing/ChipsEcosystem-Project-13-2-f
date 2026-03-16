@@ -16,9 +16,18 @@ import {
 import { globalEventEmitter } from './event-emitter';
 import {
     createInitialBasecardConfig,
+    getBasecardDescriptor,
     normalizeBasecardConfig,
     normalizeBasecardType,
 } from '../basecard-runtime/registry';
+import type { BasecardResourceOperations } from '../basecard-runtime/contracts';
+
+interface PendingBasicCardResourceImport {
+    path: string;
+    data: Uint8Array;
+    mimeType?: string;
+    token: string;
+}
 
 export interface BasicCardData {
     id: string;
@@ -26,6 +35,7 @@ export interface BasicCardData {
     data: Record<string, unknown>;
     createdAt: string;
     modifiedAt: string;
+    pendingResourceImports?: Map<string, PendingBasicCardResourceImport>;
 }
 
 export interface CardMetadata {
@@ -63,6 +73,7 @@ export interface CompositeCard {
     persistedRevision?: number;
     pendingPersistRevision?: number;
     lastPersistedAt?: string;
+    pendingResourceDeletions: Set<string>;
 }
 
 export interface CardServiceState {
@@ -108,9 +119,76 @@ function cloneValue<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function cloneBytes(bytes: Uint8Array): Uint8Array {
+    return new Uint8Array(bytes);
+}
+
+function normalizeResourcePath(resourcePath: string): string | null {
+    const normalized = resourcePath.replace(/\\/g, '/').trim();
+    if (!normalized) {
+        return null;
+    }
+
+    const segments = normalized
+        .replace(/^\.?\//, '')
+        .split('/')
+        .filter((segment) => segment.length > 0 && segment !== '.');
+    if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+        return null;
+    }
+
+    return segments.join('/');
+}
+
+function createPendingResourceToken(): string {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function guessMimeType(resourcePath: string, fallback?: string): string {
+    if (fallback && fallback.trim().length > 0) {
+        return fallback;
+    }
+
+    const normalized = resourcePath.toLowerCase();
+    if (normalized.endsWith('.png')) return 'image/png';
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) return 'image/jpeg';
+    if (normalized.endsWith('.gif')) return 'image/gif';
+    if (normalized.endsWith('.webp')) return 'image/webp';
+    if (normalized.endsWith('.svg')) return 'image/svg+xml';
+    if (normalized.endsWith('.bmp')) return 'image/bmp';
+    if (normalized.endsWith('.avif')) return 'image/avif';
+    if (normalized.endsWith('.mp4')) return 'video/mp4';
+    if (normalized.endsWith('.webm')) return 'video/webm';
+    if (normalized.endsWith('.mp3')) return 'audio/mpeg';
+    if (normalized.endsWith('.wav')) return 'audio/wav';
+    if (normalized.endsWith('.json')) return 'application/json';
+    if (normalized.endsWith('.pdf')) return 'application/pdf';
+    if (normalized.endsWith('.txt')) return 'text/plain';
+    return 'application/octet-stream';
+}
+
+function collectResourcePaths(type: string, config: Record<string, unknown>): string[] {
+    const descriptor = getBasecardDescriptor(type);
+    if (!descriptor?.collectResourcePaths) {
+        return [];
+    }
+
+    const paths = descriptor.collectResourcePaths(config);
+    const unique = new Set<string>();
+    for (const rawPath of paths) {
+        const normalizedPath = normalizeResourcePath(rawPath);
+        if (normalizedPath) {
+            unique.add(normalizedPath);
+        }
+    }
+
+    return [...unique];
+}
+
 function createPersistSnapshot(card: CompositeCard): CompositeCard {
     return {
         ...card,
+        pendingResourceDeletions: new Set(card.pendingResourceDeletions),
         metadata: cloneValue(card.metadata),
         cover: card.cover ? {
             html: card.cover.html,
@@ -125,6 +203,19 @@ function createPersistSnapshot(card: CompositeCard): CompositeCard {
             basicCards: card.structure.basicCards.map((basicCard) => ({
                 ...basicCard,
                 data: cloneValue(basicCard.data),
+                pendingResourceImports: basicCard.pendingResourceImports
+                    ? new Map(
+                        Array.from(basicCard.pendingResourceImports.entries()).map(([resourcePath, resource]) => ([
+                            resourcePath,
+                            {
+                                path: resource.path,
+                                data: cloneBytes(resource.data),
+                                mimeType: resource.mimeType,
+                                token: resource.token,
+                            },
+                        ])),
+                    )
+                    : undefined,
             })),
         },
     };
@@ -225,6 +316,7 @@ export class CardService {
                 return;
             }
 
+            this.clearPersistedResourceImports(liveCard, snapshot);
             liveCard.persistedRevision = targetRevision;
             liveCard.lastPersistedAt = now();
 
@@ -292,6 +384,7 @@ export class CardService {
             isPersisting: false,
             persistedRevision: 0,
             pendingPersistRevision: 0,
+            pendingResourceDeletions: new Set(),
         };
 
         this.state.openedCards.set(id, newCard);
@@ -376,6 +469,7 @@ export class CardService {
             isPersisting: false,
             persistedRevision: 0,
             pendingPersistRevision: 0,
+            pendingResourceDeletions: new Set(),
         };
 
         this.state.openedCards.set(id, card);
@@ -419,6 +513,11 @@ export class CardService {
 
         const latestCard = this.state.openedCards.get(id);
         if (latestCard) {
+            const deletedResourceCount = await this.finalizeCardResources(latestCard);
+            if (deletedResourceCount > 0) {
+                await this.persistCard(createPersistSnapshot(latestCard));
+                latestCard.lastPersistedAt = now();
+            }
             globalEventEmitter.emit('card:saved', { card: latestCard });
         }
     }
@@ -473,6 +572,19 @@ export class CardService {
             return;
         }
 
+        const basicCard = card.structure.basicCards[index];
+        if (basicCard) {
+            const referencedPaths = collectResourcePaths(basicCard.type, basicCard.data);
+            const pendingImports = basicCard.pendingResourceImports;
+            for (const resourcePath of referencedPaths) {
+                if (pendingImports?.has(resourcePath)) {
+                    pendingImports.delete(resourcePath);
+                    continue;
+                }
+                card.pendingResourceDeletions.add(resourcePath);
+            }
+        }
+
         card.structure.basicCards.splice(index, 1);
         this.markCardDirty(card);
         card.metadata.modifiedAt = now();
@@ -508,7 +620,12 @@ export class CardService {
         globalEventEmitter.emit('card:basic-card-moved', { cardId, basicCardId, newPosition: boundedPosition });
     }
 
-    updateBasicCard(cardId: string, basicCardId: string, data: Record<string, unknown>): void {
+    updateBasicCard(
+        cardId: string,
+        basicCardId: string,
+        data: Record<string, unknown>,
+        resourceOperations?: BasecardResourceOperations,
+    ): void {
         const card = this.state.openedCards.get(cardId);
         if (!card) return;
 
@@ -517,10 +634,47 @@ export class CardService {
             return;
         }
 
-        basicCard.data = normalizeBasicCardData(basicCardId, basicCard.type, {
-            ...basicCard.data,
-            ...data,
-        });
+        basicCard.data = normalizeBasicCardData(basicCardId, basicCard.type, data);
+
+        if (!basicCard.pendingResourceImports) {
+            basicCard.pendingResourceImports = new Map();
+        }
+
+        for (const resource of resourceOperations?.imports ?? []) {
+            const normalizedPath = normalizeResourcePath(resource.path);
+            if (!normalizedPath) {
+                continue;
+            }
+
+            basicCard.pendingResourceImports.set(normalizedPath, {
+                path: normalizedPath,
+                data: cloneBytes(resource.data),
+                mimeType: resource.mimeType,
+                token: createPendingResourceToken(),
+            });
+            card.pendingResourceDeletions.delete(normalizedPath);
+        }
+
+        for (const resourcePath of resourceOperations?.deletions ?? []) {
+            const normalizedPath = normalizeResourcePath(resourcePath);
+            if (!normalizedPath) {
+                continue;
+            }
+
+            const removedPendingImport = basicCard.pendingResourceImports.delete(normalizedPath);
+            if (!removedPendingImport) {
+                card.pendingResourceDeletions.add(normalizedPath);
+            }
+        }
+
+        for (const referencedPath of collectResourcePaths(basicCard.type, basicCard.data)) {
+            card.pendingResourceDeletions.delete(referencedPath);
+        }
+
+        if (basicCard.pendingResourceImports.size === 0) {
+            delete basicCard.pendingResourceImports;
+        }
+
         basicCard.modifiedAt = now();
         this.markCardDirty(card);
         card.metadata.modifiedAt = now();
@@ -558,6 +712,49 @@ export class CardService {
         this.notify();
         void this.queuePersist(id);
         globalEventEmitter.emit('card:metadata-updated', { cardId: id, metadata });
+    }
+
+    syncCardWorkspaceSnapshot(id: string, input: {
+        name?: string;
+        path?: string;
+        modifiedAt?: string;
+    }): void {
+        const card = this.state.openedCards.get(id);
+        if (!card) {
+            return;
+        }
+
+        let hasChanges = false;
+        const nextName = asString(input.name);
+        const nextPath = asString(input.path);
+        const nextModifiedAt = asString(input.modifiedAt);
+
+        if (nextName && nextName !== card.metadata.name) {
+            card.metadata.name = nextName;
+            hasChanges = true;
+        }
+
+        if (nextPath && nextPath !== card.path) {
+            card.path = nextPath;
+            hasChanges = true;
+        }
+
+        if (nextModifiedAt && nextModifiedAt !== card.metadata.modifiedAt) {
+            card.metadata.modifiedAt = nextModifiedAt;
+            hasChanges = true;
+        }
+
+        if (!hasChanges) {
+            return;
+        }
+
+        this.notify();
+        globalEventEmitter.emit('card:workspace-synced', {
+            cardId: id,
+            name: nextName,
+            path: nextPath,
+            modifiedAt: nextModifiedAt,
+        });
     }
 
     updateCardCover(id: string, input: {
@@ -630,22 +827,7 @@ export class CardService {
             tags: card.metadata.tags ?? [],
         };
 
-        const structure = {
-            structure: card.structure.basicCards.map((basicCard) => ({
-                id: basicCard.id,
-                type: basicCard.type,
-                created_at: basicCard.createdAt,
-                modified_at: basicCard.modifiedAt,
-            })),
-            manifest: {
-                card_count: card.structure.basicCards.length,
-                resource_count: 0,
-                resources: [],
-            },
-        };
-
         await fileService.writeText(metadataPath, yaml.stringify(metadata));
-        await fileService.writeText(structurePath, yaml.stringify(structure));
         await fileService.writeText(
             coverPath,
             card.cover?.html ?? createDefaultCoverHtml(card.metadata.name),
@@ -658,6 +840,15 @@ export class CardService {
             await fileService.writeText(contentPath, yaml.stringify(basicCard.data));
         }
 
+        for (const basicCard of card.structure.basicCards) {
+            for (const resource of basicCard.pendingResourceImports?.values() ?? []) {
+                const resourcePath = joinPath(card.path, resource.path);
+                const resourceDir = resourcePath.split('/').slice(0, -1).join('/');
+                await fileService.ensureDir(resourceDir);
+                await fileService.writeBinary(resourcePath, resource.data);
+            }
+        }
+
         for (const resource of card.cover?.resources ?? []) {
             const resourcePath = joinPath(card.path, '.card', resource.path);
             const resourceDir = resourcePath.split('/').slice(0, -1).join('/');
@@ -668,6 +859,110 @@ export class CardService {
         for (const entry of await fileService.list(contentDir)) {
             if (!entry.isDirectory && entry.path.endsWith('.yaml') && !expectedContentFiles.has(entry.path)) {
                 await fileService.delete(entry.path);
+            }
+        }
+
+        const structure = {
+            structure: card.structure.basicCards.map((basicCard) => ({
+                id: basicCard.id,
+                type: basicCard.type,
+                created_at: basicCard.createdAt,
+                modified_at: basicCard.modifiedAt,
+            })),
+            manifest: {
+                card_count: card.structure.basicCards.length,
+                ...(await this.buildResourceManifest(card.path)),
+            },
+        };
+
+        await fileService.writeText(structurePath, yaml.stringify(structure));
+    }
+
+    private async buildResourceManifest(cardPath: string): Promise<{
+        resource_count: number;
+        resources: Array<{ path: string; size: number; type: string }>;
+    }> {
+        const entries = await fileService.list(cardPath);
+        const resources: Array<{ path: string; size: number; type: string }> = [];
+
+        for (const entry of entries) {
+            if ((entry as { isDirectory?: boolean }).isDirectory) {
+                continue;
+            }
+
+            const normalizedPath = entry.path.replace(/\\/g, '/');
+            const relativePath = normalizedPath.startsWith(`${cardPath}/`)
+                ? normalizedPath.slice(cardPath.length + 1)
+                : normalizedPath;
+            const resourcePath = normalizeResourcePath(relativePath);
+            if (!resourcePath) {
+                continue;
+            }
+
+            const stat = await fileService.stat(entry.path);
+            resources.push({
+                path: resourcePath,
+                size: stat.size,
+                type: guessMimeType(resourcePath),
+            });
+        }
+
+        resources.sort((left, right) => left.path.localeCompare(right.path));
+        return {
+            resource_count: resources.length,
+            resources,
+        };
+    }
+
+    private async finalizeCardResources(card: CompositeCard): Promise<number> {
+        if (card.pendingResourceDeletions.size === 0) {
+            return 0;
+        }
+
+        const referencedPaths = new Set<string>();
+        for (const basicCard of card.structure.basicCards) {
+            for (const resourcePath of collectResourcePaths(basicCard.type, basicCard.data)) {
+                referencedPaths.add(resourcePath);
+            }
+        }
+
+        let deletedCount = 0;
+        for (const resourcePath of Array.from(card.pendingResourceDeletions)) {
+            if (referencedPaths.has(resourcePath)) {
+                card.pendingResourceDeletions.delete(resourcePath);
+                continue;
+            }
+
+            const absolutePath = joinPath(card.path, resourcePath);
+            if (await fileService.exists(absolutePath)) {
+                await fileService.delete(absolutePath);
+                deletedCount += 1;
+            }
+
+            card.pendingResourceDeletions.delete(resourcePath);
+        }
+
+        return deletedCount;
+    }
+
+    private clearPersistedResourceImports(liveCard: CompositeCard, snapshot: CompositeCard): void {
+        const snapshotImportsByCardId = new Map(snapshot.structure.basicCards.map((basicCard) => [basicCard.id, basicCard]));
+
+        for (const basicCard of liveCard.structure.basicCards) {
+            const snapshotBasicCard = snapshotImportsByCardId.get(basicCard.id);
+            if (!snapshotBasicCard?.pendingResourceImports?.size || !basicCard.pendingResourceImports?.size) {
+                continue;
+            }
+
+            for (const [resourcePath, resource] of snapshotBasicCard.pendingResourceImports.entries()) {
+                const liveResource = basicCard.pendingResourceImports.get(resourcePath);
+                if (liveResource?.token === resource.token) {
+                    basicCard.pendingResourceImports.delete(resourcePath);
+                }
+            }
+
+            if (basicCard.pendingResourceImports.size === 0) {
+                delete basicCard.pendingResourceImports;
             }
         }
     }

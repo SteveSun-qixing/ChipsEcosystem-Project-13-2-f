@@ -1,0 +1,9 @@
+card_type: "ImageCard"
+theme: ""
+images: []
+layout_type: "single"
+layout_options:
+  grid_mode: "2x2"
+  single_width_percent: 100
+  single_alignment: "center"
+  spacing_mode: "comfortable"

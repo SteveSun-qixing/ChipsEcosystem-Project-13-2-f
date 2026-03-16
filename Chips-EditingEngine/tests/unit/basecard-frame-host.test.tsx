@@ -43,6 +43,7 @@ function ParentHarness() {
         baseCardId="base-1"
         cardType="base.mock"
         config={stableConfig}
+        resourceBaseUrl="file:///workspace/demo.card/"
         selectable
         interactionPolicy="delegate"
         themeCacheKey="theme-1"
@@ -61,14 +62,28 @@ function ParentHarness() {
 describe('BasecardFrameHost', () => {
   let container: HTMLDivElement;
   let root: Root;
+  const createObjectURL = vi.fn(() => 'blob:pending-cover');
+  const revokeObjectURL = vi.fn();
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURL,
+    });
 
     mockRenderView.mockReset();
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
     mockRenderView.mockImplementation(({ container: mountContainer }: { container: HTMLElement }) => {
       const marker = mountContainer.ownerDocument.createElement('div');
       marker.textContent = 'mounted';
@@ -96,6 +111,7 @@ describe('BasecardFrameHost', () => {
 
     const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
     expect(frame).not.toBeNull();
+    expect(frame?.srcdoc).toContain('<base href="file:///workspace/demo.card/" />');
 
     const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
     expect(frameWindow).not.toBeNull();
@@ -113,9 +129,71 @@ describe('BasecardFrameHost', () => {
       await Promise.resolve();
     });
 
+    const host = container.querySelector('.basecard-frame-host') as HTMLDivElement | null;
     expect(mockRenderView).toHaveBeenCalled();
     expect(container.querySelector('.basecard-frame-host__overlay[data-state="loading"]')).toBeNull();
     expect(container.querySelector('.basecard-frame-host__overlay[data-state="error"]')).toBeNull();
     expect(container.querySelector('[data-ready-revision="1"]')).not.toBeNull();
+    expect(host?.style.minHeight).toBe('0px');
+    expect(frame?.style.minHeight).toBe('0px');
+  });
+
+  it('resolves pending imported resources for preview rendering before they are persisted', async () => {
+    mockRenderView.mockReset();
+    mockRenderView.mockImplementation(({ container: mountContainer, resolveResourceUrl }: {
+      container: HTMLElement;
+      resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    }) => {
+      void resolveResourceUrl?.('cover.png').then((src) => {
+        const image = mountContainer.ownerDocument.createElement('img');
+        image.setAttribute('data-preview-image', 'true');
+        image.src = src;
+        mountContainer.appendChild(image);
+      });
+
+      return () => {
+        while (mountContainer.firstChild) {
+          mountContainer.removeChild(mountContainer.firstChild);
+        }
+      };
+    });
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          pendingResourceImports={new Map([
+            ['cover.png', { path: 'cover.png', data: new Uint8Array([1, 2, 3]), mimeType: 'image/png' }],
+          ])}
+          interactionPolicy="native"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
+    expect(frameWindow).not.toBeNull();
+    Object.defineProperty(frameWindow, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as (cb: FrameRequestCallback) => number,
+    });
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const previewImage = frame?.contentDocument?.querySelector('[data-preview-image="true"]') as HTMLImageElement | null;
+    expect(previewImage).not.toBeNull();
+    expect(previewImage?.getAttribute('src')?.startsWith('blob:')).toBe(true);
   });
 });

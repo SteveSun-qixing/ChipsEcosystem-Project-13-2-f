@@ -1,5 +1,7 @@
 import type { EditorValidationResult } from '../basecard-runtime/contracts';
 
+import type { BasecardResourceOperations } from '../basecard-runtime/contracts';
+
 export interface EditorSessionSnapshot {
   key: string;
   cardId: string;
@@ -13,6 +15,11 @@ export interface EditorSessionSnapshot {
   mountRevision: number;
   revision: number;
   isCommitting: boolean;
+  hasPendingResourceChanges: boolean;
   errorMessage: string | null;
 }
 
+export interface EditorSessionCommitPayload {
+  config: Record<string, unknown>;
+  resourceOperations: BasecardResourceOperations;
+}

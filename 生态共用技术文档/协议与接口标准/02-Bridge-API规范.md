@@ -217,6 +217,9 @@ card 子域采用 vNext 动作口径：
 - `chips.card-editor:change`
 - `chips.card-editor:error`
 - `chips.card-editor:resize`
+- `chips.card-editor:resource-request`
+- `chips.card-editor:resource-response`
+- `chips.card-editor:resource-release`
 
 其中 `change` 事件必须至少包含：
 
@@ -228,6 +231,17 @@ card 子域采用 vNext 动作口径：
   config: Record<string, unknown>;
 }
 ```
+
+资源事件约束：
+
+- `resource-request` / `resource-response` 用于编辑器 iframe 与外层宿主之间的正式资源桥接；
+- `resourcePath` 一律使用相对于卡片根目录的路径；
+- `resource-request.action` 当前正式支持 `resolve | import | delete`；
+- `resolve` 响应返回的 URL 只作为当前会话的运行时访问地址，若使用 `blob:` 等临时地址，后续必须支持 `resource-release`；
+- `import` 响应返回的 `path` 必须是卡片根目录相对路径，宿主应负责挑选不冲突的正式文件名；
+- `delete` 表示对卡片内部资源发起删除意图，是否立即物理删除由宿主持久化链路决定；
+- `resource-release` 用于通知外层宿主释放 `blob:` 等临时资源 URL；
+- SDK `editorPanel.render({ resources })` 可以在本地桥接这组协议，但 `resources` 本身不进入 `card.renderEditor` Host 路由输入。
 
 ### storage子域
 

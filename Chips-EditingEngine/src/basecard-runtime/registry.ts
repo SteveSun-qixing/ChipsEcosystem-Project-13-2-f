@@ -1,7 +1,9 @@
 import type { BasecardConfigRecord, BasecardDescriptor, EditorValidationResult } from './contracts';
+import { imageBasecardDescriptor } from './registrations/image';
 import { richtextBasecardDescriptor } from './registrations/richtext';
 
 const basecardDescriptors = [
+  imageBasecardDescriptor,
   richtextBasecardDescriptor,
 ] satisfies BasecardDescriptor[];
 

@@ -277,6 +277,328 @@ describe("CardApi", () => {
     }
   });
 
+  it("keeps editor resource bridge out of the card.renderEditor route payload", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          view: {
+            title: "ImageCard Editor",
+            body: "<div>editor</div>",
+            cardType: "ImageCard",
+            pluginId: "chips.basecard.image",
+            baseCardId: "image-1",
+          },
+        } as any;
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+    try {
+      (globalThis as any).window = {
+        location: { origin: "https://example.test" },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      (globalThis as any).document = {
+        createElement: (tag: string) => ({
+          tagName: tag.toUpperCase(),
+          attrs: {} as Record<string, string>,
+          setAttribute(name: string, value: string) {
+            this.attrs[name] = value;
+          },
+        }),
+      };
+
+      const resources = {
+        rootPath: "/workspace/cards/demo",
+        resolveResourceUrl: vi.fn(),
+        importResource: vi.fn(),
+        deleteResource: vi.fn(),
+        releaseResourceUrl: vi.fn(),
+      };
+
+      await api.editorPanel.render({
+        cardType: "ImageCard",
+        baseCardId: "image-1",
+        initialConfig: {
+          src: "images/demo.png",
+        },
+        resources,
+      });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.action).toBe("card.renderEditor");
+      expect(calls[0]?.payload).toEqual({
+        cardType: "ImageCard",
+        baseCardId: "image-1",
+        initialConfig: {
+          src: "images/demo.png",
+        },
+      });
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("bridges editor resource requests through the SDK resource handlers", async () => {
+    const api = createCardApi(
+      createStubClient(async () => ({
+        view: {
+          title: "ImageCard Editor",
+          body: "<div>editor</div>",
+          cardType: "ImageCard",
+          pluginId: "chips.basecard.image",
+          baseCardId: "image-1",
+        },
+      }) as any),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const postMessage = vi.fn();
+      let createdFrame: HTMLIFrameElement | undefined;
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type !== "message") {
+            return;
+          }
+          const index = listeners.indexOf(listener);
+          if (index >= 0) {
+            listeners.splice(index, 1);
+          }
+        },
+      };
+
+      (globalThis as any).document = {
+        createElement: (tag: string) => {
+          const el: any = {
+            tagName: tag.toUpperCase(),
+            attrs: {} as Record<string, string>,
+            contentWindow: { postMessage },
+            isConnected: true,
+            setAttribute(name: string, value: string) {
+              this.attrs[name] = value;
+            },
+          };
+          createdFrame = el as HTMLIFrameElement;
+          return el;
+        },
+      };
+
+      const resolveResourceUrl = vi.fn(async (resourcePath: string) => `blob:https://example.test/${resourcePath}`);
+      const importResource = vi.fn(async ({ file, preferredPath }: { file: File; preferredPath?: string }) => ({
+        path: preferredPath ?? file.name,
+      }));
+      const deleteResource = vi.fn(async () => undefined);
+      const releaseResourceUrl = vi.fn();
+
+      await api.editorPanel.render({
+        cardType: "ImageCard",
+        baseCardId: "image-1",
+        resources: {
+          resolveResourceUrl,
+          importResource,
+          deleteResource,
+          releaseResourceUrl,
+        },
+      });
+
+      expect(createdFrame).toBeDefined();
+      expect(listeners).toHaveLength(1);
+
+      const dispatch = async (data: unknown, origin = "null") => {
+        listeners[0]?.({
+          source: createdFrame?.contentWindow,
+          origin,
+          data,
+        } as MessageEvent);
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+
+      await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "resolve-1",
+          action: "resolve",
+          resourcePath: "./images/demo.png",
+        },
+      });
+      expect(resolveResourceUrl).toHaveBeenCalledWith("images/demo.png");
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "resolve-1",
+            ok: true,
+            result: "blob:https://example.test/images/demo.png",
+          },
+        },
+        "*",
+      );
+
+      const file = new File(["image"], "cover.png", { type: "image/png" });
+      await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "import-1",
+          action: "import",
+          preferredPath: "images/cover.png",
+          file,
+        },
+      });
+      expect(importResource).toHaveBeenCalledWith({
+        file,
+        preferredPath: "images/cover.png",
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "import-1",
+            ok: true,
+            result: { path: "images/cover.png" },
+          },
+        },
+        "*",
+      );
+
+      await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "delete-1",
+          action: "delete",
+          resourcePath: "./images/cover.png",
+        },
+      });
+      expect(deleteResource).toHaveBeenCalledWith("images/cover.png");
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "delete-1",
+            ok: true,
+            result: null,
+          },
+        },
+        "*",
+      );
+
+      await dispatch({
+        type: "chips.card-editor:resource-release",
+        payload: {
+          resourcePath: "./images/cover.png",
+        },
+      });
+      expect(releaseResourceUrl).toHaveBeenCalledWith("images/cover.png");
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("uses rootPath as the fallback editor resource resolver", async () => {
+    const api = createCardApi(
+      createStubClient(async () => ({
+        view: {
+          title: "ImageCard Editor",
+          body: "<div>editor</div>",
+          cardType: "ImageCard",
+          pluginId: "chips.basecard.image",
+          baseCardId: "image-1",
+        },
+      }) as any),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const postMessage = vi.fn();
+      let createdFrame: HTMLIFrameElement | undefined;
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      };
+
+      (globalThis as any).document = {
+        createElement: (tag: string) => {
+          const el: any = {
+            tagName: tag.toUpperCase(),
+            attrs: {} as Record<string, string>,
+            contentWindow: { postMessage },
+            isConnected: true,
+            setAttribute(name: string, value: string) {
+              this.attrs[name] = value;
+            },
+          };
+          createdFrame = el as HTMLIFrameElement;
+          return el;
+        },
+      };
+
+      await api.editorPanel.render({
+        cardType: "ImageCard",
+        resources: {
+          rootPath: "/workspace/card-root",
+        },
+      });
+
+      listeners[0]?.({
+        source: createdFrame?.contentWindow,
+        origin: "null",
+        data: {
+          type: "chips.card-editor:resource-request",
+          payload: {
+            requestId: "resolve-root",
+            action: "resolve",
+            resourcePath: "images/cover photo.png",
+          },
+        },
+      } as MessageEvent);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "resolve-root",
+            ok: true,
+            result: "file:///workspace/card-root/images/cover%20photo.png",
+          },
+        },
+        "*",
+      );
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
   it("compositeWindow events respect origin and type filters", async () => {
     const api = createCardApi(
       createStubClient(async () => {

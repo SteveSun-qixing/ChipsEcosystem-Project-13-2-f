@@ -150,6 +150,21 @@ function MainWorkspace() {
   }, [t, updateWindow, windows]);
 
   useEffect(() => {
+    windows.forEach((window) => {
+      if (window.type !== 'card') {
+        return;
+      }
+
+      const nextTitle = openCards.get(window.cardId)?.metadata.name?.trim() || t('card_window.untitled') || 'Untitled Card';
+      if (window.title === nextTitle) {
+        return;
+      }
+
+      updateWindow(window.id, { title: nextTitle });
+    });
+  }, [openCards, t, updateWindow, windows]);
+
+  useEffect(() => {
     const handleOpenWorkspaceFile = async (payload: {
       file?: { id?: string; path?: string; type?: string; name?: string };
       openOptions?: WorkspaceOpenOptions;

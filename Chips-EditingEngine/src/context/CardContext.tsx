@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getCardService, type CompositeCard, type CardServiceState } from '../core/card-service';
 import { globalEventEmitter } from '../core/event-emitter';
+import type { BasecardResourceOperations } from '../basecard-runtime/contracts';
 import type { CardCoverResource } from '../utils/card-cover';
+import { workspaceService } from '../services/workspace-service';
 
 export interface CardState {
     openCards: Map<string, CompositeCard>;
@@ -22,7 +24,12 @@ export interface CardContextType extends CardState {
     addBasicCard: (cardId: string, type: string, data?: Record<string, unknown>, position?: number) => CompositeCard['structure']['basicCards'][number] | null;
     removeBasicCard: (cardId: string, basicCardId: string) => void;
     moveBasicCard: (cardId: string, basicCardId: string, newPosition: number) => void;
-    updateBasicCard: (cardId: string, basicCardId: string, data: Record<string, unknown>) => void;
+    updateBasicCard: (
+        cardId: string,
+        basicCardId: string,
+        data: Record<string, unknown>,
+        resourceOperations?: BasecardResourceOperations,
+    ) => void;
     toggleEditMode: (id: string) => void;
     getCard: (id: string) => CompositeCard | undefined;
 }
@@ -77,6 +84,38 @@ export function CardProvider({ children }: { children: ReactNode }) {
         };
     }, [cardService]);
 
+    useEffect(() => {
+        const handleWorkspaceFileRenamed = (payload: {
+            file?: {
+                id?: string;
+                type?: string;
+                name?: string;
+                path?: string;
+                modifiedAt?: string;
+            };
+        }) => {
+            const file = payload?.file;
+            if (!file || file.type !== 'card' || typeof file.id !== 'string') {
+                return;
+            }
+
+            const displayName = typeof file.name === 'string'
+                ? file.name.replace(/\.card$/i, '').trim()
+                : '';
+
+            cardService.syncCardWorkspaceSnapshot(file.id, {
+                name: displayName,
+                path: file.path,
+                modifiedAt: file.modifiedAt,
+            });
+        };
+
+        workspaceService.on('workspace:file-renamed', handleWorkspaceFileRenamed);
+        return () => {
+            workspaceService.off('workspace:file-renamed', handleWorkspaceFileRenamed);
+        };
+    }, [cardService]);
+
     const openCard = useCallback(async (cardId: string, path: string) => {
         await cardService.openCard(cardId, path);
     }, [cardService]);
@@ -120,8 +159,13 @@ export function CardProvider({ children }: { children: ReactNode }) {
         cardService.moveBasicCard(cardId, basicCardId, newPosition);
     }, [cardService]);
 
-    const updateBasicCard = useCallback((cardId: string, basicCardId: string, data: Record<string, unknown>) => {
-        cardService.updateBasicCard(cardId, basicCardId, data);
+    const updateBasicCard = useCallback((
+        cardId: string,
+        basicCardId: string,
+        data: Record<string, unknown>,
+        resourceOperations?: BasecardResourceOperations,
+    ) => {
+        cardService.updateBasicCard(cardId, basicCardId, data, resourceOperations);
     }, [cardService]);
 
     const toggleEditMode = useCallback((id: string) => {

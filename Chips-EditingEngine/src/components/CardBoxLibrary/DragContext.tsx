@@ -67,6 +67,29 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
+        const body = document.body;
+        if (!body) {
+            return;
+        }
+
+        if (dragState.isDragging && dragState.data) {
+            body.dataset.chipsLibraryDragging = 'true';
+            body.dataset.chipsLibraryDragType = dragState.data.type;
+            body.dataset.chipsLibraryDragPayload = JSON.stringify(dragState.data);
+        } else {
+            delete body.dataset.chipsLibraryDragging;
+            delete body.dataset.chipsLibraryDragType;
+            delete body.dataset.chipsLibraryDragPayload;
+        }
+
+        return () => {
+            delete body.dataset.chipsLibraryDragging;
+            delete body.dataset.chipsLibraryDragType;
+            delete body.dataset.chipsLibraryDragPayload;
+        };
+    }, [dragState.data, dragState.isDragging]);
+
+    useEffect(() => {
         const handleDrag = (e: DragEvent) => {
             if (dragStateRef.current.isDragging && e.clientX !== 0 && e.clientY !== 0) {
                 updatePreview(e.clientX, e.clientY);

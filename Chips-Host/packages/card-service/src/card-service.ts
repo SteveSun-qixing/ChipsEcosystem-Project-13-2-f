@@ -114,6 +114,10 @@ interface BaseCardPluginModule {
     container: unknown;
     initialConfig: unknown;
     onChange: (next: unknown) => void;
+    resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    importResource?: (input: { file: File; preferredPath?: string }) => Promise<{ path: string }>;
+    deleteResource?: (resourcePath: string) => Promise<void>;
   }) => unknown;
 }
 
@@ -783,7 +787,8 @@ const createChildFrameDocument = (
   cardType: string,
   title: string,
   contentHtml: string,
-  interactionPolicy: CompositeInteractionPolicy
+  interactionPolicy: CompositeInteractionPolicy,
+  resourceBaseUrl?: string,
 ): string => {
   const safeNodeId = JSON.stringify(nodeId);
   const contentTitle = title || cardType;
@@ -794,7 +799,8 @@ const createChildFrameDocument = (
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data: blob:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    ...(resourceBaseUrl ? [`  <base href="${escapeHtml(resourceBaseUrl)}" />`] : []),
     `  <title>${escapeHtml(contentTitle)}</title>`,
     '</head>',
     `<body data-node-id="${escapeHtml(nodeId)}" data-card-type="${escapeHtml(cardType)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
@@ -858,7 +864,7 @@ const createEditorFrameDocument = (options: {
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data: blob:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${themeCssText}</style>`,
     '</head>',
@@ -876,6 +882,51 @@ const createEditorFrameDocument = (options: {
     '      const container = document.getElementById("chips-basecard-editor-root");',
     '      const emit = (type, payload) => {',
     "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      let resourceRequestCounter = 0;',
+    '      const pendingResourceRequests = new Map();',
+    '      const nextResourceRequestId = (action) => `${action}-${Date.now()}-${++resourceRequestCounter}`;',
+    '      const requestResource = (action, payload) => {',
+    '        return new Promise((resolve, reject) => {',
+    '          const requestId = nextResourceRequestId(action);',
+    '          const timer = window.setTimeout(() => {',
+    '            pendingResourceRequests.delete(requestId);',
+    '            reject(new Error(`Card editor resource request timed out: ${action}`));',
+    '          }, 30000);',
+    '          pendingResourceRequests.set(requestId, { resolve, reject, timer });',
+    "          emit('chips.card-editor:resource-request', { requestId, action, baseCardId, cardType, pluginId, ...payload });",
+    '        });',
+    '      };',
+    '      window.addEventListener("message", (event) => {',
+    '        const data = event.data;',
+    '        if (!data || typeof data !== "object") {',
+    '          return;',
+    '        }',
+    '        if (data.type !== "chips.card-editor:resource-response") {',
+    '          return;',
+    '        }',
+    '        const payload = data.payload ?? {};',
+    '        const requestId = typeof payload.requestId === "string" ? payload.requestId : "";',
+    '        if (!requestId) {',
+    '          return;',
+    '        }',
+    '        const pending = pendingResourceRequests.get(requestId);',
+    '        if (!pending) {',
+    '          return;',
+    '        }',
+    '        window.clearTimeout(pending.timer);',
+    '        pendingResourceRequests.delete(requestId);',
+    '        if (payload.ok === false) {',
+    '          const message = typeof payload.message === "string" && payload.message.length > 0',
+    '            ? payload.message',
+    '            : "Card editor resource request failed.";',
+    '          pending.reject(new Error(message));',
+    '          return;',
+    '        }',
+    '        pending.resolve(payload.result);',
+    '      });',
+    '      const releaseResourceUrl = (resourcePath) => {',
+    "        emit('chips.card-editor:resource-release', { baseCardId, cardType, pluginId, resourcePath });",
     '      };',
     '      const emitHeight = () => {',
     '        const height = Math.max(',
@@ -898,7 +949,17 @@ const createEditorFrameDocument = (options: {
     '          onChange(next) {',
     "            emit('chips.card-editor:change', { baseCardId, cardType, pluginId, config: next });",
     '            window.setTimeout(emitHeight, 0);',
-    '          }',
+    '          },',
+    '          resolveResourceUrl(resourcePath) {',
+    "            return requestResource('resolve', { resourcePath });",
+    '          },',
+    '          releaseResourceUrl,',
+    '          importResource(input) {',
+    "            return requestResource('import', { preferredPath: input?.preferredPath, file: input?.file });",
+    '          },',
+    '          deleteResource(resourcePath) {',
+    "            return requestResource('delete', { resourcePath });",
+    '          },',
     '        });',
     "        emit('chips.card-editor:ready', { baseCardId, cardType, pluginId });",
     '        emitHeight();',
@@ -1487,7 +1548,14 @@ export class CardService {
         cardType,
         title,
         pluginId: plugin.manifest.id,
-        frameHtml: createChildFrameDocument(node.id, cardType, title, contentHtml, interactionPolicy)
+        frameHtml: createChildFrameDocument(
+          node.id,
+          cardType,
+          title,
+          contentHtml,
+          interactionPolicy,
+          pathToFileURL(`${ctx.rootDir}${path.sep}`).href,
+        )
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

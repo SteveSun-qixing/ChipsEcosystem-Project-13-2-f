@@ -1,6 +1,5 @@
 export interface CardResource {
-    id: string;
-    name: string;
+    path: string;
     type: string;
     size: number;
 }

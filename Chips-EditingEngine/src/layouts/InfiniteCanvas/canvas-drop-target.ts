@@ -2,7 +2,9 @@ import type { DragData } from '../../components/CardBoxLibrary/types';
 import type { CompositeCard } from '../../core/card-service';
 
 const COMPOSITE_DROP_SURFACE_SELECTOR = '[data-chips-drop-surface="composite-preview"]';
-const COMPOSITE_DROP_HORIZONTAL_PADDING_PX = 18;
+const BASECARD_NODE_SELECTOR = '[data-base-card-id]';
+const DEFAULT_COMPOSITE_PADDING_PX = 16;
+const MIN_INDICATOR_WIDTH_PX = 24;
 
 export interface CanvasDropPoint {
     x: number;
@@ -35,6 +37,12 @@ function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(value, max));
 }
 
+function resolveCompositePadding(card: CompositeCard | undefined): number {
+    return typeof card?.structure.layout?.padding === 'number'
+        ? card.structure.layout.padding
+        : DEFAULT_COMPOSITE_PADDING_PX;
+}
+
 function asElement(target: EventTarget | null): Element | null {
     return target instanceof Element ? target : null;
 }
@@ -57,6 +65,59 @@ function resolvePreviewSurface(
         ?.closest<HTMLElement>(COMPOSITE_DROP_SURFACE_SELECTOR) ?? null;
 }
 
+function getBaseCardNodes(previewSurface: HTMLElement): HTMLElement[] {
+    return Array.from(previewSurface.querySelectorAll<HTMLElement>(BASECARD_NODE_SELECTOR))
+        .filter((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        });
+}
+
+function buildInsertIndicator(options: {
+    previewRect: DOMRect;
+    insertionIndex: number;
+    baseCardNodes: HTMLElement[];
+    padding: number;
+}): CanvasInsertIndicator {
+    const { previewRect, insertionIndex, baseCardNodes, padding } = options;
+    const indicatorWidth = Math.max(
+        MIN_INDICATOR_WIDTH_PX,
+        previewRect.width - padding * 2,
+    );
+    const indicatorLeft = previewRect.left + (previewRect.width - indicatorWidth) / 2;
+
+    if (baseCardNodes.length === 0) {
+        return {
+            left: indicatorLeft,
+            top: previewRect.top + previewRect.height / 2,
+            width: indicatorWidth,
+        };
+    }
+
+    const firstRect = baseCardNodes[0]?.getBoundingClientRect();
+    const lastRect = baseCardNodes[baseCardNodes.length - 1]?.getBoundingClientRect();
+
+    let indicatorTop = previewRect.top + previewRect.height / 2;
+
+    if (insertionIndex <= 0 && firstRect) {
+        indicatorTop = previewRect.top + (firstRect.top - previewRect.top) / 2;
+    } else if (insertionIndex >= baseCardNodes.length && lastRect) {
+        indicatorTop = lastRect.bottom + (previewRect.bottom - lastRect.bottom) / 2;
+    } else {
+        const previousRect = baseCardNodes[insertionIndex - 1]?.getBoundingClientRect();
+        const nextRect = baseCardNodes[insertionIndex]?.getBoundingClientRect();
+        if (previousRect && nextRect) {
+            indicatorTop = previousRect.bottom + (nextRect.top - previousRect.bottom) / 2;
+        }
+    }
+
+    return {
+        left: indicatorLeft,
+        top: clamp(indicatorTop, previewRect.top, previewRect.bottom),
+        width: indicatorWidth,
+    };
+}
+
 export function resolveCompositeCardDropTarget({
     dragData,
     eventTarget,
@@ -73,49 +134,48 @@ export function resolveCompositeCardDropTarget({
         return null;
     }
 
-    const targetCard = openCards.get(cardId);
-    const baseCardCount = targetCard?.structure.basicCards.length ?? 0;
-    if (baseCardCount <= 0) {
+    if (previewSurface.dataset.chipsDropAccept !== 'true') {
         return null;
     }
 
+    const targetCard = openCards.get(cardId);
     const previewRect = previewSurface.getBoundingClientRect();
     if (previewRect.width <= 0 || previewRect.height <= 0) {
         return null;
     }
 
-    const clampedOffsetY = clamp(
-        screenPosition.y - previewRect.top,
-        0,
-        previewRect.height,
+    const baseCardNodes = getBaseCardNodes(previewSurface);
+    const clampedPointerY = clamp(
+        screenPosition.y,
+        previewRect.top,
+        previewRect.bottom,
     );
-    const segmentHeight = previewRect.height / baseCardCount;
-    const projectedCardIndex = clamp(
-        Math.floor(clampedOffsetY / Math.max(segmentHeight, 1)),
-        0,
-        baseCardCount - 1,
-    );
-    const projectedSegmentStart = projectedCardIndex * segmentHeight;
-    const withinSegmentOffset = clampedOffsetY - projectedSegmentStart;
-    const insertionIndex = withinSegmentOffset < segmentHeight / 2
-        ? projectedCardIndex
-        : projectedCardIndex + 1;
 
-    const indicatorWidth = Math.max(
-        24,
-        previewRect.width - COMPOSITE_DROP_HORIZONTAL_PADDING_PX * 2,
-    );
-    const indicatorLeft = previewRect.left + (previewRect.width - indicatorWidth) / 2;
-    const indicatorTop = previewRect.top + segmentHeight * insertionIndex;
+    const insertionIndex = (() => {
+        if (baseCardNodes.length === 0) {
+            return 0;
+        }
+
+        const targetNodeIndex = baseCardNodes.findIndex((node) => {
+            const rect = node.getBoundingClientRect();
+            const nodeMidpoint = rect.top + rect.height / 2;
+            return clampedPointerY < nodeMidpoint;
+        });
+
+        return targetNodeIndex === -1 ? baseCardNodes.length : targetNodeIndex;
+    })();
+
+    const indicator = buildInsertIndicator({
+        previewRect,
+        insertionIndex,
+        baseCardNodes,
+        padding: resolveCompositePadding(targetCard),
+    });
 
     return {
         type: 'composite-card-insert',
         cardId,
         insertionIndex,
-        indicator: {
-            left: indicatorLeft,
-            top: indicatorTop,
-            width: indicatorWidth,
-        },
+        indicator,
     };
 }

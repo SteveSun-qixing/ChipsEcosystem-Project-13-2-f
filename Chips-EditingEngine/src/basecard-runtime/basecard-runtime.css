@@ -35,6 +35,10 @@
   background: transparent;
 }
 
+body[data-chips-library-dragging='true'][data-chips-library-drag-type='card'] .basecard-frame-host__frame {
+  pointer-events: none;
+}
+
 .basecard-frame-host__overlay {
   position: absolute;
   inset: 0;

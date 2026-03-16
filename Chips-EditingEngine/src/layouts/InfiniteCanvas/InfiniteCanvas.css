@@ -27,7 +27,7 @@
 .infinite-canvas__insert-indicator {
     position: absolute;
     height: 3px;
-    transform: translateY(-50%) scaleY(var(--chips-insert-indicator-scale, 1));
+    transform: translateY(-50%);
     transform-origin: center;
     background: linear-gradient(90deg,
             var(--chips-sys-color-primary-hover, rgba(43, 165, 255, 0.92)) 0%,

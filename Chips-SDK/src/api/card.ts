@@ -83,6 +83,7 @@ export interface CardEditorRenderOptions {
   cardType: string;
   initialConfig?: Record<string, unknown>;
   baseCardId?: string;
+  resources?: CardEditorResourceBridge;
 }
 
 export interface CardEditorView {
@@ -95,6 +96,25 @@ export interface CardEditorView {
 
 export interface CardEditorRenderResult {
   view: CardEditorView;
+}
+
+export interface CardEditorResourceImportRequest {
+  file: File;
+  preferredPath?: string;
+}
+
+export interface CardEditorResourceImportResult {
+  path: string;
+}
+
+export interface CardEditorResourceBridge {
+  rootPath?: string;
+  resolveResourceUrl?: (resourcePath: string) => Promise<string> | string;
+  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  importResource?: (
+    input: CardEditorResourceImportRequest,
+  ) => Promise<CardEditorResourceImportResult> | CardEditorResourceImportResult;
+  deleteResource?: (resourcePath: string) => Promise<void> | void;
 }
 
 export interface FrameRenderResult {
@@ -343,7 +363,7 @@ export function createCardApi(client: CoreClient): CardApi {
       },
     },
     editorPanel: {
-      async render({ cardType, initialConfig, baseCardId }) {
+      async render({ cardType, initialConfig, baseCardId, resources }) {
         if (!cardType) {
           throw createError(
             "INVALID_ARGUMENT",
@@ -367,7 +387,9 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        return createFrameFromView(view.body, view.title ?? `${cardType} Editor`);
+        const frameResult = createFrameFromView(view.body, view.title ?? `${cardType} Editor`);
+        attachCardEditorResourceBridge(frameResult.frame, resources);
+        return frameResult;
       },
       onReady(frame, handler) {
         return subscribeToFrameMessage(frame, "chips.card-editor:ready", () => handler());
@@ -393,6 +415,185 @@ function createFrameFromView(body: string, title: string): FrameRenderResult {
     frame,
     origin: window.location.origin,
   };
+}
+
+type CardEditorResourceAction = "resolve" | "import" | "delete";
+
+type CardEditorResourceRequestPayload = {
+  requestId: string;
+  action: CardEditorResourceAction;
+  resourcePath?: string;
+  preferredPath?: string;
+  file?: File;
+};
+
+function attachCardEditorResourceBridge(
+  frame: HTMLIFrameElement,
+  resources?: CardEditorResourceBridge,
+): void {
+  if (typeof window === "undefined" || !resources) {
+    return;
+  }
+
+  const expectedOrigin = window.location.origin;
+
+  const cleanup = () => {
+    window.removeEventListener("message", listener);
+  };
+
+  const listener = (event: MessageEvent) => {
+    if (!frame.isConnected) {
+      cleanup();
+      return;
+    }
+
+    if (!event || event.source !== frame.contentWindow) return;
+    if (event.origin !== expectedOrigin && event.origin !== "null") return;
+    const data = event.data;
+    if (!data || typeof data !== "object") return;
+
+    const record = data as { type?: string; payload?: unknown };
+    if (record.type === "chips.card-editor:resource-release") {
+      const payload = record.payload as { resourcePath?: unknown } | undefined;
+      const resourcePath = normalizeRelativeResourcePath(payload?.resourcePath);
+      if (resourcePath) {
+        void Promise.resolve(resources.releaseResourceUrl?.(resourcePath)).catch(() => undefined);
+      }
+      return;
+    }
+
+    if (record.type !== "chips.card-editor:resource-request") {
+      return;
+    }
+
+    const payload = record.payload as CardEditorResourceRequestPayload | undefined;
+    const source = event.source as Window | null;
+    if (!payload?.requestId || !source || typeof source.postMessage !== "function") {
+      return;
+    }
+
+    void handleCardEditorResourceRequest(resources, payload)
+      .then((result) => {
+        source.postMessage(
+          {
+            type: "chips.card-editor:resource-response",
+            payload: {
+              requestId: payload.requestId,
+              ok: true,
+              result,
+            },
+          },
+          "*",
+        );
+      })
+      .catch((error) => {
+        source.postMessage(
+          {
+            type: "chips.card-editor:resource-response",
+            payload: {
+              requestId: payload.requestId,
+              ok: false,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          },
+          "*",
+        );
+      });
+  };
+
+  window.addEventListener("message", listener);
+}
+
+async function handleCardEditorResourceRequest(
+  resources: CardEditorResourceBridge,
+  payload: CardEditorResourceRequestPayload,
+): Promise<unknown> {
+  switch (payload.action) {
+    case "resolve": {
+      const resourcePath = normalizeRelativeResourcePath(payload.resourcePath);
+      if (!resourcePath) {
+        throw createError("INVALID_ARGUMENT", "card.editorPanel.resource.resolve: resourcePath is required.");
+      }
+      if (resources.resolveResourceUrl) {
+        return resources.resolveResourceUrl(resourcePath);
+      }
+      if (resources.rootPath) {
+        return {
+          url: createFileUrl(joinPath(resources.rootPath, resourcePath)),
+        }.url;
+      }
+      throw createError(
+        "RUNTIME_ENV_UNSUPPORTED",
+        "card.editorPanel.resource.resolve requires resources.resolveResourceUrl or resources.rootPath.",
+      );
+    }
+    case "import": {
+      if (!resources.importResource) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "card.editorPanel.resource.import requires resources.importResource.",
+        );
+      }
+      if (!(payload.file instanceof File)) {
+        throw createError("INVALID_ARGUMENT", "card.editorPanel.resource.import requires a File payload.");
+      }
+      return resources.importResource({
+        file: payload.file,
+        preferredPath: typeof payload.preferredPath === "string" ? payload.preferredPath : undefined,
+      });
+    }
+    case "delete": {
+      const resourcePath = normalizeRelativeResourcePath(payload.resourcePath);
+      if (!resourcePath) {
+        throw createError("INVALID_ARGUMENT", "card.editorPanel.resource.delete: resourcePath is required.");
+      }
+      if (!resources.deleteResource) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "card.editorPanel.resource.delete requires resources.deleteResource.",
+        );
+      }
+      await resources.deleteResource(resourcePath);
+      return null;
+    }
+    default:
+      throw createError("INVALID_ARGUMENT", `Unsupported editor resource action: ${String(payload.action)}`);
+  }
+}
+
+function normalizeRelativeResourcePath(resourcePath: unknown): string | null {
+  if (typeof resourcePath !== "string") {
+    return null;
+  }
+
+  const normalized = resourcePath.replace(/\\/g, "/").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\.?\//, "")
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== ".");
+  if (segments.length === 0 || segments.some((segment) => segment === "..")) {
+    return null;
+  }
+
+  return segments.join("/");
+}
+
+function joinPath(...parts: string[]): string {
+  return parts.filter(Boolean).join("/").replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function createFileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  if (/^[a-zA-Z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+
+  const absolutePath = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  return encodeURI(`file://${absolutePath}`);
 }
 
 function createFrameFromUrl(url: string, title: string, sandbox: string): FrameRenderResult {

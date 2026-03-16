@@ -4,9 +4,28 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveCompositeCardDropTarget } from '../../src/layouts/InfiniteCanvas/canvas-drop-target';
 import type { CompositeCard } from '../../src/core/card-service';
 
-function createOpenCards(cardId: string, baseCardCount: number): Map<string, CompositeCard> {
-  const basicCards = Array.from({ length: baseCardCount }, (_, index) => ({
-    id: `base-${index + 1}`,
+interface RectInput {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface NodeRectInput {
+  id: string;
+  left?: number;
+  top: number;
+  width?: number;
+  height: number;
+}
+
+function createOpenCards(
+  cardId: string,
+  baseCardIds: string[],
+  layout: NonNullable<CompositeCard['structure']['layout']> = { padding: 16, gap: 12 },
+): Map<string, CompositeCard> {
+  const basicCards = baseCardIds.map((id) => ({
+    id,
     type: 'RichTextCard',
     data: {},
     createdAt: '2026-03-14T00:00:00.000Z',
@@ -24,6 +43,7 @@ function createOpenCards(cardId: string, baseCardCount: number): Map<string, Com
       },
       structure: {
         basicCards,
+        layout,
       },
       isDirty: false,
       isEditing: true,
@@ -31,16 +51,8 @@ function createOpenCards(cardId: string, baseCardCount: number): Map<string, Com
   ]);
 }
 
-function attachPreviewSurface(cardId: string, rect: { left: number; top: number; width: number; height: number }) {
-  const preview = document.createElement('div');
-  preview.dataset.chipsDropSurface = 'composite-preview';
-  preview.dataset.chipsCardId = cardId;
-
-  const child = document.createElement('div');
-  preview.appendChild(child);
-  document.body.appendChild(preview);
-
-  Object.defineProperty(preview, 'getBoundingClientRect', {
+function defineElementRect(element: HTMLElement, rect: RectInput): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
     configurable: true,
     value: () => ({
       left: rect.left,
@@ -54,8 +66,50 @@ function attachPreviewSurface(cardId: string, rect: { left: number; top: number;
       toJSON: () => null,
     }),
   });
+}
 
-  return { preview, child };
+function attachPreviewSurface(options: {
+  cardId: string;
+  rect: RectInput;
+  nodes?: NodeRectInput[];
+  acceptDrop?: boolean;
+}) {
+  const preview = document.createElement('div');
+  preview.dataset.chipsDropSurface = 'composite-preview';
+  preview.dataset.chipsCardId = options.cardId;
+  preview.dataset.chipsDropAccept = options.acceptDrop === false ? 'false' : 'true';
+  document.body.appendChild(preview);
+
+  defineElementRect(preview, options.rect);
+
+  const nodeHandles = new Map<string, HTMLElement>();
+
+  for (const nodeConfig of options.nodes ?? []) {
+    const node = document.createElement('div');
+    node.dataset.baseCardId = nodeConfig.id;
+
+    const handle = document.createElement('div');
+    node.appendChild(handle);
+    preview.appendChild(node);
+
+    defineElementRect(node, {
+      left: nodeConfig.left ?? options.rect.left + 16,
+      top: nodeConfig.top,
+      width: nodeConfig.width ?? options.rect.width - 32,
+      height: nodeConfig.height,
+    });
+
+    nodeHandles.set(nodeConfig.id, handle);
+  }
+
+  const fallbackChild = document.createElement('div');
+  preview.appendChild(fallbackChild);
+
+  return {
+    preview,
+    fallbackChild,
+    nodeHandles,
+  };
 }
 
 describe('resolveCompositeCardDropTarget', () => {
@@ -64,7 +118,14 @@ describe('resolveCompositeCardDropTarget', () => {
   });
 
   it('returns null when the dragged payload is not a base card from the library', () => {
-    const { child } = attachPreviewSurface('card-1', { left: 40, top: 60, width: 300, height: 360 });
+    const { fallbackChild } = attachPreviewSurface({
+      cardId: 'card-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      nodes: [
+        { id: 'base-1', top: 76, height: 60 },
+        { id: 'base-2', top: 148, height: 120 },
+      ],
+    });
 
     const target = resolveCompositeCardDropTarget({
       dragData: {
@@ -74,16 +135,23 @@ describe('resolveCompositeCardDropTarget', () => {
         filePath: '/workspace/card-1.card',
         name: 'card-1.card',
       },
-      eventTarget: child,
+      eventTarget: fallbackChild,
       screenPosition: { x: 120, y: 140 },
-      openCards: createOpenCards('card-1', 3),
+      openCards: createOpenCards('card-1', ['base-1', 'base-2']),
     });
 
     expect(target).toBeNull();
   });
 
-  it('projects the upper half of a preview segment to the insertion slot before that base card', () => {
-    const { child } = attachPreviewSurface('card-1', { left: 40, top: 60, width: 300, height: 360 });
+  it('returns null when the composite preview is not accepting insert drops', () => {
+    const { fallbackChild } = attachPreviewSurface({
+      cardId: 'card-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      acceptDrop: false,
+      nodes: [
+        { id: 'base-1', top: 76, height: 60 },
+      ],
+    });
 
     const target = resolveCompositeCardDropTarget({
       dragData: {
@@ -91,9 +159,34 @@ describe('resolveCompositeCardDropTarget', () => {
         typeId: 'RichTextCard',
         name: 'Rich Text',
       },
-      eventTarget: child,
+      eventTarget: fallbackChild,
+      screenPosition: { x: 180, y: 90 },
+      openCards: createOpenCards('card-1', ['base-1']),
+    });
+
+    expect(target).toBeNull();
+  });
+
+  it('projects the upper half of a real base-card node to the slot before that node', () => {
+    const { nodeHandles } = attachPreviewSurface({
+      cardId: 'card-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      nodes: [
+        { id: 'base-1', top: 76, height: 60 },
+        { id: 'base-2', top: 148, height: 120 },
+        { id: 'base-3', top: 280, height: 92 },
+      ],
+    });
+
+    const target = resolveCompositeCardDropTarget({
+      dragData: {
+        type: 'card',
+        typeId: 'RichTextCard',
+        name: 'Rich Text',
+      },
+      eventTarget: nodeHandles.get('base-2') ?? null,
       screenPosition: { x: 180, y: 170 },
-      openCards: createOpenCards('card-1', 3),
+      openCards: createOpenCards('card-1', ['base-1', 'base-2', 'base-3']),
     });
 
     expect(target).toEqual({
@@ -101,15 +194,23 @@ describe('resolveCompositeCardDropTarget', () => {
       cardId: 'card-1',
       insertionIndex: 1,
       indicator: {
-        left: 58,
-        top: 180,
-        width: 264,
+        left: 56,
+        top: 142,
+        width: 268,
       },
     });
   });
 
-  it('projects the lower half of the last preview segment to the composite tail slot', () => {
-    const { child } = attachPreviewSurface('card-2', { left: 10, top: 20, width: 260, height: 300 });
+  it('projects the lower half of a middle base-card node to the slot after that node', () => {
+    const { nodeHandles } = attachPreviewSurface({
+      cardId: 'card-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      nodes: [
+        { id: 'base-1', top: 76, height: 60 },
+        { id: 'base-2', top: 148, height: 120 },
+        { id: 'base-3', top: 280, height: 92 },
+      ],
+    });
 
     const target = resolveCompositeCardDropTarget({
       dragData: {
@@ -117,9 +218,43 @@ describe('resolveCompositeCardDropTarget', () => {
         typeId: 'RichTextCard',
         name: 'Rich Text',
       },
-      eventTarget: child,
-      screenPosition: { x: 180, y: 280 },
-      openCards: createOpenCards('card-2', 3),
+      eventTarget: nodeHandles.get('base-2') ?? null,
+      screenPosition: { x: 180, y: 240 },
+      openCards: createOpenCards('card-1', ['base-1', 'base-2', 'base-3']),
+    });
+
+    expect(target).toEqual({
+      type: 'composite-card-insert',
+      cardId: 'card-1',
+      insertionIndex: 2,
+      indicator: {
+        left: 56,
+        top: 274,
+        width: 268,
+      },
+    });
+  });
+
+  it('projects the lower half of the last base-card node to the composite tail slot', () => {
+    const { nodeHandles } = attachPreviewSurface({
+      cardId: 'card-2',
+      rect: { left: 10, top: 20, width: 260, height: 360 },
+      nodes: [
+        { id: 'base-1', top: 36, height: 80 },
+        { id: 'base-2', top: 128, height: 120 },
+        { id: 'base-3', top: 260, height: 92 },
+      ],
+    });
+
+    const target = resolveCompositeCardDropTarget({
+      dragData: {
+        type: 'card',
+        typeId: 'RichTextCard',
+        name: 'Rich Text',
+      },
+      eventTarget: nodeHandles.get('base-3') ?? null,
+      screenPosition: { x: 180, y: 330 },
+      openCards: createOpenCards('card-2', ['base-1', 'base-2', 'base-3']),
     });
 
     expect(target).toEqual({
@@ -127,9 +262,39 @@ describe('resolveCompositeCardDropTarget', () => {
       cardId: 'card-2',
       insertionIndex: 3,
       indicator: {
-        left: 28,
-        top: 320,
-        width: 224,
+        left: 26,
+        top: 366,
+        width: 228,
+      },
+    });
+  });
+
+  it('treats an empty composite surface as the first insertion slot', () => {
+    const { fallbackChild } = attachPreviewSurface({
+      cardId: 'card-3',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      nodes: [],
+    });
+
+    const target = resolveCompositeCardDropTarget({
+      dragData: {
+        type: 'card',
+        typeId: 'RichTextCard',
+        name: 'Rich Text',
+      },
+      eventTarget: fallbackChild,
+      screenPosition: { x: 180, y: 220 },
+      openCards: createOpenCards('card-3', []),
+    });
+
+    expect(target).toEqual({
+      type: 'composite-card-insert',
+      cardId: 'card-3',
+      insertionIndex: 0,
+      indicator: {
+        left: 56,
+        top: 240,
+        width: 268,
       },
     });
   });

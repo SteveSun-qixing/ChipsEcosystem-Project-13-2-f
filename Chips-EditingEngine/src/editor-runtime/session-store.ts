@@ -1,9 +1,14 @@
-import type { BasecardDescriptor } from '../basecard-runtime/contracts';
-import type { EditorSessionSnapshot } from './contracts';
+import type {
+  BasecardDescriptor,
+  BasecardPendingResourceImport,
+} from '../basecard-runtime/contracts';
+import type { EditorSessionCommitPayload, EditorSessionSnapshot } from './contracts';
 
 interface InternalEditorSession extends EditorSessionSnapshot {
   sourceSignature: string;
   draftSignature: string;
+  resourceImports: Map<string, BasecardPendingResourceImport>;
+  resourceDeletions: Set<string>;
 }
 
 function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
@@ -16,6 +21,27 @@ function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
 
 function toSignature(value: Record<string, unknown>): string {
   return JSON.stringify(value);
+}
+
+function cloneBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes);
+}
+
+function cloneResourceImport(resource: BasecardPendingResourceImport): BasecardPendingResourceImport {
+  return {
+    path: resource.path,
+    data: cloneBytes(resource.data),
+    mimeType: resource.mimeType,
+  };
+}
+
+function hasPendingResourceMutations(session: InternalEditorSession): boolean {
+  return session.resourceImports.size > 0 || session.resourceDeletions.size > 0;
+}
+
+function syncDirtyFlag(session: InternalEditorSession): void {
+  session.hasPendingResourceChanges = hasPendingResourceMutations(session);
+  session.dirty = session.draftSignature !== session.sourceSignature || session.hasPendingResourceChanges;
 }
 
 export class EditorSessionStore {
@@ -66,6 +92,7 @@ export class EditorSessionStore {
       mountRevision: session.mountRevision,
       revision: session.revision,
       isCommitting: session.isCommitting,
+      hasPendingResourceChanges: hasPendingResourceMutations(session),
       errorMessage: session.errorMessage,
     };
   }
@@ -98,9 +125,12 @@ export class EditorSessionStore {
         mountRevision: 0,
         revision: 0,
         isCommitting: false,
+        hasPendingResourceChanges: false,
         errorMessage: null,
         sourceSignature,
         draftSignature: sourceSignature,
+        resourceImports: new Map(),
+        resourceDeletions: new Set(),
       };
 
       this.sessions.set(key, session);
@@ -131,6 +161,8 @@ export class EditorSessionStore {
         existing.draftSignature = sourceSignature;
         existing.validation = validation;
         existing.mountRevision += 1;
+        existing.resourceImports.clear();
+        existing.resourceDeletions.clear();
       }
     }
 
@@ -156,7 +188,64 @@ export class EditorSessionStore {
     session.draftConfig = cloneConfig(normalizedDraft);
     session.draftSignature = draftSignature;
     session.validation = descriptor.validateConfig(normalizedDraft);
-    session.dirty = draftSignature !== session.sourceSignature;
+    syncDirtyFlag(session);
+    session.revision += 1;
+    session.errorMessage = null;
+
+    this.emit(key);
+    return this.getSnapshot(key)!;
+  }
+
+  getPendingResourceImport(key: string, resourcePath: string): BasecardPendingResourceImport | null {
+    const session = this.sessions.get(key);
+    if (!session) {
+      return null;
+    }
+
+    const resource = session.resourceImports.get(resourcePath);
+    return resource ? cloneResourceImport(resource) : null;
+  }
+
+  hasPendingResourceDeletion(key: string, resourcePath: string): boolean {
+    const session = this.sessions.get(key);
+    if (!session) {
+      return false;
+    }
+
+    return session.resourceDeletions.has(resourcePath);
+  }
+
+  queueResourceImport(
+    key: string,
+    resource: BasecardPendingResourceImport,
+  ): EditorSessionSnapshot {
+    const session = this.sessions.get(key);
+    if (!session) {
+      throw new Error(`未找到编辑会话: ${key}`);
+    }
+
+    session.resourceImports.set(resource.path, cloneResourceImport(resource));
+    session.resourceDeletions.delete(resource.path);
+    syncDirtyFlag(session);
+    session.revision += 1;
+    session.errorMessage = null;
+
+    this.emit(key);
+    return this.getSnapshot(key)!;
+  }
+
+  queueResourceDeletion(key: string, resourcePath: string): EditorSessionSnapshot {
+    const session = this.sessions.get(key);
+    if (!session) {
+      throw new Error(`未找到编辑会话: ${key}`);
+    }
+
+    const removedPendingImport = session.resourceImports.delete(resourcePath);
+    if (!removedPendingImport) {
+      session.resourceDeletions.add(resourcePath);
+    }
+
+    syncDirtyFlag(session);
     session.revision += 1;
     session.errorMessage = null;
 
@@ -167,7 +256,7 @@ export class EditorSessionStore {
   async commit(
     key: string,
     descriptor: BasecardDescriptor,
-    commitAction: (nextConfig: Record<string, unknown>) => Promise<void> | void,
+    commitAction: (payload: EditorSessionCommitPayload) => Promise<void> | void,
   ): Promise<EditorSessionSnapshot> {
     const session = this.sessions.get(key);
     if (!session) {
@@ -180,19 +269,28 @@ export class EditorSessionStore {
 
     const committedConfig = descriptor.normalizeConfig(session.draftConfig, session.baseCardId);
     const committedSignature = toSignature(committedConfig);
+    const resourceOperations = {
+      imports: Array.from(session.resourceImports.values()).map(cloneResourceImport),
+      deletions: Array.from(session.resourceDeletions),
+    };
 
     session.isCommitting = true;
     this.emit(key);
 
     try {
-      await commitAction(cloneConfig(committedConfig));
+      await commitAction({
+        config: cloneConfig(committedConfig),
+        resourceOperations,
+      });
 
       session.sourceConfig = cloneConfig(committedConfig);
       session.sourceSignature = committedSignature;
       session.draftConfig = cloneConfig(committedConfig);
       session.draftSignature = committedSignature;
       session.validation = descriptor.validateConfig(committedConfig);
-      session.dirty = false;
+      session.resourceImports.clear();
+      session.resourceDeletions.clear();
+      syncDirtyFlag(session);
       session.isCommitting = false;
       session.errorMessage = null;
       session.revision += 1;
@@ -235,4 +333,3 @@ export class EditorSessionStore {
     });
   }
 }
-

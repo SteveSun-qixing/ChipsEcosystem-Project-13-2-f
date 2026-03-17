@@ -23,7 +23,7 @@
 
 | 层级 | 对外入口 | 消费方 |
 |---|---|---|
-| L5 | `window.chips.invoke/on/once/emit` + 子域 API | 插件、应用插件、主题插件 |
+| L5 | `window.chips.invoke/on/once/emit` + `invokeScoped/emitScoped` + 子域 API | 插件、应用插件、主题插件 |
 | L6 | Runtime Client（Host 内置运行时，SDK 仅封装调用） | 插件业务层、UI Hooks |
 | CLI | `chips <command>` | 用户、运维脚本、自动化任务 |
 
@@ -34,9 +34,11 @@
 ## 2.1 核心入口
 
 - `invoke(action, payload?)`：调用 `namespace.action` 路由动作。
+- `invokeScoped(action, payload, { token })`：以 Host 发放的一次性 bridge scope token 作为调用作用域，主要用于模块运行时建立独立插件身份。
 - `on(event, handler)`：订阅事件（返回取消订阅函数）。
 - `once(event, handler)`：一次性订阅。
 - `emit(event, data?)`：向主机发送事件。
+- `emitScoped(event, data, { token })`：以 scoped token 向主机发送事件，作用域还原规则与 `invokeScoped` 一致。
 
 ## 2.2 子域基线
 
@@ -129,7 +131,18 @@ Host 快捷方式启动参数基线：
 - 必须带上 `--chips-launch-plugin=<pluginId>`
 - 若未来需要扩展额外启动参数，应通过 `--chips-launch-payload=<base64url-json>` 承载
 
-### 3.2 card.render（L9 统一渲染入口）补充基线
+### 3.2 module 运行时治理补充基线
+
+- `module.mount` 正式输入为 `{ slot, moduleId, requiredCapabilities? }`，返回 `{ module }`。
+- `slot` 必须使用 namespaced dot 格式，例如 `viewer.preview`、`editor.richtext`。
+- `requiredCapabilities` 用于表达当前 slot 对模块能力的正式要求；Host 在挂载时必须校验模块 manifest `capabilities` 是否满足要求，不满足时拒绝挂载。
+- `module.mount` 成功后，Host 必须为目标模块插件创建独立运行时会话，并发放一次性的 `bridgeScopeToken`。
+- `invokeScoped/emitScoped` 入站后，Host 必须先把 `bridgeScopeToken` 还原为模块插件自身的 `pluginId/permissions/session`，再进入 kernel 权限校验链。
+- `module.query/list` 返回的 `ModuleState` 不得继续携带 `bridgeScopeToken`，避免令牌在治理查询链路中扩散。
+- Host 内部 `sessionId` 属于运行时治理字段，不进入公开 `ModuleState` 对外接口。
+- `module.unmount` 以及模块插件的 `disable/uninstall` 必须同时回收对应模块会话和 bridge scope token。
+
+### 3.3 card.render（L9 统一渲染入口）补充基线
 
 - 动作：`card.render`
 - 必填入参：

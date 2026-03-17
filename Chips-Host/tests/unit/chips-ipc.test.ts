@@ -223,6 +223,55 @@ describe('chips ipc bridge', () => {
     binding.dispose();
   });
 
+  it('resolves scoped bridge context before permission checks', async () => {
+    const electronMock = createElectronMock();
+    (globalThis as Record<string, unknown>)[MOCK_KEY] = electronMock.module;
+
+    const kernel = new Kernel();
+    schemaRegistry.register('schemas/demo.secure.request.json', objectWithKeys([]));
+    schemaRegistry.register('schemas/demo.secure.response.json', objectWithKeys(['ok']));
+
+    kernel.registerRoute({
+      key: 'demo.secure',
+      schemaIn: 'schemas/demo.secure.request.json',
+      schemaOut: 'schemas/demo.secure.response.json',
+      permission: ['theme.read'],
+      timeoutMs: 1_000,
+      idempotent: true,
+      retries: 0,
+      handler: async () => ({ ok: true })
+    });
+
+    const binding = bindKernelToElectronIpc(kernel, {
+      resolveScopedBridgeContext: (token) => {
+        if (token === 'module-scope-token') {
+          return {
+            callerId: 'plugin-session:module-1',
+            pluginId: 'chips.module.preview',
+            permissions: ['theme.read']
+          };
+        }
+        return null;
+      }
+    });
+    expect(binding.active).toBe(true);
+
+    const bridge = createBridgeForKernel(kernel, {
+      permissions: ['module.manage'],
+      callerId: 'renderer-module-host',
+      pluginId: 'chips.host.viewer'
+    }) as ReturnType<typeof createBridgeForKernel> & {
+      invokeScoped(action: string, payload: unknown, scope: { token: string }): Promise<{ ok: boolean }>;
+    };
+
+    await expect(bridge.invokeScoped('demo.secure', {}, { token: 'module-scope-token' })).resolves.toEqual({ ok: true });
+    await expect(bridge.invokeScoped('demo.secure', {}, { token: 'expired-token' })).rejects.toMatchObject({
+      code: 'BRIDGE_SCOPE_INVALID'
+    });
+
+    binding.dispose();
+  });
+
   it('decodes structured errors thrown through Electron invoke handlers', async () => {
     const electronMock = createElectronMock();
     const originalInvoke = electronMock.module.ipcRenderer!.invoke;

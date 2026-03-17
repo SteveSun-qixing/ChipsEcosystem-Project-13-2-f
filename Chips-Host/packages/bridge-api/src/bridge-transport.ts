@@ -14,9 +14,11 @@ export interface BridgeEventAdapter {
 
 export interface ChipsBridge {
   invoke<T = unknown>(action: string, payload?: unknown): Promise<T>;
+  invokeScoped?<T = unknown>(action: string, payload: unknown, scope: { token: string }): Promise<T>;
   on(event: string, handler: BridgeEventHandler): () => void;
   once(event: string, handler: BridgeEventHandler): void;
   emit(event: string, data?: unknown): void;
+  emitScoped?(event: string, data: unknown, scope: { token: string }): Promise<void>;
   window: {
     open(config: unknown): Promise<unknown>;
     focus(windowId: string): Promise<void>;

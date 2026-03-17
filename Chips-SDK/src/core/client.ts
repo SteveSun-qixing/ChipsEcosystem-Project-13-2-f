@@ -32,7 +32,7 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
   if (config.transport) {
     adapter = createTransportAdapter(config.transport);
   } else if (environment === "plugin") {
-    adapter = createPluginBridgeAdapter();
+    adapter = createPluginBridgeAdapter(config.bridgeScope);
   }
 
   const coreConfig: ClientConfig = {

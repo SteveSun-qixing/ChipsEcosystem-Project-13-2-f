@@ -88,6 +88,22 @@ interface ModuleRecord {
   moduleId: string;
   entry?: string | Record<string, string>;
   capabilities: string[];
+  requiredCapabilities: string[];
+  mountedByPluginId?: string;
+  sessionId: string;
+  bridgeScopeToken?: string;
+  active: boolean;
+  mountedAt: number;
+}
+
+interface ModuleRecordView {
+  slot: string;
+  moduleId: string;
+  entry?: string | Record<string, string>;
+  capabilities: string[];
+  requiredCapabilities: string[];
+  mountedByPluginId?: string;
+  bridgeScopeToken?: string;
   active: boolean;
   mountedAt: number;
 }
@@ -125,6 +141,90 @@ interface RuntimeState {
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
 }
+
+const MODULE_SLOT_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/;
+
+const normalizeModuleSlot = (value: unknown, action: string): string => {
+  const slot = typeof value === 'string' ? value.trim() : '';
+  if (slot.length === 0) {
+    throw createError('MODULE_INVALID', `${action} requires a non-empty slot`);
+  }
+  if (!MODULE_SLOT_PATTERN.test(slot)) {
+    throw createError('MODULE_INVALID', `${action} requires slot to use namespaced dot format`, {
+      slot
+    });
+  }
+  return slot;
+};
+
+const normalizeRequiredCapabilities = (value: unknown): string[] => {
+  if (typeof value === 'undefined') {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw createError('MODULE_INVALID', 'module.mount requires requiredCapabilities to be an array', {
+      requiredCapabilities: value
+    });
+  }
+
+  const capabilities = value.map((item) => (typeof item === 'string' ? item.trim() : ''));
+  if (capabilities.some((item) => item.length === 0)) {
+    throw createError('MODULE_INVALID', 'module.mount requires requiredCapabilities to contain non-empty strings only', {
+      requiredCapabilities: value
+    });
+  }
+  return capabilities;
+};
+
+const toModuleRecordView = (
+  record: ModuleRecord,
+  options?: { includeBridgeScopeToken?: boolean }
+): ModuleRecordView => {
+  const view: ModuleRecordView = {
+    slot: record.slot,
+    moduleId: record.moduleId,
+    entry: record.entry ? deepClone(record.entry) : undefined,
+    capabilities: [...record.capabilities],
+    requiredCapabilities: [...record.requiredCapabilities],
+    mountedByPluginId: record.mountedByPluginId,
+    active: record.active,
+    mountedAt: record.mountedAt
+  };
+
+  if (options?.includeBridgeScopeToken && record.bridgeScopeToken) {
+    view.bridgeScopeToken = record.bridgeScopeToken;
+  }
+
+  return view;
+};
+
+const cleanupMountedModulesForPlugin = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  reason: 'plugin-disabled' | 'plugin-uninstalled'
+): Promise<void> => {
+  const slotsToUnmount: string[] = [];
+  for (const [slot, moduleRecord] of state.modules.entries()) {
+    if (moduleRecord.moduleId === pluginId) {
+      slotsToUnmount.push(slot);
+    }
+  }
+
+  for (const slot of slotsToUnmount) {
+    const moduleRecord = state.modules.get(slot);
+    if (!moduleRecord) {
+      continue;
+    }
+    ctx.runtime.stopSession(moduleRecord.sessionId);
+    state.modules.delete(slot);
+    await ctx.kernel.events.emit('module.unmounted', 'module-service', {
+      slot,
+      moduleId: moduleRecord.moduleId,
+      reason
+    });
+  }
+};
 
 type ConfigScope = 'user' | 'workspace' | 'system';
 
@@ -1746,6 +1846,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'plugin.disable', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.disable(input.pluginId);
+            if (plugin.manifest.type === 'module') {
+              await cleanupMountedModulesForPlugin(ctx, state, input.pluginId, 'plugin-disabled');
+            }
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -1765,6 +1868,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const plugin = ctx.runtime.get(input.pluginId);
             if (plugin.manifest.type === 'app') {
               await removePluginShortcut(ctx, input.pluginId).catch(() => undefined);
+            }
+            if (plugin.manifest.type === 'module') {
+              await cleanupMountedModulesForPlugin(ctx, state, input.pluginId, 'plugin-uninstalled');
             }
             await ctx.runtime.uninstall(input.pluginId);
             if (plugin.manifest.type === 'theme') {
@@ -1884,18 +1990,18 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'module',
     actions: {
       mount: {
-        descriptor: descriptor<{ slot: string; moduleId: string }, { module: ModuleRecord }>(
+        descriptor: descriptor<{ slot: string; moduleId: string; requiredCapabilities?: string[] }, { module: ModuleRecordView }>(
           'module.mount',
           ['module.manage'],
           3_000,
           false,
           0,
-          withMetrics(state, 'module.mount', async (input) => {
-            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
+          withMetrics(state, 'module.mount', async (input, routeContext) => {
+            const slot = normalizeModuleSlot(input.slot, 'module.mount');
             const moduleId = typeof input.moduleId === 'string' ? input.moduleId.trim() : '';
-            if (slot.length === 0) {
-              throw createError('MODULE_INVALID', 'module.mount requires a non-empty slot');
-            }
+            const requiredCapabilities = normalizeRequiredCapabilities(
+              (input as { requiredCapabilities?: unknown }).requiredCapabilities
+            );
             if (moduleId.length === 0) {
               throw createError('MODULE_INVALID', 'module.mount requires a non-empty moduleId');
             }
@@ -1930,16 +2036,58 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               });
             }
 
+            const availableCapabilities = [...(plugin.manifest.capabilities ?? [])];
+            const missingCapabilities = requiredCapabilities.filter((capability) => !availableCapabilities.includes(capability));
+            if (missingCapabilities.length > 0) {
+              throw createError('MODULE_CAPABILITY_MISMATCH', 'Module plugin does not satisfy required capabilities', {
+                slot,
+                moduleId,
+                requiredCapabilities,
+                availableCapabilities,
+                missingCapabilities
+              });
+            }
+
+            const session = ctx.runtime.pluginInit(moduleId, {
+              slot,
+              mountedByPluginId: routeContext.caller.pluginId,
+              requiredCapabilities,
+              workspacePath: ctx.workspacePath
+            });
+            await ctx.kernel.events.emit('plugin.init', 'module-service', {
+              pluginId: moduleId,
+              sessionId: session.sessionId,
+              slot
+            });
+            ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
+            await ctx.kernel.events.emit('plugin.ready', 'module-service', {
+              pluginId: moduleId,
+              sessionId: session.sessionId,
+              slot
+            });
+            const bridgeScopeToken = ctx.runtime.createBridgeScope(session.sessionId);
+
             const moduleRecord: ModuleRecord = {
               slot,
               moduleId,
               entry: plugin.manifest.entry ? deepClone(plugin.manifest.entry) : undefined,
-              capabilities: [...(plugin.manifest.capabilities ?? [])],
+              capabilities: availableCapabilities,
+              requiredCapabilities,
+              mountedByPluginId: routeContext.caller.pluginId,
+              sessionId: session.sessionId,
+              bridgeScopeToken,
               active: true,
               mountedAt: Date.now()
             };
             state.modules.set(slot, moduleRecord);
-            return { module: deepClone(moduleRecord) };
+            await ctx.kernel.events.emit('module.mounted', 'module-service', {
+              slot,
+              moduleId,
+              mountedByPluginId: routeContext.caller.pluginId,
+              requiredCapabilities,
+              sessionId: session.sessionId
+            });
+            return { module: toModuleRecordView(moduleRecord, { includeBridgeScopeToken: true }) };
           })
         )
       },
@@ -1951,41 +2099,44 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'module.unmount', async (input) => {
-            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
-            if (slot.length === 0) {
-              throw createError('MODULE_INVALID', 'module.unmount requires a non-empty slot');
+            const slot = normalizeModuleSlot(input.slot, 'module.unmount');
+            const record = state.modules.get(slot);
+            if (record) {
+              ctx.runtime.stopSession(record.sessionId);
+              state.modules.delete(slot);
+              await ctx.kernel.events.emit('module.unmounted', 'module-service', {
+                slot,
+                moduleId: record.moduleId,
+                reason: 'manual'
+              });
             }
-            state.modules.delete(slot);
             return { ack: true };
           })
         )
       },
       query: {
-        descriptor: descriptor<{ slot: string }, { module: ModuleRecord | null }>(
+        descriptor: descriptor<{ slot: string }, { module: ModuleRecordView | null }>(
           'module.query',
           ['module.manage'],
           3_000,
           true,
           0,
           withMetrics(state, 'module.query', async (input) => {
-            const slot = typeof input.slot === 'string' ? input.slot.trim() : '';
-            if (slot.length === 0) {
-              throw createError('MODULE_INVALID', 'module.query requires a non-empty slot');
-            }
+            const slot = normalizeModuleSlot(input.slot, 'module.query');
             const module = state.modules.get(slot) ?? null;
-            return { module: module ? deepClone(module) : null };
+            return { module: module ? toModuleRecordView(module) : null };
           })
         )
       },
       list: {
-        descriptor: descriptor<Record<string, unknown>, { modules: ModuleRecord[] }>(
+        descriptor: descriptor<Record<string, unknown>, { modules: ModuleRecordView[] }>(
           'module.list',
           ['module.manage'],
           3_000,
           true,
           0,
           withMetrics(state, 'module.list', async () => {
-            return { modules: [...state.modules.values()].map((item) => deepClone(item)) };
+            return { modules: [...state.modules.values()].map((item) => toModuleRecordView(item)) };
           })
         )
       }

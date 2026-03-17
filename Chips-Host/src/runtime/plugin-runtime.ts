@@ -66,6 +66,12 @@ export interface PluginSession {
   status: 'handshaking' | 'running' | 'stopped';
 }
 
+export interface ResolvedBridgeScope {
+  callerId: string;
+  pluginId: string;
+  permissions: string[];
+}
+
 export interface RuntimeQuota {
   cpuBudget: number;
   memoryBudgetMb: number;
@@ -196,6 +202,7 @@ export class PluginRuntime {
   private readonly plugins = new Map<string, PluginRecord>();
   private readonly sessions = new Map<string, PluginSession>();
   private readonly quotaByPlugin = new Map<string, RuntimeQuota>();
+  private readonly bridgeScopeToSession = new Map<string, string>();
   private readonly audits: RuntimeAuditEntry[] = [];
   private readonly zip = new StoreZipService();
 
@@ -393,11 +400,52 @@ export class PluginRuntime {
       return;
     }
     session.status = 'stopped';
+    this.revokeBridgeScopesForSession(sessionId);
     this.sessions.delete(sessionId);
     this.recordAudit('session.stop', 'success', {
       pluginId: session.pluginId,
       sessionId
     });
+  }
+
+  public createBridgeScope(sessionId: string): string {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw createError('PLUGIN_SESSION_NOT_FOUND', `Session not found: ${sessionId}`);
+    }
+    if (session.status !== 'running') {
+      throw createError('PLUGIN_SESSION_NOT_READY', `Session is not running: ${sessionId}`, {
+        sessionId,
+        status: session.status
+      });
+    }
+
+    const token = createId();
+    this.bridgeScopeToSession.set(token, sessionId);
+    this.recordAudit('session.scope.issued', 'success', {
+      pluginId: session.pluginId,
+      sessionId
+    });
+    return token;
+  }
+
+  public resolveBridgeScope(token: string): ResolvedBridgeScope | null {
+    const sessionId = this.bridgeScopeToSession.get(token);
+    if (!sessionId) {
+      return null;
+    }
+
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== 'running') {
+      this.bridgeScopeToSession.delete(token);
+      return null;
+    }
+
+    return {
+      callerId: `plugin-session:${session.sessionId}`,
+      pluginId: session.pluginId,
+      permissions: [...session.permissions]
+    };
   }
 
   public ensurePermission(pluginId: string, permission: string): void {
@@ -436,11 +484,20 @@ export class PluginRuntime {
   private closeSessions(pluginId: string): void {
     for (const [sessionId, session] of this.sessions.entries()) {
       if (session.pluginId === pluginId) {
+        this.revokeBridgeScopesForSession(sessionId);
         this.sessions.delete(sessionId);
         this.recordAudit('session.stop', 'success', {
           pluginId: session.pluginId,
           sessionId
         });
+      }
+    }
+  }
+
+  private revokeBridgeScopesForSession(sessionId: string): void {
+    for (const [token, targetSessionId] of this.bridgeScopeToSession.entries()) {
+      if (targetSessionId === sessionId) {
+        this.bridgeScopeToSession.delete(token);
       }
     }
   }

@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { createClient } from "../src/core/client";
 import type { StandardError } from "../src/types/errors";
 import type { CardEditorRenderOptions, CardEditorRenderResult } from "../src/api/card";
+
+afterEach(() => {
+  delete (globalThis as { window?: unknown }).window;
+});
 
 describe("createClient", () => {
   it("uses custom transport when provided", async () => {
@@ -150,13 +154,18 @@ describe("createClient", () => {
       moduleId: "chips.module.markdown-renderer",
       entry: "dist/index.mjs",
       capabilities: ["markdown-renderer"],
+      requiredCapabilities: ["markdown-renderer"],
+      bridgeScopeToken: "scope-token-1",
       active: true,
       mountedAt: 1_710_000_000_000,
     };
 
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
     const client = createClient({
       environment: "node",
-      transport: async (action) => {
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
         if (action === "module.mount") {
           return { module: mountedModule };
         }
@@ -173,10 +182,54 @@ describe("createClient", () => {
       },
     });
 
-    await expect(client.module.mount("preview.main", mountedModule.moduleId)).resolves.toEqual(mountedModule);
+    await expect(
+      client.module.mount("preview.main", mountedModule.moduleId, {
+        requiredCapabilities: ["markdown-renderer"],
+      }),
+    ).resolves.toEqual(mountedModule);
     await expect(client.module.query("preview.main")).resolves.toEqual(mountedModule);
     await expect(client.module.list()).resolves.toEqual([mountedModule]);
     await expect(client.module.unmount("preview.main")).resolves.toBeUndefined();
+    expect(calls[0]?.payload).toEqual({
+      slot: "preview.main",
+      moduleId: mountedModule.moduleId,
+      requiredCapabilities: ["markdown-renderer"],
+    });
+  });
+
+  it("uses scoped Bridge transport when bridgeScope is provided", async () => {
+    const calls: Array<{ action: string; payload: unknown; token?: string }> = [];
+    (globalThis as { window?: unknown }).window = {
+      chips: {
+        invoke: async (action: string, payload?: unknown) => {
+          calls.push({ action, payload, token: "unscoped" });
+          return payload;
+        },
+        invokeScoped: async (action: string, payload: unknown, scope: { token: string }) => {
+          calls.push({ action, payload, token: scope.token });
+          return { locale: "en-US" };
+        },
+        on: () => () => undefined,
+        once: () => undefined,
+        emit: async () => undefined,
+        emitScoped: async () => undefined,
+      },
+    };
+
+    const client = createClient({
+      bridgeScope: {
+        token: "module-scope-token",
+      },
+    });
+
+    await expect(client.i18n.getCurrent()).resolves.toBe("en-US");
+    expect(calls).toEqual([
+      {
+        action: "i18n.getCurrent",
+        payload: {},
+        token: "module-scope-token",
+      },
+    ]);
   });
 
   it("renders card editor panels through the formal Host route", async () => {

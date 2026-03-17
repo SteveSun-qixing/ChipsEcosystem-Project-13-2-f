@@ -40,7 +40,7 @@ export type {
   ThemePluginInfo,
   LayoutPluginInfo,
 } from "./api/plugin";
-export type { ModuleApi, ModuleState } from "./api/module";
+export type { ModuleApi, ModuleMountOptions, ModuleState } from "./api/module";
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type { PlatformApi, PlatformInfo, PlatformCapabilities, PlatformLaunchContext } from "./api/platform";
 export type { BoxApi, BoxInspectResult } from "./api/box";

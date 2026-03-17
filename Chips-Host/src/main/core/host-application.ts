@@ -83,6 +83,9 @@ export class HostApplication {
         } catch {
           return undefined;
         }
+      },
+      resolveScopedBridgeContext: (token) => {
+        return this.runtime.resolveBridgeScope(token);
       }
     });
 

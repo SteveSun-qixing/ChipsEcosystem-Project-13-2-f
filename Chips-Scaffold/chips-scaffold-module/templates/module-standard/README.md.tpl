@@ -55,7 +55,7 @@ npm run validate
 
 模板默认导出：
 
-- `createModuleClient()`：基于 `chips-sdk` 创建 Bridge 客户端；
+- `createModuleClient()`：基于 `chips-sdk` 创建 Bridge 客户端，支持传入 `bridgeScopeToken` 建立模块独立 Host 身份；
 - `mountModule(context)`：在指定容器中挂载模块运行时；
 - 类型导出：`ModuleMountContext`、`ModuleSnapshot`、`ModuleHandle` 等。
 
@@ -65,6 +65,7 @@ npm run validate
 - `theme.changed` / `language.changed` 事件刷新；
 - 使用 `startTransition` 与 `useDeferredValue` 管理非紧急更新与筛选交互；
 - 通过运行时 provider 解耦 Bridge 调用、主题语言状态和展示组件。
+- 当调用方通过 `client.module.mount(...)` 获取到 `bridgeScopeToken` 后，应把它传给 `mountModule({ bridgeScopeToken })`，让模块以内建独立作用域访问 Host。
 
 ## 正式约束
 
@@ -72,4 +73,5 @@ npm run validate
 - 模块能力使用 `capabilities: ["{{ MODULE_CAPABILITY }}"]` 当前正式口径；
 - 需要读取主题与语言状态时，必须显式声明 `theme.read`、`i18n.read`；
 - 不得使用旧动作 `module.load/unload`，统一通过 `client.module.mount/unmount/query/list` 管理挂载状态；
+- 正式挂载时建议传入 `requiredCapabilities`，并把 Host 返回的 `bridgeScopeToken` 继续传入模块运行时；
 - 每次功能迭代后应同步更新 README、需求文档、技术文档和开发计划。

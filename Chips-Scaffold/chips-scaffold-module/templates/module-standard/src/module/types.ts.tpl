@@ -30,6 +30,7 @@ export interface ModuleMountContext {
   moduleId: string;
   slot: string;
   client?: Client;
+  bridgeScopeToken?: string;
   locale?: string;
   initialSnapshot?: Partial<ModuleSnapshot>;
 }

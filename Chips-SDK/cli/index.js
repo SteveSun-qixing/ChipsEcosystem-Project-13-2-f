@@ -738,6 +738,11 @@ const normalizeManifestAssetPath = (value) =>
 
 const collectManifestAssetPaths = (manifest) => {
   const assets = [];
+  const appendAsset = (value) => {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      assets.push(value.trim());
+    }
+  };
 
   if (typeof manifest?.entry === 'string' && manifest.entry.trim().length > 0) {
     assets.push(manifest.entry.trim());
@@ -755,13 +760,22 @@ const collectManifestAssetPaths = (manifest) => {
   const layout = isPlainObject(manifest?.ui) && isPlainObject(manifest.ui.layout) ? manifest.ui.layout : undefined;
   for (const field of ['contract', 'minFunctionalSet']) {
     const value = layout?.[field];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      assets.push(value.trim());
-    }
+    appendAsset(value);
   }
 
-  if (typeof manifest?.preview === 'string' && manifest.preview.trim().length > 0) {
-    assets.push(manifest.preview.trim());
+  appendAsset(manifest?.preview);
+
+  const launcher = isPlainObject(manifest?.ui) && isPlainObject(manifest.ui.launcher)
+    ? manifest.ui.launcher
+    : undefined;
+  appendAsset(launcher?.icon);
+
+  if (Array.isArray(manifest?.screenshots)) {
+    for (const screenshot of manifest.screenshots) {
+      if (isPlainObject(screenshot)) {
+        appendAsset(screenshot.path);
+      }
+    }
   }
 
   return [...new Set(assets.map(normalizeManifestAssetPath).filter((item) => item.length > 0))];

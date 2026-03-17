@@ -59,6 +59,38 @@ function ParentHarness() {
   );
 }
 
+function RefreshHarness() {
+  const [config, setConfig] = useState<Record<string, unknown>>({
+    id: 'base-1',
+    body: '<p>long</p>',
+  });
+
+  return (
+    <div>
+      <button
+        type="button"
+        data-testid="refresh-config"
+        onClick={() => {
+          setConfig({
+            id: 'base-1',
+            body: '<p>grid</p>',
+          });
+        }}
+      >
+        refresh
+      </button>
+      <BasecardFrameHost
+        baseCardId="base-1"
+        cardType="base.mock"
+        config={config}
+        resourceBaseUrl="file:///workspace/demo.card/"
+        interactionPolicy="delegate"
+        onInteraction={() => undefined}
+      />
+    </div>
+  );
+}
+
 describe('BasecardFrameHost', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -84,7 +116,33 @@ describe('BasecardFrameHost', () => {
     mockRenderView.mockReset();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
-    mockRenderView.mockImplementation(({ container: mountContainer }: { container: HTMLElement }) => {
+    mockRenderView.mockImplementation(({ container: mountContainer, config }: {
+      container: HTMLElement;
+      config?: Record<string, unknown>;
+    }) => {
+      const height = config?.body === '<p>grid</p>' ? 128 : 420;
+      Object.defineProperty(mountContainer, 'scrollHeight', {
+        configurable: true,
+        value: height,
+      });
+      Object.defineProperty(mountContainer, 'offsetHeight', {
+        configurable: true,
+        value: height,
+      });
+      Object.defineProperty(mountContainer, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({
+          width: 320,
+          height,
+          top: 0,
+          left: 0,
+          right: 320,
+          bottom: height,
+          x: 0,
+          y: 0,
+          toJSON: () => undefined,
+        }),
+      });
       const marker = mountContainer.ownerDocument.createElement('div');
       marker.textContent = 'mounted';
       mountContainer.appendChild(marker);
@@ -195,5 +253,49 @@ describe('BasecardFrameHost', () => {
     const previewImage = frame?.contentDocument?.querySelector('[data-preview-image="true"]') as HTMLImageElement | null;
     expect(previewImage).not.toBeNull();
     expect(previewImage?.getAttribute('src')?.startsWith('blob:')).toBe(true);
+  });
+
+  it('keeps previously rendered preview visible while a config refresh is remounting', async () => {
+    await act(async () => {
+      root.render(<RefreshHarness />);
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
+    expect(frameWindow).not.toBeNull();
+    Object.defineProperty(frameWindow, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as (cb: FrameRequestCallback) => number,
+    });
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.basecard-frame-host__overlay[data-state="loading"]')).toBeNull();
+    expect(frame?.style.height).toBe('420px');
+
+    const refreshButton = container.querySelector('[data-testid="refresh-config"]') as HTMLButtonElement | null;
+    expect(refreshButton).not.toBeNull();
+
+    await act(async () => {
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.basecard-frame-host__overlay[data-state="loading"]')).toBeNull();
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+    });
+
+    expect(frame?.style.height).toBe('128px');
   });
 });

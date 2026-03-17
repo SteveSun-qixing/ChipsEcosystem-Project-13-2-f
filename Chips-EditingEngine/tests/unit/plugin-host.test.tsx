@@ -11,6 +11,9 @@ let editorChangeHandler: ((nextConfig: Record<string, unknown>) => void) | null 
 let editorImportResource:
   | ((input: { file: File; preferredPath?: string }) => Promise<{ path: string }>)
   | null = null;
+let editorResolveResourceUrl:
+  | ((resourcePath: string) => Promise<string>)
+  | null = null;
 
 vi.mock('../../src/basecard-runtime/registry', () => ({
   getBasecardDescriptor: () => ({
@@ -48,19 +51,35 @@ vi.mock('../../src/services/file-service', () => ({
 describe('PluginHost', () => {
   let container: HTMLDivElement;
   let root: Root;
+  const createObjectURL = vi.fn<[Blob | MediaSource], string>(() => 'blob:existing-resource');
+  const revokeObjectURL = vi.fn<[string], void>();
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: revokeObjectURL,
+    });
 
     editorChangeHandler = null;
     editorImportResource = null;
+    editorResolveResourceUrl = null;
     mockRenderEditor.mockReset();
-    mockRenderEditor.mockImplementation(({ onChange, importResource }) => {
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
+    mockRenderEditor.mockImplementation(({ onChange, importResource, resolveResourceUrl }) => {
       editorChangeHandler = onChange;
       editorImportResource = importResource;
+      editorResolveResourceUrl = resolveResourceUrl ?? null;
       return () => undefined;
     });
   });
@@ -230,6 +249,208 @@ describe('PluginHost', () => {
         deletions: [],
       },
     );
+  });
+
+  it('does not commit resource imports before the draft config starts referencing them', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', images: [] }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+
+    await act(async () => {
+      await editorImportResource?.({
+        file,
+        preferredPath: 'photo.png',
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      editorChangeHandler?.({
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'photo.png',
+          },
+        ],
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'photo.png',
+          },
+        ],
+      },
+      {
+        imports: [
+          expect.objectContaining({
+            path: 'photo.png',
+            mimeType: 'image/png',
+          }),
+        ],
+        deletions: [],
+      },
+    );
+  });
+
+  it('resolves persisted image resources to card-root file urls for editor previews', async () => {
+    const resolvedUrls: string[] = [];
+    mockRenderEditor.mockReset();
+    mockRenderEditor.mockImplementation(({ resolveResourceUrl }) => {
+      void resolveResourceUrl?.('gallery/封面 图.png').then((url: string) => {
+        resolvedUrls.push(url);
+      });
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              images: [
+                {
+                  id: 'image-1',
+                  source: 'file',
+                  file_path: 'gallery/封面 图.png',
+                },
+              ],
+            }}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(resolvedUrls).toEqual([
+      'file:///workspace/card-1.card/gallery/%E5%B0%81%E9%9D%A2%20%E5%9B%BE.png',
+    ]);
+  });
+
+  it('keeps using blob previews for committed imports until card persistence finishes', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', images: [] }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+
+    await act(async () => {
+      await editorImportResource?.({
+        file,
+        preferredPath: 'photo.png',
+      });
+      editorChangeHandler?.({
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'photo.png',
+          },
+        ],
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(editorResolveResourceUrl).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              images: [
+                {
+                  id: 'image-1',
+                  source: 'file',
+                  file_path: 'photo.png',
+                },
+              ],
+            }}
+            pendingResourceImports={new Map([
+              ['photo.png', { path: 'photo.png', data: new Uint8Array([1, 2, 3]), mimeType: 'image/png' }],
+            ])}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    const resolvedUrl = await editorResolveResourceUrl?.('photo.png');
+    expect(resolvedUrl?.startsWith('blob:')).toBe(true);
+    expect(createObjectURL).toHaveBeenCalled();
   });
 
   it('keeps the mounted editor stable when its own committed config is reflected back through props', async () => {

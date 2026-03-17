@@ -74,6 +74,17 @@ npm install
 - `chipsdev version`：输出当前版本
 - `chipsdev help`：查看帮助
 
+补充约束：
+
+- `chipsdev package` 除 `dist/` 构建产物外，还会一并打包 manifest 显式引用的正式静态资源；
+- 当前正式收集范围至少包括：
+  - `preview`
+  - `ui.layout.contract`
+  - `ui.layout.minFunctionalSet`
+  - `ui.launcher.icon`
+  - `screenshots[].path`
+- `chipsdev validate` 对上述资源执行存在性检查，并要求与 `package` 的打包范围保持一致。
+
 ## `chipsdev run` 的正式行为
 
 `chipsdev run` 当前只支持应用插件（`manifest.type === "app"`）。执行时会完成以下正式链路：

@@ -353,7 +353,7 @@ describe("createBasecardEditorRoot", () => {
     expect(preview.getAttribute("src")).toBe("blob:fresh-cover.png");
   });
 
-  it("supports undo and redo for structural image changes", async () => {
+  it("supports undo and redo for structural image changes via keyboard shortcuts", async () => {
     let lastConfig = createConfig();
     const root = createBasecardEditorRoot({
       initialConfig: createConfig(),
@@ -370,14 +370,8 @@ describe("createBasecardEditorRoot", () => {
     const addButton = Array.from(root.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("通过链接添加"),
     ) as HTMLButtonElement | undefined;
-    const undoButton = root.querySelector(
-      '[aria-label="撤销"]',
-    ) as HTMLButtonElement | null;
-    const redoButton = root.querySelector(
-      '[aria-label="重做"]',
-    ) as HTMLButtonElement | null;
 
-    if (!urlInput || !addButton || !undoButton || !redoButton) {
+    if (!urlInput || !addButton) {
       throw new Error("未找到撤销重做测试所需控件");
     }
 
@@ -386,11 +380,19 @@ describe("createBasecardEditorRoot", () => {
     await flushAsyncWork();
     expect(lastConfig.images).toHaveLength(1);
 
-    undoButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      key: "z",
+      ctrlKey: true,
+    }));
     await flushAsyncWork();
     expect(lastConfig.images).toHaveLength(0);
 
-    redoButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      key: "y",
+      ctrlKey: true,
+    }));
     await flushAsyncWork();
     expect(lastConfig.images).toHaveLength(1);
     expect(lastConfig.images[0]?.url).toBe("https://example.com/1.png");

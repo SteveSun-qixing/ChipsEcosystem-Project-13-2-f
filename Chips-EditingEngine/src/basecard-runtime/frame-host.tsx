@@ -75,6 +75,20 @@ function measureFrameHeight(frame: HTMLIFrameElement): number {
     return DEFAULT_STATUS.height;
   }
 
+  const contentRoot = doc.querySelector('[data-chips-basecard-frame-root="true"]') as HTMLElement | null;
+  if (contentRoot) {
+    return Math.max(
+      1,
+      Math.ceil(
+        Math.max(
+          contentRoot.scrollHeight ?? 0,
+          contentRoot.offsetHeight ?? 0,
+          contentRoot.getBoundingClientRect?.().height ?? 0,
+        ),
+      ),
+    );
+  }
+
   const body = doc.body;
   const root = doc.documentElement;
   return Math.max(
@@ -82,9 +96,7 @@ function measureFrameHeight(frame: HTMLIFrameElement): number {
     Math.ceil(
       Math.max(
         body?.scrollHeight ?? 0,
-        body?.offsetHeight ?? 0,
         root?.scrollHeight ?? 0,
-        root?.offsetHeight ?? 0,
       ),
     ),
   );
@@ -210,10 +222,20 @@ export function BasecardFrameHost({
       resolvedResourceUrlsRef.current.delete(normalizedResourcePath);
     };
 
-    setStatus({
-      state: 'loading',
-      height: DEFAULT_STATUS.height,
-      errorMessage: null,
+    setStatus((current) => {
+      if (current.state === 'ready') {
+        return {
+          state: 'ready',
+          height: current.height,
+          errorMessage: null,
+        };
+      }
+
+      return {
+        state: 'loading',
+        height: current.height > 0 ? current.height : DEFAULT_STATUS.height,
+        errorMessage: null,
+      };
     });
 
     const mountFrame = () => {

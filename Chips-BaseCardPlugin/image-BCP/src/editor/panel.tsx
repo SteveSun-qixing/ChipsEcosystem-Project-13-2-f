@@ -1169,8 +1169,6 @@ function ImageCardEditor(props: BasecardEditorProps) {
   const addInputId = useId();
   const initial = normalizeEditorConfig(props.initialConfig);
   const [config, setConfig] = useState<BasecardConfig>(initial);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
   const [draggingImageId, setDraggingImageId] = useState<string | null>(null);
   const [dragPreviewIndex, setDragPreviewIndex] = useState<number | null>(null);
   const [dragOverlay, setDragOverlay] = useState<DragOverlayState | null>(null);
@@ -1272,11 +1270,6 @@ function ImageCardEditor(props: BasecardEditorProps) {
       window.removeEventListener("resize", measure);
     };
   }, [config.images.length, draggingImageId]);
-
-  function syncHistoryState(): void {
-    setCanUndo(historyRef.current.undo.length > 0);
-    setCanRedo(historyRef.current.redo.length > 0);
-  }
 
   function setPreviewUrlForPath(path: string, url: string, origin: PreviewOrigin): void {
     setPreviewUrls((current) => {
@@ -1514,7 +1507,6 @@ function ImageCardEditor(props: BasecardEditorProps) {
         historyRef.current.undo.shift();
       }
       historyRef.current.redo = [];
-      syncHistoryState();
     }
 
     configRef.current = nextConfig;
@@ -1546,7 +1538,6 @@ function ImageCardEditor(props: BasecardEditorProps) {
     setConfig(configRef.current);
     setShowUploader(configRef.current.images.length === 0);
     props.onChange(cloneConfig(configRef.current));
-    syncHistoryState();
     void syncResourceChain(currentConfig, configRef.current);
   }
 
@@ -1562,7 +1553,6 @@ function ImageCardEditor(props: BasecardEditorProps) {
     setConfig(configRef.current);
     setShowUploader(configRef.current.images.length === 0);
     props.onChange(cloneConfig(configRef.current));
-    syncHistoryState();
     void syncResourceChain(currentConfig, configRef.current);
   }
 
@@ -2287,40 +2277,19 @@ function ImageCardEditor(props: BasecardEditorProps) {
                 <div className="chips-image-editor__section-hint">
                   {config.images.length > 1
                     ? t("editor.drag_to_sort")
-                    : t("editor.image_count", { count: config.images.length })}
+                    : ""}
                 </div>
               </div>
               <div className="chips-image-editor__section-actions">
-                <span className="chips-image-editor__badge">
-                  {t("editor.image_count", { count: config.images.length })}
-                </span>
-                <button
-                  type="button"
-                  className="chips-image-editor__icon-button"
-                  aria-label={t("toolbar.undo")}
-                  title={t("toolbar.undo")}
-                  disabled={!canUndo}
-                  onClick={handleUndo}
-                >
-                  ↶
-                </button>
-                <button
-                  type="button"
-                  className="chips-image-editor__icon-button"
-                  aria-label={t("toolbar.redo")}
-                  title={t("toolbar.redo")}
-                  disabled={!canRedo}
-                  onClick={handleRedo}
-                >
-                  ↷
-                </button>
                 {config.images.length > 0 ? (
                   <button
                     type="button"
-                    className="chips-image-editor__ghost-button"
+                    className="chips-image-editor__icon-button"
+                    aria-label={t("editor.clear_all")}
+                    title={t("editor.clear_all")}
                     onClick={handleClearAll}
                   >
-                    {t("editor.clear_all")}
+                    🗑
                   </button>
                 ) : null}
               </div>

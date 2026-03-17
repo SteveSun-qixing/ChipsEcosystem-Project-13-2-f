@@ -1,5 +1,5 @@
 import React from 'react';
-import type { BasecardResourceOperations } from '../../basecard-runtime/contracts';
+import type { BasecardPendingResourceImport, BasecardResourceOperations } from '../../basecard-runtime/contracts';
 import { EditorHost } from '../../editor-runtime/EditorHost';
 import './PluginHost.css';
 
@@ -9,6 +9,7 @@ export interface PluginHostProps {
   cardType: string;
   baseCardId: string;
   config: Record<string, unknown>;
+  pendingResourceImports?: Map<string, BasecardPendingResourceImport>;
   onConfigChange?: (
     config: Record<string, unknown>,
     resourceOperations?: BasecardResourceOperations,
@@ -23,6 +24,7 @@ export function PluginHost({
   cardType,
   baseCardId,
   config,
+  pendingResourceImports,
   onConfigChange,
   onPluginLoaded,
   onPluginError,
@@ -38,6 +40,7 @@ export function PluginHost({
       cardType={cardType}
       baseCardId={baseCardId}
       sourceConfig={config}
+      pendingResourceImports={pendingResourceImports}
       onConfigChange={onConfigChange}
       onPluginLoaded={onPluginLoaded}
       onPluginError={onPluginError}

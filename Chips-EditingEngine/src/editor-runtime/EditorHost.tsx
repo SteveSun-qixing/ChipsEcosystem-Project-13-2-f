@@ -11,6 +11,16 @@ function joinPath(...parts: string[]): string {
   return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
 }
 
+function createFileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  if (/^[a-zA-Z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+
+  const absolutePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return encodeURI(`file://${absolutePath}`);
+}
+
 function normalizeResourcePath(resourcePath: string): string | null {
   const normalized = resourcePath.replace(/\\/g, '/').trim();
   if (!normalized) {
@@ -52,6 +62,7 @@ export interface EditorHostProps {
   cardType: string;
   baseCardId: string;
   sourceConfig: Record<string, unknown>;
+  pendingResourceImports?: Map<string, BasecardPendingResourceImport>;
   onConfigChange?: (
     config: Record<string, unknown>,
     resourceOperations?: BasecardResourceOperations,
@@ -66,6 +77,7 @@ export function EditorHost({
   cardType,
   baseCardId,
   sourceConfig,
+  pendingResourceImports,
   onConfigChange,
   onPluginLoaded,
   onPluginError,
@@ -107,13 +119,17 @@ export function EditorHost({
       return;
     }
 
-    URL.revokeObjectURL(url);
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
     resolvedResourceUrlsRef.current.delete(resourcePath);
   }, []);
 
   const releaseAllResolvedResourceUrls = useCallback(() => {
     resolvedResourceUrlsRef.current.forEach((url) => {
-      URL.revokeObjectURL(url);
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
     });
     resolvedResourceUrlsRef.current.clear();
     pendingResourceResolvesRef.current.clear();
@@ -155,7 +171,17 @@ export function EditorHost({
   }, [baseCardId, cardId, cardType]);
 
   const commitSession = useCallback(async () => {
-    if (!descriptor || !onConfigChange || !snapshot?.dirty || !snapshot.validation.valid) {
+    const hasConfigDelta = snapshot
+      ? JSON.stringify(snapshot.draftConfig) !== JSON.stringify(snapshot.sourceConfig)
+      : false;
+
+    if (
+      !descriptor
+      || !onConfigChange
+      || !snapshot?.dirty
+      || !snapshot.validation.valid
+      || (snapshot.hasPendingResourceChanges && !hasConfigDelta)
+    ) {
       return;
     }
 
@@ -165,7 +191,19 @@ export function EditorHost({
         resourceOperations.imports.length > 0 || resourceOperations.deletions.length > 0;
       await onConfigChange(config, hasResourceOperations ? resourceOperations : undefined);
     });
-  }, [descriptor, onConfigChange, reportEditorActivity, sessionKey, snapshot?.dirty, snapshot?.validation.valid, store]);
+  }, [
+    descriptor,
+    onConfigChange,
+    reportEditorActivity,
+    sessionKey,
+    snapshot,
+    snapshot?.dirty,
+    snapshot?.hasPendingResourceChanges,
+    snapshot?.sourceConfig,
+    snapshot?.draftConfig,
+    snapshot?.validation.valid,
+    store,
+  ]);
 
   const resolveResourceUrl = useCallback(async (resourcePath: string) => {
     const normalizedResourcePath = normalizeResourcePath(resourcePath);
@@ -184,13 +222,13 @@ export function EditorHost({
     }
 
     const resolver = (async () => {
-      const pendingImport = store.getPendingResourceImport(sessionKey, normalizedResourcePath);
+      const pendingImport =
+        store.getPendingResourceImport(sessionKey, normalizedResourcePath)
+        ?? pendingResourceImports?.get(normalizedResourcePath)
+        ?? null;
       const nextUrl = pendingImport
         ? createObjectUrl(pendingImport)
-        : createObjectUrl({
-            path: normalizedResourcePath,
-            data: await fileService.readBinary(joinPath(cardPath, normalizedResourcePath)),
-          });
+        : createFileUrl(joinPath(cardPath, normalizedResourcePath));
 
       releaseResolvedResourceUrl(normalizedResourcePath);
       resolvedResourceUrlsRef.current.set(normalizedResourcePath, nextUrl);
@@ -201,7 +239,7 @@ export function EditorHost({
 
     pendingResourceResolvesRef.current.set(normalizedResourcePath, resolver);
     return resolver;
-  }, [cardPath, releaseResolvedResourceUrl, sessionKey, store]);
+  }, [cardPath, pendingResourceImports, releaseResolvedResourceUrl, sessionKey, store]);
 
   const pickAvailableResourcePath = useCallback(async (fileName: string) => {
     const sanitizedName = sanitizeImportedFileName(fileName);
@@ -255,7 +293,13 @@ export function EditorHost({
       return;
     }
 
-    const commitDelayMs = snapshot.hasPendingResourceChanges
+    const hasConfigDelta =
+      JSON.stringify(snapshot.draftConfig) !== JSON.stringify(snapshot.sourceConfig);
+    if (snapshot.hasPendingResourceChanges && !hasConfigDelta) {
+      return;
+    }
+
+    const commitDelayMs = snapshot.hasPendingResourceChanges && hasConfigDelta
       ? 0
       : snapshot.commitDebounceMs;
     const timerId = window.setTimeout(() => {
@@ -274,9 +318,11 @@ export function EditorHost({
     descriptor,
     onPluginError,
     snapshot?.commitDebounceMs,
+    snapshot?.draftConfig,
     snapshot?.dirty,
     snapshot?.hasPendingResourceChanges,
     snapshot?.revision,
+    snapshot?.sourceConfig,
     snapshot?.validation.valid,
   ]);
 

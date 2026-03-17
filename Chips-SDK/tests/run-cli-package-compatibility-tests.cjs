@@ -90,13 +90,19 @@ const main = async () => {
         'type: app',
         'name: Package Compatibility Test',
         'permissions: []',
-        'entry: dist/main.js'
+        'entry: dist/main.js',
+        'ui:',
+        '  launcher:',
+        '    displayName: Package Compatibility Test',
+        '    icon: assets/icons/app-icon.ico'
       ].join('\n'),
       'utf-8'
     );
 
     await fsp.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fsp.mkdir(path.join(workspace, 'assets', 'icons'), { recursive: true });
     await fsp.writeFile(path.join(workspace, 'dist', 'main.js'), 'console.log("ok");\n', 'utf-8');
+    await fsp.writeFile(path.join(workspace, 'assets', 'icons', 'app-icon.ico'), 'icon-binary\n', 'utf-8');
     await fsp.writeFile(path.join(workspace, 'dist', 'manifest.yaml'), 'shadow: true\n', 'utf-8');
     await fsp.writeFile(
       path.join(workspace, 'dist', 'publish-meta.json'),
@@ -115,12 +121,12 @@ const main = async () => {
 
     assert.deepEqual(
       entries.map((entry) => entry.path),
-      ['manifest.yaml', 'dist/main.js'],
-      'package should include root manifest and runtime artifacts only'
+      ['manifest.yaml', 'assets/icons/app-icon.ico', 'dist/main.js'],
+      'package should include root manifest, runtime artifacts, and manifest-declared static assets'
     );
     assert.deepEqual(
       entries.map((entry) => entry.compressionMethod),
-      [0, 0],
+      entries.map(() => 0),
       'all ZIP entries must use store-only compression for Host compatibility'
     );
 

@@ -35,6 +35,7 @@ export default function EditPanel({
             cardType={selectedBaseCard.type}
             baseCardId={selectedBaseCard.id}
             config={selectedBaseCard.data}
+            pendingResourceImports={selectedBaseCard.pendingResourceImports}
             onConfigChange={(nextConfig, resourceOperations) => {
               if (activeCard) {
                 updateBasicCard(activeCard.id, selectedBaseCard.id, nextConfig, resourceOperations);

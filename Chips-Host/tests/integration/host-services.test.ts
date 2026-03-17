@@ -299,7 +299,9 @@ describe('Host services integration', () => {
         'type: module',
         'name: Markdown Renderer Module',
         'description: Shared markdown rendering module',
-        'permissions: []',
+        'permissions:',
+        '  - theme.read',
+        '  - i18n.read',
         'capabilities:',
         '  - markdown-renderer',
         'entry: dist/index.mjs'
@@ -323,46 +325,65 @@ describe('Host services integration', () => {
         moduleId: string;
         entry?: string;
         capabilities: string[];
+        requiredCapabilities: string[];
+        bridgeScopeToken?: string;
+        sessionId?: string;
         active: boolean;
       };
     }>('module.mount', {
       slot: 'preview.main',
-      moduleId: installed.pluginId
+      moduleId: installed.pluginId,
+      requiredCapabilities: ['markdown-renderer']
     });
 
     expect(mounted.module).toMatchObject({
       slot: 'preview.main',
       moduleId: 'chips.module.markdown-renderer',
       entry: 'dist/index.mjs',
+      requiredCapabilities: ['markdown-renderer'],
       active: true
     });
     expect(mounted.module.capabilities).toContain('markdown-renderer');
+    expect(typeof mounted.module.bridgeScopeToken).toBe('string');
+    expect(mounted.module.sessionId).toBeUndefined();
 
     const queried = await runtime.invoke<{
       module: {
         slot: string;
         moduleId: string;
+        requiredCapabilities: string[];
         active: boolean;
+        bridgeScopeToken?: string;
+        sessionId?: string;
       } | null;
     }>('module.query', { slot: 'preview.main' });
     expect(queried.module).toMatchObject({
       slot: 'preview.main',
       moduleId: 'chips.module.markdown-renderer',
+      requiredCapabilities: ['markdown-renderer'],
       active: true
     });
+    expect(queried.module?.bridgeScopeToken).toBeUndefined();
+    expect(queried.module?.sessionId).toBeUndefined();
 
     const listed = await runtime.invoke<{
       modules: Array<{
         slot: string;
         moduleId: string;
+        requiredCapabilities: string[];
+        bridgeScopeToken?: string;
+        sessionId?: string;
       }>;
     }>('module.list', {});
     expect(listed.modules).toContainEqual(
       expect.objectContaining({
         slot: 'preview.main',
-        moduleId: 'chips.module.markdown-renderer'
+        moduleId: 'chips.module.markdown-renderer',
+        requiredCapabilities: ['markdown-renderer']
       })
     );
+    expect(listed.modules[0]?.bridgeScopeToken).toBeUndefined();
+    expect(listed.modules[0]?.sessionId).toBeUndefined();
 
     await runtime.invoke('module.unmount', { slot: 'preview.main' });
     const afterUnmount = await runtime.invoke<{ module: null }>('module.query', { slot: 'preview.main' });

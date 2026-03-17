@@ -19,6 +19,9 @@ export interface ChipsInvokeRequest {
   action: string;
   payload?: unknown;
   context?: Partial<RouteInvocationContext>;
+  scope?: {
+    token?: string;
+  };
 }
 
 export interface ChipsIpcBinding {
@@ -34,6 +37,9 @@ interface BroadcastEventPayload {
 interface ChipsSubchannelRequest {
   payload?: unknown;
   context?: Partial<RouteInvocationContext>;
+  scope?: {
+    token?: string;
+  };
 }
 
 const CHIPS_SUBCHANNEL_ACTIONS: Record<string, string> = {
@@ -80,6 +86,43 @@ const buildContext = (input: Partial<RouteInvocationContext> | undefined, event:
   };
 };
 
+const applyScopedContext = (
+  context: RouteInvocationContext,
+  scope: { token?: string } | undefined,
+  resolver:
+    | ((token: string) => { callerId: string; pluginId: string; permissions: string[] } | null | undefined)
+    | undefined
+): RouteInvocationContext => {
+  if (typeof scope?.token === 'undefined') {
+    return context;
+  }
+
+  if (typeof scope.token !== 'string' || scope.token.trim().length === 0) {
+    throw createError('BRIDGE_SCOPE_INVALID', 'Scoped bridge token must be a non-empty string');
+  }
+  if (!resolver) {
+    throw createError('BRIDGE_SCOPE_UNAVAILABLE', 'Scoped bridge context is not available in current Host runtime');
+  }
+
+  const resolved = resolver(scope.token.trim());
+  if (!resolved) {
+    throw createError('BRIDGE_SCOPE_INVALID', 'Scoped bridge token is invalid or expired', {
+      token: scope.token.trim()
+    });
+  }
+
+  return {
+    ...context,
+    caller: {
+      ...context.caller,
+      id: resolved.callerId,
+      type: 'plugin',
+      pluginId: resolved.pluginId,
+      permissions: [...resolved.permissions]
+    }
+  };
+};
+
 const forwardKernelEvents = (kernel: Kernel): (() => void) => {
   const electron = loadElectronModule();
   if (!electron?.BrowserWindow?.getAllWindows) {
@@ -111,6 +154,7 @@ export const bindKernelToElectronIpc = (
   kernel: Kernel,
   options?: {
     getPluginQuota?: (pluginId: string) => { messageRateBudget: number } | null | undefined;
+    resolveScopedBridgeContext?: (token: string) => { callerId: string; pluginId: string; permissions: string[] } | null | undefined;
   }
 ): ChipsIpcBinding => {
   const electron = loadElectronModule();
@@ -180,7 +224,11 @@ export const bindKernelToElectronIpc = (
       if (typeof typed.action !== 'string' || typed.action.length === 0) {
         throw createError('BRIDGE_INVALID_REQUEST', 'chips:invoke requires action');
       }
-      const context = buildContext(typed.context as Partial<RouteInvocationContext> | undefined, event);
+      const context = applyScopedContext(
+        buildContext(typed.context as Partial<RouteInvocationContext> | undefined, event),
+        (typed.scope as { token?: string } | undefined) ?? undefined,
+        options?.resolveScopedBridgeContext
+      );
       enforcePluginQuota(context, typed.action);
       return await kernel.invoke(typed.action, typed.payload ?? {}, context);
     } catch (error) {
@@ -195,7 +243,14 @@ export const bindKernelToElectronIpc = (
     }
     const senderInfo = event as { sender?: unknown };
     const sender = senderInfo.sender as { id?: number } | undefined;
+    const baseContext = buildContext(undefined, event);
+    const scoped = applyScopedContext(
+      baseContext,
+      (data.scope as { token?: string } | undefined) ?? undefined,
+      options?.resolveScopedBridgeContext
+    );
     await kernel.events.emit(data.event, 'renderer', data.data, {
+      pluginId: scoped.caller.pluginId,
       windowId: typeof sender?.id === 'number' ? String(sender.id) : undefined
     });
   };
@@ -205,7 +260,11 @@ export const bindKernelToElectronIpc = (
     electron.ipcMain.handle(channel, async (event: unknown, request: unknown): Promise<unknown> => {
       try {
         const typed = (request ?? {}) as ChipsSubchannelRequest;
-        const context = buildContext(typed.context, event);
+        const context = applyScopedContext(
+          buildContext(typed.context, event),
+          typed.scope,
+          options?.resolveScopedBridgeContext
+        );
         enforcePluginQuota(context, action);
         return await kernel.invoke(action, typed.payload ?? {}, context);
       } catch (error) {

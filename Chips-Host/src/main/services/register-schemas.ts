@@ -8,6 +8,7 @@ const registerPair = (action: string, requestKeys: string[], responseKeys: strin
 const RENDER_TARGETS = new Set(['app-root', 'card-iframe', 'module-slot', 'offscreen-render']);
 const CARD_RENDER_MODES = new Set(['view', 'preview']);
 const CARD_INTERACTION_POLICIES = new Set(['native', 'delegate']);
+const MODULE_SLOT_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -103,6 +104,54 @@ const validateCardRenderEditorRequest: SchemaValidator = (input: unknown) => {
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+const validateModuleSlotRequest = (action: string): SchemaValidator => {
+  return (input: unknown) => {
+    if (!isRecord(input)) {
+      return { valid: false, errors: ['Input must be an object'] };
+    }
+
+    const slot = input.slot;
+    if (typeof slot !== 'string' || slot.trim().length === 0) {
+      return { valid: false, errors: [`${action}: slot must be a non-empty string`] };
+    }
+    if (!MODULE_SLOT_PATTERN.test(slot.trim())) {
+      return { valid: false, errors: [`${action}: slot must use namespaced dot format`] };
+    }
+
+    return { valid: true };
+  };
+};
+
+const validateModuleMountRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const slotValidation = validateModuleSlotRequest('module.mount')(input);
+  if (!slotValidation.valid) {
+    return slotValidation;
+  }
+
+  const errors: string[] = [];
+  if (typeof input.moduleId !== 'string' || input.moduleId.trim().length === 0) {
+    errors.push('module.mount: moduleId must be a non-empty string');
+  }
+
+  if (typeof input.requiredCapabilities !== 'undefined') {
+    if (!Array.isArray(input.requiredCapabilities)) {
+      errors.push('module.mount: requiredCapabilities must be an array');
+    } else if (
+      input.requiredCapabilities.some(
+        (item) => typeof item !== 'string' || item.trim().length === 0
+      )
+    ) {
+      errors.push('module.mount: requiredCapabilities must contain non-empty strings only');
+    }
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 export const registerHostSchemas = (): void => {
   registerPair('file.read', ['path']);
   registerPair('file.write', ['path', 'content']);
@@ -185,9 +234,12 @@ export const registerHostSchemas = (): void => {
   registerPair('plugin.init', ['pluginId']);
   registerPair('plugin.handshake.complete', ['sessionId', 'nonce']);
 
-  registerPair('module.mount', ['slot', 'moduleId'], ['module']);
-  registerPair('module.unmount', ['slot']);
-  registerPair('module.query', ['slot']);
+  schemaRegistry.register('schemas/module.mount.request.json', validateModuleMountRequest);
+  schemaRegistry.register('schemas/module.mount.response.json', objectWithKeys(['module']));
+  schemaRegistry.register('schemas/module.unmount.request.json', validateModuleSlotRequest('module.unmount'));
+  schemaRegistry.register('schemas/module.unmount.response.json', objectWithKeys([]));
+  schemaRegistry.register('schemas/module.query.request.json', validateModuleSlotRequest('module.query'));
+  schemaRegistry.register('schemas/module.query.response.json', objectWithKeys(['module']));
   registerPair('module.list', []);
 
   registerPair('platform.getInfo', []);

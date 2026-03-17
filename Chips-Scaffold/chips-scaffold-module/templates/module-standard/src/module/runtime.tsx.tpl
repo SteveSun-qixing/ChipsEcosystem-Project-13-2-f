@@ -74,12 +74,22 @@ function toErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-function createRuntimeClient(client?: Client): Client | undefined {
+function createRuntimeClient(
+  client?: Client,
+  bridgeScopeToken?: string
+): Client | undefined {
   if (client) {
     return client;
   }
   if (typeof window === "undefined" || typeof (window as { chips?: unknown }).chips === "undefined") {
     return undefined;
+  }
+  if (bridgeScopeToken) {
+    return createClient({
+      bridgeScope: {
+        token: bridgeScopeToken,
+      },
+    });
   }
   return createClient();
 }
@@ -153,14 +163,18 @@ function ModuleRuntimeProvider({
   slot,
   snapshot,
   preferredLocale,
+  bridgeScopeToken,
 }: React.PropsWithChildren<{
   client?: Client;
   moduleId: string;
   slot: string;
   snapshot: ModuleSnapshot;
   preferredLocale?: string;
+  bridgeScopeToken?: string;
 }>): React.ReactElement {
-  const runtimeClientRef = React.useRef<Client | undefined>(createRuntimeClient(client));
+  const runtimeClientRef = React.useRef<Client | undefined>(
+    createRuntimeClient(client, bridgeScopeToken)
+  );
   const [bootState, setBootState] = React.useState<ModuleRuntimeBootState>({
     locale: resolveLocale(preferredLocale),
     themeCssText: "",
@@ -515,6 +529,7 @@ export function mountModule(context: ModuleMountContext): ModuleHandle {
         <React.StrictMode>
           <ModuleRuntimeProvider
             client={context.client}
+            bridgeScopeToken={context.bridgeScopeToken}
             moduleId={moduleId}
             slot={slot}
             snapshot={snapshot}

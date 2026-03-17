@@ -19,6 +19,14 @@ export interface ClientConfig {
    */
   transport?: (action: string, payload: unknown) => Promise<unknown>;
 
+  /**
+   * 可选的 Bridge 作用域令牌。
+   * 用于模块插件等“嵌入式运行时”以独立 Host 身份访问系统能力。
+   */
+  bridgeScope?: {
+    token: string;
+  };
+
   /** 默认超时时间（毫秒）。具体超时由 Host/Bridge 控制，本字段仅用于未来扩展与诊断。 */
   timeoutMs?: number;
 

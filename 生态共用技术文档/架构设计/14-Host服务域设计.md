@@ -208,18 +208,22 @@ interface ThemeService {
 |------|------|
 | 服务名 | `module` |
 | 核心动作 | mount/unmount/query/list |
-| 输入基线 | slot + moduleId |
-| 输出基线 | moduleState（Bridge 返回包装对象，SDK 解包后暴露直接状态） |
+| 输入基线 | slot + moduleId + requiredCapabilities? |
+| 输出基线 | moduleState（mount 时附带 scoped bridge token；Bridge 返回包装对象，SDK 解包后暴露直接状态） |
 | 幂等性 | query/list 幂等 |
 | 权限边界 | `module.manage` |
 | 典型错误 | `MODULE_CONFLICT` |
 
 补充说明：
 
-- `module.mount` 正式输入为 `{ slot, moduleId }`，返回 `{ module }`；
+- `module.mount` 正式输入为 `{ slot, moduleId, requiredCapabilities? }`，返回 `{ module }`；
 - `module.unmount` 正式输入为 `{ slot }`，返回 `{ ack: true }`；
 - `module.query` 返回 `{ module: ModuleState | null }`；
 - `module.list` 返回 `{ modules: ModuleState[] }`。
+- `slot` 必须使用 namespaced dot 格式；
+- `module.mount` 会为模块插件创建正式插件会话并发放一次性 `bridgeScopeToken`，供模块运行时建立独立 Host 调用身份；
+- `bridgeScopeToken` 只在 `mount` 返回值中出现，`query/list` 不再回传；
+- 若传入 `requiredCapabilities`，Host 必须在挂载时校验模块 manifest 中的 `capabilities` 是否满足要求。
 
 ### 9. platform 服务
 

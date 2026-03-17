@@ -7,9 +7,11 @@ export interface BridgeAdapter extends EventsApi {
 
 export interface ChipsBridge {
   invoke(action: string, payload?: unknown): Promise<unknown>;
+  invokeScoped?(action: string, payload: unknown, scope: { token: string }): Promise<unknown>;
   on(event: string, handler: (payload: unknown) => void): () => void;
   once(event: string, handler: (payload: unknown) => void): void;
   emit(event: string, payload?: unknown): Promise<void>;
+  emitScoped?(event: string, payload: unknown, scope: { token: string }): Promise<void>;
   platform?: {
     getPathForFile?(file: unknown): string;
   };
@@ -52,7 +54,7 @@ function unwrapBridgeError(error: unknown, fallbackMessage: string): StandardErr
   );
 }
 
-export function createPluginBridgeAdapter(): BridgeAdapter {
+export function createPluginBridgeAdapter(scope?: { token: string }): BridgeAdapter {
   const bridge = (typeof window !== "undefined" ? (window as any).chips : undefined) as
     | ChipsBridge
     | undefined;
@@ -64,10 +66,20 @@ export function createPluginBridgeAdapter(): BridgeAdapter {
     );
   }
 
+  if (scope && typeof bridge.invokeScoped !== "function") {
+    throw createError(
+      "BRIDGE_SCOPE_UNAVAILABLE",
+      "Scoped Bridge API is not available in the current environment.",
+    );
+  }
+
   return {
     async invoke<I, O>(action: string, payload: I): Promise<O> {
       try {
-        const result = await bridge.invoke(action, payload);
+        const result =
+          scope && typeof bridge.invokeScoped === "function"
+            ? await bridge.invokeScoped(action, payload, scope)
+            : await bridge.invoke(action, payload);
         return result as O;
       } catch (err) {
         throw unwrapBridgeError(err, "Unknown error from Bridge API.");
@@ -80,6 +92,16 @@ export function createPluginBridgeAdapter(): BridgeAdapter {
       bridge.once(event, (payload) => handler(payload as T));
     },
     async emit<T>(event: string, payload: T): Promise<void> {
+      if (scope) {
+        if (typeof bridge.emitScoped !== "function") {
+          throw createError(
+            "BRIDGE_SCOPE_UNAVAILABLE",
+            "Scoped Bridge event API is not available in the current environment.",
+          );
+        }
+        await bridge.emitScoped(event, payload, scope);
+        return;
+      }
       await bridge.emit(event, payload);
     },
   };

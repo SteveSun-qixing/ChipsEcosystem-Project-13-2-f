@@ -24,6 +24,10 @@ export interface BridgeContextOptions {
   permissions?: string[];
 }
 
+export interface BridgeScopeOptions {
+  token: string;
+}
+
 export const HOST_INTERNAL_PERMISSIONS = [
   'file.read',
   'file.write',
@@ -130,7 +134,7 @@ const decodeIpcError = (error: unknown): StandardError | null => {
 export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeContextOptions): BridgeTransport => {
   const electron = loadElectronModule();
   if (electron?.ipcRenderer) {
-    return new BridgeTransport(
+    const bridge = new BridgeTransport(
       async <T>(action: string, payload: unknown) => {
         try {
           const context = buildContext(options);
@@ -180,6 +184,46 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
         }
       }
     );
+
+    (bridge as BridgeTransport & Pick<ChipsBridge, 'invokeScoped' | 'emitScoped'>).invokeScoped = async <T>(
+      action: string,
+      payload: unknown,
+      scope: BridgeScopeOptions
+    ): Promise<T> => {
+      try {
+        const channel = ACTION_CHANNEL_MAP[action] ?? CHIPS_INVOKE_CHANNEL;
+        const request =
+          channel === CHIPS_INVOKE_CHANNEL
+            ? {
+                action,
+                payload,
+                context: buildContext(options),
+                scope
+              }
+            : {
+                payload,
+                context: buildContext(options),
+                scope
+              };
+        return (await electron.ipcRenderer!.invoke(channel, request)) as T;
+      } catch (error) {
+        const decoded = decodeIpcError(error);
+        if (decoded) {
+          throw decoded;
+        }
+        throw error;
+      }
+    };
+
+    (bridge as BridgeTransport & Pick<ChipsBridge, 'invokeScoped' | 'emitScoped'>).emitScoped = async (
+      event: string,
+      data: unknown,
+      scope: BridgeScopeOptions
+    ): Promise<void> => {
+      electron.ipcRenderer!.send(CHIPS_EMIT_CHANNEL, { event, data, scope });
+    };
+
+    return bridge;
   }
 
   if (!kernel) {
@@ -233,11 +277,20 @@ export const exposeBridgeToMainWorld = (
   name = 'chips',
   launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> }
 ): void => {
+  const scopedBridge = bridge as BridgeTransport & Pick<ChipsBridge, 'invokeScoped' | 'emitScoped'>;
   const exposed: ChipsBridge & { platform: ExposedPlatformBridge } = {
     invoke: bridge.invoke.bind(bridge),
+    invokeScoped:
+      typeof scopedBridge.invokeScoped === 'function'
+        ? scopedBridge.invokeScoped.bind(scopedBridge)
+        : undefined,
     on: bridge.on.bind(bridge),
     once: bridge.once.bind(bridge),
     emit: bridge.emit.bind(bridge),
+    emitScoped:
+      typeof scopedBridge.emitScoped === 'function'
+        ? scopedBridge.emitScoped.bind(scopedBridge)
+        : undefined,
     window: bridge.window,
     dialog: bridge.dialog,
     plugin: bridge.plugin,

@@ -6,6 +6,10 @@ export interface CardDocument {
   [key: string]: unknown;
 }
 
+export interface CardMetadata {
+  [key: string]: unknown;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors?: Array<{ path: string; message: string; code?: string }>;
@@ -188,6 +192,9 @@ export interface CardEditorErrorPayload {
 }
 
 export interface CardApi {
+  pack(cardDir: string, outputPath: string): Promise<string>;
+  unpack(cardFile: string, outputDir: string): Promise<void>;
+  readMetadata(cardFile: string): Promise<CardMetadata>;
   parse(cardFile: string): Promise<CardDocument>;
   validate(card: CardDocument): Promise<ValidationResult>;
   render(cardFile: string, options?: CardRenderOptions): Promise<CardRenderResult>;
@@ -229,6 +236,32 @@ export interface CardApi {
 
 export function createCardApi(client: CoreClient): CardApi {
   return {
+    async pack(cardDir, outputPath) {
+      if (!cardDir || !outputPath) {
+        throw createError("INVALID_ARGUMENT", "card.pack: cardDir and outputPath are both required.");
+      }
+      const result = await client.invoke<
+        { cardDir: string; outputPath: string },
+        { cardFile: string }
+      >("card.pack", { cardDir, outputPath });
+      return result.cardFile;
+    },
+    async unpack(cardFile, outputDir) {
+      if (!cardFile || !outputDir) {
+        throw createError("INVALID_ARGUMENT", "card.unpack: cardFile and outputDir are both required.");
+      }
+      await client.invoke("card.unpack", { cardFile, outputDir });
+    },
+    async readMetadata(cardFile) {
+      if (!cardFile) {
+        throw createError("INVALID_ARGUMENT", "card.readMetadata: cardFile is required.");
+      }
+      const result = await client.invoke<{ cardFile: string }, { metadata: CardMetadata }>(
+        "card.readMetadata",
+        { cardFile },
+      );
+      return result.metadata;
+    },
     async parse(cardFile) {
       if (!cardFile) {
         throw createError("INVALID_ARGUMENT", "card.parse: cardFile is required.");

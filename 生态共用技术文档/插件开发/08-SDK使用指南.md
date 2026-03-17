@@ -45,6 +45,58 @@ npm install
 
 SDK提供卡片文件的读写能力。
 
+系统对话框通过 `client.platform` 正式提供，不要求应用插件自行拼接 `invoke("platform.dialog*")`：
+
+```typescript
+client.platform.openFile({
+  title: "选择卡片",
+  mode: "file",
+  allowMultiple: false,
+});
+
+client.platform.saveFile({
+  title: "保存 .card 文件",
+  defaultPath: "/workspace/demo-export.card",
+});
+
+client.platform.showMessage({
+  title: "导出完成",
+  message: "卡片已导出。",
+});
+
+client.platform.showConfirm({
+  title: "覆盖确认",
+  message: "目标文件已存在，是否继续？",
+});
+```
+
+说明：
+
+- `client.platform.openFile(...)` 对应 Host `platform.dialogOpenFile`；
+- `client.platform.saveFile(...)` 对应 Host `platform.dialogSaveFile`；
+- `client.platform.showMessage(...)` 对应 Host `platform.dialogShowMessage`；
+- `client.platform.showConfirm(...)` 对应 Host `platform.dialogShowConfirm`；
+- `defaultPath` 是系统对话框的初始建议路径，不是自动确认结果；Host 仍会弹出正式对话框，用户取消时返回 `null`；
+- 应用层应优先调用这些 SDK 正式封装，而不是在业务组件中散落 `client.invoke("platform.dialog*")` 私有调用。
+
+打包目录态卡片使用 `client.card.pack()` 方法，传入卡片目录与输出文件路径。方法签名：
+
+```typescript
+client.card.pack(cardDir: string, outputPath: string): Promise<string>
+```
+
+解包正式 `.card` 文件使用 `client.card.unpack()` 方法。方法签名：
+
+```typescript
+client.card.unpack(cardFile: string, outputDir: string): Promise<void>
+```
+
+快速读取卡片元数据使用 `client.card.readMetadata()` 方法，无需先手动解包。方法签名：
+
+```typescript
+client.card.readMetadata(cardFile: string): Promise<Record<string, unknown>>
+```
+
 解析卡片使用 `client.card.parse()` 方法，传入卡片文件路径或卡片ID。返回卡片对象，包含元数据、内容列表等。方法签名：
 
 ```typescript
@@ -63,7 +115,7 @@ client.card.validate(cardDoc: CardDocument): Promise<ValidationResult>
 client.card.render(cardFile: string, options?: RenderOptions): Promise<CardView>
 ```
 
-> 注意：旧版 `cards.read`、`cards.create`、`cards.update`、`cards.delete` 方法已归档，请使用 `card.parse/render/validate` 接口。
+> 注意：旧版 `cards.read`、`cards.create`、`cards.update`、`cards.delete` 方法已归档，请使用 `card.pack/unpack/readMetadata/parse/render/validate` 接口。
 
 ## 内容渲染
 

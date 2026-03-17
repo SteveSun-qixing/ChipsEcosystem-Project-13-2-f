@@ -8,6 +8,7 @@ import { createError } from '../../../src/shared/errors';
 import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import { parseYamlLite } from '../../../src/shared/yaml-lite';
 import { createId } from '../../../src/shared/utils';
+import { CardPacker } from '../../card-packer/src';
 import type { RenderConsistencyResult, RenderNodeDiagnostic, RenderTarget, RenderViewport, ThemeSnapshot } from '../../unified-rendering/src';
 import { StoreZipService } from '../../zip-service/src';
 
@@ -1316,6 +1317,7 @@ export class CardService {
   private readonly moduleCache = new Map<string, Promise<BaseCardPluginModule>>();
   private readonly browserBundleCache = new Map<string, Promise<string>>();
   private readonly persistentCardRootCache = new Map<string, PersistentCardRootCacheEntry>();
+  private readonly packer: CardPacker;
 
   public constructor(
     options: CardServiceOptions = {},
@@ -1323,6 +1325,19 @@ export class CardService {
   ) {
     this.runtime = options.runtime;
     this.workspaceRoot = options.workspaceRoot ?? process.cwd();
+    this.packer = new CardPacker(this.zip);
+  }
+
+  public async pack(cardDir: string, outputPath: string): Promise<string> {
+    return this.packer.pack(cardDir, outputPath);
+  }
+
+  public async unpack(cardFile: string, outputDir: string): Promise<string> {
+    return this.packer.unpack(cardFile, outputDir);
+  }
+
+  public async readMetadata(cardFile: string): Promise<Record<string, unknown>> {
+    return this.packer.readMetadata(cardFile);
   }
 
   public async validate(cardFile: string): Promise<{ valid: boolean; errors: string[] }> {

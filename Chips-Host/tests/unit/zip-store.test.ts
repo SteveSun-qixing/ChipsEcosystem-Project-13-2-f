@@ -20,6 +20,7 @@ describe('StoreZipService', () => {
 
     const entries = await zip.list(outputZip);
     expect(entries.map((entry) => entry.path)).toEqual(['a.txt', 'nested/b.txt']);
+    await expect(zip.readEntry(outputZip, 'nested/b.txt')).resolves.toEqual(Buffer.from('beta'));
 
     await zip.extract(outputZip, outputDir);
     const a = await fs.readFile(path.join(outputDir, 'a.txt'), 'utf-8');

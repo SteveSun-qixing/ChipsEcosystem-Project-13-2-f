@@ -74,7 +74,7 @@ export function CardSettingsDialog({
     }
   };
 
-  const handleSave = async () => {
+  const applyCoverDraft = () => {
     if (coverDraft?.dirty && coverDraft.valid) {
       updateCardCover(cardId, {
         html: coverDraft.html,
@@ -82,7 +82,10 @@ export function CardSettingsDialog({
         resources: coverDraft.resources,
       });
     }
+  };
 
+  const handleSave = async () => {
+    applyCoverDraft();
     await saveCard(cardId);
     onSave();
   };
@@ -166,7 +169,10 @@ export function CardSettingsDialog({
                 label: t('card_settings.tab_export') || '导出',
                 content: (
                   <div className="card-settings-dialog__panel">
-                    <ExportPanel cardId={cardId} cardInfo={cardInfo} />
+                    <ExportPanel
+                      cardId={cardId}
+                      onBeforeExport={applyCoverDraft}
+                    />
                   </div>
                 ),
               },

@@ -351,4 +351,68 @@ describe("createClient", () => {
       }
     }
   });
+
+  it("unwraps platform dialog responses", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "platform.dialogOpenFile") {
+          return { filePaths: ["/tmp/demo.card"] };
+        }
+        if (action === "platform.dialogSaveFile") {
+          return { filePath: "/tmp/export.card" };
+        }
+        if (action === "platform.dialogShowMessage") {
+          return { response: 0 };
+        }
+        if (action === "platform.dialogShowConfirm") {
+          return { confirmed: true };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.platform.openFile({ title: "Open" })).resolves.toEqual(["/tmp/demo.card"]);
+    await expect(client.platform.saveFile({ title: "Save" })).resolves.toBe("/tmp/export.card");
+    await expect(client.platform.showMessage({ message: "Hello" })).resolves.toBe(0);
+    await expect(client.platform.showConfirm({ message: "Continue?" })).resolves.toBe(true);
+
+    expect(calls).toEqual([
+      {
+        action: "platform.dialogOpenFile",
+        payload: {
+          options: {
+            title: "Open",
+          },
+        },
+      },
+      {
+        action: "platform.dialogSaveFile",
+        payload: {
+          options: {
+            title: "Save",
+          },
+        },
+      },
+      {
+        action: "platform.dialogShowMessage",
+        payload: {
+          options: {
+            message: "Hello",
+          },
+        },
+      },
+      {
+        action: "platform.dialogShowConfirm",
+        payload: {
+          options: {
+            message: "Continue?",
+          },
+        },
+      },
+    ]);
+  });
 });

@@ -121,11 +121,16 @@ const enUS: Record<string, string> = {
     'card_settings.export_format': 'Export Format',
     'card_settings.export_start': 'Start Export',
     'card_settings.export_done': 'Export Complete',
-    'card_settings.export_failed': 'Export Failed',
+    'card_settings.export_done_with_path': 'Export complete: {path}',
+    'card_settings.export_failed': 'Export failed: {error}',
     'card_settings.export_unknown_error': 'Unknown Error',
     'card_settings.export_no_card': 'No content to export',
     'card_settings.export_save_card': 'Save .card file',
+    'card_settings.export_saving_card_state': 'Saving card state...',
     'card_settings.export_create_package': 'Packaging...',
+    'card_settings.export_verify_output': 'Verifying exported file...',
+    'card_settings.export_output_missing': 'The exported file was not created.',
+    'card_settings.export_unavailable': 'This export format is not connected to a formal export pipeline yet.',
 
     // Edit Panel
     'edit_panel.title': 'Property Editor',

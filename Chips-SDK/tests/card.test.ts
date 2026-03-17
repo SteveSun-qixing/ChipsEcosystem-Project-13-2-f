@@ -16,6 +16,65 @@ function createStubClient(invokeImpl: CoreClient["invoke"]): CoreClient {
 }
 
 describe("CardApi", () => {
+  it("passes card pack options into card.pack and unwraps cardFile", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return { cardFile: "/tmp/output.card" } as any;
+      }),
+    );
+
+    await expect(api.pack("/tmp/card-dir", "/tmp/output.card")).resolves.toBe("/tmp/output.card");
+    expect(calls[0]?.action).toBe("card.pack");
+    expect(calls[0]?.payload).toEqual({
+      cardDir: "/tmp/card-dir",
+      outputPath: "/tmp/output.card",
+    });
+  });
+
+  it("passes card metadata requests into card.readMetadata and unwraps metadata", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          metadata: {
+            name: "Demo Card",
+          },
+        } as any;
+      }),
+    );
+
+    await expect(api.readMetadata("/tmp/demo.card")).resolves.toEqual({
+      name: "Demo Card",
+    });
+    expect(calls[0]?.action).toBe("card.readMetadata");
+    expect(calls[0]?.payload).toEqual({
+      cardFile: "/tmp/demo.card",
+    });
+  });
+
+  it("passes unpack requests into card.unpack", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return { outputDir: "/tmp/unpacked" } as any;
+      }),
+    );
+
+    await expect(api.unpack("/tmp/demo.card", "/tmp/unpacked")).resolves.toBeUndefined();
+    expect(calls[0]?.action).toBe("card.unpack");
+    expect(calls[0]?.payload).toEqual({
+      cardFile: "/tmp/demo.card",
+      outputDir: "/tmp/unpacked",
+    });
+  });
+
   it("throws on empty cardFile for render", async () => {
     const api = createCardApi(
       createStubClient(async () => {

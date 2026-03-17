@@ -2827,6 +2827,45 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
   const cardService: ServiceRegistration = {
     name: 'card',
     actions: {
+      pack: {
+        descriptor: descriptor<{ cardDir: string; outputPath: string }, { cardFile: string }>(
+          'card.pack',
+          ['card.write'],
+          12_000,
+          false,
+          0,
+          withMetrics(state, 'card.pack', async (input) => {
+            const cardFile = await ctx.getCardService().pack(input.cardDir, input.outputPath);
+            return { cardFile };
+          })
+        )
+      },
+      unpack: {
+        descriptor: descriptor<{ cardFile: string; outputDir: string }, { outputDir: string }>(
+          'card.unpack',
+          ['card.read'],
+          12_000,
+          false,
+          0,
+          withMetrics(state, 'card.unpack', async (input) => {
+            const outputDir = await ctx.getCardService().unpack(input.cardFile, input.outputDir);
+            return { outputDir };
+          })
+        )
+      },
+      readMetadata: {
+        descriptor: descriptor<{ cardFile: string }, { metadata: unknown }>(
+          'card.readMetadata',
+          ['card.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'card.readMetadata', async (input) => {
+            const metadata = await ctx.getCardService().readMetadata(input.cardFile);
+            return { metadata };
+          })
+        )
+      },
       parse: {
         descriptor: descriptor<{ cardFile: string }, { ast: unknown }>(
           'card.parse',

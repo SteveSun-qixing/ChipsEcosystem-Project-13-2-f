@@ -9,8 +9,14 @@
     "box.unpack": {
       "action": "box.unpack"
     },
+    "card.pack": {
+      "action": "card.pack"
+    },
     "card.parse": {
       "action": "card.parse"
+    },
+    "card.readMetadata": {
+      "action": "card.readMetadata"
     },
     "card.render": {
       "action": "card.render"
@@ -20,6 +26,9 @@
     },
     "card.renderEditor": {
       "action": "card.renderEditor"
+    },
+    "card.unpack": {
+      "action": "card.unpack"
     },
     "card.validate": {
       "action": "card.validate"

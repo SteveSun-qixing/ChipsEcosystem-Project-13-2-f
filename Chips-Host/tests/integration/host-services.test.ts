@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import yaml from 'yaml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HostApplication } from '../../src/main/core/host-application';
 import { openAssociatedFile } from '../../src/main/core/file-association';
@@ -197,6 +198,64 @@ describe('Host services integration', () => {
         }
       })
     ).rejects.toMatchObject({ code: 'SCHEMA_VALIDATION_FAILED' });
+  });
+
+  it('packs directory cards through card service routes and restores generated metadata on unpack', async () => {
+    const source = path.join(workspace, 'pack-card-source');
+    await fs.mkdir(path.join(source, '.card'), { recursive: true });
+    await fs.mkdir(path.join(source, 'content'), { recursive: true });
+    await fs.writeFile(
+      path.join(source, '.card/metadata.yaml'),
+      [
+        'chip_standards_version: "1.0.0"',
+        'card_id: "packcard01"',
+        'name: "Packed Through Route"',
+        'created_at: "2026-03-17T09:00:00.000Z"',
+        'modified_at: "2026-03-17T09:00:00.000Z"'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(
+      path.join(source, '.card/structure.yaml'),
+      'structure:\n  - id: "intro"\n    type: "RichTextCard"\n',
+      'utf-8'
+    );
+    await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+    await fs.writeFile(
+      path.join(source, 'content/intro.yaml'),
+      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <p>route pack</p>\n',
+      'utf-8'
+    );
+
+    const cardFile = path.join(workspace, 'route-packed.card');
+    const packed = await runtime.invoke<{ cardFile: string }>('card.pack', {
+      cardDir: source,
+      outputPath: cardFile
+    });
+    expect(packed.cardFile).toBe(cardFile);
+
+    const metadata = await runtime.invoke<{ metadata: Record<string, unknown> }>('card.readMetadata', {
+      cardFile
+    });
+    expect(metadata.metadata.name).toBe('Packed Through Route');
+    expect(metadata.metadata.file_info).toMatchObject({
+      file_count: 4,
+      total_size: expect.any(Number),
+      checksum: expect.stringMatching(/^[a-f0-9]{64}$/),
+      generated_at: expect.any(String)
+    });
+
+    const unpackDir = path.join(workspace, 'route-packed-unpacked');
+    const unpacked = await runtime.invoke<{ outputDir: string }>('card.unpack', {
+      cardFile,
+      outputDir: unpackDir
+    });
+    expect(unpacked.outputDir).toBe(unpackDir);
+
+    const structure = yaml.parse(
+      await fs.readFile(path.join(unpackDir, '.card/structure.yaml'), 'utf-8')
+    ) as Record<string, unknown>;
+    expect((structure.manifest as Record<string, unknown>).card_count).toBe(1);
   });
 
   it('creates window records via window service', async () => {

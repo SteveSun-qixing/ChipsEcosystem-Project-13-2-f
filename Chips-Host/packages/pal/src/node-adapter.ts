@@ -56,6 +56,7 @@ import type {
 
 const quoteAppleScript = (value: string): string => value.replaceAll('"', '\\"');
 const quoteShellArg = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+const quotePowerShell = (value: string): string => value.replaceAll('`', '``').replaceAll('"', '`"');
 const sanitizeLauncherName = (value: string): string => {
   const sanitized = value.replace(/[\\/:*?"<>|]/g, '-').trim();
   return sanitized.length > 0 ? sanitized : 'Chips App';
@@ -561,25 +562,24 @@ class NodeFileSystem implements PALFileSystem {
 }
 
 class NodeDialog implements PALDialog {
+  private readonly electron = loadElectronModule();
+
   public async openFile(options?: DialogFileOptions): Promise<string[] | null> {
     const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
-    const mustExist = options?.mustExist ?? true;
-    const mode = options?.mode ?? 'file';
-
-    if (normalizedDefault) {
-      const stats = await statSafe(normalizedDefault);
-      if (!stats && mustExist) {
-        throw createError('PAL_DIALOG_PATH_NOT_FOUND', `Path not found: ${normalizedDefault}`);
+    if (this.electron?.dialog?.showOpenDialog) {
+      const properties = [options?.mode === 'directory' ? 'openDirectory' : 'openFile'];
+      if (options?.allowMultiple) {
+        properties.push('multiSelections');
       }
-      if (stats) {
-        if (mode === 'file' && !stats.isFile) {
-          throw createError('PAL_DIALOG_EXPECT_FILE', `Expected file path: ${normalizedDefault}`);
-        }
-        if (mode === 'directory' && !stats.isDirectory) {
-          throw createError('PAL_DIALOG_EXPECT_DIRECTORY', `Expected directory path: ${normalizedDefault}`);
-        }
-      }
-      return [normalizedDefault];
+      const result = await this.electron.dialog.showOpenDialog({
+        title: options?.title,
+        defaultPath: normalizedDefault,
+        properties
+      });
+      const filePaths = Array.isArray(result.filePaths)
+        ? result.filePaths.map((item) => path.resolve(item)).filter(Boolean)
+        : [];
+      return result.canceled === true || filePaths.length === 0 ? null : filePaths;
     }
 
     if (process.platform === 'darwin') {
@@ -597,9 +597,16 @@ class NodeDialog implements PALDialog {
 
   public async saveFile(options?: DialogSaveOptions): Promise<string | null> {
     const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
-    if (normalizedDefault) {
-      await fs.mkdir(path.dirname(normalizedDefault), { recursive: true });
-      return normalizedDefault;
+    if (this.electron?.dialog?.showSaveDialog) {
+      const result = await this.electron.dialog.showSaveDialog({
+        title: options?.title,
+        defaultPath: normalizedDefault
+      });
+      if (result.canceled === true) {
+        return null;
+      }
+      const filePath = typeof result.filePath === 'string' ? result.filePath.trim() : '';
+      return filePath.length > 0 ? path.resolve(filePath) : null;
     }
 
     if (process.platform === 'darwin') {
@@ -648,18 +655,22 @@ class NodeDialog implements PALDialog {
     const allowMultiple = options?.allowMultiple ?? false;
     const mode = options?.mode ?? 'file';
     const title = quoteAppleScript(options?.title ?? 'Select item');
+    const defaultLocation = await this.resolveOpenDialogLocation(options?.defaultPath);
+    const defaultLocationArg = defaultLocation
+      ? ` default location POSIX file "${quoteAppleScript(defaultLocation)}"`
+      : '';
 
     const selectionExpr = mode === 'directory' ? 'choose folder' : 'choose file';
     const script = allowMultiple
       ? [
-          `set selectedItems to ${selectionExpr} with prompt "${title}" with multiple selections allowed true`,
+          `set selectedItems to ${selectionExpr} with prompt "${title}"${defaultLocationArg} with multiple selections allowed true`,
           'set output to ""',
           'repeat with itemPath in selectedItems',
           'set output to output & POSIX path of itemPath & linefeed',
           'end repeat',
           'return output'
         ]
-      : [`POSIX path of (${selectionExpr} with prompt "${title}")`];
+      : [`POSIX path of (${selectionExpr} with prompt "${title}"${defaultLocationArg})`];
 
     try {
       const raw = await runCommand('osascript', script.flatMap((line) => ['-e', line]));
@@ -685,6 +696,9 @@ class NodeDialog implements PALDialog {
     if (options?.title) {
       args.push(`--title=${options.title}`);
     }
+    if (options?.defaultPath) {
+      args.push(`--filename=${path.resolve(options.defaultPath)}`);
+    }
 
     try {
       const raw = await runCommand('zenity', args);
@@ -698,16 +712,22 @@ class NodeDialog implements PALDialog {
   private async openFileWindows(options?: DialogFileOptions): Promise<string[] | null> {
     const multiple = options?.allowMultiple ? '$dialog.Multiselect = $true;' : '';
     const directoryMode = options?.mode === 'directory';
+    const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
+    const defaultDirectory = normalizedDefault ? path.dirname(normalizedDefault) : undefined;
+    const defaultName = normalizedDefault ? path.basename(normalizedDefault) : undefined;
     const script = directoryMode
       ? [
           'Add-Type -AssemblyName System.Windows.Forms;',
           '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog;',
+          normalizedDefault ? `$dialog.SelectedPath = "${quotePowerShell(normalizedDefault)}";` : '',
           '$result = $dialog.ShowDialog();',
           'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }'
         ]
       : [
           'Add-Type -AssemblyName System.Windows.Forms;',
           '$dialog = New-Object System.Windows.Forms.OpenFileDialog;',
+          defaultDirectory ? `$dialog.InitialDirectory = "${quotePowerShell(defaultDirectory)}";` : '',
+          defaultName ? `$dialog.FileName = "${quotePowerShell(defaultName)}";` : '',
           multiple,
           '$result = $dialog.ShowDialog();',
           'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.FileNames | ForEach-Object { Write-Output $_ } }'
@@ -724,7 +744,16 @@ class NodeDialog implements PALDialog {
 
   private async saveFileDarwin(options?: DialogSaveOptions): Promise<string | null> {
     const title = quoteAppleScript(options?.title ?? 'Save file');
-    const script = [`POSIX path of (choose file name with prompt "${title}")`];
+    const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
+    const defaultDirectory = normalizedDefault ? path.dirname(normalizedDefault) : undefined;
+    const defaultName = normalizedDefault ? path.basename(normalizedDefault) : undefined;
+    const defaultLocationArg = defaultDirectory
+      ? ` default location POSIX file "${quoteAppleScript(defaultDirectory)}"`
+      : '';
+    const defaultNameArg = defaultName ? ` default name "${quoteAppleScript(defaultName)}"` : '';
+    const script = [
+      `POSIX path of (choose file name with prompt "${title}"${defaultLocationArg}${defaultNameArg})`
+    ];
     try {
       const result = await runCommand('osascript', script.flatMap((line) => ['-e', line]));
       const normalized = result.trim();
@@ -743,6 +772,9 @@ class NodeDialog implements PALDialog {
     if (options?.title) {
       args.push(`--title=${options.title}`);
     }
+    if (options?.defaultPath) {
+      args.push(`--filename=${path.resolve(options.defaultPath)}`);
+    }
 
     try {
       const result = await runCommand('zenity', args);
@@ -754,10 +786,16 @@ class NodeDialog implements PALDialog {
   }
 
   private async saveFileWindows(options?: DialogSaveOptions): Promise<string | null> {
+    const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
+    const defaultDirectory = normalizedDefault ? path.dirname(normalizedDefault) : undefined;
+    const defaultName = normalizedDefault ? path.basename(normalizedDefault) : undefined;
     const script = [
       'Add-Type -AssemblyName System.Windows.Forms;',
       '$dialog = New-Object System.Windows.Forms.SaveFileDialog;',
-      options?.title ? `$dialog.Title = "${options.title.replaceAll('"', '`"')}";` : '',
+      options?.title ? `$dialog.Title = "${quotePowerShell(options.title)}";` : '',
+      defaultDirectory ? `$dialog.InitialDirectory = "${quotePowerShell(defaultDirectory)}";` : '',
+      defaultName ? `$dialog.FileName = "${quotePowerShell(defaultName)}";` : '',
+      '$dialog.OverwritePrompt = $true;',
       '$result = $dialog.ShowDialog();',
       'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.FileName }'
     ]
@@ -771,6 +809,22 @@ class NodeDialog implements PALDialog {
     } catch {
       return null;
     }
+  }
+
+  private async resolveOpenDialogLocation(defaultPath?: string): Promise<string | undefined> {
+    if (!defaultPath) {
+      return undefined;
+    }
+
+    const normalized = path.resolve(defaultPath);
+    const stats = await statSafe(normalized);
+    if (stats?.isDirectory) {
+      return normalized;
+    }
+
+    const parentDirectory = path.dirname(normalized);
+    const parentStats = await statSafe(parentDirectory);
+    return parentStats?.isDirectory ? parentDirectory : undefined;
   }
 }
 

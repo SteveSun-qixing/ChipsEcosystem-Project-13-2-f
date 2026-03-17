@@ -122,11 +122,16 @@ const zhCN: Record<string, string> = {
     'card_settings.export_format': '导出格式',
     'card_settings.export_start': '开始导出',
     'card_settings.export_done': '导出完成',
-    'card_settings.export_failed': '导出失败',
+    'card_settings.export_done_with_path': '导出完成：{path}',
+    'card_settings.export_failed': '导出失败：{error}',
     'card_settings.export_unknown_error': '未知错误',
     'card_settings.export_no_card': '没有可导出的内容',
     'card_settings.export_save_card': '保存 .card 文件',
+    'card_settings.export_saving_card_state': '正在保存卡片状态…',
     'card_settings.export_create_package': '正在打包…',
+    'card_settings.export_verify_output': '正在校验导出文件…',
+    'card_settings.export_output_missing': '导出目标文件未生成',
+    'card_settings.export_unavailable': '当前导出格式尚未接入正式链路',
 
     // Edit Panel
     'edit_panel.title': '属性编辑',

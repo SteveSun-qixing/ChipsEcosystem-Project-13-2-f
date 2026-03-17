@@ -182,27 +182,23 @@ export class StoreZipService {
     await fs.mkdir(outputDir, { recursive: true });
 
     for (const entry of entries) {
-      const localHeaderOffset = entry.offset;
-      const signature = buffer.readUInt32LE(localHeaderOffset);
-      if (signature !== LFH_SIGNATURE) {
-        throw new Error('Invalid ZIP local file header signature');
-      }
-
-      const compressionMethod = buffer.readUInt16LE(localHeaderOffset + 8);
-      if (compressionMethod !== 0) {
-        throw new Error('Unsupported ZIP compression method');
-      }
-
-      const fileNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
-      const extraLength = buffer.readUInt16LE(localHeaderOffset + 28);
-      const dataStart = localHeaderOffset + 30 + fileNameLength + extraLength;
-      const dataEnd = dataStart + entry.size;
-      const data = buffer.subarray(dataStart, dataEnd);
+      const data = this.readEntryFromBuffer(buffer, entry);
 
       const destination = path.join(outputDir, entry.path);
       await fs.mkdir(path.dirname(destination), { recursive: true });
       await fs.writeFile(destination, data);
     }
+  }
+
+  public async readEntry(zipPath: string, entryPath: string): Promise<Buffer> {
+    const buffer = await fs.readFile(zipPath);
+    const entries = await this.list(zipPath);
+    const entry = entries.find((item) => item.path === entryPath);
+    if (!entry) {
+      throw new Error(`ZIP entry not found: ${entryPath}`);
+    }
+
+    return this.readEntryFromBuffer(buffer, entry);
   }
 
   private findEocdOffset(buffer: Buffer): number {
@@ -214,5 +210,24 @@ export class StoreZipService {
     }
 
     throw new Error('End of central directory not found');
+  }
+
+  private readEntryFromBuffer(buffer: Buffer, entry: ZipEntryMeta): Buffer {
+    const localHeaderOffset = entry.offset;
+    const signature = buffer.readUInt32LE(localHeaderOffset);
+    if (signature !== LFH_SIGNATURE) {
+      throw new Error('Invalid ZIP local file header signature');
+    }
+
+    const compressionMethod = buffer.readUInt16LE(localHeaderOffset + 8);
+    if (compressionMethod !== 0) {
+      throw new Error('Unsupported ZIP compression method');
+    }
+
+    const fileNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
+    const extraLength = buffer.readUInt16LE(localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + fileNameLength + extraLength;
+    const dataEnd = dataStart + entry.size;
+    return Buffer.from(buffer.subarray(dataStart, dataEnd));
   }
 }

@@ -55,9 +55,10 @@
 
 - `dialog.openFile(options)`：
   - 桥接到主机动作：`platform.dialogOpenFile`
-  - `defaultPath` 存在时优先直接返回该路径（用于自动化与无头场景）
+  - `defaultPath` 仅作为系统文件选择对话框的初始建议路径；Host 仍必须弹出正式对话框并等待用户确认
   - `mode` 支持 `file | directory`
   - `allowMultiple` 控制多选
+  - 用户取消时返回 `null`
   - 该类交互式对话框必须使用人工操作级 Host 路由超时，不能使用 2 秒级短超时
 - `window.open(payload)`：
   - 必填：`config.title/config.width/config.height`
@@ -66,7 +67,8 @@
   - 当调用方未显式提供 `config.chrome.backgroundColor` 且窗口不是透明窗口时，Host 会从当前主题 token 中推导原生窗口背景
 - `dialog.saveFile(options)`：
   - 桥接到主机动作：`platform.dialogSaveFile`
-  - `defaultPath` 存在时返回该路径并确保目录可写
+  - `defaultPath` 仅作为系统保存对话框的默认文件名/位置建议，不得绕过用户确认直接返回
+  - 用户取消时返回 `null`
   - 该类交互式对话框必须使用人工操作级 Host 路由超时，不能使用 2 秒级短超时
 - `plugin.install(payload)`：
   - 入参字段：`manifestPath`（兼容字段名）
@@ -176,6 +178,22 @@ interface RenderNodeDiagnostic {
   details?: unknown;
 }
 ```
+
+### 3.4 card.pack / card.unpack / card.readMetadata 补充基线
+
+- `card.pack`：
+  - 入参：`{ cardDir, outputPath }`
+  - 权限：`card.write`
+  - 语义：把目录态卡片打包为正式 ZIP Store `.card`
+  - 约束：必须刷新 `structure.yaml manifest.*` 与 `metadata.file_info.*`
+- `card.unpack`：
+  - 入参：`{ cardFile, outputDir }`
+  - 权限：`card.read`
+  - 语义：把正式 `.card` 恢复为目录态卡片
+- `card.readMetadata`：
+  - 入参：`{ cardFile }`
+  - 权限：`card.read`
+  - 语义：直接读取 `.card/metadata.yaml`，不要求调用方先完整解包
 
 ---
 

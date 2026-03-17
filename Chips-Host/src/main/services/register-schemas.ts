@@ -257,6 +257,9 @@ export const registerHostSchemas = (): void => {
   registerPair('credential.delete', ['ref']);
   registerPair('credential.rotate', ['ref']);
 
+  registerPair('card.pack', ['cardDir', 'outputPath'], ['cardFile']);
+  registerPair('card.unpack', ['cardFile', 'outputDir'], ['outputDir']);
+  registerPair('card.readMetadata', ['cardFile'], ['metadata']);
   registerPair('card.parse', ['cardFile']);
   schemaRegistry.register('schemas/card.render.request.json', validateCardRenderRequest);
   schemaRegistry.register('schemas/card.render.response.json', objectWithKeys(['view']));

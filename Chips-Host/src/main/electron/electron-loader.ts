@@ -145,6 +145,25 @@ export interface ElectronClipboardLike {
   writeBuffer(format: string, buffer: Buffer): void;
 }
 
+export interface ElectronOpenDialogResultLike {
+  canceled?: boolean;
+  filePaths?: string[];
+}
+
+export interface ElectronSaveDialogResultLike {
+  canceled?: boolean;
+  filePath?: string;
+}
+
+export interface ElectronDialogLike {
+  showOpenDialog(
+    options: Record<string, unknown>
+  ): Promise<ElectronOpenDialogResultLike> | ElectronOpenDialogResultLike;
+  showSaveDialog(
+    options: Record<string, unknown>
+  ): Promise<ElectronSaveDialogResultLike> | ElectronSaveDialogResultLike;
+}
+
 export interface ElectronWebUtilsLike {
   getPathForFile(file: unknown): string;
 }
@@ -163,6 +182,7 @@ export interface ElectronModuleLike {
   powerSaveBlocker?: ElectronPowerSaveBlockerLike;
   screen?: ElectronScreenLike;
   clipboard?: ElectronClipboardLike;
+  dialog?: ElectronDialogLike;
   nativeImage?: ElectronNativeImageModuleLike;
   webUtils?: ElectronWebUtilsLike;
 }

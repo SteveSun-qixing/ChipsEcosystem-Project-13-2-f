@@ -58,6 +58,11 @@ describe("template-engine", () => {
     expect(manifest).toMatch(/type:\s+card/);
     expect(manifest).toMatch(/capabilities:/);
     await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
+    expect(pkg.dependencies.react).toBe("^18.2.0");
+    expect(pkg.dependencies["react-dom"]).toBe("^18.2.0");
+    expect(pkg.devDependencies["@types/react"]).toBe("^18.2.66");
     expect(pkg.devDependencies.eslint).toBe("^8.57.1");
     expect(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
     expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");

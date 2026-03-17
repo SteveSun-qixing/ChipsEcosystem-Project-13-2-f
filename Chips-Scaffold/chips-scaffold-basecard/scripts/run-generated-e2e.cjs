@@ -39,16 +39,27 @@ function main() {
 
   renderTemplateToTarget(options)
     .then(() => {
-      // 在生成工程目录中至少检查 manifest 与 README 存在
-      const manifestPath = path.join(targetDir, "manifest.yaml");
-      const readmePath = path.join(targetDir, "README.md");
-      if (!fs.existsSync(manifestPath)) {
-        throw new Error("E2E: 生成工程缺少 manifest.yaml");
+      const requiredFiles = [
+        "manifest.yaml",
+        "README.md",
+        ".eslintrc.cjs",
+        path.join("src", "shared", "i18n.ts"),
+        path.join("tests", "unit", "schema.test.ts"),
+      ];
+      for (const relativePath of requiredFiles) {
+        if (!fs.existsSync(path.join(targetDir, relativePath))) {
+          throw new Error(`E2E: 生成工程缺少 ${relativePath}`);
+        }
       }
-      if (!fs.existsSync(readmePath)) {
-        throw new Error("E2E: 生成工程缺少 README.md");
-      }
-      // eslint-disable-next-line no-console
+
+      run("npx tsc -p tsconfig.json --noEmit", {
+        cwd: targetDir,
+      });
+
+      run("npx vitest run", {
+        cwd: targetDir,
+      });
+
       console.log("E2E: 生成工程自检通过。");
     })
     .catch((error) => {
@@ -59,4 +70,3 @@ function main() {
 }
 
 main();
-

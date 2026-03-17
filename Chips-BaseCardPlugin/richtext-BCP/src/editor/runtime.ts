@@ -62,6 +62,10 @@ export function mountBasecardEditor(
   const root = createBasecardEditorRoot({
     initialConfig,
     onChange,
+    resolveResourceUrl: ctx.resolveResourceUrl,
+    releaseResourceUrl: ctx.releaseResourceUrl,
+    importResource: ctx.importResource,
+    deleteResource: ctx.deleteResource,
   }) as HTMLElement & {
     __chipsDispose?: () => void;
   };

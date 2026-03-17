@@ -31,6 +31,7 @@
 │  ├─ schema/
 │  │  └─ card-config.ts
 │  └─ shared/
+│     ├─ i18n.ts
 │     └─ utils.ts
 ├─ config/
 │  └─ logging.ts
@@ -65,3 +66,9 @@ npm run dev
 ## 配置结构
 
 文本型基础卡片配置类型在 `src/schema/card-config.ts` 中定义，对应 YAML 文件示例位于 `templates/default-card-config.yaml`。
+
+当前模板默认内置：
+
+- React 渲染与编辑运行时
+- `normalizeBasecardConfig()` / `validateBasecardConfig()` 统一归一与校验基线
+- `card_type/theme/title/body/locale` 正式配置模型

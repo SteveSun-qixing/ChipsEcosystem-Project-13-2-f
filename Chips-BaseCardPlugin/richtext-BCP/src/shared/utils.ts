@@ -2,6 +2,8 @@ export function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+export const EMPTY_RICH_TEXT_BODY = "<p></p>";
+
 const ALLOWED_TAGS = new Set([
   "p",
   "br",
@@ -148,6 +150,13 @@ function sanitizeElement(el: HTMLElement): void {
 export function sanitizeRichTextHtml(html: string): string {
   if (!html) return "";
 
+  if (typeof document === "undefined") {
+    return html
+      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+      .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  }
+
   const template = document.createElement("template");
   template.innerHTML = html;
 
@@ -172,3 +181,26 @@ export function sanitizeRichTextHtml(html: string): string {
   return template.innerHTML;
 }
 
+export function normalizeRichTextHtml(html: string): string {
+  const sanitized = sanitizeRichTextHtml(html);
+  if (!sanitized.trim()) {
+    return EMPTY_RICH_TEXT_BODY;
+  }
+
+  return sanitized;
+}
+
+export function hasMeaningfulRichTextContent(html: string): boolean {
+  const sanitized = normalizeRichTextHtml(html);
+  const plainText = sanitized
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+
+  if (plainText.length > 0) {
+    return true;
+  }
+
+  return /<(img|video|audio|iframe|hr|table|ul|ol|blockquote|pre)\b/i.test(sanitized);
+}

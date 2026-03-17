@@ -6,9 +6,9 @@
 
 本插件工程实现了一个面向富文本内容的基础卡片插件（`type: card`），用于演示如何：
 
-- 在查看器中以标题 + 富文本内容的形式渲染卡片；
+- 在查看器中以正式 `RichTextCard` 配置模型渲染富文本正文；
 - 在编辑引擎中提供富文本编辑面板（支持加粗、斜体、下划线等基础样式）；
-- 使用 YAML 配置文件保存富文本内容（HTML 字符串）；
+- 使用 YAML 配置文件保存 `card_type/theme/body/locale` 正式字段；
 - 使用多语言文案与基础错误处理。
 
 ## 项目结构
@@ -31,6 +31,7 @@ richtext-BCP/
 │  ├─ schema/
 │  │  └─ card-config.ts
 │  └─ shared/
+│     ├─ i18n.ts
 │     └─ utils.ts
 ├─ config/
 │  └─ logging.ts
@@ -65,6 +66,18 @@ npm run dev
 ## 配置结构
 
 富文本基础卡片配置类型在 `src/schema/card-config.ts` 中定义，示例配置位于 `templates/default-card-config.yaml`。
+
+当前正式配置模型为：
+
+- `card_type: "RichTextCard"`
+- `theme?: string`
+- `body: string`
+- `locale?: string`
+
+Schema 层统一提供：
+
+- `normalizeBasecardConfig()`：把输入归一为正式 `RichTextCard` 配置；
+- `validateBasecardConfig()`：执行正式校验基线，阻止空正文等无效输出。
 
 ## 主题接入约束
 

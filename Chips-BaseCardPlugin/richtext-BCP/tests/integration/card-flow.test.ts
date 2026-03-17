@@ -3,6 +3,16 @@ import { mountBasecardView } from "../../src/render/runtime";
 import { mountBasecardEditor } from "../../src/editor/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
+function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
+  return {
+    card_type: "RichTextCard",
+    body: "<p>Body</p>",
+    locale: "zh-CN",
+    theme: "",
+    ...overrides,
+  };
+}
+
 describe("basecard integration flow (text basic)", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -14,11 +24,9 @@ describe("basecard integration flow (text basic)", () => {
     const container = document.createElement("div");
     const editorContainer = document.createElement("div");
 
-    const initialConfig: BasecardConfig = {
-      id: "test",
-      body: "Body",
-      locale: "zh-CN",
-    };
+    const initialConfig = createConfig({
+      body: "<p>Body</p>",
+    });
 
     let currentConfig: BasecardConfig = initialConfig;
 
@@ -61,7 +69,7 @@ describe("basecard integration flow (text basic)", () => {
     bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
     vi.advanceTimersByTime(130);
 
-    const bodyEl = container.querySelector(".chips-basecard__body");
+    const bodyEl = container.querySelector(".chips-richtext-card__surface");
     expect(bodyEl?.textContent).toContain("Updated Body");
   });
 
@@ -71,11 +79,7 @@ describe("basecard integration flow (text basic)", () => {
     const container = document.createElement("div");
     const editorContainer = document.createElement("div");
 
-    const initialConfig: BasecardConfig = {
-      id: "test",
-      body: "<p>Body</p>",
-      locale: "zh-CN",
-    };
+    const initialConfig = createConfig();
 
     let currentConfig: BasecardConfig = initialConfig;
 
@@ -131,7 +135,7 @@ describe("basecard integration flow (text basic)", () => {
     bodyEditor.dispatchEvent(pasteEvent);
     vi.advanceTimersByTime(130);
 
-    const bodyEl = container.querySelector(".chips-basecard__body");
+    const bodyEl = container.querySelector(".chips-richtext-card__surface");
     expect(bodyEl?.textContent).toContain("safe");
     expect(bodyEl?.innerHTML).not.toContain("script");
   });
@@ -143,11 +147,7 @@ describe("basecard integration flow (text basic)", () => {
 
     const dispose = mountBasecardEditor({
       container: editorContainer,
-      initialConfig: {
-        id: "test",
-        body: "<p>Body</p>",
-        locale: "zh-CN",
-      },
+      initialConfig: createConfig(),
       onChange: () => undefined,
     });
 

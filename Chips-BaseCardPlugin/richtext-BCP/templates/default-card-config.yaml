@@ -1,3 +1,4 @@
-id: ""
+card_type: "RichTextCard"
+theme: ""
 body: "<p>这是通过富文本基础卡片插件生成的示例内容，可以包含<strong>加粗</strong>等样式。</p>"
 locale: "zh-CN"

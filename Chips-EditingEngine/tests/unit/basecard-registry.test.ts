@@ -8,7 +8,7 @@ import {
 describe('basecard registry', () => {
   it('creates richtext starter content through the descriptor for new base cards', () => {
     expect(createInitialBasecardConfig('RichTextCard', 'base-1')).toMatchObject({
-      id: 'base-1',
+      card_type: 'RichTextCard',
       body: '<p>123456789</p>',
       locale: 'zh-CN',
     });
@@ -19,9 +19,11 @@ describe('basecard registry', () => {
       card_type: 'ImageCard',
       images: [],
       layout_type: 'single',
-      layout: {
-        height_mode: 'auto',
-        fixed_height: 720,
+      layout_options: {
+        grid_mode: '2x2',
+        single_width_percent: 100,
+        single_alignment: 'center',
+        spacing_mode: 'comfortable',
       },
     });
   });

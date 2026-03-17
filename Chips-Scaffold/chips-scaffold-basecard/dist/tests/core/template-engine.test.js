@@ -75,6 +75,11 @@ async function removeDirIfExists(dir) {
         (0, vitest_1.expect)(manifest).toMatch(/type:\s+card/);
         (0, vitest_1.expect)(manifest).toMatch(/capabilities:/);
         await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
+        await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();
+        await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
+        (0, vitest_1.expect)(pkg.dependencies.react).toBe("^18.2.0");
+        (0, vitest_1.expect)(pkg.dependencies["react-dom"]).toBe("^18.2.0");
+        (0, vitest_1.expect)(pkg.devDependencies["@types/react"]).toBe("^18.2.66");
         (0, vitest_1.expect)(pkg.devDependencies.eslint).toBe("^8.57.1");
         (0, vitest_1.expect)(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
         (0, vitest_1.expect)(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");

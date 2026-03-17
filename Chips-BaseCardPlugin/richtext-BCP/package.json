@@ -10,7 +10,13 @@
     "lint": "chipsdev lint",
     "validate": "chipsdev validate"
   },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
     "jsdom": "^28.1.0",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8",

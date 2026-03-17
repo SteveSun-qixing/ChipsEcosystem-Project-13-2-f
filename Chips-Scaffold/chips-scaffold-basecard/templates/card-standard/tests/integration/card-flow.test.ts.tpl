@@ -9,10 +9,11 @@ describe("basecard integration flow", () => {
     const editorContainer = document.createElement("div");
 
     const initialConfig: BasecardConfig = {
-      id: "test",
+      card_type: "{{ CARD_TYPE }}",
       title: "Initial",
       body: "Body",
       locale: "zh-CN",
+      theme: "",
     };
 
     let currentConfig: BasecardConfig = initialConfig;
@@ -43,7 +44,7 @@ describe("basecard integration flow", () => {
     }
 
     titleInput.value = "Updated";
-    titleInput.dispatchEvent(new Event("input"));
+    titleInput.dispatchEvent(new Event("input", { bubbles: true }));
 
     const titleEl = container.querySelector(".chips-basecard__title");
     expect(titleEl?.textContent).toBe("Updated");

@@ -2,6 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createBasecardEditorRoot } from "../../src/editor/panel";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
+function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
+  return {
+    card_type: "RichTextCard",
+    body: "<p>Body</p>",
+    locale: "zh-CN",
+    theme: "",
+    ...overrides,
+  };
+}
+
 describe("createBasecardEditorRoot (text basic)", () => {
   const originalExecCommand = (
     document as Document & {
@@ -25,11 +35,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
   it("emits changes while the user is typing", () => {
     vi.useFakeTimers();
 
-    const initialConfig: BasecardConfig = {
-      id: "test",
+    const initialConfig = createConfig({
       body: "<p></p>",
-      locale: "zh-CN",
-    };
+    });
 
     let lastConfig: BasecardConfig | undefined;
     const root = createBasecardEditorRoot({
@@ -55,11 +63,7 @@ describe("createBasecardEditorRoot (text basic)", () => {
   });
 
   it("keeps the toolbar in a dedicated top region above the scrollable editor surface", () => {
-    const initialConfig: BasecardConfig = {
-      id: "test",
-      body: "<p>Body</p>",
-      locale: "zh-CN",
-    };
+    const initialConfig = createConfig();
 
     const root = createBasecardEditorRoot({
       initialConfig,
@@ -93,9 +97,7 @@ describe("createBasecardEditorRoot (text basic)", () => {
   it("supports collapsing the top toolbar into a compact strip", () => {
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p>Body</p>",
-        locale: "zh-CN",
+        ...createConfig(),
       },
       onChange: () => undefined,
     });
@@ -130,9 +132,7 @@ describe("createBasecardEditorRoot (text basic)", () => {
   it("uses a two-region layout without the old floating toolbar offset styles", () => {
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p>Body</p>",
-        locale: "zh-CN",
+        ...createConfig(),
       },
       onChange: () => undefined,
     });
@@ -148,11 +148,7 @@ describe("createBasecardEditorRoot (text basic)", () => {
   });
 
   it("flushes pending changes when fields lose focus", () => {
-    const initialConfig: BasecardConfig = {
-      id: "test",
-      body: "<p>Body</p>",
-      locale: "zh-CN",
-    };
+    const initialConfig = createConfig();
 
     let lastConfig: BasecardConfig | undefined;
     const root = createBasecardEditorRoot({
@@ -206,9 +202,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
 
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p>Alpha Beta</p>",
-        locale: "zh-CN",
+        ...createConfig({
+          body: "<p>Alpha Beta</p>",
+        }),
       },
       onChange: () => undefined,
     });
@@ -249,9 +245,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
     let lastConfig: BasecardConfig | undefined;
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p>Start</p>",
-        locale: "zh-CN",
+        ...createConfig({
+          body: "<p>Start</p>",
+        }),
       },
       onChange: (next) => {
         lastConfig = next;
@@ -304,9 +300,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
   it("shows the placeholder for an empty body model", () => {
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p></p>",
-        locale: "zh-CN",
+        ...createConfig({
+          body: "<p></p>",
+        }),
       },
       onChange: () => undefined,
     });
@@ -325,9 +321,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
     let lastConfig: BasecardConfig | undefined;
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p></p>",
-        locale: "zh-CN",
+        ...createConfig({
+          body: "<p></p>",
+        }),
       },
       onChange: (next) => {
         lastConfig = next;
@@ -405,9 +401,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
     let lastConfig: BasecardConfig | undefined;
     const root = createBasecardEditorRoot({
       initialConfig: {
-        id: "test",
-        body: "<p>第一段</p>",
-        locale: "zh-CN",
+        ...createConfig({
+          body: "<p>第一段</p>",
+        }),
       },
       onChange: (next) => {
         lastConfig = next;

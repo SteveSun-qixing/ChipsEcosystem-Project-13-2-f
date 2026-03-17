@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import { createBasecardEditorRoot } from "../../src/editor/panel";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
-describe("createBasecardEditorRoot (text basic)", () => {
+describe("createBasecardEditorRoot", () => {
   it("emits changes when fields are updated and valid", () => {
     const initialConfig: BasecardConfig = {
-      id: "test",
+      card_type: "{{ CARD_TYPE }}",
       title: "Title",
       body: "Body",
       locale: "zh-CN",
+      theme: "",
     };
 
     let lastConfig: BasecardConfig | undefined;
@@ -28,9 +29,9 @@ describe("createBasecardEditorRoot (text basic)", () => {
     }
 
     titleInput.value = "New Title";
-    titleInput.dispatchEvent(new Event("input"));
+    titleInput.dispatchEvent(new Event("input", { bubbles: true }));
 
     expect(lastConfig?.title).toBe("New Title");
+    expect(lastConfig?.card_type).toBe("{{ CARD_TYPE }}");
   });
 });
-

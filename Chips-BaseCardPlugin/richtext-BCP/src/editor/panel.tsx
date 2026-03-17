@@ -1,11 +1,27 @@
-import type { BasecardConfig } from "../schema/card-config";
-import { defaultBasecardConfig } from "../schema/card-config";
-import { sanitizeRichTextHtml } from "../shared/utils";
+import type {
+  BasecardResourceImportRequest,
+  BasecardResourceImportResult,
+} from "../index";
+import {
+  normalizeBasecardConfig,
+  validateBasecardConfig,
+  type BasecardConfig,
+} from "../schema/card-config";
+import {
+  normalizeRichTextHtml,
+  sanitizeRichTextHtml,
+} from "../shared/utils";
 import { createTranslator } from "../shared/i18n";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
   onChange: (next: BasecardConfig) => void;
+  resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  importResource?: (
+    input: BasecardResourceImportRequest,
+  ) => Promise<BasecardResourceImportResult>;
+  deleteResource?: (resourcePath: string) => Promise<void>;
 }
 
 type EditorRoot = HTMLElement & {
@@ -15,7 +31,6 @@ type EditorRoot = HTMLElement & {
 type DraftConfig = Pick<BasecardConfig, "body">;
 
 const EMIT_DEBOUNCE_MS = 120;
-const EMPTY_BODY_HTML = "<p></p>";
 const BLOCK_TAGS = new Set([
   "p",
   "h1",
@@ -308,11 +323,7 @@ function hasMeaningfulEditorContent(editor: HTMLElement): boolean {
 }
 
 function normalizeEditorHtml(html: string): string {
-  const sanitized = sanitizeRichTextHtml(html);
-  if (!sanitized.trim()) {
-    return EMPTY_BODY_HTML;
-  }
-  return sanitized;
+  return normalizeRichTextHtml(html);
 }
 
 function createSanitizedDraftBody(editor: HTMLElement): string {
@@ -550,7 +561,8 @@ function createToolbarGroup(...children: HTMLElement[]): HTMLDivElement {
 }
 
 export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElement {
-  const t = createTranslator(props.initialConfig.locale);
+  const initialConfig = normalizeBasecardConfig(props.initialConfig);
+  const t = createTranslator(initialConfig.locale);
 
   const root = document.createElement("div") as EditorRoot;
   root.className = "chips-basecard-editor chips-basecard-editor--richtext";
@@ -596,7 +608,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElemen
   bodyEditor.setAttribute("aria-multiline", "true");
   bodyEditor.setAttribute("aria-label", t("basecard.body"));
   bodyEditor.setAttribute("data-placeholder", t("basecard.placeholder"));
-  bodyEditor.innerHTML = normalizeEditorHtml(props.initialConfig.body ?? "");
+  bodyEditor.innerHTML = normalizeEditorHtml(initialConfig.body);
   surface.appendChild(bodyEditor);
   surfaceFrame.appendChild(surface);
   root.appendChild(surfaceFrame);
@@ -606,7 +618,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElemen
   root.appendChild(errorBox);
 
   let draft: DraftConfig = {
-    body: normalizeEditorHtml(props.initialConfig.body ?? ""),
+    body: normalizeEditorHtml(initialConfig.body),
   };
   let lastCommittedSignature = JSON.stringify(draft);
   let emitTimer: number | null = null;
@@ -672,10 +684,11 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElemen
       return;
     }
 
-    const errors: string[] = [];
-    if (!hasMeaningfulEditorContent(bodyEditor)) {
-      errors.push(t("basecard.validation.bodyRequired"));
-    }
+    const validation = validateBasecardConfig({
+      ...initialConfig,
+      body: createSanitizedDraftBody(bodyEditor),
+    });
+    const errors = Object.values(validation.errors);
 
     if (errors.length === 0) {
       return;
@@ -706,14 +719,18 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElemen
 
     renderValidation(showErrors);
 
-    const next: BasecardConfig = {
-      id: props.initialConfig.id || defaultBasecardConfig.id,
+    const next = normalizeBasecardConfig({
+      ...initialConfig,
       body: safeBodyHtml,
-      locale: props.initialConfig.locale ?? defaultBasecardConfig.locale,
-    };
+    });
+    const validation = validateBasecardConfig(next);
 
     const signature = JSON.stringify(draft);
     if (signature === lastCommittedSignature) {
+      return;
+    }
+
+    if (!validation.valid) {
       return;
     }
 

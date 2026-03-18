@@ -45,6 +45,7 @@ chipsdev run
 - `manifest.yaml` 已声明 `file-handler:.card` 与 `ui.launcher`，可同时接入文件关联与系统快捷方式链路
 - 应用壳层、拖拽区、加载态与错误态统一消费主题变量
 - 主题切换时应用壳层与卡片内容区同步刷新
+- 复合卡片承载区域在横向窗口中按页面基准宽度居中收口，纵向窗口中接近满宽显示
 - 启动时通过 `client.platform.getLaunchContext()` 恢复 `targetPath` 等启动参数
 - 日志统一包含 `scope`、`traceId` 和必要上下文
 

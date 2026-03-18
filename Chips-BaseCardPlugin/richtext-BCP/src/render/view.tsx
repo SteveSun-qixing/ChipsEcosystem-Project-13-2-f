@@ -7,6 +7,7 @@ export const VIEW_STYLE_TEXT = `
   width: 100%;
   color: var(--chips-sys-color-on-surface, #111827);
   font: 14px/1.7 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif);
+  background: transparent;
 }
 
 .chips-richtext-card,
@@ -18,10 +19,10 @@ export const VIEW_STYLE_TEXT = `
   width: 100%;
   min-height: 100%;
   padding: 20px 24px;
-  border-radius: 22px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   overflow-wrap: anywhere;
 }
 

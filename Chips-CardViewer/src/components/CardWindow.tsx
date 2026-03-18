@@ -3,6 +3,7 @@ import { useThemeRuntime } from "@chips/component-library";
 import type { FrameRenderResult } from "chips-sdk";
 import { useChipsClient } from "../hooks/useChipsClient";
 import { createScopedLogger } from "../../config/logging";
+import "./CardWindow.css";
 
 interface CardWindowProps {
   cardFile: string;
@@ -181,53 +182,37 @@ export function CardWindow({
   return (
     <div
       data-chips-app="card-viewer.window"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: "hidden",
-        position: "relative",
-        background: "var(--chips-sys-color-surface, #ffffff)",
-      }}
+      className="card-viewer-window"
     >
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-      {isLoading && (
+      <div
+        data-chips-app="card-viewer.viewport"
+        className="card-viewer-window__viewport"
+      >
         <div
-          data-scope="composite-card-window"
-          data-part="overlay"
-          data-state="loading"
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 12,
-            color: "var(--chips-sys-color-on-surface, #111111)",
-          }}
-        >
-          {loadingLabel}
-        </div>
-      )}
-      {error && (
-        <div
-          data-scope="composite-card-window"
-          data-part="overlay"
-          data-state="error"
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 12,
-            background:
-              "color-mix(in srgb, var(--chips-sys-color-error, #d92d20) 12%, var(--chips-sys-color-surface, #ffffff))",
-            color: "var(--chips-sys-color-error, #d92d20)",
-          }}
-        >
-          <span>{error}</span>
-        </div>
-      )}
+          ref={containerRef}
+          className="card-viewer-window__frame-host"
+        />
+        {isLoading && (
+          <div
+            data-scope="composite-card-window"
+            data-part="overlay"
+            data-state="loading"
+            className="card-viewer-window__overlay"
+          >
+            {loadingLabel}
+          </div>
+        )}
+        {error && (
+          <div
+            data-scope="composite-card-window"
+            data-part="overlay"
+            data-state="error"
+            className="card-viewer-window__overlay card-viewer-window__overlay--error"
+          >
+            <span>{error}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

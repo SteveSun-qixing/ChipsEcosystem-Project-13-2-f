@@ -20,7 +20,7 @@ describe("App（卡片查看器根组件）", () => {
     expect(html).not.toContain("卡片查看器");
   });
 
-  it("卡片窗口组件应当以全窗口承载内容而不是卡片式外壳", () => {
+  it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {
     const html = renderToString(
       <CardWindow
         cardFile="/tmp/demo.card"
@@ -33,6 +33,8 @@ describe("App（卡片查看器根组件）", () => {
     );
 
     expect(html).toContain('data-chips-app="card-viewer.window"');
+    expect(html).toContain('data-chips-app="card-viewer.viewport"');
+    expect(html).toContain("card-viewer-window__viewport");
     expect(html).not.toContain("border-radius:8px");
   });
 });

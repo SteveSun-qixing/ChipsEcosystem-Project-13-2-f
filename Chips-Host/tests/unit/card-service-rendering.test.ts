@@ -441,7 +441,7 @@ describe('CardService rendering', () => {
     }
   }, 30_000);
 
-  it('renders composite cards at full iframe width with only inner padding gutters', async () => {
+  it('renders composite cards as a bare basecard stack without extra chrome', async () => {
     const cardDir = await createCardDirectory();
     const themeContext = await loadThemeRenderContext();
     const workspace = await createTempDir('chips-card-runtime-');
@@ -461,8 +461,37 @@ describe('CardService rendering', () => {
     });
 
     expect(view.body).toContain('html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }');
-    expect(view.body).toContain('.chips-composite { width: 100%; max-width: none; margin: 0; padding: 28px 22px 40px; box-sizing: border-box; }');
-    expect(view.body).not.toContain('width: min(calc(100% - 44px), 980px);');
+    expect(view.body).toContain('.chips-composite { width: 100%; max-width: none; margin: 0; padding: 0; box-sizing: border-box; }');
+    expect(view.body).toContain('.chips-composite__node { min-width: 0; }');
+    expect(view.body).not.toContain('chips-composite__header');
+    expect(view.body).not.toContain('chips-composite__title');
+    expect(view.body).not.toContain('chips-composite__meta');
+    expect(view.body).not.toContain('.chips-composite__node {\n  background:');
+    expect(view.body).not.toContain('body[data-mode="preview"] .chips-composite__node[data-state="ready"]:hover');
+  }, 30_000);
+
+  it('listens for viewport-driven basecard reflow and resends child heights', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      ...themeContext,
+    });
+
+    expect(view.body).toContain('scheduleEmitHeight');
+    expect(view.body).toContain('window.addEventListener(');
+    expect(view.body).toContain('observer.observe(document.documentElement);');
   }, 30_000);
 
   it('emits composite resize messages when the composite layout height changes', async () => {

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -246,6 +248,17 @@ describe('CardWindow', () => {
     const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
     expect(preview?.style.height).toBe('129px');
     expect(preview?.style.minHeight).toBe('129px');
+  });
+
+  it('uses the formal surface token for the composite preview background', () => {
+    const cardWindowCss = readFileSync(
+      resolve(process.cwd(), 'src/components/CardWindow/CardWindow.css'),
+      'utf8',
+    );
+
+    expect(cardWindowCss).toContain('.card-window__preview');
+    expect(cardWindowCss).toContain('background: var(--chips-sys-color-surface, #ffffff);');
+    expect(cardWindowCss).not.toContain('background: linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);');
   });
 
   it('passes the preview mode and interaction policy to the assembler', async () => {

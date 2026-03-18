@@ -63,6 +63,18 @@ function createFrameDocumentHtml(resourceBaseUrl?: string): string {
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
     ...(resourceBaseUrl ? [`<base href="${resourceBaseUrl}" />`] : []),
+    '<style>',
+    'html, body {',
+    '  margin: 0;',
+    '  padding: 0;',
+    '  width: 100%;',
+    '  min-height: 100%;',
+    '  background: transparent !important;',
+    '}',
+    'body {',
+    '  overflow: hidden;',
+    '}',
+    '</style>',
     '</head>',
     '<body></body>',
     '</html>',
@@ -170,6 +182,10 @@ export function BasecardFrameHost({
     if (!frame || !wrapper) {
       return;
     }
+
+    frame.style.background = 'transparent';
+    frame.style.backgroundColor = 'transparent';
+    frame.setAttribute('allowtransparency', 'true');
 
     if (!descriptor) {
       setStatus({

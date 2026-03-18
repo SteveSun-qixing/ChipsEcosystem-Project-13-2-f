@@ -170,6 +170,9 @@ describe('BasecardFrameHost', () => {
     const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
     expect(frame).not.toBeNull();
     expect(frame?.srcdoc).toContain('<base href="file:///workspace/demo.card/" />');
+    expect(frame?.srcdoc).toContain('background: transparent !important;');
+    expect(frame?.getAttribute('allowtransparency')).toBe('true');
+    expect(frame?.style.backgroundColor).toBe('transparent');
 
     const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
     expect(frameWindow).not.toBeNull();

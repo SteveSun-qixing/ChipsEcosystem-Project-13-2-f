@@ -28,12 +28,12 @@ invoke方法用于发起请求到主进程，语法是 `await window.chips.invok
 
 invoke方法返回一个 Promise 对象，resolve 时返回处理结果，reject 时返回错误信息。错误信息包含错误代码和错误描述，便于定位问题。
 
-在需要为嵌入式模块建立独立 Host 身份的场景下，Bridge 还提供：
+在需要为受控嵌入式运行时建立独立 Host 身份的场景下，Bridge 还提供：
 
 - `window.chips.invokeScoped(action, payload, { token })`
 - `window.chips.emitScoped(event, payload, { token })`
 
-其中 `token` 来自 `module.mount(...)` 成功时返回的 `bridgeScopeToken`。Host 会在 IPC 入站时校验该令牌，并还原模块插件自身的 `pluginId/permissions`，避免模块继续复用宿主调用方身份。
+该能力是高级受控接口，不是模块插件正式开发主路径。当前模块插件正式定位为 Host 托管的无界面能力模块，普通模块开发不依赖 `invokeScoped/emitScoped`。
 
 ### on方法
 
@@ -258,30 +258,30 @@ storage子域提供本地存储能力，包括storage.get(key)读取数据，sto
 
 ### module子域
 
-module子域提供 Host 管理的共享功能模块挂载能力，采用 vNext 冻结动作口径：
+module子域提供 Host 管理的无界面模块能力调用能力，采用 capability + method 正式口径：
 
 | 动作 | 说明 | 幂等 |
 |---|---|---|
-| `module.mount({ slot, moduleId, requiredCapabilities? })` | 在指定 slot 挂载已安装且已启用的模块插件，返回 `{ module }` | 否 |
-| `module.unmount({ slot })` | 卸载指定 slot 的模块挂载，返回 `{ ack: true }` | 否 |
-| `module.query({ slot })` | 查询指定 slot 的挂载状态，返回 `{ module: ModuleState \| null }` | 是 |
-| `module.list()` | 列出当前 Host 已挂载的全部模块，返回 `{ modules: ModuleState[] }` | 是 |
+| `module.listProviders({ capability?, pluginId?, status? })` | 查询可用模块 provider 列表 | 是 |
+| `module.resolve({ capability, versionRange? })` | 解析某项 capability 的默认 provider | 是 |
+| `module.invoke({ capability, method, input, pluginId?, timeoutMs? })` | 调用模块方法，返回同步结果或 job | 否 |
+| `module.job.get({ jobId })` | 查询模块异步任务状态 | 是 |
+| `module.job.cancel({ jobId })` | 取消模块异步任务 | 否 |
 
 正式约束：
 
-- `slot` 必须是 namespaced dot 格式的非空字符串，用于表达逻辑挂载位，例如 `viewer.preview`、`editor.richtext`。
-- `moduleId` 必须是已安装、已启用且 `manifest.type === "module"` 的正式插件标识。
-- `requiredCapabilities` 用于表达当前 slot 对模块能力的正式要求；若模块不满足，Host 必须拒绝挂载。
-- `module.mount` 在目标 slot 已被占用时必须返回 `MODULE_CONFLICT`。
-- `module.mount` 在模块不存在、类型错误或未启用时，分别返回 `MODULE_NOT_FOUND`、`MODULE_INVALID`、`MODULE_DISABLED`。
-- `module.mount` 成功时，返回值中的 `module` 还会附带一次性的 `bridgeScopeToken`。
-- `ModuleState` 至少包含 `slot/moduleId/entry?/capabilities/requiredCapabilities?/active/mountedAt`。
-- `module.query/list` 返回的 `ModuleState` 不再包含 `bridgeScopeToken`，避免令牌在治理查询链路中扩散。
+- 模块插件是 Host 托管的无界面能力模块，不通过页面 slot 挂载暴露正式外部协议；
+- 调用方必须按 capability + method 调用模块能力，而不是直接 import 模块源码；
+- Host 必须在 `module.invoke` 时完成 provider 选择、权限校验、schema 校验、runtime 状态检查和调用转发；
+- `module.invoke` 若目标方法是同步模式，返回 `{ mode: "sync", output }`；
+- `module.invoke` 若目标方法是异步模式，返回 `{ mode: "job", jobId }`；
+- Host 必须通过事件总线发布 `module.job.progress/module.job.completed/module.job.failed`；
+- 模块之间相互调用时，也必须继续复用同一组模块服务动作。
 
 迁移说明：
 
-- 旧文档中的 `module.load(moduleId)` / `module.unload(moduleId)` 已归档，不再作为外部正式动作暴露。
-- SDK 对 `module.query/module.list` 的包装会把 Host 返回的 `{ module }` / `{ modules }` 解包为直接结果，便于插件侧使用。
+- 旧文档中的 `module.load/unload` 已归档；
+- 旧文档中的 `module.mount/unmount/query/list` 页面挂载口径不再作为未来正式外部模块协议保留。
 
 ### plugin子域
 

@@ -135,14 +135,17 @@ Host 快捷方式启动参数基线：
 
 ### 3.2 module 运行时治理补充基线
 
-- `module.mount` 正式输入为 `{ slot, moduleId, requiredCapabilities? }`，返回 `{ module }`。
-- `slot` 必须使用 namespaced dot 格式，例如 `viewer.preview`、`editor.richtext`。
-- `requiredCapabilities` 用于表达当前 slot 对模块能力的正式要求；Host 在挂载时必须校验模块 manifest `capabilities` 是否满足要求，不满足时拒绝挂载。
-- `module.mount` 成功后，Host 必须为目标模块插件创建独立运行时会话，并发放一次性的 `bridgeScopeToken`。
-- `invokeScoped/emitScoped` 入站后，Host 必须先把 `bridgeScopeToken` 还原为模块插件自身的 `pluginId/permissions/session`，再进入 kernel 权限校验链。
-- `module.query/list` 返回的 `ModuleState` 不得继续携带 `bridgeScopeToken`，避免令牌在治理查询链路中扩散。
-- Host 内部 `sessionId` 属于运行时治理字段，不进入公开 `ModuleState` 对外接口。
-- `module.unmount` 以及模块插件的 `disable/uninstall` 必须同时回收对应模块会话和 bridge scope token。
+- 模块插件正式定位为 Host 托管的无界面能力模块。
+- Host 对外公开的模块动作使用 capability + method 模型：
+  - `module.listProviders`
+  - `module.resolve`
+  - `module.invoke`
+  - `module.job.get`
+  - `module.job.cancel`
+- 调用方必须通过正式模块服务使用模块能力，不得直接 import 模块源码。
+- Host 必须管理统一模块调用框架，包括 provider 发现、默认 provider 解析、权限校验、schema 校验、调用调度、job 管理和审计日志。
+- 模块之间相互调用时，仍然必须复用同一套模块服务动作，不允许出现模块直连旁路。
+- 旧 `module.mount/unmount/query/list` 页面挂载式模块口径不再作为未来正式外部接口保留。
 
 ### 3.3 card.render（L9 统一渲染入口）补充基线
 

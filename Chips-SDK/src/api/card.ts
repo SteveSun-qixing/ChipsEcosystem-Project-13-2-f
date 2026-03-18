@@ -439,7 +439,7 @@ export function createCardApi(client: CoreClient): CardApi {
 
 function createFrameFromView(body: string, title: string): FrameRenderResult {
   const frame = document.createElement("iframe");
-  frame.setAttribute("sandbox", "allow-scripts allow-forms");
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   frame.setAttribute("loading", "lazy");
   frame.title = title;
   frame.srcdoc = body;

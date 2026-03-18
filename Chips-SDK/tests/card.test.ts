@@ -140,17 +140,22 @@ describe("CardApi", () => {
 
     try {
       (globalThis as any).window = { location: { origin: "https://example.test" }, addEventListener: () => {}, removeEventListener: () => {} };
+      const created: any[] = [];
       (globalThis as any).document = {
-        createElement: (tag: string) => ({
-          tagName: tag.toUpperCase(),
-          attrs: {} as Record<string, string>,
-          setAttribute(name: string, value: string) {
-            this.attrs[name] = value;
-          },
-        }),
+        createElement: (tag: string) => {
+          const el: any = {
+            tagName: tag.toUpperCase(),
+            attrs: {} as Record<string, string>,
+            setAttribute(name: string, value: string) {
+              this.attrs[name] = value;
+            },
+          };
+          created.push(el);
+          return el;
+        },
       };
 
-      await api.compositeWindow.render({ cardFile: "/test.card", mode: "preview" });
+      const result = await api.compositeWindow.render({ cardFile: "/test.card", mode: "preview" });
 
       expect(calls.length).toBe(1);
       expect(calls[0]?.action).toBe("card.render");
@@ -158,6 +163,9 @@ describe("CardApi", () => {
       expect(payload.cardFile).toBe("/test.card");
       expect(payload.options?.target).toBe("card-iframe");
       expect(payload.options?.mode).toBe("preview");
+      expect(result.origin).toBe("https://example.test");
+      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-same-origin allow-forms");
+      expect(created[0]?.srcdoc).toBe("<div>content</div>");
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -328,6 +336,7 @@ describe("CardApi", () => {
         },
       });
       expect(result.origin).toBe("https://example.test");
+      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-same-origin allow-forms");
       expect(created[0]?.title).toBe("RichTextCard Editor");
       expect(created[0]?.srcdoc).toBe("<div>editor</div>");
     } finally {

@@ -36,6 +36,17 @@ export interface CardEditorRenderOptions {
   themeCssText?: string;
 }
 
+export interface CardBasecardRenderOptions {
+  baseCardId: string;
+  cardType: string;
+  config: Record<string, unknown>;
+  title?: string;
+  resourceBaseUrl?: string;
+  theme?: ThemeSnapshot;
+  themeCssText?: string;
+  interactionPolicy?: 'native' | 'delegate';
+}
+
 export interface RenderedCardView {
   title: string;
   body: string;
@@ -58,6 +69,14 @@ export interface RenderedCardCoverView {
   title: string;
   coverUrl: string;
   ratio?: string;
+}
+
+export interface RenderedBasecardView {
+  title: string;
+  body: string;
+  cardType: string;
+  pluginId: string;
+  baseCardId: string;
 }
 
 export interface CardServiceOptions {
@@ -110,7 +129,13 @@ interface PersistentCardRootCacheEntry {
 }
 
 interface BaseCardPluginModule {
-  renderBasecardView?: (ctx: { container: unknown; config: unknown; themeCssText?: string }) => unknown;
+  renderBasecardView?: (ctx: {
+    container: unknown;
+    config: unknown;
+    themeCssText?: string;
+    resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  }) => unknown;
   renderBasecardEditor?: (ctx: {
     container: unknown;
     initialConfig: unknown;
@@ -138,6 +163,28 @@ const escapeHtml = (value: string): string => {
 const escapeInlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
 
 type CompositeInteractionPolicy = 'native' | 'delegate';
+
+const normalizeRelativeResourcePath = (resourcePath: unknown): string | null => {
+  if (typeof resourcePath !== 'string') {
+    return null;
+  }
+
+  const normalized = resourcePath.replace(/\\/g, '/').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\.?\//, '')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    return null;
+  }
+
+  return segments.join('/');
+};
 
 const createChildInteractionBridgeScript = (
   cardType: string,
@@ -761,15 +808,28 @@ const createCompositeThemeCss = (theme: ThemeSnapshot, themeCssText?: string): s
   );
 };
 
-const createChildFrameDocument = (
-  nodeId: string,
-  cardType: string,
-  title: string,
-  contentHtml: string,
-  interactionPolicy: CompositeInteractionPolicy,
-  resourceBaseUrl?: string,
-): string => {
-  const safeNodeId = JSON.stringify(nodeId);
+const createBasecardFrameDocument = (options: {
+  baseCardId: string;
+  cardType: string;
+  title: string;
+  pluginId: string;
+  pluginBundleCode: string;
+  config: Record<string, unknown>;
+  themeCssText: string;
+  interactionPolicy: CompositeInteractionPolicy;
+  resourceBaseUrl?: string;
+}): string => {
+  const {
+    baseCardId,
+    cardType,
+    title,
+    pluginId,
+    pluginBundleCode,
+    config,
+    themeCssText,
+    interactionPolicy,
+    resourceBaseUrl,
+  } = options;
   const contentTitle = title || cardType;
 
   return [
@@ -781,22 +841,86 @@ const createChildFrameDocument = (
     '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data: blob:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
     ...(resourceBaseUrl ? [`  <base href="${escapeHtml(resourceBaseUrl)}" />`] : []),
     `  <title>${escapeHtml(contentTitle)}</title>`,
+    '  <style>',
+    '    html, body {',
+    '      margin: 0;',
+    '      padding: 0;',
+    '      width: 100%;',
+    '      min-height: 100%;',
+    '      background: transparent !important;',
+    '    }',
+    '    body {',
+    '      overflow: hidden;',
+    '    }',
+    '    #chips-basecard-root {',
+    '      width: 100%;',
+    '      min-height: 0;',
+    '      box-sizing: border-box;',
+    '    }',
+    '    [data-chips-basecard-frame-root="true"] {',
+    '      width: 100%;',
+    '      min-height: 0;',
+    '      box-sizing: border-box;',
+    '    }',
+    '  </style>',
     '</head>',
-    `<body data-node-id="${escapeHtml(nodeId)}" data-card-type="${escapeHtml(cardType)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
-    contentHtml,
+    `<body data-node-id="${escapeHtml(baseCardId)}" data-card-type="${escapeHtml(cardType)}" data-plugin-id="${escapeHtml(pluginId)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
+    '  <div id="chips-basecard-root" data-chips-basecard-frame-root="true"></div>',
+    '  <script>',
+    pluginBundleCode,
+    '  </script>',
     '  <script>',
     '    (() => {',
-    `      const nodeId = ${safeNodeId};`,
+    `      const nodeId = ${JSON.stringify(baseCardId)};`,
+    `      const baseCardType = ${JSON.stringify(cardType)};`,
+    `      const pluginId = ${JSON.stringify(pluginId)};`,
+    `      const config = ${escapeInlineJson(config)};`,
+    `      const themeCssText = ${escapeInlineJson(themeCssText)};`,
+    `      const resourceBaseUrl = ${JSON.stringify(resourceBaseUrl ?? '')};`,
+    '      const container = document.getElementById("chips-basecard-root");',
+    '      const emit = (type, payload) => {',
+    "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      const normalizeRelativeResourcePath = (resourcePath) => {',
+    '        if (typeof resourcePath !== "string") {',
+    '          return null;',
+    '        }',
+    '        const normalized = resourcePath.replace(/\\\\/g, "/").trim();',
+    '        if (!normalized) {',
+    '          return null;',
+    '        }',
+    '        const segments = normalized',
+    '          .replace(/^\\.?\\//, "")',
+    '          .split("/")',
+    '          .filter((segment) => segment.length > 0 && segment !== ".");',
+    '        if (segments.length === 0 || segments.some((segment) => segment === "..")) {',
+    '          return null;',
+    '        }',
+    '        return segments.join("/");',
+    '      };',
+    '      const resolveResourceUrl = async (resourcePath) => {',
+    '        const normalizedResourcePath = normalizeRelativeResourcePath(resourcePath);',
+    '        if (!normalizedResourcePath) {',
+    '          throw new Error(`Invalid base card resource path: ${String(resourcePath)}`);',
+    '        }',
+    '        if (resourceBaseUrl) {',
+    '          return new URL(normalizedResourcePath, resourceBaseUrl).toString();',
+    '        }',
+    '        return normalizedResourcePath;',
+    '      };',
+    '      const releaseResourceUrl = () => undefined;',
     '      let pendingHeightTask = 0;',
-      '      const emitHeight = () => {',
+    '      const emitHeight = () => {',
     '        const height = Math.max(',
     '          64,',
     '          document.documentElement?.scrollHeight ?? 0,',
     '          document.body?.scrollHeight ?? 0,',
     '          document.documentElement?.offsetHeight ?? 0,',
-    '          document.body?.offsetHeight ?? 0',
+    '          document.body?.offsetHeight ?? 0,',
+    '          container?.scrollHeight ?? 0,',
+    '          container?.offsetHeight ?? 0',
     '        );',
-    "        window.parent?.postMessage({ type: 'chips.basecard:height', payload: { nodeId, height } }, '*');",
+    "        emit('chips.basecard:height', { nodeId, height });",
     '      };',
     '      const scheduleEmitHeight = () => {',
     '        if (pendingHeightTask) {',
@@ -811,7 +935,7 @@ const createChildFrameDocument = (
     '        });',
     '      };',
     '      const emitSelect = (source) => {',
-    "        window.parent?.postMessage({ type: 'chips.basecard:select', payload: { nodeId, source } }, '*');",
+    "        emit('chips.basecard:select', { nodeId, source });",
     '      };',
     "      window.addEventListener('load', () => {",
     '        emitHeight();',
@@ -822,6 +946,9 @@ const createChildFrameDocument = (
     "      document.addEventListener('pointerdown', () => emitSelect('pointer'), { capture: true });",
     "      if ('ResizeObserver' in window) {",
     '        const observer = new ResizeObserver(() => scheduleEmitHeight());',
+    '        if (container) {',
+    '          observer.observe(container);',
+    '        }',
     '        if (document.body) {',
     '          observer.observe(document.body);',
     '        }',
@@ -830,10 +957,43 @@ const createChildFrameDocument = (
     '        }',
     '      }',
     createChildInteractionBridgeScript(cardType, interactionPolicy),
+    '      try {',
+    '        const plugin = globalThis.ChipsBasecardPlugin || {};',
+    '        if (typeof plugin.renderBasecardView !== "function") {',
+    "          throw new Error('Plugin does not export renderBasecardView.');",
+    '        }',
+    '        plugin.renderBasecardView({',
+    '          container,',
+    '          config,',
+    '          themeCssText,',
+    '          resolveResourceUrl,',
+    '          releaseResourceUrl,',
+    '        });',
+    '        scheduleEmitHeight();',
+    '      } catch (error) {',
+    '        const message = error instanceof Error ? error.message : String(error);',
+    '        if (container) {',
+    '          const pre = document.createElement("pre");',
+    '          pre.textContent = message;',
+    '          pre.style.margin = "0";',
+    '          pre.style.padding = "20px";',
+    '          pre.style.whiteSpace = "pre-wrap";',
+    '          pre.style.color = "var(--chips-sys-color-error, #d92d20)";',
+    '          container.replaceChildren(pre);',
+    '        }',
+    "        emit('chips.basecard:error', {",
+    '          nodeId,',
+    "          code: 'CARD_NODE_RENDER_FAILED',",
+    '          message,',
+    "          stage: 'render-commit',",
+    '          details: { cardType: baseCardType, pluginId },',
+    '        });',
+    '        scheduleEmitHeight();',
+    '      }',
     '    })();',
     '  </script>',
     '</body>',
-    '</html>'
+    '</html>',
   ].join('\n');
 };
 
@@ -1000,7 +1160,7 @@ const createCompositeDocument = (
       if (node.frameHtml) {
         return [
           `<section class="chips-composite__node" data-node-id="${escapeHtml(node.nodeId)}" data-card-type="${escapeHtml(node.cardType)}" data-plugin-id="${escapeHtml(node.pluginId ?? '')}" data-state="ready">`,
-          `  <iframe class="chips-composite__frame" data-node-id="${escapeHtml(node.nodeId)}" title="${escapeHtml(node.title || node.cardType)}" loading="lazy" sandbox="allow-scripts allow-popups" srcdoc="${escapeHtml(node.frameHtml)}"></iframe>`,
+          `  <iframe class="chips-composite__frame" data-node-id="${escapeHtml(node.nodeId)}" title="${escapeHtml(node.title || node.cardType)}" loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups" srcdoc="${escapeHtml(node.frameHtml)}"></iframe>`,
           '</section>'
         ].join('\n');
       }
@@ -1173,6 +1333,23 @@ const createCompositeDocument = (
     '      window.addEventListener("message", (event) => {',
     '        const data = event.data;',
     '        if (!data || typeof data !== "object") {',
+    '          return;',
+    '        }',
+    '        if (data.type === "chips.basecard:error") {',
+    '          const payload = data.payload ?? {};',
+    '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
+    '          if (!nodeId) {',
+    '            return;',
+    '          }',
+    '          const node = nodeById.get(nodeId);',
+    '          if (node) {',
+    '            node.dataset.state = "degraded";',
+    '          }',
+    '          failedNodeIds.add(nodeId);',
+    '          failedNodePayloads.set(nodeId, payload);',
+    "          emit('chips.composite:node-error', payload);",
+    '          emitFatalIfAllNodesFailed();',
+    '          scheduleCompositeResize("node-height");',
     '          return;',
     '        }',
     '        if (data.type === "chips.basecard:height") {',
@@ -1426,7 +1603,7 @@ export class CardService {
         diagnostics,
         consistency: options?.verifyConsistency ? createConsistencySnapshot(semanticHash) : undefined
       };
-    });
+    }, { persistArchive: true });
   }
 
   public async renderCover(cardFile: string): Promise<RenderedCardCoverView> {
@@ -1452,6 +1629,51 @@ export class CardService {
     } finally {
       await resolvedRoot.cleanup?.();
     }
+  }
+
+  public async renderBasecard(options: CardBasecardRenderOptions): Promise<RenderedBasecardView> {
+    const baseCardId = options.baseCardId.trim();
+    if (!baseCardId) {
+      throw createError('INVALID_ARGUMENT', 'baseCardId is required for base card render.');
+    }
+
+    const cardType = options.cardType.trim();
+    if (!cardType) {
+      throw createError('INVALID_ARGUMENT', 'cardType is required for base card render.');
+    }
+
+    const theme = options.theme;
+    if (!theme) {
+      throw createError('THEME_NOT_FOUND', 'Base card render requires a resolved theme snapshot.');
+    }
+
+    const plugin = this.resolveCardPlugin(cardType);
+    if (!plugin) {
+      throw createError('CARD_PLUGIN_NOT_FOUND', `No enabled base card plugin can render ${cardType}.`, {
+        cardType,
+      });
+    }
+
+    const pluginBundleCode = await this.bundlePluginForBrowser(plugin);
+    const title = asString(options.title)?.trim() || cardType;
+
+    return {
+      title,
+      body: createBasecardFrameDocument({
+        baseCardId,
+        cardType,
+        title,
+        pluginId: plugin.manifest.id,
+        pluginBundleCode,
+        config: { ...options.config },
+        themeCssText: createBasecardThemeCss(theme, options.themeCssText),
+        interactionPolicy: options.interactionPolicy ?? 'native',
+        resourceBaseUrl: options.resourceBaseUrl,
+      }),
+      cardType,
+      pluginId: plugin.manifest.id,
+      baseCardId,
+    };
   }
 
   public async renderEditor(options: CardEditorRenderOptions): Promise<RenderedCardEditorView> {
@@ -1543,27 +1765,23 @@ export class CardService {
     try {
       const config = await this.normalizeNodeConfig(plugin, content, ctx.rootDir);
       const title = asString(asRecord(config).title) ?? node.id;
-      const contentHtml = await this.renderBasecardHtml(plugin, config, theme, themeCssText);
-      if (!contentHtml.trim()) {
-        throw createError('CARD_PLUGIN_EMPTY_RENDER', `Plugin ${plugin.manifest.id} returned empty content.`, {
-          nodeId: node.id,
-          cardType
-        });
-      }
+      const view = await this.renderBasecard({
+        baseCardId: node.id,
+        cardType,
+        config,
+        title,
+        resourceBaseUrl: pathToFileURL(`${ctx.rootDir}${path.sep}`).href,
+        theme,
+        themeCssText,
+        interactionPolicy,
+      });
 
       return {
         nodeId: node.id,
         cardType,
-        title,
-        pluginId: plugin.manifest.id,
-        frameHtml: createChildFrameDocument(
-          node.id,
-          cardType,
-          title,
-          contentHtml,
-          interactionPolicy,
-          pathToFileURL(`${ctx.rootDir}${path.sep}`).href,
-        )
+        title: view.title,
+        pluginId: view.pluginId,
+        frameHtml: view.body,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1695,68 +1913,6 @@ export class CardService {
     }
 
     return rawConfig;
-  }
-
-  private async renderBasecardHtml(
-    plugin: RenderablePluginRecord,
-    config: Record<string, unknown>,
-    theme: ThemeSnapshot,
-    themeCssText: string | undefined
-  ): Promise<string> {
-    const module = await this.loadPluginModule(plugin);
-    if (typeof module.renderBasecardView !== 'function') {
-      throw createError('CARD_PLUGIN_INVALID', `Plugin ${plugin.manifest.id} does not export renderBasecardView.`, {
-        pluginId: plugin.manifest.id,
-        entry: plugin.manifest.entry
-      });
-    }
-
-    const jsdom = require('jsdom') as { JSDOM: new (html?: string, options?: { url?: string }) => { window: any } };
-    const dom = new jsdom.JSDOM('<!doctype html><html><body><div id="chips-basecard-root"></div></body></html>', {
-      url: 'file:///'
-    });
-    const win = dom.window;
-    const container = win.document.getElementById('chips-basecard-root');
-    if (!container) {
-      dom.window.close();
-      throw createError('CARD_RENDER_CONTAINER_MISSING', 'Failed to allocate base card render container.');
-    }
-
-    const previousDescriptors = new Map<string, PropertyDescriptor | undefined>();
-    const overrideGlobal = (key: string, value: unknown): void => {
-      previousDescriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
-      Object.defineProperty(globalThis, key, {
-        configurable: true,
-        writable: true,
-        value
-      });
-    };
-
-    overrideGlobal('window', win);
-    overrideGlobal('document', win.document);
-    overrideGlobal('navigator', win.navigator);
-    overrideGlobal('HTMLElement', win.HTMLElement);
-    overrideGlobal('Node', win.Node);
-    overrideGlobal('Element', win.Element);
-    overrideGlobal('NodeFilter', win.NodeFilter);
-
-    try {
-      module.renderBasecardView({
-        container,
-        config,
-        themeCssText: createBasecardThemeCss(theme, themeCssText)
-      });
-      return container.innerHTML;
-    } finally {
-      for (const [key, descriptor] of previousDescriptors.entries()) {
-        if (typeof descriptor === 'undefined') {
-          delete (globalThis as Record<string, unknown>)[key];
-        } else {
-          Object.defineProperty(globalThis, key, descriptor);
-        }
-      }
-      dom.window.close();
-    }
   }
 
   private async loadPluginModule(plugin: RenderablePluginRecord): Promise<BaseCardPluginModule> {
@@ -1934,13 +2090,17 @@ export class CardService {
     }
   }
 
-  private async withExtractedCard<T>(cardFile: string, task: (ctx: CardPackageContext) => Promise<T>): Promise<T> {
+  private async withExtractedCard<T>(
+    cardFile: string,
+    task: (ctx: CardPackageContext) => Promise<T>,
+    options: { persistArchive?: boolean } = {},
+  ): Promise<T> {
     const check = await this.validate(cardFile);
     if (!check.valid) {
       throw createError('CARD_SCHEMA_INVALID', 'Card format validation failed', check.errors);
     }
 
-    const resolvedRoot = await this.resolveCardRoot(cardFile);
+    const resolvedRoot = await this.resolveCardRoot(cardFile, options);
     try {
       const metadataPath = path.join(resolvedRoot.rootDir, '.card/metadata.yaml');
       const structurePath = path.join(resolvedRoot.rootDir, '.card/structure.yaml');
@@ -2008,7 +2168,7 @@ export class CardService {
       this.persistentCardRootCache.delete(cardFile);
     }
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-cover-'));
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-card-runtime-'));
     await this.zip.extract(cardFile, tempDir);
     this.persistentCardRootCache.set(cardFile, {
       rootDir: tempDir,

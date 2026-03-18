@@ -30,10 +30,11 @@
 2. 应用调用 `client.card.compositeWindow.render({ cardFile, mode, interactionPolicy? })`；
 3. Host 解析复合卡片结构；
 4. Host 依据 `capabilities.cardTypes` 分发到基础卡片插件；
-5. Host 渲染基础卡片节点 iframe；
-6. Host 拼接复合卡片文档并返回复合 iframe；
-7. `CompositeCardWindow` 挂载最终 iframe；
-8. 当主题运行时缓存键变化时，`CompositeCardWindow` 重新触发整条渲染链。
+5. Host 先为每个基础卡片生成独立的单卡运行时文档，并在该文档内挂载插件 `renderBasecardView`；
+6. Host 复合层只负责拼接这些单卡 iframe 区域，不再在复合链路中把基础卡片预渲染成静态 HTML；
+7. Host 拼接复合卡片文档并返回复合 iframe；
+8. `CompositeCardWindow` 挂载最终 iframe；
+9. 当主题运行时缓存键变化时，`CompositeCardWindow` 重新触发整条渲染链。
 
 ## 4. 主题同步链路
 
@@ -89,8 +90,10 @@
 
 - 外层只向应用层交付一个复合 iframe；
 - 每个基础卡片节点在复合文档内部保持独立 iframe，以便失败隔离和尺寸回传；
+- 基础卡片的真实渲染职责属于单卡运行时文档；复合文档只消费这些单卡文档并做区域装配，不得在复合链路里把节点提前拍扁成静态 HTML 片段；
 - 复合文档正式只承担基础卡片节点编排职责，不额外输出卡片标题、基础卡片计数、节点外框或其他壳层装饰；
 - 对引用卡片内部资源的基础卡片，Host 必须向单卡文档提供可解析卡片根目录相对路径的资源基准地址；
+- 若输入是打包态 `.card` 文件，Host 为复合渲染解析出的卡片根目录必须在复合 iframe 生命周期内保持稳定可访问，不能在 `card.render(...)` 返回前提前清理；
 - 节点加载完成后向复合窗口回传高度；
 - 节点高度回传必须覆盖容器宽度变化引发的重排，确保图片等按宽度缩放的基础卡片在显示区域收窄或放宽时同步更新高度；
 - 复合文档在初始装载、节点高度变化和整体布局变化后，必须向外层发送 `chips.composite:resize`，回传整张复合卡片当前总高度；

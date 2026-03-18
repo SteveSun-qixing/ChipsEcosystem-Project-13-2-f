@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardService } from '../../packages/card-service/src';
@@ -125,6 +125,65 @@ const createPartiallyBrokenCardDirectory = async (): Promise<string> => {
   );
 
   return sourceDir;
+};
+
+const createImageCardDirectory = async (): Promise<string> => {
+  const sourceDir = await createTempDir('chips-card-source-image-');
+  await fs.mkdir(path.join(sourceDir, '.card'), { recursive: true });
+  await fs.mkdir(path.join(sourceDir, 'content'), { recursive: true });
+  await fs.mkdir(path.join(sourceDir, 'assets'), { recursive: true });
+
+  await fs.writeFile(
+    path.join(sourceDir, '.card/metadata.yaml'),
+    ['card_id: image-card-id', 'name: Image Card', 'theme: chips-official.default-theme'].join('\n'),
+    'utf-8',
+  );
+  await fs.writeFile(
+    path.join(sourceDir, '.card/structure.yaml'),
+    ['structure:', '  - id: "gallery"', '    type: "ImageCard"'].join('\n'),
+    'utf-8',
+  );
+  await fs.writeFile(path.join(sourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+  await fs.writeFile(
+    path.join(sourceDir, 'content/gallery.yaml'),
+    yaml.stringify({
+      card_type: 'ImageCard',
+      layout_type: 'single',
+      layout_options: {
+        grid_mode: '2x2',
+        single_width_percent: 100,
+        single_alignment: 'center',
+        spacing_mode: 'comfortable',
+      },
+      images: [
+        {
+          id: 'image-1',
+          source: 'file',
+          file_path: 'assets/hero.png',
+          title: 'Hero',
+          alt: 'Hero',
+        },
+      ],
+    }),
+    'utf-8',
+  );
+  await fs.writeFile(
+    path.join(sourceDir, 'assets/hero.png'),
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxXcAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  );
+
+  return sourceDir;
+};
+
+const createImageCardArchive = async (): Promise<string> => {
+  const sourceDir = await createImageCardDirectory();
+  const outputDir = await createTempDir('chips-card-image-output-');
+  const cardFile = path.join(outputDir, 'image-demo.card');
+  await zip.compress(sourceDir, cardFile);
+  return cardFile;
 };
 
 const createYamlStringifiedCardDirectory = async (): Promise<string> => {
@@ -370,6 +429,152 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('.chips-basecard-editor__toolbar-shell { flex: 0 0 auto; width: 100%; }');
     expect(view.body).not.toContain('chips-basecard-editor__floating-toolbar');
     expect(view.body).not.toContain('chips-basecard-toolbar-offset');
+  }, 30_000);
+
+  it('renders formal base card documents that keep resource resolution in the single-card runtime', async () => {
+    const cardDir = await createImageCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.renderBasecard({
+      baseCardId: 'gallery',
+      cardType: 'ImageCard',
+      title: 'Hero',
+      config: {
+        card_type: 'ImageCard',
+        layout_type: 'single',
+        layout_options: {
+          grid_mode: '2x2',
+          single_width_percent: 100,
+          single_alignment: 'center',
+          spacing_mode: 'comfortable',
+        },
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'assets/hero.png',
+            title: 'Hero',
+            alt: 'Hero',
+          },
+        ],
+      },
+      resourceBaseUrl: pathToFileURL(`${cardDir}${path.sep}`).href,
+      interactionPolicy: 'native',
+      ...themeContext,
+    });
+
+    expect(view.cardType).toBe('ImageCard');
+    expect(view.pluginId).toBe('chips.basecard.image');
+    expect(view.baseCardId).toBe('gallery');
+    expect(view.body).toContain('<base href="file://');
+    expect(view.body).toContain('renderBasecardView');
+    expect(view.body).toContain('const resolveResourceUrl = async (resourcePath) =>');
+    expect(view.body).toContain('assets/hero.png');
+  }, 30_000);
+
+  it('stitches composite image cards from single-card runtime documents instead of pre-rendered static html', async () => {
+    const cardDir = await createImageCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      ...themeContext,
+    });
+    expect(view.body).toContain('sandbox="allow-scripts allow-same-origin allow-popups"');
+
+    const dom = new JSDOM(view.body);
+    try {
+      const document = dom.window.document;
+      if (!document) {
+        throw new Error('JSDOM document is not available.');
+      }
+      const querySelector = document.querySelector;
+      if (!querySelector) {
+        throw new Error('JSDOM document.querySelector is not available.');
+      }
+      const frame = querySelector.call(
+        document,
+        '.chips-composite__frame[data-node-id="gallery"]',
+      ) as { getAttribute(name: string): string | null } | null;
+      const srcdoc = frame?.getAttribute('srcdoc') ?? '';
+
+      expect(frame).not.toBeNull();
+      expect(srcdoc).toContain('<base href="file://');
+      expect(srcdoc).toContain('renderBasecardView');
+      expect(srcdoc).toContain('const resolveResourceUrl = async (resourcePath) =>');
+      expect(srcdoc).toContain('assets/hero.png');
+    } finally {
+      dom.window.close();
+    }
+  }, 30_000);
+
+  it('keeps archive-backed composite image resources reachable after render returns', async () => {
+    const cardFile = await createImageCardArchive();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardFile, {
+      target: 'card-iframe',
+      ...themeContext,
+    });
+
+    const dom = new JSDOM(view.body);
+    try {
+      const document = dom.window.document;
+      if (!document) {
+        throw new Error('JSDOM document is not available.');
+      }
+
+      const querySelector = document.querySelector;
+      if (!querySelector) {
+        throw new Error('JSDOM document.querySelector is not available.');
+      }
+
+      const frame = querySelector.call(
+        document,
+        '.chips-composite__frame[data-node-id="gallery"]',
+      ) as { getAttribute(name: string): string | null } | null;
+      const srcdoc = frame?.getAttribute('srcdoc') ?? '';
+      const baseHrefMatch = srcdoc.match(/<base href="([^"]+)"/);
+      const baseHref = baseHrefMatch?.[1] ?? '';
+
+      expect(baseHref.startsWith('file://')).toBe(true);
+      const extractedRoot = fileURLToPath(baseHref);
+      tempDirs.push(extractedRoot);
+
+      const imagePath = fileURLToPath(new URL('assets/hero.png', baseHref));
+      const imageStats = await fs.stat(imagePath);
+
+      expect(imageStats.isFile()).toBe(true);
+    } finally {
+      dom.window.close();
+    }
   }, 30_000);
 
   it('preserves dark theme color-scheme from theme package css', async () => {

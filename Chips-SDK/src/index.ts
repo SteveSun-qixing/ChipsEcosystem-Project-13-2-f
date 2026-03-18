@@ -40,7 +40,21 @@ export type {
   ThemePluginInfo,
   LayoutPluginInfo,
 } from "./api/plugin";
-export type { ModuleApi, ModuleMountOptions, ModuleState } from "./api/module";
+export type {
+  ModuleApi,
+  ModuleInvokeRequest,
+  ModuleInvokeResult,
+  ModuleJobInvokeResult,
+  ModuleJobRecord,
+  ModuleJobStatus,
+  ModuleListProvidersOptions,
+  ModuleMethodMode,
+  ModuleProviderMethod,
+  ModuleProviderRecord,
+  ModuleProviderStatus,
+  ModuleResolveOptions,
+  ModuleSyncInvokeResult,
+} from "./api/module";
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type {
   PlatformApi,

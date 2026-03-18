@@ -50,19 +50,22 @@ describe("module template-engine", () => {
 
     const manifest = await fs.readFile(path.join(targetDir, "manifest.yaml"), "utf8");
     const pkg = JSON.parse(await fs.readFile(path.join(targetDir, "package.json"), "utf8"));
-    const runtimeTest = await fs.readFile(
-      path.join(targetDir, "tests", "unit", "module-runtime.test.tsx"),
+    const moduleDefinitionTest = await fs.readFile(
+      path.join(targetDir, "tests", "unit", "module-definition.test.ts"),
       "utf8"
     );
 
     expect(manifest).toMatch(/type:\s+module/);
     expect(manifest).toMatch(/entry:\s+dist\/index\.mjs/);
-    expect(manifest).toMatch(/module\.standard\.project/);
-    expect(pkg.devDependencies.react).toBe("^18.2.0");
+    expect(manifest).toMatch(/module:\n/);
+    expect(manifest).toMatch(/capability:\s+module\.standard\.project/);
+    expect(pkg.devDependencies.react).toBeUndefined();
     expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
-    expect(runtimeTest).toMatch(/mountModule/);
+    expect(moduleDefinitionTest).toMatch(/runAsync/);
+    expect(moduleDefinitionTest).not.toMatch(/mountModule/);
 
     const readme = await fs.readFile(path.join(targetDir, "README.md"), "utf8");
     expect(readme).toMatch(/Standard Module Plugin/);
+    expect(readme).toMatch(/安装到 Host 中的无界面能力模块/);
   });
 });

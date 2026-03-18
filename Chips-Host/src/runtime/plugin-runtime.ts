@@ -28,6 +28,36 @@ export interface LayoutPluginManifestMeta {
   displayName: string;
 }
 
+export type ModuleMethodMode = 'sync' | 'job';
+
+export interface ModuleMethodManifestMeta {
+  name: string;
+  mode: ModuleMethodMode;
+  inputSchema?: string;
+  outputSchema?: string;
+  description?: string;
+}
+
+export interface ModuleProviderManifestMeta {
+  capability: string;
+  version: string;
+  description?: string;
+  methods: ModuleMethodManifestMeta[];
+}
+
+export interface ModuleConsumeManifestMeta {
+  capability: string;
+  versionRange?: string;
+}
+
+export interface ModulePluginManifestMeta {
+  apiVersion: number;
+  runtime: 'worker';
+  activation: 'onDemand' | 'eager';
+  provides: ModuleProviderManifestMeta[];
+  consumes: ModuleConsumeManifestMeta[];
+}
+
 export interface PluginManifest {
   id: string;
   version: string;
@@ -43,6 +73,7 @@ export interface PluginManifest {
   ui?: PluginUiConfig;
   theme?: ThemePluginManifestMeta;
   layout?: LayoutPluginManifestMeta;
+  module?: ModulePluginManifestMeta;
 }
 
 export interface PluginRecord {
@@ -102,6 +133,7 @@ const defaultQuota: RuntimeQuota = {
 
 const pluginTypes: PluginType[] = ['app', 'card', 'layout', 'module', 'theme'];
 const pluginSources = ['official', 'third-party', 'local'] as const;
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 const hasPluginType = (value: string): value is PluginType => pluginTypes.includes(value as PluginType);
 const hasPluginSource = (value: string): value is (typeof pluginSources)[number] =>
@@ -185,6 +217,27 @@ const collectManifestAssetPaths = (record: Record<string, unknown>, manifestPath
     assets.push(preview.trim());
   }
 
+  const moduleConfig = isRecord(record.module) ? record.module : undefined;
+  const provides = moduleConfig && Array.isArray(moduleConfig.provides) ? moduleConfig.provides : [];
+  for (const provider of provides) {
+    if (!isRecord(provider) || !Array.isArray(provider.methods)) {
+      continue;
+    }
+
+    for (const method of provider.methods) {
+      if (!isRecord(method)) {
+        continue;
+      }
+
+      if (typeof method.inputSchema === 'string' && method.inputSchema.trim().length > 0) {
+        assets.push(method.inputSchema.trim());
+      }
+      if (typeof method.outputSchema === 'string' && method.outputSchema.trim().length > 0) {
+        assets.push(method.outputSchema.trim());
+      }
+    }
+  }
+
   return {
     entry,
     assets: [...new Set(assets.map(normalizeAssetPath).filter((item) => item.length > 0))]
@@ -220,7 +273,8 @@ export class PluginRuntime {
       for (const record of parsed) {
         const manifestNeedsRefresh =
           (record.manifest.type === 'theme' && typeof record.manifest.theme === 'undefined') ||
-          (record.manifest.type === 'layout' && typeof record.manifest.layout === 'undefined');
+          (record.manifest.type === 'layout' && typeof record.manifest.layout === 'undefined') ||
+          (record.manifest.type === 'module' && typeof record.manifest.module === 'undefined');
         const manifest = manifestNeedsRefresh ? await this.readManifest(record.manifestPath) : record.manifest;
         const normalized: PluginRecord = {
           ...record,
@@ -540,6 +594,12 @@ export class PluginRuntime {
         });
       }
     }
+    if (manifest.type === 'module' && !manifest.module) {
+      throw createError('PLUGIN_INVALID', 'Module plugin must declare module metadata', {
+        manifestPath,
+        field: 'module'
+      });
+    }
   }
 
   private recordAudit(
@@ -811,6 +871,12 @@ export class PluginRuntime {
 
     const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;
     const layout = record.type === 'layout' ? this.parseLayoutManifestMeta(record) : undefined;
+    const module = record.type === 'module' ? this.parseModuleManifestMeta(record, manifestPath) : undefined;
+
+    const normalizedCapabilities =
+      record.type === 'module'
+        ? [...new Set(module?.provides.map((provider) => provider.capability) ?? [])]
+        : capabilities;
 
     return {
       id: record.id,
@@ -819,14 +885,15 @@ export class PluginRuntime {
       name: record.name,
       description: typeof record.description === 'string' ? record.description : undefined,
       permissions,
-      capabilities,
+      capabilities: normalizedCapabilities,
       entry,
       assets,
       source,
       signature,
       ui,
       theme,
-      layout
+      layout,
+      module
     };
   }
 
@@ -876,6 +943,171 @@ export class PluginRuntime {
     return {
       layoutType: asOptionalString(record.layoutType),
       displayName: asOptionalString(record.displayName) ?? String(record.name)
+    };
+  }
+
+  private parseModuleManifestMeta(record: Record<string, unknown>, manifestPath: string): ModulePluginManifestMeta {
+    const moduleConfig = record.module;
+    if (!isRecord(moduleConfig)) {
+      throw createError('PLUGIN_INVALID', 'Module plugin must declare module object', {
+        manifestPath,
+        field: 'module'
+      });
+    }
+
+    const apiVersionValue = moduleConfig.apiVersion;
+    if (typeof apiVersionValue !== 'number' || !Number.isInteger(apiVersionValue) || apiVersionValue <= 0) {
+      throw createError('PLUGIN_INVALID', 'module.apiVersion must be a positive integer', {
+        manifestPath,
+        field: 'module.apiVersion'
+      });
+    }
+
+    if (moduleConfig.runtime !== 'worker') {
+      throw createError('PLUGIN_INVALID', 'module.runtime must be "worker"', {
+        manifestPath,
+        field: 'module.runtime',
+        runtime: moduleConfig.runtime
+      });
+    }
+
+    const activationRaw = moduleConfig.activation;
+    const activation =
+      typeof activationRaw === 'undefined' || activationRaw === 'onDemand'
+        ? 'onDemand'
+        : activationRaw === 'eager'
+          ? 'eager'
+          : null;
+    if (!activation) {
+      throw createError('PLUGIN_INVALID', 'module.activation must be "onDemand" or "eager"', {
+        manifestPath,
+        field: 'module.activation',
+        activation: activationRaw
+      });
+    }
+
+    if (!Array.isArray(moduleConfig.provides) || moduleConfig.provides.length === 0) {
+      throw createError('PLUGIN_INVALID', 'module.provides must be a non-empty array', {
+        manifestPath,
+        field: 'module.provides'
+      });
+    }
+
+    const provides: ModuleProviderManifestMeta[] = moduleConfig.provides.map((provider, providerIndex) => {
+      if (!isRecord(provider)) {
+        throw createError('PLUGIN_INVALID', 'module.provides entries must be objects', {
+          manifestPath,
+          field: `module.provides[${providerIndex}]`
+        });
+      }
+
+      const capability = asOptionalString(provider.capability);
+      const version = asOptionalString(provider.version);
+      if (!capability) {
+        throw createError('PLUGIN_INVALID', 'module.provides[].capability is required', {
+          manifestPath,
+          field: `module.provides[${providerIndex}].capability`
+        });
+      }
+      if (!version || !SEMVER_PATTERN.test(version)) {
+        throw createError('PLUGIN_INVALID', 'module.provides[].version must be a semantic version', {
+          manifestPath,
+          field: `module.provides[${providerIndex}].version`,
+          version
+        });
+      }
+      if (!Array.isArray(provider.methods) || provider.methods.length === 0) {
+        throw createError('PLUGIN_INVALID', 'module.provides[].methods must be a non-empty array', {
+          manifestPath,
+          field: `module.provides[${providerIndex}].methods`
+        });
+      }
+
+      return {
+        capability,
+        version,
+        description: asOptionalString(provider.description),
+        methods: provider.methods.map((method, methodIndex) => {
+          if (!isRecord(method)) {
+            throw createError('PLUGIN_INVALID', 'module method entries must be objects', {
+              manifestPath,
+              field: `module.provides[${providerIndex}].methods[${methodIndex}]`
+            });
+          }
+
+          const name = asOptionalString(method.name);
+          const mode = method.mode;
+          const inputSchema = asOptionalString(method.inputSchema);
+          const outputSchema = asOptionalString(method.outputSchema);
+          if (!name) {
+            throw createError('PLUGIN_INVALID', 'module method name is required', {
+              manifestPath,
+              field: `module.provides[${providerIndex}].methods[${methodIndex}].name`
+            });
+          }
+          if (mode !== 'sync' && mode !== 'job') {
+            throw createError('PLUGIN_INVALID', 'module method mode must be "sync" or "job"', {
+              manifestPath,
+              field: `module.provides[${providerIndex}].methods[${methodIndex}].mode`,
+              mode
+            });
+          }
+          if (!inputSchema || !outputSchema) {
+            throw createError('PLUGIN_INVALID', 'module methods must declare inputSchema and outputSchema', {
+              manifestPath,
+              field: `module.provides[${providerIndex}].methods[${methodIndex}]`
+            });
+          }
+
+          return {
+            name,
+            mode,
+            inputSchema,
+            outputSchema,
+            description: asOptionalString(method.description)
+          };
+        })
+      };
+    });
+
+    const consumesRaw = moduleConfig.consumes;
+    if (typeof consumesRaw !== 'undefined' && !Array.isArray(consumesRaw)) {
+      throw createError('PLUGIN_INVALID', 'module.consumes must be an array when provided', {
+        manifestPath,
+        field: 'module.consumes'
+      });
+    }
+
+    const consumes: ModuleConsumeManifestMeta[] = Array.isArray(consumesRaw)
+      ? consumesRaw.map((consume, consumeIndex) => {
+          if (!isRecord(consume)) {
+            throw createError('PLUGIN_INVALID', 'module.consumes entries must be objects', {
+              manifestPath,
+              field: `module.consumes[${consumeIndex}]`
+            });
+          }
+
+          const capability = asOptionalString(consume.capability);
+          if (!capability) {
+            throw createError('PLUGIN_INVALID', 'module.consumes[].capability is required', {
+              manifestPath,
+              field: `module.consumes[${consumeIndex}].capability`
+            });
+          }
+
+          return {
+            capability,
+            versionRange: asOptionalString(consume.versionRange)
+          };
+        })
+      : [];
+
+    return {
+      apiVersion: apiVersionValue,
+      runtime: 'worker',
+      activation,
+      provides,
+      consumes
     };
   }
 

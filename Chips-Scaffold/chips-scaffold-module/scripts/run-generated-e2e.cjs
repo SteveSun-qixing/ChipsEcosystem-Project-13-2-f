@@ -25,7 +25,13 @@ async function main() {
     authorEmail: "dev@example.com",
   });
 
-  for (const fileName of ["manifest.yaml", "README.md", "src/index.ts"]) {
+  for (const fileName of [
+    "manifest.yaml",
+    "README.md",
+    "src/index.ts",
+    "contracts/run.input.schema.json",
+    "tests/unit/module-definition.test.ts"
+  ]) {
     if (!fs.existsSync(path.join(targetDir, fileName))) {
       throw new Error(`E2E: 生成工程缺少 ${fileName}`);
     }

@@ -289,21 +289,17 @@
   client.window.open(config: WindowConfig): Promise<WindowState>;
   client.window.focus(id: string): Promise<void>;
 
-  client.module.mount(
-    slot: string,
-    moduleId: string,
-    options?: { requiredCapabilities?: string[] }
-  ): Promise<ModuleState>;
-  client.module.unmount(slot: string): Promise<void>;
-  client.module.query(slot: string): Promise<ModuleState | undefined>;
-  client.module.list(): Promise<ModuleState[]>;
+  client.module.listProviders(options?): Promise<ModuleProviderRecord[]>;
+  client.module.resolve(capability: string, options?): Promise<ModuleProviderRecord>;
+  client.module.invoke(request: ModuleInvokeRequest): Promise<ModuleInvokeResult>;
+  client.module.job.get(jobId: string): Promise<ModuleJobRecord>;
+  client.module.job.cancel(jobId: string): Promise<void>;
   ```
 
 - 所有此类封装必须严格映射到 Host `window.*` 与 `module.*` 服务动作，禁止发明 SDK 自有未文档化语义。
-- SDK 必须在调用前校验 `slot` 为 namespaced dot 格式，并对 `requiredCapabilities` 做非空字符串数组归一化。
-- `ModuleState` 至少应暴露 `slot/moduleId/entry?/capabilities?/requiredCapabilities?/mountedByPluginId?/active/mountedAt` 字段。
-- `module.mount` 成功返回的 `ModuleState` 可附带一次性的 `bridgeScopeToken`，用于模块运行时通过 scoped Bridge 建立独立 Host 身份；`query/list` 不得继续暴露该令牌。
-- SDK 必须对 Host 的 `{ module }` / `{ modules }` 包装响应进行解包，并向调用方直接返回 `ModuleState` 或 `ModuleState[]`。
+- SDK 必须在调用前校验 `capability/method/jobId` 等必填字段，并校验 `invoke.input` 为对象。
+- SDK 必须对 Host 的 `{ providers }` / `{ provider }` / `{ job }` 包装响应进行解包。
+- SDK 不再保留 `module.mount/unmount/query/list` 页面挂载式模块 API。
 
 ---
 

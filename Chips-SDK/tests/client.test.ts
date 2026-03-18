@@ -148,16 +148,54 @@ describe("createClient", () => {
     await expect(client.plugin.getLayoutPlugin("grid-layout")).resolves.toBeUndefined();
   });
 
-  it("unwraps module runtime responses", async () => {
-    const mountedModule = {
-      slot: "preview.main",
-      moduleId: "chips.module.markdown-renderer",
-      entry: "dist/index.mjs",
-      capabilities: ["markdown-renderer"],
-      requiredCapabilities: ["markdown-renderer"],
-      bridgeScopeToken: "scope-token-1",
-      active: true,
-      mountedAt: 1_710_000_000_000,
+  it("unwraps module capability responses", async () => {
+    const provider = {
+      pluginId: "chips.module.markdown-renderer",
+      capability: "text.markdown.render",
+      version: "1.0.0",
+      runtime: "worker",
+      activation: "onDemand",
+      permissions: [],
+      status: "enabled",
+      methods: [
+        {
+          name: "render",
+          mode: "sync",
+          inputSchema: "contracts/render.input.schema.json",
+          outputSchema: "contracts/render.output.schema.json",
+        },
+        {
+          name: "renderAsync",
+          mode: "job",
+          inputSchema: "contracts/renderAsync.input.schema.json",
+          outputSchema: "contracts/renderAsync.output.schema.json",
+        },
+      ],
+    };
+
+    const syncResult = {
+      mode: "sync" as const,
+      output: {
+        html: "<article># Title</article>",
+      },
+    };
+
+    const jobResult = {
+      mode: "job" as const,
+      jobId: "job-1",
+    };
+
+    const jobSnapshot = {
+      jobId: "job-1",
+      pluginId: provider.pluginId,
+      capability: provider.capability,
+      method: "renderAsync",
+      status: "running",
+      createdAt: 1_710_000_000_000,
+      updatedAt: 1_710_000_000_100,
+      progress: {
+        percent: 25,
+      },
     };
 
     const calls: Array<{ action: string; payload: unknown }> = [];
@@ -166,34 +204,52 @@ describe("createClient", () => {
       environment: "node",
       transport: async (action, payload) => {
         calls.push({ action, payload });
-        if (action === "module.mount") {
-          return { module: mountedModule };
+        if (action === "module.listProviders") {
+          return { providers: [provider] };
         }
-        if (action === "module.query") {
-          return { module: mountedModule };
+        if (action === "module.resolve") {
+          return { provider };
         }
-        if (action === "module.list") {
-          return { modules: [mountedModule] };
+        if (action === "module.invoke" && (payload as { method?: string }).method === "render") {
+          return syncResult;
         }
-        if (action === "module.unmount") {
+        if (action === "module.invoke" && (payload as { method?: string }).method === "renderAsync") {
+          return jobResult;
+        }
+        if (action === "module.job.get") {
+          return { job: jobSnapshot };
+        }
+        if (action === "module.job.cancel") {
           return { ack: true };
         }
         throw { code: "SERVICE_NOT_FOUND", message: action };
       },
     });
 
+    await expect(client.module.listProviders({ capability: provider.capability })).resolves.toEqual([provider]);
+    await expect(client.module.resolve(provider.capability, { versionRange: "^1.0.0" })).resolves.toEqual(provider);
     await expect(
-      client.module.mount("preview.main", mountedModule.moduleId, {
-        requiredCapabilities: ["markdown-renderer"],
+      client.module.invoke({
+        capability: provider.capability,
+        method: "render",
+        input: {
+          markdown: "# Title",
+        },
       }),
-    ).resolves.toEqual(mountedModule);
-    await expect(client.module.query("preview.main")).resolves.toEqual(mountedModule);
-    await expect(client.module.list()).resolves.toEqual([mountedModule]);
-    await expect(client.module.unmount("preview.main")).resolves.toBeUndefined();
+    ).resolves.toEqual(syncResult);
+    await expect(
+      client.module.invoke({
+        capability: provider.capability,
+        method: "renderAsync",
+        input: {
+          markdown: "# Async Title",
+        },
+      }),
+    ).resolves.toEqual(jobResult);
+    await expect(client.module.job.get("job-1")).resolves.toEqual(jobSnapshot);
+    await expect(client.module.job.cancel("job-1")).resolves.toBeUndefined();
     expect(calls[0]?.payload).toEqual({
-      slot: "preview.main",
-      moduleId: mountedModule.moduleId,
-      requiredCapabilities: ["markdown-renderer"],
+      capability: "text.markdown.render",
     });
   });
 

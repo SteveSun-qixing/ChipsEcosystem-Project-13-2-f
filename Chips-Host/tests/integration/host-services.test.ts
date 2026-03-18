@@ -347,106 +347,249 @@ describe('Host services integration', () => {
     expect(completed.session.status).toBe('running');
   });
 
-  it('mounts enabled module plugins through the formal module service', async () => {
-    const moduleProjectDir = path.join(workspace, 'markdown-module');
-    await fs.mkdir(path.join(moduleProjectDir, 'dist'), { recursive: true });
-    await fs.writeFile(
-      path.join(moduleProjectDir, 'manifest.yaml'),
-      [
-        'id: chips.module.markdown-renderer',
-        'version: "1.0.0"',
-        'type: module',
-        'name: Markdown Renderer Module',
-        'description: Shared markdown rendering module',
-        'permissions:',
-        '  - theme.read',
-        '  - i18n.read',
-        'capabilities:',
-        '  - markdown-renderer',
-        'entry: dist/index.mjs'
-      ].join('\n'),
-      'utf-8'
-    );
-    await fs.writeFile(
-      path.join(moduleProjectDir, 'dist/index.mjs'),
-      'export const createMarkdownRenderer = () => "markdown-renderer";\n',
-      'utf-8'
-    );
+  it('loads, resolves and invokes module plugins through the formal module service', async () => {
+    try {
+      const moduleProjectDir = path.join(workspace, 'markdown-module');
+      await fs.mkdir(path.join(moduleProjectDir, 'dist'), { recursive: true });
+      await fs.mkdir(path.join(moduleProjectDir, 'contracts'), { recursive: true });
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'manifest.yaml'),
+        [
+          'id: chips.module.markdown-renderer',
+          'version: "1.0.0"',
+          'type: module',
+          'name: Markdown Renderer Module',
+          'description: Shared markdown rendering module',
+          'permissions: []',
+          'entry: dist/index.cjs',
+          'module:',
+          '  apiVersion: 1',
+          '  runtime: worker',
+          '  activation: onDemand',
+          '  provides:',
+          '    - capability: text.markdown.render',
+          '      version: "1.0.0"',
+          '      methods:',
+          '        - name: render',
+          '          mode: sync',
+          '          inputSchema: contracts/render.input.schema.json',
+          '          outputSchema: contracts/render.output.schema.json',
+          '        - name: renderAsync',
+          '          mode: job',
+          '          inputSchema: contracts/renderAsync.input.schema.json',
+          '          outputSchema: contracts/renderAsync.output.schema.json',
+          '  consumes: []'
+        ].join('\n'),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'dist/index.cjs'),
+        [
+          'const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));',
+          '',
+          'module.exports = {',
+          '  async activate(ctx) {',
+          "    ctx.logger.info('module activated', { capability: 'text.markdown.render' });",
+          '  },',
+          '  providers: [',
+          '    {',
+          "      capability: 'text.markdown.render',",
+          '      methods: {',
+          '        async render(_ctx, input) {',
+          '          return {',
+          "            html: `<article>${input.markdown}</article>`,",
+          "            provider: 'chips.module.markdown-renderer'",
+          '          };',
+          '        },',
+          '        async renderAsync(ctx, input) {',
+          "          await ctx.job?.reportProgress({ stage: 'started', percent: 10 });",
+          '          await sleep(typeof input.delayMs === "number" ? input.delayMs : 30);',
+          "          await ctx.job?.reportProgress({ stage: 'completed', percent: 100 });",
+          '          return {',
+          '            ok: true,',
+          "            html: `<article>${input.markdown}</article>`",
+          '          };',
+          '        }',
+          '      }',
+          '    }',
+          '  ]',
+          '};'
+        ].join('\n'),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/render.input.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['markdown'],
+            properties: {
+              markdown: { type: 'string' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/render.output.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['html', 'provider'],
+            properties: {
+              html: { type: 'string' },
+              provider: { type: 'string' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/renderAsync.input.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['markdown'],
+            properties: {
+              markdown: { type: 'string' },
+              delayMs: { type: 'number' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/renderAsync.output.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['ok', 'html'],
+            properties: {
+              ok: { type: 'boolean' },
+              html: { type: 'string' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
 
-    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', {
-      manifestPath: path.join(moduleProjectDir, 'manifest.yaml')
-    });
-    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+      const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+        manifestPath: path.join(moduleProjectDir, 'manifest.yaml')
+      });
+      await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
 
-    const mounted = await runtime.invoke<{
-      module: {
-        slot: string;
-        moduleId: string;
-        entry?: string;
-        capabilities: string[];
-        requiredCapabilities: string[];
-        bridgeScopeToken?: string;
-        sessionId?: string;
-        active: boolean;
-      };
-    }>('module.mount', {
-      slot: 'preview.main',
-      moduleId: installed.pluginId,
-      requiredCapabilities: ['markdown-renderer']
-    });
+      const listed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          capability: string;
+          version: string;
+          status: string;
+          methods: Array<{ name: string; mode: string }>;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render'
+      });
+      expect(listed.providers).toContainEqual(
+        expect.objectContaining({
+          pluginId: 'chips.module.markdown-renderer',
+          capability: 'text.markdown.render',
+          version: '1.0.0',
+          status: 'enabled',
+          methods: expect.arrayContaining([
+            expect.objectContaining({ name: 'render', mode: 'sync' }),
+            expect.objectContaining({ name: 'renderAsync', mode: 'job' })
+          ])
+        })
+      );
 
-    expect(mounted.module).toMatchObject({
-      slot: 'preview.main',
-      moduleId: 'chips.module.markdown-renderer',
-      entry: 'dist/index.mjs',
-      requiredCapabilities: ['markdown-renderer'],
-      active: true
-    });
-    expect(mounted.module.capabilities).toContain('markdown-renderer');
-    expect(typeof mounted.module.bridgeScopeToken).toBe('string');
-    expect(mounted.module.sessionId).toBeUndefined();
+      const resolved = await runtime.invoke<{
+        provider: {
+          pluginId: string;
+          capability: string;
+          version: string;
+        };
+      }>('module.resolve', {
+        capability: 'text.markdown.render',
+        versionRange: '^1.0.0'
+      });
+      expect(resolved.provider).toMatchObject({
+        pluginId: 'chips.module.markdown-renderer',
+        capability: 'text.markdown.render',
+        version: '1.0.0'
+      });
 
-    const queried = await runtime.invoke<{
-      module: {
-        slot: string;
-        moduleId: string;
-        requiredCapabilities: string[];
-        active: boolean;
-        bridgeScopeToken?: string;
-        sessionId?: string;
-      } | null;
-    }>('module.query', { slot: 'preview.main' });
-    expect(queried.module).toMatchObject({
-      slot: 'preview.main',
-      moduleId: 'chips.module.markdown-renderer',
-      requiredCapabilities: ['markdown-renderer'],
-      active: true
-    });
-    expect(queried.module?.bridgeScopeToken).toBeUndefined();
-    expect(queried.module?.sessionId).toBeUndefined();
+      const syncResult = await runtime.invoke<{
+        mode: 'sync';
+        output: { html: string; provider: string };
+      }>('module.invoke', {
+        capability: 'text.markdown.render',
+        method: 'render',
+        input: {
+          markdown: '# Hello Markdown'
+        }
+      });
+      expect(syncResult.mode).toBe('sync');
+      expect(syncResult.output).toMatchObject({
+        html: '<article># Hello Markdown</article>',
+        provider: 'chips.module.markdown-renderer'
+      });
 
-    const listed = await runtime.invoke<{
-      modules: Array<{
-        slot: string;
-        moduleId: string;
-        requiredCapabilities: string[];
-        bridgeScopeToken?: string;
-        sessionId?: string;
-      }>;
-    }>('module.list', {});
-    expect(listed.modules).toContainEqual(
-      expect.objectContaining({
-        slot: 'preview.main',
-        moduleId: 'chips.module.markdown-renderer',
-        requiredCapabilities: ['markdown-renderer']
-      })
-    );
-    expect(listed.modules[0]?.bridgeScopeToken).toBeUndefined();
-    expect(listed.modules[0]?.sessionId).toBeUndefined();
+      const started = await runtime.invoke<{ mode: 'job'; jobId: string }>('module.invoke', {
+        capability: 'text.markdown.render',
+        method: 'renderAsync',
+        input: {
+          markdown: '## Async Markdown',
+          delayMs: 10
+        }
+      });
+      expect(started.mode).toBe('job');
+      expect(typeof started.jobId).toBe('string');
 
-    await runtime.invoke('module.unmount', { slot: 'preview.main' });
-    const afterUnmount = await runtime.invoke<{ module: null }>('module.query', { slot: 'preview.main' });
-    expect(afterUnmount.module).toBeNull();
+      let completedJob:
+        | {
+            job: {
+              status: string;
+              output?: { ok: boolean; html: string };
+              progress?: { stage?: string; percent?: number };
+            };
+          }
+        | undefined;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const snapshot = await runtime.invoke<{
+          job: {
+            status: string;
+            output?: { ok: boolean; html: string };
+            progress?: { stage?: string; percent?: number };
+          };
+        }>('module.job.get', { jobId: started.jobId });
+        if (snapshot.job.status === 'completed') {
+          completedJob = snapshot;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      expect(completedJob?.job.status).toBe('completed');
+      expect(completedJob?.job.output).toMatchObject({
+        ok: true,
+        html: '<article>## Async Markdown</article>'
+      });
+      expect(completedJob?.job.progress?.percent).toBe(100);
+    } catch (error) {
+      throw error;
+    }
   });
 
   it('installs plugin from .cpk package', async () => {

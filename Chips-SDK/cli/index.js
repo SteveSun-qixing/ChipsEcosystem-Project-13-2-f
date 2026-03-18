@@ -778,6 +778,21 @@ const collectManifestAssetPaths = (manifest) => {
     }
   }
 
+  if (isPlainObject(manifest?.module) && Array.isArray(manifest.module.provides)) {
+    for (const provider of manifest.module.provides) {
+      if (!isPlainObject(provider) || !Array.isArray(provider.methods)) {
+        continue;
+      }
+      for (const method of provider.methods) {
+        if (!isPlainObject(method)) {
+          continue;
+        }
+        appendAsset(method.inputSchema);
+        appendAsset(method.outputSchema);
+      }
+    }
+  }
+
   return [...new Set(assets.map(normalizeManifestAssetPath).filter((item) => item.length > 0))];
 };
 
@@ -938,6 +953,73 @@ const validateManifestShape = (manifest) => {
   }
   if (!manifest.type || typeof manifest.type !== 'string') {
     errors.push('manifest.type 必须存在且为字符串。');
+  }
+
+  if (!Array.isArray(manifest.permissions)) {
+    errors.push('manifest.permissions 必须存在且为数组。');
+  }
+
+  if (manifest.type === 'module') {
+    if (!isPlainObject(manifest.module)) {
+      errors.push('module 插件必须声明 manifest.module 对象。');
+      return errors;
+    }
+
+    if (!Number.isInteger(manifest.module.apiVersion) || manifest.module.apiVersion <= 0) {
+      errors.push('manifest.module.apiVersion 必须是正整数。');
+    }
+    if (manifest.module.runtime !== 'worker') {
+      errors.push('manifest.module.runtime 目前只能是 worker。');
+    }
+    if (manifest.module.activation !== 'onDemand' && manifest.module.activation !== 'eager') {
+      errors.push('manifest.module.activation 必须是 onDemand 或 eager。');
+    }
+    if (!Array.isArray(manifest.module.provides) || manifest.module.provides.length === 0) {
+      errors.push('manifest.module.provides 必须是非空数组。');
+    } else {
+      for (const [providerIndex, provider] of manifest.module.provides.entries()) {
+        if (!isPlainObject(provider)) {
+          errors.push(`manifest.module.provides[${providerIndex}] 必须是对象。`);
+          continue;
+        }
+        if (typeof provider.capability !== 'string' || provider.capability.trim().length === 0) {
+          errors.push(`manifest.module.provides[${providerIndex}].capability 必须是非空字符串。`);
+        }
+        if (typeof provider.version !== 'string' || provider.version.trim().length === 0) {
+          errors.push(`manifest.module.provides[${providerIndex}].version 必须是非空字符串。`);
+        }
+        if (!Array.isArray(provider.methods) || provider.methods.length === 0) {
+          errors.push(`manifest.module.provides[${providerIndex}].methods 必须是非空数组。`);
+          continue;
+        }
+        for (const [methodIndex, method] of provider.methods.entries()) {
+          if (!isPlainObject(method)) {
+            errors.push(`manifest.module.provides[${providerIndex}].methods[${methodIndex}] 必须是对象。`);
+            continue;
+          }
+          if (typeof method.name !== 'string' || method.name.trim().length === 0) {
+            errors.push(`manifest.module.provides[${providerIndex}].methods[${methodIndex}].name 必须是非空字符串。`);
+          }
+          if (method.mode !== 'sync' && method.mode !== 'job') {
+            errors.push(`manifest.module.provides[${providerIndex}].methods[${methodIndex}].mode 必须是 sync 或 job。`);
+          }
+          if (typeof method.inputSchema !== 'string' || method.inputSchema.trim().length === 0) {
+            errors.push(
+              `manifest.module.provides[${providerIndex}].methods[${methodIndex}].inputSchema 必须是非空字符串。`
+            );
+          }
+          if (typeof method.outputSchema !== 'string' || method.outputSchema.trim().length === 0) {
+            errors.push(
+              `manifest.module.provides[${providerIndex}].methods[${methodIndex}].outputSchema 必须是非空字符串。`
+            );
+          }
+        }
+      }
+    }
+
+    if (typeof manifest.module.consumes !== 'undefined' && !Array.isArray(manifest.module.consumes)) {
+      errors.push('manifest.module.consumes 提供时必须是数组。');
+    }
   }
   return errors;
 };

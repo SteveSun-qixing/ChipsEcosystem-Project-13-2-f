@@ -29,12 +29,16 @@ export async function statPath(targetPath: string): Promise<Stats | null> {
 
 export async function listTemplateFiles(rootDir: string): Promise<TemplateFileInfo[]> {
   const results: TemplateFileInfo[] = [];
+  const SKIP_DIR_NAMES = new Set(["归档"]);
 
   async function walk(currentDir: string): Promise<void> {
     const entries = await fs.readdir(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = path.join(currentDir, entry.name);
       if (entry.isDirectory()) {
+        if (SKIP_DIR_NAMES.has(entry.name)) {
+          continue;
+        }
         await walk(absolutePath);
         continue;
       }

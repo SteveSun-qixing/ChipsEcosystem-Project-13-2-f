@@ -1,29 +1,62 @@
-import { createClient, type Client, type ClientConfig } from "chips-sdk";
-import { mountModule } from "./module/runtime";
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
 
-export function createModuleClient(
-  config?: ClientConfig & { bridgeScopeToken?: string }
-): Client {
-  if (config?.bridgeScopeToken) {
-    const { bridgeScopeToken, ...rest } = config;
-    return createClient({
-      ...rest,
-      bridgeScope: {
-        token: bridgeScopeToken,
-      },
-    });
-  }
-  return createClient(config);
+export interface RunInput {
+  sourceText: string;
+  uppercase?: boolean;
+  prefix?: string;
 }
 
-export { mountModule };
+export interface RunAsyncInput extends RunInput {
+  delayMs?: number;
+}
 
-export type {
-  ModuleFeatureItem,
-  ModuleFeatureState,
-  ModuleFeatureTone,
-  ModuleHandle,
-  ModuleMountContext,
-  ModuleRuntimeBootState,
-  ModuleSnapshot,
-} from "./module/types";
+export interface RunOutput {
+  text: string;
+  length: number;
+  handledBy: string;
+}
+
+const toOutput = (sourceText: string, uppercase?: boolean, prefix?: string): RunOutput => {
+  const normalized = uppercase ? sourceText.toUpperCase() : sourceText;
+  const text = `${prefix ?? ""}${normalized}`;
+  return {
+    text,
+    length: text.length,
+    handledBy: "{{ PLUGIN_ID }}",
+  };
+};
+
+const moduleDefinition = {
+  providers: [
+    {
+      capability: "{{ MODULE_CAPABILITY }}",
+      methods: {
+        async run(_ctx: unknown, input: RunInput): Promise<RunOutput> {
+          return toOutput(input.sourceText, input.uppercase, input.prefix);
+        },
+        async runAsync(
+          ctx: { job?: { reportProgress(payload: Record<string, unknown>): Promise<void> } },
+          input: RunAsyncInput
+        ): Promise<RunOutput> {
+          await ctx.job?.reportProgress({
+            stage: "started",
+            percent: 10,
+          });
+
+          await sleep(typeof input.delayMs === "number" ? input.delayMs : 25);
+
+          await ctx.job?.reportProgress({
+            stage: "completed",
+            percent: 100,
+          });
+
+          return toOutput(input.sourceText, input.uppercase, input.prefix);
+        },
+      },
+    },
+  ],
+};
+
+export default moduleDefinition;

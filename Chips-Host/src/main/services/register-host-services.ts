@@ -12,11 +12,25 @@ import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
 import { resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
+import type { PluginRecord } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
+import {
+  buildModuleProviderRecords,
+  findManifestMethod,
+  findManifestProvider,
+  loadModuleDefinition,
+  matchesVersionRange,
+  resolveInstalledModuleEntry,
+  validateContractSchema,
+  type ModuleJobRecord,
+  type ModuleLogger,
+  type ModulePluginDefinition,
+  type ModuleProviderRecord
+} from './module-runtime';
 
 interface HostServiceContext {
   kernel: Kernel;
@@ -83,29 +97,41 @@ interface FileListEntryView {
   isDirectory: boolean;
 }
 
-interface ModuleRecord {
-  slot: string;
-  moduleId: string;
-  entry?: string | Record<string, string>;
-  capabilities: string[];
-  requiredCapabilities: string[];
-  mountedByPluginId?: string;
+interface ModuleRuntimeRecord {
+  pluginId: string;
   sessionId: string;
   bridgeScopeToken?: string;
-  active: boolean;
-  mountedAt: number;
+  definition: ModulePluginDefinition;
+  status: 'running' | 'error';
+  activatedAt: number;
 }
 
-interface ModuleRecordView {
-  slot: string;
-  moduleId: string;
-  entry?: string | Record<string, string>;
-  capabilities: string[];
-  requiredCapabilities: string[];
-  mountedByPluginId?: string;
+interface ModuleProviderView extends ModuleProviderRecord {}
+
+interface ModuleRuntimeView {
+  pluginId: string;
+  sessionId: string;
   bridgeScopeToken?: string;
-  active: boolean;
-  mountedAt: number;
+  status: 'running' | 'error';
+  activatedAt: number;
+}
+
+interface ModuleJobView {
+  jobId: string;
+  pluginId: string;
+  capability: string;
+  method: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  createdAt: number;
+  updatedAt: number;
+  progress?: Record<string, unknown>;
+  output?: unknown;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+    retryable?: boolean;
+  };
 }
 
 interface ThemeRecord {
@@ -131,7 +157,10 @@ interface RuntimeState {
   configSystem: Map<string, unknown>;
   configWorkspace: Map<string, unknown>;
   configUser: Map<string, unknown>;
-  modules: Map<string, ModuleRecord>;
+  moduleProviders: Map<string, ModuleProviderRecord[]>;
+  moduleRuntimes: Map<string, ModuleRuntimeRecord>;
+  moduleJobs: Map<string, ModuleJobRecord>;
+  moduleJobControllers: Map<string, AbortController>;
   credentials: Map<string, { iv: string; tag: string; value: string }>;
   clipboard: unknown;
   themes: ThemeRecord[];
@@ -142,88 +171,67 @@ interface RuntimeState {
   activatedServices: Set<string>;
 }
 
-const MODULE_SLOT_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/;
-
-const normalizeModuleSlot = (value: unknown, action: string): string => {
-  const slot = typeof value === 'string' ? value.trim() : '';
-  if (slot.length === 0) {
-    throw createError('MODULE_INVALID', `${action} requires a non-empty slot`);
-  }
-  if (!MODULE_SLOT_PATTERN.test(slot)) {
-    throw createError('MODULE_INVALID', `${action} requires slot to use namespaced dot format`, {
-      slot
-    });
-  }
-  return slot;
-};
-
-const normalizeRequiredCapabilities = (value: unknown): string[] => {
-  if (typeof value === 'undefined') {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    throw createError('MODULE_INVALID', 'module.mount requires requiredCapabilities to be an array', {
-      requiredCapabilities: value
-    });
-  }
-
-  const capabilities = value.map((item) => (typeof item === 'string' ? item.trim() : ''));
-  if (capabilities.some((item) => item.length === 0)) {
-    throw createError('MODULE_INVALID', 'module.mount requires requiredCapabilities to contain non-empty strings only', {
-      requiredCapabilities: value
-    });
-  }
-  return capabilities;
-};
-
-const toModuleRecordView = (
-  record: ModuleRecord,
-  options?: { includeBridgeScopeToken?: boolean }
-): ModuleRecordView => {
-  const view: ModuleRecordView = {
-    slot: record.slot,
-    moduleId: record.moduleId,
-    entry: record.entry ? deepClone(record.entry) : undefined,
-    capabilities: [...record.capabilities],
-    requiredCapabilities: [...record.requiredCapabilities],
-    mountedByPluginId: record.mountedByPluginId,
-    active: record.active,
-    mountedAt: record.mountedAt
+const toModuleRuntimeView = (record: ModuleRuntimeRecord): ModuleRuntimeView => {
+  return {
+    pluginId: record.pluginId,
+    sessionId: record.sessionId,
+    bridgeScopeToken: record.bridgeScopeToken,
+    status: record.status,
+    activatedAt: record.activatedAt
   };
-
-  if (options?.includeBridgeScopeToken && record.bridgeScopeToken) {
-    view.bridgeScopeToken = record.bridgeScopeToken;
-  }
-
-  return view;
 };
 
-const cleanupMountedModulesForPlugin = async (
+const toModuleJobView = (record: ModuleJobRecord): ModuleJobView => {
+  return {
+    jobId: record.jobId,
+    pluginId: record.pluginId,
+    capability: record.capability,
+    method: record.method,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    progress: record.progress ? deepClone(record.progress) : undefined,
+    output: typeof record.output === 'undefined' ? undefined : deepClone(record.output),
+    error: record.error ? { ...record.error } : undefined
+  };
+};
+
+const unregisterModulePluginState = async (
   ctx: HostServiceContext,
   state: RuntimeState,
   pluginId: string,
   reason: 'plugin-disabled' | 'plugin-uninstalled'
 ): Promise<void> => {
-  const slotsToUnmount: string[] = [];
-  for (const [slot, moduleRecord] of state.modules.entries()) {
-    if (moduleRecord.moduleId === pluginId) {
-      slotsToUnmount.push(slot);
+  state.moduleProviders.delete(pluginId);
+
+  for (const [jobId, job] of state.moduleJobs.entries()) {
+    if (job.pluginId !== pluginId) {
+      continue;
+    }
+    if (job.status === 'running') {
+      state.moduleJobControllers.get(jobId)?.abort();
+      state.moduleJobControllers.delete(jobId);
+      job.status = 'cancelled';
+      job.updatedAt = Date.now();
+      job.error = {
+        code: 'MODULE_JOB_CANCELLED',
+        message: 'Module job cancelled because plugin stopped'
+      };
+      await ctx.kernel.events.emit('module.job.failed', 'module-service', {
+        jobId,
+        pluginId,
+        capability: job.capability,
+        method: job.method,
+        status: job.status,
+        error: job.error
+      });
     }
   }
 
-  for (const slot of slotsToUnmount) {
-    const moduleRecord = state.modules.get(slot);
-    if (!moduleRecord) {
-      continue;
-    }
-    ctx.runtime.stopSession(moduleRecord.sessionId);
-    state.modules.delete(slot);
-    await ctx.kernel.events.emit('module.unmounted', 'module-service', {
-      slot,
-      moduleId: moduleRecord.moduleId,
-      reason
-    });
-  }
+  await ctx.kernel.events.emit('module.runtime.stopped', 'module-service', {
+    pluginId,
+    reason
+  });
 };
 
 type ConfigScope = 'user' | 'workspace' | 'system';
@@ -302,7 +310,10 @@ const buildState = (): RuntimeState => ({
   configSystem: new Map<string, unknown>(),
   configWorkspace: new Map<string, unknown>(),
   configUser: new Map<string, unknown>(),
-  modules: new Map<string, ModuleRecord>(),
+  moduleProviders: new Map<string, ModuleProviderRecord[]>(),
+  moduleRuntimes: new Map<string, ModuleRuntimeRecord>(),
+  moduleJobs: new Map<string, ModuleJobRecord>(),
+  moduleJobControllers: new Map<string, AbortController>(),
   credentials: new Map<string, { iv: string; tag: string; value: string }>(),
   clipboard: null,
   themes: [],
@@ -839,6 +850,361 @@ const removePluginShortcut = async (
   return removed;
 };
 
+const getModulePlugins = (ctx: HostServiceContext): PluginRecord[] => {
+  return ctx.runtime.query({ type: 'module' }).filter((plugin): plugin is PluginRecord => Boolean(plugin.manifest.module));
+};
+
+const updateModuleProviderStatus = (
+  state: RuntimeState,
+  pluginId: string,
+  status: 'enabled' | 'disabled' | 'running' | 'error'
+): void => {
+  const providers = state.moduleProviders.get(pluginId) ?? [];
+  state.moduleProviders.set(
+    pluginId,
+    providers.map((provider) => ({
+      ...provider,
+      status
+    }))
+  );
+};
+
+const syncModuleProviders = async (ctx: HostServiceContext, state: RuntimeState): Promise<void> => {
+  const next = new Map<string, ModuleProviderRecord[]>();
+
+  for (const plugin of getModulePlugins(ctx)) {
+    const status = plugin.enabled
+      ? state.moduleRuntimes.get(plugin.manifest.id)?.status === 'error'
+        ? 'error'
+        : state.moduleRuntimes.has(plugin.manifest.id)
+          ? 'running'
+          : 'enabled'
+      : 'disabled';
+    next.set(plugin.manifest.id, buildModuleProviderRecords(plugin, status));
+  }
+
+  state.moduleProviders = next;
+  await ctx.kernel.events.emit('module.provider.changed', 'module-service', {
+    pluginIds: [...next.keys()]
+  });
+};
+
+const flattenModuleProviders = (state: RuntimeState): ModuleProviderRecord[] => {
+  return [...state.moduleProviders.values()].flatMap((providers) => providers).sort((left, right) => {
+    const capabilityCompare = left.capability.localeCompare(right.capability);
+    if (capabilityCompare !== 0) {
+      return capabilityCompare;
+    }
+    if (left.version !== right.version) {
+      return right.version.localeCompare(left.version);
+    }
+    return left.pluginId.localeCompare(right.pluginId);
+  });
+};
+
+const createModuleCallerContext = (
+  pluginId: string,
+  permissions: string[],
+  routeContext?: RouteInvocationContext
+): RouteInvocationContext => {
+  return {
+    requestId: createId(),
+    caller: {
+      id: routeContext?.caller.id ?? `module:${pluginId}`,
+      type: 'plugin',
+      pluginId,
+      permissions: [...permissions]
+    },
+    timestamp: Date.now(),
+    deadline: routeContext?.deadline
+  };
+};
+
+const createModuleLogger = (
+  ctx: HostServiceContext,
+  pluginId: string,
+  requestId: string
+): ModuleLogger => {
+  const write = (level: LogEntry['level'], message: string, metadata?: Record<string, unknown>) => {
+    ctx.logger.write({
+      level,
+      requestId,
+      pluginId,
+      namespace: 'module-runtime',
+      message,
+      metadata
+    });
+  };
+
+  return {
+    debug(message, metadata) {
+      write('debug', message, metadata);
+    },
+    info(message, metadata) {
+      write('info', message, metadata);
+    },
+    warn(message, metadata) {
+      write('warn', message, metadata);
+    },
+    error(message, metadata) {
+      write('error', message, metadata);
+    }
+  };
+};
+
+const invokeKernelForModule = async <TInput, TOutput>(
+  ctx: HostServiceContext,
+  pluginId: string,
+  permissions: string[],
+  action: string,
+  payload: TInput,
+  routeContext?: RouteInvocationContext
+): Promise<TOutput> => {
+  return ctx.kernel.invoke<TInput, TOutput>(action, payload, createModuleCallerContext(pluginId, permissions, routeContext));
+};
+
+const buildModuleBaseContext = (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  plugin: PluginRecord,
+  requestId: string,
+  routeContext: RouteInvocationContext | undefined,
+  invokeModule: (
+    pluginId: string,
+    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    routeContext: RouteInvocationContext | undefined
+  ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
+) => {
+  const pluginId = plugin.manifest.id;
+  const permissions = plugin.manifest.permissions;
+
+  return {
+    logger: createModuleLogger(ctx, pluginId, requestId),
+    module: {
+      invoke: (request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number }) =>
+        invokeModule(pluginId, request, routeContext)
+    },
+    services: {
+      file: {
+        read: (filePath: string, options?: Record<string, unknown>) =>
+          invokeKernelForModule<{ path: string; options?: Record<string, unknown> }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'file.read',
+            { path: filePath, options },
+            routeContext
+          ).then((result) => (result as { content: unknown }).content),
+        write: async (filePath: string, content: unknown, options?: Record<string, unknown>) => {
+          await invokeKernelForModule(ctx, pluginId, permissions, 'file.write', { path: filePath, content, options }, routeContext);
+        },
+        stat: (filePath: string) =>
+          invokeKernelForModule<{ path: string }, unknown>(ctx, pluginId, permissions, 'file.stat', { path: filePath }, routeContext).then(
+            (result) => (result as { meta: unknown }).meta
+          ),
+        list: (dir: string, options?: Record<string, unknown>) =>
+          invokeKernelForModule<{ dir: string; options?: Record<string, unknown> }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'file.list',
+            { dir, options },
+            routeContext
+          ).then((result) => (result as { entries: unknown }).entries)
+      },
+      resource: {
+        resolve: (resourceId: string) =>
+          invokeKernelForModule<{ resourceId: string }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'resource.resolve',
+            { resourceId },
+            routeContext
+          ).then((result) => (result as { uri: unknown }).uri),
+        readMetadata: (resourceId: string) =>
+          invokeKernelForModule<{ resourceId: string }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'resource.readMetadata',
+            { resourceId },
+            routeContext
+          ).then((result) => (result as { metadata: unknown }).metadata),
+        readBinary: (resourceId: string) =>
+          invokeKernelForModule<{ resourceId: string }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'resource.readBinary',
+            { resourceId },
+            routeContext
+          ).then((result) => (result as { data: unknown }).data)
+      },
+      card: {
+        parse: (cardFile: string) =>
+          invokeKernelForModule<{ cardFile: string }, unknown>(ctx, pluginId, permissions, 'card.parse', { cardFile }, routeContext).then(
+            (result) => (result as { ast: unknown }).ast
+          ),
+        render: (cardFile: string, options?: Record<string, unknown>) =>
+          invokeKernelForModule<{ cardFile: string; options?: Record<string, unknown> }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'card.render',
+            { cardFile, options },
+            routeContext
+          ).then((result) => (result as { view: unknown }).view),
+        validate: (cardFile: string) =>
+          invokeKernelForModule<{ cardFile: string }, unknown>(ctx, pluginId, permissions, 'card.validate', { cardFile }, routeContext)
+      },
+      box: {
+        inspect: (boxFile: string) =>
+          invokeKernelForModule<{ boxFile: string }, unknown>(ctx, pluginId, permissions, 'box.inspect', { boxFile }, routeContext).then(
+            (result) => (result as { inspection: unknown }).inspection
+          ),
+        pack: (boxDir: string, outputPath: string) =>
+          invokeKernelForModule<{ boxDir: string; outputPath: string }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'box.pack',
+            { boxDir, outputPath },
+            routeContext
+          ).then((result) => (result as { boxFile: unknown }).boxFile),
+        unpack: (boxFile: string, outputDir: string) =>
+          invokeKernelForModule<{ boxFile: string; outputDir: string }, unknown>(
+            ctx,
+            pluginId,
+            permissions,
+            'box.unpack',
+            { boxFile, outputDir },
+            routeContext
+          ).then((result) => (result as { outputDir: unknown }).outputDir)
+      },
+      config: {
+        get: (key: string) =>
+          invokeKernelForModule<{ key: string }, { value: unknown }>(ctx, pluginId, permissions, 'config.get', { key }, routeContext).then(
+            (result) => result.value
+          ),
+        set: async (key: string, value: unknown, scope?: 'user' | 'workspace' | 'system') => {
+          await invokeKernelForModule(ctx, pluginId, permissions, 'config.set', { key, value, scope }, routeContext);
+        }
+      }
+    }
+  };
+};
+
+const resolveProviderSelection = (
+  state: RuntimeState,
+  request: { capability: string; pluginId?: string; versionRange?: string }
+): ModuleProviderRecord => {
+  const providers = flattenModuleProviders(state).filter((provider) => {
+    if (provider.capability !== request.capability) {
+      return false;
+    }
+    if (request.pluginId && provider.pluginId !== request.pluginId) {
+      return false;
+    }
+    if (!matchesVersionRange(provider.version, request.versionRange)) {
+      return false;
+    }
+    return provider.status !== 'disabled';
+  });
+
+  if (providers.length === 0) {
+    throw createError('MODULE_PROVIDER_NOT_FOUND', 'No matching module provider was found', request);
+  }
+
+  return providers[0]!;
+};
+
+const ensureModuleRuntime = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  invokeModule: (
+    pluginId: string,
+    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    routeContext: RouteInvocationContext | undefined
+  ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
+): Promise<ModuleRuntimeRecord> => {
+  const existing = state.moduleRuntimes.get(pluginId);
+  if (existing) {
+    return existing;
+  }
+
+  const plugin = ctx.runtime.get(pluginId);
+  if (!plugin.enabled || plugin.manifest.type !== 'module' || !plugin.manifest.module) {
+    throw createError('MODULE_DISABLED', `Module plugin is unavailable: ${pluginId}`, { pluginId });
+  }
+
+  const session = ctx.runtime.pluginInit(pluginId, {
+    workspacePath: ctx.workspacePath,
+    runtimeKind: 'module'
+  });
+  ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
+  const bridgeScopeToken = ctx.runtime.createBridgeScope(session.sessionId);
+
+  try {
+    const entryPath = resolveInstalledModuleEntry(plugin);
+    const definition = await loadModuleDefinition(entryPath);
+    const runtimeRecord: ModuleRuntimeRecord = {
+      pluginId,
+      sessionId: session.sessionId,
+      bridgeScopeToken,
+      definition,
+      status: 'running',
+      activatedAt: Date.now()
+    };
+    state.moduleRuntimes.set(pluginId, runtimeRecord);
+    updateModuleProviderStatus(state, pluginId, 'running');
+
+    if (definition.activate) {
+      await definition.activate(
+        buildModuleBaseContext(ctx, state, plugin, session.sessionId, undefined, invokeModule)
+      );
+    }
+
+    await ctx.kernel.events.emit('module.runtime.started', 'module-service', {
+      pluginId,
+      sessionId: session.sessionId
+    });
+    return runtimeRecord;
+  } catch (error) {
+    ctx.runtime.stopSession(session.sessionId);
+    updateModuleProviderStatus(state, pluginId, 'error');
+    throw error;
+  }
+};
+
+const stopModuleRuntime = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  invokeModule: (
+    pluginId: string,
+    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    routeContext: RouteInvocationContext | undefined
+  ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
+): Promise<void> => {
+  const runtimeRecord = state.moduleRuntimes.get(pluginId);
+  if (!runtimeRecord) {
+    return;
+  }
+
+  const plugin = ctx.runtime.get(pluginId);
+  if (runtimeRecord.definition.deactivate) {
+    await runtimeRecord.definition.deactivate(
+      buildModuleBaseContext(ctx, state, plugin, runtimeRecord.sessionId, undefined, invokeModule)
+    );
+  }
+
+  ctx.runtime.stopSession(runtimeRecord.sessionId);
+  state.moduleRuntimes.delete(pluginId);
+  updateModuleProviderStatus(state, pluginId, plugin.enabled ? 'enabled' : 'disabled');
+};
+
 const buildCardTypeCandidates = (cardType: string): string[] => {
   const trimmed = cardType.trim();
   const compact = trimmed.replace(/\s+/g, '');
@@ -1089,6 +1455,184 @@ const bindLazyActivation = (ctx: HostServiceContext, state: RuntimeState, servic
 
 const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRegistration[] => {
   const credentialKey = credentialCipherKey(ctx.workspacePath);
+
+  const invokeModuleInternal = async (
+    callerPluginId: string,
+    request: {
+      capability: string;
+      method: string;
+      input: Record<string, unknown>;
+      pluginId?: string;
+      timeoutMs?: number;
+    },
+    routeContext?: RouteInvocationContext
+  ): Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }> => {
+    const provider = resolveProviderSelection(state, {
+      capability: request.capability,
+      pluginId: request.pluginId
+    });
+    const plugin = ctx.runtime.get(provider.pluginId);
+    const moduleMeta = plugin.manifest.module;
+    if (!moduleMeta) {
+      throw createError('MODULE_PROVIDER_NOT_FOUND', 'Module metadata is missing for provider', {
+        pluginId: provider.pluginId,
+        capability: provider.capability
+      });
+    }
+
+    const manifestProvider = findManifestProvider(moduleMeta, provider.capability);
+    if (!manifestProvider) {
+      throw createError('MODULE_PROVIDER_NOT_FOUND', 'Manifest provider metadata is missing', {
+        pluginId: provider.pluginId,
+        capability: provider.capability
+      });
+    }
+    const manifestMethod = findManifestMethod(manifestProvider, request.method);
+    if (!manifestMethod) {
+      throw createError('MODULE_METHOD_NOT_FOUND', 'Module method not found', {
+        pluginId: provider.pluginId,
+        capability: provider.capability,
+        method: request.method
+      });
+    }
+
+    const runtimeRecord = await ensureModuleRuntime(ctx, state, provider.pluginId, invokeModuleInternal);
+    const implementationProvider = runtimeRecord.definition.providers.find(
+      (candidate) => candidate.capability === provider.capability
+    );
+    const implementationMethod = implementationProvider?.methods[request.method];
+    if (!implementationProvider || typeof implementationMethod !== 'function') {
+      throw createError('MODULE_METHOD_NOT_FOUND', 'Runtime method implementation is missing', {
+        pluginId: provider.pluginId,
+        capability: provider.capability,
+        method: request.method
+      });
+    }
+
+    const inputSchemaPath = path.resolve(plugin.installPath, manifestMethod.inputSchema ?? '');
+    const outputSchemaPath = path.resolve(plugin.installPath, manifestMethod.outputSchema ?? '');
+    const invocationRequestId = routeContext?.requestId ?? createId();
+
+    const baseContext = buildModuleBaseContext(
+      ctx,
+      state,
+      plugin,
+      invocationRequestId,
+      routeContext,
+      invokeModuleInternal
+    );
+
+    await ctx.logger.write({
+      level: 'info',
+      requestId: invocationRequestId,
+      pluginId: provider.pluginId,
+      action: 'module.invoke',
+      message: 'Invoke module method',
+      metadata: {
+        callerPluginId,
+        capability: provider.capability,
+        method: request.method
+      }
+    });
+
+    await validateContractSchema(inputSchemaPath, request.input, 'MODULE_SCHEMA_INVALID');
+
+    if (manifestMethod.mode === 'sync') {
+      const output = await implementationMethod(baseContext, request.input);
+      await validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID');
+      return { mode: 'sync', output };
+    }
+
+    const jobId = createId();
+    const controller = new AbortController();
+    const jobRecord: ModuleJobRecord = {
+      jobId,
+      pluginId: provider.pluginId,
+      capability: provider.capability,
+      method: request.method,
+      status: 'running',
+      caller: routeContext?.caller ?? {
+        id: `module:${callerPluginId}`,
+        type: 'plugin',
+        pluginId: callerPluginId,
+        permissions: [...plugin.manifest.permissions]
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    state.moduleJobs.set(jobId, jobRecord);
+    state.moduleJobControllers.set(jobId, controller);
+
+    const jobContext = {
+      ...baseContext,
+      job: {
+        id: jobId,
+        signal: controller.signal,
+        reportProgress: async (payload: Record<string, unknown>) => {
+          const current = state.moduleJobs.get(jobId);
+          if (!current) {
+            return;
+          }
+          current.progress = deepClone(payload);
+          current.updatedAt = Date.now();
+          await ctx.kernel.events.emit('module.job.progress', 'module-service', {
+            jobId,
+            pluginId: current.pluginId,
+            capability: current.capability,
+            method: current.method,
+            progress: current.progress
+          });
+        },
+        isCancelled: () => controller.signal.aborted
+      }
+    };
+
+    void (async () => {
+      try {
+        const output = await implementationMethod(jobContext, request.input);
+        await validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID');
+        const current = state.moduleJobs.get(jobId);
+        if (!current) {
+          return;
+        }
+        current.status = controller.signal.aborted ? 'cancelled' : 'completed';
+        current.updatedAt = Date.now();
+        if (!controller.signal.aborted) {
+          current.output = deepClone(output);
+          await ctx.kernel.events.emit('module.job.completed', 'module-service', {
+            jobId,
+            pluginId: current.pluginId,
+            capability: current.capability,
+            method: current.method,
+            output: current.output
+          });
+        }
+      } catch (error) {
+        const current = state.moduleJobs.get(jobId);
+        if (!current) {
+          return;
+        }
+        current.status = controller.signal.aborted ? 'cancelled' : 'failed';
+        current.updatedAt = Date.now();
+        current.error = createError(
+          (error as { code?: string }).code ?? 'MODULE_INVOCATION_FAILED',
+          (error as { message?: string }).message ?? 'Module job failed',
+          error
+        );
+        await ctx.kernel.events.emit('module.job.failed', 'module-service', {
+          jobId,
+          pluginId: current.pluginId,
+          capability: current.capability,
+          method: current.method,
+          error: current.error
+        });
+      } finally {
+        state.moduleJobControllers.delete(jobId);
+      }
+    })();
+
+    return { mode: 'job', jobId };
+  };
 
   const fileService: ServiceRegistration = {
     name: 'file',
@@ -1810,6 +2354,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'plugin.install', async (input) => {
             const record = await ctx.runtime.install(input.manifestPath);
+            if (record.manifest.type === 'module') {
+              await syncModuleProviders(ctx, state);
+            }
             if (record.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -1828,6 +2375,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'plugin.enable', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.enable(input.pluginId);
+            if (plugin.manifest.type === 'module') {
+              await syncModuleProviders(ctx, state);
+            }
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -1847,7 +2397,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.disable(input.pluginId);
             if (plugin.manifest.type === 'module') {
-              await cleanupMountedModulesForPlugin(ctx, state, input.pluginId, 'plugin-disabled');
+              await stopModuleRuntime(ctx, state, input.pluginId, invokeModuleInternal);
+              await unregisterModulePluginState(ctx, state, input.pluginId, 'plugin-disabled');
+              await syncModuleProviders(ctx, state);
             }
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
@@ -1870,9 +2422,13 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               await removePluginShortcut(ctx, input.pluginId).catch(() => undefined);
             }
             if (plugin.manifest.type === 'module') {
-              await cleanupMountedModulesForPlugin(ctx, state, input.pluginId, 'plugin-uninstalled');
+              await stopModuleRuntime(ctx, state, input.pluginId, invokeModuleInternal);
+              await unregisterModulePluginState(ctx, state, input.pluginId, 'plugin-uninstalled');
             }
             await ctx.runtime.uninstall(input.pluginId);
+            if (plugin.manifest.type === 'module') {
+              await syncModuleProviders(ctx, state);
+            }
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -1989,154 +2545,123 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
   const moduleService: ServiceRegistration = {
     name: 'module',
     actions: {
-      mount: {
-        descriptor: descriptor<{ slot: string; moduleId: string; requiredCapabilities?: string[] }, { module: ModuleRecordView }>(
-          'module.mount',
-          ['module.manage'],
+      listProviders: {
+        descriptor: descriptor<
+          { capability?: string; pluginId?: string; status?: 'enabled' | 'running' | 'disabled' | 'error'; versionRange?: string },
+          { providers: ModuleProviderView[] }
+        >(
+          'module.listProviders',
+          ['module.read'],
           3_000,
-          false,
+          true,
           0,
-          withMetrics(state, 'module.mount', async (input, routeContext) => {
-            const slot = normalizeModuleSlot(input.slot, 'module.mount');
-            const moduleId = typeof input.moduleId === 'string' ? input.moduleId.trim() : '';
-            const requiredCapabilities = normalizeRequiredCapabilities(
-              (input as { requiredCapabilities?: unknown }).requiredCapabilities
-            );
-            if (moduleId.length === 0) {
-              throw createError('MODULE_INVALID', 'module.mount requires a non-empty moduleId');
-            }
-            if (state.modules.has(slot)) {
-              throw createError('MODULE_CONFLICT', `Module slot already mounted: ${slot}`, {
-                slot
-              });
-            }
-
-            let plugin;
-            try {
-              plugin = ctx.runtime.get(moduleId);
-            } catch (error) {
-              const standardError = error as { code?: string; message?: string } | undefined;
-              if (standardError?.code === 'PLUGIN_NOT_FOUND') {
-                throw createError('MODULE_NOT_FOUND', `Module plugin not found: ${moduleId}`, {
-                  moduleId
-                });
+          withMetrics(state, 'module.listProviders', async (input) => {
+            const providers = flattenModuleProviders(state).filter((provider) => {
+              if (input.capability && provider.capability !== input.capability) {
+                return false;
               }
-              throw error;
-            }
-
-            if (plugin.manifest.type !== 'module') {
-              throw createError('MODULE_INVALID', `Plugin is not a module plugin: ${moduleId}`, {
-                moduleId,
-                type: plugin.manifest.type
-              });
-            }
-            if (!plugin.enabled) {
-              throw createError('MODULE_DISABLED', `Module plugin is disabled: ${moduleId}`, {
-                moduleId
-              });
-            }
-
-            const availableCapabilities = [...(plugin.manifest.capabilities ?? [])];
-            const missingCapabilities = requiredCapabilities.filter((capability) => !availableCapabilities.includes(capability));
-            if (missingCapabilities.length > 0) {
-              throw createError('MODULE_CAPABILITY_MISMATCH', 'Module plugin does not satisfy required capabilities', {
-                slot,
-                moduleId,
-                requiredCapabilities,
-                availableCapabilities,
-                missingCapabilities
-              });
-            }
-
-            const session = ctx.runtime.pluginInit(moduleId, {
-              slot,
-              mountedByPluginId: routeContext.caller.pluginId,
-              requiredCapabilities,
-              workspacePath: ctx.workspacePath
+              if (input.pluginId && provider.pluginId !== input.pluginId) {
+                return false;
+              }
+              if (input.status && provider.status !== input.status) {
+                return false;
+              }
+              if (input.versionRange && !matchesVersionRange(provider.version, input.versionRange)) {
+                return false;
+              }
+              return true;
             });
-            await ctx.kernel.events.emit('plugin.init', 'module-service', {
-              pluginId: moduleId,
-              sessionId: session.sessionId,
-              slot
-            });
-            ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
-            await ctx.kernel.events.emit('plugin.ready', 'module-service', {
-              pluginId: moduleId,
-              sessionId: session.sessionId,
-              slot
-            });
-            const bridgeScopeToken = ctx.runtime.createBridgeScope(session.sessionId);
-
-            const moduleRecord: ModuleRecord = {
-              slot,
-              moduleId,
-              entry: plugin.manifest.entry ? deepClone(plugin.manifest.entry) : undefined,
-              capabilities: availableCapabilities,
-              requiredCapabilities,
-              mountedByPluginId: routeContext.caller.pluginId,
-              sessionId: session.sessionId,
-              bridgeScopeToken,
-              active: true,
-              mountedAt: Date.now()
-            };
-            state.modules.set(slot, moduleRecord);
-            await ctx.kernel.events.emit('module.mounted', 'module-service', {
-              slot,
-              moduleId,
-              mountedByPluginId: routeContext.caller.pluginId,
-              requiredCapabilities,
-              sessionId: session.sessionId
-            });
-            return { module: toModuleRecordView(moduleRecord, { includeBridgeScopeToken: true }) };
+            return { providers };
           })
         )
       },
-      unmount: {
-        descriptor: descriptor<{ slot: string }, { ack: true }>(
-          'module.unmount',
-          ['module.manage'],
+      resolve: {
+        descriptor: descriptor<{ capability: string; versionRange?: string }, { provider: ModuleProviderView }>(
+          'module.resolve',
+          ['module.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'module.resolve', async (input) => {
+            const provider = resolveProviderSelection(state, input);
+            return { provider };
+          })
+        )
+      },
+      invoke: {
+        descriptor: descriptor<
+          {
+            capability: string;
+            method: string;
+            input: Record<string, unknown>;
+            pluginId?: string;
+            timeoutMs?: number;
+          },
+          { mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }
+        >(
+          'module.invoke',
+          ['module.invoke'],
+          30_000,
+          false,
+          0,
+          withMetrics(state, 'module.invoke', async (input, routeContext) => {
+            const callerPluginId = routeContext.caller.pluginId ?? 'host';
+            return invokeModuleInternal(callerPluginId, input, routeContext);
+          })
+        )
+      },
+      jobGet: {
+        descriptor: descriptor<{ jobId: string }, { job: ModuleJobView }>(
+          'module.job.get',
+          ['module.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'module.job.get', async (input) => {
+            const job = state.moduleJobs.get(input.jobId);
+            if (!job) {
+              throw createError('MODULE_JOB_NOT_FOUND', `Module job not found: ${input.jobId}`, {
+                jobId: input.jobId
+              });
+            }
+            return { job: toModuleJobView(job) };
+          })
+        )
+      },
+      jobCancel: {
+        descriptor: descriptor<{ jobId: string }, { ack: true }>(
+          'module.job.cancel',
+          ['module.invoke'],
           3_000,
           false,
           0,
-          withMetrics(state, 'module.unmount', async (input) => {
-            const slot = normalizeModuleSlot(input.slot, 'module.unmount');
-            const record = state.modules.get(slot);
-            if (record) {
-              ctx.runtime.stopSession(record.sessionId);
-              state.modules.delete(slot);
-              await ctx.kernel.events.emit('module.unmounted', 'module-service', {
-                slot,
-                moduleId: record.moduleId,
-                reason: 'manual'
+          withMetrics(state, 'module.job.cancel', async (input) => {
+            const job = state.moduleJobs.get(input.jobId);
+            if (!job) {
+              throw createError('MODULE_JOB_NOT_FOUND', `Module job not found: ${input.jobId}`, {
+                jobId: input.jobId
+              });
+            }
+
+            const controller = state.moduleJobControllers.get(input.jobId);
+            controller?.abort();
+            state.moduleJobControllers.delete(input.jobId);
+            if (job.status === 'running') {
+              job.status = 'cancelled';
+              job.updatedAt = Date.now();
+              job.error = {
+                code: 'MODULE_JOB_CANCELLED',
+                message: 'Module job was cancelled'
+              };
+              await ctx.kernel.events.emit('module.job.failed', 'module-service', {
+                jobId: input.jobId,
+                pluginId: job.pluginId,
+                capability: job.capability,
+                method: job.method,
+                error: job.error
               });
             }
             return { ack: true };
-          })
-        )
-      },
-      query: {
-        descriptor: descriptor<{ slot: string }, { module: ModuleRecordView | null }>(
-          'module.query',
-          ['module.manage'],
-          3_000,
-          true,
-          0,
-          withMetrics(state, 'module.query', async (input) => {
-            const slot = normalizeModuleSlot(input.slot, 'module.query');
-            const module = state.modules.get(slot) ?? null;
-            return { module: module ? toModuleRecordView(module) : null };
-          })
-        )
-      },
-      list: {
-        descriptor: descriptor<Record<string, unknown>, { modules: ModuleRecordView[] }>(
-          'module.list',
-          ['module.manage'],
-          3_000,
-          true,
-          0,
-          withMetrics(state, 'module.list', async () => {
-            return { modules: [...state.modules.values()].map((item) => toModuleRecordView(item)) };
           })
         )
       }
@@ -3225,6 +3750,7 @@ export const registerHostServices = async (ctx: HostServiceContext): Promise<voi
   await loadCredentials(ctx.workspacePath, runtimeState);
   runtimeState.themes = await loadInstalledThemes(ctx.runtime);
   syncCurrentThemeState(runtimeState);
+  await syncModuleProviders(ctx, runtimeState);
 
   const services = createServices(ctx, runtimeState);
   for (const service of services) {

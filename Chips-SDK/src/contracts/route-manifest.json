@@ -117,17 +117,20 @@
     "log.write": {
       "action": "log.write"
     },
-    "module.list": {
-      "action": "module.list"
+    "module.job.cancel": {
+      "action": "module.job.cancel"
     },
-    "module.mount": {
-      "action": "module.mount"
+    "module.job.get": {
+      "action": "module.job.get"
     },
-    "module.query": {
-      "action": "module.query"
+    "module.invoke": {
+      "action": "module.invoke"
     },
-    "module.unmount": {
-      "action": "module.unmount"
+    "module.listProviders": {
+      "action": "module.listProviders"
+    },
+    "module.resolve": {
+      "action": "module.resolve"
     },
     "platform.clipboardRead": {
       "action": "platform.clipboardRead"

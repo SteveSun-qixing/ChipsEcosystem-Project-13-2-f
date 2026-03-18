@@ -257,7 +257,7 @@ describe('chips ipc bridge', () => {
     expect(binding.active).toBe(true);
 
     const bridge = createBridgeForKernel(kernel, {
-      permissions: ['module.manage'],
+      permissions: ['module.invoke'],
       callerId: 'renderer-module-host',
       pluginId: 'chips.host.viewer'
     }) as ReturnType<typeof createBridgeForKernel> & {

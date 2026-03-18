@@ -11,11 +11,7 @@
     "validate": "chipsdev validate"
   },
   "devDependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "jsdom": "^28.1.0",
+    "@types/node": "^22.13.10",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8",
     "eslint": "^8.57.1",

@@ -4,37 +4,35 @@
 
 ## 简介
 
-本工程面向 `type: module` 的共享功能模块开发，默认提供以下能力：
+本工程面向 `type: module` 的共享功能模块开发。模块插件是安装到 Host 中的无界面能力模块，不创建窗口，不承载页面渲染，不以 DOM 挂载作为正式边界。
 
-- 使用 React 构建可嵌入的模块运行时；
-- 使用 `chips-sdk` 读取 Host 主题与语言状态；
-- 通过本地 `i18n/*.json` 管理模块 UI 文案；
-- 通过 `mountModule()` 提供清晰的挂载、更新、卸载生命周期；
-- 内建单元测试、构建、校验与打包脚本。
+模板默认提供以下基线：
+
+- 冻结后的 `manifest.module` 结构；
+- `capability + method` 形式的能力定义；
+- 同步方法与异步任务方法示例；
+- 输入输出 schema 契约文件；
+- 单元测试、构建、校验与打包脚本。
 
 ## 项目结构
 
 ```text
 {{ PROJECT_NAME }}/
-├─ .eslintrc.cjs          # 工程级 ESLint 配置
-├─ manifest.yaml          # 插件清单（type: module）
-├─ package.json           # NPM 配置
-├─ tsconfig.json          # TypeScript 配置
-├─ chips.config.mjs       # chipsdev 构建配置
+├─ .eslintrc.cjs
+├─ manifest.yaml
+├─ package.json
+├─ tsconfig.json
+├─ chips.config.mjs
+├─ contracts/
+│  ├─ run.input.schema.json
+│  ├─ run.output.schema.json
+│  ├─ runAsync.input.schema.json
+│  └─ runAsync.output.schema.json
 ├─ src/
-│  ├─ index.ts            # 模块公共导出入口
-│  └─ module/
-│     ├─ runtime.tsx      # 模块运行时挂载实现
-│     ├─ types.ts         # 运行时对外类型
-│     └─ i18n.ts          # 本地词典解析与格式化
-├─ config/
-│  └─ logging.ts          # 日志封装
-├─ i18n/
-│  ├─ zh-CN.json          # 中文文案
-│  └─ en-US.json          # 英文文案
+│  └─ index.ts
 └─ tests/
    └─ unit/
-      └─ module-runtime.test.tsx
+      └─ module-definition.test.ts
 ```
 
 ## 快速开始
@@ -47,31 +45,33 @@ npm run lint
 npm run build
 npm test
 npm run validate
+chipsdev package
 ```
 
 模块插件工程应通过 `chipsdev create module` 接入生态工作区，不再单独手工拼装依赖。若工程位于生态根工作区内，`chipsdev create` 会自动完成工作区注册与 `volta.extends` 写入。
 
-## 运行时设计
+## 默认能力定义
 
-模板默认导出：
+模板默认声明一个 capability：
 
-- `createModuleClient()`：基于 `chips-sdk` 创建 Bridge 客户端，支持传入 `bridgeScopeToken` 建立模块独立 Host 身份；
-- `mountModule(context)`：在指定容器中挂载模块运行时；
-- 类型导出：`ModuleMountContext`、`ModuleSnapshot`、`ModuleHandle` 等。
+- `{{ MODULE_CAPABILITY }}`
 
-模板中的 UI 示例展示了：
+并提供两个方法：
 
-- 主题 CSS 注入；
-- `theme.changed` / `language.changed` 事件刷新；
-- 使用 `startTransition` 与 `useDeferredValue` 管理非紧急更新与筛选交互；
-- 通过运行时 provider 解耦 Bridge 调用、主题语言状态和展示组件。
-- 当调用方通过 `client.module.mount(...)` 获取到 `bridgeScopeToken` 后，应把它传给 `mountModule({ bridgeScopeToken })`，让模块以内建独立作用域访问 Host。
+- `run`：同步执行，直接返回结果；
+- `runAsync`：异步任务模式，演示 `ctx.job.reportProgress(...)` 的正式用法。
+
+你应根据实际业务替换 capability、方法名与 schema 文件，但要保持：
+
+- Manifest 中 `module.provides` 与仓库中的 contract 文件一致；
+- 模块之间调用统一使用 Host 注入的 `ctx.module.invoke(...)`；
+- 不自行实现第二套模块加载器或通信通道。
 
 ## 正式约束
 
 - `manifest.yaml` 必须保持 `type: module` 且 `entry: dist/index.mjs`；
-- 模块能力使用 `capabilities: ["{{ MODULE_CAPABILITY }}"]` 当前正式口径；
-- 需要读取主题与语言状态时，必须显式声明 `theme.read`、`i18n.read`；
-- 不得使用旧动作 `module.load/unload`，统一通过 `client.module.mount/unmount/query/list` 管理挂载状态；
-- 正式挂载时建议传入 `requiredCapabilities`，并把 Host 返回的 `bridgeScopeToken` 继续传入模块运行时；
+- 模块正式能力契约必须写在 `module.provides` 中，而不是旧 `capabilities` 主入口；
+- 调用方统一通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 使用模块能力；
+- 模块运行时只负责能力实现，不生成任何 UI 运行时、插槽挂载入口或主题注入逻辑；
+- 如果模块需要调用其他模块，只能使用 Host 注入的 `ctx.module.invoke(...)`；
 - 每次功能迭代后应同步更新 README、需求文档、技术文档和开发计划。

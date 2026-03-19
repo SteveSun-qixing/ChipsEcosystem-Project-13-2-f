@@ -1,5 +1,0 @@
-card_type: "{{ CARD_TYPE }}"
-theme: ""
-title: "示例标题"
-body: "这是通过基础卡片脚手架生成的示例内容。"
-locale: "zh-CN"

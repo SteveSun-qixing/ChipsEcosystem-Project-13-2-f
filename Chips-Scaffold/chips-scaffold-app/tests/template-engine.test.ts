@@ -10,6 +10,13 @@ import {
 } from "../src/core/template-engine.js";
 import type { CreateAppProjectOptions } from "../src/core/types.js";
 
+const FORBIDDEN_PROJECT_DIRS = [
+  "需求文档",
+  "技术文档",
+  "技术手册",
+  "开发计划",
+];
+
 test("listTemplateMetas 应返回至少一个模板（app-standard）", async () => {
   const metas = await listTemplateMetas();
   assert.ok(Array.isArray(metas));
@@ -78,6 +85,14 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "^0.1.0",
       "模板必须保持 SDK 正式 semver 依赖，由生态根工作区解析本地包",
     );
+
+    for (const dirName of FORBIDDEN_PROJECT_DIRS) {
+      await assert.rejects(
+        stat(path.join(targetDir, dirName)),
+        { code: "ENOENT" },
+        `初始化工程不应生成 ${dirName}/ 目录`,
+      );
+    }
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }

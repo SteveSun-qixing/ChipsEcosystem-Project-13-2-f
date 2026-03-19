@@ -55,7 +55,7 @@ interface TemplateVariables {
 
 const renderTemplateString = (template: string, variables: TemplateVariables): string => {
   return template.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (match, key) => {
-    const value = (variables as Record<string, string>)[key];
+    const value = variables[key as keyof TemplateVariables];
     return typeof value === 'string' ? value : match;
   });
 };
@@ -124,4 +124,3 @@ export const createThemeProject = async (input: CreateThemeProjectOptions): Prom
 
   await copyTemplateDirectory(templateDir, options.targetDir, variables);
 };
-

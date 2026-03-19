@@ -64,9 +64,12 @@ async function main() {
   const projectRelativePath = path.join("validation-projects", "app-e2e");
   const projectDir = path.join(sandboxRoot, projectRelativePath);
   const sdkCliPath = path.join(sandboxRoot, "Chips-SDK", "cli", "index.js");
+  const npmCacheDir = path.join(sandboxRoot, ".npm-cache");
   const env = {
     ...process.env,
     CHIPS_ECOSYSTEM_ROOT: sandboxRoot,
+    NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE ?? npmCacheDir,
+    npm_config_cache: process.env.npm_config_cache ?? npmCacheDir,
   };
 
   try {
@@ -74,11 +77,11 @@ async function main() {
 
     const commands = [
       ["node", [sdkCliPath, "create", "app", projectRelativePath], { cwd: sandboxRoot, env }],
-      ["npm", ["install"], { cwd: sandboxRoot, env }],
-      ["npm", ["run", "lint"], { cwd: projectDir }],
-      ["npm", ["test"], { cwd: projectDir }],
-      ["npm", ["run", "build"], { cwd: projectDir }],
-      ["npm", ["run", "validate"], { cwd: projectDir }],
+      ["npm", ["install", "--cache", npmCacheDir], { cwd: sandboxRoot, env }],
+      ["npm", ["run", "lint"], { cwd: projectDir, env }],
+      ["npm", ["test"], { cwd: projectDir, env }],
+      ["npm", ["run", "build"], { cwd: projectDir, env }],
+      ["npm", ["run", "validate"], { cwd: projectDir, env }],
     ];
 
     for (const [cmd, args, opts] of commands) {

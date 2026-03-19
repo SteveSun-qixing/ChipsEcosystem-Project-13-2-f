@@ -74,4 +74,4 @@ chipsdev package
 - 调用方统一通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 使用模块能力；
 - 模块运行时只负责能力实现，不生成任何 UI 运行时、插槽挂载入口或主题注入逻辑；
 - 如果模块需要调用其他模块，只能使用 Host 注入的 `ctx.module.invoke(...)`；
-- 每次功能迭代后应同步更新 README、需求文档、技术文档和开发计划。
+- 每次功能迭代后应同步更新 README 与测试/契约资料，避免把文档目录当作模板产物。

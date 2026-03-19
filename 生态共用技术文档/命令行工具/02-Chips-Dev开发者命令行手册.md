@@ -129,6 +129,11 @@ chipsdev theme validate
 2. 在需要时自动把新工程注册到根工作区；
 3. 自动写入指向生态根 `package.json` 的 `volta.extends`。
 
+补充约束：
+
+- 生成工程默认只输出 README 与运行时、测试、契约等必要目录；
+- `需求文档/`、`技术文档/`（或“技术手册”）与 `开发计划/` 不属于 `chipsdev create` 的默认产物。
+
 当前正式支持的类型：
 
 - `app`

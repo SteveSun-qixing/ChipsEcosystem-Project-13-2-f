@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
 import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
@@ -24,6 +24,7 @@ export interface CardRenderOptions {
   theme?: ThemeSnapshot;
   themeCssText?: string;
   verifyConsistency?: boolean;
+  locale?: string;
   mode?: 'view' | 'preview';
   interactionPolicy?: 'native' | 'delegate';
 }
@@ -44,12 +45,15 @@ export interface CardBasecardRenderOptions {
   resourceBaseUrl?: string;
   theme?: ThemeSnapshot;
   themeCssText?: string;
+  locale?: string;
   interactionPolicy?: 'native' | 'delegate';
 }
 
 export interface RenderedCardView {
   title: string;
   body: string;
+  documentUrl: string;
+  sessionId: string;
   contentFiles: string[];
   target: RenderTarget;
   semanticHash: string;
@@ -60,6 +64,8 @@ export interface RenderedCardView {
 export interface RenderedCardEditorView {
   title: string;
   body: string;
+  documentUrl: string;
+  sessionId: string;
   cardType: string;
   pluginId: string;
   baseCardId?: string;
@@ -82,6 +88,7 @@ export interface RenderedBasecardView {
 export interface CardServiceOptions {
   runtime?: Pick<PluginRuntime, 'query'>;
   workspaceRoot?: string;
+  managedDocumentScheme?: string;
 }
 
 interface CardPackageContext {
@@ -119,6 +126,7 @@ interface RenderedBaseCardNode {
   title: string;
   pluginId?: string;
   frameHtml?: string;
+  frameSrc?: string;
   error?: FrameErrorPayload;
 }
 
@@ -126,6 +134,11 @@ interface PersistentCardRootCacheEntry {
   rootDir: string;
   sourceMtimeMs: number;
   sourceSize: number;
+}
+
+interface RenderSessionEntry {
+  rootDir: string;
+  createdAt: number;
 }
 
 interface BaseCardPluginModule {
@@ -161,6 +174,83 @@ const escapeHtml = (value: string): string => {
 };
 
 const escapeInlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+
+const createDocumentScriptNonce = (): string => crypto.randomBytes(18).toString('base64');
+
+const sanitizeRenderFileSegment = (value: string, fallback: string): string => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || fallback;
+};
+
+const createRenderFileName = (prefix: string, value: string, index: number): string => {
+  const label = sanitizeRenderFileSegment(value, `${prefix}-${index + 1}`);
+  const hash = crypto.createHash('sha256').update(`${prefix}:${value}:${index}`).digest('hex').slice(0, 10);
+  return `${String(index + 1).padStart(3, '0')}-${label}-${hash}.html`;
+};
+
+const encodeManagedUrlPath = (value: string): string =>
+  value
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+
+const decodeManagedUrlPathSegments = (value: string): string[] | null => {
+  try {
+    return value
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+};
+
+const normalizeManagedRelativePath = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.replace(/\\/g, '/').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\/+/, '')
+    .replace(/^\.?\//, '')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    return null;
+  }
+
+  return segments.join('/');
+};
+
+const isPathWithinRoot = (rootDir: string, absolutePath: string): boolean => {
+  const relative = path.relative(path.resolve(rootDir), path.resolve(absolutePath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const normalizeManagedDocumentScheme = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/:$/, '').toLowerCase();
+  if (!normalized || !/^[a-z][a-z0-9+.-]*$/i.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+};
 
 type CompositeInteractionPolicy = 'native' | 'delegate';
 
@@ -816,8 +906,10 @@ const createBasecardFrameDocument = (options: {
   pluginBundleCode: string;
   config: Record<string, unknown>;
   themeCssText: string;
+  locale?: string;
   interactionPolicy: CompositeInteractionPolicy;
   resourceBaseUrl?: string;
+  managedDocumentScheme?: string;
 }): string => {
   const {
     baseCardId,
@@ -827,18 +919,24 @@ const createBasecardFrameDocument = (options: {
     pluginBundleCode,
     config,
     themeCssText,
+    locale,
     interactionPolicy,
     resourceBaseUrl,
+    managedDocumentScheme,
   } = options;
   const contentTitle = title || cardType;
+  const documentLocale = asString(locale) ?? 'zh-CN';
+  const scriptNonce = createDocumentScriptNonce();
+  const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
+  const managedSource = allowedManagedProtocol ? `${allowedManagedProtocol}:` : '';
 
   return [
     '<!doctype html>',
-    '<html lang="zh-CN">',
+    `<html lang="${escapeHtml(documentLocale)}">`,
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data: blob:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
     ...(resourceBaseUrl ? [`  <base href="${escapeHtml(resourceBaseUrl)}" />`] : []),
     `  <title>${escapeHtml(contentTitle)}</title>`,
     '  <style>',
@@ -866,10 +964,10 @@ const createBasecardFrameDocument = (options: {
     '</head>',
     `<body data-node-id="${escapeHtml(baseCardId)}" data-card-type="${escapeHtml(cardType)}" data-plugin-id="${escapeHtml(pluginId)}" data-interaction-policy="${escapeHtml(interactionPolicy)}">`,
     '  <div id="chips-basecard-root" data-chips-basecard-frame-root="true"></div>',
-    '  <script>',
+    `  <script nonce="${scriptNonce}">`,
     pluginBundleCode,
     '  </script>',
-    '  <script>',
+    `  <script nonce="${scriptNonce}">`,
     '    (() => {',
     `      const nodeId = ${JSON.stringify(baseCardId)};`,
     `      const baseCardType = ${JSON.stringify(cardType)};`,
@@ -1005,6 +1103,7 @@ const createEditorFrameDocument = (options: {
   pluginId: string;
   baseCardId?: string;
   themeCssText: string;
+  managedDocumentScheme?: string;
 }): string => {
   const {
     cardType,
@@ -1013,8 +1112,12 @@ const createEditorFrameDocument = (options: {
     initialConfig,
     pluginId,
     baseCardId,
-    themeCssText
+    themeCssText,
+    managedDocumentScheme,
   } = options;
+  const scriptNonce = createDocumentScriptNonce();
+  const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
+  const managedSource = allowedManagedProtocol ? `${allowedManagedProtocol}:` : '';
 
   return [
     '<!doctype html>',
@@ -1022,16 +1125,16 @@ const createEditorFrameDocument = (options: {
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data: blob:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:;" />',
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${themeCssText}</style>`,
     '</head>',
     `<body data-card-type="${escapeHtml(cardType)}" data-plugin-id="${escapeHtml(pluginId)}" data-base-card-id="${escapeHtml(baseCardId ?? '')}">`,
     '  <div id="chips-basecard-editor-root"></div>',
-    '  <script>',
+    `  <script nonce="${scriptNonce}">`,
     pluginBundleCode,
     '  </script>',
-    '  <script>',
+    `  <script nonce="${scriptNonce}">`,
     '    (() => {',
     `      const initialConfig = ${escapeInlineJson(initialConfig)};`,
     `      const cardType = ${JSON.stringify(cardType)};`,
@@ -1151,16 +1254,22 @@ const createCompositeDocument = (
   semanticHash: string,
   theme: ThemeSnapshot,
   themeCssText: string | undefined,
+  locale: string,
   nodes: RenderedBaseCardNode[],
   mode: 'view' | 'preview',
-  interactionPolicy: CompositeInteractionPolicy
+  interactionPolicy: CompositeInteractionPolicy,
+  managedDocumentScheme?: string,
 ): string => {
+  const scriptNonce = createDocumentScriptNonce();
+  const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
+  const managedSource = allowedManagedProtocol ? `${allowedManagedProtocol}:` : '';
   const nodeMarkup = nodes
     .map((node) => {
-      if (node.frameHtml) {
+      if (node.frameSrc) {
+        const frameLoading = target === 'offscreen-render' ? 'eager' : 'lazy';
         return [
           `<section class="chips-composite__node" data-node-id="${escapeHtml(node.nodeId)}" data-card-type="${escapeHtml(node.cardType)}" data-plugin-id="${escapeHtml(node.pluginId ?? '')}" data-state="ready">`,
-          `  <iframe class="chips-composite__frame" data-node-id="${escapeHtml(node.nodeId)}" title="${escapeHtml(node.title || node.cardType)}" loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups" srcdoc="${escapeHtml(node.frameHtml)}"></iframe>`,
+          `  <iframe class="chips-composite__frame" data-node-id="${escapeHtml(node.nodeId)}" title="${escapeHtml(node.title || node.cardType)}" loading="${frameLoading}" sandbox="allow-scripts allow-popups" src="${escapeHtml(node.frameSrc)}"></iframe>`,
           '</section>'
         ].join('\n');
       }
@@ -1183,11 +1292,11 @@ const createCompositeDocument = (
 
   return [
     '<!doctype html>',
-    '<html lang="zh-CN">',
+    `<html lang="${escapeHtml(locale)}">`,
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    '  <meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src file: http: https: data:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data: file:; child-src \'self\' blob:; frame-src \'self\' blob:;" />',
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; child-src 'self' file:${managedSource ? ` ${managedSource}` : ''}; frame-src 'self' file:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${createCompositeThemeCss(theme, themeCssText)}</style>`,
     '</head>',
@@ -1195,15 +1304,15 @@ const createCompositeDocument = (
     '  <main class="chips-composite">',
     `    <section class="chips-composite__stack">${nodeMarkup}</section>`,
     '  </main>',
-    `  <script id="__chips-node-errors" type="application/json">${escapeInlineJson(nodeErrors)}</script>`,
-    '  <script>',
+    `  <script id="__chips-node-errors" type="application/json" nonce="${scriptNonce}">${escapeInlineJson(nodeErrors)}</script>`,
+    `  <script nonce="${scriptNonce}">`,
     '    (() => {',
     '      const frameList = Array.from(document.querySelectorAll(".chips-composite__frame"));',
     '      const frameByNodeId = new Map(frameList.map((frame) => [frame.dataset.nodeId ?? "", frame]));',
     '      const nodeById = new Map(Array.from(document.querySelectorAll(".chips-composite__node")).map((node) => [node.dataset.nodeId ?? "", node]));',
     '      const errorPayload = JSON.parse(document.getElementById("__chips-node-errors")?.textContent ?? "[]");',
     '      const totalNodeCount = nodeById.size;',
-    '      const failedNodePayloads = new Map(errorPayload.map((payload) => [typeof payload?.nodeId === "string" ? payload.nodeId : "", payload]).filter(([nodeId]) => Boolean(nodeId)));',
+      '      const failedNodePayloads = new Map(errorPayload.map((payload) => [typeof payload?.nodeId === "string" ? payload.nodeId : "", payload]).filter(([nodeId]) => Boolean(nodeId)));',
     '      const failedNodeIds = new Set(failedNodePayloads.keys());',
     '      const isPreviewMode = document.body.dataset.mode === "preview";',
     '      let remaining = frameList.length;',
@@ -1213,6 +1322,40 @@ const createCompositeDocument = (
     '      let pendingResizeReason = "initial";',
     '      const emit = (type, payload) => {',
     "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      const compositeDataset = document.body?.dataset;',
+    '      if (compositeDataset) {',
+    '        compositeDataset.chipsCompositeReady = frameList.length === 0 ? "true" : "false";',
+    '        compositeDataset.chipsCompositeNodeCount = String(totalNodeCount);',
+    '        compositeDataset.chipsCompositePendingFrameCount = String(remaining);',
+    '      }',
+    '      const markCompositeResize = (reason, height) => {',
+    '        if (!compositeDataset) {',
+    '          return;',
+    '        }',
+    '        compositeDataset.chipsCompositeLastResizeAt = String(Date.now());',
+    '        compositeDataset.chipsCompositeLastResizeReason = reason;',
+    '        compositeDataset.chipsCompositeLastHeight = String(Math.max(240, Math.ceil(height)));',
+    '      };',
+    '      const markCompositeReady = (payload) => {',
+    '        if (!compositeDataset) {',
+    '          return;',
+    '        }',
+    '        compositeDataset.chipsCompositeReady = "true";',
+    '        compositeDataset.chipsCompositeReadyAt = String(Date.now());',
+    '        compositeDataset.chipsCompositePendingFrameCount = String(Math.max(0, remaining));',
+    '        compositeDataset.chipsCompositeReadyFallback = payload?.fallback === true ? "true" : "false";',
+    '      };',
+    '      const markFrameRenderReady = (frame, status, height) => {',
+    '        if (!frame?.dataset) {',
+    '          return;',
+    '        }',
+    '        frame.dataset.renderReady = "true";',
+    '        frame.dataset.renderReadyAt = String(Date.now());',
+    '        frame.dataset.renderStatus = status;',
+    '        if (Number.isFinite(height)) {',
+    '          frame.dataset.renderHeight = String(Math.max(96, Math.ceil(height)));',
+    '        }',
     '      };',
     createCompositeInteractionBridgeScript(cardId, interactionPolicy),
     '      const getCompositeHeight = () => {',
@@ -1229,8 +1372,10 @@ const createCompositeDocument = (
     '        );',
     '      };',
     '      const emitCompositeResize = (reason) => {',
+    '        const nextHeight = Math.max(240, Math.ceil(getCompositeHeight()));',
+    '        markCompositeResize(reason, nextHeight);',
     "        emit('chips.composite:resize', {",
-    '          height: Math.max(240, Math.ceil(getCompositeHeight())),',
+    '          height: nextHeight,',
     '          nodeCount: totalNodeCount,',
     '          reason,',
     '        });',
@@ -1274,12 +1419,36 @@ const createCompositeDocument = (
     '      };',
     '      const markFrameSettled = () => {',
     '        remaining = Math.max(0, remaining - 1);',
+    '        if (compositeDataset) {',
+    '          compositeDataset.chipsCompositePendingFrameCount = String(remaining);',
+    '        }',
     '        scheduleCompositeResize("node-load");',
     '        if (remaining === 0 && !readySent) {',
     '          readySent = true;',
-    "          emit('chips.composite:ready', { nodeCount: frameList.length });",
+    '          const payload = { nodeCount: frameList.length };',
+    '          markCompositeReady(payload);',
+    "          emit('chips.composite:ready', payload);",
     '          scheduleCompositeResize("ready");',
     '        }',
+    '      };',
+    '      const handleFrameFailure = (frame, payload, status = "load-error") => {',
+    '        const nodeId = typeof payload?.nodeId === "string" ? payload.nodeId : frame?.dataset?.nodeId ?? "";',
+    '        const node = nodeById.get(nodeId);',
+    '        if (node) {',
+    '          node.dataset.state = "degraded";',
+    '        }',
+    '        if (nodeId) {',
+    '          failedNodeIds.add(nodeId);',
+    '          failedNodePayloads.set(nodeId, payload);',
+    '        }',
+    '        markFrameRenderReady(frame, status);',
+    "        emit('chips.composite:node-error', payload);",
+    '        emitFatalIfAllNodesFailed();',
+    '        if (frame.dataset.loaded === "true") {',
+    '          return;',
+    '        }',
+    '        frame.dataset.loaded = "true";',
+    '        markFrameSettled();',
     '      };',
     '      for (const payload of errorPayload) {',
     "        emit('chips.composite:node-error', payload);",
@@ -1296,29 +1465,15 @@ const createCompositeDocument = (
     '        });',
     '        frame.addEventListener("error", () => {',
     '          const nodeId = frame.dataset.nodeId ?? "";',
-    '          const node = nodeById.get(nodeId);',
-    '          if (node) {',
-    '            node.dataset.state = "degraded";',
-    '          }',
-    '          if (nodeId) {',
-    '            failedNodeIds.add(nodeId);',
-    '          }',
     "          const payload = { nodeId, code: 'IFRAME_LOAD_FAILED', message: 'Base card iframe failed to load.', stage: 'render-commit' };",
-    '          if (nodeId) {',
-    '            failedNodePayloads.set(nodeId, payload);',
-    '          }',
-    "          emit('chips.composite:node-error', payload);",
-    '          emitFatalIfAllNodesFailed();',
-    '          if (frame.dataset.loaded === "true") {',
-    '            return;',
-    '          }',
-    '          frame.dataset.loaded = "true";',
-    '          markFrameSettled();',
+    '          handleFrameFailure(frame, payload, "load-error");',
     '        });',
     '      }',
     '      if (frameList.length === 0 && !readySent) {',
     '        readySent = true;',
-    "        emit('chips.composite:ready', { nodeCount: 0 });",
+    '        const payload = { nodeCount: 0 };',
+    '        markCompositeReady(payload);',
+    "        emit('chips.composite:ready', payload);",
     '        scheduleCompositeResize("ready");',
     '      }',
     '      if (isPreviewMode) {',
@@ -1345,6 +1500,10 @@ const createCompositeDocument = (
     '          if (node) {',
     '            node.dataset.state = "degraded";',
     '          }',
+    '          const frame = frameByNodeId.get(nodeId);',
+    '          if (frame) {',
+    '            markFrameRenderReady(frame, "degraded");',
+    '          }',
     '          failedNodeIds.add(nodeId);',
     '          failedNodePayloads.set(nodeId, payload);',
     "          emit('chips.composite:node-error', payload);",
@@ -1363,7 +1522,9 @@ const createCompositeDocument = (
     '          if (!frame) {',
     '            return;',
     '          }',
-    '          frame.style.height = `${Math.max(96, Math.ceil(height))}px`;',
+    '          const nextHeight = Math.max(96, Math.ceil(height));',
+    '          frame.style.height = `${nextHeight}px`;',
+    '          markFrameRenderReady(frame, "ready", nextHeight);',
     '          scheduleCompositeResize("node-height");',
     '          return;',
     '        }',
@@ -1420,7 +1581,14 @@ const createCompositeDocument = (
     '      window.setTimeout(() => {',
     '        if (!readySent) {',
     '          readySent = true;',
-    "          emit('chips.composite:ready', { nodeCount: frameList.length, fallback: true });",
+    '          const payload = { nodeCount: frameList.length, fallback: true };',
+    '          markCompositeReady(payload);',
+    '          for (const frame of frameList) {',
+    '            if (frame.dataset.loaded === "true" && frame.dataset.renderReady !== "true") {',
+    '              markFrameRenderReady(frame, "fallback");',
+    '            }',
+    '          }',
+    "          emit('chips.composite:ready', payload);",
     '          scheduleCompositeResize("ready");',
     '        }',
     '      }, 1500);',
@@ -1484,9 +1652,13 @@ const createDiagnostic = (
 export class CardService {
   private readonly runtime?: Pick<PluginRuntime, 'query'>;
   private readonly workspaceRoot: string;
+  private readonly managedDocumentScheme?: string;
   private readonly moduleCache = new Map<string, Promise<BaseCardPluginModule>>();
   private readonly browserBundleCache = new Map<string, Promise<string>>();
   private readonly persistentCardRootCache = new Map<string, PersistentCardRootCacheEntry>();
+  private readonly renderSessionCache = new Map<string, RenderSessionEntry>();
+  private readonly cardRootTokenByRootDir = new Map<string, string>();
+  private readonly cardRootDirByToken = new Map<string, string>();
   private readonly packer: CardPacker;
 
   public constructor(
@@ -1495,6 +1667,7 @@ export class CardService {
   ) {
     this.runtime = options.runtime;
     this.workspaceRoot = options.workspaceRoot ?? process.cwd();
+    this.managedDocumentScheme = normalizeManagedDocumentScheme(options.managedDocumentScheme);
     this.packer = new CardPacker(this.zip);
   }
 
@@ -1563,6 +1736,7 @@ export class CardService {
       const structureNodes = parseStructureNodes(ctx.structure, ctx.contentByNodeId);
       const title = asString(ctx.metadata.name) ?? 'Untitled Card';
       const cardId = asString(ctx.metadata.card_id) ?? asString(ctx.metadata.id) ?? createId();
+      const locale = asString(options?.locale) ?? 'zh-CN';
       const target = options?.target ?? 'card-iframe';
       const mode = options?.mode ?? 'view';
       const interactionPolicy = options?.interactionPolicy ?? 'native';
@@ -1574,7 +1748,9 @@ export class CardService {
       const renderedNodes: RenderedBaseCardNode[] = [];
 
       for (const node of structureNodes) {
-        renderedNodes.push(await this.renderStructureNode(node, ctx, theme, themeCssText, diagnostics, interactionPolicy));
+        renderedNodes.push(
+          await this.renderStructureNode(node, ctx, theme, themeCssText, locale, diagnostics, interactionPolicy)
+        );
       }
 
       const semanticModel = {
@@ -1582,6 +1758,7 @@ export class CardService {
         title,
         target,
         themeId: theme.id,
+        locale,
         contentFiles: ctx.contentFiles,
         nodes: renderedNodes.map((node) => ({
           nodeId: node.nodeId,
@@ -1592,11 +1769,28 @@ export class CardService {
         }))
       };
       const semanticHash = crypto.createHash('sha256').update(JSON.stringify(semanticModel)).digest('hex');
-      const body = createCompositeDocument(cardId, title, target, semanticHash, theme, themeCssText, renderedNodes, mode, interactionPolicy);
+      const persistedSession = await this.persistCompositeRenderSession(renderedNodes);
+      const body = createCompositeDocument(
+        cardId,
+        title,
+        target,
+        semanticHash,
+        theme,
+        themeCssText,
+        locale,
+        persistedSession.nodes,
+        mode,
+        interactionPolicy,
+        this.managedDocumentScheme,
+      );
+      const indexPath = path.join(persistedSession.rootDir, 'index.html');
+      await fs.writeFile(indexPath, body, 'utf-8');
 
       return {
         title,
         body,
+        documentUrl: this.createRenderSessionDocumentUrl(persistedSession.sessionId, indexPath),
+        sessionId: persistedSession.sessionId,
         contentFiles: ctx.contentFiles,
         target,
         semanticHash,
@@ -1619,7 +1813,7 @@ export class CardService {
       const metadata = parseCardYamlRecord(await fs.readFile(metadataPath, 'utf-8'), metadataPath);
       const title = asString(metadata.name) ?? 'Untitled Card';
       const ratio = asString(metadata.cover_ratio);
-      const coverUrl = pathToFileURL(path.resolve(coverPath)).href;
+      const coverUrl = this.createCardRootFileUrl(resolvedRoot.rootDir, '.card/cover.html');
 
       return {
         title,
@@ -1667,8 +1861,10 @@ export class CardService {
         pluginBundleCode,
         config: { ...options.config },
         themeCssText: createBasecardThemeCss(theme, options.themeCssText),
+        locale: options.locale,
         interactionPolicy: options.interactionPolicy ?? 'native',
         resourceBaseUrl: options.resourceBaseUrl,
+        managedDocumentScheme: this.managedDocumentScheme,
       }),
       cardType,
       pluginId: plugin.manifest.id,
@@ -1698,22 +1894,114 @@ export class CardService {
     const pluginBundleCode = await this.bundlePluginForBrowser(plugin);
     const baseCardId = asString(options.baseCardId) ?? asString(initialConfig.id);
     const title = `${cardType} Editor`;
+    const body = createEditorFrameDocument({
+      cardType,
+      title,
+      pluginBundleCode,
+      initialConfig,
+      pluginId: plugin.manifest.id,
+      baseCardId,
+      themeCssText: createBasecardEditorThemeCss(theme, options.themeCssText),
+      managedDocumentScheme: this.managedDocumentScheme,
+    });
+    const persistedSession = await this.persistDocumentSession('editor');
+    const indexPath = path.join(persistedSession.rootDir, 'index.html');
+    await fs.writeFile(indexPath, body, 'utf-8');
 
     return {
       title,
-      body: createEditorFrameDocument({
-        cardType,
-        title,
-        pluginBundleCode,
-        initialConfig,
-        pluginId: plugin.manifest.id,
-        baseCardId,
-        themeCssText: createBasecardEditorThemeCss(theme, options.themeCssText)
-      }),
+      body,
+      documentUrl: this.createRenderSessionDocumentUrl(persistedSession.sessionId, indexPath),
+      sessionId: persistedSession.sessionId,
       cardType,
       pluginId: plugin.manifest.id,
       baseCardId
     };
+  }
+
+  public async releaseRenderSession(sessionId: string): Promise<void> {
+    const normalizedSessionId = asString(sessionId)?.trim();
+    if (!normalizedSessionId) {
+      throw createError('INVALID_ARGUMENT', 'sessionId is required for render session release.');
+    }
+
+    const session = this.renderSessionCache.get(normalizedSessionId);
+    if (!session) {
+      return;
+    }
+
+    this.renderSessionCache.delete(normalizedSessionId);
+    await fs.rm(session.rootDir, { recursive: true, force: true });
+  }
+
+  public resolveDocumentFilePath(requestUrl: string): string | null {
+    let parsed: URL;
+    try {
+      parsed = new URL(requestUrl);
+    } catch {
+      return null;
+    }
+
+    if (parsed.protocol === 'file:') {
+      try {
+        return fileURLToPath(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    return this.resolveManagedDocumentFilePath(requestUrl);
+  }
+
+  public resolveManagedDocumentFilePath(requestUrl: string): string | null {
+    const managedScheme = this.managedDocumentScheme;
+    if (!managedScheme) {
+      return null;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(requestUrl);
+    } catch {
+      return null;
+    }
+
+    if (parsed.protocol !== `${managedScheme}:`) {
+      return null;
+    }
+
+    const pathSegments = decodeManagedUrlPathSegments(parsed.pathname);
+    if (!pathSegments || pathSegments.length < 2) {
+      return null;
+    }
+
+    const identifier = pathSegments[0];
+    const relativePath = normalizeManagedRelativePath(pathSegments.slice(1).join('/'));
+    if (!identifier || !relativePath) {
+      return null;
+    }
+
+    if (parsed.hostname === 'session') {
+      const session = this.renderSessionCache.get(identifier);
+      if (!session) {
+        return null;
+      }
+
+      const absolutePath = path.resolve(session.rootDir, relativePath);
+      return isPathWithinRoot(session.rootDir, absolutePath) ? absolutePath : null;
+    }
+
+    if (parsed.hostname === 'card-root') {
+      const rootDir = this.cardRootDirByToken.get(identifier);
+      if (!rootDir) {
+        return null;
+      }
+
+      const absolutePath = path.resolve(rootDir, relativePath);
+      return isPathWithinRoot(rootDir, absolutePath) ? absolutePath : null;
+    }
+
+    return null;
   }
 
   private async renderStructureNode(
@@ -1721,6 +2009,7 @@ export class CardService {
     ctx: CardPackageContext,
     theme: ThemeSnapshot,
     themeCssText: string | undefined,
+    locale: string,
     diagnostics: RenderNodeDiagnostic[],
     interactionPolicy: CompositeInteractionPolicy
   ): Promise<RenderedBaseCardNode> {
@@ -1763,16 +2052,17 @@ export class CardService {
     }
 
     try {
-      const config = await this.normalizeNodeConfig(plugin, content, ctx.rootDir);
+      const config = await this.normalizeNodeConfig(plugin, content, ctx.rootDir, locale);
       const title = asString(asRecord(config).title) ?? node.id;
       const view = await this.renderBasecard({
         baseCardId: node.id,
         cardType,
         config,
         title,
-        resourceBaseUrl: pathToFileURL(`${ctx.rootDir}${path.sep}`).href,
+        resourceBaseUrl: this.createCardRootBaseUrl(ctx.rootDir),
         theme,
         themeCssText,
+        locale,
         interactionPolicy,
       });
 
@@ -1848,12 +2138,14 @@ export class CardService {
   private async normalizeNodeConfig(
     plugin: RenderablePluginRecord,
     file: ParsedContentFile,
-    cardRoot: string
+    cardRoot: string,
+    locale?: string
   ): Promise<Record<string, unknown>> {
     const rawConfig: Record<string, unknown> = {
       ...file.parsed,
       id: asString(file.parsed.id) ?? file.id
     };
+    const effectiveLocale = asString(locale) ?? asString(rawConfig.locale) ?? 'zh-CN';
 
     if (plugin.manifest.id === 'chips.basecard.richtext') {
       if (
@@ -1863,7 +2155,7 @@ export class CardService {
         return {
           id: file.id,
           body: rawConfig.body,
-          locale: asString(rawConfig.locale) ?? 'zh-CN'
+          locale: effectiveLocale
         };
       }
 
@@ -1871,11 +2163,14 @@ export class CardService {
       return {
         id: file.id,
         body: richTextHtml || '<p></p>',
-        locale: asString(rawConfig.locale) ?? 'zh-CN'
+        locale: effectiveLocale
       };
     }
 
-    return rawConfig;
+    return {
+      ...rawConfig,
+      locale: effectiveLocale
+    };
   }
 
   private normalizeEditorInitialConfig(
@@ -2121,6 +2416,46 @@ export class CardService {
     }
   }
 
+  private async persistDocumentSession(kind: 'card' | 'editor'): Promise<{ sessionId: string; rootDir: string }> {
+    const sessionId = `${kind}-render-${createId()}`;
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), `chips-${kind}-render-`));
+    this.renderSessionCache.set(sessionId, {
+      rootDir,
+      createdAt: Date.now(),
+    });
+    return { sessionId, rootDir };
+  }
+
+  private async persistCompositeRenderSession(
+    nodes: RenderedBaseCardNode[],
+  ): Promise<{ sessionId: string; rootDir: string; nodes: RenderedBaseCardNode[] }> {
+    const session = await this.persistDocumentSession('card');
+    const nodesRoot = path.join(session.rootDir, 'nodes');
+    await fs.mkdir(nodesRoot, { recursive: true });
+
+    const persistedNodes = await Promise.all(
+      nodes.map(async (node, index) => {
+        if (!node.frameHtml) {
+          return node;
+        }
+
+        const fileName = createRenderFileName('basecard', node.nodeId || node.cardType, index);
+        const absolutePath = path.join(nodesRoot, fileName);
+        await fs.writeFile(absolutePath, node.frameHtml, 'utf-8');
+
+        return {
+          ...node,
+          frameSrc: `./nodes/${fileName}`,
+        } satisfies RenderedBaseCardNode;
+      }),
+    );
+
+    return {
+      ...session,
+      nodes: persistedNodes,
+    };
+  }
+
   private async resolveCardRoot(
     cardFile: string,
     options: { persistArchive?: boolean } = {},
@@ -2164,6 +2499,7 @@ export class CardService {
         return { rootDir: cached.rootDir };
       }
 
+      this.unregisterCardRoot(cached.rootDir);
       await fs.rm(cached.rootDir, { recursive: true, force: true });
       this.persistentCardRootCache.delete(cardFile);
     }
@@ -2228,5 +2564,72 @@ export class CardService {
     } catch {
       return undefined;
     }
+  }
+
+  private createRenderSessionDocumentUrl(sessionId: string, absolutePath: string): string {
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    const session = this.renderSessionCache.get(sessionId);
+    if (!session) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    const relativePath = normalizeManagedRelativePath(path.relative(session.rootDir, absolutePath).split(path.sep).join('/'));
+    if (!relativePath) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    return `${this.managedDocumentScheme}://session/${encodeURIComponent(sessionId)}/${encodeManagedUrlPath(relativePath)}`;
+  }
+
+  private createCardRootBaseUrl(rootDir: string): string {
+    const normalizedRootDir = path.resolve(rootDir);
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(`${normalizedRootDir}${path.sep}`).href;
+    }
+
+    const token = this.getOrCreateCardRootToken(normalizedRootDir);
+    return `${this.managedDocumentScheme}://card-root/${encodeURIComponent(token)}/`;
+  }
+
+  private createCardRootFileUrl(rootDir: string, relativePath: string): string {
+    const normalizedRootDir = path.resolve(rootDir);
+    const normalizedRelativePath = normalizeManagedRelativePath(relativePath);
+    if (!normalizedRelativePath) {
+      return pathToFileURL(path.resolve(normalizedRootDir, relativePath)).href;
+    }
+
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(path.resolve(normalizedRootDir, normalizedRelativePath)).href;
+    }
+
+    const token = this.getOrCreateCardRootToken(normalizedRootDir);
+    return `${this.managedDocumentScheme}://card-root/${encodeURIComponent(token)}/${encodeManagedUrlPath(normalizedRelativePath)}`;
+  }
+
+  private getOrCreateCardRootToken(rootDir: string): string {
+    const normalizedRootDir = path.resolve(rootDir);
+    const cachedToken = this.cardRootTokenByRootDir.get(normalizedRootDir);
+    if (cachedToken) {
+      return cachedToken;
+    }
+
+    const token = createId();
+    this.cardRootTokenByRootDir.set(normalizedRootDir, token);
+    this.cardRootDirByToken.set(token, normalizedRootDir);
+    return token;
+  }
+
+  private unregisterCardRoot(rootDir: string): void {
+    const normalizedRootDir = path.resolve(rootDir);
+    const token = this.cardRootTokenByRootDir.get(normalizedRootDir);
+    if (!token) {
+      return;
+    }
+
+    this.cardRootTokenByRootDir.delete(normalizedRootDir);
+    this.cardRootDirByToken.delete(token);
   }
 }

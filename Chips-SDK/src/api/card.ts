@@ -28,6 +28,8 @@ export interface CardRenderOptions {
   target?: RenderTarget;
   viewport?: RenderViewport;
   verifyConsistency?: boolean;
+  themeId?: string;
+  locale?: string;
   /**
    * 仅在复合卡片窗口场景下使用的渲染模式。
    * - view：正常查看模式；
@@ -62,6 +64,8 @@ export interface RenderConsistencyResult {
 export interface CardRenderView {
   title: string;
   body: string;
+  documentUrl: string;
+  sessionId: string;
   contentFiles: string[];
   target: string;
   semanticHash: string;
@@ -93,6 +97,8 @@ export interface CardEditorRenderOptions {
 export interface CardEditorView {
   title: string;
   body: string;
+  documentUrl: string;
+  sessionId: string;
   cardType: string;
   pluginId: string;
   baseCardId?: string;
@@ -124,6 +130,7 @@ export interface CardEditorResourceBridge {
 export interface FrameRenderResult {
   frame: HTMLIFrameElement;
   origin: string;
+  dispose: () => Promise<void>;
 }
 
 export type CompositeMode = "view" | "preview";
@@ -198,6 +205,7 @@ export interface CardApi {
   parse(cardFile: string): Promise<CardDocument>;
   validate(card: CardDocument): Promise<ValidationResult>;
   render(cardFile: string, options?: CardRenderOptions): Promise<CardRenderResult>;
+  releaseRenderSession(sessionId: string): Promise<void>;
   coverFrame: {
     render(options: { cardFile: string; cardName?: string }): Promise<FrameRenderResult>;
   };
@@ -280,6 +288,12 @@ export function createCardApi(client: CoreClient): CardApi {
       }
       return client.invoke("card.render", { cardFile, options });
     },
+    async releaseRenderSession(sessionId) {
+      if (!sessionId) {
+        throw createError("INVALID_ARGUMENT", "card.releaseRenderSession: sessionId is required.");
+      }
+      await client.invoke("card.releaseRenderSession", { sessionId });
+    },
     coverFrame: {
       async render({ cardFile, cardName }) {
         if (!cardFile) {
@@ -303,7 +317,7 @@ export function createCardApi(client: CoreClient): CardApi {
         return createFrameFromUrl(
           view.coverUrl,
           cardName ?? view.title ?? "Card Cover",
-          "allow-scripts allow-same-origin",
+          "allow-scripts",
         );
       },
     },
@@ -351,7 +365,23 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        return createFrameFromView(view.body, view.title ?? "Card");
+        if (!view.documentUrl) {
+          throw createError(
+            "INTERNAL_ERROR",
+            "card.compositeWindow.render requires Host to return view.documentUrl.",
+          );
+        }
+
+        return createFrameFromUrl(
+          view.documentUrl,
+          view.title ?? "Card",
+          "allow-scripts allow-forms",
+          {
+            release: view.sessionId
+              ? () => client.invoke("card.releaseRenderSession", { sessionId: view.sessionId }).then(() => undefined)
+              : undefined,
+          },
+        );
       },
       onReady(frame, handler) {
         return subscribeToCompositeReady(frame, handler);
@@ -420,8 +450,29 @@ export function createCardApi(client: CoreClient): CardApi {
           );
         }
 
-        const frameResult = createFrameFromView(view.body, view.title ?? `${cardType} Editor`);
-        attachCardEditorResourceBridge(frameResult.frame, resources);
+        if (!view.documentUrl) {
+          throw createError(
+            "INTERNAL_ERROR",
+            "card.editorPanel.render requires Host to return view.documentUrl.",
+          );
+        }
+
+        const frameResult = createFrameFromUrl(
+          view.documentUrl,
+          view.title ?? `${cardType} Editor`,
+          "allow-scripts allow-forms",
+          {
+            release: view.sessionId
+              ? () => client.invoke("card.releaseRenderSession", { sessionId: view.sessionId }).then(() => undefined)
+              : undefined,
+          },
+        );
+        const cleanupBridge = attachCardEditorResourceBridge(frameResult.frame, resources);
+        const originalDispose = frameResult.dispose;
+        frameResult.dispose = async () => {
+          cleanupBridge();
+          await originalDispose();
+        };
         return frameResult;
       },
       onReady(frame, handler) {
@@ -434,19 +485,6 @@ export function createCardApi(client: CoreClient): CardApi {
         return subscribeToFrameMessage<CardEditorErrorPayload>(frame, "chips.card-editor:error", handler);
       },
     },
-  };
-}
-
-function createFrameFromView(body: string, title: string): FrameRenderResult {
-  const frame = document.createElement("iframe");
-  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
-  frame.setAttribute("loading", "lazy");
-  frame.title = title;
-  frame.srcdoc = body;
-
-  return {
-    frame,
-    origin: window.location.origin,
   };
 }
 
@@ -463,12 +501,10 @@ type CardEditorResourceRequestPayload = {
 function attachCardEditorResourceBridge(
   frame: HTMLIFrameElement,
   resources?: CardEditorResourceBridge,
-): void {
+): () => void {
   if (typeof window === "undefined" || !resources) {
-    return;
+    return () => undefined;
   }
-
-  const expectedOrigin = window.location.origin;
 
   const cleanup = () => {
     window.removeEventListener("message", listener);
@@ -481,7 +517,7 @@ function attachCardEditorResourceBridge(
     }
 
     if (!event || event.source !== frame.contentWindow) return;
-    if (event.origin !== expectedOrigin && event.origin !== "null") return;
+    if (!isAllowedFrameOrigin(frame, event.origin)) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
 
@@ -535,6 +571,7 @@ function attachCardEditorResourceBridge(
   };
 
   window.addEventListener("message", listener);
+  return cleanup;
 }
 
 async function handleCardEditorResourceRequest(
@@ -629,7 +666,14 @@ function createFileUrl(filePath: string): string {
   return encodeURI(`file://${absolutePath}`);
 }
 
-function createFrameFromUrl(url: string, title: string, sandbox: string): FrameRenderResult {
+function createFrameFromUrl(
+  url: string,
+  title: string,
+  sandbox: string,
+  options?: {
+    release?: () => Promise<void> | void;
+  },
+): FrameRenderResult {
   const frame = document.createElement("iframe");
   frame.setAttribute("sandbox", sandbox);
   frame.setAttribute("loading", "lazy");
@@ -643,9 +687,64 @@ function createFrameFromUrl(url: string, title: string, sandbox: string): FrameR
     // keep the current window origin as a safe fallback for malformed urls
   }
 
+  const frameWithDataset = frame as HTMLIFrameElement & { dataset?: DOMStringMap };
+  if (!frameWithDataset.dataset) {
+    frameWithDataset.dataset = {} as DOMStringMap;
+  }
+  frameWithDataset.dataset.chipsOrigin = origin;
+
+  const cleanupTasks: Array<() => void> = [];
+  let hasBeenConnected = false;
+  let disposed = false;
+  const dispose = async () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    for (const task of cleanupTasks.splice(0)) {
+      task();
+    }
+    await options?.release?.();
+  };
+
+  const handlePageHide = () => {
+    void dispose().catch(() => undefined);
+  };
+  if (
+    typeof (window as { addEventListener?: unknown }).addEventListener === "function" &&
+    typeof (window as { removeEventListener?: unknown }).removeEventListener === "function"
+  ) {
+    window.addEventListener("pagehide", handlePageHide);
+    cleanupTasks.push(() => {
+      window.removeEventListener("pagehide", handlePageHide);
+    });
+  }
+
+  if (typeof MutationObserver === "function" && document.documentElement) {
+    const checkConnection = () => {
+      if (frame.isConnected) {
+        hasBeenConnected = true;
+        return;
+      }
+      if (hasBeenConnected) {
+        void dispose().catch(() => undefined);
+      }
+    };
+    const observer = new MutationObserver(checkConnection);
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+    cleanupTasks.push(() => {
+      observer.disconnect();
+    });
+    queueMicrotask(checkConnection);
+  }
+
   return {
     frame,
     origin,
+    dispose,
   };
 }
 
@@ -719,11 +818,10 @@ function subscribeToFrameMessage<T = void>(
   }
 
   const contentWindow = frame.contentWindow;
-  const expectedOrigin = window.location.origin;
 
   const listener = (event: MessageEvent) => {
     if (!event || event.source !== contentWindow) return;
-    if (event.origin !== expectedOrigin && event.origin !== "null") return;
+    if (!isAllowedFrameOrigin(frame, event.origin)) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const record = data as { type?: string; payload?: unknown };
@@ -736,6 +834,24 @@ function subscribeToFrameMessage<T = void>(
   return () => {
     window.removeEventListener("message", listener);
   };
+}
+
+function isAllowedFrameOrigin(frame: HTMLIFrameElement, origin: string): boolean {
+  if (origin === "null") {
+    return true;
+  }
+
+  const allowedOrigins = new Set<string>();
+  if (typeof window !== "undefined") {
+    allowedOrigins.add(window.location.origin);
+  }
+
+  const frameOrigin = frame.dataset?.chipsOrigin;
+  if (frameOrigin) {
+    allowedOrigins.add(frameOrigin);
+  }
+
+  return allowedOrigins.has(origin);
 }
 
 function normalizeCompositeError(payload: unknown): import("../types/errors").StandardError {

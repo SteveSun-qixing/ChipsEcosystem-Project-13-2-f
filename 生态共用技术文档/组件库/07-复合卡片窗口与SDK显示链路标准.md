@@ -32,9 +32,18 @@
 4. Host 依据 `capabilities.cardTypes` 分发到基础卡片插件；
 5. Host 先为每个基础卡片生成独立的单卡运行时文档，并在该文档内挂载插件 `renderBasecardView`；
 6. Host 复合层只负责拼接这些单卡 iframe 区域，不再在复合链路中把基础卡片预渲染成静态 HTML；
-7. Host 拼接复合卡片文档并返回复合 iframe；
-8. `CompositeCardWindow` 挂载最终 iframe；
-9. 当主题运行时缓存键变化时，`CompositeCardWindow` 重新触发整条渲染链。
+7. Host 拼接复合卡片文档，并把复合文档与各基础卡片节点文档持久化到一次独立的 render session；
+8. Host 返回 `{ view: { documentUrl, sessionId, ... } }`，其中 `documentUrl` 指向 render session 中的复合文档入口；
+9. `CompositeCardWindow` 必须直接把 `documentUrl` 写入 `iframe.src` 挂载最终 iframe，禁止再把 Host HTML 二次包装为 `blob:` 或 `srcdoc`；
+10. 当 iframe 被显式销毁、页面 `pagehide` 或 DOM 节点移除时，SDK 必须通过 `card.releaseRenderSession(sessionId)` 回收 render session；
+11. 当主题运行时缓存键变化时，`CompositeCardWindow` 重新触发整条渲染链。
+
+`documentUrl` 正式约束补充：
+
+- `documentUrl` 是 Host 托管的正式文档入口 URL，不要求固定为 `file://`；
+- 在 Electron Host 中，复合文档、基础卡片节点文档以及卡片根目录资源，当前正式通过 Host 注册的受控渲染协议 URL 交付，避免沙箱 iframe 继续直接访问本地 `file://` 子文档时被 Chromium 拦截；
+- SDK 与应用层只能把 `documentUrl` 视为“可直接挂载的独立文档 URL”，不得依赖其协议前缀、目录结构或磁盘落点。
+- 消费 `documentUrl`、`coverUrl` 或 Host 托管编辑器文档的应用壳层页面，其 CSP 必须显式允许正式受控渲染协议（当前为 `chips-render:`）出现在至少 `frame-src` 中；若壳层还会直接消费该协议下的图片、字体或其他子资源，也必须同步放行对应指令。
 
 ## 4. 主题同步链路
 
@@ -89,7 +98,11 @@
 ## 8. 运行时要求
 
 - 外层只向应用层交付一个复合 iframe；
+- 顶层复合 iframe 文档必须作为独立文档上下文加载，禁止应用层通过 `srcdoc` 直接内联 Host HTML，避免宿主应用 CSP 继承后阻断正式渲染脚本；
+- 顶层复合 iframe 当前正式 sandbox 策略为 `allow-scripts allow-forms`，不得加入 `allow-same-origin`，避免沙箱逃逸告警与父子文档同源耦合；
 - 每个基础卡片节点在复合文档内部保持独立 iframe，以便失败隔离和尺寸回传；
+- 复合文档内部的基础卡片 iframe 也必须通过独立文档 URL 挂载，不得继续把单卡文档写入 `srcdoc`，否则单卡脚本仍会继承上层 CSP 而被阻断；
+- 复合文档内部基础卡片 iframe 当前正式 sandbox 策略为 `allow-scripts allow-popups`，同样不得加入 `allow-same-origin`；
 - 基础卡片的真实渲染职责属于单卡运行时文档；复合文档只消费这些单卡文档并做区域装配，不得在复合链路里把节点提前拍扁成静态 HTML 片段；
 - 复合文档正式只承担基础卡片节点编排职责，不额外输出卡片标题、基础卡片计数、节点外框或其他壳层装饰；
 - 对引用卡片内部资源的基础卡片，Host 必须向单卡文档提供可解析卡片根目录相对路径的资源基准地址；
@@ -102,6 +115,7 @@
 - 复合卡片处于 `mode: 'preview'` 时，基础卡片节点被点击后必须发送 `chips.composite:node-select`；
 - 单节点失败时发送 `chips.composite:node-error`，同时在对应位置输出降级内容；
 - 整体严重错误时发送 `chips.composite:fatal-error`。
+- 由于正式复合文档和基础卡片文档都运行在 sandbox iframe 文档上下文中，消息 `origin` 可能为 `null`；应用层必须通过 SDK 事件接口消费这些事件，不得假设 iframe 与应用壳层同源。
 
 `interactionPolicy` 约束：
 

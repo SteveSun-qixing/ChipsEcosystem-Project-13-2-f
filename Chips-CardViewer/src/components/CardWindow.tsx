@@ -33,7 +33,7 @@ export function CardWindow({
   );
   const client = useChipsClient(traceId ?? "card-window");
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const frameResultRef = useRef<FrameRenderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -79,6 +79,7 @@ export function CardWindow({
           logger.warn("SDK 渲染结果返回时组件已取消，忽略本次结果", {
             cardFile,
           });
+          void result.dispose().catch(() => undefined);
           return;
         }
         const frame = result.frame;
@@ -86,14 +87,14 @@ export function CardWindow({
           origin: result.origin,
           frameTitle: frame.title,
         });
-        frameRef.current = frame;
+        frameResultRef.current = result;
         frame.style.width = "100%";
         frame.style.height = "100%";
         frame.style.border = "none";
         const handleFrameLoad = () => {
           logger.info("iframe 触发原生 load 事件", {
-            src: frame.getAttribute("src"),
-            srcdocLength: frame.srcdoc?.length ?? 0,
+            src: frame.getAttribute("src") ?? frame.src ?? null,
+            currentSrc: frame.src || null,
           });
           if (!cancelled) {
             setIsLoading(false);
@@ -170,12 +171,14 @@ export function CardWindow({
       for (const task of cleanupTasks) {
         task();
       }
-      const frame = frameRef.current;
+      const frameResult = frameResultRef.current;
+      const frame = frameResult?.frame ?? null;
+      void frameResult?.dispose().catch(() => undefined);
       if (frame && frame.parentElement) {
         frame.parentElement.removeChild(frame);
         logger.debug("已从容器中移除 iframe");
       }
-      frameRef.current = null;
+      frameResultRef.current = null;
     };
   }, [cardFile, client, logger, themeRuntime.cacheKey]);
 

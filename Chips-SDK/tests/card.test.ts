@@ -3,6 +3,11 @@ import { createCardApi } from "../src/api/card";
 import type { CoreClient } from "../src/types/client";
 import { createError } from "../src/types/errors";
 
+type MockIframeElement = HTMLIFrameElement & {
+  attrs: Record<string, string>;
+  trigger: (type: string) => void;
+};
+
 function createStubClient(invokeImpl: CoreClient["invoke"]): CoreClient {
   return {
     clientConfig: {},
@@ -13,6 +18,41 @@ function createStubClient(invokeImpl: CoreClient["invoke"]): CoreClient {
       emit: async () => {},
     },
   };
+}
+
+function createMockIframe(overrides: Record<string, unknown> = {}): MockIframeElement {
+  const listeners = new Map<string, Array<() => void>>();
+  const frame: any = {
+    tagName: "IFRAME",
+    attrs: {} as Record<string, string>,
+    dataset: {} as Record<string, string>,
+    isConnected: true,
+    setAttribute(name: string, value: string) {
+      this.attrs[name] = value;
+    },
+    addEventListener(type: string, listener: () => void) {
+      const handlers = listeners.get(type) ?? [];
+      handlers.push(listener);
+      listeners.set(type, handlers);
+    },
+    removeEventListener(type: string, listener: () => void) {
+      const handlers = listeners.get(type);
+      if (!handlers) {
+        return;
+      }
+      const index = handlers.indexOf(listener);
+      if (index >= 0) {
+        handlers.splice(index, 1);
+      }
+    },
+    trigger(type: string) {
+      for (const listener of [...(listeners.get(type) ?? [])]) {
+        listener();
+      }
+    },
+  };
+
+  return Object.assign(frame, overrides) as MockIframeElement;
 }
 
 describe("CardApi", () => {
@@ -126,7 +166,8 @@ describe("CardApi", () => {
         return {
           view: {
             title: "Test Card",
-            body: "<div>content</div>",
+            documentUrl: "file:///workspace/render/index.html",
+            sessionId: "session-1",
             contentFiles: [],
             target: "card-iframe",
             semanticHash: "hash",
@@ -139,17 +180,15 @@ describe("CardApi", () => {
     const previousDocument = (globalThis as any).document;
 
     try {
-      (globalThis as any).window = { location: { origin: "https://example.test" }, addEventListener: () => {}, removeEventListener: () => {} };
-      const created: any[] = [];
+      (globalThis as any).window = {
+        location: { origin: "https://example.test", href: "https://example.test/app" },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      const created: MockIframeElement[] = [];
       (globalThis as any).document = {
         createElement: (tag: string) => {
-          const el: any = {
-            tagName: tag.toUpperCase(),
-            attrs: {} as Record<string, string>,
-            setAttribute(name: string, value: string) {
-              this.attrs[name] = value;
-            },
-          };
+          const el = createMockIframe({ tagName: tag.toUpperCase() });
           created.push(el);
           return el;
         },
@@ -163,9 +202,15 @@ describe("CardApi", () => {
       expect(payload.cardFile).toBe("/test.card");
       expect(payload.options?.target).toBe("card-iframe");
       expect(payload.options?.mode).toBe("preview");
-      expect(result.origin).toBe("https://example.test");
-      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-same-origin allow-forms");
-      expect(created[0]?.srcdoc).toBe("<div>content</div>");
+      expect(result.origin).toBe("null");
+      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-forms");
+      expect(created[0]?.src).toBe("file:///workspace/render/index.html");
+      expect(created[0]?.dataset.chipsOrigin).toBe("null");
+      await result.dispose();
+      expect(calls[1]).toEqual({
+        action: "card.releaseRenderSession",
+        payload: { sessionId: "session-1" },
+      });
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -181,7 +226,8 @@ describe("CardApi", () => {
         return {
           view: {
             title: "Test Card",
-            body: "<div>content</div>",
+            documentUrl: "file:///workspace/render/interaction.html",
+            sessionId: "session-2",
             contentFiles: [],
             target: "card-iframe",
             semanticHash: "hash",
@@ -194,18 +240,16 @@ describe("CardApi", () => {
     const previousDocument = (globalThis as any).document;
 
     try {
-      (globalThis as any).window = { location: { origin: "https://example.test" }, addEventListener: () => {}, removeEventListener: () => {} };
+      (globalThis as any).window = {
+        location: { origin: "https://example.test", href: "https://example.test/app" },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
       (globalThis as any).document = {
-        createElement: (tag: string) => ({
-          tagName: tag.toUpperCase(),
-          attrs: {} as Record<string, string>,
-          setAttribute(name: string, value: string) {
-            this.attrs[name] = value;
-          },
-        }),
+        createElement: (tag: string) => createMockIframe({ tagName: tag.toUpperCase() }),
       };
 
-      await api.compositeWindow.render({
+      const result = await api.compositeWindow.render({
         cardFile: "/test.card",
         mode: "preview",
         interactionPolicy: "delegate",
@@ -216,6 +260,12 @@ describe("CardApi", () => {
         options?: { mode?: string; target?: string; interactionPolicy?: string };
       };
       expect(payload.options?.interactionPolicy).toBe("delegate");
+      expect(result.frame.src).toBe("file:///workspace/render/interaction.html");
+      await result.dispose();
+      expect(calls[1]).toEqual({
+        action: "card.releaseRenderSession",
+        payload: { sessionId: "session-2" },
+      });
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -242,16 +292,10 @@ describe("CardApi", () => {
     const previousDocument = (globalThis as any).document;
     try {
       (globalThis as any).window = { location: { origin: "https://example.test" } };
-      const created: any[] = [];
+      const created: MockIframeElement[] = [];
       (globalThis as any).document = {
         createElement: (tag: string) => {
-          const el: any = {
-            tagName: tag.toUpperCase(),
-            attrs: {} as Record<string, string>,
-            setAttribute(name: string, value: string) {
-              this.attrs[name] = value;
-            },
-          };
+          const el = createMockIframe({ tagName: tag.toUpperCase() });
           created.push(el);
           return el;
         },
@@ -268,7 +312,7 @@ describe("CardApi", () => {
       expect(created.length).toBe(1);
       const frame = created[0];
       expect(frame.tagName).toBe("IFRAME");
-      expect(frame.attrs.sandbox).toBe("allow-scripts allow-same-origin");
+      expect(frame.attrs.sandbox).toBe("allow-scripts");
       expect(frame.attrs.loading).toBe("lazy");
       expect(frame.title).toBe("My Card");
       expect(frame.src).toBe("file:///workspace/.card/cover.html");
@@ -288,7 +332,8 @@ describe("CardApi", () => {
         return {
           view: {
             title: "RichTextCard Editor",
-            body: "<div>editor</div>",
+            documentUrl: "file:///workspace/editor/index.html",
+            sessionId: "editor-session-1",
             cardType: "RichTextCard",
             pluginId: "chips.basecard.richtext",
             baseCardId: "base-1",
@@ -300,17 +345,15 @@ describe("CardApi", () => {
     const previousWindow = (globalThis as any).window;
     const previousDocument = (globalThis as any).document;
     try {
-      (globalThis as any).window = { location: { origin: "https://example.test" } };
-      const created: any[] = [];
+      (globalThis as any).window = {
+        location: { origin: "https://example.test", href: "https://example.test/app" },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+      const created: MockIframeElement[] = [];
       (globalThis as any).document = {
         createElement: (tag: string) => {
-          const el: any = {
-            tagName: tag.toUpperCase(),
-            attrs: {} as Record<string, string>,
-            setAttribute(name: string, value: string) {
-              this.attrs[name] = value;
-            },
-          };
+          const el = createMockIframe({ tagName: tag.toUpperCase() });
           created.push(el);
           return el;
         },
@@ -335,10 +378,16 @@ describe("CardApi", () => {
           body: "<p>World</p>",
         },
       });
-      expect(result.origin).toBe("https://example.test");
-      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-same-origin allow-forms");
+      expect(result.origin).toBe("null");
+      expect(created[0]?.attrs.sandbox).toBe("allow-scripts allow-forms");
       expect(created[0]?.title).toBe("RichTextCard Editor");
-      expect(created[0]?.srcdoc).toBe("<div>editor</div>");
+      expect(created[0]?.src).toBe("file:///workspace/editor/index.html");
+      expect(created[0]?.dataset.chipsOrigin).toBe("null");
+      await result.dispose();
+      expect(calls[1]).toEqual({
+        action: "card.releaseRenderSession",
+        payload: { sessionId: "editor-session-1" },
+      });
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -354,7 +403,8 @@ describe("CardApi", () => {
         return {
           view: {
             title: "ImageCard Editor",
-            body: "<div>editor</div>",
+            documentUrl: "file:///workspace/editor/image.html",
+            sessionId: "editor-session-2",
             cardType: "ImageCard",
             pluginId: "chips.basecard.image",
             baseCardId: "image-1",
@@ -367,18 +417,12 @@ describe("CardApi", () => {
     const previousDocument = (globalThis as any).document;
     try {
       (globalThis as any).window = {
-        location: { origin: "https://example.test" },
+        location: { origin: "https://example.test", href: "https://example.test/app" },
         addEventListener: () => {},
         removeEventListener: () => {},
       };
       (globalThis as any).document = {
-        createElement: (tag: string) => ({
-          tagName: tag.toUpperCase(),
-          attrs: {} as Record<string, string>,
-          setAttribute(name: string, value: string) {
-            this.attrs[name] = value;
-          },
-        }),
+        createElement: (tag: string) => createMockIframe({ tagName: tag.toUpperCase() }),
       };
 
       const resources = {
@@ -418,7 +462,8 @@ describe("CardApi", () => {
       createStubClient(async () => ({
         view: {
           title: "ImageCard Editor",
-          body: "<div>editor</div>",
+          documentUrl: "file:///workspace/editor/resource-bridge.html",
+          sessionId: "editor-session-3",
           cardType: "ImageCard",
           pluginId: "chips.basecard.image",
           baseCardId: "image-1",
@@ -435,7 +480,7 @@ describe("CardApi", () => {
       let createdFrame: HTMLIFrameElement | undefined;
 
       (globalThis as any).window = {
-        location: { origin: "https://example.test" },
+        location: { origin: "https://example.test", href: "https://example.test/app" },
         addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
           if (type === "message") {
             listeners.push(listener);
@@ -454,15 +499,11 @@ describe("CardApi", () => {
 
       (globalThis as any).document = {
         createElement: (tag: string) => {
-          const el: any = {
+          const el = createMockIframe({
             tagName: tag.toUpperCase(),
-            attrs: {} as Record<string, string>,
             contentWindow: { postMessage },
             isConnected: true,
-            setAttribute(name: string, value: string) {
-              this.attrs[name] = value;
-            },
-          };
+          });
           createdFrame = el as HTMLIFrameElement;
           return el;
         },
@@ -475,7 +516,7 @@ describe("CardApi", () => {
       const deleteResource = vi.fn(async () => undefined);
       const releaseResourceUrl = vi.fn();
 
-      await api.editorPanel.render({
+      const result = await api.editorPanel.render({
         cardType: "ImageCard",
         baseCardId: "image-1",
         resources: {
@@ -574,6 +615,7 @@ describe("CardApi", () => {
         },
       });
       expect(releaseResourceUrl).toHaveBeenCalledWith("images/cover.png");
+      await result.dispose();
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;
@@ -585,7 +627,8 @@ describe("CardApi", () => {
       createStubClient(async () => ({
         view: {
           title: "ImageCard Editor",
-          body: "<div>editor</div>",
+          documentUrl: "file:///workspace/editor/root-path.html",
+          sessionId: "editor-session-4",
           cardType: "ImageCard",
           pluginId: "chips.basecard.image",
           baseCardId: "image-1",
@@ -602,7 +645,7 @@ describe("CardApi", () => {
       let createdFrame: HTMLIFrameElement | undefined;
 
       (globalThis as any).window = {
-        location: { origin: "https://example.test" },
+        location: { origin: "https://example.test", href: "https://example.test/app" },
         addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
           if (type === "message") {
             listeners.push(listener);
@@ -613,15 +656,11 @@ describe("CardApi", () => {
 
       (globalThis as any).document = {
         createElement: (tag: string) => {
-          const el: any = {
+          const el = createMockIframe({
             tagName: tag.toUpperCase(),
-            attrs: {} as Record<string, string>,
             contentWindow: { postMessage },
             isConnected: true,
-            setAttribute(name: string, value: string) {
-              this.attrs[name] = value;
-            },
-          };
+          });
           createdFrame = el as HTMLIFrameElement;
           return el;
         },
@@ -794,7 +833,7 @@ describe("CardApi", () => {
       dispatch(nodeError);
       expect(nodeErrorPayload).toEqual(nodeError.payload);
 
-      // sandboxed blob iframes use opaque origin and must still be accepted
+      // sandboxed card documents use opaque origin and must still be accepted
       const nullOriginNodeSelect = {
         type: "chips.composite:node-select",
         payload: {

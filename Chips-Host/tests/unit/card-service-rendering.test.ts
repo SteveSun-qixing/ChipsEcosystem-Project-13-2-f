@@ -28,6 +28,8 @@ type JSDOMConstructor = new (
   html?: string,
   options?: {
     runScripts?: 'dangerously' | 'outside-only';
+    url?: string;
+    resources?: 'usable';
     beforeParse?: (window: JsdomWindowLike) => void;
   },
 ) => JSDOMInstance;
@@ -45,6 +47,7 @@ type DomRectLike = {
 type FrameElementLike = {
   contentWindow?: unknown;
   getBoundingClientRect: () => DomRectLike;
+  dispatchEvent?: (event: unknown) => boolean;
 };
 
 const { JSDOM }: { JSDOM: JSDOMConstructor } = require('jsdom');
@@ -56,6 +59,16 @@ const createTempDir = async (prefix: string): Promise<string> => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+};
+
+const installBlobUrlSupport = (window: JsdomWindowLike): void => {
+  const url = window.URL as typeof URL & {
+    createObjectURL?: (blob: Blob) => string;
+    revokeObjectURL?: (url: string) => void;
+  };
+  let counter = 0;
+  url.createObjectURL = (_blob: Blob) => `blob:https://chips.test/${++counter}`;
+  url.revokeObjectURL = (_url: string) => undefined;
 };
 
 const createCardDirectory = async (): Promise<string> => {
@@ -252,6 +265,75 @@ const loadThemeRenderContext = async (
   };
 };
 
+const readPersistedRenderedDocument = async (documentUrl: string): Promise<{ indexPath: string; rootDir: string; html: string }> => {
+  const indexPath = fileURLToPath(documentUrl);
+  const rootDir = path.dirname(indexPath);
+  tempDirs.push(rootDir);
+  return {
+    indexPath,
+    rootDir,
+    html: await fs.readFile(indexPath, 'utf-8'),
+  };
+};
+
+const resolveRenderedDocumentPath = (
+  service: CardService,
+  documentUrl: string,
+): string => {
+  if (documentUrl.startsWith('file://')) {
+    return fileURLToPath(documentUrl);
+  }
+
+  const resolved = service.resolveManagedDocumentFilePath(documentUrl);
+  if (!resolved) {
+    throw new Error(`Unable to resolve rendered document url: ${documentUrl}`);
+  }
+  return resolved;
+};
+
+const readResolvedRenderedDocument = async (
+  service: CardService,
+  documentUrl: string,
+): Promise<{ indexPath: string; rootDir: string; html: string }> => {
+  const indexPath = resolveRenderedDocumentPath(service, documentUrl);
+  const rootDir = path.dirname(indexPath);
+  tempDirs.push(rootDir);
+  return {
+    indexPath,
+    rootDir,
+    html: await fs.readFile(indexPath, 'utf-8'),
+  };
+};
+
+const readRenderedNodeDocument = async (
+  service: CardService,
+  view: { documentUrl: string },
+  nodeId: string,
+): Promise<{ compositeHtml: string; frameSrc: string; nodePath: string; nodeHtml: string }> => {
+  const renderedDocument = await readResolvedRenderedDocument(service, view.documentUrl);
+  const dom = new JSDOM(renderedDocument.html, { url: view.documentUrl });
+
+  try {
+    const frame = dom.window.document?.querySelector?.(
+      `.chips-composite__frame[data-node-id="${nodeId}"]`,
+    ) as { getAttribute(name: string): string | null } | null;
+    const frameSrc = frame?.getAttribute('src');
+    if (!frameSrc) {
+      throw new Error(`Rendered composite document does not contain a frame src for node ${nodeId}.`);
+    }
+
+    const nodePath = resolveRenderedDocumentPath(service, new URL(frameSrc, view.documentUrl).href);
+    return {
+      compositeHtml: renderedDocument.html,
+      frameSrc,
+      nodePath,
+      nodeHtml: await fs.readFile(nodePath, 'utf-8'),
+    };
+  } finally {
+    dom.window.close();
+  }
+};
+
 afterEach(async () => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
@@ -283,13 +365,22 @@ describe('CardService rendering', () => {
     expect(view.title).toBe('Test Card');
     expect(view.target).toBe('card-iframe');
     expect(view.semanticHash.length).toBeGreaterThan(10);
+    expect(view.documentUrl.startsWith('file://')).toBe(true);
+    expect(view.sessionId).toMatch(/^card-render-/);
     expect(view.body).toContain('data-target="card-iframe"');
     expect(view.body).toContain('data-mode="view"');
-    expect(view.body).toContain('&lt;base href=&quot;file://');
-    expect(view.body).toContain('Intro');
-    expect(view.body).toContain('Hello Chips.');
-    expect(view.body).toContain('chips.basecard.richtext');
     expect(view.contentFiles).toEqual(['details.yaml', 'intro.yaml']);
+    const persistedDocument = await readPersistedRenderedDocument(view.documentUrl);
+    const introDocument = await readRenderedNodeDocument(service, view, 'intro');
+    const detailsDocument = await readRenderedNodeDocument(service, view, 'details');
+
+    expect(persistedDocument.html).toBe(view.body);
+    expect(introDocument.frameSrc).toMatch(/^\.\/nodes\/\d{3}-intro-[a-f0-9]{10}\.html$/);
+    expect(introDocument.nodeHtml).toContain('<base href="file://');
+    expect(introDocument.nodeHtml).toContain('Intro');
+    expect(introDocument.nodeHtml).toContain('Hello Chips.');
+    expect(introDocument.nodeHtml).toContain('chips.basecard.richtext');
+    expect(detailsDocument.nodeHtml).toContain('Second node body.');
   }, 30_000);
 
   it('can run consistency verification during card render', async () => {
@@ -314,6 +405,9 @@ describe('CardService rendering', () => {
     expect(view.target).toBe('offscreen-render');
     expect(view.consistency?.consistent).toBe(true);
     expect(view.body).toContain('data-target="offscreen-render"');
+    expect(view.body).toContain('loading="eager"');
+    expect(view.body).toContain('compositeDataset.chipsCompositeReady = frameList.length === 0 ? "true" : "false";');
+    expect(view.body).toContain('frame.dataset.renderReady = "true";');
   }, 30_000);
 
   it('returns a formal cover file url that points to the card cover html', async () => {
@@ -382,10 +476,14 @@ describe('CardService rendering', () => {
     });
 
     expect(view.title).toBe('Test Card');
+    expect(view.documentUrl.startsWith('file://')).toBe(true);
     expect(view.body).toContain('data-target="card-iframe"');
-    expect(view.body).toContain('&lt;base href=&quot;file://');
-    expect(view.body).toContain('Second node body.');
     expect(view.contentFiles).toEqual(['details.yaml', 'intro.yaml']);
+    const introDocument = await readRenderedNodeDocument(service, view, 'intro');
+    const detailsDocument = await readRenderedNodeDocument(service, view, 'details');
+
+    expect(introDocument.nodeHtml).toContain('<base href="file://');
+    expect(detailsDocument.nodeHtml).toContain('Second node body.');
   }, 30_000);
 
   it('renders formal base card editor documents through the Host card.renderEditor route', async () => {
@@ -498,32 +596,14 @@ describe('CardService rendering', () => {
       target: 'card-iframe',
       ...themeContext,
     });
-    expect(view.body).toContain('sandbox="allow-scripts allow-same-origin allow-popups"');
+    const galleryDocument = await readRenderedNodeDocument(service, view, 'gallery');
 
-    const dom = new JSDOM(view.body);
-    try {
-      const document = dom.window.document;
-      if (!document) {
-        throw new Error('JSDOM document is not available.');
-      }
-      const querySelector = document.querySelector;
-      if (!querySelector) {
-        throw new Error('JSDOM document.querySelector is not available.');
-      }
-      const frame = querySelector.call(
-        document,
-        '.chips-composite__frame[data-node-id="gallery"]',
-      ) as { getAttribute(name: string): string | null } | null;
-      const srcdoc = frame?.getAttribute('srcdoc') ?? '';
-
-      expect(frame).not.toBeNull();
-      expect(srcdoc).toContain('<base href="file://');
-      expect(srcdoc).toContain('renderBasecardView');
-      expect(srcdoc).toContain('const resolveResourceUrl = async (resourcePath) =>');
-      expect(srcdoc).toContain('assets/hero.png');
-    } finally {
-      dom.window.close();
-    }
+    expect(galleryDocument.compositeHtml).toContain('sandbox="allow-scripts allow-popups"');
+    expect(galleryDocument.frameSrc).toMatch(/^\.\/nodes\/\d{3}-gallery-[a-f0-9]{10}\.html$/);
+    expect(galleryDocument.nodeHtml).toContain('<base href="file://');
+    expect(galleryDocument.nodeHtml).toContain('renderBasecardView');
+    expect(galleryDocument.nodeHtml).toContain('const resolveResourceUrl = async (resourcePath) =>');
+    expect(galleryDocument.nodeHtml).toContain('assets/hero.png');
   }, 30_000);
 
   it('keeps archive-backed composite image resources reachable after render returns', async () => {
@@ -543,38 +623,54 @@ describe('CardService rendering', () => {
       target: 'card-iframe',
       ...themeContext,
     });
+    const galleryDocument = await readRenderedNodeDocument(service, view, 'gallery');
+    const baseHrefMatch = galleryDocument.nodeHtml.match(/<base href="([^"]+)"/);
+    const baseHref = baseHrefMatch?.[1] ?? '';
 
-    const dom = new JSDOM(view.body);
-    try {
-      const document = dom.window.document;
-      if (!document) {
-        throw new Error('JSDOM document is not available.');
-      }
+    expect(baseHref.startsWith('file://')).toBe(true);
+    const extractedRoot = fileURLToPath(baseHref);
+    tempDirs.push(extractedRoot);
 
-      const querySelector = document.querySelector;
-      if (!querySelector) {
-        throw new Error('JSDOM document.querySelector is not available.');
-      }
+    const imagePath = fileURLToPath(new URL('assets/hero.png', baseHref));
+    const imageStats = await fs.stat(imagePath);
 
-      const frame = querySelector.call(
-        document,
-        '.chips-composite__frame[data-node-id="gallery"]',
-      ) as { getAttribute(name: string): string | null } | null;
-      const srcdoc = frame?.getAttribute('srcdoc') ?? '';
-      const baseHrefMatch = srcdoc.match(/<base href="([^"]+)"/);
-      const baseHref = baseHrefMatch?.[1] ?? '';
+    expect(imageStats.isFile()).toBe(true);
+  }, 30_000);
 
-      expect(baseHref.startsWith('file://')).toBe(true);
-      const extractedRoot = fileURLToPath(baseHref);
-      tempDirs.push(extractedRoot);
+  it('emits managed render protocol urls when a managed document scheme is configured', async () => {
+    const cardFile = await createImageCardArchive();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({
+      runtime,
+      workspaceRoot: process.cwd(),
+      managedDocumentScheme: 'chips-render',
+    });
 
-      const imagePath = fileURLToPath(new URL('assets/hero.png', baseHref));
-      const imageStats = await fs.stat(imagePath);
+    const view = await service.render(cardFile, {
+      target: 'card-iframe',
+      ...themeContext,
+    });
+    const galleryDocument = await readRenderedNodeDocument(service, view, 'gallery');
+    const persistedDocument = await readResolvedRenderedDocument(service, view.documentUrl);
+    const baseHrefMatch = galleryDocument.nodeHtml.match(/<base href="([^"]+)"/);
+    const baseHref = baseHrefMatch?.[1] ?? '';
+    const imageUrl = new URL('assets/hero.png', baseHref).href;
+    const coverView = await service.renderCover(cardFile);
 
-      expect(imageStats.isFile()).toBe(true);
-    } finally {
-      dom.window.close();
-    }
+    expect(view.documentUrl.startsWith('chips-render://session/')).toBe(true);
+    expect(persistedDocument.html).toBe(view.body);
+    expect(galleryDocument.nodeHtml).toContain('<base href="chips-render://card-root/');
+    expect(service.resolveManagedDocumentFilePath(imageUrl)?.endsWith(path.join('assets', 'hero.png'))).toBe(true);
+    expect(coverView.coverUrl.startsWith('chips-render://card-root/')).toBe(true);
+    expect(service.resolveManagedDocumentFilePath(coverView.coverUrl)?.endsWith(path.join('.card', 'cover.html'))).toBe(true);
   }, 30_000);
 
   it('preserves dark theme color-scheme from theme package css', async () => {
@@ -623,8 +719,10 @@ describe('CardService rendering', () => {
 
     const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
     const dom = new JSDOM(view.body, {
+      url: view.documentUrl,
       runScripts: 'dangerously',
       beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
         Object.defineProperty(window, 'parent', {
           configurable: true,
           value: {
@@ -637,6 +735,11 @@ describe('CardService rendering', () => {
     });
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const introFrame = dom.window.document?.querySelector?.(
+        '.chips-composite__frame[data-node-id="intro"]',
+      ) as FrameElementLike | null;
+      introFrame?.dispatchEvent?.(new dom.window.Event('load'));
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(postedMessages.some((message) => message.type === 'chips.composite:node-error')).toBe(true);
@@ -693,10 +796,11 @@ describe('CardService rendering', () => {
       mode: 'preview',
       ...themeContext,
     });
+    const introDocument = await readRenderedNodeDocument(service, view, 'intro');
 
-    expect(view.body).toContain('scheduleEmitHeight');
-    expect(view.body).toContain('window.addEventListener(');
-    expect(view.body).toContain('observer.observe(document.documentElement);');
+    expect(introDocument.nodeHtml).toContain('scheduleEmitHeight');
+    expect(introDocument.nodeHtml).toContain('window.addEventListener(');
+    expect(introDocument.nodeHtml).toContain('observer.observe(document.documentElement);');
   }, 30_000);
 
   it('emits composite resize messages when the composite layout height changes', async () => {
@@ -720,8 +824,10 @@ describe('CardService rendering', () => {
 
     const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
     const dom = new JSDOM(view.body, {
+      url: view.documentUrl,
       runScripts: 'dangerously',
       beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
         Object.defineProperty(window, 'parent', {
           configurable: true,
           value: {
@@ -806,6 +912,7 @@ describe('CardService rendering', () => {
     const dom = new JSDOM(view.body, {
       runScripts: 'dangerously',
       beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
         Object.defineProperty(window, 'parent', {
           configurable: true,
           value: {
@@ -925,6 +1032,7 @@ describe('CardService rendering', () => {
     const dom = new JSDOM(view.body, {
       runScripts: 'dangerously',
       beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
         Object.defineProperty(window, 'parent', {
           configurable: true,
           value: {
@@ -1010,9 +1118,10 @@ describe('CardService rendering', () => {
       mode: 'preview',
       ...themeContext,
     });
+    const introDocument = await readRenderedNodeDocument(service, view, 'intro');
 
     expect(view.title).toBe('YAML Stringified Card');
-    expect(view.body).toContain('1111');
-    expect(view.body).toContain('font-weight: normal');
+    expect(introDocument.nodeHtml).toContain('renderBasecardView');
+    expect(introDocument.nodeHtml).toContain('font-weight: normal');
   }, 30_000);
 });

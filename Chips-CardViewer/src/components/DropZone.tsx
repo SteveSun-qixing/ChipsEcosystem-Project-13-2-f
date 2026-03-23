@@ -39,6 +39,11 @@ export function DropZone({
   description,
   openLabel,
 }: DropZoneProps) {
+  const buttonRowStyle: React.CSSProperties & { WebkitAppRegion: "no-drag" } = {
+    display: "flex",
+    justifyContent: "center",
+    WebkitAppRegion: "no-drag",
+  };
   const logger = useMemo(
     () =>
       createScopedLogger({
@@ -184,7 +189,7 @@ export function DropZone({
             {description}
           </p>
         </div>
-        <div style={{ display: "flex", justifyContent: "center", WebkitAppRegion: "no-drag" }}>
+        <div style={buttonRowStyle}>
           <ChipsButton variant="secondary" onClick={onOpenCard}>
             {openLabel}
           </ChipsButton>

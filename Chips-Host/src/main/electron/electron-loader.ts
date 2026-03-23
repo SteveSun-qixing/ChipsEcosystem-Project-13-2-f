@@ -26,12 +26,20 @@ export interface ElectronAppLike {
     listener: () => void
   ): void;
   on(
+    event: 'open-file',
+    listener: (event: { preventDefault?: () => void }, filePath: string) => void
+  ): void;
+  on(
     event: 'second-instance',
     listener: (event: unknown, argv: string[], workingDirectory: string) => void
   ): void;
   off(
     event: 'before-quit' | 'window-all-closed' | 'activate',
     listener: () => void
+  ): void;
+  off(
+    event: 'open-file',
+    listener: (event: { preventDefault?: () => void }, filePath: string) => void
   ): void;
   off(
     event: 'second-instance',
@@ -44,6 +52,9 @@ export interface ElectronAppLike {
 export interface ElectronWebContentsLike {
   id: number;
   send(channel: string, payload: unknown): void;
+  printToPDF?(options?: Record<string, unknown>): Promise<Buffer>;
+  capturePage?(rect?: { x: number; y: number; width: number; height: number }): Promise<ElectronNativeImageLike>;
+  executeJavaScript?<T = unknown>(code: string, userGesture?: boolean): Promise<T>;
 }
 
 export interface ElectronBrowserWindowLike {
@@ -130,6 +141,9 @@ export interface ElectronScreenLike {
 
 export interface ElectronNativeImageLike {
   toPNG(): Buffer;
+  toJPEG?(quality: number): Buffer;
+  toDataURL?(): string;
+  getSize?(): { width: number; height: number };
 }
 
 export interface ElectronNativeImageModuleLike {
@@ -168,6 +182,27 @@ export interface ElectronWebUtilsLike {
   getPathForFile(file: unknown): string;
 }
 
+export interface ElectronProtocolRequestLike {
+  url: string;
+}
+
+export interface ElectronProtocolLike {
+  registerSchemesAsPrivileged?(
+    customSchemes: Array<{
+      scheme: string;
+      privileges?: Record<string, boolean>;
+    }>
+  ): void;
+  handle(
+    scheme: string,
+    handler: (request: ElectronProtocolRequestLike) => Promise<Response> | Response
+  ): void;
+}
+
+export interface ElectronNetLike {
+  fetch(url: string): Promise<Response>;
+}
+
 export interface ElectronModuleLike {
   app?: ElectronAppLike;
   ipcMain?: ElectronIpcMainLike;
@@ -185,6 +220,8 @@ export interface ElectronModuleLike {
   dialog?: ElectronDialogLike;
   nativeImage?: ElectronNativeImageModuleLike;
   webUtils?: ElectronWebUtilsLike;
+  protocol?: ElectronProtocolLike;
+  net?: ElectronNetLike;
 }
 
 const readElectronMock = (): ElectronModuleLike | undefined => {

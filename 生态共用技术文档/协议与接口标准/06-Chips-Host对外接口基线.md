@@ -74,6 +74,8 @@
   - 入参字段：`manifestPath`（兼容字段名）
   - 支持路径类型：插件目录、`.cpk` 包、`manifest.yaml/yml/json` 清单文件
   - 安装后由主机统一落库存储到主机插件目录
+  - 当同一工作区内已存在相同 `pluginId` 时，新的安装会正式替换旧安装副本，而不是保留重复记录
+  - 替换安装后，Host 必须继续使用主机工作区中的落库副本作为唯一运行时来源，不得回退到源工程路径直接加载
 - `clipboard.read/write`：
   - 桥接到主机动作：`platform.clipboardRead/platform.clipboardWrite`
   - 支持格式：`text`、`image`（`{ base64, mimeType? }`）、`files`（`string[]`）
@@ -145,6 +147,14 @@ Host 快捷方式启动参数基线：
 - 调用方必须通过正式模块服务使用模块能力，不得直接 import 模块源码。
 - Host 必须管理统一模块调用框架，包括 provider 发现、默认 provider 解析、权限校验、schema 校验、调用调度、job 管理和审计日志。
 - 模块之间相互调用时，仍然必须复用同一套模块服务动作，不允许出现模块直连旁路。
+- Host 注入给模块的正式运行时上下文冻结为：
+  - `ctx.host.invoke(action, payload?)`
+  - `ctx.module.invoke(...)`
+  - `ctx.module.job.get/cancel(...)`
+  - `ctx.job.reportProgress(...) / ctx.job.isCancelled() / ctx.job.signal`
+- `ctx.host.invoke(...)` 用于访问 Host 正式公开的非模块动作，继续走权限、schema、日志与审计治理。
+- 模块不得通过 `ctx.host.invoke(...)` 调用 `module.*`，避免模块能力调用面分叉。
+- Host 不再把 `ctx.services.*` 作为模块运行时正式主链路。
 - 旧 `module.mount/unmount/query/list` 页面挂载式模块口径不再作为未来正式外部接口保留。
 
 ### 3.3 card.render（L9 统一渲染入口）补充基线
@@ -156,19 +166,34 @@ Host 快捷方式启动参数基线：
   - `options.target`: `app-root | card-iframe | module-slot | offscreen-render`
   - `options.viewport`: `{ width?, height?, scrollTop?, scrollLeft? }`
   - `options.verifyConsistency`: `boolean`
+  - `options.themeId`: `string`
+  - `options.locale`: `string`
 - 入参校验规则（Host schema）：
   - `options.target` 必须属于白名单目标值，非法值直接返回 `SCHEMA_VALIDATION_FAILED`。
   - `options.viewport.width/height`（若提供）必须为大于 0 的有限数值。
   - `options.viewport.scrollTop/scrollLeft`（若提供）必须为有限数值。
   - `options.verifyConsistency`（若提供）必须为布尔值。
+  - `options.themeId/options.locale`（若提供）必须是非空字符串。
+- 运行时语义：
+  - `options.themeId` 用于本次调用级别的主题覆盖，不改变 Host 当前全局主题状态；
+  - `options.locale` 用于本次调用级别的语言覆盖，不改变 Host 当前全局语言状态；
+  - 当 `options.locale` 不存在于 Host 已注册语言表时，返回 `I18N_LOCALE_NOT_FOUND`。
 - 响应 `view` 建议字段：
   - `title: string`
   - `body: string`（适配器提交后的 HTML）
+  - `documentUrl: string`（Host 托管的正式文档入口 URL）
+  - `sessionId: string`（render session 唯一标识，用于后续释放）
   - `contentFiles: string[]`
   - `target: string`
   - `semanticHash: string`
   - `diagnostics?: RenderNodeDiagnostic[]`
   - `consistency?: RenderConsistencyResult`
+
+补充约束：
+
+- `documentUrl` 是供 SDK / 应用层直接挂载到 iframe 的正式入口，不保证固定为 `file://`；
+- Electron Host 当前正式可以返回受控渲染协议 URL，用于托管 render session 文档和卡片根目录资源；
+- 当 `view.sessionId` 存在时，调用方销毁 iframe 或结束会话后，必须调用 `card.releaseRenderSession(sessionId)` 回收渲染会话。
 
 `RenderNodeDiagnostic` 建议字段：
 
@@ -182,7 +207,46 @@ interface RenderNodeDiagnostic {
 }
 ```
 
-### 3.4 card.pack / card.unpack / card.readMetadata 补充基线
+### 3.4 card.resolveDocumentPath（渲染文档落点解析）
+
+- 动作：`card.resolveDocumentPath`
+- 必填入参：
+  - `documentUrl: string`
+- 响应字段：
+  - `path: string`
+- 运行时语义：
+  - 把 Host 托管的渲染文档 URL 解析回当前设备上的绝对文件路径；
+  - 同时适用于 `card.render` 返回的 `documentUrl`，以及该文档内部继续引用的受控卡片根目录资源 URL；
+  - 当前 Host 必须同时支持 `file://` 与受控渲染协议 URL（当前为 `chips-render://`）。
+
+补充约束：
+
+- 该动作面向受信任的模块插件与 Host 内部工具链，用于导出、离线化和调试治理；
+- 应用层正常显示链路仍然必须直接消费 `documentUrl`，不得把 `card.resolveDocumentPath` 作为 iframe 装载前置步骤；
+- 当传入 URL 无法映射到有效 render session 或受控卡片根目录时，Host 必须返回显式错误。
+
+### 3.5 platform.renderHtmlToPdf / platform.renderHtmlToImage 补充基线
+
+- `platform.renderHtmlToPdf`：
+  - 入参：`{ htmlDir, entryFile?, outputFile, options? }`
+  - 权限：`platform.read + file.read + file.write`
+  - 语义：在 Host 受控离屏 BrowserWindow 中加载目录态 HTML 入口并输出 PDF
+  - 约束：
+    - `entryFile` 必须位于 `htmlDir` 内，禁止路径穿越；
+    - Host 负责等待页面稳定、调用 Electron PDF 导出能力并写入 `outputFile`；
+    - 页面稳定至少包含：文档完成、图片与字体可用、复合卡片 iframe 文档加载完成、基础卡片高度上报与 iframe 高度同步完成、复合卡片 `ready/resize` 稳定；
+    - 该能力只允许 Host 内部访问 Electron，模块和应用不能自行 `import("electron")` 旁路。
+- `platform.renderHtmlToImage`：
+  - 入参：`{ htmlDir, entryFile?, outputFile, options? }`
+  - 权限：`platform.read + file.read + file.write`
+  - 语义：在 Host 受控离屏 BrowserWindow 中加载目录态 HTML 入口并输出图片
+  - 约束：
+    - `entryFile` 必须位于 `htmlDir` 内，禁止路径穿越；
+    - Host 负责等待页面稳定、调用 Electron 页面截图能力并写入 `outputFile`；
+    - 页面稳定至少包含：文档完成、图片与字体可用、复合卡片 iframe 文档加载完成、基础卡片高度上报与 iframe 高度同步完成、复合卡片 `ready/resize` 稳定；
+    - 当前正式输出格式为 `png | jpeg`；当运行时不支持请求格式时返回 `PLATFORM_UNSUPPORTED`。
+
+### 3.5 card.pack / card.unpack / card.readMetadata 补充基线
 
 - `card.pack`：
   - 入参：`{ cardDir, outputPath }`

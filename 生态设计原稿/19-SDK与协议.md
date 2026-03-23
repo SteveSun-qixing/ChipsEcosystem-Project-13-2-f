@@ -62,6 +62,8 @@ SDK封装了生态的核心能力，提供给开发者使用。
 - 调用方必须按 capability + method 调用模块能力；
 - Host 统一负责 provider 发现、默认 provider 选择、权限校验、schema 校验和结果归一；
 - 若目标方法为异步任务，Host 返回 `jobId` 并通过事件流持续发布任务进度。
+- 模块运行时内部访问 Host 正式服务动作时，不通过 SDK 或 Bridge，改为使用 Host 注入的 `ctx.host.invoke(action, payload?)`；
+- 模块运行时内部调用其他模块能力时，继续使用 `ctx.module.invoke(...)` / `ctx.module.job.*`。
 
 卡片显示相关的正式协议分为三条并列链路：
 

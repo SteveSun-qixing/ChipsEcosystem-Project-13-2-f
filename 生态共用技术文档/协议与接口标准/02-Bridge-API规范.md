@@ -35,6 +35,12 @@ invoke方法返回一个 Promise 对象，resolve 时返回处理结果，reject
 
 该能力是高级受控接口，不是模块插件正式开发主路径。当前模块插件正式定位为 Host 托管的无界面能力模块，普通模块开发不依赖 `invokeScoped/emitScoped`。
 
+模块运行时的正式 Host 能力入口不是 Bridge，而是 Host 注入的：
+
+- `ctx.host.invoke(action, payload?)`
+
+模块在运行时访问 Host 服务动作时，应使用上述上下文 API；调用其他模块能力时，应继续使用 `ctx.module.invoke(...)`。
+
 ### on方法
 
 on方法用于订阅事件，语法是window.chips.on(eventType, callback)。eventType参数指定要订阅的事件类型，使用点号分隔的命名空间，如card.created、box.updated等。callback参数是事件发生时要执行的回调函数，回调函数接收事件对象作为参数。
@@ -111,6 +117,21 @@ theme子域提供主题能力，采用 vNext 冻结动作口径：
 
 **迁移说明**：旧动作 `getCss`、`getAll`、`setCurrent` 已归档，仅做内部兼容映射，不再作为外部接口暴露。
 
+### platform子域（离屏导出）
+
+正式冻结以下 Host 平台导出动作：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `platform.renderHtmlToPdf({ htmlDir, entryFile?, outputFile, options? })` | 由 Host 在受控离屏 BrowserWindow 中加载目录态 HTML 并导出 PDF | 否 |
+| `platform.renderHtmlToImage({ htmlDir, entryFile?, outputFile, options? })` | 由 Host 在受控离屏 BrowserWindow 中加载目录态 HTML 并导出图片 | 否 |
+
+正式约束：
+
+- `entryFile` 必须位于 `htmlDir` 内，Host 必须拒绝路径穿越；
+- 调用方只能请求导出，不能直接获得 `BrowserWindow/webContents`；
+- 模块插件访问该能力时，必须通过 `ctx.host.invoke("platform.renderHtmlToPdf" | "platform.renderHtmlToImage", payload)`。
+
 ### card子域（统一渲染相关）
 
 card 子域采用 vNext 动作口径：
@@ -122,12 +143,16 @@ card 子域采用 vNext 动作口径：
 | `card.render({ cardFile, options? })` | 调用 Host L9 统一渲染链路并返回渲染结果 | 否 |
 | `card.renderCover({ cardFile })` | 调用 Host 正式封面渲染链路并返回封面视图 | 否 |
 | `card.renderEditor({ cardType, initialConfig?, baseCardId? })` | 调用 Host 基础卡片编辑器装载链路并返回编辑器文档 | 否 |
+| `card.releaseRenderSession({ sessionId })` | 释放 `card.render` / `card.renderEditor` 创建的 render session | 否 |
+| `card.resolveDocumentPath({ documentUrl })` | 将 Host 托管渲染文档 URL 解析为当前设备绝对文件路径 | 是 |
 
 `card.render.options` 推荐字段：
 
 - `target`: `app-root | card-iframe | module-slot | offscreen-render`
 - `viewport`: `{ width?, height?, scrollTop?, scrollLeft? }`
 - `verifyConsistency`: `boolean`
+- `themeId`: `string`
+- `locale`: `string`
 - `mode`: `view | preview`
 - `interactionPolicy`: `native | delegate`
 
@@ -137,10 +162,17 @@ card 子域采用 vNext 动作口径：
 - `viewport.width/height`（若提供）必须大于 0 且为有限数值。
 - `viewport.scrollTop/scrollLeft`（若提供）必须为有限数值。
 - `verifyConsistency`（若提供）必须为布尔值。
+- `themeId/locale`（若提供）必须是非空字符串。
 - `mode`（若提供）必须是 `view | preview`。
 - `interactionPolicy`（若提供）必须是 `native | delegate`。
 
 `card.render` 返回 `view.semanticHash` 与可选 `view.diagnostics/view.consistency`，用于一致性比对与诊断。
+
+调用语义补充：
+
+- `themeId` 与 `locale` 都是单次调用覆盖参数，不改变 Host 当前全局主题或全局语言状态；
+- `locale` 未注册时，Host 必须返回 `I18N_LOCALE_NOT_FOUND`。
+- `card.resolveDocumentPath` 仅面向受信任的模块插件与 Host 内部导出/调试工具链；正常应用显示链路必须直接消费 `documentUrl`，不得在 iframe 装载前先行解析磁盘路径。
 
 `card.renderCover` 返回 `view.title/view.coverUrl/view.ratio`，正式约束如下：
 

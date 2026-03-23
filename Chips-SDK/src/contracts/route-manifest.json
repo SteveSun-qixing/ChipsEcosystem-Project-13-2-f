@@ -27,6 +27,12 @@
     "card.renderEditor": {
       "action": "card.renderEditor"
     },
+    "card.releaseRenderSession": {
+      "action": "card.releaseRenderSession"
+    },
+    "card.resolveDocumentPath": {
+      "action": "card.resolveDocumentPath"
+    },
     "card.unpack": {
       "action": "card.unpack"
     },
@@ -182,6 +188,12 @@
     },
     "platform.openExternal": {
       "action": "platform.openExternal"
+    },
+    "platform.renderHtmlToImage": {
+      "action": "platform.renderHtmlToImage"
+    },
+    "platform.renderHtmlToPdf": {
+      "action": "platform.renderHtmlToPdf"
     },
     "platform.powerGetState": {
       "action": "platform.powerGetState"

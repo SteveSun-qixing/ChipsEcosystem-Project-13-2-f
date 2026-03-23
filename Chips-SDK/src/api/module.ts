@@ -102,11 +102,11 @@ const assertOptionalNonEmptyString = (
   }
 };
 
-const assertModuleInput = (input: unknown): asserts input is Record<string, unknown> => {
+function assertModuleInput(input: unknown): asserts input is Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw createError("INVALID_ARGUMENT", "module.invoke: input must be an object.");
   }
-};
+}
 
 export function createModuleApi(client: CoreClient): ModuleApi {
   return {

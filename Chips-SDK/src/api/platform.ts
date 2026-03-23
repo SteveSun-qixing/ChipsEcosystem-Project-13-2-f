@@ -37,10 +37,54 @@ export interface PlatformDialogMessageOptions {
   detail?: string;
 }
 
+export interface PlatformRenderHtmlToPdfRequest {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+  options?: {
+    pageSize?: "A4" | "A3" | "Letter" | "Legal";
+    landscape?: boolean;
+    printBackground?: boolean;
+    marginMm?: {
+      top?: number;
+      right?: number;
+      bottom?: number;
+      left?: number;
+    };
+  };
+}
+
+export interface PlatformRenderHtmlToPdfResult {
+  outputFile: string;
+  pageCount?: number;
+}
+
+export interface PlatformRenderHtmlToImageRequest {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+  options?: {
+    format?: "png" | "jpeg" | "webp";
+    width?: number;
+    height?: number;
+    scaleFactor?: number;
+    background?: "transparent" | "white" | "theme";
+  };
+}
+
+export interface PlatformRenderHtmlToImageResult {
+  outputFile: string;
+  width?: number;
+  height?: number;
+  format: "png" | "jpeg" | "webp";
+}
+
 export interface PlatformApi {
   getInfo(): Promise<PlatformInfo>;
   getCapabilities(): Promise<PlatformCapabilities>;
   openExternal(url: string): Promise<void>;
+  renderHtmlToPdf(request: PlatformRenderHtmlToPdfRequest): Promise<PlatformRenderHtmlToPdfResult>;
+  renderHtmlToImage(request: PlatformRenderHtmlToImageRequest): Promise<PlatformRenderHtmlToImageResult>;
   openFile(options?: PlatformDialogFileOptions): Promise<string[] | null>;
   saveFile(options?: PlatformDialogSaveOptions): Promise<string | null>;
   showMessage(options: PlatformDialogMessageOptions): Promise<number>;
@@ -105,6 +149,18 @@ export function createPlatformApi(client: CoreClient): PlatformApi {
     },
     async openExternal(url) {
       return client.invoke("platform.openExternal", { url });
+    },
+    async renderHtmlToPdf(request) {
+      if (!request?.htmlDir || !request?.outputFile) {
+        throw createError("INVALID_ARGUMENT", "platform.renderHtmlToPdf: htmlDir and outputFile are required.");
+      }
+      return client.invoke("platform.renderHtmlToPdf", request);
+    },
+    async renderHtmlToImage(request) {
+      if (!request?.htmlDir || !request?.outputFile) {
+        throw createError("INVALID_ARGUMENT", "platform.renderHtmlToImage: htmlDir and outputFile are required.");
+      }
+      return client.invoke("platform.renderHtmlToImage", request);
     },
     async openFile(options) {
       const result = await client.invoke<

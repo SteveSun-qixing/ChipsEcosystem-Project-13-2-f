@@ -70,6 +70,8 @@ describe('route manifest contract', () => {
       'platform.getCapabilities',
       'platform.getScreenInfo',
       'platform.listScreens',
+      'platform.renderHtmlToPdf',
+      'platform.renderHtmlToImage',
       'platform.openExternal',
       'platform.dialogOpenFile',
       'platform.dialogSaveFile',

@@ -253,6 +253,26 @@ describe("createClient", () => {
     });
   });
 
+  it("rejects module.invoke inputs that are not plain objects", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async () => {
+        throw new Error("transport should not be called");
+      },
+    });
+
+    await expect(
+      client.module.invoke({
+        capability: "text.markdown.render",
+        method: "render",
+        input: null as unknown as Record<string, unknown>,
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      message: "module.invoke: input must be an object.",
+    });
+  });
+
   it("uses scoped Bridge transport when bridgeScope is provided", async () => {
     const calls: Array<{ action: string; payload: unknown; token?: string }> = [];
     (globalThis as { window?: unknown }).window = {
@@ -319,6 +339,101 @@ describe("createClient", () => {
     expect(result.view.pluginId).toBe("chips.basecard.richtext");
     expect(result.view.cardType).toBe("RichTextCard");
     expect(result.view.baseCardId).toBe("base-1");
+  });
+
+  it("forwards card.render themeId and locale overrides", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          view: {
+            title: "Card",
+            body: "<html lang='en-US'></html>",
+            contentFiles: [],
+            target: "offscreen-render",
+            semanticHash: "hash-1",
+          },
+        };
+      },
+    });
+
+    await client.card.render("/tmp/demo.card", {
+      target: "offscreen-render",
+      themeId: "chips-official.default-dark-theme",
+      locale: "en-US",
+    });
+
+    expect(calls).toEqual([
+      {
+        action: "card.render",
+        payload: {
+          cardFile: "/tmp/demo.card",
+          options: {
+            target: "offscreen-render",
+            themeId: "chips-official.default-dark-theme",
+            locale: "en-US",
+          },
+        },
+      },
+    ]);
+  });
+
+  it("invokes formal platform html export routes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "platform.renderHtmlToPdf") {
+          return { outputFile: "/tmp/demo.pdf", pageCount: 2 };
+        }
+        if (action === "platform.renderHtmlToImage") {
+          return { outputFile: "/tmp/demo.png", width: 800, height: 600, format: "png" };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(
+      client.platform.renderHtmlToPdf({
+        htmlDir: "/tmp/html",
+        outputFile: "/tmp/demo.pdf",
+      }),
+    ).resolves.toEqual({ outputFile: "/tmp/demo.pdf", pageCount: 2 });
+
+    await expect(
+      client.platform.renderHtmlToImage({
+        htmlDir: "/tmp/html",
+        outputFile: "/tmp/demo.png",
+        options: {
+          format: "png",
+        },
+      }),
+    ).resolves.toEqual({ outputFile: "/tmp/demo.png", width: 800, height: 600, format: "png" });
+
+    expect(calls).toEqual([
+      {
+        action: "platform.renderHtmlToPdf",
+        payload: {
+          htmlDir: "/tmp/html",
+          outputFile: "/tmp/demo.pdf",
+        },
+      },
+      {
+        action: "platform.renderHtmlToImage",
+        payload: {
+          htmlDir: "/tmp/html",
+          outputFile: "/tmp/demo.png",
+          options: {
+            format: "png",
+          },
+        },
+      },
+    ]);
   });
 
   it("throws BRIDGE_UNAVAILABLE when no transport and no window.chips", async () => {

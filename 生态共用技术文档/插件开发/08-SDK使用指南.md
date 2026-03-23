@@ -136,6 +136,8 @@ client.card.render(
     target?: 'app-root' | 'card-iframe' | 'module-slot' | 'offscreen-render';
     viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
     verifyConsistency?: boolean;
+    themeId?: string;
+    locale?: string;
   }
 ): Promise<{
   view: {
@@ -159,6 +161,11 @@ client.card.render(
   };
 }>
 ```
+
+补充说明：
+
+- `themeId` 与 `locale` 是单次调用级覆盖参数，不会修改 Host 当前全局主题或全局语言；
+- 转换链路中的 `card -> html` 应直接把请求中的 `themeId/locale` 透传给该接口。
 
 说明：
 
@@ -208,6 +215,7 @@ client.card.editorPanel.render({
 - `compositeWindow.interactionPolicy = 'delegate'` 时，可通过 `onInteraction` 订阅复合卡片内部滚轮、触摸滚动和捏合缩放意图，正式用于无限画布等需要外层壳层接管桌面交互的场景。
 - `editorPanel` 返回基础卡片编辑器 iframe，正式用于第三方宿主、调试工具和仍需 Host 托管编辑器 iframe 的场景。
 - `editorPanel.resources` 是 SDK 本地资源桥配置，不会进入 `card.renderEditor` 正式路由负载。
+- `coverFrame/compositeWindow/editorPanel` 返回的 iframe URL 都是 Host 托管的正式文档入口；调用方不得假定它们一定是 `file://`，只应把它们视为可直接挂载的独立文档 URL。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
 
 `editorPanel.resources` 规则：

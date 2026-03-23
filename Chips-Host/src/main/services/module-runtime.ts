@@ -54,6 +54,9 @@ export interface ModuleLogger {
 
 export interface ModuleMethodContext {
   logger: ModuleLogger;
+  host: {
+    invoke<TOutput = unknown>(action: string, payload?: Record<string, unknown>): Promise<TOutput>;
+  };
   module: {
     invoke(request: {
       capability: string;
@@ -62,32 +65,9 @@ export interface ModuleMethodContext {
       pluginId?: string;
       timeoutMs?: number;
     }): Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>;
-  };
-  services: {
-    file: {
-      read(path: string, options?: Record<string, unknown>): Promise<unknown>;
-      write(path: string, content: unknown, options?: Record<string, unknown>): Promise<void>;
-      stat(path: string): Promise<unknown>;
-      list(dir: string, options?: Record<string, unknown>): Promise<unknown>;
-    };
-    resource: {
-      resolve(resourceId: string): Promise<unknown>;
-      readMetadata(resourceId: string): Promise<unknown>;
-      readBinary(resourceId: string): Promise<unknown>;
-    };
-    card: {
-      parse(cardFile: string): Promise<unknown>;
-      render(cardFile: string, options?: Record<string, unknown>): Promise<unknown>;
-      validate(cardFile: string): Promise<unknown>;
-    };
-    box: {
-      inspect(boxFile: string): Promise<unknown>;
-      pack(boxDir: string, outputPath: string): Promise<unknown>;
-      unpack(boxFile: string, outputDir: string): Promise<unknown>;
-    };
-    config: {
-      get(key: string): Promise<unknown>;
-      set(key: string, value: unknown, scope?: 'user' | 'workspace' | 'system'): Promise<void>;
+    job: {
+      get(jobId: string): Promise<unknown>;
+      cancel(jobId: string): Promise<void>;
     };
   };
   job?: {

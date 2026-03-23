@@ -38,6 +38,9 @@ const validateCardRenderRequest: SchemaValidator = (input: unknown) => {
         errors.push('options.verifyConsistency must be a boolean');
       }
 
+      validateOptionalString(input.options.themeId, 'options.themeId', errors);
+      validateOptionalString(input.options.locale, 'options.locale', errors);
+
       const mode = input.options.mode;
       if (typeof mode !== 'undefined' && (typeof mode !== 'string' || !CARD_RENDER_MODES.has(mode))) {
         errors.push('options.mode is invalid');
@@ -107,6 +110,12 @@ const validateCardRenderEditorRequest: SchemaValidator = (input: unknown) => {
 const validateOptionalString = (value: unknown, field: string, errors: string[]): void => {
   if (typeof value !== 'undefined' && (typeof value !== 'string' || value.trim().length === 0)) {
     errors.push(`${field} must be a non-empty string when provided`);
+  }
+};
+
+const validateOptionalFiniteNumber = (value: unknown, field: string, errors: string[]): void => {
+  if (typeof value !== 'undefined' && (typeof value !== 'number' || !Number.isFinite(value))) {
+    errors.push(`${field} must be a finite number when provided`);
   }
 };
 
@@ -194,6 +203,77 @@ const validateModuleJobRequest: SchemaValidator = (input: unknown) => {
     : { valid: false, errors: ['jobId must be a non-empty string'] };
 };
 
+const validatePlatformRenderHtmlToPdfRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.htmlDir !== 'string' || input.htmlDir.trim().length === 0) {
+    errors.push('htmlDir must be a non-empty string');
+  }
+  if (typeof input.outputFile !== 'string' || input.outputFile.trim().length === 0) {
+    errors.push('outputFile must be a non-empty string');
+  }
+  validateOptionalString(input.entryFile, 'entryFile', errors);
+
+  if (typeof input.options !== 'undefined') {
+    if (!isRecord(input.options)) {
+      errors.push('options must be an object');
+    } else {
+      validateOptionalString(input.options.pageSize, 'options.pageSize', errors);
+      if (typeof input.options.landscape !== 'undefined' && typeof input.options.landscape !== 'boolean') {
+        errors.push('options.landscape must be a boolean when provided');
+      }
+      if (typeof input.options.printBackground !== 'undefined' && typeof input.options.printBackground !== 'boolean') {
+        errors.push('options.printBackground must be a boolean when provided');
+      }
+
+      if (typeof input.options.marginMm !== 'undefined') {
+        if (!isRecord(input.options.marginMm)) {
+          errors.push('options.marginMm must be an object');
+        } else {
+          validateOptionalFiniteNumber(input.options.marginMm.top, 'options.marginMm.top', errors);
+          validateOptionalFiniteNumber(input.options.marginMm.right, 'options.marginMm.right', errors);
+          validateOptionalFiniteNumber(input.options.marginMm.bottom, 'options.marginMm.bottom', errors);
+          validateOptionalFiniteNumber(input.options.marginMm.left, 'options.marginMm.left', errors);
+        }
+      }
+    }
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validatePlatformRenderHtmlToImageRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.htmlDir !== 'string' || input.htmlDir.trim().length === 0) {
+    errors.push('htmlDir must be a non-empty string');
+  }
+  if (typeof input.outputFile !== 'string' || input.outputFile.trim().length === 0) {
+    errors.push('outputFile must be a non-empty string');
+  }
+  validateOptionalString(input.entryFile, 'entryFile', errors);
+
+  if (typeof input.options !== 'undefined') {
+    if (!isRecord(input.options)) {
+      errors.push('options must be an object');
+    } else {
+      validateOptionalString(input.options.format, 'options.format', errors);
+      validateOptionalFiniteNumber(input.options.width, 'options.width', errors);
+      validateOptionalFiniteNumber(input.options.height, 'options.height', errors);
+      validateOptionalFiniteNumber(input.options.scaleFactor, 'options.scaleFactor', errors);
+      validateOptionalString(input.options.background, 'options.background', errors);
+    }
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 export const registerHostSchemas = (): void => {
   registerPair('file.read', ['path']);
   registerPair('file.write', ['path', 'content']);
@@ -258,6 +338,10 @@ export const registerHostSchemas = (): void => {
   registerPair('platform.ipcReceive', ['channelId']);
   registerPair('platform.ipcCloseChannel', ['channelId']);
   registerPair('platform.ipcListChannels', []);
+  schemaRegistry.register('schemas/platform.renderHtmlToPdf.request.json', validatePlatformRenderHtmlToPdfRequest);
+  schemaRegistry.register('schemas/platform.renderHtmlToPdf.response.json', objectWithKeys(['outputFile']));
+  schemaRegistry.register('schemas/platform.renderHtmlToImage.request.json', validatePlatformRenderHtmlToImageRequest);
+  schemaRegistry.register('schemas/platform.renderHtmlToImage.response.json', objectWithKeys(['outputFile', 'format']));
 
   registerPair('plugin.list', []);
   registerPair('plugin.get', ['pluginId']);
@@ -311,6 +395,8 @@ export const registerHostSchemas = (): void => {
   registerPair('card.renderCover', ['cardFile'], ['view']);
   schemaRegistry.register('schemas/card.renderEditor.request.json', validateCardRenderEditorRequest);
   schemaRegistry.register('schemas/card.renderEditor.response.json', objectWithKeys(['view']));
+  registerPair('card.releaseRenderSession', ['sessionId'], ['ack']);
+  registerPair('card.resolveDocumentPath', ['documentUrl'], ['path']);
   registerPair('card.validate', ['cardFile']);
 
   registerPair('box.pack', ['boxDir', 'outputPath']);

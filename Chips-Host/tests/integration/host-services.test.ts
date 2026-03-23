@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import yaml from 'yaml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HostApplication } from '../../src/main/core/host-application';
@@ -12,6 +13,8 @@ import { PluginRuntime } from '../../src/runtime';
 let workspace: string;
 let app: HostApplication;
 let runtime: RuntimeClient;
+
+const ELECTRON_MOCK_KEY = '__chipsElectronMock';
 
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-host-it-'));
@@ -34,6 +37,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  delete (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY];
   await app.stop();
   await fs.rm(workspace, { recursive: true, force: true });
 });
@@ -170,6 +174,8 @@ describe('Host services integration', () => {
       view: {
         target: string;
         body: string;
+        documentUrl: string;
+        sessionId: string;
         semanticHash: string;
         consistency?: { consistent: boolean };
       };
@@ -183,10 +189,26 @@ describe('Host services integration', () => {
 
     expect(rendered.view.target).toBe('offscreen-render');
     expect(rendered.view.body).toContain('data-target="offscreen-render"');
-    expect(rendered.view.body).toContain('Render Intro');
-    expect(rendered.view.body).toContain('Rendered through host service.');
+    expect(rendered.view.documentUrl.startsWith('file://')).toBe(true);
+    expect(rendered.view.sessionId).toMatch(/^card-render-/);
+    const indexPath = fileURLToPath(rendered.view.documentUrl);
+    const sessionRoot = path.dirname(indexPath);
+    const frameSrc = rendered.view.body.match(/data-node-id="intro"[^>]*src="([^"]+)"/)?.[1];
+    expect(frameSrc).toBeTruthy();
+    const persistedCompositeHtml = await fs.readFile(indexPath, 'utf-8');
+    const introNodeHtml = await fs.readFile(path.resolve(sessionRoot, frameSrc ?? ''), 'utf-8');
+
+    expect(persistedCompositeHtml).toBe(rendered.view.body);
+    expect(introNodeHtml).toContain('Render Intro');
+    expect(introNodeHtml).toContain('Rendered through host service.');
     expect(rendered.view.semanticHash.length).toBeGreaterThan(10);
     expect(rendered.view.consistency?.consistent).toBe(true);
+
+    await expect(
+      runtime.invoke<{ path: string }>('card.resolveDocumentPath', { documentUrl: rendered.view.documentUrl }),
+    ).resolves.toEqual({ path: indexPath });
+
+    await expect(runtime.invoke('card.releaseRenderSession', { sessionId: rendered.view.sessionId })).resolves.toBeDefined();
   }, 30_000);
 
   it('rejects invalid card.render options target by schema', async () => {
@@ -198,6 +220,268 @@ describe('Host services integration', () => {
         }
       })
     ).rejects.toMatchObject({ code: 'SCHEMA_VALIDATION_FAILED' });
+  });
+
+  it('supports card.render theme and locale overrides', async () => {
+    const richTextInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP/manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: richTextInstall.pluginId });
+
+    const darkThemeInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../ThemePack/Chips-theme-default-dark/manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: darkThemeInstall.pluginId });
+
+    const source = path.join(workspace, 'render-override-source');
+    await fs.mkdir(path.join(source, '.card'), { recursive: true });
+    await fs.mkdir(path.join(source, 'content'), { recursive: true });
+    await fs.writeFile(path.join(source, '.card/metadata.yaml'), 'card_id: card.render.override\nname: Override Demo\n', 'utf-8');
+    await fs.writeFile(
+      path.join(source, '.card/structure.yaml'),
+      'structure:\n  - id: "intro"\n    type: "RichTextCard"\n',
+      'utf-8'
+    );
+    await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
+    await fs.writeFile(
+      path.join(source, 'content/intro.yaml'),
+      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <p>override test</p>\n',
+      'utf-8'
+    );
+
+    const cardFile = path.join(workspace, 'render-override.card');
+    const zip = new StoreZipService();
+    await zip.compress(source, cardFile);
+
+    const baseline = await runtime.invoke<{ view: { semanticHash: string } }>('card.render', {
+      cardFile
+    });
+    const overridden = await runtime.invoke<{ view: { body: string; semanticHash: string } }>('card.render', {
+      cardFile,
+      options: {
+        themeId: 'chips-official.default-dark-theme',
+        locale: 'en-US'
+      }
+    });
+
+    expect(overridden.view.body).toContain('<html lang="en-US">');
+    expect(overridden.view.semanticHash).not.toBe(baseline.view.semanticHash);
+  }, 30_000);
+
+  it('exports local html to pdf through formal platform action', async () => {
+    const outputFile = path.join(workspace, 'exported.pdf');
+    const htmlDir = path.join(workspace, 'html-export-pdf');
+    const executedScripts: string[] = [];
+    await fs.mkdir(htmlDir, { recursive: true });
+    await fs.writeFile(path.join(htmlDir, 'index.html'), '<!doctype html><html><body><h1>PDF</h1></body></html>', 'utf-8');
+
+    class MockBrowserWindow {
+      public webContents = {
+        executeJavaScript: async (code: string) => {
+          executedScripts.push(code);
+          return true;
+        },
+        printToPDF: async () => Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n%%EOF', 'latin1'),
+        capturePage: async () => {
+          throw new Error('not used');
+        },
+        send: () => undefined,
+        id: 1
+      };
+
+      public constructor(_options: Record<string, unknown>) {}
+      public focus(): void {}
+      public setSize(_width: number, _height: number): void {}
+      public getBounds(): { width: number; height: number } {
+        return { width: 1280, height: 960 };
+      }
+      public setTitle(_title: string): void {}
+      public isFocused(): boolean { return false; }
+      public isMinimized(): boolean { return false; }
+      public isMaximized(): boolean { return false; }
+      public isFullScreen(): boolean { return false; }
+      public minimize(): void {}
+      public maximize(): void {}
+      public setFullScreen(_flag: boolean): void {}
+      public restore(): void {}
+      public close(): void {}
+      public isDestroyed(): boolean { return false; }
+      public on(_event: 'closed', _listener: () => void): void {}
+      public async loadURL(_url: string): Promise<void> {}
+      public async loadFile(_filePath: string): Promise<void> {}
+    }
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow
+    };
+
+    const result = await runtime.invoke<{ outputFile: string; pageCount?: number }>('platform.renderHtmlToPdf', {
+      htmlDir,
+      outputFile
+    });
+
+    const written = await fs.readFile(outputFile);
+    expect(result.outputFile).toBe(outputFile);
+    expect(result.pageCount).toBe(1);
+    expect(written.toString('latin1')).toContain('%PDF-1.7');
+    expect(executedScripts.some((code) => code.includes('.chips-composite__frame'))).toBe(true);
+    expect(executedScripts.some((code) => code.includes('frame.loading = "eager"'))).toBe(true);
+    expect(executedScripts.some((code) => code.includes('chipsCompositeReady'))).toBe(true);
+    expect(executedScripts.some((code) => code.includes('frame.dataset.renderReady === "true"'))).toBe(true);
+  });
+
+  it('exports local html to image through formal platform action', async () => {
+    const outputFile = path.join(workspace, 'exported.png');
+    const htmlDir = path.join(workspace, 'html-export-image');
+    await fs.mkdir(htmlDir, { recursive: true });
+    await fs.writeFile(path.join(htmlDir, 'index.html'), '<!doctype html><html><body><h1>PNG</h1></body></html>', 'utf-8');
+
+    class MockBrowserWindow {
+      public webContents = {
+        executeJavaScript: async <T,>() => ({ width: 640, height: 360 } as T),
+        printToPDF: async () => Buffer.alloc(0),
+        capturePage: async () => ({
+          toPNG: () => Buffer.from('png-binary'),
+          toJPEG: () => Buffer.from('jpeg-binary'),
+          getSize: () => ({ width: 640, height: 360 })
+        }),
+        send: () => undefined,
+        id: 1
+      };
+
+      public constructor(_options: Record<string, unknown>) {}
+      public focus(): void {}
+      public setSize(_width: number, _height: number): void {}
+      public getBounds(): { width: number; height: number } {
+        return { width: 1280, height: 960 };
+      }
+      public setTitle(_title: string): void {}
+      public isFocused(): boolean { return false; }
+      public isMinimized(): boolean { return false; }
+      public isMaximized(): boolean { return false; }
+      public isFullScreen(): boolean { return false; }
+      public minimize(): void {}
+      public maximize(): void {}
+      public setFullScreen(_flag: boolean): void {}
+      public restore(): void {}
+      public close(): void {}
+      public isDestroyed(): boolean { return false; }
+      public on(_event: 'closed', _listener: () => void): void {}
+      public async loadURL(_url: string): Promise<void> {}
+      public async loadFile(_filePath: string): Promise<void> {}
+    }
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow
+    };
+
+    const result = await runtime.invoke<{ outputFile: string; width?: number; height?: number; format: string }>(
+      'platform.renderHtmlToImage',
+      {
+        htmlDir,
+        outputFile,
+        options: {
+          format: 'png',
+          background: 'theme'
+        }
+      }
+    );
+
+    const written = await fs.readFile(outputFile, 'utf-8');
+    expect(result.outputFile).toBe(outputFile);
+    expect(result.format).toBe('png');
+    expect(result.width).toBe(640);
+    expect(result.height).toBe(360);
+    expect(written).toBe('png-binary');
+  });
+
+  it('re-waits and re-measures image export after resizing the capture viewport', async () => {
+    const outputFile = path.join(workspace, 'exported-resized.png');
+    const htmlDir = path.join(workspace, 'html-export-image-resized');
+    await fs.mkdir(htmlDir, { recursive: true });
+    await fs.writeFile(path.join(htmlDir, 'index.html'), '<!doctype html><html><body><h1>PNG</h1></body></html>', 'utf-8');
+
+    const setSizeCalls: Array<{ width: number; height: number }> = [];
+    const captureRects: Array<{ x: number; y: number; width: number; height: number }> = [];
+    let measureCall = 0;
+
+    class MockBrowserWindow {
+      public webContents = {
+        executeJavaScript: async <T,>(code: string) => {
+          if (code.includes('chipsCompositeReady')) {
+            return true as T;
+          }
+          measureCall += 1;
+          if (measureCall === 1) {
+            return { width: 640, height: 320 } as T;
+          }
+          return { width: 640, height: 960 } as T;
+        },
+        printToPDF: async () => Buffer.alloc(0),
+        capturePage: async (rect?: { x: number; y: number; width: number; height: number }) => {
+          if (rect) {
+            captureRects.push(rect);
+          }
+          return {
+            toPNG: () => Buffer.from('png-resized'),
+            toJPEG: () => Buffer.from('jpeg-resized'),
+            getSize: () => ({ width: rect?.width ?? 0, height: rect?.height ?? 0 })
+          };
+        },
+        send: () => undefined,
+        id: 1
+      };
+
+      public constructor(_options: Record<string, unknown>) {}
+      public focus(): void {}
+      public setSize(width: number, height: number): void {
+        setSizeCalls.push({ width, height });
+      }
+      public getBounds(): { width: number; height: number } {
+        return { width: 1280, height: 960 };
+      }
+      public setTitle(_title: string): void {}
+      public isFocused(): boolean { return false; }
+      public isMinimized(): boolean { return false; }
+      public isMaximized(): boolean { return false; }
+      public isFullScreen(): boolean { return false; }
+      public minimize(): void {}
+      public maximize(): void {}
+      public setFullScreen(_flag: boolean): void {}
+      public restore(): void {}
+      public close(): void {}
+      public isDestroyed(): boolean { return false; }
+      public on(_event: 'closed', _listener: () => void): void {}
+      public async loadURL(_url: string): Promise<void> {}
+      public async loadFile(_filePath: string): Promise<void> {}
+    }
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow
+    };
+
+    const result = await runtime.invoke<{ outputFile: string; width?: number; height?: number; format: string }>(
+      'platform.renderHtmlToImage',
+      {
+        htmlDir,
+        outputFile,
+        options: {
+          format: 'png',
+        }
+      }
+    );
+
+    expect(result.outputFile).toBe(outputFile);
+    expect(result.width).toBe(640);
+    expect(result.height).toBe(960);
+    expect(setSizeCalls).toEqual([
+      { width: 640, height: 320 },
+      { width: 640, height: 960 }
+    ]);
+    expect(captureRects).toEqual([
+      { x: 0, y: 0, width: 640, height: 960 }
+    ]);
+    expect(await fs.readFile(outputFile, 'utf-8')).toBe('png-resized');
   });
 
   it('packs directory cards through card service routes and restores generated metadata on unpack', async () => {
@@ -360,7 +644,8 @@ describe('Host services integration', () => {
           'type: module',
           'name: Markdown Renderer Module',
           'description: Shared markdown rendering module',
-          'permissions: []',
+          'permissions:',
+          '  - file.read',
           'entry: dist/index.cjs',
           'module:',
           '  apiVersion: 1',
@@ -374,6 +659,14 @@ describe('Host services integration', () => {
           '          mode: sync',
           '          inputSchema: contracts/render.input.schema.json',
           '          outputSchema: contracts/render.output.schema.json',
+          '        - name: inspectFile',
+          '          mode: sync',
+          '          inputSchema: contracts/inspectFile.input.schema.json',
+          '          outputSchema: contracts/inspectFile.output.schema.json',
+          '        - name: proxyModuleCall',
+          '          mode: sync',
+          '          inputSchema: contracts/proxyModuleCall.input.schema.json',
+          '          outputSchema: contracts/proxyModuleCall.output.schema.json',
           '        - name: renderAsync',
           '          mode: job',
           '          inputSchema: contracts/renderAsync.input.schema.json',
@@ -400,6 +693,16 @@ describe('Host services integration', () => {
           "            html: `<article>${input.markdown}</article>`,",
           "            provider: 'chips.module.markdown-renderer'",
           '          };',
+          '        },',
+          '        async inspectFile(ctx, input) {',
+          "          const result = await ctx.host.invoke('file.stat', { path: input.path });",
+          '          return {',
+          '            isFile: result.meta?.isFile === true,',
+          '            isDirectory: result.meta?.isDirectory === true',
+          '          };',
+          '        },',
+          '        async proxyModuleCall(ctx) {',
+          "          return await ctx.host.invoke('module.listProviders', {});",
           '        },',
           '        async renderAsync(ctx, input) {',
           "          await ctx.job?.reportProgress({ stage: 'started', percent: 10 });",
@@ -444,6 +747,63 @@ describe('Host services integration', () => {
               provider: { type: 'string' }
             },
             additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/inspectFile.input.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['path'],
+            properties: {
+              path: { type: 'string' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/inspectFile.output.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            required: ['isFile', 'isDirectory'],
+            properties: {
+              isFile: { type: 'boolean' },
+              isDirectory: { type: 'boolean' }
+            },
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/proxyModuleCall.input.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            additionalProperties: false
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+      await fs.writeFile(
+        path.join(moduleProjectDir, 'contracts/proxyModuleCall.output.schema.json'),
+        JSON.stringify(
+          {
+            type: 'object',
+            additionalProperties: true
           },
           null,
           2
@@ -544,6 +904,35 @@ describe('Host services integration', () => {
       expect(syncResult.output).toMatchObject({
         html: '<article># Hello Markdown</article>',
         provider: 'chips.module.markdown-renderer'
+      });
+
+      const inspected = await runtime.invoke<{
+        mode: 'sync';
+        output: {
+          isFile: boolean;
+          isDirectory: boolean;
+        };
+      }>('module.invoke', {
+        capability: 'text.markdown.render',
+        method: 'inspectFile',
+        input: {
+          path: path.join(moduleProjectDir, 'manifest.yaml')
+        }
+      });
+      expect(inspected.mode).toBe('sync');
+      expect(inspected.output).toMatchObject({
+        isFile: true,
+        isDirectory: false
+      });
+
+      await expect(
+        runtime.invoke('module.invoke', {
+          capability: 'text.markdown.render',
+          method: 'proxyModuleCall',
+          input: {}
+        })
+      ).rejects.toMatchObject({
+        code: 'MODULE_HOST_ACTION_FORBIDDEN'
       });
 
       const started = await runtime.invoke<{ mode: 'job'; jobId: string }>('module.invoke', {

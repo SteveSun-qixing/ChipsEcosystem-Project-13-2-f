@@ -1,10 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { createError } from '../../shared/errors';
 import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
+import { loadElectronModule } from '../electron/electron-loader';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
 import { buildThemeContractsView, type ThemeContract, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
 import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
@@ -169,6 +171,13 @@ interface RuntimeState {
   locales: Record<string, Record<string, string>>;
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
+}
+
+interface ResolvedHtmlExportPaths {
+  htmlDir: string;
+  entryFile: string;
+  entryPath: string;
+  outputFile: string;
 }
 
 const toModuleRuntimeView = (record: ModuleRuntimeRecord): ModuleRuntimeView => {
@@ -432,6 +441,218 @@ const asString = (value: unknown): string | undefined => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 };
 
+const asPositiveFiniteNumber = (value: unknown): number | undefined => {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+};
+
+const isPathInside = (parentPath: string, targetPath: string): boolean => {
+  const relative = path.relative(parentPath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const normalizeHtmlEntryFile = (entryFile?: string): string => {
+  const normalized = (asString(entryFile) ?? 'index.html').replace(/\\/g, '/');
+  const candidate = path.posix.normalize(normalized);
+  if (candidate.startsWith('/') || candidate === '..' || candidate.startsWith('../')) {
+    throw createError('INVALID_ARGUMENT', 'entryFile must stay inside htmlDir', { entryFile });
+  }
+  return candidate;
+};
+
+const resolveHtmlExportPaths = async (input: {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+}): Promise<ResolvedHtmlExportPaths> => {
+  const htmlDir = path.resolve(input.htmlDir);
+  const htmlDirStat = await fs.stat(htmlDir).catch(() => null);
+  if (!htmlDirStat?.isDirectory()) {
+    throw createError('FILE_NOT_FOUND', 'htmlDir does not exist or is not a directory', { htmlDir });
+  }
+
+  const entryFile = normalizeHtmlEntryFile(input.entryFile);
+  const entryPath = path.resolve(htmlDir, entryFile);
+  if (!isPathInside(htmlDir, entryPath)) {
+    throw createError('INVALID_ARGUMENT', 'entryFile must stay inside htmlDir', { entryFile });
+  }
+
+  const entryStat = await fs.stat(entryPath).catch(() => null);
+  if (!entryStat?.isFile()) {
+    throw createError('FILE_NOT_FOUND', 'HTML entry file does not exist', { htmlDir, entryFile, entryPath });
+  }
+
+  const outputFile = path.resolve(input.outputFile);
+  await fs.mkdir(path.dirname(outputFile), { recursive: true });
+
+  return {
+    htmlDir,
+    entryFile,
+    entryPath,
+    outputFile
+  };
+};
+
+const countPdfPages = (buffer: Buffer): number | undefined => {
+  const matches = buffer.toString('latin1').match(/\/Type\s*\/Page\b/g);
+  return matches && matches.length > 0 ? matches.length : undefined;
+};
+
+const resolveThemeBackgroundColor = (state: RuntimeState): string => {
+  const context = resolveThemeContext(state, []);
+  return (
+    asString(context.resolvedTheme.variables['chips.sys.color.canvas']) ??
+    asString(context.resolvedTheme.variables['chips.sys.color.surface']) ??
+    '#ffffff'
+  );
+};
+
+const waitForExportDocumentReady = async (browserWindow: {
+  webContents: { executeJavaScript?: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> };
+}): Promise<void> => {
+  if (typeof browserWindow.webContents.executeJavaScript !== 'function') {
+    return;
+  }
+
+  await browserWindow.webContents.executeJavaScript(
+    [
+      'new Promise((resolve) => {',
+      '  let settled = false;',
+      '  const finish = () => {',
+      '    if (settled) {',
+      '      return;',
+      '    }',
+      '    settled = true;',
+      '    const raf = typeof window.requestAnimationFrame === "function"',
+      '      ? window.requestAnimationFrame.bind(window)',
+      '      : (callback) => window.setTimeout(callback, 0);',
+      '    raf(() => raf(() => resolve(true)));',
+      '  };',
+      '  const waitImages = Promise.all(Array.from(document.images || []).map((image) => {',
+      '    if (image.complete) {',
+      '      return Promise.resolve();',
+      '    }',
+      '    return new Promise((done) => {',
+      '      image.addEventListener("load", () => done(undefined), { once: true });',
+      '      image.addEventListener("error", () => done(undefined), { once: true });',
+      '    });',
+      '  }));',
+      '  const waitFonts = document.fonts && typeof document.fonts.ready?.then === "function"',
+      '    ? document.fonts.ready',
+      '    : Promise.resolve();',
+      '  const waitWindowLoad = document.readyState === "complete"',
+      '    ? Promise.resolve()',
+      '    : new Promise((done) => window.addEventListener("load", () => done(undefined), { once: true }));',
+      '  const frameList = Array.from(document.querySelectorAll(".chips-composite__frame"));',
+      '  const compositeBodyDataset = document.body?.dataset;',
+      '  for (const frame of frameList) {',
+      '    try {',
+      '      frame.loading = "eager";',
+      '      frame.setAttribute("loading", "eager");',
+      '    } catch {}',
+      '  }',
+      '  const waitFrames = Promise.all(frameList.map((frame) => new Promise((done) => {',
+      '    const finishFrame = () => done(undefined);',
+      '    if (frame.dataset.loaded === "true") {',
+      '      finishFrame();',
+      '      return;',
+      '    }',
+      '    frame.addEventListener("load", finishFrame, { once: true });',
+      '    frame.addEventListener("error", finishFrame, { once: true });',
+      '    window.setTimeout(finishFrame, 3000);',
+      '  })));',
+      '  const isCompositeSettled = () => {',
+      '    if (frameList.length === 0) {',
+      '      return true;',
+      '    }',
+      '    const ready = compositeBodyDataset?.chipsCompositeReady === "true";',
+      '    const lastResizeAt = Number(compositeBodyDataset?.chipsCompositeLastResizeAt ?? "0");',
+      '    const quietForMs = Number.isFinite(lastResizeAt) && lastResizeAt > 0 ? Date.now() - lastResizeAt : Number.POSITIVE_INFINITY;',
+      '    const framesReady = frameList.every((frame) => frame.dataset.loaded === "true" && frame.dataset.renderReady === "true");',
+      '    return ready && framesReady && quietForMs >= 180;',
+      '  };',
+      '  const waitCompositeSettled = frameList.length === 0',
+      '    ? Promise.resolve()',
+      '    : new Promise((done) => {',
+      '        const startedAt = Date.now();',
+      '        const scheduleCheck = () => {',
+      '          if (isCompositeSettled()) {',
+      '            window.setTimeout(() => done(undefined), 120);',
+      '            return;',
+      '          }',
+      '          if (Date.now() - startedAt >= 8000) {',
+      '            done(undefined);',
+      '            return;',
+      '          }',
+      '          window.setTimeout(scheduleCheck, 60);',
+      '        };',
+      '        window.addEventListener("message", (event) => {',
+      '          const type = event?.data?.type;',
+      '          if (type === "chips.composite:ready" || type === "chips.composite:resize" || type === "chips.basecard:height" || type === "chips.basecard:error") {',
+      '            window.setTimeout(scheduleCheck, 0);',
+      '          }',
+      '        });',
+      '        scheduleCheck();',
+      '      });',
+      '  Promise.all([waitWindowLoad, waitImages, waitFonts, waitFrames, waitCompositeSettled])',
+      '    .then(() => window.setTimeout(finish, 80))',
+      '    .catch(() => window.setTimeout(finish, 80));',
+      '  window.setTimeout(finish, 10000);',
+      '})'
+    ].join('\n'),
+    true
+  );
+};
+
+const measureExportDocumentBounds = async (browserWindow: {
+  webContents: { executeJavaScript?: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> };
+}): Promise<{ width?: number; height?: number }> => {
+  let measuredWidth: number | undefined;
+  let measuredHeight: number | undefined;
+
+  if (typeof browserWindow.webContents.executeJavaScript === 'function') {
+    const measured = await browserWindow.webContents
+      .executeJavaScript<{ width?: number; height?: number }>(
+        [
+          '(() => ({',
+          '  width: Math.max(',
+          '    document.documentElement?.scrollWidth ?? 0,',
+          '    document.body?.scrollWidth ?? 0,',
+          '    document.documentElement?.offsetWidth ?? 0,',
+          '    document.body?.offsetWidth ?? 0,',
+          '    window.innerWidth ?? 0',
+          '  ),',
+          '  height: Math.max(',
+          '    document.documentElement?.scrollHeight ?? 0,',
+          '    document.body?.scrollHeight ?? 0,',
+          '    document.documentElement?.offsetHeight ?? 0,',
+          '    document.body?.offsetHeight ?? 0,',
+          '    Number(document.body?.dataset?.chipsCompositeLastHeight ?? "0") || 0,',
+          '    window.innerHeight ?? 0',
+          '  )',
+          '}))()'
+        ].join('\n'),
+        true
+      )
+      .catch(() => ({ width: undefined, height: undefined }));
+    measuredWidth = asPositiveFiniteNumber(measured.width);
+    measuredHeight = asPositiveFiniteNumber(measured.height);
+  }
+
+  return { width: measuredWidth, height: measuredHeight };
+};
+
+const resolveExportViewport = (
+  measuredBounds: { width?: number; height?: number },
+  requestedWidth?: number,
+  requestedHeight?: number,
+  scaleFactor = 1
+): { width: number; height: number } => {
+  const effectiveScale = asPositiveFiniteNumber(scaleFactor) ?? 1;
+  const width = Math.max(1, Math.ceil((requestedWidth ?? measuredBounds.width ?? 1200) * effectiveScale));
+  const height = Math.max(1, Math.ceil((requestedHeight ?? measuredBounds.height ?? 900) * effectiveScale));
+  return { width, height };
+};
+
 const normalizeThemeAssetPath = (value: string): string => {
   return path.normalize(value).replace(/^[.][\\/]/, '');
 };
@@ -633,14 +854,86 @@ const resolveAppEntryPath = (): string => {
   throw createError('HOST_APP_ENTRY_NOT_FOUND', 'Host electron app entry is unavailable', { candidates });
 };
 
-const resolveLaunchExecutable = (): { executablePath: string; argsPrefix: string[] } => {
-  const executablePath = process.execPath;
-  const appEntryPath = resolveAppEntryPath();
+export const shouldPassAppEntryArgument = (executablePath: string, defaultApp?: boolean): boolean => {
+  if (defaultApp === true) {
+    return true;
+  }
+
+  const executableName = path.basename(executablePath).toLowerCase();
+  return executableName === 'node' || executableName === 'node.exe';
+};
+
+export const resolveLaunchExecutable = (): { executablePath: string; argsPrefix: string[] } => {
+  const processRef = process as NodeJS.Process & { defaultApp?: boolean };
+  const executablePath = processRef.execPath;
 
   return {
     executablePath,
-    argsPrefix: [appEntryPath]
+    // Packaged Electron apps already resolve their main entry from Resources/app/package.json.
+    // Passing app-entry.js again forces "default app" style launching and breaks macOS launcher apps.
+    argsPrefix: shouldPassAppEntryArgument(executablePath, processRef.defaultApp)
+      ? [resolveAppEntryPath()]
+      : []
   };
+};
+
+const toSerializableErrorDetails = (error: unknown): unknown => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  if (error && typeof error === 'object') {
+    return { ...(error as Record<string, unknown>) };
+  }
+
+  return {
+    value: error
+  };
+};
+
+const getErrnoCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const candidate = error as Record<string, unknown>;
+  return typeof candidate.code === 'string' ? candidate.code : undefined;
+};
+
+const toPluginShortcutCreateError = (
+  pluginId: string,
+  shortcut: Pick<PluginShortcutView, 'launcherPath' | 'location'>,
+  error: unknown
+) => {
+  const errnoCode = getErrnoCode(error);
+  const details = {
+    pluginId,
+    launcherPath: shortcut.launcherPath,
+    location: shortcut.location,
+    cause: toSerializableErrorDetails(error)
+  };
+
+  if (errnoCode === 'EACCES' || errnoCode === 'EPERM') {
+    if (shortcut.location === 'launchpad') {
+      return createError(
+        'PLUGIN_SHORTCUT_PERMISSION_DENIED',
+        'Cannot create macOS launchpad shortcut because ~/Applications/Chips Apps is not writable by the current user. Re-run the macOS installer to repair the directory ownership.',
+        details
+      );
+    }
+
+    return createError(
+      'PLUGIN_SHORTCUT_PERMISSION_DENIED',
+      `Cannot create shortcut because target directory is not writable: ${shortcut.launcherPath}`,
+      details
+    );
+  }
+
+  return createError('PLUGIN_SHORTCUT_CREATE_FAILED', `Failed to create shortcut for ${pluginId}`, details);
 };
 
 const resolveListedPath = (dir: string, entry: string): string => {
@@ -798,14 +1091,18 @@ const createPluginShortcut = async (
 
   const launchTarget = resolveLaunchExecutable();
   const iconPath = await resolvePluginIconPath(plugin);
-  const created = await ctx.pal.launcher.create({
-    pluginId,
-    name: shortcutName,
-    launcherPath: existingPath,
-    executablePath: launchTarget.executablePath,
-    args: buildPluginShortcutArgs(ctx.workspacePath, pluginId),
-    iconPath
-  });
+  const created = await ctx.pal.launcher
+    .create({
+      pluginId,
+      name: shortcutName,
+      launcherPath: existingPath,
+      executablePath: launchTarget.executablePath,
+      args: buildPluginShortcutArgs(ctx.workspacePath, pluginId),
+      iconPath
+    })
+    .catch((error: unknown) => {
+      throw toPluginShortcutCreateError(pluginId, current, error);
+    });
 
   registry[pluginId] = created.launcherPath;
   await writeShortcutRegistry(ctx.workspacePath, registry);
@@ -980,118 +1277,42 @@ const buildModuleBaseContext = (
 
   return {
     logger: createModuleLogger(ctx, pluginId, requestId),
+    host: {
+      invoke: async <TOutput = unknown>(action: string, payload?: Record<string, unknown>) => {
+        if (typeof action !== 'string' || action.trim().length === 0) {
+          throw createError('MODULE_HOST_ACTION_INVALID', 'Module host proxy requires a non-empty action');
+        }
+        if (action.startsWith('module.')) {
+          throw createError(
+            'MODULE_HOST_ACTION_FORBIDDEN',
+            'Module host proxy does not allow module.* actions; use ctx.module.invoke(...) or ctx.module.job.* instead',
+            { action }
+          );
+        }
+
+        return invokeKernelForModule<Record<string, unknown>, TOutput>(
+          ctx,
+          pluginId,
+          permissions,
+          action,
+          payload ?? {},
+          routeContext
+        );
+      }
+    },
     module: {
       invoke: (request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number }) =>
-        invokeModule(pluginId, request, routeContext)
-    },
-    services: {
-      file: {
-        read: (filePath: string, options?: Record<string, unknown>) =>
-          invokeKernelForModule<{ path: string; options?: Record<string, unknown> }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'file.read',
-            { path: filePath, options },
-            routeContext
-          ).then((result) => (result as { content: unknown }).content),
-        write: async (filePath: string, content: unknown, options?: Record<string, unknown>) => {
-          await invokeKernelForModule(ctx, pluginId, permissions, 'file.write', { path: filePath, content, options }, routeContext);
-        },
-        stat: (filePath: string) =>
-          invokeKernelForModule<{ path: string }, unknown>(ctx, pluginId, permissions, 'file.stat', { path: filePath }, routeContext).then(
-            (result) => (result as { meta: unknown }).meta
+        invokeModule(pluginId, request, routeContext),
+      job: {
+        get: (jobId: string) =>
+          invokeKernelForModule<{ jobId: string }, unknown>(ctx, pluginId, permissions, 'module.job.get', { jobId }, routeContext).then(
+            (result) => (result as { job: unknown }).job
           ),
-        list: (dir: string, options?: Record<string, unknown>) =>
-          invokeKernelForModule<{ dir: string; options?: Record<string, unknown> }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'file.list',
-            { dir, options },
-            routeContext
-          ).then((result) => (result as { entries: unknown }).entries)
-      },
-      resource: {
-        resolve: (resourceId: string) =>
-          invokeKernelForModule<{ resourceId: string }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'resource.resolve',
-            { resourceId },
-            routeContext
-          ).then((result) => (result as { uri: unknown }).uri),
-        readMetadata: (resourceId: string) =>
-          invokeKernelForModule<{ resourceId: string }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'resource.readMetadata',
-            { resourceId },
-            routeContext
-          ).then((result) => (result as { metadata: unknown }).metadata),
-        readBinary: (resourceId: string) =>
-          invokeKernelForModule<{ resourceId: string }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'resource.readBinary',
-            { resourceId },
-            routeContext
-          ).then((result) => (result as { data: unknown }).data)
-      },
-      card: {
-        parse: (cardFile: string) =>
-          invokeKernelForModule<{ cardFile: string }, unknown>(ctx, pluginId, permissions, 'card.parse', { cardFile }, routeContext).then(
-            (result) => (result as { ast: unknown }).ast
-          ),
-        render: (cardFile: string, options?: Record<string, unknown>) =>
-          invokeKernelForModule<{ cardFile: string; options?: Record<string, unknown> }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'card.render',
-            { cardFile, options },
-            routeContext
-          ).then((result) => (result as { view: unknown }).view),
-        validate: (cardFile: string) =>
-          invokeKernelForModule<{ cardFile: string }, unknown>(ctx, pluginId, permissions, 'card.validate', { cardFile }, routeContext)
-      },
-      box: {
-        inspect: (boxFile: string) =>
-          invokeKernelForModule<{ boxFile: string }, unknown>(ctx, pluginId, permissions, 'box.inspect', { boxFile }, routeContext).then(
-            (result) => (result as { inspection: unknown }).inspection
-          ),
-        pack: (boxDir: string, outputPath: string) =>
-          invokeKernelForModule<{ boxDir: string; outputPath: string }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'box.pack',
-            { boxDir, outputPath },
-            routeContext
-          ).then((result) => (result as { boxFile: unknown }).boxFile),
-        unpack: (boxFile: string, outputDir: string) =>
-          invokeKernelForModule<{ boxFile: string; outputDir: string }, unknown>(
-            ctx,
-            pluginId,
-            permissions,
-            'box.unpack',
-            { boxFile, outputDir },
-            routeContext
-          ).then((result) => (result as { outputDir: unknown }).outputDir)
-      },
-      config: {
-        get: (key: string) =>
-          invokeKernelForModule<{ key: string }, { value: unknown }>(ctx, pluginId, permissions, 'config.get', { key }, routeContext).then(
-            (result) => result.value
-          ),
-        set: async (key: string, value: unknown, scope?: 'user' | 'workspace' | 'system') => {
-          await invokeKernelForModule(ctx, pluginId, permissions, 'config.set', { key, value, scope }, routeContext);
+        cancel: async (jobId: string) => {
+          await invokeKernelForModule(ctx, pluginId, permissions, 'module.job.cancel', { jobId }, routeContext);
         }
       }
-    }
+    },
   };
 };
 
@@ -1319,9 +1540,7 @@ const resolveThemedWindowChrome = (
 
   try {
     const context = resolveThemeContext(state, []);
-    const backgroundColor =
-      asString(context.resolvedTheme.variables['chips.sys.color.canvas']) ??
-      asString(context.resolvedTheme.variables['chips.sys.color.surface']);
+    const backgroundColor = resolveThemeBackgroundColor(state);
 
     if (!backgroundColor) {
       return nextChrome;
@@ -1333,6 +1552,184 @@ const resolveThemedWindowChrome = (
     };
   } catch {
     return nextChrome;
+  }
+};
+
+const renderHtmlToPdfFile = async (
+  state: RuntimeState,
+  input: {
+    htmlDir: string;
+    entryFile?: string;
+    outputFile: string;
+    options?: {
+      pageSize?: 'A4' | 'A3' | 'Letter' | 'Legal';
+      landscape?: boolean;
+      printBackground?: boolean;
+      marginMm?: {
+        top?: number;
+        right?: number;
+        bottom?: number;
+        left?: number;
+      };
+    };
+  }
+): Promise<{ outputFile: string; pageCount?: number }> => {
+  const electron = loadElectronModule();
+  if (!electron?.BrowserWindow) {
+    throw createError('PLATFORM_UNSUPPORTED', 'HTML to PDF export requires Electron BrowserWindow support');
+  }
+
+  const resolved = await resolveHtmlExportPaths(input);
+  const browserWindow = new electron.BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 960,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true
+    }
+  });
+
+  try {
+    await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
+    await waitForExportDocumentReady(browserWindow);
+
+    if (typeof browserWindow.webContents.printToPDF !== 'function') {
+      throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose printToPDF');
+    }
+
+    const marginMm = input.options?.marginMm;
+    const pdfBuffer = await browserWindow.webContents.printToPDF({
+      pageSize: input.options?.pageSize ?? 'A4',
+      landscape: input.options?.landscape === true,
+      printBackground: input.options?.printBackground !== false,
+      margins: marginMm
+        ? {
+            top: (marginMm.top ?? 0) / 25.4,
+            right: (marginMm.right ?? 0) / 25.4,
+            bottom: (marginMm.bottom ?? 0) / 25.4,
+            left: (marginMm.left ?? 0) / 25.4
+          }
+        : undefined
+    });
+
+    await fs.writeFile(resolved.outputFile, pdfBuffer);
+    return {
+      outputFile: resolved.outputFile,
+      pageCount: countPdfPages(pdfBuffer)
+    };
+  } finally {
+    if (!browserWindow.isDestroyed()) {
+      browserWindow.close();
+    }
+  }
+};
+
+const renderHtmlToImageFile = async (
+  state: RuntimeState,
+  input: {
+    htmlDir: string;
+    entryFile?: string;
+    outputFile: string;
+    options?: {
+      format?: 'png' | 'jpeg' | 'webp';
+      width?: number;
+      height?: number;
+      scaleFactor?: number;
+      background?: 'transparent' | 'white' | 'theme';
+    };
+  }
+): Promise<{ outputFile: string; width?: number; height?: number; format: 'png' | 'jpeg' | 'webp' }> => {
+  const electron = loadElectronModule();
+  if (!electron?.BrowserWindow) {
+    throw createError('PLATFORM_UNSUPPORTED', 'HTML to image export requires Electron BrowserWindow support');
+  }
+
+  const resolved = await resolveHtmlExportPaths(input);
+  const format = input.options?.format ?? 'png';
+  const background = input.options?.background ?? (format === 'jpeg' ? 'white' : 'transparent');
+  const backgroundColor =
+    background === 'theme' ? resolveThemeBackgroundColor(state) : background === 'white' ? '#ffffff' : '#00000000';
+  const browserWindow = new electron.BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 960,
+    transparent: background === 'transparent' && format !== 'jpeg',
+    backgroundColor,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true
+    }
+  });
+
+  try {
+    await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
+    await waitForExportDocumentReady(browserWindow);
+
+    if (typeof browserWindow.webContents.capturePage !== 'function') {
+      throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose capturePage');
+    }
+
+    const initialBounds = await measureExportDocumentBounds(browserWindow);
+    let viewport = resolveExportViewport(
+      initialBounds,
+      asPositiveFiniteNumber(input.options?.width),
+      asPositiveFiniteNumber(input.options?.height),
+      asPositiveFiniteNumber(input.options?.scaleFactor) ?? 1
+    );
+    browserWindow.setSize(viewport.width, viewport.height);
+
+    await waitForExportDocumentReady(browserWindow);
+
+    const settledBounds = await measureExportDocumentBounds(browserWindow);
+    const settledViewport = resolveExportViewport(
+      {
+        width: Math.max(initialBounds.width ?? 0, settledBounds.width ?? 0) || undefined,
+        height: Math.max(initialBounds.height ?? 0, settledBounds.height ?? 0) || undefined,
+      },
+      asPositiveFiniteNumber(input.options?.width),
+      asPositiveFiniteNumber(input.options?.height),
+      asPositiveFiniteNumber(input.options?.scaleFactor) ?? 1
+    );
+
+    if (settledViewport.width !== viewport.width || settledViewport.height !== viewport.height) {
+      viewport = settledViewport;
+      browserWindow.setSize(viewport.width, viewport.height);
+      await waitForExportDocumentReady(browserWindow);
+    }
+
+    const image = await browserWindow.webContents.capturePage({
+      x: 0,
+      y: 0,
+      width: viewport.width,
+      height: viewport.height
+    });
+
+    let imageBuffer: Buffer;
+    if (format === 'png') {
+      imageBuffer = image.toPNG();
+    } else if (format === 'jpeg') {
+      if (typeof image.toJPEG !== 'function') {
+        throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose JPEG image export');
+      }
+      imageBuffer = image.toJPEG(92);
+    } else {
+      throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose WEBP image export');
+    }
+
+    await fs.writeFile(resolved.outputFile, imageBuffer);
+    const imageSize = typeof image.getSize === 'function' ? image.getSize() : undefined;
+    return {
+      outputFile: resolved.outputFile,
+      width: imageSize?.width ?? viewport.width,
+      height: imageSize?.height ?? viewport.height,
+      format
+    };
+  } finally {
+    if (!browserWindow.isDestroyed()) {
+      browserWindow.close();
+    }
   }
 };
 
@@ -2723,6 +3120,62 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           })
         )
       },
+      renderHtmlToPdf: {
+        descriptor: descriptor<
+          {
+            htmlDir: string;
+            entryFile?: string;
+            outputFile: string;
+            options?: {
+              pageSize?: 'A4' | 'A3' | 'Letter' | 'Legal';
+              landscape?: boolean;
+              printBackground?: boolean;
+              marginMm?: {
+                top?: number;
+                right?: number;
+                bottom?: number;
+                left?: number;
+              };
+            };
+          },
+          { outputFile: string; pageCount?: number }
+        >(
+          'platform.renderHtmlToPdf',
+          ['platform.read', 'file.read', 'file.write'],
+          60_000,
+          false,
+          0,
+          withMetrics(state, 'platform.renderHtmlToPdf', async (input) => {
+            return renderHtmlToPdfFile(state, input);
+          })
+        )
+      },
+      renderHtmlToImage: {
+        descriptor: descriptor<
+          {
+            htmlDir: string;
+            entryFile?: string;
+            outputFile: string;
+            options?: {
+              format?: 'png' | 'jpeg' | 'webp';
+              width?: number;
+              height?: number;
+              scaleFactor?: number;
+              background?: 'transparent' | 'white' | 'theme';
+            };
+          },
+          { outputFile: string; width?: number; height?: number; format: 'png' | 'jpeg' | 'webp' }
+        >(
+          'platform.renderHtmlToImage',
+          ['platform.read', 'file.read', 'file.write'],
+          60_000,
+          false,
+          0,
+          withMetrics(state, 'platform.renderHtmlToImage', async (input) => {
+            return renderHtmlToImageFile(state, input);
+          })
+        )
+      },
       openExternal: {
         descriptor: descriptor<{ url: string }, { ack: true }>(
           'platform.openExternal',
@@ -3414,6 +3867,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               interactionPolicy?: 'native' | 'delegate';
               viewport?: { width?: number; height?: number; scrollTop?: number; scrollLeft?: number };
               verifyConsistency?: boolean;
+              themeId?: string;
+              locale?: string;
             };
           },
           { view: unknown }
@@ -3424,9 +3879,14 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'card.render', async (input) => {
-            const themeContext = resolveThemeContext(state, []);
+            const themeContext = resolveThemeContext(state, input.options?.themeId ? [input.options.themeId] : []);
+            const locale = input.options?.locale ?? state.locale;
+            if (!state.locales[locale]) {
+              throw createError('I18N_LOCALE_NOT_FOUND', `Locale not found: ${locale}`, { locale });
+            }
             const view = await ctx.getCardService().render(input.cardFile, {
               ...input.options,
+              locale,
               theme: themeContext.renderTheme,
               themeCssText: themeContext.css
             });
@@ -3474,6 +3934,43 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               themeCssText: themeContext.css
             });
             return { view };
+          })
+        )
+      },
+      releaseRenderSession: {
+        descriptor: descriptor<
+          { sessionId: string },
+          { ack: true }
+        >(
+          'card.releaseRenderSession',
+          ['card.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'card.releaseRenderSession', async (input) => {
+            await ctx.getCardService().releaseRenderSession(input.sessionId);
+            return { ack: true };
+          })
+        )
+      },
+      resolveDocumentPath: {
+        descriptor: descriptor<
+          { documentUrl: string },
+          { path: string }
+        >(
+          'card.resolveDocumentPath',
+          ['card.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'card.resolveDocumentPath', async (input) => {
+            const resolvedPath = ctx.getCardService().resolveDocumentFilePath(input.documentUrl);
+            if (!resolvedPath) {
+              throw createError('CARD_RENDER_DOCUMENT_NOT_FOUND', `Unable to resolve rendered document url: ${input.documentUrl}`, {
+                documentUrl: input.documentUrl,
+              });
+            }
+            return { path: resolvedPath };
           })
         )
       },

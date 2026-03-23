@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "required": ["htmlDir", "outputFile"],
+  "properties": {
+    "htmlDir": {
+      "type": "string"
+    },
+    "entryFile": {
+      "type": "string"
+    },
+    "outputFile": {
+      "type": "string"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "pageSize": {
+          "type": "string",
+          "enum": ["A4", "A3", "Letter", "Legal"]
+        },
+        "landscape": {
+          "type": "boolean"
+        },
+        "printBackground": {
+          "type": "boolean"
+        },
+        "marginMm": {
+          "type": "object",
+          "properties": {
+            "top": { "type": "number" },
+            "right": { "type": "number" },
+            "bottom": { "type": "number" },
+            "left": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

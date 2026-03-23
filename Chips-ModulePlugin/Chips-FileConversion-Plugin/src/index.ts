@@ -1,58 +1,68 @@
-const sleep = async (ms: number): Promise<void> => {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-};
+import { executePlan } from "./executor";
+import { normalizeRequest, planConversion, resolveHtmlSource } from "./planner";
+import { createConversionError } from "./errors";
+import type { FileConvertRequest, FileModuleContext } from "./types";
 
-export interface RunInput {
-  sourceText: string;
-  uppercase?: boolean;
-  prefix?: string;
-}
+export type { FileConvertRequest, FileConvertResult } from "./types";
 
-export interface RunAsyncInput extends RunInput {
-  delayMs?: number;
-}
+const resolveSourceShape = async (ctx: FileModuleContext, request: FileConvertRequest) => {
+  if (request.source.type !== "html") {
+    return undefined;
+  }
 
-export interface RunOutput {
-  text: string;
-  length: number;
-  handledBy: string;
-}
+  let stat: unknown;
+  try {
+    stat = (await ctx.host.invoke<{ meta: unknown }>("file.stat", {
+      path: request.source.path,
+    })).meta;
+  } catch (error) {
+    throw createConversionError("CONVERTER_INPUT_INVALID", `HTML source path does not exist: ${request.source.path}`, {
+      sourcePath: request.source.path,
+      cause: error,
+    });
+  }
 
-const toOutput = (sourceText: string, uppercase?: boolean, prefix?: string): RunOutput => {
-  const normalized = uppercase ? sourceText.toUpperCase() : sourceText;
-  const text = `${prefix ?? ""}${normalized}`;
-  return {
-    text,
-    length: text.length,
-    handledBy: "chips.module.chips.fileconversion.plugin",
-  };
+  const isFile =
+    Boolean(stat) &&
+    typeof stat === "object" &&
+    !Array.isArray(stat) &&
+    (stat as Record<string, unknown>).isFile === true;
+
+  return resolveHtmlSource(request.source.path, isFile);
 };
 
 const moduleDefinition = {
   providers: [
     {
-      capability: "module.chips.fileconversion.plugin",
+      capability: "converter.file.convert",
       methods: {
-        async run(_ctx: unknown, input: RunInput): Promise<RunOutput> {
-          return toOutput(input.sourceText, input.uppercase, input.prefix);
-        },
-        async runAsync(
-          ctx: { job?: { reportProgress(payload: Record<string, unknown>): Promise<void> } },
-          input: RunAsyncInput
-        ): Promise<RunOutput> {
-          await ctx.job?.reportProgress({
-            stage: "started",
-            percent: 10,
+        async convert(ctx: FileModuleContext, input: FileConvertRequest) {
+          const normalizedRequest = normalizeRequest(input);
+          const htmlSource = await resolveSourceShape(ctx, normalizedRequest);
+          const plan = planConversion(normalizedRequest, htmlSource);
+
+          ctx.logger.info("Starting file conversion.", {
+            sourceType: normalizedRequest.source.type,
+            targetType: normalizedRequest.target.type,
+            outputPath: normalizedRequest.output.path,
+            stepCount: plan.steps.length,
           });
 
-          await sleep(typeof input.delayMs === "number" ? input.delayMs : 25);
+          await ctx.job?.reportProgress({
+            stage: "prepare",
+            percent: 1,
+            message: "Planning conversion pipeline",
+          });
+
+          const result = await executePlan(ctx, plan);
 
           await ctx.job?.reportProgress({
             stage: "completed",
             percent: 100,
+            message: "File conversion completed",
           });
 
-          return toOutput(input.sourceText, input.uppercase, input.prefix);
+          return result;
         },
       },
     },

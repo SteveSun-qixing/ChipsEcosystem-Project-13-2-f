@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "required": ["htmlDir", "outputFile"],
+  "properties": {
+    "htmlDir": {
+      "type": "string"
+    },
+    "entryFile": {
+      "type": "string"
+    },
+    "outputFile": {
+      "type": "string"
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["png", "jpeg", "webp"]
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "scaleFactor": {
+          "type": "number"
+        },
+        "background": {
+          "type": "string",
+          "enum": ["transparent", "white", "theme"]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

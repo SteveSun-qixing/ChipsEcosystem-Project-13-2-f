@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 仓库已使用 `chips-scaffold-module` 完成初始化，具备正式模块工程骨架。
-- 当前 `src/`、`contracts/` 与 `tests/` 仍保持脚手架示例基线。
-- 本仓的正式需求、技术方案与阶段计划已经写入：
+- 已替换脚手架示例能力，正式对外提供 `converter.card.to-html/convert`。
+- 当前实现通过 Host 正式动作完成 `card.render`、文件读写与 ZIP 打包，不复制私有渲染器。
+- 仓库内保留正式需求、技术方案与阶段计划：
   - `需求文档/`
   - `技术文档/`
   - `开发计划/`
@@ -19,9 +19,25 @@
 
 ## 开发基线
 
-- HTML 产物的视觉效果必须与 Host `card.render(..., { target: "offscreen-render" })` 保持一致。
+- HTML 产物中的卡片内容必须与 Host `card.render(..., { target: "offscreen-render" })` 保持一致。
+- 转换模块在最终导出阶段负责补充网页展示背景、响应式居中宽度和上下留白，但不改变卡片内容结构与渲染来源。
+- 单次导出主题与语言覆盖统一依赖 Host `card.render(..., { options.themeId, options.locale })` 正式能力。
 - 基础卡片前端显示代码必须复用正式卡片渲染链路，不得在本仓复制一套私有渲染实现。
-- 资源复制、路径重写、主题保真、压缩打包策略以仓库文档和生态共用技术文档为准。
+- 中间 HTML 若供 PDF / 图片模块消费，必须包含自包含资源与 `conversion-manifest.json`。
+
+## 当前输出
+
+- `directory`：写出 `index.html`，按需写出 `assets/content/` 与 `conversion-manifest.json`。
+- `zip`：先构建同结构目录，再通过 `zip.compress` 打包为最终 ZIP。
+- `includeAssets=false` 只允许目录态直接导出，结果会保留原始 `file://` 引用并返回警告。
+- `includeManifest=false` 会省略 `conversion-manifest.json`，仅适用于不再进入下游转换链路的直接 HTML 导出。
+
+## 验证命令
+
+- `npm test`
+- `npm run build`
+- `npm run lint`
+- `npm run validate`
 
 ## 文档入口
 

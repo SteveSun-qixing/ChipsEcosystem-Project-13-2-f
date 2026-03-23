@@ -3,11 +3,14 @@ name: Chips HtmltoPDF Plugin
 version: 0.1.0
 type: module
 entry: dist/index.mjs
-description: 基于 chips-scaffold-module 生成的标准模块插件。
+description: 消费目录态 HTML 中间产物并通过 Host 正式导出能力输出 PDF 的原子转换模块。
 author:
   name: sevenstars
   email: chips-htmltopdf-plugin@example.invalid
-permissions: []
+permissions:
+  - file.read
+  - file.write
+  - platform.read
 engines:
   chips: "^0.1.0"
 os:
@@ -19,15 +22,11 @@ module:
   runtime: worker
   activation: onDemand
   provides:
-    - capability: module.chips.htmltopdf.plugin
+    - capability: converter.html.to-pdf
       version: "1.0.0"
       methods:
-        - name: run
-          mode: sync
-          inputSchema: contracts/run.input.schema.json
-          outputSchema: contracts/run.output.schema.json
-        - name: runAsync
+        - name: convert
           mode: job
-          inputSchema: contracts/runAsync.input.schema.json
-          outputSchema: contracts/runAsync.output.schema.json
+          inputSchema: contracts/convert.input.schema.json
+          outputSchema: contracts/convert.output.schema.json
   consumes: []

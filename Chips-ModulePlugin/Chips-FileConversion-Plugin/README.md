@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 仓库已使用 `chips-scaffold-module` 完成初始化，具备正式模块工程骨架。
-- 当前 `src/`、`contracts/` 与 `tests/` 仍保持脚手架示例基线。
+- `converter.file.convert` 编排能力已完成正式实现，`src/`、`contracts/` 与 `tests/` 已切换为真实转换链路实现。
 - 本仓的正式需求、技术方案与阶段计划已经写入：
   - `需求文档/`
   - `技术文档/`
@@ -20,8 +20,20 @@
 ## 开发基线
 
 - 工程入口、Manifest、构建脚本与测试骨架保持 `chips-scaffold-module` 正式口径。
-- 正式能力契约、方法名与 schema 以仓库文档和生态共用技术文档为准，在阶段一完成替换。
+- 正式能力契约、方法名与 schema 已按生态共用技术文档冻结为 `converter.file.convert/convert`。
+- 模块访问 Host 文件动作统一使用 Host 注入的 `ctx.host.invoke("file.*", payload)`。
 - 模块间调用只能走 Host 注入的 `ctx.module.invoke(...)`，不得直接 `import` 其他模块源码。
+
+## 当前实现范围
+
+- 对外统一提供 `converter.file.convert/convert` 异步任务方法。
+- 支持 `card -> html`、`card -> pdf`、`card -> image`、`html -> pdf`、`html -> image` 五条正式流水线。
+- `card -> pdf/image` 会先生成临时 HTML 目录，再继续调用原子模块完成最终导出。
+- 子模块如果返回异步任务，本模块会统一轮询 `module.job.get`，并在父任务取消时联动取消子任务。
+- 下游正式能力口径已收口为：
+  - `card -> html` 透传 `themeId / locale` 到 Host `card.render`
+  - `html -> pdf` 使用 Host `platform.renderHtmlToPdf`
+  - `html -> image` 使用 Host `platform.renderHtmlToImage`
 
 ## 文档入口
 

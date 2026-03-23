@@ -27,6 +27,8 @@ permissions:
   - platform.read
   - platform.external
   - plugin.read
+  - module.read
+  - module.invoke
   - card.read
   - card.write
 

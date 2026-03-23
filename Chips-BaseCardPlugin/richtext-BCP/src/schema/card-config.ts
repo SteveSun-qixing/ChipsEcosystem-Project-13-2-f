@@ -42,8 +42,10 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value.trim() : undefined;
 }
 
-export function normalizeBasecardConfig(input: Record<string, unknown> | null | undefined): BasecardConfig {
-  const record = input ?? {};
+export function normalizeBasecardConfig(
+  input: Partial<BasecardConfig> | Record<string, unknown> | null | undefined,
+): BasecardConfig {
+  const record = (input ?? {}) as Record<string, unknown>;
   const rawBody =
     typeof record.body === "string"
       ? record.body

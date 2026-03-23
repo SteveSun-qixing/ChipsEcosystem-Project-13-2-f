@@ -8,6 +8,7 @@ import {
   type BasecardConfig,
 } from "../schema/card-config";
 import {
+  EMPTY_RICH_TEXT_BODY,
   normalizeRichTextHtml,
   sanitizeRichTextHtml,
 } from "../shared/utils";
@@ -492,7 +493,7 @@ function wrapSelectionWithStyle(editor: HTMLElement, style: string): void {
 function plainTextToRichTextHtml(text: string): string {
   const normalized = text.replace(/\r\n/g, "\n").trim();
   if (!normalized) {
-    return EMPTY_BODY_HTML;
+    return EMPTY_RICH_TEXT_BODY;
   }
 
   return normalized

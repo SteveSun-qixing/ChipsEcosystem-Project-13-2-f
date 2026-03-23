@@ -1,6 +1,12 @@
 import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
+import {
+  defaultBasecardConfig,
+  normalizeBasecardConfig,
+  validateBasecardConfig,
+} from "./schema/card-config";
+import { getInternalResourcePaths } from "./shared/utils";
 
 export interface BasecardResourceImportRequest {
   file: File;
@@ -36,3 +42,65 @@ export function renderBasecardView(ctx: BasecardRenderContext): () => void {
 export function renderBasecardEditor(ctx: BasecardEditorContext): () => void {
   return mountBasecardEditor(ctx);
 }
+
+export const basecardDefinition = {
+  pluginId: "chips.basecard.image",
+  cardType: "base.image",
+  displayName: "图片基础卡片",
+  description: "提供图片内容的查看、排版与编辑能力。",
+  icon: "🖼️",
+  aliases: ["ImageCard"],
+  commitDebounceMs: 260,
+  createInitialConfig(_baseCardId: string) {
+    return normalizeBasecardConfig(
+      defaultBasecardConfig as unknown as Record<string, unknown>,
+    ) as unknown as Record<string, unknown>;
+  },
+  normalizeConfig(input: Record<string, unknown>, _baseCardId: string) {
+    return normalizeBasecardConfig(input) as unknown as Record<string, unknown>;
+  },
+  validateConfig(config: Record<string, unknown>) {
+    return validateBasecardConfig(
+      normalizeBasecardConfig(config),
+    );
+  },
+  collectResourcePaths(config: Record<string, unknown>) {
+    return getInternalResourcePaths(normalizeBasecardConfig(config));
+  },
+  renderView(ctx: {
+    container: HTMLElement;
+    config: Record<string, unknown>;
+    themeCssText?: string;
+    resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  }) {
+    return renderBasecardView({
+      container: ctx.container,
+      config: normalizeBasecardConfig(ctx.config),
+      themeCssText: ctx.themeCssText,
+      resolveResourceUrl: ctx.resolveResourceUrl,
+      releaseResourceUrl: ctx.releaseResourceUrl,
+    });
+  },
+  renderEditor(ctx: {
+    container: HTMLElement;
+    initialConfig: Record<string, unknown>;
+    onChange: (next: Record<string, unknown>) => void;
+    resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
+    deleteResource?: (resourcePath: string) => Promise<void>;
+  }) {
+    return renderBasecardEditor({
+      container: ctx.container,
+      initialConfig: normalizeBasecardConfig(ctx.initialConfig),
+      onChange(next) {
+        ctx.onChange(next as unknown as Record<string, unknown>);
+      },
+      resolveResourceUrl: ctx.resolveResourceUrl,
+      releaseResourceUrl: ctx.releaseResourceUrl,
+      importResource: ctx.importResource,
+      deleteResource: ctx.deleteResource,
+    });
+  },
+} as const;

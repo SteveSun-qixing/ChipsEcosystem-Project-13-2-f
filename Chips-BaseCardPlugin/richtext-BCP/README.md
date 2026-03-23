@@ -8,6 +8,7 @@
 
 - 在查看器中以正式 `RichTextCard` 配置模型渲染富文本正文；
 - 在编辑引擎中提供富文本编辑面板（支持加粗、斜体、下划线等基础样式）；
+- 通过 `basecardDefinition` 同时对接 Host 通用链路与官方编辑引擎运行时；
 - 使用 YAML 配置文件保存 `card_type/theme/body/locale` 正式字段；
 - 使用多语言文案与基础错误处理。
 
@@ -78,6 +79,20 @@ Schema 层统一提供：
 
 - `normalizeBasecardConfig()`：把输入归一为正式 `RichTextCard` 配置；
 - `validateBasecardConfig()`：执行正式校验基线，阻止空正文等无效输出。
+
+## 正式入口契约
+
+`src/index.ts` 当前同时导出以下正式能力：
+
+- `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
+- `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；
+- `basecardDefinition`：供编辑引擎运行时注册表读取插件元信息、别名、归一/校验与渲染能力。
+
+其中：
+
+- `basecardDefinition.cardType = "base.richtext"` 与 `manifest.yaml -> capabilities.cardTypes` 保持一致；
+- `aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
+- `createInitialConfig()` 生成编辑引擎新建基础卡片时的正式初始正文。
 
 ## 主题接入约束
 

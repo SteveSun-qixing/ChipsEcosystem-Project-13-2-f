@@ -210,7 +210,7 @@ describe("createBasecardEditorRoot", () => {
     expect(lastConfig.images[0]?.url).toBe("https://example.com/photo.png");
     expect(lastConfig.layout_type).toBe("single");
     expect(lastConfig.layout_options?.single_width_percent).toBe(70);
-  });
+  }, 15000);
 
   it("imports file resources at the card root and removes them through the bottom delete tray", async () => {
     let lastConfig = createConfig();

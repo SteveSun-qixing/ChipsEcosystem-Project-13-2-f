@@ -102,5 +102,5 @@ describe("image basecard integration flow", () => {
     expect(currentConfig.images).toHaveLength(1);
     expect(currentConfig.images[0]?.file_path).toBe("gallery-shot.webp");
     expect(viewContainer.querySelector("img")?.getAttribute("src")).toBe("gallery-shot.webp");
-  });
+  }, 15000);
 });

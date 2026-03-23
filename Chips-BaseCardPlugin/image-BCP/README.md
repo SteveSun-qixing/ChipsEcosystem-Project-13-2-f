@@ -2,6 +2,12 @@
 
 图片基础卡片插件（`chips.basecard.image`）是薯片生态的新架构基础卡片插件，用于在复合卡片中展示和编辑图片内容。插件已迁移到 React 运行时，并正式接入卡片根目录资源链路。
 
+当前正式入口契约为：
+
+- `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
+- `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；
+- `basecardDefinition`：供编辑引擎运行时注册表读取 `pluginId/cardType/aliases/collectResourcePaths` 与渲染能力。
+
 ## 当前能力
 
 - 查看态支持四种正式布局：

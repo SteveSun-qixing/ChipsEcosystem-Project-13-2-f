@@ -88,6 +88,8 @@
   - `process.on('unhandledRejection')`
   - 异常统一写入结构化日志，避免静默失败。
 - 开发态 `chipsdev run` 改为拉起真实 Electron Host，并在主进程内部完成插件安装、握手与窗口打开，而不是在普通 Node CLI 中只创建内存态 Host。
+- `dev-run-app.ts` 在安装当前应用插件前，会先读取开发工作区 `plugins.json`，把其中登记的插件重新安装到 Host 当前运行时，避免继续消费旧安装副本。
+- 对 `plugins.json` 中的相对 `manifestPath`，开发态会按工作区上下文解析真实路径，兼容历史记录与源码工程清单登记。
 
 ## 3. 文件关联与插件宿主协同
 

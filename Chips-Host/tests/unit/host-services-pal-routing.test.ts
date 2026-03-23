@@ -11,7 +11,10 @@ import { PluginRuntime } from '../../src/runtime';
 import { StructuredLogger } from '../../src/shared/logger';
 import type { RouteInvocationContext } from '../../src/shared/types';
 import { registerHostSchemas } from '../../src/main/services/register-schemas';
-import { registerHostServices } from '../../src/main/services/register-host-services';
+import {
+  registerHostServices,
+  shouldPassAppEntryArgument
+} from '../../src/main/services/register-host-services';
 
 interface PalState {
   clipboardText: string;
@@ -336,6 +339,12 @@ describe('Host services PAL routing', () => {
 
   afterEach(async () => {
     await fs.rm(workspace, { recursive: true, force: true });
+  });
+
+  it('only passes app-entry.js for default-app style launches', () => {
+    expect(shouldPassAppEntryArgument('/Applications/Chips.app/Contents/MacOS/Chips', false)).toBe(false);
+    expect(shouldPassAppEntryArgument('/usr/local/bin/node', false)).toBe(true);
+    expect(shouldPassAppEntryArgument('/Applications/Electron.app/Contents/MacOS/Electron', true)).toBe(true);
   });
 
   it('forwards dialog routes to PAL dialog implementation', async () => {
@@ -669,5 +678,127 @@ describe('Host services PAL routing', () => {
         })
       })
     );
+  });
+
+  it('returns a readable shortcut permission error when macOS launchpad directory is not writable', async () => {
+    const state: PalState = {
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
+      windowCreateArgs: [],
+      dialogOpenArgs: [],
+      dialogSaveArgs: [],
+      dialogMessageArgs: [],
+      dialogConfirmArgs: [],
+      shellOpenPath: [],
+      shellOpenExternal: [],
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false,
+      ipcChannels: new Map()
+    };
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+
+    const pal = createPal(state);
+    pal.launcher = {
+      async getDefaultPath(name) {
+        return {
+          launcherPath: `/Users/steve/Applications/Chips Apps/${name}.app`,
+          location: 'launchpad'
+        };
+      },
+      async create() {
+        throw {
+          errno: -13,
+          code: 'EACCES',
+          syscall: 'mkdir',
+          path: '/Users/steve/Applications/Chips Apps/Card Viewer.app'
+        };
+      },
+      async getRecord(options) {
+        return {
+          pluginId: options.pluginId,
+          name: options.name,
+          location: 'launchpad',
+          launcherPath: options.launcherPath ?? `/Users/steve/Applications/Chips Apps/${options.name}.app`,
+          executablePath: '',
+          args: []
+        };
+      },
+      async remove(options) {
+        return {
+          removed: true,
+          launcherPath: options.launcherPath ?? `/Users/steve/Applications/Chips Apps/${options.name}.app`,
+          location: 'launchpad'
+        };
+      }
+    };
+
+    await registerHostServices({
+      kernel,
+      pal,
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'shortcut-app.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.shortcut.app',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Card Viewer',
+          permissions: ['plugin.read'],
+          entry: 'dist/index.html',
+          ui: {
+            launcher: {
+              displayName: 'Card Viewer'
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>shortcut</title>', 'utf-8');
+    await runtime.install(manifestPath);
+
+    const context = createContextFactory();
+    await expect(
+      kernel.invoke<{ pluginId: string; replace?: boolean }, { shortcut: { launcherPath: string } }>(
+        'plugin.createShortcut',
+        {
+          pluginId: 'chips.shortcut.app'
+        },
+        context(['plugin.manage'])
+      )
+    ).rejects.toMatchObject({
+      code: 'PLUGIN_SHORTCUT_PERMISSION_DENIED',
+      message: expect.stringContaining('~/Applications/Chips Apps'),
+      details: expect.objectContaining({
+        lastError: expect.objectContaining({
+          pluginId: 'chips.shortcut.app',
+          launcherPath: '/Users/steve/Applications/Chips Apps/Card Viewer.app',
+          location: 'launchpad',
+          cause: expect.objectContaining({
+            code: 'EACCES',
+            syscall: 'mkdir'
+          })
+        })
+      })
+    });
   });
 });

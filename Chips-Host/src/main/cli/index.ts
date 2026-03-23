@@ -35,6 +35,8 @@ const writeJson = async (filePath: string, value: unknown): Promise<void> => {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), 'utf-8');
 };
 
+const normalizePluginSourcePath = (manifestPath: string): string => path.resolve(manifestPath);
+
 const print = (value: unknown): void => {
   if (typeof value === 'string') {
     process.stdout.write(value + '\n');
@@ -251,11 +253,18 @@ export const runCli = async (argv: string[]): Promise<number> => {
           return 1;
         }
 
+        const normalizedManifestPath = normalizePluginSourcePath(manifestPath);
+
         const result = await withHost(workspace, async (runtime) => {
-          return runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
+          return runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: normalizedManifestPath });
         });
 
-        plugins.push({ id: result.pluginId, manifestPath, enabled: false });
+        const existing = plugins.find((plugin) => plugin.id === result.pluginId);
+        if (existing) {
+          existing.manifestPath = normalizedManifestPath;
+        } else {
+          plugins.push({ id: result.pluginId, manifestPath: normalizedManifestPath, enabled: false });
+        }
         await writeJson(pluginFile(workspace), plugins);
         print(result);
         return 0;

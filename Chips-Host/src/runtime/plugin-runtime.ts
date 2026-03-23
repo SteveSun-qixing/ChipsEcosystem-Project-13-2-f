@@ -301,14 +301,19 @@ export class PluginRuntime {
     const source = await this.resolveInstallSource(sourcePath);
     try {
       this.validateManifest(source.manifest, source.manifestPath);
-      if (this.plugins.has(source.manifest.id)) {
-        throw createError('PLUGIN_ALREADY_EXISTS', `Plugin already exists: ${source.manifest.id}`);
-      }
-
       const installPath = this.installPath(source.manifest.id);
+      const existingRecord = this.plugins.get(source.manifest.id);
       const existingPath = await this.statSafe(installPath);
+      const replaced = Boolean(existingRecord || existingPath);
+      const preservedQuota = this.quotaByPlugin.get(source.manifest.id) ?? defaultQuota;
+      const wasEnabled = existingRecord?.enabled ?? false;
+
+      if (existingRecord) {
+        this.plugins.delete(source.manifest.id);
+        this.closeSessions(source.manifest.id);
+      }
       if (existingPath) {
-        throw createError('PLUGIN_ALREADY_EXISTS', `Plugin directory already exists: ${installPath}`);
+        await fs.rm(installPath, { recursive: true, force: true });
       }
 
       await fs.mkdir(path.dirname(installPath), { recursive: true });
@@ -320,14 +325,17 @@ export class PluginRuntime {
         manifest: source.manifest,
         manifestPath: installedManifestPath,
         installPath,
-        enabled: false,
+        enabled: wasEnabled,
         installedAt: now()
       };
 
       this.plugins.set(source.manifest.id, record);
-      this.quotaByPlugin.set(source.manifest.id, defaultQuota);
+      this.quotaByPlugin.set(source.manifest.id, preservedQuota);
       await this.persist();
-      this.recordAudit('install.complete', 'success', { pluginId: source.manifest.id });
+      this.recordAudit('install.complete', 'success', {
+        pluginId: source.manifest.id,
+        replaced
+      });
       return record;
     } catch (error) {
       this.recordAudit('install.complete', 'error', {

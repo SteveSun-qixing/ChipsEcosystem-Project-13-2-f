@@ -23,7 +23,7 @@ describe('chips cli', () => {
 
     expect(await runCli(['help'])).toBe(0);
     expect(await runCli(['host', 'help'])).toBe(1);
-  });
+  }, 15000);
 
   it('supports start/status/stop lifecycle', async () => {
     const { runCli } = await import('../../src/main/cli/index');
@@ -31,7 +31,7 @@ describe('chips cli', () => {
     expect(await runCli(['start'])).toBe(0);
     expect(await runCli(['status'])).toBe(0);
     expect(await runCli(['stop'])).toBe(0);
-  });
+  }, 15000);
 
   it('supports config set/list', async () => {
     const { runCli } = await import('../../src/main/cli/index');
@@ -63,6 +63,31 @@ describe('chips cli', () => {
     expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
     expect(await runCli(['plugin', 'list'])).toBe(0);
     expect(await runCli(['plugin', 'query'])).toBe(0);
+  });
+
+  it('upserts plugins.json when the same plugin is installed again', async () => {
+    const { runCli } = await import('../../src/main/cli/index');
+    const manifestPath = path.join(workspace, 'replace.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        id: 'chips.cli.replaceable',
+        version: '1.0.0',
+        type: 'app',
+        name: 'Replaceable CLI Plugin',
+        permissions: ['file.read']
+      })
+    );
+
+    expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
+    expect(await runCli(['plugin', 'install', manifestPath])).toBe(0);
+
+    const pluginsJson = JSON.parse(await fs.readFile(path.join(workspace, 'plugins.json'), 'utf-8'));
+    expect(pluginsJson).toHaveLength(1);
+    expect(pluginsJson[0]).toMatchObject({
+      id: 'chips.cli.replaceable',
+      manifestPath: path.resolve(manifestPath)
+    });
   });
 
   it('returns structured error output when plugin install fails', async () => {

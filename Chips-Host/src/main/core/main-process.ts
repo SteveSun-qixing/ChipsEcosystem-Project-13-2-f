@@ -2,6 +2,7 @@ import type { HostApplicationOptions } from './host-application';
 import { HostApplication } from './host-application';
 import type { ElectronAppLike } from '../electron/electron-loader';
 import { loadElectronModule } from '../electron/electron-loader';
+import { registerChipsRenderDocumentScheme } from '../electron/render-document-protocol';
 import { toStandardError } from '../../shared/errors';
 
 interface ProcessLike {
@@ -73,6 +74,7 @@ export class HostMainProcess {
 
     this.bindGlobalHandlers();
     if (this.electronApp) {
+      registerChipsRenderDocumentScheme();
       await this.electronApp.whenReady();
     }
 

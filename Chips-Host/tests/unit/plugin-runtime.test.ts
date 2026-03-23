@@ -272,6 +272,41 @@ describe('PluginRuntime', () => {
     await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
   }, 15_000);
 
+  it('replaces an existing installed plugin with the same id', async () => {
+    const v1Dir = path.join(workspace, 'replaceable-plugin-v1');
+    const v2Dir = path.join(workspace, 'replaceable-plugin-v2');
+    await fs.mkdir(path.join(v1Dir, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(v2Dir, 'dist'), { recursive: true });
+
+    const manifestText = [
+      'id: chips.replaceable.plugin',
+      'version: "1.0.0"',
+      'type: app',
+      'name: Replaceable Plugin',
+      'permissions:',
+      '  - file.read',
+      'entry: dist/index.html'
+    ].join('\n');
+
+    await fs.writeFile(path.join(v1Dir, 'manifest.yaml'), manifestText, 'utf-8');
+    await fs.writeFile(path.join(v1Dir, 'dist', 'index.html'), '<!doctype html><title>v1</title>', 'utf-8');
+    await fs.writeFile(path.join(v1Dir, 'dist', 'legacy.js'), 'console.log("legacy");', 'utf-8');
+
+    const firstInstall = await runtime.install(path.join(v1Dir, 'manifest.yaml'));
+    await runtime.enable('chips.replaceable.plugin');
+
+    await fs.writeFile(path.join(v2Dir, 'manifest.yaml'), manifestText, 'utf-8');
+    await fs.writeFile(path.join(v2Dir, 'dist', 'index.html'), '<!doctype html><title>v2</title>', 'utf-8');
+    await fs.writeFile(path.join(v2Dir, 'dist', 'fresh.js'), 'console.log("fresh");', 'utf-8');
+
+    const secondInstall = await runtime.install(path.join(v2Dir, 'manifest.yaml'));
+    expect(secondInstall.installPath).toBe(firstInstall.installPath);
+    expect(runtime.get('chips.replaceable.plugin').enabled).toBe(true);
+
+    await expect(fs.access(path.join(secondInstall.installPath, 'dist', 'fresh.js'))).resolves.toBeUndefined();
+    await expect(fs.access(path.join(secondInstall.installPath, 'dist', 'legacy.js'))).rejects.toBeDefined();
+  });
+
   it('normalizes theme plugin governance metadata during install', async () => {
     const record = await runtime.install(path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'));
     expect(record.manifest.theme).toMatchObject({

@@ -1,28 +1,12 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { bootstrapHostMainProcess } from '../core/main-process';
 import { RuntimeClient } from '../../renderer/runtime-client';
-import { parseYamlLite } from '../../shared/yaml-lite';
+import { readManifestSummary, reinstallAndEnablePlugin, syncConfiguredWorkspacePlugins } from './dev-plugin-utils';
 
 interface ParsedArgs {
   workspacePath: string;
   manifestPath: string;
-}
-
-interface ManifestSummary {
-  id?: string;
-  name?: string;
-}
-
-interface PluginQueryResponse {
-  plugins: Array<{
-    id: string;
-  }>;
-}
-
-interface PluginInstallResponse {
-  pluginId: string;
 }
 
 interface PluginLaunchResponse {
@@ -30,15 +14,6 @@ interface PluginLaunchResponse {
     id: string;
   };
 }
-
-const readManifestSummary = async (manifestPath: string): Promise<ManifestSummary> => {
-  const raw = await fs.readFile(manifestPath, 'utf-8');
-  const parsed = parseYamlLite(raw) as Record<string, unknown>;
-  return {
-    id: typeof parsed.id === 'string' ? parsed.id : undefined,
-    name: typeof parsed.name === 'string' ? parsed.name : undefined
-  };
-};
 
 const parseArgs = (argv: string[]): ParsedArgs => {
   let workspacePath = '';
@@ -77,24 +52,11 @@ const run = async (): Promise<void> => {
   const runtime = new RuntimeClient(hostApplication.createBridge());
 
   try {
-    const installedPlugins = await runtime.invoke<PluginQueryResponse>('plugin.query', {
-      type: 'app'
+    await syncConfiguredWorkspacePlugins(runtime, workspacePath, {
+      skipPluginIds: manifest.id ? [manifest.id] : []
     });
-    const existingPlugin = installedPlugins.plugins.find((item) => item.id === manifest.id);
-
-    if (existingPlugin && manifest.id) {
-      try {
-        await runtime.invoke('plugin.disable', { pluginId: manifest.id });
-      } catch {
-        // ignore disable errors and continue uninstall
-      }
-      await runtime.invoke('plugin.uninstall', { pluginId: manifest.id });
-    }
-
-    const installResult = await runtime.invoke<PluginInstallResponse>('plugin.install', { manifestPath });
+    const installResult = await reinstallAndEnablePlugin(runtime, manifestPath, manifest.id);
     const pluginId = installResult.pluginId;
-
-    await runtime.invoke('plugin.enable', { pluginId });
 
     const opened = await runtime.invoke<PluginLaunchResponse>('plugin.launch', {
       pluginId,

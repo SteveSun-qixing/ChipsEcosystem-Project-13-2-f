@@ -1,7 +1,10 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HostApplication } from '../../src/main/core/host-application';
 import { HostMainProcess } from '../../src/main/core/main-process';
+import { CHIPS_RENDER_DOCUMENT_SCHEME } from '../../src/main/electron/render-document-protocol';
+
+const ELECTRON_MOCK_KEY = '__chipsElectronMock';
 
 class ProcessStub extends EventEmitter {
   public override on(event: 'uncaughtException' | 'unhandledRejection', listener: (error: unknown) => void): this {
@@ -14,6 +17,76 @@ class ProcessStub extends EventEmitter {
 }
 
 describe('HostMainProcess lifecycle', () => {
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY];
+  });
+
+  it('registers the managed render document scheme before Electron ready', async () => {
+    const processRef = new ProcessStub();
+    const loggerWrite = vi.fn();
+    const callOrder: string[] = [];
+    const start = vi.fn(async () => {
+      callOrder.push('host.start');
+    });
+
+    const fakeHost = {
+      logger: {
+        write: loggerWrite,
+      },
+      start,
+      stop: vi.fn(async () => {}),
+      isRunning: vi.fn(() => true),
+    } as unknown as HostApplication;
+
+    const appEvents = new EventEmitter();
+    const whenReady = vi.fn(async () => {
+      callOrder.push('electron.whenReady');
+    });
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      protocol: {
+        registerSchemesAsPrivileged: vi.fn(() => {
+          callOrder.push('protocol.registerSchemesAsPrivileged');
+        }),
+      },
+    };
+
+    const electronApp = {
+      whenReady,
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.on(event, listener);
+      },
+      off: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.off(event, listener);
+      },
+      quit: vi.fn(() => {}),
+    };
+
+    const main = new HostMainProcess({
+      hostApplication: fakeHost,
+      processRef,
+      electronApp: electronApp as any,
+    });
+
+    await main.start();
+
+    const mockedElectron = (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] as {
+      protocol: {
+        registerSchemesAsPrivileged: ReturnType<typeof vi.fn>;
+      };
+    };
+    expect(mockedElectron.protocol.registerSchemesAsPrivileged).toHaveBeenCalledWith([
+      expect.objectContaining({
+        scheme: CHIPS_RENDER_DOCUMENT_SCHEME,
+      }),
+    ]);
+    expect(callOrder).toEqual([
+      'protocol.registerSchemesAsPrivileged',
+      'electron.whenReady',
+      'host.start',
+    ]);
+  });
+
   it('starts with electron lifecycle hooks and handles global errors', async () => {
     const processRef = new ProcessStub();
     const loggerWrite = vi.fn();

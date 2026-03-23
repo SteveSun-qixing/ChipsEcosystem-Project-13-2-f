@@ -1,0 +1,183 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+import type { PluginRuntime } from '../../runtime';
+import { createError } from '../../shared/errors';
+
+export interface BuiltInPluginDefinition {
+  id: string;
+  manifestRelativePath: string;
+  autoEnable: boolean;
+  createShortcut?: boolean;
+  launchOnFirstInstall?: boolean;
+}
+
+export interface BuiltInPluginBootstrapResult {
+  installedPluginIds: string[];
+  enabledPluginIds: string[];
+  shortcutPluginIds: string[];
+  launchPluginId?: string;
+}
+
+export interface EnsureBuiltInPluginsOptions {
+  runtime: PluginRuntime;
+  pluginRoots?: string[];
+  plugins?: BuiltInPluginDefinition[];
+}
+
+interface RuntimeInvokerLike {
+  invoke<T>(action: string, payload?: unknown): Promise<T>;
+}
+
+const SETTINGS_PANEL_PLUGIN_ID = 'com.chips.eco-settings-panel';
+const DEFAULT_THEME_PLUGIN_ID = 'theme.theme.chips-official-default-theme';
+
+export const DEFAULT_BUILT_IN_PLUGINS: BuiltInPluginDefinition[] = [
+  {
+    id: DEFAULT_THEME_PLUGIN_ID,
+    manifestRelativePath: `${DEFAULT_THEME_PLUGIN_ID}/manifest.yaml`,
+    autoEnable: true
+  },
+  {
+    id: SETTINGS_PANEL_PLUGIN_ID,
+    manifestRelativePath: `${SETTINGS_PANEL_PLUGIN_ID}/manifest.yaml`,
+    autoEnable: true,
+    createShortcut: true,
+    launchOnFirstInstall: true
+  }
+];
+
+const pathExists = async (targetPath: string): Promise<boolean> => {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const unique = (items: string[]): string[] => {
+  return [...new Set(items.map((item) => item.trim()).filter((item) => item.length > 0))];
+};
+
+export const resolveDefaultBuiltInPluginRoots = (): string[] => {
+  const envRoots = (process.env.CHIPS_BUILTIN_PLUGINS_DIR ?? '')
+    .split(path.delimiter)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const packagedRoot = typeof resourcesPath === 'string' && resourcesPath.length > 0
+    ? path.join(resourcesPath, 'builtin-plugins')
+    : '';
+
+  return unique([...envRoots, packagedRoot]);
+};
+
+const resolveBuiltInManifestPath = async (
+  plugin: BuiltInPluginDefinition,
+  roots: string[]
+): Promise<string | null> => {
+  for (const root of roots) {
+    const candidate = path.join(root, plugin.manifestRelativePath);
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+const filterExistingRoots = async (roots: string[]): Promise<string[]> => {
+  const resolved = await Promise.all(
+    roots.map(async (root) => {
+      const normalized = path.resolve(root);
+      return (await pathExists(normalized)) ? normalized : null;
+    })
+  );
+
+  return resolved.filter((item): item is string => item !== null);
+};
+
+export const ensureBuiltInPlugins = async (
+  options: EnsureBuiltInPluginsOptions
+): Promise<BuiltInPluginBootstrapResult> => {
+  const plugins = options.plugins ?? DEFAULT_BUILT_IN_PLUGINS;
+  const roots = await filterExistingRoots(options.pluginRoots ?? resolveDefaultBuiltInPluginRoots());
+
+  if (roots.length === 0 || plugins.length === 0) {
+    return {
+      installedPluginIds: [],
+      enabledPluginIds: [],
+      shortcutPluginIds: []
+    };
+  }
+
+  const installedPluginIds: string[] = [];
+  const enabledPluginIds: string[] = [];
+  const shortcutPluginIds: string[] = [];
+  let launchPluginId: string | undefined;
+
+  for (const plugin of plugins) {
+    const manifestPath = await resolveBuiltInManifestPath(plugin, roots);
+    if (!manifestPath) {
+      throw createError('HOST_BUILTIN_PLUGIN_NOT_FOUND', `Built-in plugin manifest is unavailable: ${plugin.id}`, {
+        pluginId: plugin.id,
+        roots
+      });
+    }
+
+    let record = options.runtime.query().find((item) => item.manifest.id === plugin.id);
+
+    if (record) {
+      const manifestExists = await pathExists(record.manifestPath);
+      const installPathExists = await pathExists(record.installPath);
+      if (!manifestExists || !installPathExists) {
+        await options.runtime.uninstall(plugin.id);
+        record = undefined;
+      }
+    }
+
+    if (!record) {
+      record = await options.runtime.install(manifestPath);
+      installedPluginIds.push(plugin.id);
+      if (!launchPluginId && plugin.launchOnFirstInstall) {
+        launchPluginId = plugin.id;
+      }
+    }
+
+    if (plugin.autoEnable && !record.enabled) {
+      await options.runtime.enable(plugin.id);
+      enabledPluginIds.push(plugin.id);
+    }
+
+    if (plugin.createShortcut) {
+      shortcutPluginIds.push(plugin.id);
+    }
+  }
+
+  return {
+    installedPluginIds,
+    enabledPluginIds,
+    shortcutPluginIds: unique(shortcutPluginIds),
+    launchPluginId
+  };
+};
+
+export const ensureBuiltInPluginShortcuts = async (
+  runtime: RuntimeInvokerLike,
+  pluginIds: string[]
+): Promise<string[]> => {
+  const created: string[] = [];
+
+  for (const pluginId of unique(pluginIds)) {
+    const shortcut = await runtime.invoke<{ shortcut: { exists: boolean } }>('plugin.getShortcut', { pluginId });
+    if (shortcut.shortcut.exists) {
+      continue;
+    }
+
+    await runtime.invoke('plugin.createShortcut', { pluginId, replace: false });
+    created.push(pluginId);
+  }
+
+  return created;
+};

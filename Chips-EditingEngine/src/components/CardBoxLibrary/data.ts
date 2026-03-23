@@ -1,146 +1,110 @@
-import yaml from 'yaml';
+import React from 'react';
+import type { PluginRecord } from 'chips-sdk';
+import { getInstalledBasecardDescriptors, subscribeBasecardRegistry } from '../../basecard-runtime/registry';
+import { getChipsClient } from '../../services/bridge-client';
 import type { CardTypeDefinition, LayoutTypeDefinition } from './types';
 import { useTranslation } from '../../hooks/useTranslation';
 
-interface PluginManifest {
-  id?: string;
-  name?: string;
-  description?: string;
-  icon?: string;
-  tags?: string[];
-  type?: string;
-  cardType?: string;
-  layoutType?: string;
-  capabilities?: {
-    cardTypes?: string[];
-    layoutTypes?: string[];
-  };
+function createCardTypeDefinitions(): CardTypeDefinition[] {
+  return getInstalledBasecardDescriptors()
+    .map((descriptor) => ({
+      id: descriptor.cardType,
+      name: descriptor.displayName,
+      icon: descriptor.icon ?? '🧩',
+      description: descriptor.description ?? '',
+      keywords: [
+        descriptor.displayName,
+        descriptor.description ?? '',
+        descriptor.cardType,
+        descriptor.pluginId,
+        ...(descriptor.aliases ?? []),
+      ].filter(Boolean),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
-function resolveIcon(manifest: PluginManifest): string {
-  const icon = manifest.icon ?? '';
-  const isEmoji = icon && !icon.includes('/') && !icon.includes('.') && icon.length <= 3;
-  if (isEmoji) {
-    return icon;
-  }
-  return '🧩';
+function createLayoutTypeDefinitions(records: PluginRecord[]): LayoutTypeDefinition[] {
+  return records
+    .filter((record) => record.type === 'layout' && record.enabled)
+    .map((record) => ({
+      id: record.layout?.layoutType ?? record.id,
+      name: record.layout?.displayName ?? record.name,
+      icon: '📦',
+      description: record.description ?? '',
+      keywords: [
+        record.name,
+        record.description ?? '',
+        record.id,
+        record.layout?.layoutType ?? '',
+        ...(record.capabilities ?? []),
+      ].filter(Boolean),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
-function parsePluginManifest(raw: unknown, path: string): PluginManifest | null {
-  if (!raw) return null;
-  try {
-    if (path.endsWith('.json')) {
-      return JSON.parse(raw as string) as PluginManifest;
-    }
-    return yaml.parse(raw as string) as PluginManifest;
-  } catch {
-    return null;
-  }
+export function useCardTypeDefinitions(): CardTypeDefinition[] {
+  const [cardTypes, setCardTypes] = React.useState<CardTypeDefinition[]>(() => createCardTypeDefinitions());
+
+  React.useEffect(() => {
+    setCardTypes(createCardTypeDefinitions());
+    return subscribeBasecardRegistry(() => {
+      setCardTypes(createCardTypeDefinitions());
+    });
+  }, []);
+
+  return cardTypes;
 }
 
-function resolveCardTypeIds(manifest: PluginManifest): string[] {
-  const capabilityIds = Array.isArray(manifest.capabilities?.cardTypes)
-    ? manifest.capabilities.cardTypes
-        .map((value) => String(value).trim())
-        .filter(Boolean)
-    : [];
+export function useLayoutTypeDefinitions(): LayoutTypeDefinition[] {
+  const client = React.useMemo(() => getChipsClient(), []);
+  const [layoutTypes, setLayoutTypes] = React.useState<LayoutTypeDefinition[]>([]);
 
-  if (capabilityIds.length > 0) {
-    return capabilityIds;
-  }
+  React.useEffect(() => {
+    let active = true;
 
-  const fallbackId = manifest.cardType ?? manifest.id;
-  return fallbackId ? [fallbackId] : [];
-}
-
-function dedupeById<T extends { id: string }>(items: T[]): T[] {
-  const definitions = new Map<string, T>();
-  for (const item of items) {
-    if (!definitions.has(item.id)) {
-      definitions.set(item.id, item);
-    }
-  }
-  return Array.from(definitions.values());
-}
-
-// 动态加载所有基础卡片插件和布局插件的清单
-const manifestModules = import.meta.glob('../../../../Chips-BaseCardPlugin/**/manifest.yaml', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-});
-
-const layoutManifestModules = {
-  ...import.meta.glob('../../../../LayoutPlugin/**/manifest.json', {
-    query: '?raw',
-    import: 'default',
-    eager: true,
-  }),
-  ...import.meta.glob('../../../../LayoutPlugin/**/manifest.yaml', {
-    query: '?raw',
-    import: 'default',
-    eager: true,
-  }),
-  ...import.meta.glob('../../../../LayoutPlugin/**/manifest.yml', {
-    query: '?raw',
-    import: 'default',
-    eager: true,
-  }),
-  ...import.meta.glob('../../../../layout-plugin/**/manifest.json', {
-    query: '?raw',
-    import: 'default',
-    eager: true,
-  }),
-};
-
-export const cardTypes: CardTypeDefinition[] = dedupeById(
-  Object.entries(manifestModules)
-    .map(([path, raw]) => parsePluginManifest(raw, path))
-    .filter((manifest): manifest is PluginManifest => Boolean(manifest))
-    .filter((manifest) => manifest.type === 'card')
-    .flatMap((manifest) => {
-      const name = manifest.name ?? manifest.id ?? 'unknown';
-      const description = manifest.description ?? '';
-
-      return resolveCardTypeIds(manifest).map((id) => ({
-        id,
-        name,
-        icon: resolveIcon(manifest),
-        description,
-        keywords: [name, description, id, manifest.id ?? '', ...(manifest.tags ?? [])]
-          .filter(Boolean)
-          .map((item) => String(item)),
-      }));
-    })
-)
-  .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
-
-export const layoutTypes: LayoutTypeDefinition[] = Object.entries(layoutManifestModules)
-  .map(([path, raw]) => parsePluginManifest(raw, path))
-  .filter((manifest): manifest is PluginManifest => Boolean(manifest))
-  .filter((manifest) => manifest.type === 'layout')
-  .map((manifest) => {
-    const id = manifest.layoutType ?? manifest.id ?? 'unknown';
-    const name = manifest.name ?? id;
-    const description = manifest.description ?? '';
-    const keywords = [name, description, id, ...(manifest.tags ?? [])]
-      .filter(Boolean)
-      .map((item) => String(item));
-
-    return {
-      id,
-      name,
-      icon: resolveIcon(manifest),
-      description,
-      keywords,
+    const refresh = async () => {
+      const plugins = await client.plugin.query({ type: 'layout' });
+      if (!active) {
+        return;
+      }
+      setLayoutTypes(createLayoutTypeDefinitions(plugins));
     };
-  })
-  .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+    void refresh().catch((error) => {
+      console.error('[CardBoxLibrary] Failed to load installed layout plugins.', error);
+      if (active) {
+        setLayoutTypes([]);
+      }
+    });
+
+    const refreshSafe = () => {
+      void refresh().catch((error) => {
+        console.error('[CardBoxLibrary] Failed to refresh installed layout plugins.', error);
+      });
+    };
+
+    const unsubscribeInstalled = client.events.on('plugin.installed', refreshSafe);
+    const unsubscribeEnabled = client.events.on('plugin.enabled', refreshSafe);
+    const unsubscribeDisabled = client.events.on('plugin.disabled', refreshSafe);
+    const unsubscribeUninstalled = client.events.on('plugin.uninstalled', refreshSafe);
+
+    return () => {
+      active = false;
+      unsubscribeInstalled();
+      unsubscribeEnabled();
+      unsubscribeDisabled();
+      unsubscribeUninstalled();
+    };
+  }, [client]);
+
+  return layoutTypes;
+}
 
 export function useSearchCardTypes() {
   const { t } = useTranslation();
+  const cardTypes = useCardTypeDefinitions();
 
-  return (query: string): CardTypeDefinition[] => {
+  return React.useCallback((query: string): CardTypeDefinition[] => {
     if (!query.trim()) return cardTypes;
 
     const lowerQuery = query.toLowerCase();
@@ -154,13 +118,14 @@ export function useSearchCardTypes() {
         keywords.some((keyword) => keyword.includes(lowerQuery))
       );
     });
-  };
+  }, [cardTypes, t]);
 }
 
 export function useSearchLayoutTypes() {
   const { t } = useTranslation();
+  const layoutTypes = useLayoutTypeDefinitions();
 
-  return (query: string): LayoutTypeDefinition[] => {
+  return React.useCallback((query: string): LayoutTypeDefinition[] => {
     if (!query.trim()) return layoutTypes;
 
     const lowerQuery = query.toLowerCase();
@@ -174,5 +139,5 @@ export function useSearchLayoutTypes() {
         keywords.some((keyword) => keyword.includes(lowerQuery))
       );
     });
-  };
+  }, [layoutTypes, t]);
 }

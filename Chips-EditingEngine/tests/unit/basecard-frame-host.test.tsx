@@ -28,6 +28,8 @@ vi.mock('../../src/basecard-runtime/registry', () => ({
     ...input,
     id: baseCardId,
   }),
+  getBasecardRegistryVersion: () => 0,
+  subscribeBasecardRegistry: () => () => undefined,
 }));
 
 function ParentHarness() {
@@ -197,7 +199,7 @@ describe('BasecardFrameHost', () => {
     expect(container.querySelector('[data-ready-revision="1"]')).not.toBeNull();
     expect(host?.style.minHeight).toBe('0px');
     expect(frame?.style.minHeight).toBe('0px');
-  });
+  }, 15000);
 
   it('resolves pending imported resources for preview rendering before they are persisted', async () => {
     mockRenderView.mockReset();

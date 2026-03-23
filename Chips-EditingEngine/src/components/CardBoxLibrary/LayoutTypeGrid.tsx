@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import type { LayoutTypeDefinition, LayoutLibraryDragData } from './types';
-import { layoutTypes as allLayoutTypes } from './data';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useDrag } from './DragContext';
 import './CardTypeGrid.css'; // Reusing CardTypeGrid styles for unified appearance
@@ -13,7 +12,7 @@ export function LayoutTypeGrid({ types }: LayoutTypeGridProps) {
   const { t } = useTranslation();
   const { startDrag } = useDrag();
 
-  const displayTypes = useMemo(() => types ?? allLayoutTypes, [types]);
+  const displayTypes = useMemo(() => types ?? [], [types]);
 
   const handleDragStart = (type: LayoutTypeDefinition, event: React.DragEvent) => {
     const data: LayoutLibraryDragData = {

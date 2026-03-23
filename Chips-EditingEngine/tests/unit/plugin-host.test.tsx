@@ -33,6 +33,8 @@ vi.mock('../../src/basecard-runtime/registry', () => ({
     renderView: () => () => undefined,
     renderEditor: mockRenderEditor,
   }),
+  getBasecardRegistryVersion: () => 0,
+  subscribeBasecardRegistry: () => () => undefined,
 }));
 
 vi.mock('../../src/hooks/useTranslation', () => ({

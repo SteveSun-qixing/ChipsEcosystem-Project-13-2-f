@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CardTypeGrid } from './CardTypeGrid';
 import { LayoutTypeGrid } from './LayoutTypeGrid';
-import { cardTypes as allCardTypes, layoutTypes as allLayoutTypes } from './data';
+import { useCardTypeDefinitions, useLayoutTypeDefinitions } from './data';
 import { useTranslation } from '../../hooks/useTranslation';
 import { DragProvider } from './DragContext';
 import './CardBoxLibrary.css';
@@ -11,6 +11,8 @@ type TabType = 'cards' | 'boxes';
 export default function CardBoxLibrary() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('cards');
+  const allCardTypes = useCardTypeDefinitions();
+  const allLayoutTypes = useLayoutTypeDefinitions();
 
   const currentCardCount = allCardTypes.length;
   const currentLayoutCount = allLayoutTypes.length;

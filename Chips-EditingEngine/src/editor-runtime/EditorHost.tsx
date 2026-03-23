@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getBasecardDescriptor } from '../basecard-runtime/registry';
+import {
+  getBasecardDescriptor,
+  getBasecardRegistryVersion,
+  subscribeBasecardRegistry,
+} from '../basecard-runtime/registry';
 import { globalEventEmitter } from '../core/event-emitter';
 import { useTranslation } from '../hooks/useTranslation';
 import { fileService } from '../services/file-service';
@@ -85,7 +89,8 @@ export function EditorHost({
   const { t } = useTranslation();
   const store = useEditorRuntime();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType]);
+  const [registryVersion, setRegistryVersion] = useState(() => getBasecardRegistryVersion());
+  const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType, registryVersion]);
   const sourceSignature = useMemo(() => JSON.stringify(sourceConfig), [sourceConfig]);
   const sessionKey = useMemo(() => store.createKey(cardId, baseCardId), [baseCardId, cardId, store]);
 
@@ -140,6 +145,12 @@ export function EditorHost({
       releaseAllResolvedResourceUrls();
     };
   }, [releaseAllResolvedResourceUrls, sessionKey, cardPath]);
+
+  useEffect(() => {
+    return subscribeBasecardRegistry(() => {
+      setRegistryVersion(getBasecardRegistryVersion());
+    });
+  }, []);
 
   useEffect(() => {
     if (!descriptor) {

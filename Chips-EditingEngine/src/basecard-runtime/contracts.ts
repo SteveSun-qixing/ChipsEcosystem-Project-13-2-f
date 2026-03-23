@@ -47,7 +47,9 @@ export interface BasecardDescriptor {
   pluginId: string;
   cardType: string;
   displayName: string;
-  aliases?: string[];
+  description?: string;
+  icon?: string;
+  aliases?: readonly string[];
   commitDebounceMs?: number;
   createInitialConfig: (baseCardId: string) => BasecardConfigRecord;
   normalizeConfig: (input: BasecardConfigRecord, baseCardId: string) => BasecardConfigRecord;

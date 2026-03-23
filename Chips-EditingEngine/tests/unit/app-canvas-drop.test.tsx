@@ -48,6 +48,9 @@ const mockState = vi.hoisted(() => {
       createBox: vi.fn(),
     },
     bridgeClient: {
+      plugin: {
+        query: vi.fn(async () => []),
+      },
       theme: {
         getCurrent: vi.fn(async () => ({
           themeId: 'chips-official.default-theme',
@@ -151,6 +154,7 @@ describe('App canvas drop integration', () => {
     mockState.workspaceServiceMock.openFile.mockClear();
     mockState.workspaceServiceMock.createCard.mockClear();
     mockState.workspaceServiceMock.createBox.mockClear();
+    mockState.bridgeClient.plugin.query.mockClear();
     mockState.bridgeClient.theme.getCurrent.mockClear();
     mockState.bridgeClient.events.on.mockClear();
   });
@@ -275,7 +279,9 @@ describe('App canvas drop integration', () => {
       'RichTextCard',
       {
         body: '<p>123456789</p>',
+        card_type: 'RichTextCard',
         locale: 'zh-CN',
+        theme: '',
       },
       1,
     );

@@ -209,9 +209,10 @@ describe('unpacked .card files', () => {
       id: 'intro',
       type: 'base.richtext',
       data: {
-        id: 'intro',
+        card_type: 'RichTextCard',
         body: '<h1>Intro</h1><p>Hello Chips.</p>',
         locale: 'zh-CN',
+        theme: '',
       },
     });
 
@@ -227,9 +228,10 @@ describe('unpacked .card files', () => {
     expect(persistedStructure.structure).toHaveLength(1);
     expect(persistedStructure.structure[0]?.type).toBe('base.richtext');
     expect(persistedIntro).toMatchObject({
-      id: 'intro',
+      card_type: 'RichTextCard',
       body: '<p>已更新</p>',
       locale: 'zh-CN',
+      theme: '',
     });
     expect(files.has('/workspace/demo.card/content/details.yaml')).toBe(false);
     expect(files.has('/workspace/demo.card/content/legacy-unused.yaml')).toBe(false);
@@ -355,9 +357,10 @@ describe('unpacked .card files', () => {
     expect(latestCard?.persistedRevision).toBe(2);
     expect(latestCard?.isPersisting).toBe(false);
     expect(persistedIntro).toMatchObject({
-      id: 'intro',
+      card_type: 'RichTextCard',
       body: '<p>second</p>',
       locale: 'zh-CN',
+      theme: '',
     });
   });
 });

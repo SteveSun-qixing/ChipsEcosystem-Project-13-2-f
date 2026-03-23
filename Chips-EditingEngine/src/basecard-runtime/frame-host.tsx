@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CompositeInteractionPayload } from 'chips-sdk';
 import type { BasecardPendingResourceImport } from './contracts';
-import { getBasecardDescriptor, normalizeBasecardConfig } from './registry';
+import {
+  getBasecardDescriptor,
+  getBasecardRegistryVersion,
+  normalizeBasecardConfig,
+  subscribeBasecardRegistry,
+} from './registry';
 import { createBasecardFrameThemeCss } from './theme-css';
 
 export interface BasecardFrameStatus {
@@ -135,17 +140,24 @@ export function BasecardFrameHost({
   const interactionPolicyRef = useRef(interactionPolicy);
   const resolvedResourceUrlsRef = useRef(new Map<string, string>());
   const [status, setStatus] = useState<BasecardFrameStatus>(DEFAULT_STATUS);
+  const [registryVersion, setRegistryVersion] = useState(() => getBasecardRegistryVersion());
 
-  const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType]);
+  const descriptor = useMemo(() => getBasecardDescriptor(cardType), [cardType, registryVersion]);
   const normalizedConfig = useMemo(
     () => normalizeBasecardConfig(cardType, baseCardId, config),
-    [baseCardId, cardType, config],
+    [baseCardId, cardType, config, registryVersion],
   );
   const configSignature = useMemo(() => JSON.stringify(normalizedConfig), [normalizedConfig]);
   const readyMinHeightStyle = useMemo(
     () => ({ minHeight: status.state === 'ready' ? '0px' : `${DEFAULT_STATUS.height}px` }),
     [status.state],
   );
+
+  useEffect(() => {
+    return subscribeBasecardRegistry(() => {
+      setRegistryVersion(getBasecardRegistryVersion());
+    });
+  }, []);
 
   useEffect(() => {
     onStatusChange?.(status);

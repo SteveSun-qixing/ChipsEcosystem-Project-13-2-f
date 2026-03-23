@@ -19,7 +19,11 @@ import type { BasicCardConfig } from './core/card-initializer';
 import type { DragData } from './components/CardBoxLibrary/types';
 import { generateId62 } from './utils/id';
 import { setLocale } from './i18n';
-import { createInitialBasecardConfig, normalizeBasecardType } from './basecard-runtime/registry';
+import {
+  createInitialBasecardConfig,
+  normalizeBasecardType,
+  syncInstalledBasecardDescriptors,
+} from './basecard-runtime/registry';
 
 const EngineSettingsDialog = lazy(() => import('./components/EngineSettings/EngineSettingsDialog').then(m => ({ default: m.EngineSettingsDialog })));
 
@@ -50,6 +54,7 @@ function createInitialBasicCard(typeId: string): BasicCardConfig {
 }
 
 function MainWorkspace() {
+  const client = useMemo(() => getChipsClient(), []);
   const { currentLayout, setState } = useEditor();
   const { createToolWindow, createCardWindow, updateWindow, focusWindow, windows } = useUI();
   const {
@@ -110,25 +115,55 @@ function MainWorkspace() {
       return;
     }
     hasInitializedRef.current = true;
+    let active = true;
 
     async function init() {
       try {
         setState('loading');
 
-        getChipsClient();
+        await syncInstalledBasecardDescriptors(client);
         await i18nService.initLocale();
         await workspaceService.initialize();
         initDefaultTools();
 
-        setState('ready');
+        if (active) {
+          setState('ready');
+        }
       } catch (e) {
         console.error('[App] Unexpected init error:', e);
-        setState('ready');
+        if (active) {
+          setState('ready');
+        }
       }
     }
 
-    init();
-  }, [setState, windows.length, t, createToolWindow]);
+    void init();
+
+    if (!client?.events || typeof client.events.on !== 'function') {
+      return () => {
+        active = false;
+      };
+    }
+
+    const refreshInstalledBasecards = () => {
+      void syncInstalledBasecardDescriptors(client).catch((error) => {
+        console.error('[App] Failed to refresh installed basecard descriptors.', error);
+      });
+    };
+
+    const unsubscribeInstalled = client.events.on('plugin.installed', refreshInstalledBasecards);
+    const unsubscribeEnabled = client.events.on('plugin.enabled', refreshInstalledBasecards);
+    const unsubscribeDisabled = client.events.on('plugin.disabled', refreshInstalledBasecards);
+    const unsubscribeUninstalled = client.events.on('plugin.uninstalled', refreshInstalledBasecards);
+
+    return () => {
+      active = false;
+      unsubscribeInstalled();
+      unsubscribeEnabled();
+      unsubscribeDisabled();
+      unsubscribeUninstalled();
+    };
+  }, [client, setState, windows.length, t, createToolWindow]);
 
   useEffect(() => {
     const localizedToolTitles: Record<string, string> = {

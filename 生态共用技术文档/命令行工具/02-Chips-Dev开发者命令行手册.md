@@ -63,6 +63,7 @@ npm install
 - `chipsdev create <app|card|module|theme> <targetDir>`：创建新工程
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
+- `chipsdev module invoke`：在真实 Electron Host 中调用模块 capability/method
 - `chipsdev build`：执行正式构建
 - `chipsdev test`：执行 Vitest 单元测试
 - `chipsdev lint`：执行 ESLint 检查
@@ -96,12 +97,62 @@ npm install
 5. 解析开发工作区 `.chips-host-dev`；
 6. 若开发工作区尚无已启用主题插件，则自动引导默认主题包进入该工作区并设为当前主题；
 7. 拉起真实 Electron Host 主进程；
-8. 在开发工作区中安装并启用当前应用插件；
-9. 通过 Host `window` 服务打开应用窗口。
+8. 先按开发工作区 `plugins.json` 重新同步其中已配置的插件副本，确保 Host 运行时不会继续消费旧安装残留；
+9. 在开发工作区中安装并启用当前应用插件；
+10. 通过 Host `window` 服务打开应用窗口。
+
+补充语义：
+
+- 第 8 步会按 `plugins.json` 中的 `manifestPath` 重新安装已配置插件，并保留各插件在开发工作区中的启用状态；
+- 若 `plugins.json` 中存在相对路径，`chipsdev run` 会按工程/工作区上下文解析为真实清单路径；
+- 当前目标应用自身会在同步阶段被跳过，随后再单独重装并启用，避免重复处理。
+
+## `chipsdev module invoke` 的正式行为
+
+`chipsdev module invoke` 是模块插件在开发工作区中的正式 Electron 联调入口，适用于：
+
+- 直接调试模块 capability/method；
+- 验证依赖 Electron `BrowserWindow` 的模块能力；
+- 验证同步返回和异步 job 返回。
+
+正式用法：
+
+```bash
+chipsdev module invoke \
+  --capability <capability> \
+  --method <method> \
+  [--input '<json>'] \
+  [--input-file /绝对路径/input.json] \
+  [--manifest /绝对路径/manifest.yaml] \
+  [--timeout-ms 60000]
+```
+
+执行时会完成以下正式链路：
+
+1. 解析开发工作区 `.chips-host-dev`；
+2. 若开发工作区尚无已启用主题插件，则自动引导默认主题包进入该工作区并设为当前主题；
+3. 若当前目录或 `--manifest` 指向模块插件工程，则先执行正式构建；
+4. 拉起真实 Electron Host 主进程；
+5. 在开发工作区中安装并启用目标模块插件；
+6. 通过 Host `module.invoke` 发起 capability/method 调用；
+7. 若模块返回 `mode = "job"`，则持续轮询到 `completed/failed/cancelled` 终态；
+8. 以 JSON 输出最终结果。
+
+补充边界：
+
+- `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
+- 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
+- 因此，依赖 `platform.renderHtmlToImage`、`platform.renderHtmlToPdf` 之类 Electron 渲染导出能力的模块，必须使用 `chipsdev module invoke` 验证。
 
 ## 插件与主题调试
 
 主题包、卡片插件、布局插件、模块插件的联调均应通过开发工作区完成，不应手工修改 `.chips-host-dev` 文件。
+
+其中：
+
+- 主题插件、卡片插件、布局插件，以及模块插件的安装/启停状态验证，可使用 `chipsdev plugin/theme/...`；
+- 应用插件窗口联调，使用 `chipsdev run`；
+- 模块插件 capability/method 联调，尤其是依赖 Electron 宿主的模块能力，使用 `chipsdev module invoke`。
 
 典型命令如下：
 
@@ -114,12 +165,24 @@ chipsdev theme current
 chipsdev theme validate
 ```
 
+模块插件典型命令如下：
+
+```bash
+chipsdev module invoke \
+  --capability converter.html.to-image \
+  --method convert \
+  --input-file /绝对路径/request.json
+```
+
 语义说明：
 
 - `chipsdev plugin install` 仅完成安装；
+- 若开发工作区中已存在相同 `pluginId`，再次执行 `chipsdev plugin install` 会正式替换旧安装副本，而不是追加重复记录；
+- `chipsdev plugin install` 写入 `plugins.json` 时会更新已有记录，并把传入路径规范化为绝对路径；
 - 主题插件必须显式 `enable` 后，才会进入 `chipsdev theme list` 的可用主题集合；
 - `chipsdev theme apply` 只允许切换到当前开发工作区内已启用的主题；
 - `chipsdev theme validate` 会逐个调用 `theme.apply + theme.resolve` 做正式门禁验证。
+- `chipsdev module invoke` 会在真实 Electron Host 中完成模块调用；若当前目录是模块工程，会先构建并重新安装该模块。
 
 ## 创建工程
 
@@ -161,6 +224,12 @@ chipsdev plugin enable <pluginId>
 chipsdev theme validate   # 主题包
 ```
 
+模块插件若需要验证正式能力调用，推荐执行：
+
+```bash
+chipsdev module invoke --capability <capability> --method <method> --input '<json>'
+```
+
 ## 常见问题
 
 ### 为什么 `chipsdev run` 没有使用我在 `chips` 里切换的主题？
@@ -171,9 +240,17 @@ chipsdev theme validate   # 主题包
 
 因为主题插件安装后必须先启用。只有已启用主题插件才会进入主题运行时。
 
+### 为什么模块插件不能只靠 `chipsdev start` 验证 Electron 能力？
+
+因为 `chipsdev start` 属于开发工作区 Host 管理命令，底层仍走 Host CLI，不负责模块 capability 的真实 Electron 宿主调用。依赖 `BrowserWindow` 的模块能力要使用 `chipsdev module invoke`。
+
 ### 为什么应用启动后不应该写死默认主题？
 
 因为应用初始主题必须从 Host 当前主题读取。主题变更事件只负责增量同步，不能替代初始主题装载。
+
+### 为什么我已经重新构建插件，但 `chipsdev run` 里仍然像是在加载旧代码？
+
+因为 Host 真正运行的是开发工作区 `.chips-host-dev/plugins/` 里的已安装副本，而不是你的源码目录。当前正式行为是：`chipsdev plugin install` 会替换开发工作区中的同 ID 插件副本，`chipsdev run` 也会在启动目标应用前先同步 `plugins.json` 中登记的插件，避免继续消费旧安装残留。
 
 ## 质量要求
 

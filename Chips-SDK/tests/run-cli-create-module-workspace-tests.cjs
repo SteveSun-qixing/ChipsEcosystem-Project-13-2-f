@@ -31,6 +31,12 @@ const symlinkDir = async (source, target) => {
   await fsp.symlink(source, target, type);
 };
 
+const withWritableNpmCache = (env, cacheRoot) => ({
+  ...env,
+  NPM_CONFIG_CACHE: cacheRoot,
+  npm_config_cache: cacheRoot
+});
+
 const main = async () => {
   console.log('Running chipsdev create module workspace integration tests...');
 
@@ -67,10 +73,10 @@ const linkedEntries = ['Chips-SDK', 'Chips-Scaffold', 'Chips-ComponentLibrary'];
       'utf-8'
     );
 
-    const env = {
+    const env = withWritableNpmCache({
       ...process.env,
       CHIPS_ECOSYSTEM_ROOT: sandboxRoot
-    };
+    }, path.join(sandboxRoot, '.npm-cache'));
 
     const targetRelativePath = path.join('validation-projects', 'module-smoke');
     const targetDir = path.join(sandboxRoot, targetRelativePath);

@@ -10,6 +10,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { createRequire } = require('node:module');
 const { pathToFileURL } = require('node:url');
 const childProcess = require('node:child_process');
 const yaml = require('yaml');
@@ -31,6 +32,7 @@ const COMMANDS = new Set([
   'update',
   'doctor',
   'open',
+  'module',
   'server',
   'debug',
   'build',
@@ -117,6 +119,7 @@ const printHelp = () => {
       '  update      查看或安装开发工具更新信息',
       '  doctor      检查开发工作区健康状态',
       '  open        在开发工作区链路中打开目标文件',
+      '  module      在真实 Electron Host 中调试模块插件能力调用',
       '  server      启动 Vite 开发服务器',
       '  debug       以调试模式启动目标项目（与 server 行为一致，可扩展调试预设）',
       '  build       使用 Vite 构建插件工程',
@@ -192,6 +195,10 @@ const createFrontendResolveConfig = (projectRoot) => {
     dedupe: ['react', 'react-dom']
   };
 };
+
+const createFrontendDefineConfig = (mode) => ({
+  'process.env.NODE_ENV': JSON.stringify(mode)
+});
 
 const loadPackageJsonVersion = async () => {
   const herePackage = path.resolve(__dirname, '..', 'package.json');
@@ -406,17 +413,24 @@ const resolveNodePackageEntry = (request, searchPaths, errorMessage) => {
 };
 
 const resolveElectronExecutable = (searchPaths) => {
-  const electronModulePath = resolveNodePackageEntry(
-    'electron',
-    searchPaths,
-    '未找到 Electron 运行时。请先在生态根目录执行 npm install。'
-  );
-  // eslint-disable-next-line global-require, import/no-dynamic-require
-  const electronExecutable = require(electronModulePath);
-  if (typeof electronExecutable !== 'string' || electronExecutable.length === 0) {
-    throw new Error('Electron 可执行路径解析失败。');
+  for (const searchPath of searchPaths) {
+    const requireBase = path.join(searchPath, 'package.json');
+    try {
+      const scopedRequire = createRequire(requireBase);
+      const electronExecutable = scopedRequire('electron');
+      if (typeof electronExecutable === 'string' && electronExecutable.length > 0) {
+        return electronExecutable;
+      }
+      throw new Error('Electron 可执行路径解析失败。');
+    } catch (error) {
+      if (error && error.code === 'MODULE_NOT_FOUND') {
+        continue;
+      }
+      throw error;
+    }
   }
-  return electronExecutable;
+
+  throw new Error('未找到 Electron 运行时。请先在生态根目录执行 npm install。');
 };
 
 const runForegroundProcess = (command, args, options = {}) =>
@@ -619,6 +633,7 @@ const handleServer = async (mode = 'server') => {
   const viteConfig = {
     root,
     configFile: false,
+    define: createFrontendDefineConfig('development'),
     resolve: createFrontendResolveConfig(projectRoot),
     server: {
       port: process.env.PORT ? Number(process.env.PORT) : 5173,
@@ -651,19 +666,16 @@ const handleServer = async (mode = 'server') => {
   server.printUrls();
 };
 
-const handleBuild = async () => {
-  const projectRoot = resolveProjectRoot();
-  const config = await loadProjectConfig(projectRoot);
-
+const buildProject = async (projectRoot, config) => {
   const vite = await import('vite');
-  const root = projectRoot;
   const isApp = config.type === 'app';
   const entryPath = path.resolve(projectRoot, config.entry);
 
   const viteConfig = {
-    root,
+    root: projectRoot,
     configFile: false,
     base: isApp ? './' : undefined,
+    define: createFrontendDefineConfig('production'),
     resolve: createFrontendResolveConfig(projectRoot),
     build: isApp
       ? {
@@ -684,7 +696,12 @@ const handleBuild = async () => {
   };
 
   await vite.build(viteConfig);
+};
 
+const handleBuild = async () => {
+  const projectRoot = resolveProjectRoot();
+  const config = await loadProjectConfig(projectRoot);
+  await buildProject(projectRoot, config);
   log(`构建完成，输出目录：${config.outDir}`);
 };
 
@@ -1658,6 +1675,8 @@ const main = async () => {
       await handlePackage();
     } else if (command === 'validate') {
       await handleValidate();
+    } else if (command === 'module') {
+      await handleModuleCommand(args);
     } else if (command === 'create') {
       await handleCreate(args);
     } else if (command === 'login') {
@@ -1712,6 +1731,168 @@ const handleRun = async () => {
     cwd: projectRoot,
     env: makeBinEnv(projectRoot)
   });
+};
+
+const parseModuleInvokeArgs = (args) => {
+  const options = {
+    manifestPath: undefined,
+    capability: undefined,
+    method: undefined,
+    input: {},
+    timeoutMs: 60_000
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    const value = args[index + 1];
+
+    if (token === '--manifest') {
+      options.manifestPath = value;
+      index += 1;
+      continue;
+    }
+    if (token === '--capability') {
+      options.capability = value;
+      index += 1;
+      continue;
+    }
+    if (token === '--method') {
+      options.method = value;
+      index += 1;
+      continue;
+    }
+    if (token === '--input') {
+      if (!value) {
+        throw new Error('--input 需要提供 JSON 字符串。');
+      }
+      options.input = JSON.parse(value);
+      index += 1;
+      continue;
+    }
+    if (token === '--input-file') {
+      if (!value) {
+        throw new Error('--input-file 需要提供 JSON 文件路径。');
+      }
+      options.input = JSON.parse(fs.readFileSync(path.resolve(value), 'utf-8'));
+      index += 1;
+      continue;
+    }
+    if (token === '--timeout-ms') {
+      if (!value) {
+        throw new Error('--timeout-ms 需要提供正整数。');
+      }
+      const timeoutMs = Number(value);
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        throw new Error('--timeout-ms 必须是正整数。');
+      }
+      options.timeoutMs = timeoutMs;
+      index += 1;
+      continue;
+    }
+  }
+
+  if (typeof options.capability !== 'string' || options.capability.trim().length === 0) {
+    throw new Error('chipsdev module invoke 需要 --capability。');
+  }
+  if (typeof options.method !== 'string' || options.method.trim().length === 0) {
+    throw new Error('chipsdev module invoke 需要 --method。');
+  }
+
+  return {
+    manifestPath: typeof options.manifestPath === 'string' && options.manifestPath.trim().length > 0
+      ? path.resolve(options.manifestPath)
+      : undefined,
+    capability: options.capability.trim(),
+    method: options.method.trim(),
+    input: options.input,
+    timeoutMs: options.timeoutMs
+  };
+};
+
+const resolveModuleManifestForInvoke = async (projectRoot, explicitManifestPath) => {
+  if (explicitManifestPath) {
+    const manifestRoot = path.dirname(explicitManifestPath);
+    const { manifest, manifestPath } = await loadManifest(manifestRoot);
+    if (path.resolve(manifestPath) !== path.resolve(explicitManifestPath)) {
+      throw new Error(`manifest 文件必须位于插件工程根目录：${explicitManifestPath}`);
+    }
+    if (manifest.type !== 'module') {
+      throw new Error(`目标 manifest 不是 module 插件：${explicitManifestPath}`);
+    }
+    const config = await loadProjectConfig(manifestRoot);
+    await buildProject(manifestRoot, config);
+    return manifestPath;
+  }
+
+  try {
+    const { manifest, manifestPath } = await loadManifest(projectRoot);
+    if (manifest.type !== 'module') {
+      return undefined;
+    }
+    const config = await loadProjectConfig(projectRoot);
+    await buildProject(projectRoot, config);
+    return manifestPath;
+  } catch {
+    return undefined;
+  }
+};
+
+const handleModuleInvoke = async (args) => {
+  const projectRoot = resolveProjectRoot();
+  const workspacePath = await resolveDevWorkspace(projectRoot);
+  await ensureDevWorkspaceThemeBootstrap(projectRoot, workspacePath);
+
+  const options = parseModuleInvokeArgs(args);
+  const manifestPath = await resolveModuleManifestForInvoke(projectRoot, options.manifestPath);
+  const { ecosystemRoot, hostPackageDir } = await resolveHostCliPath(projectRoot);
+  const hostRunnerPath = path.join(hostPackageDir, 'dist', 'src', 'main', 'electron', 'dev-invoke-module.js');
+
+  await ensurePackageBuildArtifact(hostPackageDir, hostRunnerPath, 'Chips-Host');
+
+  const electronExecutable = resolveElectronExecutable([hostPackageDir, ecosystemRoot]);
+  const runnerArgs = [
+    hostRunnerPath,
+    `--workspace=${workspacePath}`,
+    `--capability=${options.capability}`,
+    `--method=${options.method}`,
+    `--input-base64=${Buffer.from(JSON.stringify(options.input), 'utf-8').toString('base64url')}`,
+    `--timeout-ms=${options.timeoutMs}`
+  ];
+
+  if (manifestPath) {
+    runnerArgs.push(`--manifest=${manifestPath}`);
+  }
+
+  await runForegroundProcess(electronExecutable, runnerArgs, {
+    cwd: projectRoot,
+    env: makeBinEnv(projectRoot)
+  });
+};
+
+const handleModuleCommand = async (args) => {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand || subcommand === 'help') {
+    log(
+      [
+        'chipsdev module 用法：',
+        '  chipsdev module invoke --capability <capability> --method <method> [--input <json>] [--input-file <path>] [--manifest <manifest.yaml>] [--timeout-ms <ms>]',
+        '',
+        '说明：',
+        '  - 在真实 Electron Host 中执行模块 capability/method 调用；',
+        '  - 若当前目录或 --manifest 指向 module 插件工程，会先构建并安装启用该模块；',
+        '  - 异步 job 会等待到最终 completed/failed/cancelled 状态后再退出。'
+      ].join('\n')
+    );
+    return;
+  }
+
+  if (subcommand === 'invoke') {
+    await handleModuleInvoke(rest);
+    return;
+  }
+
+  throw new Error(`不支持的 module 子命令：${subcommand}`);
 };
 
 main().catch((error) => {

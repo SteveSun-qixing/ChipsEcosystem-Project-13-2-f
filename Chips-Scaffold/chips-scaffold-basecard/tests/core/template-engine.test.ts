@@ -80,7 +80,17 @@ describe("template-engine", () => {
         path.join(targetDir, "README.md"),
         "utf8"
       );
+      const indexTs = await fs.readFile(
+        path.join(targetDir, "src", "index.ts"),
+        "utf8"
+      );
       expect(readme).toMatch(/Standard Basecard Plugin/);
+      expect(readme).toMatch(/basecardDefinition/);
+      expect(indexTs).toMatch(/export const basecardDefinition/);
+      expect(indexTs).toMatch(/export function renderBasecardView/);
+      expect(indexTs).toMatch(/export function renderBasecardEditor/);
+      expect(indexTs).toMatch(/cardType:\s*"base\.text"/);
+      expect(indexTs).toMatch(/pluginId:\s*"com\.example\.card-standard"/);
 
       for (const dirName of FORBIDDEN_PROJECT_DIRS) {
         await expect(fs.stat(path.join(targetDir, dirName))).rejects.toMatchObject({

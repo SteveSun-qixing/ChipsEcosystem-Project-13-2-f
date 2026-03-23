@@ -31,6 +31,12 @@ const symlinkDir = async (source, target) => {
   await fsp.symlink(source, target, type);
 };
 
+const withWritableNpmCache = (env, cacheRoot) => ({
+  ...env,
+  NPM_CONFIG_CACHE: cacheRoot,
+  npm_config_cache: cacheRoot
+});
+
 const main = async () => {
   console.log('Running chipsdev create card workspace integration tests...');
 
@@ -67,10 +73,10 @@ const main = async () => {
       'utf-8'
     );
 
-    const env = {
+    const env = withWritableNpmCache({
       ...process.env,
       CHIPS_ECOSYSTEM_ROOT: sandboxRoot
-    };
+    }, path.join(sandboxRoot, '.npm-cache'));
 
     const targetRelativePath = path.join('validation-projects', 'card-smoke');
     const targetDir = path.join(sandboxRoot, targetRelativePath);
@@ -98,6 +104,14 @@ const main = async () => {
     await run('npm', ['install'], sandboxRoot, env);
     await run('npm', ['run', 'lint'], targetDir, env);
     await run('npm', ['run', 'build'], targetDir, env);
+
+    const builtEntry = await fsp.readFile(path.join(targetDir, 'dist', 'index.mjs'), 'utf-8');
+    assert.equal(
+      builtEntry.includes('process.env.NODE_ENV'),
+      false,
+      'chipsdev build must replace NODE_ENV checks in card plugin browser bundles'
+    );
+
     await run('npm', ['test'], targetDir, env);
     await run('npm', ['run', 'validate'], targetDir, env);
     await run('node', [cliPath, 'package'], targetDir, env);

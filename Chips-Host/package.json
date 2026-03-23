@@ -15,9 +15,12 @@
     "test:watch": "vitest",
     "start": "node dist/src/main/cli/index.js",
     "dev": "tsx src/main/cli/index.ts",
-    "perf:l9": "tsx scripts/benchmark-unified-rendering.ts"
+    "perf:l9": "tsx scripts/benchmark-unified-rendering.ts",
+    "build:installer:macos": "tsx src/main/installer/cli.ts macos"
   },
   "dependencies": {
+    "esbuild": "^0.27.3",
+    "jsdom": "^28.1.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {

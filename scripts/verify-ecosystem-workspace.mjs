@@ -8,6 +8,7 @@ const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, "utf8"));
 const expectedWorkspacePatterns = [
   "Chips-*",
   "Chips-BaseCardPlugin/*",
+  "Chips-ModulePlugin/*",
   "Chips-ComponentLibrary/packages/*",
   "Chips-ComponentLibrary/packages/adapters/*",
   "Chips-Scaffold/*",
@@ -37,10 +38,6 @@ const requiredTemplateSpecs = new Map([
   ["Chips-Scaffold/chips-scaffold-basecard/templates/card-standard/package.json.tpl", [
     "\"jsdom\": \"^28.1.0\"",
     "\"chips-sdk\": \"^0.1.0\""
-  ]],
-  ["Chips-Scaffold/chips-scaffold-basecard/templates/card-text-basic/package.json.tpl", [
-    "\"jsdom\": \"^28.1.0\"",
-    "\"chips-sdk\": \"^0.1.0\""
   ]]
 ]);
 
@@ -59,11 +56,6 @@ const requiredTemplateFiles = new Map([
     "vitest.config.mts.tpl",
     "chips.config.mjs.tpl",
     "manifest.yaml.tpl"
-  ]],
-  ["Chips-Scaffold/chips-scaffold-basecard/templates/card-text-basic", [
-    "vitest.config.mts.tpl",
-    "chips.config.mjs.tpl",
-    "manifest.yaml.tpl"
   ]]
 ]);
 
@@ -76,16 +68,6 @@ const requiredTemplateContent = new Map([
     "entry: dist/index.mjs"
   ]],
   ["Chips-Scaffold/chips-scaffold-basecard/templates/card-standard/vitest.config.mts.tpl", [
-    'environment: "jsdom"'
-  ]],
-  ["Chips-Scaffold/chips-scaffold-basecard/templates/card-text-basic/chips.config.mjs.tpl", [
-    'type: "card"',
-    'testsDir: "./tests"'
-  ]],
-  ["Chips-Scaffold/chips-scaffold-basecard/templates/card-text-basic/manifest.yaml.tpl", [
-    "entry: dist/index.mjs"
-  ]],
-  ["Chips-Scaffold/chips-scaffold-basecard/templates/card-text-basic/vitest.config.mts.tpl", [
     'environment: "jsdom"'
   ]]
 ]);

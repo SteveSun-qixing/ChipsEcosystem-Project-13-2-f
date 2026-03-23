@@ -35,6 +35,12 @@ const runBinary = (command, args, cwd, env = process.env) =>
     });
   });
 
+const withWritableNpmCache = (env, cacheRoot) => ({
+  ...env,
+  NPM_CONFIG_CACHE: cacheRoot,
+  npm_config_cache: cacheRoot
+});
+
 const main = async () => {
   console.log('Running chipsdev CLI smoke tests...');
   await run(['help']);
@@ -71,6 +77,7 @@ const main = async () => {
   fs.writeFileSync(path.join(buildProject, 'main.js'), 'document.getElementById("app").textContent = "chips";');
 
   const tempProject = fs.mkdtempSync(path.join(os.tmpdir(), 'chipsdev-local-bin-'));
+  const npmCache = path.join(tempProject, '.npm-cache');
   fs.writeFileSync(
     path.join(tempProject, 'package.json'),
     JSON.stringify(
@@ -102,8 +109,9 @@ const main = async () => {
       throw new Error('chipsdev build must emit relative asset paths for app plugins');
     }
 
-    await runBinary('npm', ['install'], tempProject);
-    await runBinary('chipsdev', ['help'], tempProject);
+    const env = withWritableNpmCache(process.env, npmCache);
+    await runBinary('npm', ['install'], tempProject, env);
+    await runBinary('chipsdev', ['help'], tempProject, env);
   } finally {
     fs.rmSync(buildProject, { recursive: true, force: true });
     fs.rmSync(tempProject, { recursive: true, force: true });

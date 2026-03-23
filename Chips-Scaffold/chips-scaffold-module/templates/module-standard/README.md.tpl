@@ -64,6 +64,7 @@ chipsdev package
 你应根据实际业务替换 capability、方法名与 schema 文件，但要保持：
 
 - Manifest 中 `module.provides` 与仓库中的 contract 文件一致；
+- 模块访问 Host 正式服务动作时使用 `ctx.host.invoke(...)`；
 - 模块之间调用统一使用 Host 注入的 `ctx.module.invoke(...)`；
 - 不自行实现第二套模块加载器或通信通道。
 
@@ -73,5 +74,6 @@ chipsdev package
 - 模块正式能力契约必须写在 `module.provides` 中，而不是旧 `capabilities` 主入口；
 - 调用方统一通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 使用模块能力；
 - 模块运行时只负责能力实现，不生成任何 UI 运行时、插槽挂载入口或主题注入逻辑；
+- 模块访问 Host 服务动作应使用 `ctx.host.invoke(...)`，不得依赖 `ctx.services.*` 旧口径；
 - 如果模块需要调用其他模块，只能使用 Host 注入的 `ctx.module.invoke(...)`；
 - 每次功能迭代后应同步更新 README 与测试/契约资料，避免把文档目录当作模板产物。

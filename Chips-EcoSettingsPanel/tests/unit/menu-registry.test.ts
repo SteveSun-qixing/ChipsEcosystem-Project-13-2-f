@@ -9,6 +9,9 @@ describe("menu registry", () => {
       "themes",
       "languages",
       "app-plugins",
+      "card-plugins",
+      "layout-plugins",
+      "module-plugins",
       "component-gallery",
     ]);
     expect(new Set(MENU_REGISTRY.map((entry) => entry.id)).size).toBe(MENU_REGISTRY.length);

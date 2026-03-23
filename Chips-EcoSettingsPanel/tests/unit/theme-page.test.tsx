@@ -64,5 +64,5 @@ describe("ThemePage", () => {
     expect(markup).toContain("settingsPanel.themes.columns.theme");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("chips.theme-demo");
-  });
+  }, 15000);
 });

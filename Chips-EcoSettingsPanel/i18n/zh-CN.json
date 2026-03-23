@@ -25,6 +25,18 @@
         "title": "应用插件",
         "summary": "安装、启停、卸载应用插件"
       },
+      "cardPlugins": {
+        "title": "卡片插件",
+        "summary": "安装、启停、卸载基础卡片插件"
+      },
+      "layoutPlugins": {
+        "title": "布局插件",
+        "summary": "安装、启停、卸载布局插件"
+      },
+      "modulePlugins": {
+        "title": "模块插件",
+        "summary": "安装、启停、卸载模块插件"
+      },
       "gallery": {
         "title": "组件展示",
         "summary": "用真实组件验证当前主题效果"
@@ -57,6 +69,18 @@
       "appPluginShortcutCreate": "创建应用快捷方式失败。",
       "appPluginShortcutRemove": "移除应用快捷方式失败。",
       "appPluginShortcutReveal": "定位应用快捷方式失败。",
+      "cardPluginList": "读取卡片插件列表失败。",
+      "cardPluginInstall": "安装卡片插件失败。",
+      "cardPluginToggle": "更新卡片插件状态失败。",
+      "cardPluginUninstall": "卸载卡片插件失败。",
+      "layoutPluginList": "读取布局插件列表失败。",
+      "layoutPluginInstall": "安装布局插件失败。",
+      "layoutPluginToggle": "更新布局插件状态失败。",
+      "layoutPluginUninstall": "卸载布局插件失败。",
+      "modulePluginList": "读取模块插件列表失败。",
+      "modulePluginInstall": "安装模块插件失败。",
+      "modulePluginToggle": "更新模块插件状态失败。",
+      "modulePluginUninstall": "卸载模块插件失败。",
       "filePicker": "打开文件选择器失败。",
       "dragPathUnavailable": "当前环境无法解析拖拽文件路径，请改用文件选择器。",
       "appPluginLaunch": "启动应用插件失败"
@@ -237,6 +261,174 @@
         "status": "状态",
         "meta": "元信息",
         "shortcut": "快捷方式",
+        "actions": "操作"
+      }
+    },
+    "cardPlugins": {
+      "title": "卡片插件",
+      "loading": "正在加载卡片插件列表…",
+      "actions": {
+        "install": "安装卡片插件",
+        "enable": "启用",
+        "disable": "停用",
+        "uninstall": "卸载"
+      },
+      "dropzone": {
+        "title": "将卡片插件包拖到此处即可安装",
+        "description": "支持 .cpk、插件目录或 manifest 文件输入，安装动作统一交给 Host。"
+      },
+      "empty": {
+        "ariaLabel": "卡片插件空状态",
+        "title": "尚未安装额外卡片插件",
+        "description": "使用正式安装入口导入新的基础卡片插件包。"
+      },
+      "fields": {
+        "pluginId": "插件 ID",
+        "version": "版本",
+        "identity": "卡片类型",
+        "capabilities": "能力标记",
+        "installPath": "安装路径"
+      },
+      "badges": {
+        "enabled": "已启用",
+        "disabled": "已停用"
+      },
+      "feedback": {
+        "installTitle": "卡片插件安装",
+        "installSuccess": "卡片插件已安装，列表已刷新。",
+        "enableTitle": "卡片插件启用",
+        "enableSuccess": "已启用 {name}。",
+        "disableTitle": "卡片插件停用",
+        "disableSuccess": "已停用 {name}。",
+        "uninstallTitle": "卡片插件卸载",
+        "uninstallSuccess": "已卸载 {name}。"
+      },
+      "dialogs": {
+        "filePickerTitle": "安装卡片插件",
+        "filePickerFilter": "卡片插件",
+        "uninstallTitle": "确认卸载卡片插件",
+        "uninstallMessage": "确定要卸载卡片插件“{name}”吗？",
+        "uninstallDetail": "卸载后 Host 会立即刷新卡片插件治理记录。",
+        "detailTitle": "卡片插件详情：{name}",
+        "detailDescription": "查看当前卡片插件条目的完整治理信息。"
+      },
+      "listAriaLabel": "卡片插件治理列表",
+      "columns": {
+        "plugin": "插件",
+        "status": "状态",
+        "meta": "元信息",
+        "actions": "操作"
+      }
+    },
+    "layoutPlugins": {
+      "title": "布局插件",
+      "loading": "正在加载布局插件列表…",
+      "actions": {
+        "install": "安装布局插件",
+        "enable": "启用",
+        "disable": "停用",
+        "uninstall": "卸载"
+      },
+      "dropzone": {
+        "title": "将布局插件包拖到此处即可安装",
+        "description": "支持 .cpk、插件目录或 manifest 文件输入，安装动作统一交给 Host。"
+      },
+      "empty": {
+        "ariaLabel": "布局插件空状态",
+        "title": "尚未安装额外布局插件",
+        "description": "使用正式安装入口导入新的布局插件包。"
+      },
+      "fields": {
+        "pluginId": "插件 ID",
+        "version": "版本",
+        "identity": "布局类型",
+        "capabilities": "能力标记",
+        "installPath": "安装路径"
+      },
+      "badges": {
+        "enabled": "已启用",
+        "disabled": "已停用"
+      },
+      "feedback": {
+        "installTitle": "布局插件安装",
+        "installSuccess": "布局插件已安装，列表已刷新。",
+        "enableTitle": "布局插件启用",
+        "enableSuccess": "已启用 {name}。",
+        "disableTitle": "布局插件停用",
+        "disableSuccess": "已停用 {name}。",
+        "uninstallTitle": "布局插件卸载",
+        "uninstallSuccess": "已卸载 {name}。"
+      },
+      "dialogs": {
+        "filePickerTitle": "安装布局插件",
+        "filePickerFilter": "布局插件",
+        "uninstallTitle": "确认卸载布局插件",
+        "uninstallMessage": "确定要卸载布局插件“{name}”吗？",
+        "uninstallDetail": "卸载后 Host 会立即刷新布局插件治理记录。",
+        "detailTitle": "布局插件详情：{name}",
+        "detailDescription": "查看当前布局插件条目的完整治理信息。"
+      },
+      "listAriaLabel": "布局插件治理列表",
+      "columns": {
+        "plugin": "插件",
+        "status": "状态",
+        "meta": "元信息",
+        "actions": "操作"
+      }
+    },
+    "modulePlugins": {
+      "title": "模块插件",
+      "loading": "正在加载模块插件列表…",
+      "actions": {
+        "install": "安装模块插件",
+        "enable": "启用",
+        "disable": "停用",
+        "uninstall": "卸载"
+      },
+      "dropzone": {
+        "title": "将模块插件包拖到此处即可安装",
+        "description": "支持 .cpk、插件目录或 manifest 文件输入，安装动作统一交给 Host。"
+      },
+      "empty": {
+        "ariaLabel": "模块插件空状态",
+        "title": "尚未安装额外模块插件",
+        "description": "使用正式安装入口导入新的模块插件包。"
+      },
+      "fields": {
+        "pluginId": "插件 ID",
+        "version": "版本",
+        "identity": "模块能力",
+        "capabilities": "能力标记",
+        "installPath": "安装路径"
+      },
+      "badges": {
+        "enabled": "已启用",
+        "disabled": "已停用"
+      },
+      "feedback": {
+        "installTitle": "模块插件安装",
+        "installSuccess": "模块插件已安装，列表已刷新。",
+        "enableTitle": "模块插件启用",
+        "enableSuccess": "已启用 {name}。",
+        "disableTitle": "模块插件停用",
+        "disableSuccess": "已停用 {name}。",
+        "uninstallTitle": "模块插件卸载",
+        "uninstallSuccess": "已卸载 {name}。"
+      },
+      "dialogs": {
+        "filePickerTitle": "安装模块插件",
+        "filePickerFilter": "模块插件",
+        "uninstallTitle": "确认卸载模块插件",
+        "uninstallMessage": "确定要卸载模块插件“{name}”吗？",
+        "uninstallDetail": "卸载后 Host 会立即刷新模块插件治理记录。",
+        "detailTitle": "模块插件详情：{name}",
+        "detailDescription": "查看当前模块插件条目的完整治理信息。"
+      },
+      "listAriaLabel": "模块插件治理列表",
+      "columns": {
+        "plugin": "插件",
+        "status": "状态",
+        "meta": "元信息",
         "actions": "操作"
       }
     },

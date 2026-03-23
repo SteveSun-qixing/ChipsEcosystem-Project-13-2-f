@@ -33,7 +33,7 @@ export function useThemeGovernance() {
     void refresh();
   }, [refresh]);
 
-  useHostRefresh(["theme.changed", "plugin.installed", "plugin.uninstalled"], refresh);
+  useHostRefresh(["theme.changed", "plugin.installed", "plugin.enabled", "plugin.disabled", "plugin.uninstalled"], refresh);
 
   const installFromPath = React.useCallback(async (manifestPath: string) => {
     setActiveActionId(manifestPath);
@@ -99,6 +99,9 @@ export function useThemeGovernance() {
   const applyTheme = React.useCallback(async (theme: ThemeGovernanceRecord) => {
     setActiveActionId(theme.pluginId);
     try {
+      if (!theme.enabled) {
+        await service.enablePlugin(theme.pluginId);
+      }
       await service.applyTheme(theme.themeId);
       feedback.push({
         tone: "success",

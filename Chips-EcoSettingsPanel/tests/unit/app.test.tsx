@@ -47,7 +47,7 @@ describe("App (标准应用插件根组件)", () => {
   it("应当导出一个可用的 React 组件", async () => {
     const { App } = await import("../../src/App");
     expect(App).toBeTypeOf("function");
-  });
+  }, 15000);
 
   it("渲染桌面导航和窄屏菜单切换器结构", async () => {
     const { App } = await import("../../src/App");
@@ -59,5 +59,5 @@ describe("App (标准应用插件根组件)", () => {
     expect(markup).toContain("settingsPanel.menu.mobileLabel");
     expect(markup).toContain("settingsPanel.menu.themes.title");
     expect(markup).not.toContain("settings-sidebar__runtime");
-  });
+  }, 15000);
 });

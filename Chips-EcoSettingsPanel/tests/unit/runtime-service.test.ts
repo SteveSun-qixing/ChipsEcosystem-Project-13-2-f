@@ -165,6 +165,20 @@ describe("SettingsRuntimeService", () => {
     expect(languages[1].nativeName.length).toBeGreaterThan(0);
   });
 
+  it("enables a theme immediately after installation", async () => {
+    const client = createClientMock();
+    vi.mocked(client.plugin.install).mockResolvedValue({
+      pluginId: "theme.demo",
+      installPath: "/themes/demo",
+    } as never);
+
+    const service = new SettingsRuntimeService(client);
+    await service.installTheme("/packages/theme-demo.cpk");
+
+    expect(client.plugin.install).toHaveBeenCalledWith("/packages/theme-demo.cpk");
+    expect(client.plugin.enable).toHaveBeenCalledWith("theme.demo");
+  });
+
   it("sorts enabled app plugins ahead of disabled ones", async () => {
     const client = createClientMock();
     vi.mocked(client.plugin.query).mockResolvedValue([
@@ -231,6 +245,73 @@ describe("SettingsRuntimeService", () => {
       selfManaged: false,
       capabilities: ["beta"],
     });
+  });
+
+  it("lists governed card plugins through the formal runtime query", async () => {
+    const client = createClientMock();
+    vi.mocked(client.plugin.query).mockResolvedValue([
+      {
+        id: "chips.basecard.richtext",
+        type: "card",
+        name: "RichText",
+        version: "1.0.0",
+        description: "Rich text card",
+        enabled: true,
+        installPath: "/plugins/richtext",
+        installedAt: 2,
+        capabilities: ["base.richtext", "RichTextCard"],
+      },
+      {
+        id: "chips.basecard.image",
+        type: "card",
+        name: "Image",
+        version: "1.0.0",
+        description: "Image card",
+        enabled: false,
+        installPath: "/plugins/image",
+        installedAt: 1,
+        capabilities: ["base.image", "ImageCard"],
+      },
+    ] as never);
+
+    const service = new SettingsRuntimeService(client);
+    const plugins = await service.listPlugins("card");
+
+    expect(client.plugin.query).toHaveBeenCalledWith({ type: "card" });
+    expect(plugins.map((plugin) => plugin.pluginId)).toEqual([
+      "chips.basecard.richtext",
+      "chips.basecard.image",
+    ]);
+    expect(plugins[0]).toMatchObject({
+      pluginId: "chips.basecard.richtext",
+      type: "card",
+      enabled: true,
+      cardTypes: ["base.richtext", "RichTextCard"],
+    });
+  });
+
+  it("validates the installed plugin type before accepting the package", async () => {
+    const client = createClientMock();
+    vi.mocked(client.plugin.install).mockResolvedValue({
+      pluginId: "chips.basecard.image",
+      installPath: "/plugins/image",
+    } as never);
+    vi.mocked(client.plugin.get).mockResolvedValue({
+      id: "chips.basecard.image",
+      type: "card",
+      name: "Image",
+      version: "1.0.0",
+      enabled: false,
+      installPath: "/plugins/image",
+      installedAt: 1,
+      capabilities: ["base.image"],
+    } as never);
+
+    const service = new SettingsRuntimeService(client);
+    await service.installPluginOfType("/packages/image-plugin.cpk", "card");
+
+    expect(client.plugin.install).toHaveBeenCalledWith("/packages/image-plugin.cpk");
+    expect(client.plugin.get).toHaveBeenCalledWith("chips.basecard.image");
   });
 
   it("opens the plugin file dialog through the formal Host action", async () => {

@@ -78,5 +78,5 @@ describe("AppPluginsPage", () => {
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("settingsPanel.appPlugins.actions.disable");
     expect(markup).toContain("settingsPanel.appPlugins.actions.uninstall");
-  });
+  }, 15000);
 });

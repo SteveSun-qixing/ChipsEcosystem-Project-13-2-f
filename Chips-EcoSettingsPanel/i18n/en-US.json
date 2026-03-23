@@ -25,6 +25,18 @@
         "title": "App Plugins",
         "summary": "Install, enable, disable, and remove app plugins"
       },
+      "cardPlugins": {
+        "title": "Card Plugins",
+        "summary": "Install, enable, disable, and remove base card plugins"
+      },
+      "layoutPlugins": {
+        "title": "Layout Plugins",
+        "summary": "Install, enable, disable, and remove layout plugins"
+      },
+      "modulePlugins": {
+        "title": "Module Plugins",
+        "summary": "Install, enable, disable, and remove module plugins"
+      },
       "gallery": {
         "title": "Component Gallery",
         "summary": "Preview real components with the active theme"
@@ -57,6 +69,18 @@
       "appPluginShortcutCreate": "Failed to create the app shortcut.",
       "appPluginShortcutRemove": "Failed to remove the app shortcut.",
       "appPluginShortcutReveal": "Failed to reveal the app shortcut.",
+      "cardPluginList": "Failed to load the card plugin list.",
+      "cardPluginInstall": "Failed to install the card plugin.",
+      "cardPluginToggle": "Failed to update the card plugin state.",
+      "cardPluginUninstall": "Failed to uninstall the card plugin.",
+      "layoutPluginList": "Failed to load the layout plugin list.",
+      "layoutPluginInstall": "Failed to install the layout plugin.",
+      "layoutPluginToggle": "Failed to update the layout plugin state.",
+      "layoutPluginUninstall": "Failed to uninstall the layout plugin.",
+      "modulePluginList": "Failed to load the module plugin list.",
+      "modulePluginInstall": "Failed to install the module plugin.",
+      "modulePluginToggle": "Failed to update the module plugin state.",
+      "modulePluginUninstall": "Failed to uninstall the module plugin.",
       "filePicker": "Failed to open the file picker.",
       "dragPathUnavailable": "This environment cannot resolve dragged file paths. Please use the file picker instead.",
       "appPluginLaunch": "Failed to launch app plugin."
@@ -237,6 +261,174 @@
         "status": "Status",
         "meta": "Metadata",
         "shortcut": "Shortcut",
+        "actions": "Actions"
+      }
+    },
+    "cardPlugins": {
+      "title": "Card Plugins",
+      "loading": "Loading card plugins…",
+      "actions": {
+        "install": "Install Card Plugin",
+        "enable": "Enable",
+        "disable": "Disable",
+        "uninstall": "Uninstall"
+      },
+      "dropzone": {
+        "title": "Drop a card plugin package here to install",
+        "description": "Supports .cpk archives, plugin directories, and manifest inputs. Host performs the installation."
+      },
+      "empty": {
+        "ariaLabel": "Empty card plugin state",
+        "title": "No extra card plugins installed",
+        "description": "Import a new base card plugin package through the formal installation entry."
+      },
+      "fields": {
+        "pluginId": "Plugin ID",
+        "version": "Version",
+        "identity": "Card types",
+        "capabilities": "Capabilities",
+        "installPath": "Install path"
+      },
+      "badges": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "feedback": {
+        "installTitle": "Card plugin installation",
+        "installSuccess": "The card plugin was installed and the list was refreshed.",
+        "enableTitle": "Card plugin enabled",
+        "enableSuccess": "Enabled {name}.",
+        "disableTitle": "Card plugin disabled",
+        "disableSuccess": "Disabled {name}.",
+        "uninstallTitle": "Card plugin uninstalled",
+        "uninstallSuccess": "Removed {name}."
+      },
+      "dialogs": {
+        "filePickerTitle": "Install card plugin",
+        "filePickerFilter": "Card plugin",
+        "uninstallTitle": "Confirm card plugin removal",
+        "uninstallMessage": "Remove the card plugin “{name}”?",
+        "uninstallDetail": "Host refreshes card plugin governance records immediately after removal.",
+        "detailTitle": "Card plugin details: {name}",
+        "detailDescription": "Review the full governance details for this card plugin record."
+      },
+      "listAriaLabel": "Card plugin governance list",
+      "columns": {
+        "plugin": "Plugin",
+        "status": "Status",
+        "meta": "Metadata",
+        "actions": "Actions"
+      }
+    },
+    "layoutPlugins": {
+      "title": "Layout Plugins",
+      "loading": "Loading layout plugins…",
+      "actions": {
+        "install": "Install Layout Plugin",
+        "enable": "Enable",
+        "disable": "Disable",
+        "uninstall": "Uninstall"
+      },
+      "dropzone": {
+        "title": "Drop a layout plugin package here to install",
+        "description": "Supports .cpk archives, plugin directories, and manifest inputs. Host performs the installation."
+      },
+      "empty": {
+        "ariaLabel": "Empty layout plugin state",
+        "title": "No extra layout plugins installed",
+        "description": "Import a new layout plugin package through the formal installation entry."
+      },
+      "fields": {
+        "pluginId": "Plugin ID",
+        "version": "Version",
+        "identity": "Layout type",
+        "capabilities": "Capabilities",
+        "installPath": "Install path"
+      },
+      "badges": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "feedback": {
+        "installTitle": "Layout plugin installation",
+        "installSuccess": "The layout plugin was installed and the list was refreshed.",
+        "enableTitle": "Layout plugin enabled",
+        "enableSuccess": "Enabled {name}.",
+        "disableTitle": "Layout plugin disabled",
+        "disableSuccess": "Disabled {name}.",
+        "uninstallTitle": "Layout plugin uninstalled",
+        "uninstallSuccess": "Removed {name}."
+      },
+      "dialogs": {
+        "filePickerTitle": "Install layout plugin",
+        "filePickerFilter": "Layout plugin",
+        "uninstallTitle": "Confirm layout plugin removal",
+        "uninstallMessage": "Remove the layout plugin “{name}”?",
+        "uninstallDetail": "Host refreshes layout plugin governance records immediately after removal.",
+        "detailTitle": "Layout plugin details: {name}",
+        "detailDescription": "Review the full governance details for this layout plugin record."
+      },
+      "listAriaLabel": "Layout plugin governance list",
+      "columns": {
+        "plugin": "Plugin",
+        "status": "Status",
+        "meta": "Metadata",
+        "actions": "Actions"
+      }
+    },
+    "modulePlugins": {
+      "title": "Module Plugins",
+      "loading": "Loading module plugins…",
+      "actions": {
+        "install": "Install Module Plugin",
+        "enable": "Enable",
+        "disable": "Disable",
+        "uninstall": "Uninstall"
+      },
+      "dropzone": {
+        "title": "Drop a module plugin package here to install",
+        "description": "Supports .cpk archives, plugin directories, and manifest inputs. Host performs the installation."
+      },
+      "empty": {
+        "ariaLabel": "Empty module plugin state",
+        "title": "No extra module plugins installed",
+        "description": "Import a new module plugin package through the formal installation entry."
+      },
+      "fields": {
+        "pluginId": "Plugin ID",
+        "version": "Version",
+        "identity": "Module capability",
+        "capabilities": "Capabilities",
+        "installPath": "Install path"
+      },
+      "badges": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "feedback": {
+        "installTitle": "Module plugin installation",
+        "installSuccess": "The module plugin was installed and the list was refreshed.",
+        "enableTitle": "Module plugin enabled",
+        "enableSuccess": "Enabled {name}.",
+        "disableTitle": "Module plugin disabled",
+        "disableSuccess": "Disabled {name}.",
+        "uninstallTitle": "Module plugin uninstalled",
+        "uninstallSuccess": "Removed {name}."
+      },
+      "dialogs": {
+        "filePickerTitle": "Install module plugin",
+        "filePickerFilter": "Module plugin",
+        "uninstallTitle": "Confirm module plugin removal",
+        "uninstallMessage": "Remove the module plugin “{name}”?",
+        "uninstallDetail": "Host refreshes module plugin governance records immediately after removal.",
+        "detailTitle": "Module plugin details: {name}",
+        "detailDescription": "Review the full governance details for this module plugin record."
+      },
+      "listAriaLabel": "Module plugin governance list",
+      "columns": {
+        "plugin": "Plugin",
+        "status": "Status",
+        "meta": "Metadata",
         "actions": "Actions"
       }
     },

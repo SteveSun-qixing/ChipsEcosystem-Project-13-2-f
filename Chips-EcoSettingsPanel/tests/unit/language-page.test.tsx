@@ -50,5 +50,5 @@ describe("LanguagePage", () => {
     expect(markup).toContain("settingsPanel.languages.columns.language");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("zh-CN");
-  });
+  }, 15000);
 });

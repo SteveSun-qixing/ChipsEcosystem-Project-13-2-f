@@ -38,6 +38,23 @@ export interface AppPluginGovernanceRecord {
   shortcut: PluginShortcutRecord;
 }
 
+export type GovernedPluginType = Exclude<PluginType, "app" | "theme">;
+
+export interface PluginGovernanceRecord {
+  pluginId: string;
+  type: GovernedPluginType;
+  name: string;
+  description?: string;
+  version: string;
+  enabled: boolean;
+  installPath: string;
+  installedAt: number;
+  capabilities: string[];
+  cardTypes: string[];
+  layoutType?: string;
+  displayName?: string;
+}
+
 interface OpenFileDialogResult {
   filePaths: string[] | null;
 }
@@ -84,6 +101,23 @@ function toLocaleDisplayName(locale: string, displayLocale: string): { displayNa
 
 function toSettingsError(error: unknown, fallbackMessage: string): SettingsPanelError {
   return normalizeSettingsError(error, fallbackMessage);
+}
+
+function toPluginGovernanceRecord(record: PluginRecord): PluginGovernanceRecord {
+  return {
+    pluginId: record.id,
+    type: record.type as GovernedPluginType,
+    name: record.name,
+    description: record.description,
+    version: record.version,
+    enabled: record.enabled,
+    installPath: record.installPath,
+    installedAt: record.installedAt,
+    capabilities: [...(record.capabilities ?? [])],
+    cardTypes: record.type === "card" ? [...(record.capabilities ?? [])] : [],
+    layoutType: record.layout?.layoutType,
+    displayName: record.layout?.displayName,
+  };
 }
 
 export class SettingsRuntimeService {
@@ -138,7 +172,8 @@ export class SettingsRuntimeService {
 
   public async installTheme(manifestPath: string): Promise<void> {
     try {
-      await this.client.plugin.install(manifestPath);
+      const { pluginId } = await this.client.plugin.install(manifestPath);
+      await this.client.plugin.enable(pluginId);
     } catch (error) {
       throw toSettingsError(error, "Failed to install theme package.");
     }
@@ -241,6 +276,39 @@ export class SettingsRuntimeService {
     }
   }
 
+  public async listPlugins(type: GovernedPluginType): Promise<PluginGovernanceRecord[]> {
+    try {
+      const installed = await this.client.plugin.query({ type });
+      return sortByName(
+        installed
+          .filter((record) => record.type === type)
+          .map((record) => toPluginGovernanceRecord(record)),
+      ).sort((left, right) => {
+        if (left.enabled !== right.enabled) {
+          return left.enabled ? -1 : 1;
+        }
+        return left.name.localeCompare(right.name, "zh-Hans-CN");
+      });
+    } catch (error) {
+      throw toSettingsError(error, `Failed to load installed ${type} plugins.`);
+    }
+  }
+
+  public async installPluginOfType(manifestPath: string, expectedType: GovernedPluginType): Promise<void> {
+    try {
+      const installResult = await this.client.plugin.install(manifestPath);
+      const plugin = await this.client.plugin.get(installResult.pluginId);
+      if (!plugin || plugin.type !== expectedType) {
+        throw toSettingsError(
+          null,
+          `Installed package type mismatch. Expected ${expectedType}.`,
+        );
+      }
+    } catch (error) {
+      throw toSettingsError(error, `Failed to install ${expectedType} plugin.`);
+    }
+  }
+
   public async enablePlugin(pluginId: string): Promise<void> {
     try {
       await this.client.plugin.enable(pluginId);
@@ -289,7 +357,7 @@ export class SettingsRuntimeService {
     }
   }
 
-  public async openPluginFileDialog(kind: "theme" | "app", dialog: OpenPluginFileDialogOptions): Promise<string[]> {
+  public async openPluginFileDialog(kind: "theme" | "app" | GovernedPluginType, dialog: OpenPluginFileDialogOptions): Promise<string[]> {
     try {
       const result = await this.client.invoke<{ options: Record<string, unknown> }, OpenFileDialogResult>(
         "platform.dialogOpenFile",

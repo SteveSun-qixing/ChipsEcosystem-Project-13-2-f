@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import type { AnyWindowConfig, CardWindowConfig, ToolWindowConfig } from '../types/window';
+import type { AnyWindowConfig, BoxWindowConfig, CardWindowConfig, ToolWindowConfig } from '../types/window';
 import { getWindowManager, type WindowManagerState } from '../core/window-manager';
 import { globalEventEmitter } from '../core/event-emitter';
 
@@ -23,6 +23,7 @@ interface UIContextType extends UIState {
     focusWindow: (windowId: string) => void;
     bringToFront: (windowId: string) => void;
     createCardWindow: (cardId: string, options?: Partial<CardWindowConfig>) => string;
+    createBoxWindow: (boxId: string, boxPath: string, options?: Partial<BoxWindowConfig>) => string;
     createToolWindow: (component: string, options?: Partial<ToolWindowConfig>) => string;
     closeWindow: (windowId: string) => void;
     tileWindows: () => void;
@@ -106,6 +107,10 @@ export function UIProvider({ children }: { children: ReactNode }) {
         return windowManager.createCardWindow(cardId, options);
     }, [windowManager]);
 
+    const createBoxWindow = useCallback((boxId: string, boxPath: string, options?: Partial<BoxWindowConfig>) => {
+        return windowManager.createBoxWindow(boxId, boxPath, options);
+    }, [windowManager]);
+
     const createToolWindow = useCallback((component: string, options?: Partial<ToolWindowConfig>) => {
         return windowManager.createToolWindow(component, options);
     }, [windowManager]);
@@ -149,6 +154,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
                 focusWindow,
                 bringToFront,
                 createCardWindow,
+                createBoxWindow,
                 createToolWindow,
                 closeWindow,
                 tileWindows,

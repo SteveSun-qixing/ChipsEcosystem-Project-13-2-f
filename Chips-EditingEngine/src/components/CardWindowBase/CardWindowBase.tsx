@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
-import type { CardWindowConfig, Position, Size } from '../../types/window';
+import type { BaseWindowConfig, Position, Size } from '../../types/window';
 import './CardWindowBase.css';
 
-export interface CardWindowBaseProps {
-    config: CardWindowConfig;
+export interface CardWindowBaseProps<TWindowConfig extends BaseWindowConfig = BaseWindowConfig> {
+    config: TWindowConfig;
     draggable?: boolean;
     resizable?: boolean;
     minWidth?: number;
@@ -20,7 +20,7 @@ export interface CardWindowBaseProps {
     children?: React.ReactNode;
 }
 
-export function CardWindowBase({
+export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWindowConfig>({
     config,
     draggable = true,
     resizable = true,
@@ -35,7 +35,7 @@ export function CardWindowBase({
     headerSlot,
     actionsSlot,
     children,
-}: CardWindowBaseProps) {
+}: CardWindowBaseProps<TWindowConfig>) {
     const canvasContext = useCanvas();
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);

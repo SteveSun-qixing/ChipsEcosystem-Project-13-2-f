@@ -31,6 +31,8 @@ permissions:
   - module.invoke
   - card.read
   - card.write
+  - box.read
+  - box.write
 
 engines:
   chips: "^1.0.0"

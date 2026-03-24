@@ -5,7 +5,7 @@ export type WindowSize = Size;
 export type { Position, Size } from './editor';
 
 export type WindowState = 'normal' | 'minimized' | 'maximized' | 'collapsed' | 'cover';
-export type WindowType = 'card' | 'tool' | 'dialog';
+export type WindowType = 'card' | 'box' | 'tool' | 'dialog';
 
 export interface BaseWindowConfig {
     id: string;
@@ -30,10 +30,16 @@ export interface CardWindowConfig extends BaseWindowConfig {
     coverRatio?: string;
 }
 
+export interface BoxWindowConfig extends BaseWindowConfig {
+    type: 'box';
+    boxId: string;
+    boxPath: string;
+}
+
 export interface ToolWindowConfig extends BaseWindowConfig {
     type: 'tool';
     component: string;
     dockable?: boolean;
 }
 
-export type AnyWindowConfig = CardWindowConfig | ToolWindowConfig;
+export type AnyWindowConfig = CardWindowConfig | BoxWindowConfig | ToolWindowConfig;

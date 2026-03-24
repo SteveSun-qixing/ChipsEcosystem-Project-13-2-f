@@ -1,0 +1,91 @@
+.box-window {
+    height: 100%;
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    box-sizing: border-box;
+    background: var(--chips-color-surface, #f8fafc);
+}
+
+.box-window__panel,
+.box-window__surface {
+    min-height: 0;
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.box-window__panel {
+    overflow: auto;
+    align-content: start;
+}
+
+.box-window__surface {
+    grid-template-rows: minmax(220px, auto) minmax(0, 1fr);
+    overflow: hidden;
+}
+
+.box-window__canvas {
+    min-height: 0;
+    overflow: auto;
+    border-radius: 12px;
+    background: rgba(248, 250, 252, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.box-window__entry-list {
+    display: grid;
+    gap: 12px;
+}
+
+.box-window__entry {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(248, 250, 252, 0.78);
+}
+
+.box-window__entry-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.box-window__entry-row > input[type="text"],
+.box-window__entry-row > input[type="number"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.box-window__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.box-window__header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.box-window__header-title {
+    font-weight: 600;
+}
+
+.box-window__header-meta {
+    color: var(--chips-color-text-secondary, #64748b);
+    font-size: 12px;
+}
+
+.box-window__error,
+.box-window__empty {
+    padding: 16px;
+    color: var(--chips-color-text-secondary, #64748b);
+}

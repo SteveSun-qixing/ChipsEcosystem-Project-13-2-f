@@ -15,6 +15,7 @@ import { useUI } from './context/UIContext';
 import { useCard } from './context/CardContext';
 import { useTranslation } from './hooks/useTranslation';
 import { workspaceService, type WorkspaceOpenOptions } from './services/workspace-service';
+import { DEFAULT_BOX_LAYOUT_TYPE } from './services/box-document-service';
 import type { BasicCardConfig } from './core/card-initializer';
 import type { DragData } from './components/CardBoxLibrary/types';
 import { generateId62 } from './utils/id';
@@ -56,7 +57,7 @@ function createInitialBasicCard(typeId: string): BasicCardConfig {
 function MainWorkspace() {
   const client = useMemo(() => getChipsClient(), []);
   const { currentLayout, setState } = useEditor();
-  const { createToolWindow, createCardWindow, updateWindow, focusWindow, windows } = useUI();
+  const { createToolWindow, createCardWindow, createBoxWindow, updateWindow, focusWindow, windows } = useUI();
   const {
     addBasicCard,
     openCard,
@@ -205,40 +206,67 @@ function MainWorkspace() {
       openOptions?: WorkspaceOpenOptions;
     }) => {
       const file = payload.file;
-      if (!file || file.type !== 'card' || typeof file.id !== 'string' || typeof file.path !== 'string') {
+      if (!file || typeof file.id !== 'string' || typeof file.path !== 'string') {
         return;
       }
 
-      await openCard(file.id, file.path);
-      const existingWindow = windows.find((window) => window.type === 'card' && window.cardId === file.id);
-      if (existingWindow) {
-        const updates: Record<string, unknown> = {};
+      if (file.type === 'card') {
+        await openCard(file.id, file.path);
+        const existingWindow = windows.find((window) => window.type === 'card' && window.cardId === file.id);
+        if (existingWindow) {
+          const updates: Record<string, unknown> = {};
 
-        if (payload.openOptions?.windowPosition) {
-          updates.position = payload.openOptions.windowPosition;
+          if (payload.openOptions?.windowPosition) {
+            updates.position = payload.openOptions.windowPosition;
+          }
+
+          if (typeof payload.openOptions?.isEditing === 'boolean') {
+            updates.isEditing = payload.openOptions.isEditing;
+          }
+
+          if (existingWindow.state !== 'normal') {
+            updates.state = 'normal';
+          }
+
+          if (Object.keys(updates).length > 0) {
+            updateWindow(existingWindow.id, updates);
+          }
+
+          focusWindow(existingWindow.id);
+          return;
         }
 
-        if (typeof payload.openOptions?.isEditing === 'boolean') {
-          updates.isEditing = payload.openOptions.isEditing;
-        }
+        createCardWindow(file.id, {
+          title: file.name ?? file.path.split('/').pop() ?? file.id,
+          isEditing: payload.openOptions?.isEditing ?? true,
+          position: payload.openOptions?.windowPosition,
+        });
+        return;
+      }
 
-        if (existingWindow.state !== 'normal') {
-          updates.state = 'normal';
-        }
-
-        if (Object.keys(updates).length > 0) {
+      if (file.type === 'box') {
+        const existingWindow = windows.find((window) => window.type === 'box' && window.boxId === file.id);
+        if (existingWindow) {
+          const updates: Record<string, unknown> = {
+            boxPath: file.path,
+            title: file.name ?? existingWindow.title,
+          };
+          if (payload.openOptions?.windowPosition) {
+            updates.position = payload.openOptions.windowPosition;
+          }
+          if (existingWindow.state !== 'normal') {
+            updates.state = 'normal';
+          }
           updateWindow(existingWindow.id, updates);
+          focusWindow(existingWindow.id);
+          return;
         }
 
-        focusWindow(existingWindow.id);
-        return;
+        createBoxWindow(file.id, file.path, {
+          title: file.name ?? file.path.split('/').pop() ?? file.id,
+          position: payload.openOptions?.windowPosition,
+        });
       }
-
-      createCardWindow(file.id, {
-        title: file.name ?? file.path.split('/').pop() ?? file.id,
-        isEditing: payload.openOptions?.isEditing ?? true,
-        position: payload.openOptions?.windowPosition,
-      });
     };
 
     const handleOpenWorkspaceFileSafe = (payload: {
@@ -260,7 +288,33 @@ function MainWorkspace() {
       workspaceService.off('workspace:file-opened', handleOpenWorkspaceFileSafe);
       workspaceService.off('workspace:file-created', handleOpenWorkspaceFileSafe);
     };
-  }, [createCardWindow, focusWindow, openCard, updateWindow, windows]);
+  }, [createBoxWindow, createCardWindow, focusWindow, openCard, updateWindow, windows]);
+
+  useEffect(() => {
+    const handleWorkspaceFileRenamed = (payload: {
+      file?: { id?: string; type?: string; name?: string; path?: string };
+    }) => {
+      const file = payload.file;
+      if (!file || file.type !== 'box' || typeof file.id !== 'string') {
+        return;
+      }
+
+      const window = windows.find((item) => item.type === 'box' && item.boxId === file.id);
+      if (!window) {
+        return;
+      }
+
+      updateWindow(window.id, {
+        title: file.name ?? window.title,
+        boxPath: file.path ?? window.boxPath,
+      });
+    };
+
+    workspaceService.on('workspace:file-renamed', handleWorkspaceFileRenamed);
+    return () => {
+      workspaceService.off('workspace:file-renamed', handleWorkspaceFileRenamed);
+    };
+  }, [updateWindow, windows]);
 
   const handleResolveCanvasDropTarget = useCallback((options: {
     dragData: DragData | null;
@@ -326,14 +380,6 @@ function MainWorkspace() {
     }
 
     if (data.type === 'workspace-file') {
-      if (data.fileType !== 'card') {
-        console.warn('[App] Unsupported workspace file drop target type.', {
-          fileId: data.fileId,
-          fileType: data.fileType,
-        });
-        return;
-      }
-
       workspaceService.openFile(data.fileId, {
         windowPosition: worldPosition,
         isEditing: true,
@@ -342,7 +388,15 @@ function MainWorkspace() {
     }
 
     if (data.type === 'layout') {
-      await workspaceService.createBox(data.name.trim() || '未命名盒子', data.typeId);
+      await workspaceService.createBox(
+        data.name.trim() || '未命名盒子',
+        data.typeId || DEFAULT_BOX_LAYOUT_TYPE,
+        undefined,
+        {
+          windowPosition: worldPosition,
+          isEditing: true,
+        },
+      );
     }
   }, [
     addBasicCard,

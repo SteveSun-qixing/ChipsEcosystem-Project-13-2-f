@@ -4,6 +4,7 @@ import { createEventEmitter, type EventEmitter } from '../core/event-emitter';
 import { createCardInitializer, type BasicCardConfig } from '../core/card-initializer';
 import { generateId62 } from '../utils/id';
 import type { WorkspaceState, WorkspaceFile } from '../types/workspace';
+import { boxDocumentService, DEFAULT_BOX_LAYOUT_TYPE } from './box-document-service';
 import yaml from 'yaml';
 
 export interface WorkspaceOpenOptions {
@@ -138,6 +139,25 @@ export class WorkspaceService {
         }
     }
 
+    async readBoxMetadata(boxFile: string): Promise<{
+        boxId: string;
+        name: string;
+        createdAt: string;
+        modifiedAt: string;
+    } | null> {
+        try {
+            const metadata = await getChipsClient().box.readMetadata(boxFile);
+            return {
+                boxId: metadata.boxId,
+                name: metadata.name,
+                createdAt: metadata.createdAt,
+                modifiedAt: metadata.modifiedAt,
+            };
+        } catch {
+            return null;
+        }
+    }
+
     async buildTree(basePath: string): Promise<WorkspaceFile[]> {
         const entries = await fileService.list(basePath);
         const result: WorkspaceFile[] = [];
@@ -155,7 +175,6 @@ export class WorkspaceService {
 
                 if (stat.isDirectory) {
                     const cardMetaPath = joinPath(entryPath, '.card/metadata.yaml');
-                    const boxMetaPath = joinPath(entryPath, '.box/metadata.yaml');
 
                     if (await fileService.exists(cardMetaPath)) {
                         const metadata = await this.readMetadata(cardMetaPath);
@@ -166,21 +185,6 @@ export class WorkspaceService {
                             name: `${stripExtension(cardName, '.card')}.card`,
                             path: entryPath,
                             type: 'card',
-                            createdAt: (metadata?.created_at as string) || new Date(stat.mtimeMs).toISOString(),
-                            modifiedAt: (metadata?.modified_at as string) || new Date(stat.mtimeMs).toISOString(),
-                        });
-                        continue;
-                    }
-
-                    if (await fileService.exists(boxMetaPath)) {
-                        const metadata = await this.readMetadata(boxMetaPath);
-                        const boxId = (metadata?.box_id as string) ?? fileName.replace(/\.box$/i, '');
-                        const boxName = (metadata?.name as string) ?? fileName;
-                        result.push({
-                            id: boxId,
-                            name: `${stripExtension(boxName, '.box')}.box`,
-                            path: entryPath,
-                            type: 'box',
                             createdAt: (metadata?.created_at as string) || new Date(stat.mtimeMs).toISOString(),
                             modifiedAt: (metadata?.modified_at as string) || new Date(stat.mtimeMs).toISOString(),
                         });
@@ -211,13 +215,14 @@ export class WorkspaceService {
                         modifiedAt: new Date(stat.mtimeMs).toISOString(),
                     });
                 } else if (lower.endsWith('.box')) {
+                    const metadata = await this.readBoxMetadata(entryPath);
                     result.push({
-                        id: entryPath,
-                        name: fileName,
+                        id: metadata?.boxId ?? entryPath,
+                        name: `${stripExtension(metadata?.name ?? fileName, '.box')}.box`,
                         path: entryPath,
                         type: 'box',
-                        createdAt: new Date(stat.mtimeMs).toISOString(),
-                        modifiedAt: new Date(stat.mtimeMs).toISOString(),
+                        createdAt: metadata?.createdAt ?? new Date(stat.mtimeMs).toISOString(),
+                        modifiedAt: metadata?.modifiedAt ?? new Date(stat.mtimeMs).toISOString(),
                     });
                 }
             } catch (e) {
@@ -285,39 +290,32 @@ export class WorkspaceService {
         throw new Error('Card created but not found in workspace tree');
     }
 
-    async createBox(name: string, layoutType?: string, parentPath?: string): Promise<WorkspaceFile> {
-        const timestamp = new Date().toISOString();
-        const boxId = generateId62();
+    async createBox(
+        name: string,
+        layoutType?: string,
+        parentPath?: string,
+        openOptions?: WorkspaceOpenOptions
+    ): Promise<WorkspaceFile> {
         const parent = parentPath || this.state.rootPath;
-        const boxFolderName = `${boxId}.box`;
-        const boxPath = joinPath(parent, boxFolderName);
-        const metaDir = joinPath(boxPath, '.box');
+        if (!parent) {
+            throw new Error('当前工作区未绑定，无法创建箱子。');
+        }
 
-        const metadata = {
-            chip_standards_version: '1.0.0',
-            box_id: boxId,
-            name: name.trim(),
-            created_at: timestamp,
-            modified_at: timestamp,
-            layout: layoutType || 'grid',
-        };
-        const structure = {
-            cards: [],
-        };
-        const content = {
-            layout: layoutType || 'grid',
-        };
-
-        await fileService.ensureDir(boxPath);
-        await fileService.ensureDir(metaDir);
-        await fileService.writeText(joinPath(metaDir, 'metadata.yaml'), yaml.stringify(metadata));
-        await fileService.writeText(joinPath(metaDir, 'structure.yaml'), yaml.stringify(structure));
-        await fileService.writeText(joinPath(metaDir, 'content.yaml'), yaml.stringify(content));
+        const created = await boxDocumentService.createBoxFile(
+            name,
+            layoutType || DEFAULT_BOX_LAYOUT_TYPE,
+            parent,
+            this.state.rootPath,
+        );
 
         await this.refresh();
-        const file = this.getFile(boxId) || this.findFileByPath(this.state.files, boxPath);
+        const file = this.getFile(created.metadata.boxId) || this.findFileByPath(this.state.files, created.boxFile);
         if (file) {
-            this.eventEmitter.emit('workspace:file-created', { file, layoutType });
+            this.eventEmitter.emit('workspace:file-created', {
+                file,
+                layoutType: layoutType || DEFAULT_BOX_LAYOUT_TYPE,
+                openOptions,
+            });
             return file;
         }
 
@@ -357,6 +355,21 @@ export class WorkspaceService {
         if (file.type === 'card' || file.type === 'box') {
             const extension = file.type === 'card' ? '.card' : '.box';
             const cleanName = stripExtension(trimmed, extension);
+            if (file.type === 'box') {
+                const renamed = await boxDocumentService.renameBoxFile(file.path, `${cleanName}${extension}`, this.state.rootPath);
+                await this.refresh();
+                this.eventEmitter.emit('workspace:file-renamed', {
+                    previousFile: file,
+                    file: {
+                        ...file,
+                        name: `${cleanName}${extension}`,
+                        path: renamed.boxFile,
+                        modifiedAt: renamed.metadata.modifiedAt,
+                    },
+                });
+                return;
+            }
+
             const metadataPath = joinPath(file.path, `.${file.type}`, 'metadata.yaml');
             const metadata = (await this.readMetadata(metadataPath)) || {};
             metadata.name = cleanName;

@@ -3,6 +3,7 @@ import { ChipsInput } from '@chips/component-library';
 import { FileTree } from './FileTree';
 import { ContextMenu } from './ContextMenu';
 import { workspaceService } from '../../services/workspace-service';
+import { DEFAULT_BOX_LAYOUT_TYPE } from '../../services/box-document-service';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
 import { CHIPS_DRAG_DATA_TYPE, type WorkspaceFileDragData } from '../CardBoxLibrary/types';
@@ -154,7 +155,11 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                 await workspaceService.createCard(t('file.untitled_card') || '无标题卡片', undefined, undefined, parentPath);
                 break;
             case 'new-box':
-                await workspaceService.createBox(t('file.untitled_box') || '无标题盒子', 'grid', parentPath);
+                await workspaceService.createBox(
+                    t('file.untitled_box') || '无标题盒子',
+                    DEFAULT_BOX_LAYOUT_TYPE,
+                    parentPath,
+                );
                 break;
             case 'open':
                 if (targetFile) handleOpen(targetFile);

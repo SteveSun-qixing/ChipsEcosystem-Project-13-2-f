@@ -8,6 +8,7 @@ import { generateScopedId } from '../utils/id';
 import { globalEventEmitter } from './event-emitter';
 import type {
     CardWindowConfig,
+    BoxWindowConfig,
     ToolWindowConfig,
     WindowPosition,
     WindowSize,
@@ -17,6 +18,7 @@ import type {
 
 export interface WindowManagerOptions {
     defaultCardWindowSize?: WindowSize;
+    defaultBoxWindowSize?: WindowSize;
     defaultToolWindowSize?: WindowSize;
     cascadeOffset?: number;
     tileGap?: number;
@@ -24,6 +26,7 @@ export interface WindowManagerOptions {
 
 const DEFAULT_OPTIONS: Required<WindowManagerOptions> = {
     defaultCardWindowSize: { width: 400, height: 600 },
+    defaultBoxWindowSize: { width: 1100, height: 760 },
     defaultToolWindowSize: { width: 300, height: 400 },
     cascadeOffset: 30,
     tileGap: 20,
@@ -120,6 +123,39 @@ export class WindowManager {
         this.focusWindow(windowId);
 
         globalEventEmitter.emit('window:created', { windowId, type: 'card', cardId });
+        return windowId;
+    }
+
+    createBoxWindow(
+        boxId: string,
+        boxPath: string,
+        options?: Partial<Omit<BoxWindowConfig, 'id' | 'type' | 'boxId' | 'boxPath'>>
+    ): string {
+        const windowId = generateScopedId('box-window');
+        const position = this.getNextPosition();
+        const zIndex = this.getMaxZIndex() + 1;
+
+        const config: BoxWindowConfig = {
+            id: windowId,
+            type: 'box',
+            title: options?.title || 'Untitled Box',
+            boxId,
+            boxPath,
+            position: options?.position ?? position,
+            size: options?.size ?? this.options.defaultBoxWindowSize,
+            state: 'normal',
+            zIndex,
+            resizable: true,
+            draggable: true,
+            closable: true,
+            minimizable: true,
+            ...options,
+        };
+
+        this.setWindows([...this.state.windows, config]);
+        this.focusWindow(windowId);
+
+        globalEventEmitter.emit('window:created', { windowId, type: 'box', boxId, boxPath });
         return windowId;
     }
 
@@ -249,6 +285,10 @@ export class WindowManager {
         return this.state.windows.filter(w => w.type === 'card') as CardWindowConfig[];
     }
 
+    getBoxWindows(): BoxWindowConfig[] {
+        return this.state.windows.filter(w => w.type === 'box') as BoxWindowConfig[];
+    }
+
     getToolWindows(): ToolWindowConfig[] {
         return this.state.windows.filter(w => w.type === 'tool') as ToolWindowConfig[];
     }
@@ -329,6 +369,10 @@ export class WindowManager {
 
     findWindowByCardId(cardId: string): CardWindowConfig | undefined {
         return this.getCardWindows().find(w => w.cardId === cardId);
+    }
+
+    findWindowByBoxId(boxId: string): BoxWindowConfig | undefined {
+        return this.getBoxWindows().find(w => w.boxId === boxId);
     }
 
     findWindowsByComponent(component: string): ToolWindowConfig[] {

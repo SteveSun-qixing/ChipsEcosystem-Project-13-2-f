@@ -14,7 +14,7 @@
     "chipsdev": "cli/index.js"
   },
   "scripts": {
-    "test": "node ./tests/run-cli-smoke-tests.cjs && node ./tests/run-cli-host-managed-tests.cjs && node ./tests/run-cli-create-workspace-tests.cjs && node ./tests/run-cli-create-card-workspace-tests.cjs && node ./tests/run-cli-create-module-workspace-tests.cjs && node ./tests/run-cli-module-invoke-tests.cjs && node ./tests/run-cli-package-compatibility-tests.cjs"
+    "test": "node ./tests/run-cli-smoke-tests.cjs && node ./tests/run-cli-host-managed-tests.cjs && node ./tests/run-cli-create-workspace-tests.cjs && node ./tests/run-cli-create-card-workspace-tests.cjs && node ./tests/run-cli-create-layout-workspace-tests.cjs && node ./tests/run-cli-create-module-workspace-tests.cjs && node ./tests/run-cli-module-invoke-tests.cjs && node ./tests/run-cli-package-compatibility-tests.cjs"
   },
   "dependencies": {
     "jsdom": "^28.1.0",

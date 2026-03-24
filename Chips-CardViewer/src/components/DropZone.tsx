@@ -3,8 +3,8 @@ import { ChipsButton } from "@chips/component-library";
 import { createScopedLogger } from "../../config/logging";
 
 interface DropZoneProps {
-  onCardFile: (filePath: string) => void;
-  onOpenCard: () => void;
+  onFilePath: (filePath: string) => void;
+  onOpenFile: () => void;
   error?: string | null;
   traceId?: string;
   ariaLabel: string;
@@ -30,8 +30,8 @@ function resolveNativeFilePath(file: File): string {
 }
 
 export function DropZone({
-  onCardFile,
-  onOpenCard,
+  onFilePath,
+  onOpenFile,
   error = null,
   traceId,
   ariaLabel,
@@ -108,7 +108,7 @@ export function DropZone({
           fileType: file.type,
           source: typeof (window as any).chips?.platform?.getPathForFile === "function" ? "webUtils" : "file.path",
         });
-        onCardFile(filePath);
+        onFilePath(filePath);
         return;
       }
 
@@ -118,7 +118,7 @@ export function DropZone({
         hasBridgeResolver: typeof (window as any).chips?.platform?.getPathForFile === "function",
       });
     },
-    [logger, onCardFile, resetDragState],
+    [logger, onFilePath, resetDragState],
   );
 
   return (
@@ -190,7 +190,7 @@ export function DropZone({
           </p>
         </div>
         <div style={buttonRowStyle}>
-          <ChipsButton variant="secondary" onClick={onOpenCard}>
+          <ChipsButton variant="secondary" onClick={onOpenFile}>
             {openLabel}
           </ChipsButton>
         </div>

@@ -1557,8 +1557,44 @@ const handleCreate = async (args) => {
     return;
   }
 
+  if (type === 'layout') {
+    const packageDir = path.join(scaffoldRoot, 'chips-scaffold-boxlayout');
+    const modulePath = path.join(
+      packageDir,
+      'dist',
+      'src',
+      'index.js'
+    );
+    await ensurePackageBuildArtifact(packageDir, modulePath, '布局插件脚手架');
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const boxlayoutScaffold = require(modulePath);
+    const projectName = deriveProjectName(targetDir);
+    const slug = slugifyForPluginId(projectName);
+    const displayName = toDisplayName(projectName);
+    const options = {
+      projectName,
+      targetDir: path.resolve(projectRoot, targetDir),
+      templateId: 'boxlayout-standard',
+      pluginId: `chips.layout.${slug.replace(/-/g, '.')}`,
+      layoutType: `chips.layout.${slug.replace(/-/g, '.')}`,
+      displayName,
+      description: `${displayName} 布局插件。`,
+      version: '0.1.0',
+      authorName: deriveAuthorName(),
+      authorEmail: deriveAuthorEmail(slug)
+    };
+    await boxlayoutScaffold.createBoxlayoutProject(options);
+    await adaptWorkspaceDependencies(options.targetDir);
+    log({
+      message: '布局插件工程创建完成',
+      targetDir: options.targetDir,
+      templateId: options.templateId
+    });
+    return;
+  }
+
   throw new Error(
-    `不支持的 create 类型：${type}。当前支持：app、card、module、theme。`
+    `不支持的 create 类型：${type}。当前支持：app、card、layout、module、theme。`
   );
 };
 

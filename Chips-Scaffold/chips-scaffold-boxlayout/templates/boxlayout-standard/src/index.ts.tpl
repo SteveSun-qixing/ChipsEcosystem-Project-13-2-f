@@ -1,0 +1,104 @@
+import { mountLayoutEditor } from "./editor/runtime";
+import { mountLayoutView } from "./view/runtime";
+import {
+  createDefaultLayoutConfig,
+  normalizeLayoutConfig,
+  validateLayoutConfig,
+} from "./schema/layout-config";
+import type { LayoutConfig } from "./schema/layout-config";
+import type {
+  BoxEntryPage,
+  BoxEntryQuery,
+  BoxEntrySnapshot,
+  BoxLayoutRuntime,
+  BoxSessionInfo,
+  ResolvedRuntimeResource,
+} from "./shared/types";
+
+export type {
+  BoxEntryPage,
+  BoxEntryQuery,
+  BoxEntrySnapshot,
+  BoxLayoutRuntime,
+  BoxSessionInfo,
+  LayoutConfig,
+  ResolvedRuntimeResource,
+};
+
+export interface BoxLayoutRenderContext {
+  container: HTMLElement;
+  sessionId: string;
+  box: BoxSessionInfo;
+  initialView: BoxEntryPage;
+  config: Record<string, unknown>;
+  runtime: BoxLayoutRuntime;
+  locale?: string;
+}
+
+export interface BoxLayoutEditorContext {
+  container: HTMLElement;
+  entries: BoxEntrySnapshot[];
+  initialConfig: Record<string, unknown>;
+  onChange(next: Record<string, unknown>): void;
+  readBoxAsset?(assetPath: string): Promise<ResolvedRuntimeResource>;
+  importBoxAsset?(input: { file: File; preferredPath?: string }): Promise<{ assetPath: string }>;
+  deleteBoxAsset?(assetPath: string): Promise<void>;
+  locale?: string;
+}
+
+export interface BoxLayoutDefinition {
+  pluginId: string;
+  layoutType: string;
+  displayName: string;
+  createDefaultConfig(): Record<string, unknown>;
+  normalizeConfig(input: Record<string, unknown>): Record<string, unknown>;
+  validateConfig(config: Record<string, unknown>): {
+    valid: boolean;
+    errors: Record<string, string>;
+  };
+  getInitialQuery?(config: Record<string, unknown>): BoxEntryQuery | undefined;
+  renderView(ctx: BoxLayoutRenderContext): (() => void) | void;
+  renderEditor?(ctx: BoxLayoutEditorContext): (() => void) | void;
+}
+
+export const layoutDefinition: BoxLayoutDefinition = {
+  pluginId: "{{ PLUGIN_ID }}",
+  layoutType: "{{ LAYOUT_TYPE }}",
+  displayName: "{{ DISPLAY_NAME }}",
+  createDefaultConfig() {
+    return createDefaultLayoutConfig() as unknown as Record<string, unknown>;
+  },
+  normalizeConfig(input) {
+    return normalizeLayoutConfig(input) as unknown as Record<string, unknown>;
+  },
+  validateConfig(config) {
+    return validateLayoutConfig(
+      normalizeLayoutConfig(config)
+    );
+  },
+  getInitialQuery(config) {
+    const normalized = normalizeLayoutConfig(config);
+    return {
+      limit: Math.max(24, normalized.props.columnCount * 12),
+    };
+  },
+  renderView(ctx) {
+    return mountLayoutView({
+      container: ctx.container,
+      initialView: ctx.initialView,
+      config: normalizeLayoutConfig(ctx.config),
+      locale: ctx.locale,
+    });
+  },
+  renderEditor(ctx) {
+    return mountLayoutEditor({
+      container: ctx.container,
+      entries: ctx.entries,
+      initialConfig: normalizeLayoutConfig(ctx.initialConfig),
+      locale: ctx.locale,
+      onChange(next) {
+        ctx.onChange(next as unknown as Record<string, unknown>);
+      },
+    });
+  },
+};

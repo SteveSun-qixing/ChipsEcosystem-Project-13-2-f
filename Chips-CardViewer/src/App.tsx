@@ -3,6 +3,7 @@ import { ChipsThemeProvider } from "@chips/component-library";
 import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
 import { CardWindow } from "./components/CardWindow";
+import { BoxWindow } from "./components/BoxWindow";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { useChipsBridge } from "./hooks/useChipsBridge";
@@ -12,6 +13,11 @@ import { createLogger, createTraceId } from "../config/logging";
 interface AppThemeState {
   themeId: string;
   version: string;
+}
+
+interface OpenedTarget {
+  filePath: string;
+  mode: "card" | "box";
 }
 
 const DEFAULT_THEME_STATE: AppThemeState = {
@@ -45,6 +51,28 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+function resolveTargetMode(filePath: string): OpenedTarget["mode"] | null {
+  const normalized = filePath.trim().toLowerCase();
+  if (normalized.endsWith(".card")) {
+    return "card";
+  }
+  if (normalized.endsWith(".box")) {
+    return "box";
+  }
+  return null;
+}
+
+function resolveOpenedTarget(filePath: string): OpenedTarget | null {
+  const mode = resolveTargetMode(filePath);
+  if (!mode) {
+    return null;
+  }
+  return {
+    filePath,
+    mode,
+  };
+}
+
 export function App() {
   const bridge = useChipsBridge();
   const themeEventSource = typeof window !== "undefined" ? (window as any).chips : undefined;
@@ -58,7 +86,7 @@ export function App() {
     [traceId],
   );
   const client = useChipsClient(traceId);
-  const [cardFile, setCardFile] = useState<string | null>(null);
+  const [openedTarget, setOpenedTarget] = useState<OpenedTarget | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [themeState, setThemeState] = useState<AppThemeState>(() => readDocumentThemeState());
   const [locale, setLocale] = useState(() => resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined));
@@ -81,11 +109,12 @@ export function App() {
   }, [logger]);
 
   useEffect(() => {
-    logger.debug("当前卡片文件状态已更新", {
-      hasCardFile: cardFile !== null,
-      cardFile,
+    logger.debug("当前查看目标状态已更新", {
+      hasOpenedTarget: openedTarget !== null,
+      mode: openedTarget?.mode,
+      filePath: openedTarget?.filePath ?? null,
     });
-  }, [cardFile, logger]);
+  }, [logger, openedTarget]);
 
   useEffect(() => {
     if (!error) {
@@ -126,15 +155,36 @@ export function App() {
     const targetPath = typeof launchContext.launchParams.targetPath === "string"
       ? launchContext.launchParams.targetPath
       : "";
-    if (targetPath) {
-      logger.info("从启动上下文恢复目标卡片文件", {
-        targetPath,
-        trigger: launchContext.launchParams.trigger,
-      });
-      setCardFile(targetPath);
-      setError(null);
+    const requestedMode =
+      typeof launchContext.launchParams.fileOpenMode === "string"
+      && (launchContext.launchParams.fileOpenMode === "card" || launchContext.launchParams.fileOpenMode === "box")
+        ? launchContext.launchParams.fileOpenMode
+        : null;
+
+    if (!targetPath) {
+      return;
     }
-  }, [client, logger]);
+
+    const nextTarget = requestedMode
+      ? {
+          filePath: targetPath,
+          mode: requestedMode,
+        }
+      : resolveOpenedTarget(targetPath);
+
+    if (!nextTarget) {
+      setError(t("card-viewer.errors.unsupportedFile"));
+      return;
+    }
+
+    logger.info("从启动上下文恢复目标文件", {
+      targetPath,
+      mode: nextTarget.mode,
+      trigger: launchContext.launchParams.trigger,
+    });
+    setOpenedTarget(nextTarget);
+    setError(null);
+  }, [client, logger, t]);
 
   useEffect(() => {
     const unsubscribe = bridge.on("language.changed", (payload: unknown) => {
@@ -153,69 +203,77 @@ export function App() {
     };
   }, [bridge]);
 
-  const handleOpenCard = useCallback(async () => {
+  const handleResolvedFilePath = useCallback((filePath: string) => {
+    const nextTarget = resolveOpenedTarget(filePath);
+    if (!nextTarget) {
+      logger.warn("选择的文件类型当前不受支持", {
+        filePath,
+      });
+      setError(t("card-viewer.errors.unsupportedFile"));
+      return;
+    }
+    logger.info("用户已选定查看目标", {
+      filePath,
+      mode: nextTarget.mode,
+    });
+    setError(null);
+    setOpenedTarget(nextTarget);
+  }, [logger, t]);
+
+  const handleOpenFile = useCallback(async () => {
     try {
       setError(null);
-      logger.info("用户点击“选择导入卡片”按钮，准备调用文件选择对话框");
-      const result = await client.invoke<
-        {
-          options: {
-            title: string;
-            mode: "file";
-            allowMultiple: false;
-            mustExist: true;
-          };
-        },
-        { filePaths: string[] | null }
-      >("platform.dialogOpenFile", {
-        options: {
-          title: t("card-viewer.dialogs.openCardTitle"),
-          mode: "file",
-          allowMultiple: false,
-          mustExist: true,
-        },
+      logger.info("用户点击“打开文件”按钮，准备调用文件选择对话框");
+      const selected = await client.platform.openFile({
+        title: t("card-viewer.dialogs.openFileTitle"),
+        mode: "file",
+        allowMultiple: false,
+        mustExist: true,
       });
 
-      const selected = Array.isArray(result.filePaths) ? result.filePaths[0] : undefined;
+      const filePath = Array.isArray(selected) ? selected[0] : undefined;
       logger.info("文件选择对话框已返回", {
-        fileCount: Array.isArray(result.filePaths) ? result.filePaths.length : 0,
-        selected,
+        fileCount: Array.isArray(selected) ? selected.length : 0,
+        selected: filePath,
       });
-      if (selected) {
-        setCardFile(selected);
+      if (filePath) {
+        handleResolvedFilePath(filePath);
       }
     } catch (runtimeError) {
-      logger.error("通过按钮导入卡片失败", runtimeError);
+      logger.error("通过按钮选择查看目标失败", runtimeError);
       setError(resolveErrorMessage(runtimeError, t("card-viewer.errors.hostActionFailed")));
     }
-  }, [client, logger, t]);
+  }, [client, handleResolvedFilePath, logger, t]);
 
   const content =
-    cardFile === null ? (
+    openedTarget === null ? (
       <DropZone
         error={error}
-        onOpenCard={handleOpenCard}
+        onOpenFile={handleOpenFile}
         traceId={traceId}
         ariaLabel={t("card-viewer.dropzone.ariaLabel")}
         title={t("card-viewer.dropzone.title")}
         description={t("card-viewer.dropzone.description")}
         openLabel={t("card-viewer.actions.open")}
-        onCardFile={(nextCardFile) => {
-          logger.info("拖拽导入已选定卡片文件", {
-            cardFile: nextCardFile,
-          });
-          setError(null);
-          setCardFile(nextCardFile);
-        }}
+        onFilePath={handleResolvedFilePath}
+      />
+    ) : openedTarget.mode === "card" ? (
+      <CardWindow
+        cardFile={openedTarget.filePath}
+        traceId={traceId}
+        loadingLabel={t("card-viewer.viewer.cardLoading")}
+        containerErrorLabel={t("card-viewer.viewer.cardContainerError")}
+        fatalErrorFallback={t("card-viewer.viewer.cardFatalError")}
+        renderErrorFallback={t("card-viewer.viewer.cardRenderError")}
       />
     ) : (
-      <CardWindow
-        cardFile={cardFile}
+      <BoxWindow
+        boxFile={openedTarget.filePath}
         traceId={traceId}
-        loadingLabel={t("card-viewer.viewer.loading")}
-        containerErrorLabel={t("card-viewer.viewer.containerError")}
-        fatalErrorFallback={t("card-viewer.viewer.fatalError")}
-        renderErrorFallback={t("card-viewer.viewer.renderError")}
+        locale={locale}
+        loadingLabel={t("card-viewer.viewer.boxLoading")}
+        containerErrorLabel={t("card-viewer.viewer.boxContainerError")}
+        renderErrorFallback={t("card-viewer.viewer.boxRenderError")}
       />
     );
 

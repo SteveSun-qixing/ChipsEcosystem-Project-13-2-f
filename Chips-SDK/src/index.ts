@@ -65,6 +65,24 @@ export type {
   PlatformDialogSaveOptions,
   PlatformDialogMessageOptions,
 } from "./api/platform";
-export type { BoxApi, BoxInspectResult } from "./api/box";
+export type {
+  BoxApi,
+  BoxContent,
+  BoxEntryDetailField,
+  BoxEntryDetailItem,
+  BoxEntryPage,
+  BoxEntryQuery,
+  BoxEntryResourceKind,
+  BoxEntrySnapshot,
+  BoxInspectionResult,
+  BoxLayoutConfig,
+  BoxMetadata,
+  BoxOpenViewResult,
+  BoxPrefetchTarget,
+  BoxSessionInfo,
+  BoxTag,
+  BoxValidationResult,
+  ResolvedRuntimeResource,
+} from "./api/box";
 export type { ResourceApi, ResourceUri, ResourceMeta } from "./api/resource";
 export type { StandardError } from "./types/errors";

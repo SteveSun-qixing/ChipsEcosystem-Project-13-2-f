@@ -399,9 +399,19 @@ export const registerHostSchemas = (): void => {
   registerPair('card.resolveDocumentPath', ['documentUrl'], ['path']);
   registerPair('card.validate', ['cardFile']);
 
-  registerPair('box.pack', ['boxDir', 'outputPath']);
-  registerPair('box.unpack', ['boxFile', 'outputDir']);
-  registerPair('box.inspect', ['boxFile']);
+  registerPair('box.pack', ['boxDir', 'outputPath'], ['boxFile']);
+  registerPair('box.unpack', ['boxFile', 'outputDir'], ['outputDir']);
+  registerPair('box.inspect', ['boxFile'], ['inspection']);
+  registerPair('box.validate', ['boxFile'], ['validationResult']);
+  registerPair('box.readMetadata', ['boxFile'], ['metadata']);
+  schemaRegistry.register('schemas/box.openView.request.json', objectWithKeys(['boxFile']));
+  schemaRegistry.register('schemas/box.openView.response.json', objectWithKeys(['sessionId', 'box', 'initialView']));
+  registerPair('box.listEntries', ['sessionId'], ['page']);
+  registerPair('box.readEntryDetail', ['sessionId', 'entryIds', 'fields'], ['items']);
+  registerPair('box.resolveEntryResource', ['sessionId', 'entryId', 'resource'], ['resource']);
+  registerPair('box.readBoxAsset', ['sessionId', 'assetPath'], ['resource']);
+  registerPair('box.prefetchEntries', ['sessionId', 'entryIds', 'targets'], ['ack']);
+  registerPair('box.closeView', ['sessionId'], ['ack']);
 
   registerPair('zip.compress', ['inputDir', 'outputZip']);
   registerPair('zip.extract', ['zipPath', 'outputDir']);

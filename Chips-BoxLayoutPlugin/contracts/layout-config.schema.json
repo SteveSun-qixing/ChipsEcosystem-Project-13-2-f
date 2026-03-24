@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "网格布局插件 layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": ["columnCount", "gap", "coverRatio", "informationDensity"],
+      "properties": {
+        "columnCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "gap": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "coverRatio": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 3
+        },
+        "informationDensity": {
+          "type": "string",
+          "enum": ["compact", "comfortable", "expanded"]
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

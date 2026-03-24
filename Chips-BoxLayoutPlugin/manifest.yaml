@@ -1,0 +1,22 @@
+id: chips.layout.grid
+name: 网格布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+description: 薯片官方网格布局插件，提供箱子摘要网格查看与布局参数编辑能力。
+author:
+  name: Chips Ecosystem
+  email: support@chips-ecosystem.com
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+layout:
+  layoutType: chips.layout.grid
+  displayName: 网格布局插件

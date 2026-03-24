@@ -17,9 +17,12 @@ keywords:
 
 capabilities:
   - file-handler:.card
+  - file-handler:.box
 
 permissions:
   - card.read
+  - box.read
+  - plugin.read
   - platform.read
   - theme.read
   - i18n.read

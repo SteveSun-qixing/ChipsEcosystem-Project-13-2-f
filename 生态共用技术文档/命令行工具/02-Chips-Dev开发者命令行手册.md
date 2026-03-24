@@ -60,7 +60,7 @@ npm install
 ### 2. 工程命令
 
 - `chipsdev init`：初始化当前工程的 `chips.config.mjs`
-- `chipsdev create <app|card|module|theme> <targetDir>`：创建新工程
+- `chipsdev create <app|card|layout|module|theme> <targetDir>`：创建新工程
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
 - `chipsdev module invoke`：在真实 Electron Host 中调用模块 capability/method
@@ -201,6 +201,7 @@ chipsdev module invoke \
 
 - `app`
 - `card`
+- `layout`
 - `module`
 - `theme`
 

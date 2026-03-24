@@ -6,6 +6,33 @@
     "box.pack": {
       "action": "box.pack"
     },
+    "box.validate": {
+      "action": "box.validate"
+    },
+    "box.readMetadata": {
+      "action": "box.readMetadata"
+    },
+    "box.openView": {
+      "action": "box.openView"
+    },
+    "box.listEntries": {
+      "action": "box.listEntries"
+    },
+    "box.readEntryDetail": {
+      "action": "box.readEntryDetail"
+    },
+    "box.resolveEntryResource": {
+      "action": "box.resolveEntryResource"
+    },
+    "box.readBoxAsset": {
+      "action": "box.readBoxAsset"
+    },
+    "box.prefetchEntries": {
+      "action": "box.prefetchEntries"
+    },
+    "box.closeView": {
+      "action": "box.closeView"
+    },
     "box.unpack": {
       "action": "box.unpack"
     },

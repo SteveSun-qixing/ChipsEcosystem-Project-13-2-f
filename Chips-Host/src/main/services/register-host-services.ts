@@ -249,6 +249,10 @@ const ensureWorkspace = async (workspacePath: string): Promise<void> => {
   await fs.mkdir(workspacePath, { recursive: true });
 };
 
+const resolveBoxSessionOwnerKey = (ctx: RouteInvocationContext): string => {
+  return `${ctx.caller.type}:${ctx.caller.pluginId ?? ctx.caller.windowId ?? ctx.caller.id}`;
+};
+
 const updateMetric = (state: RuntimeState, route: string, failed: boolean, durationMs: number): void => {
   const current = state.routeMetrics.get(route) ?? { count: 0, failures: 0, latencies: [] };
   current.count += 1;
@@ -3996,7 +4000,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       pack: {
         descriptor: descriptor<{ boxDir: string; outputPath: string }, { boxFile: string }>(
           'box.pack',
-          ['box.pack'],
+          ['box.write'],
           12_000,
           false,
           0,
@@ -4009,7 +4013,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       unpack: {
         descriptor: descriptor<{ boxFile: string; outputDir: string }, { outputDir: string }>(
           'box.unpack',
-          ['box.pack'],
+          ['box.write'],
           12_000,
           false,
           0,
@@ -4029,6 +4033,178 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'box.inspect', async (input) => {
             const inspection = await ctx.getBoxService().inspect(input.boxFile);
             return { inspection };
+          })
+        )
+      },
+      validate: {
+        descriptor: descriptor<{ boxFile: string }, { validationResult: unknown }>(
+          'box.validate',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.validate', async (input) => {
+            const validationResult = await ctx.getBoxService().validate(input.boxFile);
+            return { validationResult };
+          })
+        )
+      },
+      readMetadata: {
+        descriptor: descriptor<{ boxFile: string }, { metadata: unknown }>(
+          'box.readMetadata',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.readMetadata', async (input) => {
+            const metadata = await ctx.getBoxService().readMetadata(input.boxFile);
+            return { metadata };
+          })
+        )
+      },
+      openView: {
+        descriptor: descriptor<
+          { boxFile: string; layoutType?: string; initialQuery?: Record<string, unknown> },
+          { sessionId: string; box: unknown; initialView: unknown }
+        >(
+          'box.openView',
+          ['box.read'],
+          12_000,
+          false,
+          0,
+          withMetrics(state, 'box.openView', async (input, routeContext) => {
+            const opened = await ctx.getBoxService().openView(input.boxFile, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              layoutType: typeof input.layoutType === 'string' ? input.layoutType : undefined,
+              initialQuery: input.initialQuery as never
+            });
+            await ctx.kernel.events.emit('box.session.updated', 'box-service', {
+              sessionId: opened.sessionId,
+              boxId: opened.box.boxId,
+              boxFile: opened.box.boxFile,
+              activeLayoutType: opened.box.activeLayoutType,
+              state: 'opened'
+            });
+            return opened;
+          })
+        )
+      },
+      listEntries: {
+        descriptor: descriptor<{ sessionId: string; query?: Record<string, unknown> }, { page: unknown }>(
+          'box.listEntries',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.listEntries', async (input, routeContext) => {
+            const page = await ctx.getBoxService().listEntries(
+              input.sessionId,
+              resolveBoxSessionOwnerKey(routeContext),
+              input.query as never
+            );
+            return { page };
+          })
+        )
+      },
+      readEntryDetail: {
+        descriptor: descriptor<
+          { sessionId: string; entryIds: string[]; fields: Array<'cardMetadata' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status'> },
+          { items: unknown }
+        >(
+          'box.readEntryDetail',
+          ['box.read'],
+          10_000,
+          true,
+          0,
+          withMetrics(state, 'box.readEntryDetail', async (input, routeContext) => {
+            const result = await ctx.getBoxService().readEntryDetail(input.sessionId, input.entryIds, input.fields, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile)
+            });
+            return result;
+          })
+        )
+      },
+      resolveEntryResource: {
+        descriptor: descriptor<
+          {
+            sessionId: string;
+            entryId: string;
+            resource: {
+              kind: 'cover' | 'preview' | 'cardFile' | 'custom';
+              key?: string;
+              sizeHint?: {
+                width?: number;
+                height?: number;
+              };
+            };
+          },
+          { resource: unknown }
+        >(
+          'box.resolveEntryResource',
+          ['box.read'],
+          12_000,
+          true,
+          0,
+          withMetrics(state, 'box.resolveEntryResource', async (input, routeContext) => {
+            const resource = await ctx.getBoxService().resolveEntryResource(input.sessionId, input.entryId, input.resource, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile),
+              renderCardCover: (cardFile) => ctx.getCardService().renderCover(cardFile)
+            });
+            return { resource };
+          })
+        )
+      },
+      readBoxAsset: {
+        descriptor: descriptor<{ sessionId: string; assetPath: string }, { resource: unknown }>(
+          'box.readBoxAsset',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.readBoxAsset', async (input, routeContext) => {
+            const resource = await ctx.getBoxService().readBoxAsset(
+              input.sessionId,
+              input.assetPath,
+              resolveBoxSessionOwnerKey(routeContext)
+            );
+            return { resource };
+          })
+        )
+      },
+      prefetchEntries: {
+        descriptor: descriptor<
+          { sessionId: string; entryIds: string[]; targets: Array<'cover' | 'preview' | 'cardMetadata'> },
+          { ack: true }
+        >(
+          'box.prefetchEntries',
+          ['box.read'],
+          12_000,
+          false,
+          0,
+          withMetrics(state, 'box.prefetchEntries', async (input, routeContext) => {
+            return ctx.getBoxService().prefetchEntries(input.sessionId, input.entryIds, input.targets, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile),
+              renderCardCover: (cardFile) => ctx.getCardService().renderCover(cardFile)
+            });
+          })
+        )
+      },
+      closeView: {
+        descriptor: descriptor<{ sessionId: string }, { ack: true }>(
+          'box.closeView',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.closeView', async (input, routeContext) => {
+            const result = await ctx.getBoxService().closeView(input.sessionId, resolveBoxSessionOwnerKey(routeContext));
+            await ctx.kernel.events.emit('box.session.closed', 'box-service', {
+              sessionId: input.sessionId
+            });
+            return result;
           })
         )
       }

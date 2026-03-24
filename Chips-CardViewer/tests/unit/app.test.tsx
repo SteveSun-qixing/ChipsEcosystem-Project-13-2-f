@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToString } from "react-dom/server";
 import { App } from "../../src/App";
 import { CardWindow } from "../../src/components/CardWindow";
+import { BoxWindow } from "../../src/components/BoxWindow";
 
 describe("App（卡片查看器根组件）", () => {
   it("应当导出一个可用的 React 组件", () => {
@@ -15,8 +16,8 @@ describe("App（卡片查看器根组件）", () => {
   it("首屏应当展示居中的导入提示与选择导入按钮", () => {
     const html = renderToString(<App />);
 
-    expect(html).toContain("拖入卡片文件");
-    expect(html).toContain("打开卡片");
+    expect(html).toContain("拖入卡片或箱子文件");
+    expect(html).toContain("打开文件");
     expect(html).not.toContain("卡片查看器");
   });
 
@@ -36,5 +37,22 @@ describe("App（卡片查看器根组件）", () => {
     expect(html).toContain('data-chips-app="card-viewer.viewport"');
     expect(html).toContain("card-viewer-window__viewport");
     expect(html).not.toContain("border-radius:8px");
+  });
+
+  it("箱子窗口组件应当提供独立的布局容器来承载布局插件输出", () => {
+    const html = renderToString(
+      <BoxWindow
+        boxFile="/tmp/demo.box"
+        traceId="test-trace"
+        locale="zh-CN"
+        loadingLabel="正在加载箱子布局…"
+        containerErrorLabel="容器不可用"
+        renderErrorFallback="渲染失败"
+      />,
+    );
+
+    expect(html).toContain('data-chips-app="box-viewer.window"');
+    expect(html).toContain('data-chips-app="box-viewer.viewport"');
+    expect(html).toContain("card-viewer-window__frame-host");
   });
 });

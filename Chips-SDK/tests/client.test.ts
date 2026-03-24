@@ -148,6 +148,153 @@ describe("createClient", () => {
     await expect(client.plugin.getLayoutPlugin("grid-layout")).resolves.toBeUndefined();
   });
 
+  it("unwraps box runtime responses and validates required arguments", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const inspection = {
+      metadata: {
+        chipStandardsVersion: "1.0.0",
+        boxId: "b1C2d3E4f5",
+        name: "旅行箱",
+        createdAt: "2026-03-23T09:30:00.000Z",
+        modifiedAt: "2026-03-23T11:20:00.000Z",
+        activeLayoutType: "chips.layout.grid",
+      },
+      content: {
+        activeLayoutType: "chips.layout.grid",
+        layoutConfigs: {
+          "chips.layout.grid": {
+            schemaVersion: "1.0.0",
+            props: {
+              columnCount: 4,
+            },
+          },
+        },
+      },
+      entries: [],
+      assets: ["assets/layouts/grid/background.webp"],
+    };
+    const openViewResult = {
+      sessionId: "session-1",
+      box: {
+        boxId: "b1C2d3E4f5",
+        boxFile: "/tmp/demo.box",
+        name: "旅行箱",
+        activeLayoutType: "chips.layout.grid",
+        availableLayouts: ["chips.layout.grid"],
+        capabilities: {
+          listEntries: true,
+          readEntryDetail: true,
+          resolveEntryResource: true,
+          readBoxAsset: true,
+          prefetchEntries: true,
+        },
+      },
+      initialView: {
+        items: [],
+        total: 0,
+      },
+    };
+    const runtimeResource = {
+      resourceUrl: "file:///tmp/assets/background.webp",
+      mimeType: "image/webp",
+      cacheKey: "box-asset:assets/layouts/grid/background.webp",
+    };
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "box.pack") {
+          return { boxFile: "/tmp/demo.box" };
+        }
+        if (action === "box.unpack") {
+          return { outputDir: "/tmp/unpacked-box" };
+        }
+        if (action === "box.inspect") {
+          return { inspection };
+        }
+        if (action === "box.validate") {
+          return { validationResult: { valid: true, errors: [] } };
+        }
+        if (action === "box.readMetadata") {
+          return { metadata: inspection.metadata };
+        }
+        if (action === "box.openView") {
+          return openViewResult;
+        }
+        if (action === "box.listEntries") {
+          return { page: openViewResult.initialView };
+        }
+        if (action === "box.readEntryDetail") {
+          return {
+            items: [
+              {
+                entryId: "e9K2m1P4q7",
+                detail: {
+                  status: {
+                    state: "ready",
+                  },
+                },
+              },
+            ],
+          };
+        }
+        if (action === "box.resolveEntryResource" || action === "box.readBoxAsset") {
+          return { resource: runtimeResource };
+        }
+        if (action === "box.prefetchEntries" || action === "box.closeView") {
+          return { ack: true };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.box.pack("/tmp/box-dir", { outputPath: "/tmp/demo.box" })).resolves.toBe("/tmp/demo.box");
+    await expect(client.box.unpack("/tmp/demo.box", "/tmp/unpacked-box")).resolves.toBe("/tmp/unpacked-box");
+    await expect(client.box.inspect("/tmp/demo.box")).resolves.toEqual(inspection);
+    await expect(client.box.validate("/tmp/demo.box")).resolves.toEqual({ valid: true, errors: [] });
+    await expect(client.box.readMetadata("/tmp/demo.box")).resolves.toEqual(inspection.metadata);
+    await expect(
+      client.box.openView("/tmp/demo.box", {
+        layoutType: "chips.layout.grid",
+        initialQuery: {
+          limit: 24,
+        },
+      }),
+    ).resolves.toEqual(openViewResult);
+    await expect(client.box.listEntries("session-1", { limit: 24 })).resolves.toEqual(openViewResult.initialView);
+    await expect(
+      client.box.readEntryDetail("session-1", ["e9K2m1P4q7"], ["status"]),
+    ).resolves.toEqual([
+      {
+        entryId: "e9K2m1P4q7",
+        detail: {
+          status: {
+            state: "ready",
+          },
+        },
+      },
+    ]);
+    await expect(
+      client.box.resolveEntryResource("session-1", "e9K2m1P4q7", { kind: "cover" }),
+    ).resolves.toEqual(runtimeResource);
+    await expect(client.box.readBoxAsset("session-1", "assets/layouts/grid/background.webp")).resolves.toEqual(runtimeResource);
+    await expect(
+      client.box.prefetchEntries("session-1", ["e9K2m1P4q7"], ["cover"]),
+    ).resolves.toBeUndefined();
+    await expect(client.box.closeView("session-1")).resolves.toBeUndefined();
+
+    expect(calls[0]?.payload).toEqual({
+      boxDir: "/tmp/box-dir",
+      outputPath: "/tmp/demo.box",
+    });
+    await expect(client.box.openView("", {})).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(client.box.readEntryDetail("session-1", [], ["status"])).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+  });
+
   it("unwraps module capability responses", async () => {
     const provider = {
       pluginId: "chips.module.markdown-renderer",

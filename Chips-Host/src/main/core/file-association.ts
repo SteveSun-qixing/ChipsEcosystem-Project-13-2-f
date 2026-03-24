@@ -120,19 +120,11 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
         windowId: opened.windowId
       };
     }
-    const opened = await runtime.invoke<WindowOpenResponse>('window.open', {
-      config: {
-        title: `Box - ${path.basename(targetPath)}`,
-        width: 1280,
-        height: 800
-      }
-    });
-    return {
+    throw createError('FILE_ASSOCIATION_HANDLER_MISSING', 'No enabled viewer is registered for .box files.', {
       targetPath,
       extension,
-      mode: 'box',
-      windowId: resolveWindowId(opened)
-    };
+      expectedCapability: 'file-handler:.box'
+    });
   }
 
   await runtime.invoke('platform.shellOpenPath', { path: targetPath });

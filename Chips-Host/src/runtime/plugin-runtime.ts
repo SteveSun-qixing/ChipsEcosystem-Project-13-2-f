@@ -948,9 +948,17 @@ export class PluginRuntime {
   }
 
   private parseLayoutManifestMeta(record: Record<string, unknown>): LayoutPluginManifestMeta {
+    const layout = isRecord(record.layout) ? record.layout : undefined;
+    if (!layout) {
+      throw createError('PLUGIN_INVALID', 'Layout plugin must declare layout object', {
+        pluginId: record.id,
+        field: 'layout'
+      });
+    }
+
     return {
-      layoutType: asOptionalString(record.layoutType),
-      displayName: asOptionalString(record.displayName) ?? String(record.name)
+      layoutType: asOptionalString(layout.layoutType),
+      displayName: asOptionalString(layout.displayName) ?? String(record.name)
     };
   }
 

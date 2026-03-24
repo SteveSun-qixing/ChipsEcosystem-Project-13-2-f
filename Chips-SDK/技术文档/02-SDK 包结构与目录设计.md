@@ -89,7 +89,7 @@ Chips-SDK/
 
 - 公共基础类型：
   - `StandardError`
-  - `CardDocument`, `CardRenderView`, `BoxInspectResult`
+  - `CardDocument`, `CardRenderView`, `BoxInspectionResult`, `BoxOpenViewResult`, `BoxEntrySnapshot`
   - `ThemeMeta`, `ThemeState`, `ResolvedTheme`, `ThemeContract`
   - `PluginInfo`, `WindowConfig`, `WindowState` 等。
 - 环境与客户端配置类型：
@@ -193,4 +193,3 @@ tests/
 ## 9. 小结
 
 本文件定义了 `Chips-SDK` 仓库的物理目录与内部模块划分，为后续实现提供统一的结构约束。实际创建目录与文件时必须严格遵守本设计，禁止在实现阶段临时改变结构或引入未规划的模块；若确需调整，应先更新本文件并通过评审。
-

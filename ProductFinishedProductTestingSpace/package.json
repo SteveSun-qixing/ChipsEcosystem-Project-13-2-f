@@ -18,7 +18,8 @@
     "ThemePack/*"
   ],
   "scripts": {
-    "verify:workspace": "node ./scripts/verify-ecosystem-workspace.mjs"
+    "verify:workspace": "node ./scripts/verify-ecosystem-workspace.mjs",
+    "generate:box-samples": "node ./scripts/generate-box-samples.mjs"
   },
   "devDependencies": {
     "chips-host": "0.1.0",

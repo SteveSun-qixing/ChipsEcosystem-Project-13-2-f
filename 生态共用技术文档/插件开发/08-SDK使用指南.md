@@ -180,9 +180,11 @@ client.card.render(
 
 ```typescript
 client.card.coverFrame.render({
-  cardFile: string,
-  cardName?: string
-}): Promise<IframeWindow>
+  cardFile: string
+}): Promise<IframeWindow & {
+  title: string,
+  ratio?: string
+}>
 
 client.card.compositeWindow.render({
   cardFile: string,
@@ -206,7 +208,7 @@ client.card.editorPanel.render({
 
 说明：
 
-- `coverFrame` 返回卡片封面 iframe（下方显示卡片名称）。
+- `coverFrame` 返回卡片封面 iframe，并同时返回 `title/ratio` 元信息；标题、副文案、角标和操作按钮由应用层自行布局。
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
 - `compositeWindow.interactionPolicy` 只允许 `native | delegate`，默认应保持 `native`。

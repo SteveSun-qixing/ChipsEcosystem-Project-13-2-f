@@ -21,6 +21,12 @@
     "box.readEntryDetail": {
       "action": "box.readEntryDetail"
     },
+    "box.renderEntryCover": {
+      "action": "box.renderEntryCover"
+    },
+    "box.openEntry": {
+      "action": "box.openEntry"
+    },
     "box.resolveEntryResource": {
       "action": "box.resolveEntryResource"
     },
@@ -45,6 +51,9 @@
     "card.readMetadata": {
       "action": "card.readMetadata"
     },
+    "card.readInfo": {
+      "action": "card.readInfo"
+    },
     "card.render": {
       "action": "card.render"
     },
@@ -65,6 +74,9 @@
     },
     "card.validate": {
       "action": "card.validate"
+    },
+    "card.open": {
+      "action": "card.open"
     },
     "config.batchSet": {
       "action": "config.batchSet"

@@ -1,9 +1,11 @@
 import type {
   BoxContent,
+  BoxEntryCoverView as SdkBoxEntryCoverView,
   BoxEntryDetailField,
   BoxEntryPage,
   BoxEntryQuery,
   BoxEntrySnapshot,
+  BoxEntryOpenResult,
   BoxEntryResourceKind,
   BoxPrefetchTarget,
   BoxSessionInfo,
@@ -12,12 +14,15 @@ import type {
   ResolvedRuntimeResource,
 } from 'chips-sdk';
 
+export type BoxEntryCoverView = SdkBoxEntryCoverView;
+
 export interface BoxLayoutRuntime {
   listEntries(query?: BoxEntryQuery): Promise<BoxEntryPage>;
   readEntryDetail(request: {
     entryIds: string[];
     fields: BoxEntryDetailField[];
   }): Promise<Array<{ entryId: string; detail: Record<string, unknown> }>>;
+  renderEntryCover(entryId: string): Promise<BoxEntryCoverView>;
   resolveEntryResource(request: {
     entryId: string;
     resource: {
@@ -34,6 +39,7 @@ export interface BoxLayoutRuntime {
     entryIds: string[];
     targets: BoxPrefetchTarget[];
   }): Promise<void>;
+  openEntry(entryId: string): Promise<BoxEntryOpenResult>;
 }
 
 export interface BoxLayoutRenderContext {
@@ -81,6 +87,8 @@ export interface LoadedLayoutDescriptor {
 export interface InMemoryBoxLayoutRuntimeOptions {
   getEntries(): BoxEntrySnapshot[];
   readBoxAsset(assetPath: string): Promise<ResolvedRuntimeResource>;
+  renderEntryCover?(entryId: string): Promise<BoxEntryCoverView>;
+  openEntry?(entryId: string): Promise<BoxEntryOpenResult>;
 }
 
 export declare function clearLayoutDefinitionCache(): void;

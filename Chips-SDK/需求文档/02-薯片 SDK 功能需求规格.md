@@ -128,16 +128,75 @@
 - SDK 必须封装卡片与箱子核心能力：
 
   ```ts
+  client.card.readMetadata(cardFile: string): Promise<CardMetadata>;
+  client.card.readInfo(
+    cardFile: string,
+    fields?: Array<'status' | 'metadata' | 'cover'>
+  ): Promise<CardReadInfoResult>;
   client.card.parse(cardFile: string): Promise<CardDocument>;
   client.card.validate(cardDoc: CardDocument): Promise<ValidationResult>;
+  client.card.open(cardFile: string): Promise<{
+    mode: 'card-window';
+    windowId?: string;
+    pluginId?: string;
+  }>;
   client.card.render(cardFile: string, options?: RenderOptions): Promise<CardRenderView>;
 
   client.box.pack(inputDir: string, options?: PackOptions): Promise<string>;    // 返回 box 文件路径
-  client.box.unpack(boxFile: string, outputDir: string): Promise<void>;
-  client.box.inspect(boxFile: string): Promise<BoxInspectResult>;
+  client.box.unpack(boxFile: string, outputDir: string): Promise<string>;
+  client.box.inspect(boxFile: string): Promise<BoxInspectionResult>;
+  client.box.validate(boxFile: string): Promise<BoxValidationResult>;
+  client.box.readMetadata(boxFile: string): Promise<BoxMetadata>;
+  client.box.openView(
+    boxFile: string,
+    options?: { layoutType?: string; initialQuery?: BoxEntryQuery }
+  ): Promise<BoxOpenViewResult>;
+  client.box.listEntries(sessionId: string, query?: BoxEntryQuery): Promise<BoxEntryPage>;
+  client.box.readEntryDetail(
+    sessionId: string,
+    entryIds: string[],
+    fields: BoxEntryDetailField[]
+  ): Promise<BoxEntryDetailItem[]>;
+  client.box.renderEntryCover(
+    sessionId: string,
+    entryId: string
+  ): Promise<{
+    title: string;
+    coverUrl: string;
+    mimeType: string;
+    ratio?: string;
+  }>;
+  client.box.openEntry(
+    sessionId: string,
+    entryId: string
+  ): Promise<{
+    mode: 'card-window' | 'external';
+    windowId?: string;
+    pluginId?: string;
+    url?: string;
+  }>;
+  client.box.resolveEntryResource(
+    sessionId: string,
+    entryId: string,
+    resource: {
+      kind: BoxEntryResourceKind;
+      key?: string;
+      sizeHint?: { width?: number; height?: number };
+    }
+  ): Promise<ResolvedRuntimeResource>;
+  client.box.readBoxAsset(sessionId: string, assetPath: string): Promise<ResolvedRuntimeResource>;
+  client.box.prefetchEntries(sessionId: string, entryIds: string[], targets: BoxPrefetchTarget[]): Promise<void>;
+  client.box.closeView(sessionId: string): Promise<void>;
   ```
 
+- `client.card.readMetadata` 必须映射到 Host `card.readMetadata`；
+- `client.card.readInfo` 必须映射到 Host `card.readInfo`，并返回生态统一的标准化卡片信息视图，供箱子、选择器、资源管理器、查看器和编辑器复用；
+- `client.card.open` 必须映射到 Host `card.open`，作为正式卡片打开入口；
 - `client.card.render` 必须直接映射到 Host `card.render` 动作（统一渲染入口），并填充 `options` 推荐字段。
+- `client.box.inspect` 只负责静态读取箱子摘要；正式消费链路必须通过 `client.box.openView` 建立会话，再使用 `listEntries/readEntryDetail/resolveEntryResource/readBoxAsset/prefetchEntries/closeView` 完成按需取数。
+- `client.box.readEntryDetail` 中用于卡片详情的正式字段名必须是 `cardInfo`，不得继续暴露第二套 `cardMetadata` 口径；
+- `client.box.renderEntryCover` 必须映射到 Host `box.renderEntryCover`，作为布局插件消费条目正式封面的首选接口；
+- `client.box.openEntry` 必须映射到 Host `box.openEntry`，作为布局插件点击封面或条目卡片后的正式激活动作。
 
 ### FR-SDK-FILE-003 资源访问封装
 
@@ -162,8 +221,10 @@
   ```ts
   client.card.coverFrame.render(options: {
     cardFile: string;
-    cardName?: string;
-  }): Promise<HTMLIFrameElement>;
+  }): Promise<FrameRenderResult & {
+    title: string;
+    ratio?: string;
+  }>;
 
   client.card.compositeWindow.render(options: {
     cardFile: string;
@@ -203,7 +264,7 @@
 
 ### FR-SDK-CARD-DISPLAY-003 origin 安全约束
 
-- SDK 必须在渲染接口返回结果中暴露 iframe `origin` 信息，供组件端做消息来源白名单校验：
+- SDK 必须在渲染接口返回结果中暴露 iframe `origin` 信息，供组件端做消息来源白名单校验；封面接口还必须把 `title/ratio` 元信息一并返回，供应用层自行决定标题显示与比例占位：
 
   ```ts
   type FrameRenderResult = {

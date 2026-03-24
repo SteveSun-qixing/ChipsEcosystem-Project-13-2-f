@@ -19,6 +19,25 @@ class ProcessStub extends EventEmitter {
 describe('HostMainProcess lifecycle', () => {
   afterEach(() => {
     delete (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY];
+    vi.resetModules();
+  });
+
+  it('registers the managed render document scheme when the main-process module is loaded', async () => {
+    vi.resetModules();
+    const registerSchemesAsPrivileged = vi.fn();
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      protocol: {
+        registerSchemesAsPrivileged,
+      },
+    };
+
+    await import('../../src/main/core/main-process');
+
+    expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
+      expect.objectContaining({
+        scheme: 'chips-render',
+      }),
+    ]);
   });
 
   it('registers the managed render document scheme before Electron ready', async () => {

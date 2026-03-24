@@ -28,6 +28,8 @@ interface SyncConfiguredPluginsOptions {
   skipPluginIds?: string[];
 }
 
+const PROJECT_MANIFEST_FILE_NAMES = ['manifest.yaml', 'manifest.yml', 'manifest.json'];
+
 const readConfiguredPlugins = async (workspacePath: string): Promise<ConfiguredPluginRecord[]> => {
   try {
     const raw = await fs.readFile(path.join(workspacePath, 'plugins.json'), 'utf-8');
@@ -47,16 +49,35 @@ const pathExists = async (candidate: string): Promise<boolean> => {
   }
 };
 
-const resolveConfiguredPluginSourcePath = async (workspacePath: string, manifestPath: string): Promise<string> => {
-  if (path.isAbsolute(manifestPath)) {
-    return manifestPath;
+const resolveProjectManifestFromPackagedArtifact = async (candidate: string): Promise<string | null> => {
+  if (path.extname(candidate).toLowerCase() !== '.cpk') {
+    return null;
   }
 
-  const candidates = [
-    path.resolve(path.dirname(workspacePath), manifestPath),
-    path.resolve(process.cwd(), manifestPath),
-    path.resolve(workspacePath, manifestPath),
-  ];
+  const distDir = path.dirname(candidate);
+  if (path.basename(distDir).toLowerCase() !== 'dist') {
+    return null;
+  }
+
+  const projectRoot = path.dirname(distDir);
+  for (const fileName of PROJECT_MANIFEST_FILE_NAMES) {
+    const manifestCandidate = path.join(projectRoot, fileName);
+    if (await pathExists(manifestCandidate)) {
+      return manifestCandidate;
+    }
+  }
+
+  return null;
+};
+
+const resolveConfiguredPluginSourcePath = async (workspacePath: string, manifestPath: string): Promise<string | null> => {
+  const candidates = path.isAbsolute(manifestPath)
+    ? [path.resolve(manifestPath)]
+    : [
+        path.resolve(path.dirname(workspacePath), manifestPath),
+        path.resolve(process.cwd(), manifestPath),
+        path.resolve(workspacePath, manifestPath),
+      ];
 
   for (const candidate of candidates) {
     if (await pathExists(candidate)) {
@@ -64,7 +85,14 @@ const resolveConfiguredPluginSourcePath = async (workspacePath: string, manifest
     }
   }
 
-  return path.resolve(path.dirname(workspacePath), manifestPath);
+  for (const candidate of candidates) {
+    const manifestFallback = await resolveProjectManifestFromPackagedArtifact(candidate);
+    if (manifestFallback) {
+      return manifestFallback;
+    }
+  }
+
+  return null;
 };
 
 export const readManifestSummary = async (manifestPath: string): Promise<ManifestSummary> => {
@@ -93,26 +121,43 @@ export const reinstallPlugin = async (
   manifestPath: string,
   options: { pluginId?: string; enabled?: boolean } = {}
 ): Promise<{ pluginId: string }> => {
-  const { pluginId, enabled = false } = options;
-
-  if (pluginId) {
-    try {
-      await runtime.invoke('plugin.disable', { pluginId });
-    } catch {
-      // ignore missing/disabled plugin
-    }
-    try {
-      await runtime.invoke('plugin.uninstall', { pluginId });
-    } catch {
-      // ignore missing plugin
-    }
-  }
-
+  const { enabled = false } = options;
   const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
   if (enabled) {
     await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+  } else {
+    try {
+      await runtime.invoke('plugin.disable', { pluginId: installed.pluginId });
+    } catch {
+      // ignore missing/disabled plugin
+    }
   }
   return installed;
+};
+
+const readErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object' || !('code' in error)) {
+    return undefined;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code.length > 0 ? code : undefined;
+};
+
+const isRecoverableConfiguredPluginSyncError = (error: unknown): boolean => {
+  const code = readErrorCode(error);
+  return (
+    code === 'PLUGIN_SOURCE_NOT_FOUND' ||
+    code === 'PLUGIN_MANIFEST_NOT_FOUND' ||
+    code === 'PLUGIN_ENTRY_NOT_FOUND'
+  );
+};
+
+const warnSkippedConfiguredPlugin = (pluginId: string | undefined, sourcePath: string, error: unknown): void => {
+  const label = pluginId ?? sourcePath;
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `[chipsdev] 跳过开发工作区插件同步：${label}（来源不可用或未完成构建：${sourcePath}）\n原因：${message}\n`
+  );
 };
 
 export const syncConfiguredWorkspacePlugins = async (
@@ -136,10 +181,22 @@ export const syncConfiguredWorkspacePlugins = async (
     }
 
     const resolvedManifestPath = await resolveConfiguredPluginSourcePath(workspacePath, record.manifestPath.trim());
-    await reinstallPlugin(runtime, resolvedManifestPath, {
-      pluginId,
-      enabled: record.enabled !== false
-    });
+    if (!resolvedManifestPath) {
+      warnSkippedConfiguredPlugin(pluginId, record.manifestPath.trim(), '未找到可用的插件源路径。');
+      continue;
+    }
+
+    try {
+      await reinstallPlugin(runtime, resolvedManifestPath, {
+        pluginId,
+        enabled: record.enabled !== false
+      });
+    } catch (error) {
+      if (!isRecoverableConfiguredPluginSyncError(error)) {
+        throw error;
+      }
+      warnSkippedConfiguredPlugin(pluginId, resolvedManifestPath, error);
+    }
   }
 };
 

@@ -18,6 +18,8 @@ import type { PluginRecord } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
+import { CardInfoService } from '../../../packages/card-info-service/src';
+import { CardOpenService } from '../../../packages/card-open-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import {
@@ -40,6 +42,7 @@ interface HostServiceContext {
   workspacePath: string;
   logger: StructuredLogger;
   getCardService: () => CardService;
+  getCardInfoService: () => CardInfoService;
   getBoxService: () => BoxService;
   getZipService: () => StoreZipService;
   runtime: PluginRuntime;
@@ -1033,6 +1036,47 @@ const openPluginWindow = async (
       permissions: [...session.permissions]
     }
   };
+};
+
+const createCardOpenService = (ctx: HostServiceContext, state: RuntimeState): CardOpenService => {
+  return new CardOpenService({
+    ensureCardReady: async (cardFile) => {
+      const status = await ctx.getCardInfoService().readInfo(cardFile, ['status']);
+      if (status.info.status?.state !== 'ready') {
+        throw createError('CARD_NOT_FOUND', `Card file is not ready to open: ${cardFile}`, {
+          cardFile,
+          status: status.info.status
+        });
+      }
+    },
+    queryHandlerPlugins: async (capability) => {
+      return ctx.runtime.query({ type: 'app', capability }).map((record) => ({
+        id: record.manifest.id,
+        enabled: record.enabled,
+        type: record.manifest.type
+      }));
+    },
+    launchPlugin: async (pluginId, launchParams) => {
+      const launched = await openPluginWindow(ctx, state, pluginId, launchParams);
+      return {
+        windowId: launched.window.id
+      };
+    },
+    openWindow: async (config) => {
+      const window = await ctx.pal.window.create({
+        title: config.title,
+        width: config.width,
+        height: config.height
+      });
+      return {
+        windowId: window.id
+      };
+    },
+    defaultWindowSize: {
+      width: 1200,
+      height: 760
+    }
+  });
 };
 
 const readPluginShortcut = async (
@@ -3848,6 +3892,22 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           })
         )
       },
+      readInfo: {
+        descriptor: descriptor<
+          { cardFile: string; fields?: Array<'status' | 'metadata' | 'cover'> },
+          { info: unknown }
+        >(
+          'card.readInfo',
+          ['card.read'],
+          10_000,
+          true,
+          0,
+          withMetrics(state, 'card.readInfo', async (input) => {
+            const info = await ctx.getCardInfoService().readInfo(input.cardFile, input.fields);
+            return { info };
+          })
+        )
+      },
       parse: {
         descriptor: descriptor<{ cardFile: string }, { ast: unknown }>(
           'card.parse',
@@ -3990,6 +4050,19 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             return result;
           })
         )
+      },
+      open: {
+        descriptor: descriptor<{ cardFile: string }, { result: unknown }>(
+          'card.open',
+          ['card.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'card.open', async (input) => {
+            const result = await createCardOpenService(ctx, state).openCard(input.cardFile);
+            return { result };
+          })
+        )
       }
     }
   };
@@ -4108,7 +4181,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       readEntryDetail: {
         descriptor: descriptor<
-          { sessionId: string; entryIds: string[]; fields: Array<'cardMetadata' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status'> },
+          { sessionId: string; entryIds: string[]; fields: Array<'cardInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status'> },
           { items: unknown }
         >(
           'box.readEntryDetail',
@@ -4119,9 +4192,25 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'box.readEntryDetail', async (input, routeContext) => {
             const result = await ctx.getBoxService().readEntryDetail(input.sessionId, input.entryIds, input.fields, {
               ownerKey: resolveBoxSessionOwnerKey(routeContext),
-              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile)
+              readCardInfo: (cardFile, fields) => ctx.getCardInfoService().readInfo(cardFile, fields)
             });
             return result;
+          })
+        )
+      },
+      renderEntryCover: {
+        descriptor: descriptor<{ sessionId: string; entryId: string }, { view: unknown }>(
+          'box.renderEntryCover',
+          ['box.read'],
+          10_000,
+          true,
+          0,
+          withMetrics(state, 'box.renderEntryCover', async (input, routeContext) => {
+            const view = await ctx.getBoxService().renderEntryCover(input.sessionId, input.entryId, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              readCardInfo: (cardFile, fields) => ctx.getCardInfoService().readInfo(cardFile, fields)
+            });
+            return { view };
           })
         )
       },
@@ -4149,10 +4238,26 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'box.resolveEntryResource', async (input, routeContext) => {
             const resource = await ctx.getBoxService().resolveEntryResource(input.sessionId, input.entryId, input.resource, {
               ownerKey: resolveBoxSessionOwnerKey(routeContext),
-              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile),
-              renderCardCover: (cardFile) => ctx.getCardService().renderCover(cardFile)
+              readCardInfo: (cardFile, fields) => ctx.getCardInfoService().readInfo(cardFile, fields)
             });
             return { resource };
+          })
+        )
+      },
+      openEntry: {
+        descriptor: descriptor<{ sessionId: string; entryId: string }, { result: unknown }>(
+          'box.openEntry',
+          ['box.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'box.openEntry', async (input, routeContext) => {
+            const result = await ctx.getBoxService().openEntry(input.sessionId, input.entryId, {
+              ownerKey: resolveBoxSessionOwnerKey(routeContext),
+              openCardFile: (cardFile) => createCardOpenService(ctx, state).openCard(cardFile),
+              openExternalUrl: (url) => ctx.pal.shell.openExternal(url)
+            });
+            return { result };
           })
         )
       },
@@ -4175,7 +4280,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       prefetchEntries: {
         descriptor: descriptor<
-          { sessionId: string; entryIds: string[]; targets: Array<'cover' | 'preview' | 'cardMetadata'> },
+          { sessionId: string; entryIds: string[]; targets: Array<'cover' | 'preview' | 'cardInfo'> },
           { ack: true }
         >(
           'box.prefetchEntries',
@@ -4186,8 +4291,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'box.prefetchEntries', async (input, routeContext) => {
             return ctx.getBoxService().prefetchEntries(input.sessionId, input.entryIds, input.targets, {
               ownerKey: resolveBoxSessionOwnerKey(routeContext),
-              readCardMetadata: (cardFile) => ctx.getCardService().readMetadata(cardFile),
-              renderCardCover: (cardFile) => ctx.getCardService().renderCover(cardFile)
+              readCardInfo: (cardFile, fields) => ctx.getCardInfoService().readInfo(cardFile, fields)
             });
           })
         )

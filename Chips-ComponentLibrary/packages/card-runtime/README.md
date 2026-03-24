@@ -28,7 +28,7 @@ Composite iframe event contract:
 
 Adapter contract (for SDK not-yet-available phase):
 
-- `resolveCoverFrame({ cardId, cardFile, cardName, signal })`
+- `resolveCoverFrame({ cardId, cardFile, signal })`
 - `resolveCompositeWindow({ cardFile, mode, signal })` (`mode` only supports `view | preview`)
 
 SDK blocker tracking:

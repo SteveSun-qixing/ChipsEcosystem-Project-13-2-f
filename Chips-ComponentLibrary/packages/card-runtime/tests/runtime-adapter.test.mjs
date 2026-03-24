@@ -21,7 +21,8 @@ test("loadCoverFrameData normalizes adapter output", async () => {
   const adapter = {
     resolveCoverFrame: async () => ({
       coverUrl: "https://example.com/cover.html",
-      cardName: "Card A"
+      title: "Card A",
+      ratio: "3:4"
     }),
     resolveCompositeWindow: async () => ({ frameUrl: "https://example.com/frame.html" })
   };
@@ -32,7 +33,8 @@ test("loadCoverFrameData normalizes adapter output", async () => {
 
   assert.deepEqual(result, {
     cardId: "card-1",
-    cardName: "Card A",
+    title: "Card A",
+    ratio: "3:4",
     coverUrl: "https://example.com/cover.html"
   });
 });
@@ -62,7 +64,7 @@ test("loadCoverFrameData uses input fallback id when adapter cardId missing", as
   const adapter = {
     resolveCoverFrame: async () => ({
       coverUrl: "https://example.com/cover.html",
-      cardName: "Card B"
+      title: "Card B"
     }),
     resolveCompositeWindow: async () => ({ frameUrl: "https://example.com/frame.html" })
   };
@@ -72,7 +74,7 @@ test("loadCoverFrameData uses input fallback id when adapter cardId missing", as
   });
 
   assert.equal(result.cardId, "fallback-id");
-  assert.equal(result.cardName, "Card B");
+  assert.equal(result.title, "Card B");
 });
 
 test("loadCompositeWindowData uses cardFile fallback id when adapter cardId missing", async () => {

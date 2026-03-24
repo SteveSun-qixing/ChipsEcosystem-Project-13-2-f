@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../../packages/kernel/src';
 import type { PALAdapter } from '../../packages/pal/src';
+import { CardInfoService } from '../../packages/card-info-service/src';
 import { registerHostSchemas } from '../../src/main/services/register-schemas';
 import { registerHostServices } from '../../src/main/services/register-host-services';
 import { StructuredLogger } from '../../src/shared/logger';
@@ -12,6 +13,14 @@ import { PluginRuntime } from '../../src/runtime';
 import type { CardService } from '../../packages/card-service/src';
 import type { BoxService } from '../../packages/box-service/src';
 import type { StoreZipService } from '../../packages/zip-service/src';
+
+const createCardInfoService = (cardService: CardService): CardInfoService => {
+  return new CardInfoService({
+    validate: (cardFile) => cardService.validate(cardFile),
+    readMetadata: (cardFile) => cardService.readMetadata(cardFile),
+    renderCover: (cardFile) => cardService.renderCover(cardFile)
+  });
+};
 
 const createContext = (permissions: string[]): RouteInvocationContext => ({
   requestId: `req-${Date.now()}`,
@@ -271,6 +280,7 @@ describe('Service activation and lazy heavy service creation', () => {
         }
         return cardService;
       },
+      getCardInfoService: () => createCardInfoService((cardService ?? fakeCardService) as CardService),
       getBoxService: () => {
         if (!boxService) {
           boxService = fakeBoxService;

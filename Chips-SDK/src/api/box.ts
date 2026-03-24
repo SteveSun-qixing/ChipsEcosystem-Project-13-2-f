@@ -2,9 +2,9 @@ import type { CoreClient } from "../types/client";
 import { createError } from "../types/errors";
 
 export type BoxTag = string | string[];
-export type BoxEntryDetailField = "cardMetadata" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status";
+export type BoxEntryDetailField = "cardInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status";
 export type BoxEntryResourceKind = "cover" | "preview" | "cardFile" | "custom";
-export type BoxPrefetchTarget = "cover" | "preview" | "cardMetadata";
+export type BoxPrefetchTarget = "cover" | "preview" | "cardInfo";
 
 export interface BoxValidationResult {
   valid: boolean;
@@ -98,9 +98,11 @@ export interface BoxSessionInfo {
   capabilities: {
     listEntries: true;
     readEntryDetail: true;
+    renderEntryCover: true;
     resolveEntryResource: true;
     readBoxAsset: true;
     prefetchEntries: true;
+    openEntry: true;
   };
 }
 
@@ -108,6 +110,20 @@ export interface BoxOpenViewResult {
   sessionId: string;
   box: BoxSessionInfo;
   initialView: BoxEntryPage;
+}
+
+export interface BoxEntryOpenResult {
+  mode: "card-window" | "external";
+  windowId?: string;
+  pluginId?: string;
+  url?: string;
+}
+
+export interface BoxEntryCoverView {
+  title: string;
+  coverUrl: string;
+  mimeType: string;
+  ratio?: string;
 }
 
 export interface ResolvedRuntimeResource {
@@ -133,6 +149,8 @@ export interface BoxApi {
   openView(boxFile: string, options?: { layoutType?: string; initialQuery?: BoxEntryQuery }): Promise<BoxOpenViewResult>;
   listEntries(sessionId: string, query?: BoxEntryQuery): Promise<BoxEntryPage>;
   readEntryDetail(sessionId: string, entryIds: string[], fields: BoxEntryDetailField[]): Promise<BoxEntryDetailItem[]>;
+  renderEntryCover(sessionId: string, entryId: string): Promise<BoxEntryCoverView>;
+  openEntry(sessionId: string, entryId: string): Promise<BoxEntryOpenResult>;
   resolveEntryResource(
     sessionId: string,
     entryId: string,
@@ -235,6 +253,32 @@ export function createBoxApi(client: CoreClient): BoxApi {
         fields,
       });
       return result.items;
+    },
+    async renderEntryCover(sessionId, entryId) {
+      if (!sessionId || !entryId) {
+        throw createError("INVALID_ARGUMENT", "box.renderEntryCover: sessionId and entryId are required.");
+      }
+      const result = await client.invoke<{ sessionId: string; entryId: string }, { view: BoxEntryCoverView }>(
+        "box.renderEntryCover",
+        {
+          sessionId,
+          entryId,
+        },
+      );
+      return result.view;
+    },
+    async openEntry(sessionId, entryId) {
+      if (!sessionId || !entryId) {
+        throw createError("INVALID_ARGUMENT", "box.openEntry: sessionId and entryId are required.");
+      }
+      const result = await client.invoke<{ sessionId: string; entryId: string }, { result: BoxEntryOpenResult }>(
+        "box.openEntry",
+        {
+          sessionId,
+          entryId,
+        },
+      );
+      return result.result;
     },
     async resolveEntryResource(sessionId, entryId, resource) {
       if (!sessionId || !entryId) {

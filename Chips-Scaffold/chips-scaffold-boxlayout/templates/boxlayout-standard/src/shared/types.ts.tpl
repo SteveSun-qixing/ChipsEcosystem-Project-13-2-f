@@ -1,8 +1,15 @@
 export interface ResolvedRuntimeResource {
-  url?: string;
+  resourceUrl?: string;
   mimeType?: string;
   assetPath?: string;
   status?: "ready" | "missing" | "forbidden" | "error";
+}
+
+export interface BoxEntryCoverView {
+  title: string;
+  coverUrl: string;
+  mimeType: string;
+  ratio?: string;
 }
 
 export interface BoxSessionInfo {
@@ -13,6 +20,15 @@ export interface BoxSessionInfo {
   availableLayouts: string[];
   tags?: Array<string | string[]>;
   coverAsset?: string;
+  capabilities?: {
+    listEntries: true;
+    readEntryDetail: true;
+    renderEntryCover: true;
+    resolveEntryResource: true;
+    readBoxAsset: true;
+    prefetchEntries: true;
+    openEntry: true;
+  };
 }
 
 export interface BoxEntrySnapshot {
@@ -62,8 +78,9 @@ export interface BoxLayoutRuntime {
   listEntries(query?: BoxEntryQuery): Promise<BoxEntryPage>;
   readEntryDetail(request: {
     entryIds: string[];
-    fields: Array<"cardMetadata" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status">;
+    fields: Array<"cardInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status">;
   }): Promise<Array<{ entryId: string; detail: Record<string, unknown> }>>;
+  renderEntryCover(entryId: string): Promise<BoxEntryCoverView>;
   resolveEntryResource(request: {
     entryId: string;
     resource: {
@@ -75,6 +92,12 @@ export interface BoxLayoutRuntime {
   readBoxAsset(assetPath: string): Promise<ResolvedRuntimeResource>;
   prefetchEntries(request: {
     entryIds: string[];
-    targets: Array<"cover" | "preview" | "cardMetadata">;
+    targets: Array<"cover" | "preview" | "cardInfo">;
   }): Promise<void>;
+  openEntry(entryId: string): Promise<{
+    mode: "card-window" | "external";
+    windowId?: string;
+    pluginId?: string;
+    url?: string;
+  }>;
 }

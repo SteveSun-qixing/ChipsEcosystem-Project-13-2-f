@@ -170,11 +170,23 @@ describe('BoxService', () => {
     });
 
     await expect(
-      service.readEntryDetail(opened.sessionId, [ENTRY_ID], ['status', 'cardMetadata'], {
+      service.readEntryDetail(opened.sessionId, [ENTRY_ID], ['status', 'cardInfo'], {
         ownerKey: 'app:test-viewer',
-        readCardMetadata: async (resolvedCardFile) => ({
+        readCardInfo: async (resolvedCardFile) => ({
           cardFile: resolvedCardFile,
-          name: 'Demo Card',
+          info: {
+            status: {
+              state: 'ready',
+              exists: true,
+              valid: true
+            },
+            metadata: {
+              raw: {
+                name: 'Demo Card'
+              },
+              name: 'Demo Card'
+            }
+          }
         }),
       })
     ).resolves.toEqual({
@@ -187,9 +199,18 @@ describe('BoxService', () => {
               scheme: 'file',
               url: pathToFileURL(cardFile).href,
             },
-            cardMetadata: {
-              cardFile,
-              name: 'Demo Card',
+            cardInfo: {
+              status: {
+                state: 'ready',
+                exists: true,
+                valid: true
+              },
+              metadata: {
+                raw: {
+                  name: 'Demo Card'
+                },
+                name: 'Demo Card'
+              }
             },
           },
         },
@@ -206,17 +227,88 @@ describe('BoxService', () => {
       { kind: 'cover' },
       {
         ownerKey: 'app:test-viewer',
+        readCardInfo: async () => ({
+          cardFile,
+          info: {
+            status: {
+              state: 'ready',
+              exists: true,
+              valid: true
+            },
+            cover: {
+              title: 'Demo Card',
+              resourceUrl: pathToFileURL(path.join(workspace, 'cover.html')).href,
+              mimeType: 'text/html'
+            }
+          }
+        })
       }
     );
     expect(coverResource.mimeType).toBe('image/webp');
     expect(coverResource.resourceUrl.startsWith('file://')).toBe(true);
 
     await expect(
-      service.prefetchEntries(opened.sessionId, [ENTRY_ID], ['cover', 'cardMetadata'], {
+      service.renderEntryCover(opened.sessionId, ENTRY_ID, {
         ownerKey: 'app:test-viewer',
-        readCardMetadata: async () => ({ name: 'Demo Card' }),
+        readCardInfo: async () => ({
+          cardFile,
+          info: {
+            status: {
+              state: 'ready',
+              exists: true,
+              valid: true
+            },
+            cover: {
+              title: 'Demo Card',
+              resourceUrl: pathToFileURL(path.join(workspace, 'cover.html')).href,
+              mimeType: 'text/html',
+              ratio: '3:4'
+            },
+            metadata: {
+              raw: {
+                name: 'Demo Card'
+              },
+              name: 'Demo Card',
+              coverRatio: '3:4'
+            }
+          }
+        })
+      })
+    ).resolves.toEqual({
+      title: '第一天',
+      coverUrl: coverResource.resourceUrl,
+      mimeType: 'image/webp',
+      ratio: '640:360'
+    });
+
+    await expect(
+      service.prefetchEntries(opened.sessionId, [ENTRY_ID], ['cover', 'cardInfo'], {
+        ownerKey: 'app:test-viewer',
+        readCardInfo: async () => ({
+          cardFile,
+          info: {
+            status: {
+              state: 'ready',
+              exists: true,
+              valid: true
+            }
+          }
+        }),
       })
     ).resolves.toEqual({ ack: true });
+
+    await expect(
+      service.openEntry(opened.sessionId, ENTRY_ID, {
+        ownerKey: 'app:test-viewer',
+        openCardFile: async (resolvedCardFile) => ({
+          mode: 'card-window',
+          windowId: `window:${resolvedCardFile}`
+        })
+      })
+    ).resolves.toEqual({
+      mode: 'card-window',
+      windowId: `window:${cardFile}`
+    });
 
     await expect(service.closeView(opened.sessionId, 'app:test-viewer')).resolves.toEqual({ ack: true });
     await expect(service.listEntries(opened.sessionId, 'app:test-viewer')).rejects.toMatchObject({

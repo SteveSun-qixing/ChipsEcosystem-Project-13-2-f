@@ -9,7 +9,7 @@ export interface StandardError {
 
 export interface CardCoverFrameProps {
   cardId?: string;
-  cardName?: string;
+  title?: string;
   coverUrl?: string;
   ratio?: string;
   loading?: boolean;
@@ -107,9 +107,8 @@ export interface CardDisplayAdapter {
   resolveCoverFrame(input: {
     cardId?: string;
     cardFile?: string;
-    cardName?: string;
     signal?: AbortSignal;
-  }): Promise<{ cardId?: string; cardName?: string; coverUrl: string }>;
+  }): Promise<{ cardId?: string; title?: string; ratio?: string; coverUrl: string }>;
   resolveCompositeWindow(input: {
     cardFile: string;
     mode: CompositeWindowModeValue;
@@ -145,9 +144,9 @@ export function parseCompositeFrameMessage(data: unknown): CompositeFrameMessage
 export function validateCardDisplayAdapter(adapter: CardDisplayAdapter): true;
 export function loadCoverFrameData(
   adapter: CardDisplayAdapter,
-  input: { cardId?: string; cardFile?: string; cardName?: string },
+  input: { cardId?: string; cardFile?: string },
   options?: { signal?: AbortSignal },
-): Promise<{ cardId: string; cardName: string; coverUrl: string }>;
+): Promise<{ cardId: string; title: string; ratio?: string; coverUrl: string }>;
 export function loadCompositeWindowData(
   adapter: CardDisplayAdapter,
   input: { cardFile: string; mode?: CompositeWindowModeValue },

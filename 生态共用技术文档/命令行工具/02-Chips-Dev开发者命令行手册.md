@@ -105,6 +105,8 @@ npm install
 
 - 第 8 步会按 `plugins.json` 中的 `manifestPath` 重新安装已配置插件，并保留各插件在开发工作区中的启用状态；
 - 若 `plugins.json` 中存在相对路径，`chipsdev run` 会按工程/工作区上下文解析为真实清单路径；
+- 若 `plugins.json` 中记录的是已丢失的 `dist/*.cpk` 开发产物，而对应工程根仍存在正式 `manifest.yaml`，`chipsdev run` 会回退到工程清单继续同步；
+- 若某条历史插件记录的来源已经不存在，或来源工程尚未完成正式构建导致入口资产缺失，`chipsdev run` 会输出告警并跳过该条同步，不中断当前目标应用启动；
 - 当前目标应用自身会在同步阶段被跳过，随后再单独重装并启用，避免重复处理。
 
 ## `chipsdev module invoke` 的正式行为
@@ -154,6 +156,23 @@ chipsdev module invoke \
 - 应用插件窗口联调，使用 `chipsdev run`；
 - 模块插件 capability/method 联调，尤其是依赖 Electron 宿主的模块能力，使用 `chipsdev module invoke`。
 
+### 布局插件联调
+
+布局插件没有独立的 `chipsdev run` 窗口入口。  
+正式联调链路是：
+
+1. 使用 `chipsdev create layout <targetDir>` 创建工程；
+2. 在布局工程内执行 `chipsdev build/test/lint/validate/package`；
+3. 使用 `chipsdev plugin install /绝对路径/布局插件.cpk` 安装到开发工作区；
+4. 使用 `chipsdev plugin enable <layoutPluginId>` 启用插件；
+5. 由箱子查看器、编辑器或其他消费箱子布局的正式应用打开 `.box` 文件，让 Host 按 `layout.layoutType` 加载已安装布局插件。
+
+重要约束：
+
+- 布局插件必须以“已安装插件副本”身份参与 Host 加载，不能直接从源码目录热挂载；
+- 查看器和编辑器会按 `layout.layoutType -> installPath + entry` 的正式链路加载布局插件；
+- 若重新构建并重新打包了同 ID 的布局插件，必须再次执行 `chipsdev plugin install`，以替换开发工作区中的旧副本。
+
 典型命令如下：
 
 ```bash
@@ -172,6 +191,19 @@ chipsdev module invoke \
   --capability converter.html.to-image \
   --method convert \
   --input-file /绝对路径/request.json
+```
+
+布局插件典型命令如下：
+
+```bash
+chipsdev create layout my-grid-layout
+chipsdev build
+chipsdev test
+chipsdev lint
+chipsdev validate
+chipsdev package
+chipsdev plugin install /绝对路径/my-grid-layout/dist/my-grid-layout.cpk
+chipsdev plugin enable chips.layout.my-grid-layout
 ```
 
 语义说明：

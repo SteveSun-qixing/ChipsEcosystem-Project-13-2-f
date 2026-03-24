@@ -21,6 +21,19 @@ function isSupportedBoxUrl(value: string): boolean {
     }
 }
 
+function resolveFileUrlPath(value: string): string | null {
+    try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== 'file:') {
+            return null;
+        }
+        const pathname = decodeURIComponent(parsed.pathname);
+        return pathname.replace(/^\/([A-Za-z]:\/)/, '$1');
+    } catch {
+        return null;
+    }
+}
+
 export interface BoxWindowProps {
     config: BoxWindowConfig;
     onUpdateConfig: (config: Partial<BoxWindowConfig>) => void;
@@ -166,6 +179,67 @@ export function BoxWindow({
             readBoxAsset(assetPath) {
                 return boxDocumentService.readBoxAsset(session.boxId, assetPath);
             },
+            async renderEntryCover(entryId) {
+                const currentEntry = boxDocumentService.getSession(session.boxId)?.entries.find((entry) => entry.entryId === entryId);
+                if (!currentEntry) {
+                    throw new Error(`箱子条目不存在: ${entryId}`);
+                }
+
+                if (currentEntry.snapshot.cover?.mode === 'asset' && currentEntry.snapshot.cover.assetPath) {
+                    const asset = await boxDocumentService.readBoxAsset(session.boxId, currentEntry.snapshot.cover.assetPath);
+                    return {
+                        title: currentEntry.snapshot.title ?? currentEntry.snapshot.cardId ?? currentEntry.entryId,
+                        coverUrl: asset.resourceUrl,
+                        mimeType: currentEntry.snapshot.cover.mimeType ?? asset.mimeType,
+                        ratio:
+                            typeof currentEntry.snapshot.cover.width === 'number' && typeof currentEntry.snapshot.cover.height === 'number'
+                                ? `${currentEntry.snapshot.cover.width}:${currentEntry.snapshot.cover.height}`
+                                : undefined,
+                    };
+                }
+
+                const filePath = resolveFileUrlPath(currentEntry.url);
+                if (!filePath) {
+                    throw new Error(`当前条目没有可渲染封面: ${entryId}`);
+                }
+
+                const info = await client.card.readInfo(filePath, ['status', 'cover', 'metadata']);
+                if (info.info.status?.state !== 'ready' || !info.info.cover) {
+                    throw new Error(`当前条目没有可渲染封面: ${entryId}`);
+                }
+
+                return {
+                    title: info.info.cover.title || info.info.metadata?.name || currentEntry.snapshot.title || currentEntry.entryId,
+                    coverUrl: info.info.cover.resourceUrl,
+                    mimeType: info.info.cover.mimeType,
+                    ratio: info.info.cover.ratio ?? info.info.metadata?.coverRatio,
+                };
+            },
+            async openEntry(entryId) {
+                const currentEntry = boxDocumentService.getSession(session.boxId)?.entries.find((entry) => entry.entryId === entryId);
+                if (!currentEntry) {
+                    throw new Error(`箱子条目不存在: ${entryId}`);
+                }
+
+                const filePath = resolveFileUrlPath(currentEntry.url);
+                if (filePath) {
+                    const file = workspaceService.getFileByPath(filePath);
+                    if (file) {
+                        workspaceService.openFile(file.id, { isEditing: false });
+                        return {
+                            mode: 'card-window',
+                        };
+                    }
+
+                    return client.card.open(filePath);
+                }
+
+                await client.platform.openExternal(currentEntry.url);
+                return {
+                    mode: 'external',
+                    url: currentEntry.url,
+                };
+            },
         });
 
         const cleanup = layoutDefinition.renderView({
@@ -182,9 +256,11 @@ export function BoxWindow({
                 capabilities: {
                     listEntries: true,
                     readEntryDetail: true,
+                    renderEntryCover: true,
                     resolveEntryResource: true,
                     readBoxAsset: true,
                     prefetchEntries: true,
+                    openEntry: true,
                 },
             },
             initialView: {

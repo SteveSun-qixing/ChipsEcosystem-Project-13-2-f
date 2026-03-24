@@ -12,12 +12,6 @@ interface PluginQueryResponse {
   }>;
 }
 
-interface WindowOpenResponse {
-  window: {
-    id: string;
-  };
-}
-
 export interface FileAssociationOpenResult {
   targetPath: string;
   extension: string;
@@ -25,13 +19,6 @@ export interface FileAssociationOpenResult {
   windowId?: string;
   pluginId?: string;
 }
-
-const resolveWindowId = (opened: WindowOpenResponse): string => {
-  if (!opened.window || typeof opened.window.id !== 'string' || opened.window.id.length === 0) {
-    throw createError('WINDOW_OPEN_FAILED', 'window.open did not return a valid window handle');
-  }
-  return opened.window.id;
-};
 
 const findEnabledHandlerPlugin = async (
   runtime: RuntimeClient,
@@ -80,30 +67,15 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
 
   const extension = path.extname(targetPath).toLowerCase();
   if (extension === '.card') {
-    await runtime.invoke('card.render', { cardFile: targetPath });
-    const plugin = await findEnabledHandlerPlugin(runtime, extension);
-    if (plugin) {
-      const opened = await openByPlugin(runtime, plugin, targetPath, 'card');
-      return {
-        targetPath,
-        extension,
-        mode: 'card',
-        pluginId: opened.pluginId,
-        windowId: opened.windowId
-      };
-    }
-    const opened = await runtime.invoke<WindowOpenResponse>('window.open', {
-      config: {
-        title: `Card - ${path.basename(targetPath)}`,
-        width: 1200,
-        height: 760
-      }
+    const opened = await runtime.invoke<{ result: { pluginId?: string; windowId?: string } }>('card.open', {
+      cardFile: targetPath
     });
     return {
       targetPath,
       extension,
       mode: 'card',
-      windowId: resolveWindowId(opened)
+      pluginId: opened.result.pluginId,
+      windowId: opened.result.windowId
     };
   }
 

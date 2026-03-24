@@ -389,6 +389,7 @@ export const registerHostSchemas = (): void => {
   registerPair('card.pack', ['cardDir', 'outputPath'], ['cardFile']);
   registerPair('card.unpack', ['cardFile', 'outputDir'], ['outputDir']);
   registerPair('card.readMetadata', ['cardFile'], ['metadata']);
+  registerPair('card.readInfo', ['cardFile'], ['info']);
   registerPair('card.parse', ['cardFile']);
   schemaRegistry.register('schemas/card.render.request.json', validateCardRenderRequest);
   schemaRegistry.register('schemas/card.render.response.json', objectWithKeys(['view']));
@@ -398,6 +399,7 @@ export const registerHostSchemas = (): void => {
   registerPair('card.releaseRenderSession', ['sessionId'], ['ack']);
   registerPair('card.resolveDocumentPath', ['documentUrl'], ['path']);
   registerPair('card.validate', ['cardFile']);
+  registerPair('card.open', ['cardFile'], ['result']);
 
   registerPair('box.pack', ['boxDir', 'outputPath'], ['boxFile']);
   registerPair('box.unpack', ['boxFile', 'outputDir'], ['outputDir']);
@@ -408,7 +410,9 @@ export const registerHostSchemas = (): void => {
   schemaRegistry.register('schemas/box.openView.response.json', objectWithKeys(['sessionId', 'box', 'initialView']));
   registerPair('box.listEntries', ['sessionId'], ['page']);
   registerPair('box.readEntryDetail', ['sessionId', 'entryIds', 'fields'], ['items']);
+  registerPair('box.renderEntryCover', ['sessionId', 'entryId'], ['view']);
   registerPair('box.resolveEntryResource', ['sessionId', 'entryId', 'resource'], ['resource']);
+  registerPair('box.openEntry', ['sessionId', 'entryId'], ['result']);
   registerPair('box.readBoxAsset', ['sessionId', 'assetPath'], ['resource']);
   registerPair('box.prefetchEntries', ['sessionId', 'entryIds', 'targets'], ['ack']);
   registerPair('box.closeView', ['sessionId'], ['ack']);

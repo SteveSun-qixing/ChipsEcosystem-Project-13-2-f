@@ -7,6 +7,7 @@ import {
 } from "./schema/layout-config";
 import type { LayoutConfig } from "./schema/layout-config";
 import type {
+  BoxEntryCoverView,
   BoxEntryPage,
   BoxEntryQuery,
   BoxEntrySnapshot,
@@ -16,6 +17,7 @@ import type {
 } from "./shared/types";
 
 export type {
+  BoxEntryCoverView,
   BoxEntryPage,
   BoxEntryQuery,
   BoxEntrySnapshot,
@@ -87,6 +89,7 @@ export const layoutDefinition: BoxLayoutDefinition = {
       container: ctx.container,
       initialView: ctx.initialView,
       config: normalizeLayoutConfig(ctx.config),
+      runtime: ctx.runtime,
       locale: ctx.locale,
     });
   },

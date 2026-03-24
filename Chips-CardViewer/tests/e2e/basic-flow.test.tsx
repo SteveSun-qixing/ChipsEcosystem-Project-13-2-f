@@ -36,9 +36,11 @@ const mockState = vi.hoisted(() => {
       capabilities: {
         listEntries: true,
         readEntryDetail: true,
+        renderEntryCover: true,
         resolveEntryResource: true,
         readBoxAsset: true,
         prefetchEntries: true,
+        openEntry: true,
       },
     },
     initialView: {
@@ -99,9 +101,11 @@ const mockState = vi.hoisted(() => {
     createBoxLayoutRuntime: vi.fn(() => ({
       listEntries: vi.fn(),
       readEntryDetail: vi.fn(),
+      renderEntryCover: vi.fn(),
       resolveEntryResource: vi.fn(),
       readBoxAsset: vi.fn(),
       prefetchEntries: vi.fn(),
+      openEntry: vi.fn(),
     })),
     logger: {
       info: vi.fn(),

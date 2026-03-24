@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
 import { createId } from '../../../src/shared/utils';
+import type { CardInfoField, CardReadInfoResult } from '../../card-info-service/src';
 import type { ZipEntryMeta } from '../../zip-service/src';
 import { StoreZipService } from '../../zip-service/src';
 
@@ -14,9 +15,9 @@ const BOX_MIME_TYPE = 'application/vnd.chips.box+zip';
 const CARD_MIME_TYPE = 'application/vnd.chips.card+zip';
 
 type BoxTag = string | string[];
-type EntryDetailField = 'cardMetadata' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status';
+type EntryDetailField = 'cardInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status';
 type EntryResourceKind = 'cover' | 'preview' | 'cardFile' | 'custom';
-type PrefetchTarget = 'cover' | 'preview' | 'cardMetadata';
+type PrefetchTarget = 'cover' | 'preview' | 'cardInfo';
 
 export interface BoxValidationResult {
   valid: boolean;
@@ -110,9 +111,11 @@ export interface BoxSessionInfo {
   capabilities: {
     listEntries: true;
     readEntryDetail: true;
+    renderEntryCover: true;
     resolveEntryResource: true;
     readBoxAsset: true;
     prefetchEntries: true;
+    openEntry: true;
   };
 }
 
@@ -120,6 +123,20 @@ export interface BoxOpenViewResult {
   sessionId: string;
   box: BoxSessionInfo;
   initialView: BoxEntryPage;
+}
+
+export interface BoxEntryOpenResult {
+  mode: 'card-window' | 'external';
+  windowId?: string;
+  pluginId?: string;
+  url?: string;
+}
+
+export interface BoxEntryCoverView {
+  title: string;
+  coverUrl: string;
+  mimeType: string;
+  ratio?: string;
 }
 
 export interface ResolvedRuntimeResource {
@@ -140,11 +157,12 @@ export interface BoxReadEntryDetailResult {
 
 export interface BoxServiceReadEntryDetailOptions {
   ownerKey: string;
-  readCardMetadata?: (cardFile: string) => Promise<Record<string, unknown>>;
+  readCardInfo?: (cardFile: string, fields?: CardInfoField[]) => Promise<CardReadInfoResult>;
 }
 
 export interface BoxServiceResolveEntryResourceOptions extends BoxServiceReadEntryDetailOptions {
-  renderCardCover?: (cardFile: string) => Promise<{ coverUrl: string; title?: string; ratio?: string }>;
+  openCardFile?: (cardFile: string) => Promise<BoxEntryOpenResult>;
+  openExternalUrl?: (url: string) => Promise<void>;
 }
 
 export interface BoxOpenViewOptions {
@@ -195,6 +213,13 @@ const asString = (value: unknown): string | undefined => {
 
 const asFiniteNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const toRatioString = (width?: number, height?: number): string | undefined => {
+  if (!width || !height || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return undefined;
+  }
+  return `${width}:${height}`;
 };
 
 const normalizeTags = (value: unknown, field: string): BoxTag[] | undefined => {
@@ -444,16 +469,16 @@ export class BoxService {
             continue;
           }
 
-          if (field === 'cardMetadata') {
-            if (locator.scheme === 'file:' && locator.filePath && options.readCardMetadata) {
-              const exists = await this.pathExists(locator.filePath);
-              detail.cardMetadata = exists
-                ? await options.readCardMetadata(locator.filePath)
-                : { state: 'missing', url: entry.url };
+          if (field === 'cardInfo') {
+            if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
+              detail.cardInfo = (await options.readCardInfo(locator.filePath, ['status', 'metadata', 'cover'])).info;
             } else {
-              detail.cardMetadata = {
-                url: entry.url,
-                state: locator.scheme === 'file:' ? 'unresolved' : 'remote'
+              detail.cardInfo = {
+                status: {
+                  state: locator.scheme === 'file:' ? 'missing' : 'invalid',
+                  exists: false,
+                  valid: false
+                }
               };
             }
             continue;
@@ -542,15 +567,14 @@ export class BoxService {
         }
       } else {
         const locator = this.resolveEntryLocator(entry.url);
-        if (locator.scheme === 'file:' && locator.filePath && options.renderCardCover) {
-          const exists = await this.pathExists(locator.filePath);
-          if (!exists) {
+        if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
+          const info = await options.readCardInfo(locator.filePath, ['status', 'cover']);
+          if (info.info.status?.state !== 'ready' || !info.info.cover) {
             throw createError('BOX_RESOURCE_NOT_FOUND', `Entry cover resource missing: ${entryId}`, { sessionId, entryId });
           }
-          const coverView = await options.renderCardCover(locator.filePath);
           resolved = {
-            resourceUrl: coverView.coverUrl,
-            mimeType: 'text/html',
+            resourceUrl: info.info.cover.resourceUrl,
+            mimeType: info.info.cover.mimeType,
             cacheKey
           };
         } else {
@@ -592,6 +616,92 @@ export class BoxService {
 
     session.resourceCache.set(cacheKey, resolved);
     return resolved;
+  }
+
+  public async renderEntryCover(
+    sessionId: string,
+    entryId: string,
+    options: Pick<BoxServiceReadEntryDetailOptions, 'ownerKey' | 'readCardInfo'>
+  ): Promise<BoxEntryCoverView> {
+    const session = this.requireSession(sessionId, options.ownerKey);
+    const entry = session.entryMap.get(entryId);
+    if (!entry) {
+      throw createError('BOX_ENTRY_NOT_FOUND', `Box entry not found: ${entryId}`, { sessionId, entryId });
+    }
+
+    const fallbackTitle = entry.snapshot.title ?? entry.snapshot.cardId ?? entry.entryId;
+    const cover = entry.snapshot.cover;
+    if (cover?.mode === 'asset' && cover.assetPath) {
+      const asset = await this.readBoxAsset(sessionId, cover.assetPath, options.ownerKey);
+      return {
+        title: fallbackTitle,
+        coverUrl: asset.resourceUrl,
+        mimeType: cover.mimeType ?? asset.mimeType,
+        ratio: toRatioString(cover.width, cover.height)
+      };
+    }
+
+    const locator = this.resolveEntryLocator(entry.url);
+    if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
+      const info = await options.readCardInfo(locator.filePath, ['status', 'cover', 'metadata']);
+      if (info.info.status?.state !== 'ready' || !info.info.cover) {
+        throw createError('BOX_RESOURCE_NOT_FOUND', `Entry cover resource missing: ${entryId}`, { sessionId, entryId });
+      }
+
+      return {
+        title: info.info.cover.title || info.info.metadata?.name || fallbackTitle,
+        coverUrl: info.info.cover.resourceUrl,
+        mimeType: info.info.cover.mimeType,
+        ratio: info.info.cover.ratio ?? info.info.metadata?.coverRatio
+      };
+    }
+
+    throw createError('BOX_RESOURCE_NOT_FOUND', 'Current box entry does not provide a renderable cover view.', {
+      sessionId,
+      entryId,
+      url: entry.url
+    });
+  }
+
+  public async openEntry(
+    sessionId: string,
+    entryId: string,
+    options: Pick<BoxServiceResolveEntryResourceOptions, 'ownerKey' | 'openCardFile' | 'openExternalUrl'>
+  ): Promise<BoxEntryOpenResult> {
+    const session = this.requireSession(sessionId, options.ownerKey);
+    const entry = session.entryMap.get(entryId);
+    if (!entry) {
+      throw createError('BOX_ENTRY_NOT_FOUND', `Box entry not found: ${entryId}`, { sessionId, entryId });
+    }
+
+    const locator = this.resolveEntryLocator(entry.url);
+    if (locator.scheme === 'file:' && locator.filePath) {
+      const exists = await this.pathExists(locator.filePath);
+      if (!exists) {
+        throw createError('BOX_RESOURCE_NOT_FOUND', `Card file is missing: ${entryId}`, { sessionId, entryId });
+      }
+      if (!options.openCardFile) {
+        throw createError('BOX_OPEN_FAILED', 'Current Host cannot open local card files for this box session.', {
+          sessionId,
+          entryId
+        });
+      }
+      return options.openCardFile(locator.filePath);
+    }
+
+    if (!options.openExternalUrl) {
+      throw createError('BOX_OPEN_FAILED', 'Current Host cannot open external URLs for this box session.', {
+        sessionId,
+        entryId,
+        url: entry.url
+      });
+    }
+
+    await options.openExternalUrl(entry.url);
+    return {
+      mode: 'external',
+      url: entry.url
+    };
   }
 
   public async readBoxAsset(sessionId: string, assetPath: string, ownerKey: string): Promise<ResolvedRuntimeResource> {
@@ -638,8 +748,8 @@ export class BoxService {
     }
 
     const detailFields: EntryDetailField[] = [];
-    if (uniqueTargets.includes('cardMetadata')) {
-      detailFields.push('cardMetadata');
+    if (uniqueTargets.includes('cardInfo')) {
+      detailFields.push('cardInfo');
     }
     if (detailFields.length > 0) {
       await this.readEntryDetail(sessionId, uniqueEntryIds, detailFields, options);
@@ -1085,9 +1195,11 @@ export class BoxService {
       capabilities: {
         listEntries: true,
         readEntryDetail: true,
+        renderEntryCover: true,
         resolveEntryResource: true,
         readBoxAsset: true,
-        prefetchEntries: true
+        prefetchEntries: true,
+        openEntry: true
       }
     };
   }

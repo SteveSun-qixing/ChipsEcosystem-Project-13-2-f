@@ -54,7 +54,6 @@ export function CardWindow({
     const windowState = config.state;
     const interactionPolicy = windowState === 'normal' ? 'delegate' : 'native';
     const coverCardPath = cardInfo?.path;
-    const coverCardName = cardInfo?.metadata?.name;
     const coverRatioValue = cardInfo?.metadata?.coverRatio ?? config.coverRatio;
     const clientRef = useRef(getChipsClient());
     const panByInputRef = useRef(canvasContext.panByInput);
@@ -133,7 +132,6 @@ export function CardWindow({
 
         clientRef.current.card.coverFrame.render({
             cardFile: coverCardPath,
-            cardName: coverCardName,
         }).then((result) => {
             if (disposed) {
                 return;
@@ -182,7 +180,7 @@ export function CardWindow({
                 frame.remove();
             }
         };
-    }, [config.cardId, coverCardName, coverCardPath, windowState]);
+    }, [config.cardId, coverCardPath, windowState]);
 
     const toggleEditMode = () => onUpdateConfig({ isEditing: !isEditing });
     const switchToCover = () => onUpdateConfig({ state: 'cover' });

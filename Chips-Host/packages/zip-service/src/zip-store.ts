@@ -182,9 +182,13 @@ export class StoreZipService {
     await fs.mkdir(outputDir, { recursive: true });
 
     for (const entry of entries) {
-      const data = this.readEntryFromBuffer(buffer, entry);
-
       const destination = path.join(outputDir, entry.path);
+      if (entry.path.endsWith('/')) {
+        await fs.mkdir(destination, { recursive: true });
+        continue;
+      }
+
+      const data = this.readEntryFromBuffer(buffer, entry);
       await fs.mkdir(path.dirname(destination), { recursive: true });
       await fs.writeFile(destination, data);
     }

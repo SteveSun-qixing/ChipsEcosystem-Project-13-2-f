@@ -376,7 +376,6 @@ describe('CardWindow', () => {
 
     expect(coverFrameRender).toHaveBeenCalledWith({
       cardFile: '/workspace/demo.card',
-      cardName: 'Demo Card',
     });
 
     const cover = container.querySelector('.card-cover') as HTMLDivElement | null;

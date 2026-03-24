@@ -147,6 +147,9 @@ export function createBoxLayoutRuntime(client, sessionId) {
     readEntryDetail(request) {
       return client.box.readEntryDetail(sessionId, request.entryIds, request.fields);
     },
+    renderEntryCover(entryId) {
+      return client.box.renderEntryCover(sessionId, entryId);
+    },
     resolveEntryResource(request) {
       return client.box.resolveEntryResource(sessionId, request.entryId, request.resource);
     },
@@ -155,6 +158,9 @@ export function createBoxLayoutRuntime(client, sessionId) {
     },
     async prefetchEntries(request) {
       await client.box.prefetchEntries(sessionId, request.entryIds, request.targets);
+    },
+    openEntry(entryId) {
+      return client.box.openEntry(sessionId, entryId);
     },
   };
 }
@@ -184,11 +190,11 @@ export function createInMemoryBoxLayoutRuntime(options) {
             continue;
           }
           if (field === 'runtimeProps') {
-            detail.runtimeProps = {
-              url: entry.url,
-              enabled: entry.enabled,
-            };
-            continue;
+          detail.runtimeProps = {
+            url: entry.url,
+            enabled: entry.enabled,
+          };
+          continue;
           }
           if (field === 'status') {
             detail.status = {
@@ -196,7 +202,7 @@ export function createInMemoryBoxLayoutRuntime(options) {
             };
             continue;
           }
-          detail.cardMetadata = {
+          detail.cardInfo = {
             cardId: entry.snapshot.cardId,
             title: entry.snapshot.title,
             summary: entry.snapshot.summary,
@@ -209,6 +215,30 @@ export function createInMemoryBoxLayoutRuntime(options) {
           detail,
         };
       });
+    },
+    async renderEntryCover(entryId) {
+      if (options.renderEntryCover) {
+        return options.renderEntryCover(entryId);
+      }
+      const entry = getEntries().find((item) => item.entryId === entryId);
+      if (!entry) {
+        throw new Error(`箱子条目不存在: ${entryId}`);
+      }
+
+      if (entry.snapshot.cover?.mode === 'asset' && entry.snapshot.cover.assetPath) {
+        const asset = await options.readBoxAsset(entry.snapshot.cover.assetPath);
+        return {
+          title: entry.snapshot.title ?? entry.snapshot.cardId ?? entry.entryId,
+          coverUrl: asset.resourceUrl,
+          mimeType: entry.snapshot.cover.mimeType ?? asset.mimeType,
+          ratio:
+            typeof entry.snapshot.cover.width === 'number' && typeof entry.snapshot.cover.height === 'number'
+              ? `${entry.snapshot.cover.width}:${entry.snapshot.cover.height}`
+              : undefined,
+        };
+      }
+
+      throw new Error(`当前预览运行时不支持动态封面渲染: ${entryId}`);
     },
     async resolveEntryResource(request) {
       const entry = getEntries().find((item) => item.entryId === request.entryId);
@@ -240,6 +270,12 @@ export function createInMemoryBoxLayoutRuntime(options) {
     },
     async prefetchEntries() {
       return undefined;
+    },
+    async openEntry(entryId) {
+      if (!options.openEntry) {
+        throw new Error(`当前预览运行时不支持打开箱子条目: ${entryId}`);
+      }
+      return options.openEntry(entryId);
     },
   };
 }

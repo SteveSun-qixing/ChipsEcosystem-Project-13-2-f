@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../../packages/kernel/src';
 import type { PALAdapter } from '../../packages/pal/src';
 import { BoxService } from '../../packages/box-service/src';
+import { CardInfoService } from '../../packages/card-info-service/src';
 import { CardService } from '../../packages/card-service/src';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { PluginRuntime } from '../../src/runtime';
@@ -330,6 +331,15 @@ const createPal = (state: PalState): PALAdapter => {
   };
 };
 
+const createCardInfoService = (): CardInfoService => {
+  const cardService = new CardService();
+  return new CardInfoService({
+    validate: (cardFile) => cardService.validate(cardFile),
+    readMetadata: (cardFile) => cardService.readMetadata(cardFile),
+    renderCover: (cardFile) => cardService.renderCover(cardFile)
+  });
+};
+
 describe('Host services PAL routing', () => {
   let workspace: string;
 
@@ -376,6 +386,7 @@ describe('Host services PAL routing', () => {
       workspacePath: workspace,
       logger: new StructuredLogger(),
       getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
       getBoxService: () => new BoxService(),
       getZipService: () => new StoreZipService(),
       runtime
@@ -456,6 +467,7 @@ describe('Host services PAL routing', () => {
       workspacePath: workspace,
       logger: new StructuredLogger(),
       getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
       getBoxService: () => new BoxService(),
       getZipService: () => new StoreZipService(),
       runtime
@@ -510,6 +522,7 @@ describe('Host services PAL routing', () => {
       workspacePath: workspace,
       logger: new StructuredLogger(),
       getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
       getBoxService: () => new BoxService(),
       getZipService: () => new StoreZipService(),
       runtime
@@ -624,6 +637,7 @@ describe('Host services PAL routing', () => {
       workspacePath: workspace,
       logger: new StructuredLogger(),
       getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
       getBoxService: () => new BoxService(),
       getZipService: () => new StoreZipService(),
       runtime
@@ -745,6 +759,7 @@ describe('Host services PAL routing', () => {
       workspacePath: workspace,
       logger: new StructuredLogger(),
       getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
       getBoxService: () => new BoxService(),
       getZipService: () => new StoreZipService(),
       runtime

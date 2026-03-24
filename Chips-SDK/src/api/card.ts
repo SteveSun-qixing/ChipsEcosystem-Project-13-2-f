@@ -10,6 +10,51 @@ export interface CardMetadata {
   [key: string]: unknown;
 }
 
+export type CardInfoField = "status" | "metadata" | "cover";
+
+export interface CardInfoStatus {
+  state: "ready" | "missing" | "invalid";
+  exists: boolean;
+  valid: boolean;
+  errors?: string[];
+}
+
+export interface CardInfoMetadata {
+  raw: Record<string, unknown>;
+  chipStandardsVersion?: string;
+  cardId?: string;
+  name?: string;
+  createdAt?: string;
+  modifiedAt?: string;
+  theme?: string;
+  coverRatio?: string;
+  tags?: Array<string | string[]>;
+}
+
+export interface CardInfoCover {
+  title: string;
+  resourceUrl: string;
+  mimeType: "text/html";
+  ratio?: string;
+}
+
+export interface CardInfoPayload {
+  status?: CardInfoStatus;
+  metadata?: CardInfoMetadata;
+  cover?: CardInfoCover;
+}
+
+export interface CardReadInfoResult {
+  cardFile: string;
+  info: CardInfoPayload;
+}
+
+export interface CardOpenResult {
+  mode: "card-window";
+  windowId?: string;
+  pluginId?: string;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors?: Array<{ path: string; message: string; code?: string }>;
@@ -85,6 +130,11 @@ export interface CardCoverView {
 
 export interface CardCoverRenderResult {
   view: CardCoverView;
+}
+
+export interface CardCoverFrameRenderResult extends FrameRenderResult {
+  title: string;
+  ratio?: string;
 }
 
 export interface CardEditorRenderOptions {
@@ -202,12 +252,14 @@ export interface CardApi {
   pack(cardDir: string, outputPath: string): Promise<string>;
   unpack(cardFile: string, outputDir: string): Promise<void>;
   readMetadata(cardFile: string): Promise<CardMetadata>;
+  readInfo(cardFile: string, fields?: CardInfoField[]): Promise<CardReadInfoResult>;
   parse(cardFile: string): Promise<CardDocument>;
   validate(card: CardDocument): Promise<ValidationResult>;
+  open(cardFile: string): Promise<CardOpenResult>;
   render(cardFile: string, options?: CardRenderOptions): Promise<CardRenderResult>;
   releaseRenderSession(sessionId: string): Promise<void>;
   coverFrame: {
-    render(options: { cardFile: string; cardName?: string }): Promise<FrameRenderResult>;
+    render(options: { cardFile: string }): Promise<CardCoverFrameRenderResult>;
   };
   compositeWindow: {
     render(options: {
@@ -270,6 +322,16 @@ export function createCardApi(client: CoreClient): CardApi {
       );
       return result.metadata;
     },
+    async readInfo(cardFile, fields) {
+      if (!cardFile) {
+        throw createError("INVALID_ARGUMENT", "card.readInfo: cardFile is required.");
+      }
+      const result = await client.invoke<{ cardFile: string; fields?: CardInfoField[] }, { info: CardReadInfoResult }>(
+        "card.readInfo",
+        { cardFile, fields },
+      );
+      return result.info;
+    },
     async parse(cardFile) {
       if (!cardFile) {
         throw createError("INVALID_ARGUMENT", "card.parse: cardFile is required.");
@@ -281,6 +343,13 @@ export function createCardApi(client: CoreClient): CardApi {
         throw createError("INVALID_ARGUMENT", "card.validate: card document is required.");
       }
       return client.invoke("card.validate", { card });
+    },
+    async open(cardFile) {
+      if (!cardFile) {
+        throw createError("INVALID_ARGUMENT", "card.open: cardFile is required.");
+      }
+      const result = await client.invoke<{ cardFile: string }, { result: CardOpenResult }>("card.open", { cardFile });
+      return result.result;
     },
     async render(cardFile, options) {
       if (!cardFile) {
@@ -295,7 +364,7 @@ export function createCardApi(client: CoreClient): CardApi {
       await client.invoke("card.releaseRenderSession", { sessionId });
     },
     coverFrame: {
-      async render({ cardFile, cardName }) {
+      async render({ cardFile }) {
         if (!cardFile) {
           throw createError("INVALID_ARGUMENT", "card.coverFrame.render: cardFile is required.");
         }
@@ -314,11 +383,16 @@ export function createCardApi(client: CoreClient): CardApi {
           },
         );
 
-        return createFrameFromUrl(
+        const frameResult = createFrameFromUrl(
           view.coverUrl,
-          cardName ?? view.title ?? "Card Cover",
+          view.title ?? "Card Cover",
           "allow-scripts",
         );
+        return {
+          ...frameResult,
+          title: view.title,
+          ratio: view.ratio,
+        };
       },
     },
     compositeWindow: {

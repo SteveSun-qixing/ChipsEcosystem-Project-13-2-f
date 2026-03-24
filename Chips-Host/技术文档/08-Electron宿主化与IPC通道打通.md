@@ -78,6 +78,7 @@
 - `src/main/electron/dev-run-app.ts`
 
 行为：
+- `chips-render://` 等需要 `registerSchemesAsPrivileged` 的受控协议，在主进程模块装载期立即注册，再进入任何异步启动步骤，避免 Electron 在 `app ready` 之后拒绝接收特权协议声明。
 - 启动时统一编排 `app.whenReady -> hostApplication.start`。
 - 绑定并治理 Electron 生命周期事件：
   - `before-quit`：触发主机停止与资源回收；
@@ -90,6 +91,7 @@
 - 开发态 `chipsdev run` 改为拉起真实 Electron Host，并在主进程内部完成插件安装、握手与窗口打开，而不是在普通 Node CLI 中只创建内存态 Host。
 - `dev-run-app.ts` 在安装当前应用插件前，会先读取开发工作区 `plugins.json`，把其中登记的插件重新安装到 Host 当前运行时，避免继续消费旧安装副本。
 - 对 `plugins.json` 中的相对 `manifestPath`，开发态会按工作区上下文解析真实路径，兼容历史记录与源码工程清单登记。
+- 若 `plugins.json` 中保留的是已失效的 `dist/*.cpk` 路径，开发态会优先回退到同工程根的正式 `manifest.*`；若来源彻底不存在或工程未完成构建，则只记录告警并跳过该条同步，不阻断当前目标应用拉起。
 
 ## 3. 文件关联与插件宿主协同
 

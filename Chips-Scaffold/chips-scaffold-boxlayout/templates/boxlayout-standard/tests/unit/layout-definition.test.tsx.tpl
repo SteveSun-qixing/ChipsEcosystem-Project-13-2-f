@@ -10,9 +10,18 @@ afterEach(() => {
 });
 
 describe("layoutDefinition", () => {
-  it("renders view and cleans up", async () => {
+  it("renders view, loads cover and cleans up", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
+    const renderEntryCover = vi.fn().mockResolvedValue({
+      title: "Demo Card",
+      coverUrl: "file:///tmp/demo-cover.html",
+      mimeType: "text/html",
+    });
+    const openEntry = vi.fn().mockResolvedValue({
+      mode: "card-window",
+      windowId: "window-1",
+    });
 
     let cleanup: (() => void) | void;
     await act(async () => {
@@ -47,15 +56,25 @@ describe("layoutDefinition", () => {
         runtime: {
           listEntries: vi.fn(),
           readEntryDetail: vi.fn(),
+          renderEntryCover,
           resolveEntryResource: vi.fn(),
           readBoxAsset: vi.fn(),
           prefetchEntries: vi.fn(),
+          openEntry,
         },
         locale: "zh-CN",
       });
+      await Promise.resolve();
     });
 
     expect(container.textContent).toContain("Demo Card");
+    const tile = container.querySelector('[data-entry-id="entry-1"]');
+    expect(tile).toBeTruthy();
+    expect(container.querySelector('[data-scope="card-cover-frame"]')).toBeTruthy();
+    expect(container.textContent).not.toContain("Summary");
+    expect(renderEntryCover).toHaveBeenCalledWith("entry-1");
+    tile?.querySelector('[data-grid-entry-title]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(openEntry).toHaveBeenCalledWith("entry-1");
     await act(async () => {
       cleanup?.();
     });

@@ -253,6 +253,10 @@ export class WorkspaceService {
         return this.findFileById(this.state.files, id);
     }
 
+    getFileByPath(targetPath: string): WorkspaceFile | undefined {
+        return this.findFileByPath(this.state.files, targetPath);
+    }
+
     findFileByPath(list: WorkspaceFile[], targetPath: string): WorkspaceFile | undefined {
         for (const file of list) {
             if (file.path === targetPath) return file;

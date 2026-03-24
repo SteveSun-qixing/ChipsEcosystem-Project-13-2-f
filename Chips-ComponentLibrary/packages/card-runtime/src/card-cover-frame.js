@@ -6,12 +6,12 @@ import { resolveIframeSandboxPolicy } from "./security-policy.js";
 export function CardCoverFrame(props) {
   const {
     cardId,
-    cardName,
+    title,
     coverUrl,
     ratio = "4:3",
     loading = false,
     disabled = false,
-    sandbox = "allow-scripts allow-same-origin",
+    sandbox = "allow-scripts",
     onOpenCard,
     onFrameReady,
     onFrameError
@@ -86,7 +86,7 @@ export function CardCoverFrame(props) {
       coverUrl
         ? React.createElement("iframe", {
             "data-part": "iframe",
-            title: cardName,
+            title: title || "Card Cover",
             src: coverUrl,
             loading: "lazy",
             sandbox: sandboxPolicy,
@@ -94,11 +94,6 @@ export function CardCoverFrame(props) {
             onError: handleError
           })
         : null
-    ),
-    React.createElement(
-      "div",
-      { "data-part": "name" },
-      cardName
     ),
     React.createElement(
       "div",

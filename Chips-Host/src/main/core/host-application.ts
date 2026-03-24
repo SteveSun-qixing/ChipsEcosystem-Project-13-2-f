@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import { Kernel } from '../../../packages/kernel/src';
 import { NodePalAdapter } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
+import { CardInfoService } from '../../../packages/card-info-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import { StructuredLogger } from '../../shared/logger';
@@ -41,6 +42,7 @@ export class HostApplication {
   private readonly builtInPluginRoots: string[];
   private readonly builtInPlugins: BuiltInPluginDefinition[];
   private cardService?: CardService;
+  private cardInfoService?: CardInfoService;
   private boxService?: BoxService;
   private zipService?: StoreZipService;
   private ipcBinding?: { active: boolean; dispose(): void };
@@ -86,6 +88,7 @@ export class HostApplication {
       workspacePath: this.workspacePath,
       logger: this.logger,
       getCardService: () => this.getCardService(),
+      getCardInfoService: () => this.getCardInfoService(),
       getBoxService: () => {
         this.boxService ??= new BoxService();
         return this.boxService;
@@ -202,5 +205,17 @@ export class HostApplication {
     }
 
     return this.cardService;
+  }
+
+  private getCardInfoService(): CardInfoService {
+    if (!this.cardInfoService) {
+      this.cardInfoService = new CardInfoService({
+        validate: (cardFile) => this.getCardService().validate(cardFile),
+        readMetadata: (cardFile) => this.getCardService().readMetadata(cardFile),
+        renderCover: (cardFile) => this.getCardService().renderCover(cardFile)
+      });
+    }
+
+    return this.cardInfoService;
   }
 }

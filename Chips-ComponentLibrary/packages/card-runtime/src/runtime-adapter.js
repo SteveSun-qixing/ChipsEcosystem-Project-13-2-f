@@ -27,7 +27,8 @@ function normalizeCoverFrameResult(result, fallbackCardId) {
 
   return {
     cardId: typeof result.cardId === "string" && result.cardId.length > 0 ? result.cardId : fallbackCardId,
-    cardName: typeof result.cardName === "string" ? result.cardName : "",
+    title: typeof result.title === "string" ? result.title : "",
+    ratio: typeof result.ratio === "string" ? result.ratio : undefined,
     coverUrl: result.coverUrl
   };
 }
@@ -55,7 +56,6 @@ export async function loadCoverFrameData(adapter, input, options = {}) {
     const result = await adapter.resolveCoverFrame({
       cardId: input.cardId,
       cardFile: input.cardFile,
-      cardName: input.cardName,
       signal: options.signal
     });
 

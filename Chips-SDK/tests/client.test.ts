@@ -184,9 +184,11 @@ describe("createClient", () => {
         capabilities: {
           listEntries: true,
           readEntryDetail: true,
+          renderEntryCover: true,
           resolveEntryResource: true,
           readBoxAsset: true,
           prefetchEntries: true,
+          openEntry: true,
         },
       },
       initialView: {
@@ -238,6 +240,24 @@ describe("createClient", () => {
             ],
           };
         }
+        if (action === "box.renderEntryCover") {
+          return {
+            view: {
+              title: "封面标题",
+              coverUrl: "file:///tmp/cover.html",
+              mimeType: "text/html",
+              ratio: "3:4",
+            },
+          };
+        }
+        if (action === "box.openEntry") {
+          return {
+            result: {
+              mode: "card-window",
+              windowId: "window-1",
+            },
+          };
+        }
         if (action === "box.resolveEntryResource" || action === "box.readBoxAsset") {
           return { resource: runtimeResource };
         }
@@ -274,6 +294,16 @@ describe("createClient", () => {
         },
       },
     ]);
+    await expect(client.box.openEntry("session-1", "e9K2m1P4q7")).resolves.toEqual({
+      mode: "card-window",
+      windowId: "window-1",
+    });
+    await expect(client.box.renderEntryCover("session-1", "e9K2m1P4q7")).resolves.toEqual({
+      title: "封面标题",
+      coverUrl: "file:///tmp/cover.html",
+      mimeType: "text/html",
+      ratio: "3:4",
+    });
     await expect(
       client.box.resolveEntryResource("session-1", "e9K2m1P4q7", { kind: "cover" }),
     ).resolves.toEqual(runtimeResource);

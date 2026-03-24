@@ -5,6 +5,8 @@ import { loadElectronModule } from '../electron/electron-loader';
 import { registerChipsRenderDocumentScheme } from '../electron/render-document-protocol';
 import { toStandardError } from '../../shared/errors';
 
+registerChipsRenderDocumentScheme(loadElectronModule());
+
 interface ProcessLike {
   on(event: 'uncaughtException' | 'unhandledRejection', listener: (error: unknown) => void): void;
   off(event: 'uncaughtException' | 'unhandledRejection', listener: (error: unknown) => void): void;

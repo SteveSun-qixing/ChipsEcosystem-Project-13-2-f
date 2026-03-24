@@ -97,6 +97,69 @@ describe("CardApi", () => {
     });
   });
 
+  it("passes card info requests into card.readInfo and unwraps info", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          info: {
+            cardFile: "/tmp/demo.card",
+            info: {
+              status: {
+                state: "ready",
+                exists: true,
+                valid: true,
+              },
+            },
+          },
+        } as any;
+      }),
+    );
+
+    await expect(api.readInfo("/tmp/demo.card", ["status"])).resolves.toEqual({
+      cardFile: "/tmp/demo.card",
+      info: {
+        status: {
+          state: "ready",
+          exists: true,
+          valid: true,
+        },
+      },
+    });
+    expect(calls[0]?.action).toBe("card.readInfo");
+    expect(calls[0]?.payload).toEqual({
+      cardFile: "/tmp/demo.card",
+      fields: ["status"],
+    });
+  });
+
+  it("passes card open requests into card.open and unwraps result", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          result: {
+            mode: "card-window",
+            windowId: "window-1",
+          },
+        } as any;
+      }),
+    );
+
+    await expect(api.open("/tmp/demo.card")).resolves.toEqual({
+      mode: "card-window",
+      windowId: "window-1",
+    });
+    expect(calls[0]?.action).toBe("card.open");
+    expect(calls[0]?.payload).toEqual({
+      cardFile: "/tmp/demo.card",
+    });
+  });
+
   it("passes unpack requests into card.unpack", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 
@@ -301,7 +364,7 @@ describe("CardApi", () => {
         },
       };
 
-      const result = await api.coverFrame.render({ cardFile: "/cover.card", cardName: "My Card" });
+      const result = await api.coverFrame.render({ cardFile: "/cover.card" });
 
       expect(calls.length).toBe(1);
       expect(calls[0]?.action).toBe("card.renderCover");
@@ -314,9 +377,11 @@ describe("CardApi", () => {
       expect(frame.tagName).toBe("IFRAME");
       expect(frame.attrs.sandbox).toBe("allow-scripts");
       expect(frame.attrs.loading).toBe("lazy");
-      expect(frame.title).toBe("My Card");
+      expect(frame.title).toBe("Cover Title");
       expect(frame.src).toBe("file:///workspace/.card/cover.html");
       expect(frame.srcdoc).toBeUndefined();
+      expect(result.title).toBe("Cover Title");
+      expect(result.ratio).toBe("3:4");
     } finally {
       (globalThis as any).window = previousWindow;
       (globalThis as any).document = previousDocument;

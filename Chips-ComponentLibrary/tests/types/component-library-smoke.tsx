@@ -4,7 +4,8 @@ const adapter: CardDisplayAdapter = {
   async resolveCoverFrame(input) {
     return {
       cardId: input.cardId ?? "demo-card",
-      cardName: input.cardName ?? "Demo Card",
+      title: "Demo Card",
+      ratio: "3:4",
       coverUrl: "https://example.com/cover.html"
     };
   },

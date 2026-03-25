@@ -91,14 +91,14 @@ const createCardDirectory = async (): Promise<string> => {
   await fs.writeFile(path.join(sourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
   await fs.writeFile(
     path.join(sourceDir, 'content/intro.yaml'),
-    ['card_type: "RichTextCard"', 'content_source: "inline"', 'content_text: |', '  <h1>Intro</h1>', '  <p>Hello Chips.</p>'].join(
+    ['card_type: "RichTextCard"', 'content_format: "markdown"', 'content_source: "inline"', 'content_text: |', '  # Intro', '', '  Hello Chips.'].join(
       '\n'
     ),
     'utf-8'
   );
   await fs.writeFile(
     path.join(sourceDir, 'content/details.yaml'),
-    ['card_type: "RichTextCard"', 'content_source: "inline"', 'content_text: |', '  <h1>Details</h1>', '  <p>Second node body.</p>'].join(
+    ['card_type: "RichTextCard"', 'content_format: "markdown"', 'content_source: "inline"', 'content_text: |', '  # Details', '', '  Second node body.'].join(
       '\n'
     ),
     'utf-8'
@@ -133,7 +133,7 @@ const createPartiallyBrokenCardDirectory = async (): Promise<string> => {
   await fs.writeFile(path.join(sourceDir, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
   await fs.writeFile(
     path.join(sourceDir, 'content/intro.yaml'),
-    ['card_type: "RichTextCard"', 'content_source: "inline"', 'content_text: |', '  <h1>Intro</h1>', '  <p>Hello Chips.</p>'].join('\n'),
+    ['card_type: "RichTextCard"', 'content_format: "markdown"', 'content_source: "inline"', 'content_text: |', '  # Intro', '', '  Hello Chips.'].join('\n'),
     'utf-8',
   );
 
@@ -242,7 +242,10 @@ const createYamlStringifiedCardDirectory = async (): Promise<string> => {
     path.join(sourceDir, 'content/intro.yaml'),
     yaml.stringify({
       id: 'intro',
-      body: '<span style="font-weight: normal">2</span><p></p><span style="font-weight: normal">22</span><span style="font-weight: normal"><br></span><span style="font-weight: normal">2</span><span style="font-weight: normal">2</span><span style="font-weight: normal">2</span>',
+      card_type: 'RichTextCard',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '2\n\n22\n\n222',
       locale: 'zh-CN',
     }),
     'utf-8',
@@ -503,7 +506,10 @@ describe('CardService rendering', () => {
       baseCardId: 'intro',
       initialConfig: {
         id: 'intro',
-        body: '<p>Editor Body</p>',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: 'Editor Body',
         locale: 'zh-CN'
       },
       ...themeContext
@@ -524,8 +530,7 @@ describe('CardService rendering', () => {
     expect(view.body).toContain("img-src file: http: https: data: blob:");
     expect(view.body).toContain('overflow: hidden;');
     expect(view.body).toContain('#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }');
-    expect(view.body).toContain('.chips-basecard-editor__toolbar-shell { flex: 0 0 auto; width: 100%; }');
-    expect(view.body).not.toContain('chips-basecard-editor__floating-toolbar');
+    expect(view.body).toContain('chips-basecard-editor__floating-toolbar');
     expect(view.body).not.toContain('chips-basecard-toolbar-offset');
   }, 30_000);
 
@@ -1122,6 +1127,7 @@ describe('CardService rendering', () => {
 
     expect(view.title).toBe('YAML Stringified Card');
     expect(introDocument.nodeHtml).toContain('renderBasecardView');
-    expect(introDocument.nodeHtml).toContain('font-weight: normal');
+    expect(introDocument.nodeHtml).toContain('"content_source":"inline"');
+    expect(introDocument.nodeHtml).toContain('"content_text":"2\\n\\n22\\n\\n222"');
   }, 30_000);
 });

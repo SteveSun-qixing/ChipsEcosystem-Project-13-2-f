@@ -1,18 +1,37 @@
-import type {
-  BasecardResourceImportRequest,
-  BasecardResourceImportResult,
-} from "../index";
 import {
+  Editor,
+  defaultValueCtx,
+  editorViewCtx,
+  editorViewOptionsCtx,
+  rootCtx,
+} from "@milkdown/core";
+import { commonmark, insertHrCommand, toggleEmphasisCommand, toggleInlineCodeCommand, toggleLinkCommand, toggleStrongCommand, turnIntoTextCommand, wrapInBlockquoteCommand, wrapInBulletListCommand, wrapInHeadingCommand, wrapInOrderedListCommand } from "@milkdown/preset-commonmark";
+import { listener, listenerCtx } from "@milkdown/plugin-listener";
+import { callCommand, getMarkdown } from "@milkdown/utils";
+import type { Editor as MilkdownEditor } from "@milkdown/core";
+import type { Selection } from "@milkdown/prose/state";
+import { editorViewOptionsCtx as _editorViewOptionsCtx } from "@milkdown/core";
+import { toggleMark } from "@milkdown/prose/commands";
+import type { BasecardResourceImportRequest, BasecardResourceImportResult } from "../index";
+import {
+  collectRichTextResourcePaths,
+  createFileBasecardConfig,
+  createInlineBasecardConfig,
   normalizeBasecardConfig,
   validateBasecardConfig,
   type BasecardConfig,
 } from "../schema/card-config";
-import {
-  EMPTY_RICH_TEXT_BODY,
-  normalizeRichTextHtml,
-  sanitizeRichTextHtml,
-} from "../shared/utils";
 import { createTranslator } from "../shared/i18n";
+import { rewriteRelativeResourceUrls, loadMarkdownFromConfig } from "../shared/resource-links";
+import {
+  MAX_INLINE_RICHTEXT_LENGTH,
+  countUnicodeCharacters,
+  createRichTextMarkdownFileName,
+  extractPlainTextFromMarkdown,
+  hasMeaningfulMarkdownContent,
+  normalizeMarkdown,
+  shouldUseFileStorage,
+} from "../shared/utils";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
@@ -29,20 +48,37 @@ type EditorRoot = HTMLElement & {
   __chipsDispose?: () => void;
 };
 
-type DraftConfig = Pick<BasecardConfig, "body">;
+type ToolbarButton = {
+  key: string;
+  labelKey: string;
+  run: (controller: EditorController) => void | Promise<void>;
+};
 
-const EMIT_DEBOUNCE_MS = 120;
-const BLOCK_TAGS = new Set([
-  "p",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "blockquote",
-  "li",
-]);
+type EditorController = {
+  root: EditorRoot;
+  editorHost: HTMLDivElement;
+  scrollSurface: HTMLDivElement;
+  floatingToolbar: HTMLDivElement;
+  errorList: HTMLUListElement;
+  locale: string;
+  theme: string;
+  props: BasecardEditorProps;
+  t: ReturnType<typeof createTranslator>;
+  editor?: MilkdownEditor;
+  disposed: boolean;
+  focused: boolean;
+  currentMarkdown: string;
+  currentFilePath?: string;
+  sessionFileName: string;
+  lastCommittedSignature: string;
+  lastResolvedResources: Set<string>;
+  isComposing: boolean;
+  isImporting: boolean;
+  rerunCommitAfterImport: boolean;
+  flushTimer?: number;
+  pendingErrors: string[];
+  handleWindowResize: () => void;
+};
 
 const EDITOR_STYLE_TEXT = `
 html, body {
@@ -63,6 +99,7 @@ html, body {
 }
 
 .chips-basecard-editor {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -83,84 +120,8 @@ html, body {
   box-sizing: border-box;
 }
 
-.chips-basecard-editor__toolbar-shell {
-  flex: 0 0 auto;
-  width: 100%;
-}
-
-.chips-basecard-editor__toolbar-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 18px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-}
-
-.chips-basecard-editor__toolbar-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 32px;
-}
-
-.chips-basecard-editor__toolbar-toggle {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 999px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.chips-basecard-editor__toolbar-toggle:hover {
-  border-color: rgba(37, 99, 235, 0.55);
-  background: rgba(239, 246, 255, 0.92);
-}
-
-.chips-basecard-editor__toolbar-toggle:focus-visible {
-  border-color: rgba(37, 99, 235, 0.85);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
-}
-
-.chips-basecard-editor__toolbar-content {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-panel {
-  min-height: 44px;
-  padding: 6px 10px;
-  border-radius: 16px;
-}
-
-.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-content {
-  display: none;
-}
-
-.chips-basecard-editor__toolbar-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
 .chips-basecard-editor__surface-frame {
+  position: relative;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -179,49 +140,53 @@ html, body {
   overscroll-behavior: contain;
 }
 
-.chips-basecard-editor__richtext {
+.chips-basecard-editor__editor-host {
   min-height: 100%;
   padding: 20px 24px 56px;
+}
+
+.chips-basecard-editor__editor-host .milkdown,
+.chips-basecard-editor__editor-host .milkdown .editor {
+  background: transparent;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror {
+  min-height: 100%;
   outline: none;
   color: inherit;
+  white-space: break-spaces;
   word-break: break-word;
 }
 
-.chips-basecard-editor__richtext[data-empty="true"]::before {
-  content: attr(data-placeholder);
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.chips-basecard-editor__richtext > :first-child {
+.chips-basecard-editor__editor-host .ProseMirror > :first-child {
   margin-top: 0;
 }
 
-.chips-basecard-editor__richtext > :last-child {
+.chips-basecard-editor__editor-host .ProseMirror > :last-child {
   margin-bottom: 0;
 }
 
-.chips-basecard-editor__richtext p,
-.chips-basecard-editor__richtext ul,
-.chips-basecard-editor__richtext ol,
-.chips-basecard-editor__richtext blockquote,
-.chips-basecard-editor__richtext h1,
-.chips-basecard-editor__richtext h2,
-.chips-basecard-editor__richtext h3,
-.chips-basecard-editor__richtext h4,
-.chips-basecard-editor__richtext h5,
-.chips-basecard-editor__richtext h6 {
+.chips-basecard-editor__editor-host .ProseMirror p,
+.chips-basecard-editor__editor-host .ProseMirror ul,
+.chips-basecard-editor__editor-host .ProseMirror ol,
+.chips-basecard-editor__editor-host .ProseMirror blockquote,
+.chips-basecard-editor__editor-host .ProseMirror h1,
+.chips-basecard-editor__editor-host .ProseMirror h2,
+.chips-basecard-editor__editor-host .ProseMirror h3,
+.chips-basecard-editor__editor-host .ProseMirror h4,
+.chips-basecard-editor__editor-host .ProseMirror h5,
+.chips-basecard-editor__editor-host .ProseMirror h6 {
   margin: 0 0 12px;
 }
 
-.chips-basecard-editor__richtext blockquote {
+.chips-basecard-editor__editor-host .ProseMirror blockquote {
   margin-left: 0;
   padding-left: 14px;
   border-left: 3px solid rgba(37, 99, 235, 0.28);
   color: #475467;
 }
 
-.chips-basecard-editor__richtext code {
+.chips-basecard-editor__editor-host .ProseMirror code {
   padding: 2px 6px;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.08);
@@ -229,18 +194,39 @@ html, body {
   font-size: 0.92em;
 }
 
-.chips-basecard-editor__richtext img {
+.chips-basecard-editor__editor-host .ProseMirror img {
   max-width: 100%;
   height: auto;
   border-radius: 12px;
 }
 
+.chips-basecard-editor__floating-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+  transform: translate(-50%, calc(-100% - 12px));
+  backdrop-filter: blur(16px);
+}
+
+.chips-basecard-editor__floating-toolbar[hidden] {
+  display: none;
+}
+
 .chips-basecard-editor__toolbar-button,
-.chips-basecard-editor__toolbar-select,
-.chips-basecard-editor__toolbar-color {
+.chips-basecard-editor__toolbar-select {
   border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
   border-radius: 10px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
+  background: var(--chips-comp-card-shell-root-surface, #ffffff);
   color: inherit;
   font: inherit;
   outline: none;
@@ -265,25 +251,26 @@ html, body {
   padding: 0 10px;
 }
 
-.chips-basecard-editor__toolbar-color {
-  width: 38px;
-  height: 38px;
-  padding: 4px;
-  cursor: pointer;
-}
-
 .chips-basecard-editor__toolbar-button:hover,
-.chips-basecard-editor__toolbar-select:hover,
-.chips-basecard-editor__toolbar-color:hover {
+.chips-basecard-editor__toolbar-select:hover {
   border-color: rgba(37, 99, 235, 0.55);
   transform: translateY(-1px);
 }
 
 .chips-basecard-editor__toolbar-button:focus-visible,
-.chips-basecard-editor__toolbar-select:focus-visible,
-.chips-basecard-editor__toolbar-color:focus-visible {
+.chips-basecard-editor__toolbar-select:focus-visible {
   border-color: rgba(37, 99, 235, 0.85);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.chips-basecard-editor__meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  color: var(--chips-sys-color-on-surface-variant, #667085);
+  font-size: 12px;
 }
 
 .chips-basecard-editor__errors {
@@ -294,920 +281,538 @@ html, body {
   color: var(--chips-sys-color-error, #d92d20);
 }
 
+.chips-basecard-editor__errors[hidden] {
+  display: none;
+}
+
 .chips-basecard-editor__errors-list {
   margin: 0;
   padding-left: 18px;
 }
 `;
 
-function ensureEditorFocus(editor: HTMLElement): void {
-  if (document.activeElement !== editor) {
-    editor.focus();
-  }
-}
+const TOOLBAR_BUTTONS: ToolbarButton[] = [
+  {
+    key: "bold",
+    labelKey: "basecard.toolbar.bold",
+    run: (controller) => {
+      runCommand(controller, toggleStrongCommand.key);
+    },
+  },
+  {
+    key: "italic",
+    labelKey: "basecard.toolbar.italic",
+    run: (controller) => {
+      runCommand(controller, toggleEmphasisCommand.key);
+    },
+  },
+  {
+    key: "code",
+    labelKey: "basecard.toolbar.code",
+    run: (controller) => {
+      runCommand(controller, toggleInlineCodeCommand.key);
+    },
+  },
+  {
+    key: "blockquote",
+    labelKey: "basecard.toolbar.blockquote",
+    run: (controller) => {
+      runCommand(controller, wrapInBlockquoteCommand.key);
+    },
+  },
+  {
+    key: "orderedList",
+    labelKey: "basecard.toolbar.orderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInOrderedListCommand.key);
+    },
+  },
+  {
+    key: "unorderedList",
+    labelKey: "basecard.toolbar.unorderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInBulletListCommand.key);
+    },
+  },
+  {
+    key: "divider",
+    labelKey: "basecard.toolbar.divider",
+    run: (controller) => {
+      runCommand(controller, insertHrCommand.key);
+    },
+  },
+  {
+    key: "link",
+    labelKey: "basecard.toolbar.link",
+    run: async (controller) => {
+      const url = askUserForValue(controller.t("basecard.prompt.linkUrl"));
+      if (!url) {
+        return;
+      }
+      runCommand(controller, toggleLinkCommand.key, { href: url });
+    },
+  },
+  {
+    key: "clear",
+    labelKey: "basecard.toolbar.clear",
+    run: (controller) => {
+      clearInlineFormatting(controller);
+    },
+  },
+];
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function hasMeaningfulEditorContent(editor: HTMLElement): boolean {
-  const text = (editor.textContent ?? "").replace(/\u00a0/g, " ").trim();
-  if (text.length > 0) {
-    return true;
-  }
-
-  return editor.querySelector("img, hr") !== null;
-}
-
-function normalizeEditorHtml(html: string): string {
-  return normalizeRichTextHtml(html);
-}
-
-function createSanitizedDraftBody(editor: HTMLElement): string {
-  return normalizeEditorHtml(editor.innerHTML);
-}
-
-function isRangeInsideEditor(range: Range, editor: HTMLElement): boolean {
-  const container = range.commonAncestorContainer;
-  return container === editor || editor.contains(container);
-}
-
-function cloneEditorSelection(editor: HTMLElement): Range | null {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
+function askUserForValue(label: string): string | null {
+  if (typeof window === "undefined" || typeof window.prompt !== "function") {
     return null;
   }
-
-  const range = selection.getRangeAt(0);
-  if (!isRangeInsideEditor(range, editor)) {
-    return null;
-  }
-
-  return range.cloneRange();
+  const value = window.prompt(label);
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function placeCaretAtEnd(editor: HTMLElement): Range {
-  ensureEditorFocus(editor);
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-  range.collapse(false);
+function createToolbarSelect(controller: EditorController): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.className = "chips-basecard-editor__toolbar-select";
+  select.setAttribute("aria-label", controller.t("basecard.toolbar.block"));
 
-  if (selection) {
-    selection.removeAllRanges();
-    selection.addRange(range);
+  const options = [
+    { value: "paragraph", label: controller.t("basecard.block.paragraph") },
+    { value: "h1", label: controller.t("basecard.block.h1") },
+    { value: "h2", label: controller.t("basecard.block.h2") },
+    { value: "h3", label: controller.t("basecard.block.h3") },
+  ];
+
+  for (const option of options) {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    select.appendChild(element);
   }
 
-  return range;
+  select.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+  select.addEventListener("change", () => {
+    if (select.value === "paragraph") {
+      runCommand(controller, turnIntoTextCommand.key);
+    } else {
+      const level = Number(select.value.replace("h", ""));
+      runCommand(controller, wrapInHeadingCommand.key, level);
+    }
+    select.value = "paragraph";
+  });
+
+  return select;
 }
 
-function restoreEditorSelection(editor: HTMLElement, savedRange: Range | null): Range {
-  ensureEditorFocus(editor);
-
-  const selection = window.getSelection();
-  if (!selection) {
-    return placeCaretAtEnd(editor);
-  }
-
-  if (savedRange && isRangeInsideEditor(savedRange, editor)) {
-    selection.removeAllRanges();
-    selection.addRange(savedRange);
-    return savedRange;
-  }
-
-  return placeCaretAtEnd(editor);
+function renderMeta(controller: EditorController, meta: HTMLDivElement): void {
+  const plainTextLength = countUnicodeCharacters(extractPlainTextFromMarkdown(controller.currentMarkdown));
+  const storageMode = plainTextLength > MAX_INLINE_RICHTEXT_LENGTH
+    ? controller.t("basecard.storage.file")
+    : controller.t("basecard.storage.inline");
+  meta.textContent = controller.t("basecard.meta.storage", {
+    mode: storageMode,
+    count: plainTextLength,
+  });
 }
 
-function executeDocumentCommand(command: string, value?: string): boolean {
-  const execCommand = (document as Document & {
-    execCommand?: (name: string, showUi?: boolean, value?: string) => boolean;
-  }).execCommand;
-
-  if (typeof execCommand !== "function") {
-    return false;
-  }
-
-  if (command === "formatBlock" && value) {
-    return (
-      execCommand.call(document, command, false, value) ||
-      execCommand.call(document, command, false, `<${value}>`)
-    );
-  }
-
-  return execCommand.call(document, command, false, value);
-}
-
-function replaceSelectionWithHtml(editor: HTMLElement, html: string): void {
-  const safeHtml = sanitizeRichTextHtml(html).trim();
-  if (!safeHtml) {
+function setErrors(controller: EditorController, errors: string[]): void {
+  controller.pendingErrors = errors;
+  controller.errorList.innerHTML = "";
+  const wrapper = controller.errorList.parentElement as HTMLElement;
+  if (errors.length === 0) {
+    wrapper.hidden = true;
     return;
   }
 
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  range.deleteContents();
+  for (const error of errors) {
+    const item = document.createElement("li");
+    item.textContent = error;
+    controller.errorList.appendChild(item);
+  }
+  wrapper.hidden = false;
+}
 
-  const fragment = range.createContextualFragment(safeHtml);
-  const lastInsertedNode = fragment.lastChild;
-  range.insertNode(fragment);
-
-  const selection = window.getSelection();
-  if (!selection) {
+function scheduleCommit(controller: EditorController, reason: "change" | "flush"): void {
+  if (controller.disposed || controller.isComposing) {
     return;
   }
 
-  const nextRange = document.createRange();
-  if (lastInsertedNode) {
-    nextRange.setStartAfter(lastInsertedNode);
+  if (controller.flushTimer) {
+    window.clearTimeout(controller.flushTimer);
+    controller.flushTimer = undefined;
+  }
+
+  if (reason === "flush") {
+    void commitCurrentMarkdown(controller);
+    return;
+  }
+
+  controller.flushTimer = window.setTimeout(() => {
+    controller.flushTimer = undefined;
+    void commitCurrentMarkdown(controller);
+  }, 80);
+}
+
+function buildConfigSignature(config: BasecardConfig): string {
+  return JSON.stringify(config);
+}
+
+async function commitCurrentMarkdown(controller: EditorController): Promise<void> {
+  if (controller.disposed || !controller.editor) {
+    return;
+  }
+
+  if (controller.isImporting) {
+    controller.rerunCommitAfterImport = true;
+    return;
+  }
+
+  const markdown = normalizeMarkdown(controller.editor.action(getMarkdown()));
+  controller.currentMarkdown = markdown;
+
+  const hasContent = hasMeaningfulMarkdownContent(markdown);
+  if (!hasContent) {
+    setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
+    const meta = controller.root.querySelector(".chips-basecard-editor__meta") as HTMLDivElement | null;
+    if (meta) {
+      renderMeta(controller, meta);
+    }
+    return;
+  }
+
+  const plainTextLength = countUnicodeCharacters(extractPlainTextFromMarkdown(markdown));
+  let nextConfig: BasecardConfig;
+
+  if (shouldUseFileStorage(plainTextLength)) {
+    if (!controller.props.importResource) {
+      setErrors(controller, [controller.t("basecard.validation.importUnavailable")]);
+      return;
+    }
+
+    controller.isImporting = true;
+    try {
+      const currentPreferredPath = controller.currentFilePath || controller.sessionFileName;
+      const file = new File([markdown], currentPreferredPath, { type: "text/markdown;charset=utf-8" });
+      const imported = await controller.props.importResource({
+        file,
+        preferredPath: currentPreferredPath,
+      });
+      const nextFilePath = imported.path;
+      if (controller.currentFilePath && controller.currentFilePath !== nextFilePath && controller.props.deleteResource) {
+        await controller.props.deleteResource(controller.currentFilePath);
+      }
+      controller.currentFilePath = nextFilePath;
+      nextConfig = createFileBasecardConfig(nextFilePath, controller.locale, controller.theme);
+    } finally {
+      controller.isImporting = false;
+    }
   } else {
-    nextRange.selectNodeContents(editor);
-    nextRange.collapse(false);
+    if (controller.currentFilePath && controller.props.deleteResource) {
+      await controller.props.deleteResource(controller.currentFilePath);
+      controller.currentFilePath = undefined;
+    }
+    nextConfig = createInlineBasecardConfig(markdown, controller.locale, controller.theme);
   }
-  nextRange.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
+
+  const validation = validateBasecardConfig(nextConfig);
+  if (!validation.valid) {
+    setErrors(controller, Object.values(validation.errors));
+    return;
+  }
+
+  setErrors(controller, []);
+  const signature = buildConfigSignature(nextConfig);
+  if (signature !== controller.lastCommittedSignature) {
+    controller.lastCommittedSignature = signature;
+    controller.props.onChange(nextConfig);
+  }
+
+  const meta = controller.root.querySelector(".chips-basecard-editor__meta") as HTMLDivElement | null;
+  if (meta) {
+    renderMeta(controller, meta);
+  }
+
+  if (controller.rerunCommitAfterImport) {
+    controller.rerunCommitAfterImport = false;
+    void commitCurrentMarkdown(controller);
+  }
 }
 
-function wrapSelectionWithTag(editor: HTMLElement, tagName: string): void {
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  if (range.collapsed) {
+function runCommand<T>(controller: EditorController, commandKey: string | { name?: string }, payload?: T): void {
+  if (!controller.editor) {
     return;
   }
 
-  const element = document.createElement(tagName);
-  try {
-    range.surroundContents(element);
-  } catch {
-    const contents = range.extractContents();
-    element.appendChild(contents);
-    range.insertNode(element);
-  }
-
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const nextRange = document.createRange();
-  nextRange.selectNodeContents(element);
-  nextRange.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
+  const key = typeof commandKey === "string" ? commandKey : (commandKey as { name?: string }).name ?? commandKey;
+  controller.editor.action(callCommand(key as never, payload));
+  void syncPreviewResources(controller);
+  scheduleCommit(controller, "change");
 }
 
-function wrapSelectionWithStyle(editor: HTMLElement, style: string): void {
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  if (range.collapsed) {
+function clearInlineFormatting(controller: EditorController): void {
+  if (!controller.editor) {
     return;
   }
 
-  const span = document.createElement("span");
-  span.setAttribute("style", style);
+  controller.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const { from, to } = state.selection;
+    const tr = state.tr;
+    const marks = [
+      state.schema.marks.strong,
+      state.schema.marks.em,
+      state.schema.marks.link,
+      state.schema.marks.code,
+    ].filter(Boolean);
 
-  try {
-    range.surroundContents(span);
-  } catch {
-    const text = range.toString();
-    replaceSelectionWithHtml(
-      editor,
-      `<span style="${escapeHtml(style)}">${escapeHtml(text)}</span>`
-    );
-    return;
-  }
+    for (const mark of marks) {
+      tr.removeMark(from, to, mark);
+    }
 
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const nextRange = document.createRange();
-  nextRange.selectNodeContents(span);
-  nextRange.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
-}
-
-function plainTextToRichTextHtml(text: string): string {
-  const normalized = text.replace(/\r\n/g, "\n").trim();
-  if (!normalized) {
-    return EMPTY_RICH_TEXT_BODY;
-  }
-
-  return normalized
-    .split(/\n{2,}/)
-    .map((block) => {
-      const lineHtml = block
-        .split("\n")
-        .map((line) => escapeHtml(line))
-        .join("<br>");
-      return `<p>${lineHtml || "<br>"}</p>`;
-    })
-    .join("");
-}
-
-function getCurrentBlockTag(editor: HTMLElement): string {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return "p";
-  }
-
-  const range = selection.getRangeAt(0);
-  if (!isRangeInsideEditor(range, editor)) {
-    return "p";
-  }
-
-  let node: Node | null = range.startContainer;
-  if (node.nodeType === Node.TEXT_NODE) {
-    node = node.parentNode;
-  }
-
-  while (node && node !== editor) {
-    if (node instanceof HTMLElement) {
-      const tagName = node.tagName.toLowerCase();
-      if (BLOCK_TAGS.has(tagName)) {
-        return tagName === "li" ? "p" : tagName;
+    const paragraph = state.schema.nodes.paragraph;
+    if (paragraph) {
+      try {
+        tr.setBlockType(from, to, paragraph);
+      } catch {
+        // ignore block conversion failures
       }
     }
-    node = node.parentNode;
-  }
 
-  return "p";
-}
-
-function createValidatedFragmentHtml(html: string, requiredSelector?: string): string {
-  const safeHtml = sanitizeRichTextHtml(html).trim();
-  if (!safeHtml) {
-    return "";
-  }
-
-  if (!requiredSelector) {
-    return safeHtml;
-  }
-
-  const template = document.createElement("template");
-  template.innerHTML = safeHtml;
-  return template.content.querySelector(requiredSelector) ? safeHtml : "";
-}
-
-function createToolbarGroup(...children: HTMLElement[]): HTMLDivElement {
-  const group = document.createElement("div");
-  group.className = "chips-basecard-editor__toolbar-group";
-  children.forEach((child) => {
-    group.appendChild(child);
+    view.dispatch(tr.scrollIntoView());
   });
-  return group;
+
+  void syncPreviewResources(controller);
+  scheduleCommit(controller, "change");
 }
 
-export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElement {
-  const initialConfig = normalizeBasecardConfig(props.initialConfig);
-  const t = createTranslator(initialConfig.locale);
+function updateToolbarPosition(controller: EditorController, selection?: Selection): void {
+  if (!controller.editor || !controller.focused) {
+    controller.floatingToolbar.hidden = true;
+    return;
+  }
 
+  const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+  const currentSelection = selection ?? view.state.selection;
+  if (currentSelection.empty) {
+    controller.floatingToolbar.hidden = true;
+    return;
+  }
+
+  const start = view.coordsAtPos(currentSelection.from);
+  const end = view.coordsAtPos(currentSelection.to);
+  const rootRect = controller.root.getBoundingClientRect();
+  const toolbarWidth = controller.floatingToolbar.offsetWidth || 280;
+  const centerX = ((start.left + end.right) / 2) - rootRect.left;
+  const clampedX = Math.min(Math.max(centerX, 24 + toolbarWidth / 2), rootRect.width - 24 - toolbarWidth / 2);
+  const top = Math.max(Math.min(start.top, end.top) - rootRect.top, 16);
+
+  controller.floatingToolbar.style.left = `${clampedX}px`;
+  controller.floatingToolbar.style.top = `${top}px`;
+  controller.floatingToolbar.hidden = false;
+}
+
+async function syncPreviewResources(controller: EditorController): Promise<void> {
+  if (!controller.props.resolveResourceUrl) {
+    return;
+  }
+
+  for (const resourcePath of controller.lastResolvedResources) {
+    controller.props.releaseResourceUrl?.(resourcePath);
+  }
+  controller.lastResolvedResources.clear();
+
+  const resolved = await rewriteRelativeResourceUrls(controller.editorHost, controller.props.resolveResourceUrl);
+  resolved.forEach((resourcePath) => controller.lastResolvedResources.add(resourcePath));
+}
+
+export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot {
+  const config = normalizeBasecardConfig(props.initialConfig as unknown as Record<string, unknown>);
   const root = document.createElement("div") as EditorRoot;
-  root.className = "chips-basecard-editor chips-basecard-editor--richtext";
-  root.setAttribute("data-toolbar-state", "expanded");
+  root.id = "chips-basecard-editor-root";
 
   const style = document.createElement("style");
   style.textContent = EDITOR_STYLE_TEXT;
   root.appendChild(style);
 
-  const toolbarShell = document.createElement("div");
-  toolbarShell.className = "chips-basecard-editor__toolbar-shell";
-
-  const toolbarPanel = document.createElement("div");
-  toolbarPanel.className = "chips-basecard-editor__toolbar-panel";
-
-  const toolbarHeader = document.createElement("div");
-  toolbarHeader.className = "chips-basecard-editor__toolbar-header";
-
-  const toolbarToggle = document.createElement("button");
-  toolbarToggle.type = "button";
-  toolbarToggle.className = "chips-basecard-editor__toolbar-toggle";
-
-  const toolbarContent = document.createElement("div");
-  toolbarContent.className = "chips-basecard-editor__toolbar-content";
-
-  toolbarHeader.appendChild(toolbarToggle);
-  toolbarPanel.appendChild(toolbarHeader);
-  toolbarPanel.appendChild(toolbarContent);
-  toolbarShell.appendChild(toolbarPanel);
-  root.appendChild(toolbarShell);
+  const editorRoot = document.createElement("div");
+  editorRoot.className = "chips-basecard-editor";
+  root.appendChild(editorRoot);
 
   const surfaceFrame = document.createElement("div");
   surfaceFrame.className = "chips-basecard-editor__surface-frame";
+  editorRoot.appendChild(surfaceFrame);
 
-  const surface = document.createElement("div");
-  surface.className = "chips-basecard-editor__surface";
+  const scrollSurface = document.createElement("div");
+  scrollSurface.className = "chips-basecard-editor__surface";
+  surfaceFrame.appendChild(scrollSurface);
 
-  const bodyEditor = document.createElement("div");
-  bodyEditor.className = "chips-basecard-editor__richtext";
-  bodyEditor.contentEditable = "true";
-  bodyEditor.spellcheck = true;
-  bodyEditor.setAttribute("role", "textbox");
-  bodyEditor.setAttribute("aria-multiline", "true");
-  bodyEditor.setAttribute("aria-label", t("basecard.body"));
-  bodyEditor.setAttribute("data-placeholder", t("basecard.placeholder"));
-  bodyEditor.innerHTML = normalizeEditorHtml(initialConfig.body);
-  surface.appendChild(bodyEditor);
-  surfaceFrame.appendChild(surface);
-  root.appendChild(surfaceFrame);
+  const editorHost = document.createElement("div");
+  editorHost.className = "chips-basecard-editor__editor-host";
+  scrollSurface.appendChild(editorHost);
 
-  const errorBox = document.createElement("div");
-  errorBox.className = "chips-basecard-editor__errors";
-  root.appendChild(errorBox);
+  const floatingToolbar = document.createElement("div");
+  floatingToolbar.className = "chips-basecard-editor__floating-toolbar";
+  floatingToolbar.hidden = true;
+  surfaceFrame.appendChild(floatingToolbar);
 
-  let draft: DraftConfig = {
-    body: normalizeEditorHtml(initialConfig.body),
+  const meta = document.createElement("div");
+  meta.className = "chips-basecard-editor__meta";
+  editorRoot.appendChild(meta);
+
+  const errors = document.createElement("div");
+  errors.className = "chips-basecard-editor__errors";
+  errors.hidden = true;
+  const errorList = document.createElement("ul");
+  errorList.className = "chips-basecard-editor__errors-list";
+  errors.appendChild(errorList);
+  editorRoot.appendChild(errors);
+
+  const controller: EditorController = {
+    root,
+    editorHost,
+    scrollSurface,
+    floatingToolbar,
+    errorList,
+    locale: config.locale ?? "zh-CN",
+    theme: config.theme ?? "",
+    props,
+    t: createTranslator(config.locale),
+    disposed: false,
+    focused: false,
+    currentMarkdown: "",
+    currentFilePath: config.content_source === "file" ? config.content_file : undefined,
+    sessionFileName: createRichTextMarkdownFileName(config.content_file?.replace(/\.md$/i, "")),
+    lastCommittedSignature: "",
+    lastResolvedResources: new Set<string>(),
+    isComposing: false,
+    isImporting: false,
+    rerunCommitAfterImport: false,
+    pendingErrors: [],
+    handleWindowResize: () => {
+      updateToolbarPosition(controller);
+    },
   };
-  let lastCommittedSignature = JSON.stringify(draft);
-  let emitTimer: number | null = null;
-  let savedSelection: Range | null = null;
-  let isToolbarCollapsed = false;
-  let isComposingText = false;
-  let didConfigureParagraphBehavior = false;
 
-  function ensureParagraphBehavior(): void {
-    if (didConfigureParagraphBehavior) {
-      return;
-    }
+  const toolbarSelect = createToolbarSelect(controller);
+  floatingToolbar.appendChild(toolbarSelect);
 
-    executeDocumentCommand("defaultParagraphSeparator", "p");
-    didConfigureParagraphBehavior = true;
-  }
-
-  function rememberSelection(): void {
-    savedSelection = cloneEditorSelection(bodyEditor);
-  }
-
-  function resolveSelection(preferLiveSelection = false): Range {
-    if (preferLiveSelection) {
-      const liveSelection = cloneEditorSelection(bodyEditor);
-      if (liveSelection) {
-        return restoreEditorSelection(bodyEditor, liveSelection);
-      }
-    }
-    return restoreEditorSelection(bodyEditor, savedSelection);
-  }
-
-  function syncToolbarState(): void {
-    blockSelect.value = getCurrentBlockTag(bodyEditor);
-  }
-
-  function syncPlaceholderState(): void {
-    bodyEditor.setAttribute(
-      "data-empty",
-      hasMeaningfulEditorContent(bodyEditor) ? "false" : "true"
-    );
-  }
-
-  function applyToolbarState(): void {
-    const state = isToolbarCollapsed ? "collapsed" : "expanded";
-    root.setAttribute("data-toolbar-state", state);
-    toolbarContent.hidden = isToolbarCollapsed;
-    toolbarToggle.textContent = isToolbarCollapsed
-      ? t("basecard.toolbar.expand")
-      : t("basecard.toolbar.collapse");
-    toolbarToggle.setAttribute("aria-label", toolbarToggle.textContent);
-    toolbarToggle.setAttribute("aria-expanded", String(!isToolbarCollapsed));
-  }
-
-  function collectDraftFromDom(): DraftConfig {
-    return {
-      body: createSanitizedDraftBody(bodyEditor),
-    };
-  }
-
-  function renderValidation(showErrors: boolean): void {
-    errorBox.textContent = "";
-    if (!showErrors) {
-      return;
-    }
-
-    const validation = validateBasecardConfig({
-      ...initialConfig,
-      body: createSanitizedDraftBody(bodyEditor),
-    });
-    const errors = Object.values(validation.errors);
-
-    if (errors.length === 0) {
-      return;
-    }
-
-    const list = document.createElement("ul");
-    list.className = "chips-basecard-editor__errors-list";
-    errors.forEach((message) => {
-      const item = document.createElement("li");
-      item.textContent = message;
-      list.appendChild(item);
-    });
-    errorBox.appendChild(list);
-  }
-
-  function validateAndEmit(showErrors = false, normalizeDom = false): void {
-    const nextDraft = collectDraftFromDom();
-    const safeBodyHtml = normalizeEditorHtml(nextDraft.body);
-
-    if (normalizeDom && safeBodyHtml !== bodyEditor.innerHTML) {
-      bodyEditor.innerHTML = safeBodyHtml;
-    }
-    syncPlaceholderState();
-
-    draft = {
-      body: safeBodyHtml,
-    };
-
-    renderValidation(showErrors);
-
-    const next = normalizeBasecardConfig({
-      ...initialConfig,
-      body: safeBodyHtml,
-    });
-    const validation = validateBasecardConfig(next);
-
-    const signature = JSON.stringify(draft);
-    if (signature === lastCommittedSignature) {
-      return;
-    }
-
-    if (!validation.valid) {
-      return;
-    }
-
-    lastCommittedSignature = signature;
-    props.onChange(next);
-  }
-
-  function scheduleValidateAndEmit(showErrors = false, normalizeDom = false): void {
-    if (emitTimer !== null) {
-      window.clearTimeout(emitTimer);
-    }
-    emitTimer = window.setTimeout(() => {
-      emitTimer = null;
-      validateAndEmit(showErrors, normalizeDom);
-    }, EMIT_DEBOUNCE_MS);
-  }
-
-  function flushValidateAndEmit(showErrors = true, normalizeDom = true): void {
-    if (emitTimer !== null) {
-      window.clearTimeout(emitTimer);
-      emitTimer = null;
-    }
-    validateAndEmit(showErrors, normalizeDom);
-  }
-
-  function runEditorCommand(command: string, value?: string): void {
-    resolveSelection();
-    executeDocumentCommand(command, value);
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function insertParagraphBreak(): void {
-    ensureParagraphBehavior();
-    resolveSelection(true);
-    if (!executeDocumentCommand("insertParagraph")) {
-      replaceSelectionWithHtml(bodyEditor, "<p><br></p>");
-    }
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function insertLineBreak(): void {
-    ensureParagraphBehavior();
-    resolveSelection(true);
-    if (!executeDocumentCommand("insertLineBreak")) {
-      replaceSelectionWithHtml(bodyEditor, "<br>");
-    }
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function createToolbarButton(
-    text: string,
-    title: string,
-    onClick: () => void
-  ): HTMLButtonElement {
+  for (const definition of TOOLBAR_BUTTONS) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "chips-basecard-editor__toolbar-button";
-    button.textContent = text;
-    button.title = title;
-    button.setAttribute("aria-label", title);
+    button.setAttribute("aria-label", controller.t(definition.labelKey));
+    button.textContent = controller.t(definition.labelKey);
     button.addEventListener("mousedown", (event) => {
-      rememberSelection();
       event.preventDefault();
     });
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      onClick();
-      validateAndEmit(false);
+    button.addEventListener("click", () => {
+      void definition.run(controller);
     });
-    return button;
+    floatingToolbar.appendChild(button);
   }
 
-  const boldButton = createToolbarButton("B", t("basecard.toolbar.bold"), () =>
-    runEditorCommand("bold")
-  );
-  const italicButton = createToolbarButton("I", t("basecard.toolbar.italic"), () =>
-    runEditorCommand("italic")
-  );
-  const underlineButton = createToolbarButton("U", t("basecard.toolbar.underline"), () =>
-    runEditorCommand("underline")
-  );
-  const strikeButton = createToolbarButton("S", t("basecard.toolbar.strike"), () =>
-    runEditorCommand("strikeThrough")
-  );
-  const superscriptButton = createToolbarButton(
-    "X2",
-    t("basecard.toolbar.superscript"),
-    () => runEditorCommand("superscript")
-  );
-  const subscriptButton = createToolbarButton(
-    "X_2",
-    t("basecard.toolbar.subscript"),
-    () => runEditorCommand("subscript")
-  );
-  const codeButton = createToolbarButton("Code", t("basecard.toolbar.code"), () => {
-    resolveSelection();
-    wrapSelectionWithTag(bodyEditor, "code");
-    rememberSelection();
-  });
+  renderMeta(controller, meta);
 
-  const blockSelect = document.createElement("select");
-  blockSelect.className = "chips-basecard-editor__toolbar-select";
-  blockSelect.title = t("basecard.toolbar.block");
-  blockSelect.setAttribute("aria-label", t("basecard.toolbar.block"));
-  [
-    { value: "p", label: t("basecard.block.paragraph") },
-    { value: "h1", label: t("basecard.block.h1") },
-    { value: "h2", label: t("basecard.block.h2") },
-    { value: "h3", label: t("basecard.block.h3") },
-    { value: "h4", label: t("basecard.block.h4") },
-    { value: "h5", label: t("basecard.block.h5") },
-    { value: "h6", label: t("basecard.block.h6") },
-  ].forEach((option) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = option.value;
-    optionEl.textContent = option.label;
-    blockSelect.appendChild(optionEl);
-  });
-  blockSelect.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  blockSelect.addEventListener("change", () => {
-    const value = blockSelect.value;
-    runEditorCommand("formatBlock", value === "p" ? "p" : value);
-    validateAndEmit(false);
-  });
+  scrollSurface.addEventListener("scroll", () => {
+    updateToolbarPosition(controller);
+  }, { passive: true });
+  window.addEventListener("resize", controller.handleWindowResize);
 
-  const orderedListButton = createToolbarButton(
-    "1.",
-    t("basecard.toolbar.orderedList"),
-    () => runEditorCommand("insertOrderedList")
-  );
-  const unorderedListButton = createToolbarButton(
-    "•",
-    t("basecard.toolbar.unorderedList"),
-    () => runEditorCommand("insertUnorderedList")
-  );
-  const blockquoteButton = createToolbarButton(
-    "\"",
-    t("basecard.toolbar.blockquote"),
-    () => runEditorCommand("formatBlock", "blockquote")
-  );
+  void (async () => {
+    try {
+      const markdown = normalizeMarkdown(await loadMarkdownFromConfig(config, props.resolveResourceUrl));
+      controller.currentMarkdown = markdown;
+      controller.editor = await Editor.make()
+        .config((ctx) => {
+          ctx.set(rootCtx, editorHost);
+          ctx.set(defaultValueCtx, markdown);
+          ctx.update(_editorViewOptionsCtx, (prev) => ({
+            ...prev,
+            attributes: {
+              ...(typeof prev.attributes === "object" ? prev.attributes : {}),
+              spellcheck: "true",
+              autocapitalize: "off",
+              autocorrect: "off",
+              translate: "no",
+            },
+          }));
+        })
+        .use(commonmark)
+        .use(listener)
+        .create();
 
-  const alignLeftButton = createToolbarButton("L", t("basecard.toolbar.alignLeft"), () =>
-    runEditorCommand("justifyLeft")
-  );
-  const alignCenterButton = createToolbarButton(
-    "C",
-    t("basecard.toolbar.alignCenter"),
-    () => runEditorCommand("justifyCenter")
-  );
-  const alignRightButton = createToolbarButton("R", t("basecard.toolbar.alignRight"), () =>
-    runEditorCommand("justifyRight")
-  );
-  const alignJustifyButton = createToolbarButton(
-    "J",
-    t("basecard.toolbar.alignJustify"),
-    () => runEditorCommand("justifyFull")
-  );
-
-  const colorInput = document.createElement("input");
-  colorInput.type = "color";
-  colorInput.className = "chips-basecard-editor__toolbar-color";
-  colorInput.title = t("basecard.toolbar.textColor");
-  colorInput.setAttribute("aria-label", t("basecard.toolbar.textColor"));
-  colorInput.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  colorInput.addEventListener("input", () => {
-    if (!colorInput.value) {
-      return;
-    }
-    runEditorCommand("foreColor", colorInput.value);
-    validateAndEmit(false);
-  });
-
-  const bgColorInput = document.createElement("input");
-  bgColorInput.type = "color";
-  bgColorInput.className = "chips-basecard-editor__toolbar-color";
-  bgColorInput.title = t("basecard.toolbar.highlightColor");
-  bgColorInput.setAttribute("aria-label", t("basecard.toolbar.highlightColor"));
-  bgColorInput.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  bgColorInput.addEventListener("input", () => {
-    if (!bgColorInput.value) {
-      return;
-    }
-    runEditorCommand("hiliteColor", bgColorInput.value);
-    validateAndEmit(false);
-  });
-
-  const fontSizeSelect = document.createElement("select");
-  fontSizeSelect.className = "chips-basecard-editor__toolbar-select";
-  fontSizeSelect.title = t("basecard.toolbar.fontSize");
-  fontSizeSelect.setAttribute("aria-label", t("basecard.toolbar.fontSize"));
-  const defaultFontSizeOption = document.createElement("option");
-  defaultFontSizeOption.value = "";
-  defaultFontSizeOption.textContent = t("basecard.toolbar.fontSize");
-  fontSizeSelect.appendChild(defaultFontSizeOption);
-  [12, 14, 16, 18, 24, 32].forEach((size) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = String(size);
-    optionEl.textContent = `${size}px`;
-    fontSizeSelect.appendChild(optionEl);
-  });
-  fontSizeSelect.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  fontSizeSelect.addEventListener("change", () => {
-    const selected = Number.parseInt(fontSizeSelect.value, 10);
-    if (!Number.isFinite(selected)) {
-      return;
-    }
-    resolveSelection();
-    wrapSelectionWithStyle(bodyEditor, `font-size: ${selected}px`);
-    rememberSelection();
-    validateAndEmit(false);
-    fontSizeSelect.value = "";
-  });
-
-  const clearFormatButton = createToolbarButton(
-    t("basecard.toolbar.clear"),
-    t("basecard.toolbar.clear"),
-    () => runEditorCommand("removeFormat")
-  );
-
-  const linkButton = createToolbarButton(
-    t("basecard.toolbar.link"),
-    t("basecard.toolbar.link"),
-    () => {
-      const selectionRange = cloneEditorSelection(bodyEditor);
-      const selectedText = selectionRange?.toString() ?? "";
-      const defaultUrl =
-        selectedText && selectedText.startsWith("http") ? selectedText : "https://";
-
-      const url = (window.prompt(t("basecard.prompt.linkUrl"), defaultUrl) ?? "").trim();
-      if (!url) {
+      if (controller.disposed) {
+        await controller.editor.destroy();
         return;
       }
 
-      const text = (
-        selectedText ||
-        window.prompt(t("basecard.prompt.linkText"), url) ||
-        url
-      ).trim();
+      controller.editor.action((ctx) => {
+        const manager = ctx.get(listenerCtx);
+        manager.markdownUpdated((_listenerCtx, nextMarkdown) => {
+          controller.currentMarkdown = normalizeMarkdown(nextMarkdown);
+          renderMeta(controller, meta);
+          void syncPreviewResources(controller);
+          scheduleCommit(controller, "change");
+        });
+        manager.selectionUpdated((_listenerCtx, selection) => {
+          updateToolbarPosition(controller, selection);
+        });
+        manager.focus(() => {
+          controller.focused = true;
+          updateToolbarPosition(controller);
+        });
+        manager.blur(() => {
+          controller.focused = false;
+          controller.floatingToolbar.hidden = true;
+          scheduleCommit(controller, "flush");
+        });
+      });
 
-      const linkHtml = createValidatedFragmentHtml(
-        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`,
-        'a[href]'
-      );
-      if (!linkHtml) {
-        return;
+      const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+      view.dom.addEventListener("compositionstart", () => {
+        controller.isComposing = true;
+      });
+      view.dom.addEventListener("compositionend", () => {
+        controller.isComposing = false;
+        scheduleCommit(controller, "change");
+      });
+      view.dom.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+          event.preventDefault();
+          runCommand(controller, toggleStrongCommand.key);
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") {
+          event.preventDefault();
+          runCommand(controller, toggleEmphasisCommand.key);
+        }
+      });
+
+      await syncPreviewResources(controller);
+      renderMeta(controller, meta);
+      if (!hasMeaningfulMarkdownContent(markdown)) {
+        setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
       }
-
-      restoreEditorSelection(bodyEditor, selectionRange);
-      replaceSelectionWithHtml(bodyEditor, linkHtml);
-      rememberSelection();
+    } catch (error) {
+      setErrors(controller, [`${controller.t("basecard.status.loadFailed")}：${error instanceof Error ? error.message : String(error)}`]);
     }
-  );
+  })();
 
-  const imageButton = createToolbarButton(
-    t("basecard.toolbar.image"),
-    t("basecard.toolbar.image"),
-    () => {
-      const selectionRange = cloneEditorSelection(bodyEditor);
-      const src = (window.prompt(t("basecard.prompt.imageUrl"), "https://") ?? "").trim();
-      if (!src) {
-        return;
-      }
-
-      const alt = (window.prompt(t("basecard.prompt.imageAlt"), "") ?? "").trim();
-      const width = (window.prompt(t("basecard.prompt.imageWidth"), "") ?? "").trim();
-      const height = (window.prompt(t("basecard.prompt.imageHeight"), "") ?? "").trim();
-
-      const attributes: string[] = [`src="${escapeHtml(src)}"`];
-      if (alt) {
-        attributes.push(`alt="${escapeHtml(alt)}"`);
-      }
-      if (width) {
-        attributes.push(`width="${escapeHtml(width)}"`);
-      }
-      if (height) {
-        attributes.push(`height="${escapeHtml(height)}"`);
-      }
-
-      const imageHtml = createValidatedFragmentHtml(
-        `<img ${attributes.join(" ")} />`,
-        "img[src]"
-      );
-      if (!imageHtml) {
-        return;
-      }
-
-      restoreEditorSelection(bodyEditor, selectionRange);
-      replaceSelectionWithHtml(bodyEditor, imageHtml);
-      rememberSelection();
+  root.__chipsDispose = () => {
+    controller.disposed = true;
+    if (controller.flushTimer) {
+      window.clearTimeout(controller.flushTimer);
+      controller.flushTimer = undefined;
     }
-  );
-
-  const hrButton = createToolbarButton(
-    t("basecard.toolbar.divider"),
-    t("basecard.toolbar.divider"),
-    () => runEditorCommand("insertHorizontalRule")
-  );
-
-  toolbarContent.appendChild(
-    createToolbarGroup(
-      boldButton,
-      italicButton,
-      underlineButton,
-      strikeButton,
-      superscriptButton,
-      subscriptButton,
-      codeButton
-    )
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(blockSelect, orderedListButton, unorderedListButton, blockquoteButton)
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(
-      alignLeftButton,
-      alignCenterButton,
-      alignRightButton,
-      alignJustifyButton,
-      colorInput,
-      bgColorInput,
-      fontSizeSelect
-    )
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(clearFormatButton, linkButton, imageButton, hrButton)
-  );
-
-  toolbarToggle.addEventListener("mousedown", (event) => {
-    rememberSelection();
-    event.preventDefault();
-  });
-  toolbarToggle.addEventListener("click", (event) => {
-    event.preventDefault();
-    isToolbarCollapsed = !isToolbarCollapsed;
-    applyToolbarState();
-  });
-
-  bodyEditor.addEventListener("focus", () => {
-    ensureParagraphBehavior();
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("mouseup", () => {
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("keyup", () => {
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("input", () => {
-    if (isComposingText) {
-      syncPlaceholderState();
-      return;
+    if (controller.editor) {
+      void controller.editor.destroy();
     }
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    draft = collectDraftFromDom();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("compositionstart", () => {
-    isComposingText = true;
-  });
-
-  bodyEditor.addEventListener("compositionend", () => {
-    isComposingText = false;
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("paste", (event) => {
-    event.preventDefault();
-
-    const clipboardData = event.clipboardData;
-    const pastedHtml = clipboardData?.getData("text/html") ?? "";
-    const pastedText = clipboardData?.getData("text/plain") ?? "";
-
-    const normalizedHtml = pastedHtml
-      ? sanitizeRichTextHtml(pastedHtml).trim()
-      : plainTextToRichTextHtml(pastedText);
-
-    if (!normalizedHtml) {
-      return;
+    for (const resourcePath of controller.lastResolvedResources) {
+      controller.props.releaseResourceUrl?.(resourcePath);
     }
-
-    rememberSelection();
-    resolveSelection();
-    replaceSelectionWithHtml(bodyEditor, normalizedHtml);
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("keydown", (event) => {
-    if (isComposingText || event.isComposing) {
-      return;
-    }
-
-    if (
-      event.key === "Enter" &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
-      if (event.shiftKey) {
-        insertLineBreak();
-      } else {
-        insertParagraphBreak();
-      }
-      syncPlaceholderState();
-      scheduleValidateAndEmit(false, false);
-      return;
-    }
-
-    if (!(event.ctrlKey || event.metaKey)) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-    if (key === "b") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("bold");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    } else if (key === "i") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("italic");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    } else if (key === "u") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("underline");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    }
-  });
-
-  root.addEventListener("focusout", (event) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && root.contains(nextTarget)) {
-      return;
-    }
-    flushValidateAndEmit(true, true);
-  });
-
-  syncToolbarState();
-  syncPlaceholderState();
-  applyToolbarState();
-
-  root.__chipsDispose = () => undefined;
+    controller.lastResolvedResources.clear();
+    window.removeEventListener("resize", controller.handleWindowResize);
+  };
 
   return root;
 }

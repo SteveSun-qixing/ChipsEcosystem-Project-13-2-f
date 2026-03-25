@@ -23,7 +23,7 @@ function createMockBaseCards(count = 1) {
   return Array.from({ length: count }, (_, index) => ({
     id: `base-${index + 1}`,
     type: 'base.richtext',
-    data: { id: `base-${index + 1}`, body: `<p>Intro ${index + 1}</p>` },
+    data: { id: `base-${index + 1}`, content_text: `Intro ${index + 1}` },
   }));
 }
 

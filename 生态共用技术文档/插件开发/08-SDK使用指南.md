@@ -280,8 +280,11 @@ const result = await client.card.editorPanel.render({
   cardType: 'RichTextCard',
   baseCardId: 'base-1',
   initialConfig: {
-    title: 'Hello',
-    body: '<p>World</p>',
+    card_type: 'RichTextCard',
+    content_format: 'markdown',
+    content_source: 'inline',
+    content_text: 'Hello **World**',
+    locale: 'zh-CN',
   },
 });
 
@@ -297,6 +300,12 @@ const disposeError = client.card.editorPanel.onError(result.frame, (payload) => 
   console.error(payload.code, payload.message);
 });
 ```
+
+富文本基础卡片约束补充：
+
+- `initialConfig` 必须使用 RichTextCard 的正式 Markdown 配置字段；
+- 运行时会根据正文纯文本字符数决定最终保存到 `content_text` 或 `content_file`；
+- 悬浮工具框由插件运行时控制，不需要也不能通过 SDK 传入工具栏配置。
 
 资源型编辑器示例：
 

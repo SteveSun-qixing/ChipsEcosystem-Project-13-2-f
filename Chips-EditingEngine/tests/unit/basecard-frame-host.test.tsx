@@ -36,7 +36,7 @@ function ParentHarness() {
   const [readyRevision, setReadyRevision] = useState(0);
   const stableConfig = useMemo(() => ({
     id: 'base-1',
-    body: '<p>demo</p>',
+    content_text: 'demo',
   }), []);
 
   return (
@@ -64,7 +64,7 @@ function ParentHarness() {
 function RefreshHarness() {
   const [config, setConfig] = useState<Record<string, unknown>>({
     id: 'base-1',
-    body: '<p>long</p>',
+    content_text: 'long',
   });
 
   return (
@@ -75,7 +75,7 @@ function RefreshHarness() {
         onClick={() => {
           setConfig({
             id: 'base-1',
-            body: '<p>grid</p>',
+            content_text: 'grid',
           });
         }}
       >
@@ -122,7 +122,7 @@ describe('BasecardFrameHost', () => {
       container: HTMLElement;
       config?: Record<string, unknown>;
     }) => {
-      const height = config?.body === '<p>grid</p>' ? 128 : 420;
+      const height = config?.content_text === 'grid' ? 128 : 420;
       Object.defineProperty(mountContainer, 'scrollHeight', {
         configurable: true,
         value: height,

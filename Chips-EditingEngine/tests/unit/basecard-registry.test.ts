@@ -9,7 +9,9 @@ describe('basecard registry', () => {
   it('creates richtext starter content through the descriptor for new base cards', () => {
     expect(createInitialBasecardConfig('RichTextCard', 'base-1')).toMatchObject({
       card_type: 'RichTextCard',
-      body: '<p>123456789</p>',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '123456789',
       locale: 'zh-CN',
     });
   });

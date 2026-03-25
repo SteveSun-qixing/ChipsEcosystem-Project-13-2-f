@@ -1,10 +1,12 @@
-import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
 import {
+  collectRichTextResourcePaths,
+  createInitialBasecardConfig,
   defaultBasecardConfig,
   normalizeBasecardConfig,
   validateBasecardConfig,
+  type BasecardConfig,
 } from "./schema/card-config";
 
 export interface BasecardResourceImportRequest {
@@ -46,23 +48,24 @@ export const basecardDefinition = {
   pluginId: "chips.basecard.richtext",
   cardType: "base.richtext",
   displayName: "富文本基础卡片",
-  description: "提供富文本内容的查看与编辑能力。",
+  description: "提供基于 Milkdown 的 Markdown 富文本编辑与查看能力。",
   icon: "📝",
   aliases: ["RichTextCard"],
   commitDebounceMs: 260,
   createInitialConfig(_baseCardId: string) {
-    return normalizeBasecardConfig({
-      ...defaultBasecardConfig,
-      body: "<p>123456789</p>",
-    }) as unknown as Record<string, unknown>;
+    return createInitialBasecardConfig() as unknown as Record<string, unknown>;
   },
   normalizeConfig(input: Record<string, unknown>, _baseCardId: string) {
-    return normalizeBasecardConfig(input) as unknown as Record<string, unknown>;
+    return normalizeBasecardConfig({
+      ...defaultBasecardConfig,
+      ...input,
+    }) as unknown as Record<string, unknown>;
   },
   validateConfig(config: Record<string, unknown>) {
-    return validateBasecardConfig(
-      normalizeBasecardConfig(config),
-    );
+    return validateBasecardConfig(normalizeBasecardConfig(config));
+  },
+  collectResourcePaths(config: Record<string, unknown>) {
+    return collectRichTextResourcePaths(normalizeBasecardConfig(config));
   },
   renderView(ctx: {
     container: HTMLElement;

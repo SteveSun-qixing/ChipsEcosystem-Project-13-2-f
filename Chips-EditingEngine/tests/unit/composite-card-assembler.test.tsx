@@ -65,7 +65,7 @@ describe('CompositeCardAssembler', () => {
             {
               id: 'base-1',
               type: 'base.richtext',
-              data: { id: 'base-1', body: '<p>demo</p>' },
+              data: { id: 'base-1', content_text: 'demo' },
               createdAt: '2026-03-14T00:00:00.000Z',
               modifiedAt: '2026-03-14T00:00:00.000Z',
             },

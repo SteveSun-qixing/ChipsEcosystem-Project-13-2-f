@@ -1,206 +1,110 @@
+export const MARKDOWN_CONTENT_FORMAT = "markdown" as const;
+export const MAX_INLINE_RICHTEXT_LENGTH = 200;
+export const DEFAULT_RICHTEXT_MARKDOWN = "123456789";
+
 export function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export const EMPTY_RICH_TEXT_BODY = "<p></p>";
-
-const ALLOWED_TAGS = new Set([
-  "p",
-  "br",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "ul",
-  "ol",
-  "li",
-  "blockquote",
-  "hr",
-  "strong",
-  "b",
-  "em",
-  "i",
-  "u",
-  "s",
-  "del",
-  "sup",
-  "sub",
-  "code",
-  "span",
-  "a",
-  "img",
-]);
-
-const GLOBAL_ALLOWED_ATTRS = new Set(["title", "style"]);
-
-const TAG_ALLOWED_ATTRS: Record<string, Set<string>> = {
-  a: new Set(["href", "target", "rel", "title", "style"]),
-  img: new Set(["src", "alt", "width", "height", "title", "style"]),
-};
-
-const STYLE_ALLOWED_PROPS = new Set([
-  "color",
-  "background-color",
-  "font-size",
-  "text-align",
-  "font-weight",
-  "font-style",
-  "text-decoration",
-]);
-
-function sanitizeStyleAttribute(style: string): string {
-  const safe: string[] = [];
-  const declarations = style.split(";");
-  for (const decl of declarations) {
-    const trimmed = decl.trim();
-    if (!trimmed) continue;
-    const [propRaw, valueRaw] = trimmed.split(":", 2);
-    if (!propRaw || !valueRaw) continue;
-    const prop = propRaw.trim().toLowerCase();
-    const value = valueRaw.trim();
-    if (STYLE_ALLOWED_PROPS.has(prop)) {
-      safe.push(`${prop}: ${value}`);
-    }
-  }
-  return safe.join("; ");
+export function normalizeMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[\t ]+$/gm, "")
+    .replace(/^\n+/, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
 }
 
-function isSafeUrl(url: string): boolean {
-  const trimmed = url.trim().toLowerCase();
-  if (!trimmed) return false;
-  if (
-    trimmed.startsWith("javascript:") ||
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("vbscript:")
-  ) {
+export function normalizeResourcePath(resourcePath: string): string {
+  const normalized = resourcePath.replace(/\\/g, "/").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.replace(/^\.\//, "").replace(/^\//, "");
+}
+
+export function isExternalUrl(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("//") || value.startsWith("#");
+}
+
+export function isRelativeResourcePath(value: string | undefined): value is string {
+  return isNonEmptyString(value) && !isExternalUrl(value.trim());
+}
+
+export function isMarkdownFilePath(value: string | undefined): value is string {
+  if (!isRelativeResourcePath(value)) {
     return false;
   }
-  return true;
+  const normalized = normalizeResourcePath(value);
+  return normalized.toLowerCase().endsWith(".md");
 }
 
-function sanitizeElement(el: HTMLElement): void {
-  const tag = el.tagName.toLowerCase();
+export function createRichTextMarkdownFileName(seed?: string): string {
+  const safeSeed = (seed ?? "")
+    .trim()
+    .replace(/[^0-9a-zA-Z_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
-  if (!ALLOWED_TAGS.has(tag)) {
-    const parent = el.parentNode;
-    if (!parent) return;
-    while (el.firstChild) {
-      parent.insertBefore(el.firstChild, el);
-    }
-    parent.removeChild(el);
-    return;
+  if (safeSeed) {
+    return `richtext-${safeSeed}.md`;
   }
 
-  for (const attr of Array.from(el.attributes)) {
-    const name = attr.name;
-    const value = attr.value;
-    const lowerName = name.toLowerCase();
+  const fallback = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID().slice(0, 10)
+    : `${Date.now()}`;
 
-    const allowedForTag =
-      TAG_ALLOWED_ATTRS[tag as keyof typeof TAG_ALLOWED_ATTRS];
-    const isAllowedGlobal = GLOBAL_ALLOWED_ATTRS.has(lowerName);
-    const isAllowedOnTag = allowedForTag?.has(lowerName) ?? false;
-
-    if (!isAllowedGlobal && !isAllowedOnTag) {
-      el.removeAttribute(name);
-      continue;
-    }
-
-    if (lowerName === "style") {
-      const safeStyle = sanitizeStyleAttribute(value);
-      if (safeStyle) {
-        el.setAttribute("style", safeStyle);
-      } else {
-        el.removeAttribute("style");
-      }
-      continue;
-    }
-
-    if (tag === "a" && lowerName === "href") {
-      if (!isSafeUrl(value)) {
-        el.removeAttribute(name);
-      } else {
-        if (!el.hasAttribute("target")) {
-          el.setAttribute("target", "_blank");
-        }
-        const existingRel = el.getAttribute("rel") || "";
-        const relParts = new Set(
-          existingRel
-            .split(/\s+/)
-            .map((p) => p.trim())
-            .filter(Boolean)
-        );
-        relParts.add("noopener");
-        el.setAttribute("rel", Array.from(relParts).join(" "));
-      }
-      continue;
-    }
-
-    if (tag === "img" && lowerName === "src") {
-      if (!isSafeUrl(value) && !value.startsWith("/")) {
-        el.removeAttribute(name);
-      }
-      continue;
-    }
-  }
+  return `richtext-${fallback}.md`;
 }
 
-export function sanitizeRichTextHtml(html: string): string {
-  if (!html) return "";
-
-  if (typeof document === "undefined") {
-    return html
-      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
-      .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+export function extractPlainTextFromMarkdown(markdown: string): string {
+  const normalized = normalizeMarkdown(markdown);
+  if (!normalized) {
+    return "";
   }
 
-  const template = document.createElement("template");
-  template.innerHTML = html;
-
-  const walker = document.createTreeWalker(
-    template.content,
-    NodeFilter.SHOW_ELEMENT,
-    null
-  );
-
-  const elements: HTMLElement[] = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      elements.push(node as HTMLElement);
-    }
-  }
-
-  for (const el of elements) {
-    sanitizeElement(el);
-  }
-
-  return template.innerHTML;
-}
-
-export function normalizeRichTextHtml(html: string): string {
-  const sanitized = sanitizeRichTextHtml(html);
-  if (!sanitized.trim()) {
-    return EMPTY_RICH_TEXT_BODY;
-  }
-
-  return sanitized;
-}
-
-export function hasMeaningfulRichTextContent(html: string): boolean {
-  const sanitized = normalizeRichTextHtml(html);
-  const plainText = sanitized
-    .replace(/<br\s*\/?>/gi, " ")
+  return normalized
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s{0,3}>\s?/gm, "")
+    .replace(/^\s{0,3}(?:[-*+] |\d+\. )/gm, "")
+    .replace(/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/gm, " ")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/\\([\\`*{}\[\]()#+\-.!_>~|])/g, "$1")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
+}
 
-  if (plainText.length > 0) {
+export function countUnicodeCharacters(text: string): number {
+  return Array.from(text).length;
+}
+
+export function countPlainTextLengthFromMarkdown(markdown: string): number {
+  return countUnicodeCharacters(extractPlainTextFromMarkdown(markdown));
+}
+
+export function hasMeaningfulMarkdownContent(markdown: string): boolean {
+  if (countPlainTextLengthFromMarkdown(markdown) > 0) {
     return true;
   }
 
-  return /<(img|video|audio|iframe|hr|table|ul|ol|blockquote|pre)\b/i.test(sanitized);
+  const normalized = normalizeMarkdown(markdown);
+  if (!normalized) {
+    return false;
+  }
+
+  return /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/m.test(normalized);
+}
+
+export function shouldUseFileStorage(plainTextLength: number): boolean {
+  return plainTextLength > MAX_INLINE_RICHTEXT_LENGTH;
 }

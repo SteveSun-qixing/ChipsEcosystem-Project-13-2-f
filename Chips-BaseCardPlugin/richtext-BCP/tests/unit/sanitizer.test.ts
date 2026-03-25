@@ -1,38 +1,29 @@
-import { describe, it, expect } from "vitest";
-import { sanitizeRichTextHtml } from "../../src/shared/utils";
+import { describe, expect, it } from "vitest";
+import {
+  countPlainTextLengthFromMarkdown,
+  createRichTextMarkdownFileName,
+  extractPlainTextFromMarkdown,
+  normalizeResourcePath,
+  shouldUseFileStorage,
+} from "../../src/shared/utils";
 
-describe("sanitizeRichTextHtml", () => {
-  it("removes script tags and keeps text content", () => {
-    const input = '<p>safe</p><script>alert(1)</script><p>more</p>';
-    const sanitized = sanitizeRichTextHtml(input);
+describe("markdown helpers", () => {
+  it("extracts readable text from markdown", () => {
+    const markdown = `# 标题
 
-    const container = document.createElement("div");
-    container.innerHTML = sanitized;
-
-    expect(container.querySelector("script")).toBeNull();
-    expect(container.textContent).toContain("safe");
-    expect(container.textContent).toContain("more");
+这是 **内容**，包含 [链接](https://example.com) 和 \`code\`。`;
+    expect(extractPlainTextFromMarkdown(markdown)).toContain("标题");
+    expect(extractPlainTextFromMarkdown(markdown)).toContain("内容");
+    expect(countPlainTextLengthFromMarkdown(markdown)).toBeGreaterThan(2);
   });
 
-  it("removes dangerous javascript: URLs from links", () => {
-    const input =
-      '<a href="javascript:alert(1)">bad</a><a href="https://example.com">good</a>';
-  const sanitized = sanitizeRichTextHtml(input);
+  it("normalizes resource paths and markdown file naming", () => {
+    expect(normalizeResourcePath("./richtext-a.md")).toBe("richtext-a.md");
+    expect(createRichTextMarkdownFileName("base-1")).toBe("richtext-base-1.md");
+  });
 
-  const container = document.createElement("div");
-  container.innerHTML = sanitized;
-  const links = container.querySelectorAll("a");
-
-  expect(links.length).toBe(2);
-
-  const badLink = links.item(0);
-  const goodLink = links.item(1);
-
-  if (!badLink || !goodLink) {
-    throw new Error("预期存在两个链接元素");
-  }
-
-  expect(badLink.getAttribute("href")).toBeNull();
-  expect(goodLink.getAttribute("href")).toBe("https://example.com");
+  it("switches to file storage only after 200 characters", () => {
+    expect(shouldUseFileStorage(200)).toBe(false);
+    expect(shouldUseFileStorage(201)).toBe(true);
   });
 });

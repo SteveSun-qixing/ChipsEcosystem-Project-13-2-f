@@ -1,0 +1,36 @@
+{
+  "version": "1.0.0",
+  "components": [
+    {
+      "name": "button",
+      "scope": "comp",
+      "parts": ["root"],
+      "states": ["default", "disabled"],
+      "tokens": [
+        "chips.comp.button.root.radius",
+        "chips.comp.button.root.surface.idle",
+        "chips.comp.button.root.surface.hover",
+        "chips.comp.button.root.surface.active",
+        "chips.comp.button.root.surface.disabled",
+        "chips.comp.button.label.color.idle",
+        "chips.comp.button.label.color.disabled",
+        "chips.comp.button.focus.outline"
+      ]
+    },
+    {
+      "name": "input",
+      "scope": "comp",
+      "parts": ["root", "value", "placeholder"],
+      "states": ["default", "focus", "error"],
+      "tokens": [
+        "chips.comp.input.root.radius",
+        "chips.comp.input.root.surface.idle",
+        "chips.comp.input.root.surface.focus",
+        "chips.comp.input.root.border.idle",
+        "chips.comp.input.root.border.error",
+        "chips.comp.input.value.color",
+        "chips.comp.input.placeholder.color"
+      ]
+    }
+  ]
+}

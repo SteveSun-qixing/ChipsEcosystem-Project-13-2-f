@@ -5,16 +5,25 @@ import {
   editorViewOptionsCtx,
   rootCtx,
 } from "@milkdown/core";
-import { commonmark, insertHrCommand, toggleEmphasisCommand, toggleInlineCodeCommand, toggleLinkCommand, toggleStrongCommand, turnIntoTextCommand, wrapInBlockquoteCommand, wrapInBulletListCommand, wrapInHeadingCommand, wrapInOrderedListCommand } from "@milkdown/preset-commonmark";
-import { listener, listenerCtx } from "@milkdown/plugin-listener";
-import { callCommand, getMarkdown } from "@milkdown/utils";
 import type { Editor as MilkdownEditor } from "@milkdown/core";
-import type { Selection } from "@milkdown/prose/state";
-import { editorViewOptionsCtx as _editorViewOptionsCtx } from "@milkdown/core";
-import { toggleMark } from "@milkdown/prose/commands";
+import { listener, listenerCtx } from "@milkdown/plugin-listener";
+import {
+  commonmark,
+  insertHrCommand,
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  turnIntoTextCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInHeadingCommand,
+  wrapInOrderedListCommand,
+} from "@milkdown/preset-commonmark";
+import { TextSelection, type Selection } from "@milkdown/prose/state";
+import { callCommand, getMarkdown } from "@milkdown/utils";
 import type { BasecardResourceImportRequest, BasecardResourceImportResult } from "../index";
 import {
-  collectRichTextResourcePaths,
   createFileBasecardConfig,
   createInlineBasecardConfig,
   normalizeBasecardConfig,
@@ -22,9 +31,8 @@ import {
   type BasecardConfig,
 } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
-import { rewriteRelativeResourceUrls, loadMarkdownFromConfig } from "../shared/resource-links";
+import { loadMarkdownFromConfig, rewriteRelativeResourceUrls } from "../shared/resource-links";
 import {
-  MAX_INLINE_RICHTEXT_LENGTH,
   countUnicodeCharacters,
   createRichTextMarkdownFileName,
   extractPlainTextFromMarkdown,
@@ -48,17 +56,51 @@ type EditorRoot = HTMLElement & {
   __chipsDispose?: () => void;
 };
 
+type ToolbarIconName =
+  | "bold"
+  | "italic"
+  | "code"
+  | "link"
+  | "clear"
+  | "paragraph"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "blockquote"
+  | "orderedList"
+  | "unorderedList"
+  | "divider";
+
 type ToolbarButton = {
   key: string;
   labelKey: string;
+  icon: ToolbarIconName;
   run: (controller: EditorController) => void | Promise<void>;
+};
+
+type ContextMenuAction = {
+  key: string;
+  labelKey: string;
+  icon: ToolbarIconName;
+  run: (controller: EditorController) => void | Promise<void>;
+};
+
+type SelectionSnapshot = {
+  from: number;
+  to: number;
 };
 
 type EditorController = {
   root: EditorRoot;
+  surfaceFrame: HTMLDivElement;
   editorHost: HTMLDivElement;
   scrollSurface: HTMLDivElement;
   floatingToolbar: HTMLDivElement;
+  tooltipLayer: HTMLDivElement;
+  tooltipContent: HTMLDivElement;
+  tooltipArrow: HTMLDivElement;
+  contextMenu: HTMLDivElement;
+  contextMenuContent: HTMLDivElement;
   errorList: HTMLUListElement;
   locale: string;
   theme: string;
@@ -77,7 +119,12 @@ type EditorController = {
   rerunCommitAfterImport: boolean;
   flushTimer?: number;
   pendingErrors: string[];
+  selectionSnapshot?: SelectionSnapshot;
+  tooltipTrigger?: HTMLElement;
   handleWindowResize: () => void;
+  handleDocumentPointerDown: (event: PointerEvent) => void;
+  handleDocumentKeyDown: (event: KeyboardEvent) => void;
+  handleWindowBlur: () => void;
 };
 
 const EDITOR_STYLE_TEXT = `
@@ -107,11 +154,12 @@ html, body {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 14px 16px 16px;
   background: var(--chips-sys-color-surface, #ffffff);
   color: var(--chips-sys-color-on-surface, #111827);
-  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 14px/1.6 var(--chips-font-family-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  isolation: isolate;
 }
 
 .chips-basecard-editor *,
@@ -125,7 +173,7 @@ html, body {
   flex: 1;
   min-height: 0;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .chips-basecard-editor__surface {
@@ -183,7 +231,7 @@ html, body {
   margin-left: 0;
   padding-left: 14px;
   border-left: 3px solid rgba(37, 99, 235, 0.28);
-  color: #475467;
+  color: var(--chips-sys-color-on-surface-variant, #667085);
 }
 
 .chips-basecard-editor__editor-host .ProseMirror code {
@@ -204,31 +252,44 @@ html, body {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 20;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: min(560px, calc(100% - 32px));
-  padding: 10px 12px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 4px;
   border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
-  transform: translate(-50%, calc(-100% - 12px));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--chips-comp-menu-content-surface, #ffffff) 94%, transparent);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  transform: translate(-50%, calc(-100% - 10px));
   backdrop-filter: blur(16px);
+}
+
+.chips-basecard-editor__floating-toolbar[data-side="bottom"] {
+  transform: translate(-50%, 10px);
 }
 
 .chips-basecard-editor__floating-toolbar[hidden] {
   display: none;
 }
 
-.chips-basecard-editor__toolbar-button,
-.chips-basecard-editor__toolbar-select {
+.chips-basecard-editor__toolbar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
   border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 10px;
-  background: var(--chips-comp-card-shell-root-surface, #ffffff);
-  color: inherit;
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--chips-sys-color-on-surface, #111827);
   font: inherit;
+  cursor: pointer;
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -237,40 +298,150 @@ html, body {
     transform 0.15s ease;
 }
 
-.chips-basecard-editor__toolbar-button {
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0 10px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.chips-basecard-editor__toolbar-select {
-  min-width: 108px;
-  min-height: 36px;
-  padding: 0 10px;
-}
-
-.chips-basecard-editor__toolbar-button:hover,
-.chips-basecard-editor__toolbar-select:hover {
+.chips-basecard-editor__toolbar-button[data-state="hover"],
+.chips-basecard-editor__toolbar-button:hover {
   border-color: rgba(37, 99, 235, 0.55);
   transform: translateY(-1px);
 }
 
-.chips-basecard-editor__toolbar-button:focus-visible,
-.chips-basecard-editor__toolbar-select:focus-visible {
+.chips-basecard-editor__toolbar-button[data-state="active"] {
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 8%, #ffffff);
+  transform: translateY(0);
+}
+
+.chips-basecard-editor__toolbar-button[data-state="focus"],
+.chips-basecard-editor__toolbar-button:focus-visible {
   border-color: rgba(37, 99, 235, 0.85);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
-.chips-basecard-editor__meta {
-  flex: 0 0 auto;
+.chips-basecard-editor__toolbar-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chips-basecard-editor__tooltip-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.chips-basecard-editor__tooltip-layer[hidden] {
+  display: none;
+}
+
+[data-scope="tooltip"][data-part="content"] {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 10px));
+  padding: 4px 8px;
+  white-space: nowrap;
+  border-radius: var(--chips-comp-tooltip-content-radius, var(--chips-base-radius-sm, 8px));
+  background-color: var(--chips-comp-tooltip-content-surface, rgba(15, 23, 42, 0.92));
+  color: var(--chips-comp-tooltip-content-text-color, #ffffff);
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.chips-basecard-editor__tooltip-layer[data-side="bottom"] [data-scope="tooltip"][data-part="content"] {
+  transform: translate(-50%, 10px);
+}
+
+[data-scope="tooltip"][data-part="content"][data-state="focus"] {
+  outline: 2px solid var(--chips-comp-tooltip-focus-outline, rgba(37, 99, 235, 0.48));
+  outline-offset: 2px;
+}
+
+[data-scope="tooltip"][data-part="arrow"] {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, calc(-100% - 5px)) rotate(45deg);
+  background-color: var(--chips-comp-tooltip-arrow-surface, rgba(15, 23, 42, 0.92));
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.chips-basecard-editor__tooltip-layer[data-side="bottom"] [data-scope="tooltip"][data-part="arrow"] {
+  transform: translate(-50%, 5px) rotate(45deg);
+}
+
+.chips-basecard-editor__context-menu {
+  position: absolute;
+  z-index: 70;
+}
+
+.chips-basecard-editor__context-menu[hidden] {
+  display: none;
+}
+
+[data-scope="menu"][data-part="content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: var(--chips-comp-menu-content-radius, var(--chips-base-radius-md, 12px));
+  background-color: var(--chips-comp-menu-content-surface, #ffffff);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+}
+
+[data-scope="menu"][data-part="content"][data-state="focus"] {
+  outline: 2px solid var(--chips-comp-menu-focus-outline, rgba(37, 99, 235, 0.48));
+  outline-offset: 2px;
+}
+
+[data-scope="menu"][data-part="item"] {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 20px;
-  color: var(--chips-sys-color-on-surface-variant, #667085);
-  font-size: 12px;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  color: var(--chips-comp-menu-item-text-color, inherit);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+[data-scope="menu"][data-part="item"][data-state="hover"],
+[data-scope="menu"][data-part="item"]:hover {
+  background-color: var(--chips-comp-menu-item-surface-hover, rgba(37, 99, 235, 0.1));
+}
+
+[data-scope="menu"][data-part="item"][data-state="active"] {
+  background-color: var(--chips-comp-menu-item-surface-active, rgba(37, 99, 235, 0.16));
+}
+
+[data-scope="menu"][data-part="item"][data-state="focus"],
+[data-scope="menu"][data-part="item"]:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chips-comp-menu-focus-outline, #2563eb) 35%, transparent);
+}
+
+.chips-basecard-editor__context-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.chips-basecard-editor__context-menu-label {
+  min-width: 0;
+  flex: 1;
 }
 
 .chips-basecard-editor__errors {
@@ -295,6 +466,7 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   {
     key: "bold",
     labelKey: "basecard.toolbar.bold",
+    icon: "bold",
     run: (controller) => {
       runCommand(controller, toggleStrongCommand.key);
     },
@@ -302,6 +474,7 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   {
     key: "italic",
     labelKey: "basecard.toolbar.italic",
+    icon: "italic",
     run: (controller) => {
       runCommand(controller, toggleEmphasisCommand.key);
     },
@@ -309,41 +482,15 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   {
     key: "code",
     labelKey: "basecard.toolbar.code",
+    icon: "code",
     run: (controller) => {
       runCommand(controller, toggleInlineCodeCommand.key);
     },
   },
   {
-    key: "blockquote",
-    labelKey: "basecard.toolbar.blockquote",
-    run: (controller) => {
-      runCommand(controller, wrapInBlockquoteCommand.key);
-    },
-  },
-  {
-    key: "orderedList",
-    labelKey: "basecard.toolbar.orderedList",
-    run: (controller) => {
-      runCommand(controller, wrapInOrderedListCommand.key);
-    },
-  },
-  {
-    key: "unorderedList",
-    labelKey: "basecard.toolbar.unorderedList",
-    run: (controller) => {
-      runCommand(controller, wrapInBulletListCommand.key);
-    },
-  },
-  {
-    key: "divider",
-    labelKey: "basecard.toolbar.divider",
-    run: (controller) => {
-      runCommand(controller, insertHrCommand.key);
-    },
-  },
-  {
     key: "link",
     labelKey: "basecard.toolbar.link",
+    icon: "link",
     run: async (controller) => {
       const url = askUserForValue(controller.t("basecard.prompt.linkUrl"));
       if (!url) {
@@ -355,6 +502,82 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   {
     key: "clear",
     labelKey: "basecard.toolbar.clear",
+    icon: "clear",
+    run: (controller) => {
+      clearInlineFormatting(controller);
+    },
+  },
+];
+
+const CONTEXT_MENU_ACTIONS: ContextMenuAction[] = [
+  {
+    key: "paragraph",
+    labelKey: "basecard.block.paragraph",
+    icon: "paragraph",
+    run: (controller) => {
+      runCommand(controller, turnIntoTextCommand.key);
+    },
+  },
+  {
+    key: "h1",
+    labelKey: "basecard.block.h1",
+    icon: "h1",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 1);
+    },
+  },
+  {
+    key: "h2",
+    labelKey: "basecard.block.h2",
+    icon: "h2",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 2);
+    },
+  },
+  {
+    key: "h3",
+    labelKey: "basecard.block.h3",
+    icon: "h3",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 3);
+    },
+  },
+  {
+    key: "blockquote",
+    labelKey: "basecard.toolbar.blockquote",
+    icon: "blockquote",
+    run: (controller) => {
+      runCommand(controller, wrapInBlockquoteCommand.key);
+    },
+  },
+  {
+    key: "orderedList",
+    labelKey: "basecard.toolbar.orderedList",
+    icon: "orderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInOrderedListCommand.key);
+    },
+  },
+  {
+    key: "unorderedList",
+    labelKey: "basecard.toolbar.unorderedList",
+    icon: "unorderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInBulletListCommand.key);
+    },
+  },
+  {
+    key: "divider",
+    labelKey: "basecard.toolbar.divider",
+    icon: "divider",
+    run: (controller) => {
+      runCommand(controller, insertHrCommand.key);
+    },
+  },
+  {
+    key: "clear",
+    labelKey: "basecard.toolbar.clear",
+    icon: "clear",
     run: (controller) => {
       clearInlineFormatting(controller);
     },
@@ -369,50 +592,252 @@ function askUserForValue(label: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function createToolbarSelect(controller: EditorController): HTMLSelectElement {
-  const select = document.createElement("select");
-  select.className = "chips-basecard-editor__toolbar-select";
-  select.setAttribute("aria-label", controller.t("basecard.toolbar.block"));
-
-  const options = [
-    { value: "paragraph", label: controller.t("basecard.block.paragraph") },
-    { value: "h1", label: controller.t("basecard.block.h1") },
-    { value: "h2", label: controller.t("basecard.block.h2") },
-    { value: "h3", label: controller.t("basecard.block.h3") },
-  ];
-
-  for (const option of options) {
-    const element = document.createElement("option");
-    element.value = option.value;
-    element.textContent = option.label;
-    select.appendChild(element);
+function getIconEmoji(icon: ToolbarIconName): string {
+  switch (icon) {
+    case "bold":
+      return "𝐁";
+    case "italic":
+      return "𝘐";
+    case "code":
+      return "💻";
+    case "link":
+      return "🔗";
+    case "clear":
+      return "🧹";
+    case "paragraph":
+      return "¶";
+    case "h1":
+      return "①";
+    case "h2":
+      return "②";
+    case "h3":
+      return "③";
+    case "blockquote":
+      return "❝";
+    case "orderedList":
+      return "🔢";
+    case "unorderedList":
+      return "•";
+    case "divider":
+      return "➖";
   }
-
-  select.addEventListener("mousedown", (event) => {
-    event.preventDefault();
-  });
-  select.addEventListener("change", () => {
-    if (select.value === "paragraph") {
-      runCommand(controller, turnIntoTextCommand.key);
-    } else {
-      const level = Number(select.value.replace("h", ""));
-      runCommand(controller, wrapInHeadingCommand.key, level);
-    }
-    select.value = "paragraph";
-  });
-
-  return select;
 }
 
-function renderMeta(controller: EditorController, meta: HTMLDivElement): void {
-  const plainTextLength = countUnicodeCharacters(extractPlainTextFromMarkdown(controller.currentMarkdown));
-  const storageMode = plainTextLength > MAX_INLINE_RICHTEXT_LENGTH
-    ? controller.t("basecard.storage.file")
-    : controller.t("basecard.storage.inline");
-  meta.textContent = controller.t("basecard.meta.storage", {
-    mode: storageMode,
-    count: plainTextLength,
+function applyInteractiveState(node: HTMLElement): void {
+  node.dataset.state = "idle";
+  node.addEventListener("mouseenter", () => {
+    node.dataset.state = "hover";
   });
+  node.addEventListener("mouseleave", () => {
+    node.dataset.state = "idle";
+  });
+  node.addEventListener("focus", () => {
+    node.dataset.state = "focus";
+  });
+  node.addEventListener("blur", () => {
+    node.dataset.state = "idle";
+  });
+  node.addEventListener("mousedown", () => {
+    node.dataset.state = "active";
+  });
+  node.addEventListener("mouseup", () => {
+    node.dataset.state = node.matches(":focus") ? "focus" : "hover";
+  });
+}
+
+function hasTextSelection(selection: Selection): boolean {
+  return selection instanceof TextSelection && !selection.empty;
+}
+
+function captureSelection(controller: EditorController, selection?: Selection): void {
+  if (!controller.editor) {
+    return;
+  }
+
+  const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+  const currentSelection = selection ?? view.state.selection;
+  controller.selectionSnapshot = {
+    from: currentSelection.from,
+    to: currentSelection.to,
+  };
+}
+
+function restoreSelection(controller: EditorController): void {
+  if (!controller.editor || !controller.selectionSnapshot) {
+    return;
+  }
+
+  controller.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const maxPos = state.doc.content.size;
+    const from = Math.max(0, Math.min(controller.selectionSnapshot?.from ?? 0, maxPos));
+    const to = Math.max(from, Math.min(controller.selectionSnapshot?.to ?? from, maxPos));
+    const nextSelection = TextSelection.create(state.doc, from, to);
+    view.dispatch(state.tr.setSelection(nextSelection));
+    view.focus();
+  });
+}
+
+function hideTooltip(controller: EditorController): void {
+  if (controller.tooltipTrigger) {
+    controller.tooltipTrigger.removeAttribute("aria-describedby");
+    controller.tooltipTrigger = undefined;
+  }
+  controller.tooltipLayer.hidden = true;
+}
+
+function showTooltip(controller: EditorController, trigger: HTMLElement, label: string): void {
+  const tooltipId = controller.tooltipContent.id;
+  if (controller.tooltipTrigger && controller.tooltipTrigger !== trigger) {
+    controller.tooltipTrigger.removeAttribute("aria-describedby");
+  }
+
+  controller.tooltipTrigger = trigger;
+  trigger.setAttribute("aria-describedby", tooltipId);
+
+  const frameRect = controller.surfaceFrame.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  controller.tooltipLayer.hidden = false;
+  controller.tooltipContent.textContent = label;
+  controller.tooltipContent.dataset.state = "idle";
+
+  const tooltipWidth = controller.tooltipContent.offsetWidth || 72;
+  const tooltipHeight = controller.tooltipContent.offsetHeight || 28;
+  const centerX = triggerRect.left - frameRect.left + (triggerRect.width / 2);
+  const clampedX = Math.min(
+    Math.max(centerX, 16 + tooltipWidth / 2),
+    frameRect.width - 16 - tooltipWidth / 2,
+  );
+  const topSpace = triggerRect.top - frameRect.top;
+  const bottomSpace = frameRect.bottom - triggerRect.bottom;
+  const showBelow = topSpace < tooltipHeight + 18 && bottomSpace > topSpace;
+  const anchorTop = showBelow
+    ? triggerRect.bottom - frameRect.top - 2
+    : triggerRect.top - frameRect.top + 2;
+
+  controller.tooltipLayer.dataset.side = showBelow ? "bottom" : "top";
+
+  controller.tooltipContent.style.left = `${clampedX}px`;
+  controller.tooltipContent.style.top = `${anchorTop}px`;
+  controller.tooltipArrow.style.left = `${clampedX}px`;
+  controller.tooltipArrow.style.top = `${anchorTop}px`;
+}
+
+function hideContextMenu(controller: EditorController, restoreToolbar = true): void {
+  controller.contextMenu.hidden = true;
+  if (restoreToolbar) {
+    updateToolbarPosition(controller);
+  }
+}
+
+function positionContextMenu(controller: EditorController, clientX: number, clientY: number): void {
+  hideTooltip(controller);
+  controller.floatingToolbar.hidden = true;
+  controller.contextMenu.hidden = false;
+
+  const frameRect = controller.surfaceFrame.getBoundingClientRect();
+  const width = controller.contextMenuContent.offsetWidth || 220;
+  const height = controller.contextMenuContent.offsetHeight || 240;
+  const left = Math.min(
+    Math.max(clientX - frameRect.left, 12),
+    Math.max(12, frameRect.width - width - 12),
+  );
+  const top = Math.min(
+    Math.max(clientY - frameRect.top, 12),
+    Math.max(12, frameRect.height - height - 12),
+  );
+
+  controller.contextMenu.style.left = `${left}px`;
+  controller.contextMenu.style.top = `${top}px`;
+}
+
+function getMenuItems(controller: EditorController): HTMLButtonElement[] {
+  return Array.from(
+    controller.contextMenuContent.querySelectorAll<HTMLButtonElement>('[data-scope="menu"][data-part="item"]'),
+  );
+}
+
+function focusMenuItem(controller: EditorController, index: number): void {
+  const items = getMenuItems(controller);
+  if (items.length === 0) {
+    return;
+  }
+  const nextIndex = ((index % items.length) + items.length) % items.length;
+  items[nextIndex]?.focus();
+}
+
+function createToolbarButton(controller: EditorController, definition: ToolbarButton): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chips-basecard-editor__toolbar-button";
+  button.dataset.scope = "button";
+  button.dataset.part = "root";
+  button.setAttribute("aria-label", controller.t(definition.labelKey));
+
+  const icon = document.createElement("span");
+  icon.className = "chips-basecard-editor__toolbar-button-icon";
+  icon.dataset.part = "icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = getIconEmoji(definition.icon);
+  button.appendChild(icon);
+
+  applyInteractiveState(button);
+
+  button.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    restoreSelection(controller);
+  });
+  button.addEventListener("click", () => {
+    void definition.run(controller);
+  });
+  button.addEventListener("mouseenter", () => {
+    showTooltip(controller, button, controller.t(definition.labelKey));
+  });
+  button.addEventListener("focus", () => {
+    showTooltip(controller, button, controller.t(definition.labelKey));
+  });
+  button.addEventListener("mouseleave", () => {
+    hideTooltip(controller);
+  });
+  button.addEventListener("blur", () => {
+    hideTooltip(controller);
+  });
+
+  return button;
+}
+
+function createContextMenuItem(controller: EditorController, action: ContextMenuAction): HTMLButtonElement {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.dataset.scope = "menu";
+  item.dataset.part = "item";
+  item.setAttribute("role", "menuitem");
+  item.setAttribute("aria-label", controller.t(action.labelKey));
+
+  const icon = document.createElement("span");
+  icon.className = "chips-basecard-editor__context-menu-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = getIconEmoji(action.icon);
+  item.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "chips-basecard-editor__context-menu-label";
+  label.textContent = controller.t(action.labelKey);
+  item.appendChild(label);
+
+  applyInteractiveState(item);
+
+  item.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    restoreSelection(controller);
+  });
+  item.addEventListener("click", () => {
+    hideContextMenu(controller, false);
+    void action.run(controller);
+  });
+
+  return item;
 }
 
 function setErrors(controller: EditorController, errors: string[]): void {
@@ -473,10 +898,6 @@ async function commitCurrentMarkdown(controller: EditorController): Promise<void
   const hasContent = hasMeaningfulMarkdownContent(markdown);
   if (!hasContent) {
     setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
-    const meta = controller.root.querySelector(".chips-basecard-editor__meta") as HTMLDivElement | null;
-    if (meta) {
-      renderMeta(controller, meta);
-    }
     return;
   }
 
@@ -527,11 +948,6 @@ async function commitCurrentMarkdown(controller: EditorController): Promise<void
     controller.props.onChange(nextConfig);
   }
 
-  const meta = controller.root.querySelector(".chips-basecard-editor__meta") as HTMLDivElement | null;
-  if (meta) {
-    renderMeta(controller, meta);
-  }
-
   if (controller.rerunCommitAfterImport) {
     controller.rerunCommitAfterImport = false;
     void commitCurrentMarkdown(controller);
@@ -543,16 +959,25 @@ function runCommand<T>(controller: EditorController, commandKey: string | { name
     return;
   }
 
+  restoreSelection(controller);
+  hideTooltip(controller);
+  hideContextMenu(controller, false);
+
   const key = typeof commandKey === "string" ? commandKey : (commandKey as { name?: string }).name ?? commandKey;
   controller.editor.action(callCommand(key as never, payload));
   void syncPreviewResources(controller);
   scheduleCommit(controller, "change");
+  updateToolbarPosition(controller);
 }
 
 function clearInlineFormatting(controller: EditorController): void {
   if (!controller.editor) {
     return;
   }
+
+  restoreSelection(controller);
+  hideTooltip(controller);
+  hideContextMenu(controller, false);
 
   controller.editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -584,32 +1009,49 @@ function clearInlineFormatting(controller: EditorController): void {
 
   void syncPreviewResources(controller);
   scheduleCommit(controller, "change");
+  updateToolbarPosition(controller);
 }
 
 function updateToolbarPosition(controller: EditorController, selection?: Selection): void {
-  if (!controller.editor || !controller.focused) {
+  if (!controller.editor || !controller.focused || !controller.contextMenu.hidden) {
     controller.floatingToolbar.hidden = true;
     return;
   }
 
   const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
   const currentSelection = selection ?? view.state.selection;
-  if (currentSelection.empty) {
+  if (!hasTextSelection(currentSelection)) {
     controller.floatingToolbar.hidden = true;
     return;
   }
 
-  const start = view.coordsAtPos(currentSelection.from);
-  const end = view.coordsAtPos(currentSelection.to);
-  const rootRect = controller.root.getBoundingClientRect();
-  const toolbarWidth = controller.floatingToolbar.offsetWidth || 280;
-  const centerX = ((start.left + end.right) / 2) - rootRect.left;
-  const clampedX = Math.min(Math.max(centerX, 24 + toolbarWidth / 2), rootRect.width - 24 - toolbarWidth / 2);
-  const top = Math.max(Math.min(start.top, end.top) - rootRect.top, 16);
+  try {
+    const start = view.coordsAtPos(currentSelection.from);
+    const end = view.coordsAtPos(currentSelection.to);
+    const frameRect = controller.surfaceFrame.getBoundingClientRect();
+    const toolbarWidth = controller.floatingToolbar.offsetWidth || 280;
+    const toolbarHeight = controller.floatingToolbar.offsetHeight || 48;
+    const centerX = ((start.left + end.right) / 2) - frameRect.left;
+    const clampedX = Math.min(
+      Math.max(centerX, 24 + toolbarWidth / 2),
+      frameRect.width - 24 - toolbarWidth / 2,
+    );
+    const selectionTop = Math.min(start.top, end.top) - frameRect.top;
+    const selectionBottom = Math.max(start.bottom, end.bottom) - frameRect.top;
+    const topSpace = selectionTop;
+    const bottomSpace = frameRect.height - selectionBottom;
+    const showBelow = topSpace < toolbarHeight + 18 && bottomSpace > topSpace;
+    const top = showBelow
+      ? Math.min(selectionBottom, Math.max(16, frameRect.height - toolbarHeight - 16))
+      : Math.max(selectionTop, 16);
 
-  controller.floatingToolbar.style.left = `${clampedX}px`;
-  controller.floatingToolbar.style.top = `${top}px`;
-  controller.floatingToolbar.hidden = false;
+    controller.floatingToolbar.style.left = `${clampedX}px`;
+    controller.floatingToolbar.style.top = `${top}px`;
+    controller.floatingToolbar.dataset.side = showBelow ? "bottom" : "top";
+    controller.floatingToolbar.hidden = false;
+  } catch {
+    controller.floatingToolbar.hidden = true;
+  }
 }
 
 async function syncPreviewResources(controller: EditorController): Promise<void> {
@@ -629,6 +1071,10 @@ async function syncPreviewResources(controller: EditorController): Promise<void>
 export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot {
   const config = normalizeBasecardConfig(props.initialConfig as unknown as Record<string, unknown>);
   const root = document.createElement("div") as EditorRoot;
+  const ownerDocument = root.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView ?? window;
+  const tooltipId = `chips-basecard-editor-tooltip-${Math.random().toString(36).slice(2, 10)}`;
+
   root.id = "chips-basecard-editor-root";
 
   const style = document.createElement("style");
@@ -656,9 +1102,39 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
   floatingToolbar.hidden = true;
   surfaceFrame.appendChild(floatingToolbar);
 
-  const meta = document.createElement("div");
-  meta.className = "chips-basecard-editor__meta";
-  editorRoot.appendChild(meta);
+  const tooltipLayer = document.createElement("div");
+  tooltipLayer.className = "chips-basecard-editor__tooltip-layer";
+  tooltipLayer.hidden = true;
+  tooltipLayer.dataset.scope = "tooltip";
+  tooltipLayer.dataset.part = "root";
+  surfaceFrame.appendChild(tooltipLayer);
+
+  const tooltipContent = document.createElement("div");
+  tooltipContent.dataset.scope = "tooltip";
+  tooltipContent.dataset.part = "content";
+  tooltipContent.dataset.state = "idle";
+  tooltipContent.id = tooltipId;
+  tooltipContent.setAttribute("role", "tooltip");
+  tooltipLayer.appendChild(tooltipContent);
+
+  const tooltipArrow = document.createElement("div");
+  tooltipArrow.dataset.scope = "tooltip";
+  tooltipArrow.dataset.part = "arrow";
+  tooltipLayer.appendChild(tooltipArrow);
+
+  const contextMenu = document.createElement("div");
+  contextMenu.className = "chips-basecard-editor__context-menu";
+  contextMenu.dataset.scope = "menu";
+  contextMenu.dataset.part = "root";
+  contextMenu.hidden = true;
+  surfaceFrame.appendChild(contextMenu);
+
+  const contextMenuContent = document.createElement("div");
+  contextMenuContent.dataset.scope = "menu";
+  contextMenuContent.dataset.part = "content";
+  contextMenuContent.dataset.state = "idle";
+  contextMenuContent.setAttribute("role", "menu");
+  contextMenu.appendChild(contextMenuContent);
 
   const errors = document.createElement("div");
   errors.className = "chips-basecard-editor__errors";
@@ -670,9 +1146,15 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
 
   const controller: EditorController = {
     root,
+    surfaceFrame,
     editorHost,
     scrollSurface,
     floatingToolbar,
+    tooltipLayer,
+    tooltipContent,
+    tooltipArrow,
+    contextMenu,
+    contextMenuContent,
     errorList,
     locale: config.locale ?? "zh-CN",
     theme: config.theme ?? "",
@@ -690,34 +1172,111 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
     rerunCommitAfterImport: false,
     pendingErrors: [],
     handleWindowResize: () => {
+      hideTooltip(controller);
+      hideContextMenu(controller, false);
       updateToolbarPosition(controller);
+    },
+    handleDocumentPointerDown: (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        hideTooltip(controller);
+        hideContextMenu(controller, false);
+        return;
+      }
+
+      if (!root.contains(target)) {
+        hideTooltip(controller);
+        hideContextMenu(controller, false);
+        controller.floatingToolbar.hidden = true;
+        return;
+      }
+
+      if (!floatingToolbar.contains(target)) {
+        hideTooltip(controller);
+      }
+
+      if (!contextMenu.contains(target)) {
+        hideContextMenu(controller, true);
+      }
+    },
+    handleDocumentKeyDown: (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (!controller.contextMenu.hidden) {
+        event.preventDefault();
+        hideTooltip(controller);
+        hideContextMenu(controller, true);
+        return;
+      }
+
+      hideTooltip(controller);
+    },
+    handleWindowBlur: () => {
+      hideTooltip(controller);
+      hideContextMenu(controller, false);
+      controller.floatingToolbar.hidden = true;
     },
   };
 
-  const toolbarSelect = createToolbarSelect(controller);
-  floatingToolbar.appendChild(toolbarSelect);
-
   for (const definition of TOOLBAR_BUTTONS) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chips-basecard-editor__toolbar-button";
-    button.setAttribute("aria-label", controller.t(definition.labelKey));
-    button.textContent = controller.t(definition.labelKey);
-    button.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-    });
-    button.addEventListener("click", () => {
-      void definition.run(controller);
-    });
-    floatingToolbar.appendChild(button);
+    floatingToolbar.appendChild(createToolbarButton(controller, definition));
   }
 
-  renderMeta(controller, meta);
+  for (const action of CONTEXT_MENU_ACTIONS) {
+    contextMenuContent.appendChild(createContextMenuItem(controller, action));
+  }
 
-  scrollSurface.addEventListener("scroll", () => {
+  contextMenuContent.addEventListener("focusin", () => {
+    contextMenuContent.dataset.state = "focus";
+  });
+  contextMenuContent.addEventListener("focusout", () => {
+    contextMenuContent.dataset.state = "idle";
+  });
+  contextMenuContent.addEventListener("keydown", (event) => {
+    const items = getMenuItems(controller);
+    if (items.length === 0) {
+      return;
+    }
+
+    const currentIndex = items.findIndex((item) => item === ownerDocument.activeElement);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        focusMenuItem(controller, currentIndex + 1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        focusMenuItem(controller, currentIndex - 1);
+        break;
+      case "Home":
+        event.preventDefault();
+        focusMenuItem(controller, 0);
+        break;
+      case "End":
+        event.preventDefault();
+        focusMenuItem(controller, items.length - 1);
+        break;
+      case "Escape":
+        event.preventDefault();
+        hideContextMenu(controller, true);
+        break;
+      default:
+        break;
+    }
+  });
+  const handleSurfaceScroll = () => {
+    hideTooltip(controller);
+    hideContextMenu(controller, false);
     updateToolbarPosition(controller);
-  }, { passive: true });
-  window.addEventListener("resize", controller.handleWindowResize);
+  };
+
+  scrollSurface.addEventListener("scroll", handleSurfaceScroll, { passive: true });
+  ownerWindow.addEventListener("resize", controller.handleWindowResize);
+  ownerWindow.addEventListener("blur", controller.handleWindowBlur);
+  ownerDocument.addEventListener("pointerdown", controller.handleDocumentPointerDown);
+  ownerDocument.addEventListener("keydown", controller.handleDocumentKeyDown);
 
   void (async () => {
     try {
@@ -727,7 +1286,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
         .config((ctx) => {
           ctx.set(rootCtx, editorHost);
           ctx.set(defaultValueCtx, markdown);
-          ctx.update(_editorViewOptionsCtx, (prev) => ({
+          ctx.update(editorViewOptionsCtx, (prev) => ({
             ...prev,
             attributes: {
               ...(typeof prev.attributes === "object" ? prev.attributes : {}),
@@ -751,11 +1310,11 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
         const manager = ctx.get(listenerCtx);
         manager.markdownUpdated((_listenerCtx, nextMarkdown) => {
           controller.currentMarkdown = normalizeMarkdown(nextMarkdown);
-          renderMeta(controller, meta);
           void syncPreviewResources(controller);
           scheduleCommit(controller, "change");
         });
         manager.selectionUpdated((_listenerCtx, selection) => {
+          captureSelection(controller, selection);
           updateToolbarPosition(controller, selection);
         });
         manager.focus(() => {
@@ -764,6 +1323,8 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
         });
         manager.blur(() => {
           controller.focused = false;
+          hideTooltip(controller);
+          hideContextMenu(controller, false);
           controller.floatingToolbar.hidden = true;
           scheduleCommit(controller, "flush");
         });
@@ -787,9 +1348,14 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
           runCommand(controller, toggleEmphasisCommand.key);
         }
       });
+      view.dom.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        captureSelection(controller, view.state.selection);
+        positionContextMenu(controller, event.clientX, event.clientY);
+        focusMenuItem(controller, 0);
+      });
 
       await syncPreviewResources(controller);
-      renderMeta(controller, meta);
       if (!hasMeaningfulMarkdownContent(markdown)) {
         setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
       }
@@ -801,7 +1367,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
   root.__chipsDispose = () => {
     controller.disposed = true;
     if (controller.flushTimer) {
-      window.clearTimeout(controller.flushTimer);
+      ownerWindow.clearTimeout(controller.flushTimer);
       controller.flushTimer = undefined;
     }
     if (controller.editor) {
@@ -811,7 +1377,11 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
       controller.props.releaseResourceUrl?.(resourcePath);
     }
     controller.lastResolvedResources.clear();
-    window.removeEventListener("resize", controller.handleWindowResize);
+    scrollSurface.removeEventListener("scroll", handleSurfaceScroll);
+    ownerWindow.removeEventListener("resize", controller.handleWindowResize);
+    ownerWindow.removeEventListener("blur", controller.handleWindowBlur);
+    ownerDocument.removeEventListener("pointerdown", controller.handleDocumentPointerDown);
+    ownerDocument.removeEventListener("keydown", controller.handleDocumentKeyDown);
   };
 
   return root;

@@ -1134,7 +1134,7 @@ export const convertCardToHtml = async (
       packageMode: request.output.packageMode,
       outputPath: request.output.path,
       entryFile: ENTRY_FILE,
-      manifestFile: request.options.includeManifest ? MANIFEST_FILE : undefined,
+      ...(request.options.includeManifest ? { manifestFile: MANIFEST_FILE } : {}),
       semanticHash: renderView.semanticHash,
       assetCount,
       ...(warnings.length > 0 ? { warnings } : {}),

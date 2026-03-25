@@ -1,0 +1,23 @@
+.auth-page {
+  min-height: calc(100vh - var(--nav-height) - var(--chips-layout-space-12));
+  display: flex;
+  align-items: center;
+}
+
+.auth-layout {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  gap: var(--chips-layout-space-6);
+}
+
+.auth-panel,
+.auth-side {
+  padding: var(--chips-layout-space-8);
+}
+
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+  }
+}

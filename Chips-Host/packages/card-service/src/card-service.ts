@@ -27,6 +27,7 @@ export interface CardRenderOptions {
   locale?: string;
   mode?: 'view' | 'preview';
   interactionPolicy?: 'native' | 'delegate';
+  resourceBaseUrl?: string;
 }
 
 export interface CardEditorRenderOptions {
@@ -1211,6 +1212,7 @@ const createCompositeDocument = (
   mode: 'view' | 'preview',
   interactionPolicy: CompositeInteractionPolicy,
   managedDocumentScheme?: string,
+  resourceBaseUrl?: string,
 ): string => {
   const scriptNonce = createDocumentScriptNonce();
   const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
@@ -1692,6 +1694,7 @@ export class CardService {
       const target = options?.target ?? 'card-iframe';
       const mode = options?.mode ?? 'view';
       const interactionPolicy = options?.interactionPolicy ?? 'native';
+      const resourceBaseUrl = options?.resourceBaseUrl ?? this.createCardRootBaseUrl(ctx.rootDir);
       const theme = options?.theme;
       if (!theme) {
         throw createError('THEME_NOT_FOUND', 'Card render requires a resolved theme snapshot.');
@@ -1701,7 +1704,16 @@ export class CardService {
 
       for (const node of structureNodes) {
         renderedNodes.push(
-          await this.renderStructureNode(node, ctx, theme, themeCssText, locale, diagnostics, interactionPolicy)
+          await this.renderStructureNode(
+            node, 
+            ctx, 
+            theme, 
+            themeCssText, 
+            locale, 
+            diagnostics, 
+            interactionPolicy,
+            resourceBaseUrl
+          )
         );
       }
 
@@ -1734,6 +1746,7 @@ export class CardService {
         mode,
         interactionPolicy,
         this.managedDocumentScheme,
+        resourceBaseUrl,
       );
       const indexPath = path.join(persistedSession.rootDir, 'index.html');
       await fs.writeFile(indexPath, body, 'utf-8');
@@ -1963,7 +1976,8 @@ export class CardService {
     themeCssText: string | undefined,
     locale: string,
     diagnostics: RenderNodeDiagnostic[],
-    interactionPolicy: CompositeInteractionPolicy
+    interactionPolicy: CompositeInteractionPolicy,
+    resourceBaseUrl: string
   ): Promise<RenderedBaseCardNode> {
     const content = ctx.contentByNodeId.get(node.id);
     const cardType = node.type || asString(content?.parsed.card_type) || 'UnknownCard';
@@ -2011,7 +2025,7 @@ export class CardService {
         cardType,
         config,
         title,
-        resourceBaseUrl: this.createCardRootBaseUrl(ctx.rootDir),
+        resourceBaseUrl,
         theme,
         themeCssText,
         locale,

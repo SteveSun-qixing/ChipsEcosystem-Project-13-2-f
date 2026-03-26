@@ -40,6 +40,7 @@ import {
   normalizeMarkdown,
   shouldUseFileStorage,
 } from "../shared/utils";
+import type { IconDescriptor } from "chips-sdk";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
@@ -584,6 +585,22 @@ const CONTEXT_MENU_ACTIONS: ContextMenuAction[] = [
   },
 ];
 
+const TOOLBAR_ICON_DESCRIPTORS: Record<ToolbarIconName, IconDescriptor> = {
+  bold: { name: "format_bold", decorative: true },
+  italic: { name: "format_italic", decorative: true },
+  code: { name: "code", decorative: true },
+  link: { name: "link", decorative: true },
+  clear: { name: "format_clear", decorative: true },
+  paragraph: { name: "format_paragraph", decorative: true },
+  h1: { name: "format_h1", decorative: true },
+  h2: { name: "format_h2", decorative: true },
+  h3: { name: "format_h3", decorative: true },
+  blockquote: { name: "format_quote", decorative: true },
+  orderedList: { name: "format_list_numbered", decorative: true },
+  unorderedList: { name: "format_list_bulleted", decorative: true },
+  divider: { name: "horizontal_rule", decorative: true },
+};
+
 function askUserForValue(label: string): string | null {
   if (typeof window === "undefined" || typeof window.prompt !== "function") {
     return null;
@@ -592,35 +609,34 @@ function askUserForValue(label: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function getIconEmoji(icon: ToolbarIconName): string {
-  switch (icon) {
-    case "bold":
-      return "𝐁";
-    case "italic":
-      return "𝘐";
-    case "code":
-      return "💻";
-    case "link":
-      return "🔗";
-    case "clear":
-      return "🧹";
-    case "paragraph":
-      return "¶";
-    case "h1":
-      return "①";
-    case "h2":
-      return "②";
-    case "h3":
-      return "③";
-    case "blockquote":
-      return "❝";
-    case "orderedList":
-      return "🔢";
-    case "unorderedList":
-      return "•";
-    case "divider":
-      return "➖";
+function createRuntimeIconElement(
+  icon: ToolbarIconName,
+  className: string,
+  sizePx: number,
+): HTMLSpanElement {
+  const descriptor = TOOLBAR_ICON_DESCRIPTORS[icon];
+  const node = document.createElement("span");
+  node.className = className;
+  node.dataset.scope = "icon";
+  node.dataset.part = "root";
+  node.dataset.iconName = descriptor.name;
+  node.dataset.iconStyle = descriptor.style ?? "outlined";
+  node.setAttribute("aria-hidden", "true");
+  node.style.setProperty("--chips-icon-size", `${sizePx}px`);
+  if (descriptor.fill !== undefined) {
+    node.style.setProperty("--chips-icon-fill", String(descriptor.fill));
   }
+  if (descriptor.wght !== undefined) {
+    node.style.setProperty("--chips-icon-wght", String(descriptor.wght));
+  }
+  if (descriptor.grad !== undefined) {
+    node.style.setProperty("--chips-icon-grad", String(descriptor.grad));
+  }
+  if (descriptor.opsz !== undefined) {
+    node.style.setProperty("--chips-icon-opsz", String(descriptor.opsz));
+  }
+  node.textContent = descriptor.name;
+  return node;
 }
 
 function applyInteractiveState(node: HTMLElement): void {
@@ -776,11 +792,7 @@ function createToolbarButton(controller: EditorController, definition: ToolbarBu
   button.setAttribute("aria-label", controller.t(definition.labelKey));
 
   const icon = document.createElement("span");
-  icon.className = "chips-basecard-editor__toolbar-button-icon";
-  icon.dataset.part = "icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = getIconEmoji(definition.icon);
-  button.appendChild(icon);
+  button.appendChild(createRuntimeIconElement(definition.icon, "chips-basecard-editor__toolbar-button-icon", 16));
 
   applyInteractiveState(button);
 
@@ -815,11 +827,7 @@ function createContextMenuItem(controller: EditorController, action: ContextMenu
   item.setAttribute("role", "menuitem");
   item.setAttribute("aria-label", controller.t(action.labelKey));
 
-  const icon = document.createElement("span");
-  icon.className = "chips-basecard-editor__context-menu-icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = getIconEmoji(action.icon);
-  item.appendChild(icon);
+  item.appendChild(createRuntimeIconElement(action.icon, "chips-basecard-editor__context-menu-icon", 18));
 
   const label = document.createElement("span");
   label.className = "chips-basecard-editor__context-menu-label";

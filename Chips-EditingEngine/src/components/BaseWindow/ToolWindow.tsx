@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { BaseWindow } from './BaseWindow';
 import { useUI } from '../../context/UIContext';
 import { ToolComponentRegistry } from '../ToolComponentRegistry';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import type { ToolWindowConfig } from '../../types/window';
 import './ToolWindow.css';
 
@@ -47,7 +48,7 @@ export function ToolWindow({ config }: ToolWindowProps) {
             onMinimize={handleMinimize}
             headerSlot={
                 <div className="tool-window__header">
-                    {config.icon && <span className="tool-window__icon">{config.icon}</span>}
+                    {config.icon && <RuntimeIcon className="tool-window__icon" icon={config.icon} />}
                     <span className="tool-window__title">{config.title}</span>
                 </div>
             }

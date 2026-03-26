@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
@@ -42,12 +43,17 @@ export function renderBasecardEditor(ctx: BasecardEditorContext): () => void {
   return mountBasecardEditor(ctx);
 }
 
+const richtextBasecardIcon: IconDescriptor = {
+  name: "article",
+  decorative: true,
+};
+
 export const basecardDefinition = {
   pluginId: "chips.basecard.richtext",
   cardType: "base.richtext",
   displayName: "富文本基础卡片",
   description: "提供富文本内容的查看与编辑能力。",
-  icon: "📝",
+  icon: richtextBasecardIcon,
   aliases: ["RichTextCard"],
   commitDebounceMs: 260,
   createInitialConfig(_baseCardId: string) {

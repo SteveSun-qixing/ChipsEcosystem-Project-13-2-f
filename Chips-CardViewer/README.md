@@ -49,7 +49,13 @@ chipsdev run
 - 启动时通过 `client.platform.getLaunchContext()` 恢复 `targetPath` 等启动参数
 - 日志统一包含 `scope`、`traceId` 和必要上下文
 
-## 5. 快捷方式与文件关联链路
+## 5. 启动图标与快捷方式链路
+
+- `manifest.yaml` 当前通过 `ui.launcher.icon: assets/icons/app-icon.ico` 声明系统入口图标。
+- Host 在创建快捷方式时会按平台优先顺序解析 `assets/icons/app-icon.ico/.icns/.png`，不把该文件路径混入运行时 `ChipsIcon` 图标模型。
+- 当前工程 `assets/icons/app-icon.ico`、`assets/icons/app-icon.icns`、`assets/icons/app-icon.png` 已与 `design-assets/Appicon/CardViewer.*` 对齐。
+
+## 6. 快捷方式与文件关联链路
 
 卡片查看器当前接入了两条正式启动链路：
 
@@ -66,7 +72,7 @@ chipsdev run
 
 应用入口当前会在首次渲染时读取 `launchContext.launchParams.targetPath`，若存在则直接恢复为当前待显示卡片文件。
 
-## 6. 调试建议
+## 7. 调试建议
 
 开发态调试主题问题时，优先使用：
 

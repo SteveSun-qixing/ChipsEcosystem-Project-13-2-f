@@ -2,6 +2,8 @@ import React from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCard } from '../../context/CardContext';
 import { PluginHost } from './PluginHost';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './EditPanel.css';
 
 interface EditPanelProps {
@@ -44,7 +46,9 @@ export default function EditPanel({
           />
         ) : (
           <div className="edit-panel__empty">
-            <div className="edit-panel__empty-icon">📝</div>
+            <div className="edit-panel__empty-icon">
+              <RuntimeIcon icon={ENGINE_ICONS.edit} />
+            </div>
             <p className="edit-panel__empty-text">{t('edit_panel.empty_hint') || '请在左侧选择要编辑的内容'}</p>
           </div>
         )}

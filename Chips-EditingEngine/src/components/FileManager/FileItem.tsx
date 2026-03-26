@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ChipsInput } from '@chips/component-library';
 import type { WorkspaceFile } from '../../types/workspace';
+import { ENGINE_ICONS, getWorkspaceFileIcon } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileItem.css';
 
 interface FileItemProps {
@@ -36,9 +38,7 @@ export function FileItem({
     const inputRef = useRef<HTMLInputElement>(null);
     const isDirectory = file.type === 'folder';
 
-    const fileIcon = isDirectory
-        ? (file.expanded ? '📂' : '📁')
-        : (file.type === 'card' ? '🃏' : file.type === 'box' ? '📦' : '📄');
+    const fileIcon = getWorkspaceFileIcon(file);
 
     const indentStyle = {
         paddingLeft: `${level * 16 + 8}px`,
@@ -113,14 +113,16 @@ export function FileItem({
                     onClick={(e: React.MouseEvent) => onToggle(file, e)}
                 >
                     <span className={`file-item__arrow ${file.expanded ? 'file-item__arrow--expanded' : ''}`}>
-                        ▶
+                        <RuntimeIcon icon={ENGINE_ICONS.chevronRight} />
                     </span>
                 </button>
             ) : (
                 <span className="file-item__toggle-placeholder"></span>
             )}
 
-            <span className="file-item__icon">{fileIcon}</span>
+            <span className="file-item__icon">
+                <RuntimeIcon icon={fileIcon} />
+            </span>
 
             {renaming ? (
                 <ChipsInput

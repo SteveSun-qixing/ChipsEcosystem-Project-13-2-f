@@ -51,7 +51,8 @@
 │     └─ card-flow.test.ts
 └─ assets/
    └─ icons/
-      └─ basecard-icon.svg
+      ├─ basecard-icon.svg
+      └─ SOURCE.md
 ```
 
 ## 快速开始
@@ -93,6 +94,8 @@ npm run dev
 - `basecardDefinition.pluginId === manifest.id`
 - `basecardDefinition.cardType === manifest.capabilities.cardTypes[0]`
 - 如需兼容历史卡片类型别名，请在 `aliases` 中显式声明，而不是把别名判断散落到业务组件里。
+- `basecardDefinition.icon` 是运行时正式图标描述符；
+- `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 主题接入约束
 

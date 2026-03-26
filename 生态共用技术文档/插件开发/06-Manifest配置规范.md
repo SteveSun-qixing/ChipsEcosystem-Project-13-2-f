@@ -246,6 +246,8 @@ ui:
 
 - 仅 `type: app` 插件允许声明 `ui.launcher`；
 - `icon` 必须指向随插件一起发布的正式资源文件；
+- `ui.launcher.icon` 始终表示“系统启动入口图标文件路径”，不是运行时 UI 图标描述符；
+- 运行时 UI 图标统一通过 `ChipsIcon + IconDescriptor` 解决，禁止把 emoji、字符图标或 `IconDescriptor` 直接写进 manifest 代替启动图标文件；
 - Windows 快捷方式优先使用 `.ico`，macOS 启动台入口会由 Host 转换或复制为系统可识别图标资源；
 - 应用插件不得自行创建系统级快捷方式，必须通过 Host 正式接口完成。
 

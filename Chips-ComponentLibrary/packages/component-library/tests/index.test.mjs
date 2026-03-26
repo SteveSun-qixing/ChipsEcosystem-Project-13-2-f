@@ -6,6 +6,7 @@ import { toStandardError as toCardRuntimeStandardError } from "@chips/card-runti
 
 test("component-library aggregate exports the formal package surface", () => {
   assert.equal(typeof aggregate.ChipsThemeProvider, "function");
+  assert.ok(aggregate.ChipsIcon);
   assert.ok(aggregate.ChipsButton);
   assert.equal(typeof aggregate.CardCoverFrame, "function");
   assert.equal(typeof aggregate.CompositeCardWindow, "function");

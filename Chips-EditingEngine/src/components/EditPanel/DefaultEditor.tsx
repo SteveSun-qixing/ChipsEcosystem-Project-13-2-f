@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './DefaultEditor.css';
 
 interface FormField {
@@ -192,7 +194,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
             title={currentMode === 'json' ? (t('default_editor.switch_to_form') || '切换到表单') : (t('default_editor.switch_to_json') || '切换到 JSON')}
             onClick={toggleMode}
           >
-            {currentMode === 'json' ? '📝' : '{ }'}
+            <RuntimeIcon icon={currentMode === 'json' ? ENGINE_ICONS.edit : ENGINE_ICONS.code} />
           </button>
           {currentMode === 'json' && (
             <button
@@ -201,7 +203,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
               title={t('default_editor.format_json') || '格式化 JSON'}
               onClick={formatJson}
             >
-              ✨
+              <RuntimeIcon icon={ENGINE_ICONS.format} />
             </button>
           )}
           <button
@@ -210,7 +212,7 @@ export const DefaultEditor = forwardRef<DefaultEditorRef, DefaultEditorProps>((p
             title={t('default_editor.reset_config') || '重置配置'}
             onClick={resetConfig}
           >
-            ↺
+            <RuntimeIcon icon={ENGINE_ICONS.reset} />
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { REQUIRED_THEME_TOKENS } from "../src/validate-theme";
 
 interface ThemeTokenLayers {
   ref: Record<string, unknown>;
@@ -30,16 +31,22 @@ const flattenLayer = (layer: Record<string, unknown>): Record<string, unknown> =
 };
 
 describe("theme contract", () => {
-  it("provides required component tokens for button", async () => {
+  it("provides required tokens for the formal runtime surface", async () => {
     const projectRoot = path.resolve(__dirname, "..");
     const tokensPath = path.join(projectRoot, "dist", "tokens.json");
     const raw = await fs.readFile(tokensPath, "utf-8");
     const parsed = JSON.parse(raw) as ThemeTokenLayers;
 
-    const compFlat = flattenLayer(parsed.comp);
+    const variables = {
+      ...flattenLayer(parsed.ref),
+      ...flattenLayer(parsed.sys),
+      ...flattenLayer(parsed.comp),
+      ...flattenLayer(parsed.motion),
+      ...flattenLayer(parsed.layout),
+    };
 
-    expect("chips.comp.button.background" in compFlat).toBe(true);
-    expect("chips.comp.button.color" in compFlat).toBe(true);
+    for (const tokenKey of REQUIRED_THEME_TOKENS) {
+      expect(tokenKey in variables).toBe(true);
+    }
   });
 });
-

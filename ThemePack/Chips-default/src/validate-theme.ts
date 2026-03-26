@@ -29,7 +29,14 @@ const flattenLayer = (layer: Record<string, unknown>, prefix?: string): Record<s
   return flat;
 };
 
-export const REQUIRED_COMPONENT_TOKENS: string[] = [
+export const REQUIRED_THEME_TOKENS: string[] = [
+  // icon
+  "chips.sys.icon.color",
+  "chips.sys.icon.size",
+  "chips.sys.icon.fill",
+  "chips.sys.icon.wght",
+  "chips.sys.icon.grad",
+  "chips.sys.icon.opsz",
   // button
   "chips.comp.button.root.radius",
   "chips.comp.button.root.surface.idle",
@@ -77,7 +84,7 @@ const main = async (): Promise<void> => {
     ...layoutFlat
   };
 
-  const missing = REQUIRED_COMPONENT_TOKENS.filter((key) => !(key in variables));
+  const missing = REQUIRED_THEME_TOKENS.filter((key) => !(key in variables));
 
   if (missing.length > 0) {
     // eslint-disable-next-line no-console

@@ -1,6 +1,8 @@
 import React, { useCallback } from 'react';
 import { useLayoutSwitch } from '../../hooks/use-layout-switch';
 import { useTranslation } from '../../hooks/useTranslation';
+import { getLayoutSwitcherIcon } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import type { LayoutType } from '../../types/editor';
 
 interface LayoutSwitcherProps {
@@ -23,7 +25,6 @@ export function LayoutSwitcher({
         currentLayout,
         isSwitching,
         isInfiniteCanvas,
-        isWorkbench,
         toggleLayout,
     } = useLayoutSwitch({
         enableTransition: true,
@@ -38,7 +39,6 @@ export function LayoutSwitcher({
         await toggleLayout();
     }, [disabled, isSwitching, toggleLayout]);
 
-    const currentIcon = isInfiniteCanvas ? '🎨' : '📋';
     const currentLabel = isInfiniteCanvas
         ? t('layout_switcher.canvas')
         : t('layout_switcher.workbench');
@@ -58,7 +58,9 @@ export function LayoutSwitcher({
                 disabled={disabled || isSwitching}
                 title={targetLabel}
             >
-                <span className="layout-switcher__icon">{currentIcon}</span>
+                <span className="layout-switcher__icon">
+                    <RuntimeIcon icon={getLayoutSwitcherIcon(currentLayout)} />
+                </span>
                 {showLabel && (
                     <span className="layout-switcher__label">{currentLabel}</span>
                 )}

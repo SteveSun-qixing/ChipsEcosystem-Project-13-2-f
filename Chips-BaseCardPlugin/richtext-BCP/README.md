@@ -93,6 +93,8 @@ Schema 层统一提供：
 - `basecardDefinition.cardType = "base.richtext"` 与 `manifest.yaml -> capabilities.cardTypes` 保持一致；
 - `aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
 - `createInitialConfig()` 生成编辑引擎新建基础卡片时的正式初始正文。
+- `basecardDefinition.icon` 是运行时正式图标描述符；
+- `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 主题接入约束
 

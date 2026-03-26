@@ -21,6 +21,13 @@ const registryListeners = new Set<() => void>();
 let availableBasecardDescriptors = [...builtinBasecardDescriptors];
 let registryVersion = 0;
 
+function isIconDescriptor(icon: unknown): icon is { name: string } {
+  return Boolean(icon)
+    && typeof icon === 'object'
+    && typeof (icon as { name?: unknown }).name === 'string'
+    && (icon as { name: string }).name.trim().length > 0;
+}
+
 function toFileModuleUrl(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   if (/^[a-zA-Z]:\//.test(normalized)) {
@@ -79,6 +86,9 @@ function toInstalledDescriptor(
   }
   if (typeof definition.validateConfig !== 'function') {
     throw new Error(`基础卡片插件缺少 validateConfig: ${plugin.id}`);
+  }
+  if (definition.icon !== undefined && !isIconDescriptor(definition.icon)) {
+    throw new Error(`基础卡片插件 icon 必须为正式 IconDescriptor: ${plugin.id}`);
   }
 
   return {

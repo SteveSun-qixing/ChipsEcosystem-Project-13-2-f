@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import type { IconDescriptor } from 'chips-sdk';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './ContextMenu.css';
 
 export interface MenuItem {
   id: string;
   label: string;
-  icon?: string;
+  icon?: IconDescriptor;
   shortcut?: string;
   disabled?: boolean;
   divider?: boolean;
@@ -48,10 +51,10 @@ export function ContextMenu({
     items.push({
       id: 'new',
       label: 'file_manager.menu_new',
-      icon: '➕',
+      icon: ENGINE_ICONS.add,
       children: [
-        { id: 'new-card', label: 'file_manager.new_card', icon: '🃏' },
-        { id: 'new-box', label: 'file_manager.new_box', icon: '📦' },
+        { id: 'new-card', label: 'file_manager.new_card', icon: ENGINE_ICONS.card },
+        { id: 'new-box', label: 'file_manager.new_box', icon: ENGINE_ICONS.box },
       ],
     });
 
@@ -61,7 +64,7 @@ export function ContextMenu({
       items.push({
         id: 'open',
         label: 'file_manager.open',
-        icon: '📂',
+        icon: ENGINE_ICONS.folderOpen,
         shortcut: 'Enter',
         disabled: !isSingleFile,
       });
@@ -71,14 +74,14 @@ export function ContextMenu({
       items.push({
         id: 'cut',
         label: 'common.cut',
-        icon: '✂️',
+        icon: ENGINE_ICONS.cut,
         shortcut: '⌘X',
       });
 
       items.push({
         id: 'copy',
         label: 'common.copy',
-        icon: '📋',
+        icon: ENGINE_ICONS.copy,
         shortcut: '⌘C',
       });
     }
@@ -86,7 +89,7 @@ export function ContextMenu({
     items.push({
       id: 'paste',
       label: 'common.paste',
-      icon: '📥',
+      icon: ENGINE_ICONS.paste,
       shortcut: '⌘V',
       disabled: !hasClipboard,
     });
@@ -97,7 +100,7 @@ export function ContextMenu({
       items.push({
         id: 'rename',
         label: 'file_manager.rename',
-        icon: '✏️',
+        icon: ENGINE_ICONS.edit,
         shortcut: 'F2',
         disabled: !isSingleFile,
       });
@@ -105,7 +108,7 @@ export function ContextMenu({
       items.push({
         id: 'delete',
         label: 'common.delete',
-        icon: '🗑️',
+        icon: ENGINE_ICONS.delete,
         shortcut: 'Del',
       });
     }
@@ -116,14 +119,14 @@ export function ContextMenu({
       items.push({
         id: 'reveal',
         label: 'file_manager.reveal_in_finder',
-        icon: '🔍',
+        icon: ENGINE_ICONS.search,
       });
     }
 
     items.push({
       id: 'refresh',
       label: 'file_manager.refresh',
-      icon: '🔄',
+      icon: ENGINE_ICONS.refresh,
     });
 
     return items;
@@ -204,10 +207,18 @@ export function ContextMenu({
               onMouseEnter={() => setExpandedSubmenu(item.children ? item.id : null)}
               onClick={(e) => handleItemClick(item, e)}
             >
-              {item.icon && <span className="context-menu__icon">{item.icon}</span>}
+              {item.icon && (
+                <span className="context-menu__icon">
+                  <RuntimeIcon icon={item.icon} />
+                </span>
+              )}
               <span className="context-menu__label">{t(item.label) || item.label}</span>
               {item.shortcut && <span className="context-menu__shortcut">{item.shortcut}</span>}
-              {item.children && <span className="context-menu__arrow">▶</span>}
+              {item.children && (
+                <span className="context-menu__arrow">
+                  <RuntimeIcon icon={ENGINE_ICONS.chevronRight} />
+                </span>
+              )}
 
               {item.children && expandedSubmenu === item.id && (
                 <div className="context-menu__submenu">
@@ -223,7 +234,11 @@ export function ContextMenu({
                         onClose();
                       }}
                     >
-                      {child.icon && <span className="context-menu__icon">{child.icon}</span>}
+                      {child.icon && (
+                        <span className="context-menu__icon">
+                          <RuntimeIcon icon={child.icon} />
+                        </span>
+                      )}
                       <span className="context-menu__label">{t(child.label) || child.label}</span>
                       {child.shortcut && <span className="context-menu__shortcut">{child.shortcut}</span>}
                     </div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getCommandManager } from '../../core/command-manager';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './HistoryPanel.css';
 
 interface CommandHistory {
@@ -166,7 +168,9 @@ export function HistoryPanel({
           type="button"
           onClick={handleUndo}
         >
-          <span className="history-btn-icon">↶</span>
+          <span className="history-btn-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.undo} />
+          </span>
           {!compact && <span className="history-btn-text">{t('history_panel.undo') || '撤销'}</span>}
         </button>
 
@@ -177,7 +181,9 @@ export function HistoryPanel({
           type="button"
           onClick={handleRedo}
         >
-          <span className="history-btn-icon">↷</span>
+          <span className="history-btn-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.redo} />
+          </span>
           {!compact && <span className="history-btn-text">{t('history_panel.redo') || '重做'}</span>}
         </button>
 
@@ -190,7 +196,9 @@ export function HistoryPanel({
           type="button"
           onClick={handleClear}
         >
-          <span className="history-btn-icon">🗑</span>
+          <span className="history-btn-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.delete} />
+          </span>
         </button>
       </div>
 
@@ -231,7 +239,9 @@ export function HistoryPanel({
         </div>
       ) : (
         <div className="history-empty">
-          <div className="history-empty-icon">📋</div>
+          <div className="history-empty-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.history} />
+          </div>
           <div className="history-empty-text">{t('history_panel.empty') || '暂无历史记录'}</div>
         </div>
       )}

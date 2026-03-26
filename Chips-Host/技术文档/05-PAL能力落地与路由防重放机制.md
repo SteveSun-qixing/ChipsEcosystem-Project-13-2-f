@@ -46,6 +46,12 @@
 - Notification：`show`，Electron 环境下对接 `Notification`，无宿主时回退系统命令/控制台输出。
 - Shortcut：`register/unregister/isRegistered/list/clear`，Electron 环境对接 `globalShortcut`。
 - Power：`getState/setPreventSleep`，Electron 环境对接 `powerMonitor/powerSaveBlocker`。
+- 图标边界：
+  - `platform.notificationShow.options.icon`
+  - `platform.traySet.options.icon`
+  - `plugin.getShortcut().iconPath`
+  - `manifest.ui.launcher.icon`
+  都属于操作系统壳层图标文件路径，不属于运行时 `ChipsIcon` / `IconDescriptor` 链路。
 
 ### 2.5 File Watch / IPC
 

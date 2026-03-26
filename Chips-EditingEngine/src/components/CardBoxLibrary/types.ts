@@ -1,3 +1,5 @@
+import type { IconDescriptor } from "chips-sdk";
+
 /**
  * 卡箱库类型定义
  */
@@ -7,7 +9,7 @@ export const CHIPS_DRAG_DATA_TYPE = 'application/x-chips-drag-data';
 export interface CardTypeDefinition {
   id: string;
   name: string;
-  icon: string;
+  icon: IconDescriptor;
   description: string;
   keywords: string[];
 }
@@ -15,7 +17,7 @@ export interface CardTypeDefinition {
 export interface LayoutTypeDefinition {
   id: string;
   name: string;
-  icon: string;
+  icon: IconDescriptor;
   description: string;
   keywords: string[];
 }

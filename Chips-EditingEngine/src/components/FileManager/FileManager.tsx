@@ -7,6 +7,8 @@ import { DEFAULT_BOX_LAYOUT_TYPE } from '../../services/box-document-service';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
 import { CHIPS_DRAG_DATA_TYPE, type WorkspaceFileDragData } from '../CardBoxLibrary/types';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileManager.css';
 
 interface FileManagerProps {
@@ -95,6 +97,9 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
 
     const handleContextMenu = (file: WorkspaceFile, event: React.MouseEvent) => {
         event.preventDefault();
+        if (!selectedPaths.includes(file.path)) {
+            setSelectedPaths([file.path]);
+        }
         setContextMenu({
             visible: true,
             x: event.clientX,
@@ -199,7 +204,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                         title={t('file_manager.new_card') || '新建卡片'}
                         onClick={() => handleContextMenuAction('new-card', [])}
                     >
-                        🃏
+                        <RuntimeIcon icon={ENGINE_ICONS.card} />
                     </button>
                     <button
                         type="button"
@@ -207,7 +212,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                         title={t('file_manager.new_box') || '新建盒子'}
                         onClick={() => handleContextMenuAction('new-box', [])}
                     >
-                        📦
+                        <RuntimeIcon icon={ENGINE_ICONS.box} />
                     </button>
                 </div>
 
@@ -217,7 +222,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                     title={t('file_manager.search_placeholder') || '搜索'}
                     onClick={toggleSearch}
                 >
-                    🔍
+                    <RuntimeIcon icon={ENGINE_ICONS.search} />
                 </button>
             </div>
 
@@ -236,7 +241,7 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                         className="file-manager__search-close"
                         onClick={toggleSearch}
                     >
-                        ✕
+                        <RuntimeIcon icon={ENGINE_ICONS.close} />
                     </button>
                 </div>
             )}
@@ -245,12 +250,16 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
             <div className="file-manager__content">
                 {isLoading ? (
                     <div className="file-manager__loading">
-                        <span className="file-manager__loading-spinner">⏳</span>
+                        <span className="file-manager__loading-spinner">
+                            <RuntimeIcon icon={ENGINE_ICONS.loading} />
+                        </span>
                         <span>{t('file_manager.loading') || '加载中...'}</span>
                     </div>
                 ) : displayFiles.length === 0 ? (
                     <div className="file-manager__empty">
-                        <span className="file-manager__empty-icon">{isSearching ? '🔍' : '📂'}</span>
+                        <span className="file-manager__empty-icon">
+                            <RuntimeIcon icon={isSearching ? ENGINE_ICONS.search : ENGINE_ICONS.folderOpen} />
+                        </span>
                         <span className="file-manager__empty-title">
                             {isSearching ? t('file_manager.search_empty_title') : t('file_manager.empty_title')}
                         </span>

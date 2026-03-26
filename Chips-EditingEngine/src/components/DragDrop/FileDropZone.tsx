@@ -1,6 +1,8 @@
 import React, { useState, useCallback, type DragEvent, type ReactNode } from 'react';
 import { useFileDrop } from '../../hooks/use-file-drop';
 import type { FileDragData, FileDropType } from '../../core/drag-drop-manager';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileDropZone.css';
 
 interface FileDropZoneProps {
@@ -78,7 +80,9 @@ export function FileDropZone({
             {isDragOverActive && (
                 <div className="file-drop-zone__overlay">
                     <div className="file-drop-zone__indicator">
-                        <span className="file-drop-zone__icon">📁</span>
+                        <span className="file-drop-zone__icon">
+                            <RuntimeIcon icon={ENGINE_ICONS.upload} />
+                        </span>
                         <span className="file-drop-zone__text">
                             将文件拖放到此处
                         </span>

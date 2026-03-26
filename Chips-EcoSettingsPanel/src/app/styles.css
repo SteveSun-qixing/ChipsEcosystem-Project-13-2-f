@@ -251,6 +251,38 @@ textarea {
   min-width: 0;
 }
 
+.governance-item__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.governance-item__icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #0a6cff) 10%, transparent);
+  color: var(--chips-sys-color-primary, #0a6cff);
+  overflow: hidden;
+}
+
+.governance-item__icon-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.governance-item__content {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
 .governance-item__title {
   font-size: 15px;
   font-weight: 700;

@@ -15,8 +15,8 @@ describe("layoutDefinition", () => {
     document.body.appendChild(container);
     const renderEntryCover = vi.fn().mockResolvedValue({
       title: "Demo Card",
-      coverUrl: "file:///tmp/demo-cover.html",
-      mimeType: "text/html",
+      coverUrl: "file:///tmp/demo-cover.png",
+      mimeType: "image/png",
     });
     const openEntry = vi.fn().mockResolvedValue({
       mode: "card-window",
@@ -45,7 +45,7 @@ describe("layoutDefinition", () => {
                 title: "Demo Card",
                 summary: "Summary",
                 cover: {
-                  mode: "none",
+                  mode: "runtime",
                 },
               },
             },

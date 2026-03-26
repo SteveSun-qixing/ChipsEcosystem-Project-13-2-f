@@ -2,6 +2,7 @@ import React from 'react';
 import { DockItem } from './DockItem';
 import { useUI } from '../../context/UIContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
 import './Dock.css';
 
 export interface DockProps {
@@ -47,7 +48,7 @@ export function Dock({ onOpenSettings }: DockProps) {
 
             <DockItem
                 toolId="__engine-settings__"
-                icon="⚙️"
+                icon={ENGINE_ICONS.settings}
                 title={t('engine_settings.title')}
                 minimized={false}
                 onRestore={onOpenSettings}

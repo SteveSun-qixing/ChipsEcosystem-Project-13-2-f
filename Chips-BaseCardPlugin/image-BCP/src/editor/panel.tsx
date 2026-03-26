@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { ChipsIcon } from "@chips/component-library";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
@@ -2289,7 +2290,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
                     title={t("editor.clear_all")}
                     onClick={handleClearAll}
                   >
-                    🗑
+                    <ChipsIcon descriptor={{ name: "delete", decorative: true }} />
                   </button>
                 ) : null}
               </div>

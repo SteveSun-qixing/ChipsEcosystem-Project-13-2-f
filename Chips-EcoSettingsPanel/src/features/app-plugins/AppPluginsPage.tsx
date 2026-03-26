@@ -1,5 +1,6 @@
 import React from "react";
-import { ChipsButton, ChipsEmptyState } from "@chips/component-library";
+import { ChipsButton, ChipsEmptyState, ChipsIcon } from "@chips/component-library";
+import type { IconDescriptor } from "chips-sdk";
 import { useI18n } from "../../app/providers/I18nProvider";
 import { DropZone } from "../../shared/ui/DropZone";
 import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
@@ -9,6 +10,26 @@ import { RecordDetailDialog } from "../../shared/ui/RecordDetailDialog";
 import { SectionStateBoundary } from "../../shared/ui/SectionStateBoundary";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { useAppPluginGovernance } from "./useAppPluginGovernance";
+
+const APP_PLUGIN_FALLBACK_ICON: IconDescriptor = {
+  name: "apps",
+  decorative: true,
+};
+
+function toFileUrl(filePath?: string): string | null {
+  if (typeof filePath !== "string" || filePath.trim().length === 0) {
+    return null;
+  }
+
+  const normalized = filePath.replace(/\\/g, "/");
+  if (/^file:\/\//i.test(normalized)) {
+    return normalized;
+  }
+  if (/^[a-zA-Z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+  return encodeURI(`file://${normalized.startsWith("/") ? normalized : `/${normalized}`}`);
+}
 
 function formatInstalledAt(locale: string, installedAt: number): string {
   if (!Number.isFinite(installedAt) || installedAt <= 0) {
@@ -98,17 +119,34 @@ export function AppPluginsPage(): React.ReactElement {
                 exists: false,
                 location: "desktop" as const,
                 launcherPath: "",
+                iconPath: undefined,
               };
+              const shortcutIconUrl = toFileUrl(shortcut.iconPath);
 
               return (
                 <GovernanceListRow key={plugin.pluginId}>
                   <GovernanceListCell label={t("settingsPanel.appPlugins.columns.plugin")}>
                     <div className="governance-item">
-                      <div className="governance-item__title">{plugin.name}</div>
-                      <div className="governance-item__summary">
-                        {plugin.selfManaged
-                          ? t("settingsPanel.appPlugins.selfManaged.description")
-                          : plugin.description ?? plugin.pluginId}
+                      <div className="governance-item__header">
+                        <div className="governance-item__icon" aria-hidden="true">
+                          {shortcutIconUrl ? (
+                            <img
+                              className="governance-item__icon-image"
+                              src={shortcutIconUrl}
+                              alt=""
+                            />
+                          ) : (
+                            <ChipsIcon descriptor={APP_PLUGIN_FALLBACK_ICON} />
+                          )}
+                        </div>
+                        <div className="governance-item__content">
+                          <div className="governance-item__title">{plugin.name}</div>
+                          <div className="governance-item__summary">
+                            {plugin.selfManaged
+                              ? t("settingsPanel.appPlugins.selfManaged.description")
+                              : plugin.description ?? plugin.pluginId}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </GovernanceListCell>

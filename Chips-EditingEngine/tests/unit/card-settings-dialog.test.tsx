@@ -11,6 +11,7 @@ const updateCardCover = vi.fn();
 const saveCard = vi.fn(async () => undefined);
 
 vi.mock('@chips/component-library', () => ({
+  ChipsIcon: ({ descriptor }: { descriptor: { name: string } }) => <span data-icon-name={descriptor.name} />,
   ChipsTabs: ({ items }: { items: Array<{ value: string; content: React.ReactNode }> }) => (
     <div>{items.map((item) => <div key={item.value}>{item.content}</div>)}</div>
   ),

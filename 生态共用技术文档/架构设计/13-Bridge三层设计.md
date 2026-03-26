@@ -177,14 +177,14 @@ interface ShellBridge {
 ### 事件命名规范
 
 **强制采用点语义**：
-- ✅ `theme.changed`
-- ✅ `language.changed`
-- ✅ `plugin.enabled`
-- ✅ `window.focused`
+- 正确示例：`theme.changed`
+- 正确示例：`language.changed`
+- 正确示例：`plugin.enabled`
+- 正确示例：`window.focused`
 
 **禁止混用**：
-- ❌ `theme:changed`
-- ❌ `language-changed`
+- 禁止示例：`theme:changed`
+- 禁止示例：`language-changed`
 
 ### 安全约束
 

@@ -7,6 +7,8 @@
 - `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
 - `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；
 - `basecardDefinition`：供编辑引擎运行时注册表读取 `pluginId/cardType/aliases/collectResourcePaths` 与渲染能力。
+- 运行时图标统一使用 `basecardDefinition.icon`；
+- `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 当前能力
 

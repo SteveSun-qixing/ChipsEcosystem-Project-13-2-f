@@ -2,6 +2,9 @@ import React from 'react';
 import { useEditor } from '../../context/EditorContext';
 import { useUI } from '../../context/UIContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import { AppBrandIcon } from '../../icons/AppBrandIcon';
+import { getLayoutSwitcherIcon, getThemeSwitcherIcon } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './HeaderBar.css';
 
 export function HeaderBar() {
@@ -22,7 +25,9 @@ export function HeaderBar() {
     return (
         <div className="header-bar">
             <div className="header-bar__left">
-                <div className="header-bar__logo">🍟</div>
+                <div className="header-bar__logo">
+                    <AppBrandIcon className="header-bar__logo-image" aria-hidden="true" />
+                </div>
                 <div className="header-bar__title">Chips Editing Engine</div>
                 <div className={`header-bar__status ${isReady ? 'header-bar__status--ready' : ''}`}>
                     {isReady ? t('header_bar.status.ready') : t('header_bar.status.loading')}
@@ -40,7 +45,7 @@ export function HeaderBar() {
                     onClick={handleToggleLayout}
                     aria-label={t('header_bar.toggle_layout')}
                 >
-                    {currentLayout === 'infinite-canvas' ? '📝' : '♾️'}
+                    <RuntimeIcon icon={getLayoutSwitcherIcon(currentLayout)} />
                 </button>
                 <button
                     type="button"
@@ -48,7 +53,7 @@ export function HeaderBar() {
                     onClick={handleToggleTheme}
                     aria-label={t('header_bar.toggle_theme')}
                 >
-                    {theme.includes('dark') ? '☀️' : '🌙'}
+                    <RuntimeIcon icon={getThemeSwitcherIcon(theme)} />
                 </button>
             </div>
         </div>

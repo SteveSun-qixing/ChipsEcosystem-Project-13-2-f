@@ -16,6 +16,7 @@
 - `src/shared/`：共享类型、多语言和视图辅助函数
 - `contracts/`：布局配置 schema
 - `tests/`：单元测试
+- `assets/icons/`：静态布局图标资源与来源说明
 
 ## 正式导出
 
@@ -25,6 +26,11 @@
 - `createDefaultLayoutConfig`
 - `normalizeLayoutConfig`
 - `validateLayoutConfig`
+
+其中：
+
+- `layoutDefinition.icon` 是运行时正式图标描述符；
+- `assets/icons/layout-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 常用命令
 

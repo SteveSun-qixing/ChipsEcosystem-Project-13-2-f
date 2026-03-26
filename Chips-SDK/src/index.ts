@@ -1,5 +1,6 @@
 export { createClient } from "./core/client";
 export type { Client, ClientConfig, SdkLogRecord, SdkLogger } from "./types/client";
+export type { IconDescriptor, IconStyle } from "./api/icon";
 export type {
   CardApi,
   CardCoverRenderResult,

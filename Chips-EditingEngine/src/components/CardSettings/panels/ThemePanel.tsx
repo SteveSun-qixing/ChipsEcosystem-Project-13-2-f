@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { getChipsClient } from '../../../services/bridge-client';
+import { ENGINE_ICONS } from '../../../icons/descriptors';
+import { RuntimeIcon } from '../../../icons/RuntimeIcon';
 import './ThemePanel.css';
 
 export interface ThemePanelProps {
@@ -133,7 +135,7 @@ export function ThemePanel({ value, onChange }: ThemePanelProps) {
                   className="theme-panel__item-check"
                   aria-hidden="true"
                 >
-                  ✓
+                  <RuntimeIcon icon={ENGINE_ICONS.check} />
                 </span>
               )}
             </button>
@@ -143,7 +145,9 @@ export function ThemePanel({ value, onChange }: ThemePanelProps) {
 
       {themes.length <= 1 && !isLoading && (
         <div className="theme-panel__hint">
-          <span className="theme-panel__hint-icon">💡</span>
+          <span className="theme-panel__hint-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.info} />
+          </span>
           <span className="theme-panel__hint-message">
             {t('card_settings.theme_hint') || '可前往插件市场下载更多主题。'}
           </span>

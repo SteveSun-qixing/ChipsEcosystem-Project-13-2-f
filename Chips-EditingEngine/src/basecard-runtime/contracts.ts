@@ -1,3 +1,5 @@
+import type { IconDescriptor } from "chips-sdk";
+
 export type BasecardConfigRecord = Record<string, unknown>;
 
 export interface EditorValidationResult {
@@ -48,7 +50,7 @@ export interface BasecardDescriptor {
   cardType: string;
   displayName: string;
   description?: string;
-  icon?: string;
+  icon?: IconDescriptor;
   aliases?: readonly string[];
   commitDebounceMs?: number;
   createInitialConfig: (baseCardId: string) => BasecardConfigRecord;

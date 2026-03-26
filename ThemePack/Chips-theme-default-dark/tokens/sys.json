@@ -20,6 +20,14 @@
         "shadow": "rgba(0, 0, 0, 0.46)",
         "error": "{chips.ref.color.red-500}"
       },
+      "icon": {
+        "color": "{chips.ref.color.gray-0}",
+        "size": "1em",
+        "fill": 0,
+        "wght": 400,
+        "grad": 0,
+        "opsz": 24
+      },
       "radius": {
         "container": "{chips.ref.radius.md}"
       }

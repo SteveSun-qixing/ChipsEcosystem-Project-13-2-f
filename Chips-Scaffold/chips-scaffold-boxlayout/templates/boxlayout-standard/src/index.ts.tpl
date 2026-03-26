@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import { mountLayoutEditor } from "./editor/runtime";
 import { mountLayoutView } from "./view/runtime";
 import {
@@ -52,6 +53,7 @@ export interface BoxLayoutDefinition {
   pluginId: string;
   layoutType: string;
   displayName: string;
+  icon?: IconDescriptor;
   createDefaultConfig(): Record<string, unknown>;
   normalizeConfig(input: Record<string, unknown>): Record<string, unknown>;
   validateConfig(config: Record<string, unknown>): {
@@ -67,6 +69,10 @@ export const layoutDefinition: BoxLayoutDefinition = {
   pluginId: "{{ PLUGIN_ID }}",
   layoutType: "{{ LAYOUT_TYPE }}",
   displayName: "{{ DISPLAY_NAME }}",
+  icon: {
+    name: "grid_view",
+    decorative: true,
+  },
   createDefaultConfig() {
     return createDefaultLayoutConfig() as unknown as Record<string, unknown>;
   },

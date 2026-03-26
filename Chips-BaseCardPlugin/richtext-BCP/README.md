@@ -1,102 +1,58 @@
 # 富文本基础卡片插件
 
-> 通过 `chips-scaffold-basecard` 生成的富文本基础卡片插件工程。
-
 ## 简介
 
-本插件工程实现了一个面向富文本内容的基础卡片插件（`type: card`），用于演示如何：
+`chips.basecard.richtext` 是薯片生态的富文本基础卡片插件，当前正式版本采用：
 
-- 在查看器中以正式 `RichTextCard` 配置模型渲染富文本正文；
-- 在编辑引擎中提供富文本编辑面板（支持加粗、斜体、下划线等基础样式）；
-- 通过 `basecardDefinition` 同时对接 Host 通用链路与官方编辑引擎运行时；
-- 使用 YAML 配置文件保存 `card_type/theme/body/locale` 正式字段；
-- 使用多语言文案与基础错误处理。
+- `Milkdown` 作为编辑内核；
+- 文本选区触发的图标悬浮工具框作为核心编辑交互；
+- 编辑区右键菜单承载块级操作；
+- Markdown 作为唯一正式内容格式；
+- `<= 200` 字内容保存在 `content/*.yaml`；
+- `> 200` 字内容保存为卡片根目录 `.md` 文件，并在内容配置中保存引用。
 
-## 项目结构
+## 正式导出
 
-```text
-richtext-BCP/
-├─ .eslintrc.cjs
-├─ manifest.yaml
-├─ package.json
-├─ tsconfig.json
-├─ chips.config.mjs
-├─ src/
-│  ├─ index.ts
-│  ├─ render/
-│  │  ├─ view.tsx
-│  │  └─ runtime.ts
-│  ├─ editor/
-│  │  ├─ panel.tsx
-│  │  └─ runtime.ts
-│  ├─ schema/
-│  │  └─ card-config.ts
-│  └─ shared/
-│     ├─ i18n.ts
-│     └─ utils.ts
-├─ config/
-│  └─ logging.ts
-├─ i18n/
-│  ├─ zh-CN.json
-│  └─ en-US.json
-├─ templates/
-│  ├─ default-card-config.yaml
-│  └─ parameters.md
-├─ tests/
-│  ├─ unit/
-│  │  ├─ render-view.test.tsx
-│  │  └─ editor-panel.test.tsx
-│  └─ integration/
-│     └─ card-flow.test.ts
-└─ assets/
-   └─ icons/
-      └─ basecard-icon.svg
-```
+插件入口 `src/index.ts` 导出：
 
-## 快速开始
-
-```bash
-cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
-npm install
-cd richtext-BCP
-npm run dev
-```
-
-`chips-sdk`、`chipsdev` 与 ESLint 工具链统一通过生态根工作区解析；当前工程不再单独维护 sibling `file:` 依赖。
-
-## 配置结构
-
-富文本基础卡片配置类型在 `src/schema/card-config.ts` 中定义，示例配置位于 `templates/default-card-config.yaml`。
-
-当前正式配置模型为：
-
-- `card_type: "RichTextCard"`
-- `theme?: string`
-- `body: string`
-- `locale?: string`
-
-Schema 层统一提供：
-
-- `normalizeBasecardConfig()`：把输入归一为正式 `RichTextCard` 配置；
-- `validateBasecardConfig()`：执行正式校验基线，阻止空正文等无效输出。
-
-## 正式入口契约
-
-`src/index.ts` 当前同时导出以下正式能力：
-
-- `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
-- `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；
-- `basecardDefinition`：供编辑引擎运行时注册表读取插件元信息、别名、归一/校验与渲染能力。
+- `renderBasecardView(ctx)`
+- `renderBasecardEditor(ctx)`
+- `basecardDefinition`
 
 其中：
 
 - `basecardDefinition.cardType = "base.richtext"` 与 `manifest.yaml -> capabilities.cardTypes` 保持一致；
-- `aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
-- `createInitialConfig()` 生成编辑引擎新建基础卡片时的正式初始正文。
+- `basecardDefinition.aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
+- `basecardDefinition.createInitialConfig()` 默认生成 Markdown inline 配置；
 - `basecardDefinition.icon` 是运行时正式图标描述符；
 - `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
-## 主题接入约束
+## 配置结构
 
-- Host 会在渲染阶段注入 `themeCssText`，渲染运行时必须优先消费当前生效主题；
-- 富文本基础卡片不得自行硬编码整套卡片视觉色板，所有结构样式应通过主题类名与变量落地。
+当前正式配置模型位于 `src/schema/card-config.ts`：
+
+- `card_type: "RichTextCard"`
+- `theme?: string`
+- `locale?: string`
+- `content_format: "markdown"`
+- `content_source: "inline" | "file"`
+- `content_text?: string`
+- `content_file?: string`
+
+## 开发命令
+
+```bash
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/richtext-BCP
+npm run build
+npm run test
+npm run lint
+npm run validate
+```
+
+## 文档
+
+- 需求文档：`docs/requirements/01-需求规格说明书.md`
+- 技术文档：`docs/technical/01-架构设计.md`
+- 数据模型：`docs/technical/02-数据模型设计.md`
+- 开发计划：`docs/development/00-开发计划总览.md`
+- 旧版 HTML 方案归档：`归档/20260324-富文本基础卡片旧版HTML方案`

@@ -24,7 +24,7 @@ const createRenderCardArchive = async (): Promise<string> => {
   await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
   await fs.writeFile(
     path.join(source, 'content/intro.yaml'),
-    'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <p>render protocol</p>\n',
+    'card_type: "RichTextCard"\ncontent_format: "markdown"\ncontent_source: "inline"\ncontent_text: |\n  render protocol\n',
     'utf-8',
   );
 

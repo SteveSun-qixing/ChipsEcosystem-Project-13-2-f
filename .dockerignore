@@ -1,0 +1,12 @@
+.git
+.specstory
+output
+**/.DS_Store
+**/node_modules
+**/dist
+**/.turbo
+**/.cache
+**/.next
+**/coverage
+**/playwright-report
+**/.chips-server-host

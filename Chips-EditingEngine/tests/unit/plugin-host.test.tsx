@@ -106,7 +106,7 @@ describe('PluginHost', () => {
             cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
-            config={{ id: 'base-1', body: '<p>init</p>' }}
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'init' }}
             onConfigChange={onConfigChange}
           />
         </EditorRuntimeProvider>,
@@ -115,8 +115,8 @@ describe('PluginHost', () => {
     });
 
     await act(async () => {
-      editorChangeHandler?.({ id: 'base-1', body: '<p>a</p>' });
-      editorChangeHandler?.({ id: 'base-1', body: '<p>ab</p>' });
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'a' });
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'ab' });
       await Promise.resolve();
     });
 
@@ -136,7 +136,10 @@ describe('PluginHost', () => {
     expect(onConfigChange).toHaveBeenLastCalledWith(
       {
         id: 'base-1',
-        body: '<p>ab</p>',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: 'ab',
       },
       undefined,
     );
@@ -154,7 +157,7 @@ describe('PluginHost', () => {
             cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
-            config={{ id: 'base-1', body: '<p>init</p>' }}
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'init' }}
             onConfigChange={onConfigChange}
           />
         </EditorRuntimeProvider>,
@@ -163,7 +166,7 @@ describe('PluginHost', () => {
     });
 
     await act(async () => {
-      editorChangeHandler?.({ id: 'base-1', body: '<p>final</p>' });
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'final' });
       await Promise.resolve();
     });
 
@@ -178,7 +181,10 @@ describe('PluginHost', () => {
     expect(onConfigChange).toHaveBeenCalledWith(
       {
         id: 'base-1',
-        body: '<p>final</p>',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: 'final',
       },
       undefined,
     );
@@ -467,7 +473,7 @@ describe('PluginHost', () => {
             cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
-            config={{ id: 'base-1', body: '<p>init</p>' }}
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'init' }}
             onConfigChange={onConfigChange}
           />
         </EditorRuntimeProvider>,
@@ -478,7 +484,7 @@ describe('PluginHost', () => {
     expect(mockRenderEditor).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      editorChangeHandler?.({ id: 'base-1', body: '<p>updated</p>' });
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'updated' });
       await Promise.resolve();
     });
 
@@ -490,7 +496,10 @@ describe('PluginHost', () => {
     expect(onConfigChange).toHaveBeenCalledWith(
       {
         id: 'base-1',
-        body: '<p>updated</p>',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: 'updated',
       },
       undefined,
     );
@@ -503,7 +512,7 @@ describe('PluginHost', () => {
             cardPath="/workspace/card-1.card"
             cardType="RichTextCard"
             baseCardId="base-1"
-            config={{ id: 'base-1', body: '<p>updated</p>' }}
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'updated' }}
             onConfigChange={onConfigChange}
           />
         </EditorRuntimeProvider>,

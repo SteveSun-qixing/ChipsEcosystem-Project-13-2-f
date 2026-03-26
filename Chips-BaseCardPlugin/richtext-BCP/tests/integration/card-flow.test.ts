@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mountBasecardView } from "../../src/render/runtime";
 import { mountBasecardEditor } from "../../src/editor/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
@@ -6,157 +6,55 @@ import type { BasecardConfig } from "../../src/schema/card-config";
 function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
   return {
     card_type: "RichTextCard",
-    body: "<p>Body</p>",
+    content_format: "markdown",
+    content_source: "inline",
+    content_text: "Body",
     locale: "zh-CN",
     theme: "",
     ...overrides,
   };
 }
 
-describe("basecard integration flow (text basic)", () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+async function waitFor(condition: () => boolean, timeout = 3000): Promise<void> {
+  const started = Date.now();
+  while (!condition()) {
+    if (Date.now() - started > timeout) {
+      throw new Error("waitFor timeout");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
-  it("updates view when editor emits valid body content without a title field", () => {
-    vi.useFakeTimers();
-
+describe("basecard integration flow (markdown richtext)", () => {
+  it("mounts both readonly view and Milkdown editor on the same config model", async () => {
     const container = document.createElement("div");
     const editorContainer = document.createElement("div");
 
     const initialConfig = createConfig({
-      body: "<p>Body</p>",
+      content_text: `# 标题
+
+集成测试正文`,
     });
 
-    let currentConfig: BasecardConfig = initialConfig;
-
-    mountBasecardView({
+    const disposeView = mountBasecardView({
       container,
-      config: currentConfig,
+      config: initialConfig,
     });
 
-    mountBasecardEditor({
+    const disposeEditor = mountBasecardEditor({
       container: editorContainer,
       initialConfig,
-      onChange: (next) => {
-        currentConfig = next;
-        mountBasecardView({
-          container,
-          config: currentConfig,
-        });
-      },
+      onChange: vi.fn(),
     });
 
-    expect(
-      editorContainer.querySelector(".chips-basecard-editor__input")
-    ).toBeNull();
-    expect(
-      editorContainer.querySelector(".chips-basecard-editor__toolbar-shell")
-    ).not.toBeNull();
-    expect(
-      editorContainer.querySelector(".chips-basecard-editor__floating-toolbar")
-    ).toBeNull();
+    await waitFor(() => Boolean(container.querySelector(".ProseMirror")));
+    await waitFor(() => Boolean(editorContainer.querySelector(".ProseMirror")));
 
-    const bodyEditor = editorContainer.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
+    expect(container.textContent).toContain("标题");
+    expect(editorContainer.textContent).toContain("集成测试正文");
+    expect(editorContainer.querySelector(".chips-basecard-editor__floating-toolbar")).not.toBeNull();
 
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    bodyEditor.innerHTML = "<p>Updated Body</p>";
-    bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
-    vi.advanceTimersByTime(130);
-
-    const bodyEl = container.querySelector(".chips-richtext-card__surface");
-    expect(bodyEl?.textContent).toContain("Updated Body");
-  });
-
-  it("renders sanitized pasted content in the view", () => {
-    vi.useFakeTimers();
-
-    const container = document.createElement("div");
-    const editorContainer = document.createElement("div");
-
-    const initialConfig = createConfig();
-
-    let currentConfig: BasecardConfig = initialConfig;
-
-    mountBasecardView({
-      container,
-      config: currentConfig,
-    });
-
-    mountBasecardEditor({
-      container: editorContainer,
-      initialConfig,
-      onChange: (next) => {
-        currentConfig = next;
-        mountBasecardView({
-          container,
-          config: currentConfig,
-        });
-      },
-    });
-
-    const bodyEditor = editorContainer.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    const range = document.createRange();
-    range.selectNodeContents(bodyEditor);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const pasteEvent = new Event("paste", {
-      bubbles: true,
-      cancelable: true,
-    }) as ClipboardEvent;
-
-    Object.defineProperty(pasteEvent, "clipboardData", {
-      configurable: true,
-      value: {
-        getData(type: string) {
-          if (type === "text/html") {
-            return '<p>safe</p><script>alert(1)</script>';
-          }
-          return "";
-        },
-      },
-    });
-
-    bodyEditor.dispatchEvent(pasteEvent);
-    vi.advanceTimersByTime(130);
-
-    const bodyEl = container.querySelector(".chips-richtext-card__surface");
-    expect(bodyEl?.textContent).toContain("safe");
-    expect(bodyEl?.innerHTML).not.toContain("script");
-  });
-
-  it("locks the editor document height chain to the local scroll container", () => {
-    const container = document.createElement("div");
-    const editorContainer = document.createElement("div");
-    container.appendChild(editorContainer);
-
-    const dispose = mountBasecardEditor({
-      container: editorContainer,
-      initialConfig: createConfig(),
-      onChange: () => undefined,
-    });
-
-    expect(document.documentElement.style.height).toBe("100%");
-    expect(document.body.style.height).toBe("100%");
-    expect(document.body.style.overflow).toBe("hidden");
-    expect(editorContainer.style.height).toBe("100%");
-    expect(editorContainer.style.overflow).toBe("hidden");
-
-    dispose();
+    disposeEditor();
+    disposeView();
   });
 });

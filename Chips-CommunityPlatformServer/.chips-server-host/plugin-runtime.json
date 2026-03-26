@@ -1,0 +1,188 @@
+[
+  {
+    "manifest": {
+      "id": "chips.basecard.richtext",
+      "version": "0.1.0",
+      "type": "card",
+      "name": "富文本基础卡片插件",
+      "description": "富文本基础卡片插件（通过 chips-scaffold-basecard 生成，支持富文本内容的编辑与渲染）。",
+      "permissions": [],
+      "capabilities": [
+        "base.richtext"
+      ],
+      "entry": "dist/index.mjs",
+      "assets": [
+        "dist/index.mjs"
+      ]
+    },
+    "manifestPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.basecard.richtext/manifest.yaml",
+    "installPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.basecard.richtext",
+    "enabled": true,
+    "installedAt": 1774359831070
+  },
+  {
+    "manifest": {
+      "id": "chips.basecard.image",
+      "version": "0.1.0",
+      "type": "card",
+      "name": "图片基础卡片插件",
+      "description": "图片基础卡片插件，支持卡片根目录资源导入、四种图片布局和托管编辑器完整编辑链路。",
+      "permissions": [],
+      "capabilities": [
+        "base.image"
+      ],
+      "entry": "dist/index.mjs",
+      "assets": [
+        "dist/index.mjs"
+      ]
+    },
+    "manifestPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.basecard.image/manifest.yaml",
+    "installPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.basecard.image",
+    "enabled": true,
+    "installedAt": 1774359831079
+  },
+  {
+    "manifest": {
+      "id": "chips.module.chips.cardtohtml.plugin",
+      "version": "0.1.0",
+      "type": "module",
+      "name": "Chips CardtoHTML Plugin",
+      "description": "把卡片通过 Host 正式渲染链路导出为目录态或压缩态 HTML 的原子转换模块。",
+      "permissions": [
+        "card.read",
+        "file.read",
+        "file.write",
+        "zip.manage"
+      ],
+      "capabilities": [
+        "converter.card.to-html"
+      ],
+      "entry": "dist/index.mjs",
+      "assets": [
+        "dist/index.mjs",
+        "contracts/convert.input.schema.json",
+        "contracts/convert.output.schema.json"
+      ],
+      "module": {
+        "apiVersion": 1,
+        "runtime": "worker",
+        "activation": "onDemand",
+        "provides": [
+          {
+            "capability": "converter.card.to-html",
+            "version": "1.0.0",
+            "methods": [
+              {
+                "name": "convert",
+                "mode": "job",
+                "inputSchema": "contracts/convert.input.schema.json",
+                "outputSchema": "contracts/convert.output.schema.json"
+              }
+            ]
+          }
+        ],
+        "consumes": []
+      }
+    },
+    "manifestPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.module.chips.cardtohtml.plugin/manifest.yaml",
+    "installPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.module.chips.cardtohtml.plugin",
+    "enabled": true,
+    "installedAt": 1774359831086
+  },
+  {
+    "manifest": {
+      "id": "chips.module.chips.fileconversion.plugin",
+      "version": "0.1.0",
+      "type": "module",
+      "name": "Chips FileConversion Plugin",
+      "description": "基于 chips-scaffold-module 生成的标准模块插件。",
+      "permissions": [
+        "file.read",
+        "file.write",
+        "module.read",
+        "module.invoke"
+      ],
+      "capabilities": [
+        "converter.file.convert"
+      ],
+      "entry": "dist/index.mjs",
+      "assets": [
+        "dist/index.mjs",
+        "contracts/convert.input.schema.json",
+        "contracts/convert.output.schema.json"
+      ],
+      "module": {
+        "apiVersion": 1,
+        "runtime": "worker",
+        "activation": "onDemand",
+        "provides": [
+          {
+            "capability": "converter.file.convert",
+            "version": "1.0.0",
+            "methods": [
+              {
+                "name": "convert",
+                "mode": "job",
+                "inputSchema": "contracts/convert.input.schema.json",
+                "outputSchema": "contracts/convert.output.schema.json"
+              }
+            ]
+          }
+        ],
+        "consumes": [
+          {
+            "capability": "converter.card.to-html",
+            "versionRange": "^1.0.0"
+          },
+          {
+            "capability": "converter.html.to-pdf",
+            "versionRange": "^1.0.0"
+          },
+          {
+            "capability": "converter.html.to-image",
+            "versionRange": "^1.0.0"
+          }
+        ]
+      }
+    },
+    "manifestPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.module.chips.fileconversion.plugin/manifest.yaml",
+    "installPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/chips.module.chips.fileconversion.plugin",
+    "enabled": true,
+    "installedAt": 1774359831092
+  },
+  {
+    "manifest": {
+      "id": "theme.theme.chips-official-default-theme",
+      "version": "1.0.0",
+      "type": "theme",
+      "name": "薯片官方 · 默认主题",
+      "description": "Chips 官方默认内置主题",
+      "permissions": [
+        "theme.read"
+      ],
+      "entry": {
+        "tokens": "dist/tokens.json",
+        "themeCss": "dist/theme.css"
+      },
+      "assets": [
+        "dist/tokens.json",
+        "dist/theme.css",
+        "contracts/theme-interface.contract.json",
+        "contracts/theme-min-functional-set.json"
+      ],
+      "theme": {
+        "themeId": "chips-official.default-theme",
+        "displayName": "薯片官方 · 默认主题",
+        "publisher": "薯片官方",
+        "isDefault": true,
+        "tokensPath": "dist/tokens.json",
+        "themeCssPath": "dist/theme.css",
+        "contractPath": "./contracts/theme-interface.contract.json"
+      }
+    },
+    "manifestPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/theme.theme.chips-official-default-theme/manifest.yaml",
+    "installPath": "/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task-006-社区平台服务器实际开发/Chips-CommunityPlatformServer/.chips-server-host/plugins/theme.theme.chips-official-default-theme",
+    "enabled": true,
+    "installedAt": 1774359831102
+  }
+]

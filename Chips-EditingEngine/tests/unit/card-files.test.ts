@@ -78,18 +78,26 @@ describe('unpacked .card files', () => {
 
     setFile('/workspace/demo.card/content/intro.yaml', yaml.stringify({
       card_type: 'RichTextCard',
-      content_text: '<h1>Intro</h1><p>Hello Chips.</p>',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '# Intro\n\nHello Chips.',
     }));
 
     setFile('/workspace/demo.card/content/details.yaml', yaml.stringify({
       id: 'details',
-      body: '<p>Second node body.</p>',
+      card_type: 'RichTextCard',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: 'Second node body.',
       locale: 'zh-CN',
     }));
 
     setFile('/workspace/demo.card/content/legacy-unused.yaml', yaml.stringify({
       id: 'legacy-unused',
-      body: '<p>Unused</p>',
+      card_type: 'RichTextCard',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: 'Unused',
     }));
   };
 
@@ -175,7 +183,10 @@ describe('unpacked .card files', () => {
       type: 'RichTextCard',
       config: {
         id: 'intro',
-        body: '<p>你好</p>',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: '你好',
         locale: 'zh-CN',
       },
     });
@@ -192,7 +203,13 @@ describe('unpacked .card files', () => {
     expect(metadata.name).toBe('新卡片');
     expect(metadata.cover_ratio).toBe('3:4');
     expect(structure.structure).toHaveLength(1);
-    expect(content.body).toBe('<p>你好</p>');
+    expect(content).toMatchObject({
+      card_type: 'RichTextCard',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '你好',
+      locale: 'zh-CN',
+    });
     expect(files.get('/workspace/new-card.card/.card/cover.html')).toContain('新卡片');
   });
 
@@ -210,7 +227,9 @@ describe('unpacked .card files', () => {
       type: 'base.richtext',
       data: {
         card_type: 'RichTextCard',
-        body: '<h1>Intro</h1><p>Hello Chips.</p>',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: '# Intro\n\nHello Chips.',
         locale: 'zh-CN',
         theme: '',
       },
@@ -218,7 +237,7 @@ describe('unpacked .card files', () => {
 
     service.removeBasicCard('demo-card', 'details');
     service.updateBasicCard('demo-card', 'intro', {
-      body: '<p>已更新</p>',
+      content_text: '已更新',
     });
     await service.saveCard('demo-card');
 
@@ -229,7 +248,9 @@ describe('unpacked .card files', () => {
     expect(persistedStructure.structure[0]?.type).toBe('base.richtext');
     expect(persistedIntro).toMatchObject({
       card_type: 'RichTextCard',
-      body: '<p>已更新</p>',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '已更新',
       locale: 'zh-CN',
       theme: '',
     });
@@ -330,10 +351,10 @@ describe('unpacked .card files', () => {
     await service.openCard('demo-card', '/workspace/demo.card');
 
     service.updateBasicCard('demo-card', 'intro', {
-      body: '<p>first</p>',
+      content_text: 'first',
     });
     service.updateBasicCard('demo-card', 'intro', {
-      body: '<p>second</p>',
+      content_text: 'second',
     });
 
     const pendingCard = service.getCard('demo-card');
@@ -358,7 +379,9 @@ describe('unpacked .card files', () => {
     expect(latestCard?.isPersisting).toBe(false);
     expect(persistedIntro).toMatchObject({
       card_type: 'RichTextCard',
-      body: '<p>second</p>',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: 'second',
       locale: 'zh-CN',
       theme: '',
     });

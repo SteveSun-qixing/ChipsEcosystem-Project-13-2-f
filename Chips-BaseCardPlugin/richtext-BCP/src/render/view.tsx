@@ -1,10 +1,14 @@
-import React from "react";
-import type { BasecardConfig } from "../schema/card-config";
-import { normalizeRichTextHtml } from "../shared/utils";
-
 export const VIEW_STYLE_TEXT = `
+html, body {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  background: transparent;
+}
+
 .chips-richtext-card {
   width: 100%;
+  min-height: 100%;
   color: var(--chips-sys-color-on-surface, #111827);
   font: 14px/1.7 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif);
   background: transparent;
@@ -20,17 +24,28 @@ export const VIEW_STYLE_TEXT = `
   min-height: 100%;
   padding: 20px 24px;
   background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
   overflow-wrap: anywhere;
 }
 
-.chips-richtext-card__surface > :first-child {
+.chips-richtext-card__surface .milkdown,
+.chips-richtext-card__surface .milkdown .editor {
+  background: transparent;
+}
+
+.chips-richtext-card__surface .ProseMirror {
+  outline: none;
+  white-space: break-spaces;
+}
+
+.chips-richtext-card__surface .ProseMirror[contenteditable="false"] {
+  cursor: default;
+}
+
+.chips-richtext-card__surface .ProseMirror > :first-child {
   margin-top: 0;
 }
 
-.chips-richtext-card__surface > :last-child {
+.chips-richtext-card__surface .ProseMirror > :last-child {
   margin-bottom: 0;
 }
 
@@ -67,19 +82,19 @@ export const VIEW_STYLE_TEXT = `
   height: auto;
   border-radius: 12px;
 }
+
+.chips-richtext-card__surface hr {
+  border: 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.12);
+  margin: 16px 0;
+}
+
+.chips-richtext-card__status {
+  padding: 20px 24px;
+  color: var(--chips-sys-color-on-surface-variant, #667085);
+}
+
+.chips-richtext-card__status--error {
+  color: var(--chips-sys-color-error, #d92d20);
+}
 `;
-
-export interface RichTextCardViewProps {
-  config: BasecardConfig;
-}
-
-export function RichTextCardView({ config }: RichTextCardViewProps) {
-  return (
-    <div className="chips-richtext-card" data-card-type={config.card_type}>
-      <div
-        className="chips-richtext-card__surface"
-        dangerouslySetInnerHTML={{ __html: normalizeRichTextHtml(config.body) }}
-      />
-    </div>
-  );
-}

@@ -27,6 +27,7 @@ export interface CardRenderOptions {
   locale?: string;
   mode?: 'view' | 'preview';
   interactionPolicy?: 'native' | 'delegate';
+  resourceBaseUrl?: string;
 }
 
 export interface CardEditorRenderOptions {
@@ -647,84 +648,36 @@ const asString = (value: unknown): string | undefined => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 };
 
-const isSafeUrlProtocol = (value: string): boolean => {
-  const lowered = value.trim().toLowerCase();
-  return !(
-    lowered.startsWith('javascript:') ||
-    lowered.startsWith('data:') ||
-    lowered.startsWith('vbscript:')
-  );
-};
+const normalizeRichTextRuntimeConfig = (
+  config: Record<string, unknown>,
+  fallbackId: string,
+  locale: string
+): Record<string, unknown> => {
+  const id = asString(config.id) ?? fallbackId;
+  const theme = asString(config.theme) ?? '';
+  const contentSource = asString(config.content_source) === 'file' ? 'file' : 'inline';
 
-const resolveResourceUrl = (rawValue: string, baseDir: string, cardRoot: string): string => {
-  const value = rawValue.trim();
-  if (!value || !isSafeUrlProtocol(value)) {
-    return '';
-  }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith('//') || value.startsWith('#')) {
-    return value;
-  }
-
-  const absolutePath = value.startsWith('/')
-    ? path.resolve(cardRoot, `.${value}`)
-    : path.resolve(baseDir, value);
-  return pathToFileURL(absolutePath).href;
-};
-
-const loadHtmlFromRichTextConfig = async (config: Record<string, unknown>, file: ParsedContentFile, cardRoot: string): Promise<string> => {
-  const contentSource = asString(config.content_source) ?? 'inline';
-  let html = '';
-
-  if (typeof config.body === 'string') {
-    html = config.body;
-  } else if (contentSource === 'file') {
-    const relativePath = asString(config.content_file);
-    if (!relativePath) {
-      throw createError('CARD_SCHEMA_INVALID', 'Rich text card is missing content_file.', {
-        nodeId: file.id,
-        filePath: file.path
-      });
-    }
-    const absolutePath = path.resolve(cardRoot, relativePath);
-    html = await fs.readFile(absolutePath, 'utf-8');
-  } else {
-    html = typeof config.content_text === 'string' ? config.content_text : '';
+  if (contentSource === 'file') {
+    return {
+      id,
+      card_type: 'RichTextCard',
+      theme,
+      locale,
+      content_format: 'markdown',
+      content_source: 'file',
+      content_file: asString(config.content_file) ?? ''
+    };
   }
 
-  const jsdom = require('jsdom') as { JSDOM: new (html?: string) => { window: any } };
-  const dom = new jsdom.JSDOM(`<!doctype html><html><body>${html}</body></html>`);
-  try {
-    const { document } = dom.window;
-    for (const element of Array.from(document.querySelectorAll('[src]')) as Array<any>) {
-      const src = element.getAttribute('src');
-      if (!src) {
-        continue;
-      }
-      const next = resolveResourceUrl(src, path.dirname(file.absolutePath), cardRoot);
-      if (next) {
-        element.setAttribute('src', next);
-      } else {
-        element.removeAttribute('src');
-      }
-    }
-
-    for (const element of Array.from(document.querySelectorAll('[href]')) as Array<any>) {
-      const href = element.getAttribute('href');
-      if (!href) {
-        continue;
-      }
-      const next = resolveResourceUrl(href, path.dirname(file.absolutePath), cardRoot);
-      if (next) {
-        element.setAttribute('href', next);
-      } else {
-        element.removeAttribute('href');
-      }
-    }
-
-    return document.body.innerHTML;
-  } finally {
-    dom.window.close();
-  }
+  return {
+    id,
+    card_type: 'RichTextCard',
+    theme,
+    locale,
+    content_format: 'markdown',
+    content_source: 'inline',
+    content_text: typeof config.content_text === 'string' ? config.content_text : ''
+  };
 };
 
 const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
@@ -1259,6 +1212,7 @@ const createCompositeDocument = (
   mode: 'view' | 'preview',
   interactionPolicy: CompositeInteractionPolicy,
   managedDocumentScheme?: string,
+  resourceBaseUrl?: string,
 ): string => {
   const scriptNonce = createDocumentScriptNonce();
   const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
@@ -1740,6 +1694,7 @@ export class CardService {
       const target = options?.target ?? 'card-iframe';
       const mode = options?.mode ?? 'view';
       const interactionPolicy = options?.interactionPolicy ?? 'native';
+      const resourceBaseUrl = options?.resourceBaseUrl ?? this.createCardRootBaseUrl(ctx.rootDir);
       const theme = options?.theme;
       if (!theme) {
         throw createError('THEME_NOT_FOUND', 'Card render requires a resolved theme snapshot.');
@@ -1749,7 +1704,16 @@ export class CardService {
 
       for (const node of structureNodes) {
         renderedNodes.push(
-          await this.renderStructureNode(node, ctx, theme, themeCssText, locale, diagnostics, interactionPolicy)
+          await this.renderStructureNode(
+            node, 
+            ctx, 
+            theme, 
+            themeCssText, 
+            locale, 
+            diagnostics, 
+            interactionPolicy,
+            resourceBaseUrl
+          )
         );
       }
 
@@ -1782,6 +1746,7 @@ export class CardService {
         mode,
         interactionPolicy,
         this.managedDocumentScheme,
+        resourceBaseUrl,
       );
       const indexPath = path.join(persistedSession.rootDir, 'index.html');
       await fs.writeFile(indexPath, body, 'utf-8');
@@ -2011,7 +1976,8 @@ export class CardService {
     themeCssText: string | undefined,
     locale: string,
     diagnostics: RenderNodeDiagnostic[],
-    interactionPolicy: CompositeInteractionPolicy
+    interactionPolicy: CompositeInteractionPolicy,
+    resourceBaseUrl: string
   ): Promise<RenderedBaseCardNode> {
     const content = ctx.contentByNodeId.get(node.id);
     const cardType = node.type || asString(content?.parsed.card_type) || 'UnknownCard';
@@ -2059,7 +2025,7 @@ export class CardService {
         cardType,
         config,
         title,
-        resourceBaseUrl: this.createCardRootBaseUrl(ctx.rootDir),
+        resourceBaseUrl,
         theme,
         themeCssText,
         locale,
@@ -2138,7 +2104,7 @@ export class CardService {
   private async normalizeNodeConfig(
     plugin: RenderablePluginRecord,
     file: ParsedContentFile,
-    cardRoot: string,
+    _cardRoot: string,
     locale?: string
   ): Promise<Record<string, unknown>> {
     const rawConfig: Record<string, unknown> = {
@@ -2148,23 +2114,7 @@ export class CardService {
     const effectiveLocale = asString(locale) ?? asString(rawConfig.locale) ?? 'zh-CN';
 
     if (plugin.manifest.id === 'chips.basecard.richtext') {
-      if (
-        typeof rawConfig.body === 'string' &&
-        !asString(rawConfig.content_text)
-      ) {
-        return {
-          id: file.id,
-          body: rawConfig.body,
-          locale: effectiveLocale
-        };
-      }
-
-      const richTextHtml = await loadHtmlFromRichTextConfig(rawConfig, file, cardRoot);
-      return {
-        id: file.id,
-        body: richTextHtml || '<p></p>',
-        locale: effectiveLocale
-      };
+      return normalizeRichTextRuntimeConfig(rawConfig, file.id, effectiveLocale);
     }
 
     return {
@@ -2186,25 +2136,11 @@ export class CardService {
       cardType === 'base.richtext' ||
       asString(rawConfig.card_type) === 'RichTextCard'
     ) {
-      if (typeof rawConfig.body === 'string') {
-        return {
-          id: asString(rawConfig.id) ?? createId(),
-          body: rawConfig.body,
-          locale: asString(rawConfig.locale) ?? 'zh-CN'
-        };
-      }
-
-      const richTextHtml =
-        typeof rawConfig.body === 'string'
-          ? rawConfig.body
-          : typeof rawConfig.content_text === 'string'
-            ? rawConfig.content_text
-            : '';
-      return {
-        id: asString(rawConfig.id) ?? createId(),
-        body: richTextHtml || '<p></p>',
-        locale: asString(rawConfig.locale) ?? 'zh-CN'
-      };
+      return normalizeRichTextRuntimeConfig(
+        rawConfig,
+        asString(rawConfig.id) ?? createId(),
+        asString(rawConfig.locale) ?? 'zh-CN'
+      );
     }
 
     return rawConfig;

@@ -1,0 +1,13 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1774342111538,
+      "tag": "0000_workable_maggott",
+      "breakpoints": true
+    }
+  ]
+}

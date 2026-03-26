@@ -162,7 +162,7 @@ describe('Host services integration', () => {
     await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
     await fs.writeFile(
       path.join(source, 'content/intro.yaml'),
-      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <h1>Render Intro</h1>\n  <p>Rendered through host service.</p>\n',
+      'card_type: "RichTextCard"\ncontent_format: "markdown"\ncontent_source: "inline"\ncontent_text: |\n  # Render Intro\n\n  Rendered through host service.\n',
       'utf-8'
     );
 
@@ -245,7 +245,7 @@ describe('Host services integration', () => {
     await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
     await fs.writeFile(
       path.join(source, 'content/intro.yaml'),
-      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <p>override test</p>\n',
+      'card_type: "RichTextCard"\ncontent_format: "markdown"\ncontent_source: "inline"\ncontent_text: |\n  override test\n',
       'utf-8'
     );
 
@@ -507,7 +507,7 @@ describe('Host services integration', () => {
     await fs.writeFile(path.join(source, '.card/cover.html'), '<h1>cover</h1>', 'utf-8');
     await fs.writeFile(
       path.join(source, 'content/intro.yaml'),
-      'card_type: "RichTextCard"\ncontent_source: "inline"\ncontent_text: |\n  <p>route pack</p>\n',
+      'card_type: "RichTextCard"\ncontent_format: "markdown"\ncontent_source: "inline"\ncontent_text: |\n  route pack\n',
       'utf-8'
     );
 

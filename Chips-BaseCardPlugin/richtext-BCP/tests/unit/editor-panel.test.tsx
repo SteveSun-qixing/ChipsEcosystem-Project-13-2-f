@@ -1,441 +1,120 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createBasecardEditorRoot } from "../../src/editor/panel";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
 function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
   return {
     card_type: "RichTextCard",
-    body: "<p>Body</p>",
+    content_format: "markdown",
+    content_source: "inline",
+    content_text: "初始内容",
     locale: "zh-CN",
     theme: "",
     ...overrides,
   };
 }
 
-describe("createBasecardEditorRoot (text basic)", () => {
-  const originalExecCommand = (
-    document as Document & {
-      execCommand?: (name: string, showUi?: boolean, value?: string) => boolean;
+async function waitFor(condition: () => boolean, timeout = 3000): Promise<void> {
+  const started = Date.now();
+  while (!condition()) {
+    if (Date.now() - started > timeout) {
+      throw new Error("waitFor timeout");
     }
-  ).execCommand;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
-  afterEach(() => {
-    vi.useRealTimers();
-
-    if (originalExecCommand) {
-      Object.defineProperty(document, "execCommand", {
-        configurable: true,
-        value: originalExecCommand,
-      });
-    } else {
-      Reflect.deleteProperty(document, "execCommand");
-    }
-  });
-
-  it("emits changes while the user is typing", () => {
-    vi.useFakeTimers();
-
-    const initialConfig = createConfig({
-      body: "<p></p>",
-    });
-
-    let lastConfig: BasecardConfig | undefined;
+describe("createBasecardEditorRoot (Milkdown)", () => {
+  it("renders a compact icon-only floating toolbar", async () => {
     const root = createBasecardEditorRoot({
-      initialConfig,
-      onChange: (next) => {
-        lastConfig = next;
-      },
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    bodyEditor.innerHTML = "<p>实时内容</p>";
-    bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
-    vi.advanceTimersByTime(130);
-
-    expect(lastConfig?.body).toContain("实时内容");
-  });
-
-  it("keeps the toolbar in a dedicated top region above the scrollable editor surface", () => {
-    const initialConfig = createConfig();
-
-    const root = createBasecardEditorRoot({
-      initialConfig,
+      initialConfig: createConfig(),
       onChange: () => undefined,
     });
 
-    const toolbarShell = root.querySelector(
-      ".chips-basecard-editor__toolbar-shell"
-    ) as HTMLDivElement | null;
-    const toolbarPanel = root.querySelector(
-      ".chips-basecard-editor__toolbar-panel"
-    ) as HTMLDivElement | null;
-    const surfaceFrame = root.querySelector(
-      ".chips-basecard-editor__surface-frame"
-    ) as HTMLDivElement | null;
-    const scrollSurface = root.querySelector(
-      ".chips-basecard-editor__surface"
-    ) as HTMLDivElement | null;
+    await waitFor(() => Boolean(root.querySelector(".ProseMirror")));
 
-    expect(toolbarShell).not.toBeNull();
-    expect(toolbarPanel).not.toBeNull();
-    expect(surfaceFrame).not.toBeNull();
-    expect(scrollSurface).not.toBeNull();
-    expect(surfaceFrame?.contains(toolbarShell as Node)).toBe(false);
-    expect(scrollSurface?.contains(toolbarShell as Node)).toBe(false);
-    expect(root.querySelector(".chips-basecard-editor__input")).toBeNull();
-    expect(root.children.item(1)).toBe(toolbarShell);
-    expect(root.children.item(2)).toBe(surfaceFrame);
+    const toolbar = root.querySelector(".chips-basecard-editor__floating-toolbar");
+    const toolbarButtons = Array.from(root.querySelectorAll(".chips-basecard-editor__toolbar-button"));
+
+    expect(toolbar).not.toBeNull();
+    expect(root.querySelector(".chips-basecard-editor__toolbar-shell")).toBeNull();
+    expect(root.querySelector(".chips-basecard-editor__toolbar-panel")).toBeNull();
+    expect(root.querySelector(".chips-basecard-editor__surface")).not.toBeNull();
+    expect(toolbarButtons).toHaveLength(5);
+    toolbarButtons.forEach((button) => {
+      expect(button.querySelector(".chips-basecard-editor__toolbar-button-icon")).not.toBeNull();
+      expect(button.childElementCount).toBe(1);
+    });
+    expect(root.querySelector(".chips-basecard-editor__editor-host .ProseMirror")?.textContent).toContain("初始内容");
   });
 
-  it("supports collapsing the top toolbar into a compact strip", () => {
+  it("loads file-backed markdown into the editor runtime", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => `# 长文
+
+来自文件` }));
+    vi.stubGlobal("fetch", fetchMock);
+
     const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig(),
-      },
+      initialConfig: createConfig({
+        content_source: "file",
+        content_file: "richtext-base-2.md",
+        content_text: undefined,
+      }),
+      onChange: () => undefined,
+      resolveResourceUrl: async (resourcePath) => `file://${resourcePath}`,
+    });
+
+    await waitFor(() => Boolean(root.querySelector(".ProseMirror")));
+
+    expect(fetchMock).toHaveBeenCalledWith("file://richtext-base-2.md");
+    expect(root.textContent).toContain("长文");
+    vi.unstubAllGlobals();
+  });
+
+  it("shows validation errors for empty inline markdown", async () => {
+    const root = createBasecardEditorRoot({
+      initialConfig: createConfig({
+        content_text: "",
+      }),
       onChange: () => undefined,
     });
 
-    const toggleButton = root.querySelector(
-      ".chips-basecard-editor__toolbar-toggle"
-    ) as HTMLButtonElement | null;
-    const toolbarContent = root.querySelector(
-      ".chips-basecard-editor__toolbar-content"
-    ) as HTMLDivElement | null;
+    await waitFor(() => Boolean(root.querySelector(".ProseMirror")));
+    await waitFor(() => Boolean(root.querySelector(".chips-basecard-editor__errors:not([hidden])")));
 
-    if (!toggleButton || !toolbarContent) {
-      throw new Error("找不到工具栏折叠控件");
-    }
-
-    expect(root.getAttribute("data-toolbar-state")).toBe("expanded");
-    expect(toolbarContent.hidden).toBe(false);
-    expect(toggleButton.textContent).toBe("收起");
-
-    toggleButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-    expect(root.getAttribute("data-toolbar-state")).toBe("collapsed");
-    expect(toolbarContent.hidden).toBe(true);
-    expect(toggleButton.textContent).toBe("展开");
-
-    toggleButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-    expect(root.getAttribute("data-toolbar-state")).toBe("expanded");
-    expect(toolbarContent.hidden).toBe(false);
+    expect(root.textContent).toContain("内容不能为空");
   });
 
-  it("uses a two-region layout without the old floating toolbar offset styles", () => {
+  it("shows tooltip on toolbar hover and opens the editor context menu on right click", async () => {
     const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig(),
-      },
+      initialConfig: createConfig(),
       onChange: () => undefined,
     });
 
-    const styleText = root.querySelector("style")?.textContent ?? "";
+    await waitFor(() => Boolean(root.querySelector(".ProseMirror")));
 
-    expect(styleText).toContain("padding: 14px 16px 16px;");
-    expect(styleText).toContain(".chips-basecard-editor__toolbar-shell");
-    expect(styleText).toContain(".chips-basecard-editor__surface-frame");
-    expect(styleText).toContain("padding: 20px 24px 56px;");
-    expect(styleText).not.toContain("toolbar-offset");
-    expect(styleText).not.toContain("floating-toolbar");
-  });
+    const firstToolbarButton = root.querySelector(".chips-basecard-editor__toolbar-button") as HTMLButtonElement | null;
+    const tooltipLayer = root.querySelector(".chips-basecard-editor__tooltip-layer") as HTMLDivElement | null;
+    const tooltipContent = root.querySelector('[data-scope="tooltip"][data-part="content"]') as HTMLDivElement | null;
+    const editorDom = root.querySelector(".ProseMirror") as HTMLDivElement | null;
 
-  it("flushes pending changes when fields lose focus", () => {
-    const initialConfig = createConfig();
+    expect(firstToolbarButton).not.toBeNull();
+    expect(tooltipLayer).not.toBeNull();
+    expect(tooltipContent).not.toBeNull();
+    expect(editorDom).not.toBeNull();
 
-    let lastConfig: BasecardConfig | undefined;
-    const root = createBasecardEditorRoot({
-      initialConfig,
-      onChange: (next) => {
-        lastConfig = next;
-      },
-    });
+    firstToolbarButton?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    expect(tooltipLayer?.hidden).toBe(false);
+    expect(tooltipContent?.textContent).toBe("加粗");
 
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    bodyEditor.innerHTML = "<p>Updated Body</p>";
-    bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
-    bodyEditor.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-
-    expect(lastConfig?.body).toContain("Updated Body");
-  });
-
-  it("applies formatting commands through the fixed toolbar", () => {
-    const execCommandMock = vi.fn((command: string) => {
-      if (command !== "bold") {
-        return true;
-      }
-
-      const selection = window.getSelection();
-      const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
-      if (!range || range.collapsed) {
-        return true;
-      }
-
-      const strong = document.createElement("strong");
-      try {
-        range.surroundContents(strong);
-      } catch {
-        return false;
-      }
-
-      return true;
-    });
-
-    Object.defineProperty(document, "execCommand", {
-      configurable: true,
-      value: execCommandMock,
-    });
-
-    const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig({
-          body: "<p>Alpha Beta</p>",
-        }),
-      },
-      onChange: () => undefined,
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-    const boldButton = Array.from(
-      root.querySelectorAll(".chips-basecard-editor__toolbar-button")
-    ).find((button) => button.getAttribute("aria-label") === "加粗");
-
-    if (!bodyEditor || !boldButton) {
-      throw new Error("找不到富文本编辑器工具栏");
-    }
-
-    const textNode = bodyEditor.querySelector("p")?.firstChild;
-    if (!textNode) {
-      throw new Error("找不到正文文本节点");
-    }
-
-    const range = document.createRange();
-    range.setStart(textNode, 0);
-    range.setEnd(textNode, 5);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    bodyEditor.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    boldButton.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    boldButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-    expect(execCommandMock).toHaveBeenCalledWith("bold", false, undefined);
-  });
-
-  it("sanitizes pasted rich text before emitting config changes", () => {
-    vi.useFakeTimers();
-
-    let lastConfig: BasecardConfig | undefined;
-    const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig({
-          body: "<p>Start</p>",
-        }),
-      },
-      onChange: (next) => {
-        lastConfig = next;
-      },
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    const range = document.createRange();
-    range.selectNodeContents(bodyEditor);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const pasteEvent = new Event("paste", {
+    editorDom?.dispatchEvent(new MouseEvent("contextmenu", {
       bubbles: true,
-      cancelable: true,
-    }) as ClipboardEvent;
-
-    Object.defineProperty(pasteEvent, "clipboardData", {
-      configurable: true,
-      value: {
-        getData(type: string) {
-          if (type === "text/html") {
-            return '<p>safe</p><script>alert(1)</script><a href="javascript:alert(1)">bad</a>';
-          }
-          if (type === "text/plain") {
-            return "safe";
-          }
-          return "";
-        },
-      },
-    });
-
-    bodyEditor.dispatchEvent(pasteEvent);
-    vi.advanceTimersByTime(130);
-
-    expect(lastConfig?.body).toContain("safe");
-    expect(lastConfig?.body).not.toContain("script");
-    expect(lastConfig?.body).not.toContain("javascript:");
-  });
-
-  it("shows the placeholder for an empty body model", () => {
-    const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig({
-          body: "<p></p>",
-        }),
-      },
-      onChange: () => undefined,
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    expect(bodyEditor?.getAttribute("data-placeholder")).toBe("开始输入内容");
-    expect(bodyEditor?.getAttribute("data-empty")).toBe("true");
-  });
-
-  it("waits for composition to finish before emitting model updates", () => {
-    vi.useFakeTimers();
-
-    let lastConfig: BasecardConfig | undefined;
-    const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig({
-          body: "<p></p>",
-        }),
-      },
-      onChange: (next) => {
-        lastConfig = next;
-      },
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-
-    if (!bodyEditor) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    bodyEditor.dispatchEvent(new Event("compositionstart", { bubbles: true }));
-    bodyEditor.innerHTML = "<p>输入法</p>";
-    bodyEditor.dispatchEvent(new Event("input", { bubbles: true }));
-    vi.advanceTimersByTime(130);
-
-    expect(lastConfig).toBeUndefined();
-
-    bodyEditor.dispatchEvent(new Event("compositionend", { bubbles: true }));
-    vi.advanceTimersByTime(130);
-
-    expect(lastConfig?.body).toContain("输入法");
-  });
-
-  it("keeps Enter on the current paragraph flow instead of jumping back to the start", () => {
-    vi.useFakeTimers();
-
-    const execCommandMock = vi.fn((command: string, _showUi?: boolean, value?: string) => {
-      if (command === "defaultParagraphSeparator") {
-        return value === "p";
-      }
-
-      if (command !== "insertParagraph") {
-        return true;
-      }
-
-      const selection = window.getSelection();
-      const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
-      if (!range) {
-        return false;
-      }
-
-      const anchorNode =
-        range.startContainer.nodeType === Node.TEXT_NODE
-          ? range.startContainer.parentNode
-          : range.startContainer;
-      const paragraph = anchorNode instanceof HTMLElement
-        ? anchorNode.closest("p")
-        : null;
-
-      if (!paragraph) {
-        return false;
-      }
-
-      const nextParagraph = document.createElement("p");
-      nextParagraph.innerHTML = "<br>";
-      paragraph.insertAdjacentElement("afterend", nextParagraph);
-
-      const nextRange = document.createRange();
-      nextRange.selectNodeContents(nextParagraph);
-      nextRange.collapse(true);
-      selection?.removeAllRanges();
-      selection?.addRange(nextRange);
-      return true;
-    });
-
-    Object.defineProperty(document, "execCommand", {
-      configurable: true,
-      value: execCommandMock,
-    });
-
-    let lastConfig: BasecardConfig | undefined;
-    const root = createBasecardEditorRoot({
-      initialConfig: {
-        ...createConfig({
-          body: "<p>第一段</p>",
-        }),
-      },
-      onChange: (next) => {
-        lastConfig = next;
-      },
-    });
-
-    const bodyEditor = root.querySelector(
-      ".chips-basecard-editor__richtext"
-    ) as HTMLDivElement | null;
-    const textNode = bodyEditor?.querySelector("p")?.firstChild;
-
-    if (!bodyEditor || !textNode) {
-      throw new Error("找不到正文编辑器");
-    }
-
-    const range = document.createRange();
-    range.setStart(textNode, textNode.textContent?.length ?? 0);
-    range.collapse(true);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    bodyEditor.dispatchEvent(new KeyboardEvent("keydown", {
-      key: "Enter",
-      bubbles: true,
-      cancelable: true,
+      clientX: 80,
+      clientY: 64,
     }));
-    vi.advanceTimersByTime(130);
 
-    expect(execCommandMock).toHaveBeenCalledWith("defaultParagraphSeparator", false, "p");
-    expect(execCommandMock).toHaveBeenCalledWith("insertParagraph", false, undefined);
-    expect(lastConfig?.body).toContain("<p>第一段</p>");
-    expect(lastConfig?.body).toContain("<p><br></p>");
+    await waitFor(() => Boolean(root.querySelector(".chips-basecard-editor__context-menu:not([hidden])")));
+    expect(root.querySelector('[data-scope="menu"][data-part="content"]')).not.toBeNull();
+    expect(root.textContent).toContain("标题 1");
   });
 });

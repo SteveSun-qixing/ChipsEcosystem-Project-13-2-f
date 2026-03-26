@@ -1,18 +1,45 @@
-import type {
-  BasecardResourceImportRequest,
-  BasecardResourceImportResult,
-} from "../index";
 import {
+  Editor,
+  defaultValueCtx,
+  editorViewCtx,
+  editorViewOptionsCtx,
+  rootCtx,
+} from "@milkdown/core";
+import type { Editor as MilkdownEditor } from "@milkdown/core";
+import { listener, listenerCtx } from "@milkdown/plugin-listener";
+import {
+  commonmark,
+  insertHrCommand,
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  turnIntoTextCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInHeadingCommand,
+  wrapInOrderedListCommand,
+} from "@milkdown/preset-commonmark";
+import { TextSelection, type Selection } from "@milkdown/prose/state";
+import { callCommand, getMarkdown } from "@milkdown/utils";
+import type { BasecardResourceImportRequest, BasecardResourceImportResult } from "../index";
+import {
+  createFileBasecardConfig,
+  createInlineBasecardConfig,
   normalizeBasecardConfig,
   validateBasecardConfig,
   type BasecardConfig,
 } from "../schema/card-config";
-import {
-  EMPTY_RICH_TEXT_BODY,
-  normalizeRichTextHtml,
-  sanitizeRichTextHtml,
-} from "../shared/utils";
 import { createTranslator } from "../shared/i18n";
+import { loadMarkdownFromConfig, rewriteRelativeResourceUrls } from "../shared/resource-links";
+import {
+  countUnicodeCharacters,
+  createRichTextMarkdownFileName,
+  extractPlainTextFromMarkdown,
+  hasMeaningfulMarkdownContent,
+  normalizeMarkdown,
+  shouldUseFileStorage,
+} from "../shared/utils";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
@@ -29,20 +56,76 @@ type EditorRoot = HTMLElement & {
   __chipsDispose?: () => void;
 };
 
-type DraftConfig = Pick<BasecardConfig, "body">;
+type ToolbarIconName =
+  | "bold"
+  | "italic"
+  | "code"
+  | "link"
+  | "clear"
+  | "paragraph"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "blockquote"
+  | "orderedList"
+  | "unorderedList"
+  | "divider";
 
-const EMIT_DEBOUNCE_MS = 120;
-const BLOCK_TAGS = new Set([
-  "p",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "blockquote",
-  "li",
-]);
+type ToolbarButton = {
+  key: string;
+  labelKey: string;
+  icon: ToolbarIconName;
+  run: (controller: EditorController) => void | Promise<void>;
+};
+
+type ContextMenuAction = {
+  key: string;
+  labelKey: string;
+  icon: ToolbarIconName;
+  run: (controller: EditorController) => void | Promise<void>;
+};
+
+type SelectionSnapshot = {
+  from: number;
+  to: number;
+};
+
+type EditorController = {
+  root: EditorRoot;
+  surfaceFrame: HTMLDivElement;
+  editorHost: HTMLDivElement;
+  scrollSurface: HTMLDivElement;
+  floatingToolbar: HTMLDivElement;
+  tooltipLayer: HTMLDivElement;
+  tooltipContent: HTMLDivElement;
+  tooltipArrow: HTMLDivElement;
+  contextMenu: HTMLDivElement;
+  contextMenuContent: HTMLDivElement;
+  errorList: HTMLUListElement;
+  locale: string;
+  theme: string;
+  props: BasecardEditorProps;
+  t: ReturnType<typeof createTranslator>;
+  editor?: MilkdownEditor;
+  disposed: boolean;
+  focused: boolean;
+  currentMarkdown: string;
+  currentFilePath?: string;
+  sessionFileName: string;
+  lastCommittedSignature: string;
+  lastResolvedResources: Set<string>;
+  isComposing: boolean;
+  isImporting: boolean;
+  rerunCommitAfterImport: boolean;
+  flushTimer?: number;
+  pendingErrors: string[];
+  selectionSnapshot?: SelectionSnapshot;
+  tooltipTrigger?: HTMLElement;
+  handleWindowResize: () => void;
+  handleDocumentPointerDown: (event: PointerEvent) => void;
+  handleDocumentKeyDown: (event: KeyboardEvent) => void;
+  handleWindowBlur: () => void;
+};
 
 const EDITOR_STYLE_TEXT = `
 html, body {
@@ -63,6 +146,7 @@ html, body {
 }
 
 .chips-basecard-editor {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -70,11 +154,12 @@ html, body {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 14px 16px 16px;
   background: var(--chips-sys-color-surface, #ffffff);
   color: var(--chips-sys-color-on-surface, #111827);
-  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 14px/1.6 var(--chips-font-family-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  isolation: isolate;
 }
 
 .chips-basecard-editor *,
@@ -83,88 +168,12 @@ html, body {
   box-sizing: border-box;
 }
 
-.chips-basecard-editor__toolbar-shell {
-  flex: 0 0 auto;
-  width: 100%;
-}
-
-.chips-basecard-editor__toolbar-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 18px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-}
-
-.chips-basecard-editor__toolbar-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 32px;
-}
-
-.chips-basecard-editor__toolbar-toggle {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 999px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.chips-basecard-editor__toolbar-toggle:hover {
-  border-color: rgba(37, 99, 235, 0.55);
-  background: rgba(239, 246, 255, 0.92);
-}
-
-.chips-basecard-editor__toolbar-toggle:focus-visible {
-  border-color: rgba(37, 99, 235, 0.85);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
-}
-
-.chips-basecard-editor__toolbar-content {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-panel {
-  min-height: 44px;
-  padding: 6px 10px;
-  border-radius: 16px;
-}
-
-.chips-basecard-editor[data-toolbar-state="collapsed"] .chips-basecard-editor__toolbar-content {
-  display: none;
-}
-
-.chips-basecard-editor__toolbar-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
 .chips-basecard-editor__surface-frame {
+  position: relative;
   flex: 1;
   min-height: 0;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .chips-basecard-editor__surface {
@@ -179,49 +188,53 @@ html, body {
   overscroll-behavior: contain;
 }
 
-.chips-basecard-editor__richtext {
+.chips-basecard-editor__editor-host {
   min-height: 100%;
   padding: 20px 24px 56px;
+}
+
+.chips-basecard-editor__editor-host .milkdown,
+.chips-basecard-editor__editor-host .milkdown .editor {
+  background: transparent;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror {
+  min-height: 100%;
   outline: none;
   color: inherit;
+  white-space: break-spaces;
   word-break: break-word;
 }
 
-.chips-basecard-editor__richtext[data-empty="true"]::before {
-  content: attr(data-placeholder);
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.chips-basecard-editor__richtext > :first-child {
+.chips-basecard-editor__editor-host .ProseMirror > :first-child {
   margin-top: 0;
 }
 
-.chips-basecard-editor__richtext > :last-child {
+.chips-basecard-editor__editor-host .ProseMirror > :last-child {
   margin-bottom: 0;
 }
 
-.chips-basecard-editor__richtext p,
-.chips-basecard-editor__richtext ul,
-.chips-basecard-editor__richtext ol,
-.chips-basecard-editor__richtext blockquote,
-.chips-basecard-editor__richtext h1,
-.chips-basecard-editor__richtext h2,
-.chips-basecard-editor__richtext h3,
-.chips-basecard-editor__richtext h4,
-.chips-basecard-editor__richtext h5,
-.chips-basecard-editor__richtext h6 {
+.chips-basecard-editor__editor-host .ProseMirror p,
+.chips-basecard-editor__editor-host .ProseMirror ul,
+.chips-basecard-editor__editor-host .ProseMirror ol,
+.chips-basecard-editor__editor-host .ProseMirror blockquote,
+.chips-basecard-editor__editor-host .ProseMirror h1,
+.chips-basecard-editor__editor-host .ProseMirror h2,
+.chips-basecard-editor__editor-host .ProseMirror h3,
+.chips-basecard-editor__editor-host .ProseMirror h4,
+.chips-basecard-editor__editor-host .ProseMirror h5,
+.chips-basecard-editor__editor-host .ProseMirror h6 {
   margin: 0 0 12px;
 }
 
-.chips-basecard-editor__richtext blockquote {
+.chips-basecard-editor__editor-host .ProseMirror blockquote {
   margin-left: 0;
   padding-left: 14px;
   border-left: 3px solid rgba(37, 99, 235, 0.28);
-  color: #475467;
+  color: var(--chips-sys-color-on-surface-variant, #667085);
 }
 
-.chips-basecard-editor__richtext code {
+.chips-basecard-editor__editor-host .ProseMirror code {
   padding: 2px 6px;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.08);
@@ -229,20 +242,54 @@ html, body {
   font-size: 0.92em;
 }
 
-.chips-basecard-editor__richtext img {
+.chips-basecard-editor__editor-host .ProseMirror img {
   max-width: 100%;
   height: auto;
   border-radius: 12px;
 }
 
-.chips-basecard-editor__toolbar-button,
-.chips-basecard-editor__toolbar-select,
-.chips-basecard-editor__toolbar-color {
+.chips-basecard-editor__floating-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 4px;
   border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 10px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  color: inherit;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--chips-comp-menu-content-surface, #ffffff) 94%, transparent);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  transform: translate(-50%, calc(-100% - 10px));
+  backdrop-filter: blur(16px);
+}
+
+.chips-basecard-editor__floating-toolbar[data-side="bottom"] {
+  transform: translate(-50%, 10px);
+}
+
+.chips-basecard-editor__floating-toolbar[hidden] {
+  display: none;
+}
+
+.chips-basecard-editor__toolbar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--chips-sys-color-on-surface, #111827);
   font: inherit;
+  cursor: pointer;
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -251,39 +298,150 @@ html, body {
     transform 0.15s ease;
 }
 
-.chips-basecard-editor__toolbar-button {
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0 10px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.chips-basecard-editor__toolbar-select {
-  min-width: 108px;
-  min-height: 36px;
-  padding: 0 10px;
-}
-
-.chips-basecard-editor__toolbar-color {
-  width: 38px;
-  height: 38px;
-  padding: 4px;
-  cursor: pointer;
-}
-
-.chips-basecard-editor__toolbar-button:hover,
-.chips-basecard-editor__toolbar-select:hover,
-.chips-basecard-editor__toolbar-color:hover {
+.chips-basecard-editor__toolbar-button[data-state="hover"],
+.chips-basecard-editor__toolbar-button:hover {
   border-color: rgba(37, 99, 235, 0.55);
   transform: translateY(-1px);
 }
 
-.chips-basecard-editor__toolbar-button:focus-visible,
-.chips-basecard-editor__toolbar-select:focus-visible,
-.chips-basecard-editor__toolbar-color:focus-visible {
+.chips-basecard-editor__toolbar-button[data-state="active"] {
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 8%, #ffffff);
+  transform: translateY(0);
+}
+
+.chips-basecard-editor__toolbar-button[data-state="focus"],
+.chips-basecard-editor__toolbar-button:focus-visible {
   border-color: rgba(37, 99, 235, 0.85);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.chips-basecard-editor__toolbar-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chips-basecard-editor__tooltip-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.chips-basecard-editor__tooltip-layer[hidden] {
+  display: none;
+}
+
+[data-scope="tooltip"][data-part="content"] {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 10px));
+  padding: 4px 8px;
+  white-space: nowrap;
+  border-radius: var(--chips-comp-tooltip-content-radius, var(--chips-base-radius-sm, 8px));
+  background-color: var(--chips-comp-tooltip-content-surface, rgba(15, 23, 42, 0.92));
+  color: var(--chips-comp-tooltip-content-text-color, #ffffff);
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.chips-basecard-editor__tooltip-layer[data-side="bottom"] [data-scope="tooltip"][data-part="content"] {
+  transform: translate(-50%, 10px);
+}
+
+[data-scope="tooltip"][data-part="content"][data-state="focus"] {
+  outline: 2px solid var(--chips-comp-tooltip-focus-outline, rgba(37, 99, 235, 0.48));
+  outline-offset: 2px;
+}
+
+[data-scope="tooltip"][data-part="arrow"] {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, calc(-100% - 5px)) rotate(45deg);
+  background-color: var(--chips-comp-tooltip-arrow-surface, rgba(15, 23, 42, 0.92));
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.chips-basecard-editor__tooltip-layer[data-side="bottom"] [data-scope="tooltip"][data-part="arrow"] {
+  transform: translate(-50%, 5px) rotate(45deg);
+}
+
+.chips-basecard-editor__context-menu {
+  position: absolute;
+  z-index: 70;
+}
+
+.chips-basecard-editor__context-menu[hidden] {
+  display: none;
+}
+
+[data-scope="menu"][data-part="content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: var(--chips-comp-menu-content-radius, var(--chips-base-radius-md, 12px));
+  background-color: var(--chips-comp-menu-content-surface, #ffffff);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+}
+
+[data-scope="menu"][data-part="content"][data-state="focus"] {
+  outline: 2px solid var(--chips-comp-menu-focus-outline, rgba(37, 99, 235, 0.48));
+  outline-offset: 2px;
+}
+
+[data-scope="menu"][data-part="item"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+  color: var(--chips-comp-menu-item-text-color, inherit);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+[data-scope="menu"][data-part="item"][data-state="hover"],
+[data-scope="menu"][data-part="item"]:hover {
+  background-color: var(--chips-comp-menu-item-surface-hover, rgba(37, 99, 235, 0.1));
+}
+
+[data-scope="menu"][data-part="item"][data-state="active"] {
+  background-color: var(--chips-comp-menu-item-surface-active, rgba(37, 99, 235, 0.16));
+}
+
+[data-scope="menu"][data-part="item"][data-state="focus"],
+[data-scope="menu"][data-part="item"]:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chips-comp-menu-focus-outline, #2563eb) 35%, transparent);
+}
+
+.chips-basecard-editor__context-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.chips-basecard-editor__context-menu-label {
+  min-width: 0;
+  flex: 1;
 }
 
 .chips-basecard-editor__errors {
@@ -294,920 +452,937 @@ html, body {
   color: var(--chips-sys-color-error, #d92d20);
 }
 
+.chips-basecard-editor__errors[hidden] {
+  display: none;
+}
+
 .chips-basecard-editor__errors-list {
   margin: 0;
   padding-left: 18px;
 }
 `;
 
-function ensureEditorFocus(editor: HTMLElement): void {
-  if (document.activeElement !== editor) {
-    editor.focus();
-  }
-}
+const TOOLBAR_BUTTONS: ToolbarButton[] = [
+  {
+    key: "bold",
+    labelKey: "basecard.toolbar.bold",
+    icon: "bold",
+    run: (controller) => {
+      runCommand(controller, toggleStrongCommand.key);
+    },
+  },
+  {
+    key: "italic",
+    labelKey: "basecard.toolbar.italic",
+    icon: "italic",
+    run: (controller) => {
+      runCommand(controller, toggleEmphasisCommand.key);
+    },
+  },
+  {
+    key: "code",
+    labelKey: "basecard.toolbar.code",
+    icon: "code",
+    run: (controller) => {
+      runCommand(controller, toggleInlineCodeCommand.key);
+    },
+  },
+  {
+    key: "link",
+    labelKey: "basecard.toolbar.link",
+    icon: "link",
+    run: async (controller) => {
+      const url = askUserForValue(controller.t("basecard.prompt.linkUrl"));
+      if (!url) {
+        return;
+      }
+      runCommand(controller, toggleLinkCommand.key, { href: url });
+    },
+  },
+  {
+    key: "clear",
+    labelKey: "basecard.toolbar.clear",
+    icon: "clear",
+    run: (controller) => {
+      clearInlineFormatting(controller);
+    },
+  },
+];
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+const CONTEXT_MENU_ACTIONS: ContextMenuAction[] = [
+  {
+    key: "paragraph",
+    labelKey: "basecard.block.paragraph",
+    icon: "paragraph",
+    run: (controller) => {
+      runCommand(controller, turnIntoTextCommand.key);
+    },
+  },
+  {
+    key: "h1",
+    labelKey: "basecard.block.h1",
+    icon: "h1",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 1);
+    },
+  },
+  {
+    key: "h2",
+    labelKey: "basecard.block.h2",
+    icon: "h2",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 2);
+    },
+  },
+  {
+    key: "h3",
+    labelKey: "basecard.block.h3",
+    icon: "h3",
+    run: (controller) => {
+      runCommand(controller, wrapInHeadingCommand.key, 3);
+    },
+  },
+  {
+    key: "blockquote",
+    labelKey: "basecard.toolbar.blockquote",
+    icon: "blockquote",
+    run: (controller) => {
+      runCommand(controller, wrapInBlockquoteCommand.key);
+    },
+  },
+  {
+    key: "orderedList",
+    labelKey: "basecard.toolbar.orderedList",
+    icon: "orderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInOrderedListCommand.key);
+    },
+  },
+  {
+    key: "unorderedList",
+    labelKey: "basecard.toolbar.unorderedList",
+    icon: "unorderedList",
+    run: (controller) => {
+      runCommand(controller, wrapInBulletListCommand.key);
+    },
+  },
+  {
+    key: "divider",
+    labelKey: "basecard.toolbar.divider",
+    icon: "divider",
+    run: (controller) => {
+      runCommand(controller, insertHrCommand.key);
+    },
+  },
+  {
+    key: "clear",
+    labelKey: "basecard.toolbar.clear",
+    icon: "clear",
+    run: (controller) => {
+      clearInlineFormatting(controller);
+    },
+  },
+];
 
-function hasMeaningfulEditorContent(editor: HTMLElement): boolean {
-  const text = (editor.textContent ?? "").replace(/\u00a0/g, " ").trim();
-  if (text.length > 0) {
-    return true;
-  }
-
-  return editor.querySelector("img, hr") !== null;
-}
-
-function normalizeEditorHtml(html: string): string {
-  return normalizeRichTextHtml(html);
-}
-
-function createSanitizedDraftBody(editor: HTMLElement): string {
-  return normalizeEditorHtml(editor.innerHTML);
-}
-
-function isRangeInsideEditor(range: Range, editor: HTMLElement): boolean {
-  const container = range.commonAncestorContainer;
-  return container === editor || editor.contains(container);
-}
-
-function cloneEditorSelection(editor: HTMLElement): Range | null {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
+function askUserForValue(label: string): string | null {
+  if (typeof window === "undefined" || typeof window.prompt !== "function") {
     return null;
   }
-
-  const range = selection.getRangeAt(0);
-  if (!isRangeInsideEditor(range, editor)) {
-    return null;
-  }
-
-  return range.cloneRange();
+  const value = window.prompt(label);
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function placeCaretAtEnd(editor: HTMLElement): Range {
-  ensureEditorFocus(editor);
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(editor);
-  range.collapse(false);
-
-  if (selection) {
-    selection.removeAllRanges();
-    selection.addRange(range);
+function getIconEmoji(icon: ToolbarIconName): string {
+  switch (icon) {
+    case "bold":
+      return "𝐁";
+    case "italic":
+      return "𝘐";
+    case "code":
+      return "💻";
+    case "link":
+      return "🔗";
+    case "clear":
+      return "🧹";
+    case "paragraph":
+      return "¶";
+    case "h1":
+      return "①";
+    case "h2":
+      return "②";
+    case "h3":
+      return "③";
+    case "blockquote":
+      return "❝";
+    case "orderedList":
+      return "🔢";
+    case "unorderedList":
+      return "•";
+    case "divider":
+      return "➖";
   }
-
-  return range;
 }
 
-function restoreEditorSelection(editor: HTMLElement, savedRange: Range | null): Range {
-  ensureEditorFocus(editor);
-
-  const selection = window.getSelection();
-  if (!selection) {
-    return placeCaretAtEnd(editor);
-  }
-
-  if (savedRange && isRangeInsideEditor(savedRange, editor)) {
-    selection.removeAllRanges();
-    selection.addRange(savedRange);
-    return savedRange;
-  }
-
-  return placeCaretAtEnd(editor);
+function applyInteractiveState(node: HTMLElement): void {
+  node.dataset.state = "idle";
+  node.addEventListener("mouseenter", () => {
+    node.dataset.state = "hover";
+  });
+  node.addEventListener("mouseleave", () => {
+    node.dataset.state = "idle";
+  });
+  node.addEventListener("focus", () => {
+    node.dataset.state = "focus";
+  });
+  node.addEventListener("blur", () => {
+    node.dataset.state = "idle";
+  });
+  node.addEventListener("mousedown", () => {
+    node.dataset.state = "active";
+  });
+  node.addEventListener("mouseup", () => {
+    node.dataset.state = node.matches(":focus") ? "focus" : "hover";
+  });
 }
 
-function executeDocumentCommand(command: string, value?: string): boolean {
-  const execCommand = (document as Document & {
-    execCommand?: (name: string, showUi?: boolean, value?: string) => boolean;
-  }).execCommand;
-
-  if (typeof execCommand !== "function") {
-    return false;
-  }
-
-  if (command === "formatBlock" && value) {
-    return (
-      execCommand.call(document, command, false, value) ||
-      execCommand.call(document, command, false, `<${value}>`)
-    );
-  }
-
-  return execCommand.call(document, command, false, value);
+function hasTextSelection(selection: Selection): boolean {
+  return selection instanceof TextSelection && !selection.empty;
 }
 
-function replaceSelectionWithHtml(editor: HTMLElement, html: string): void {
-  const safeHtml = sanitizeRichTextHtml(html).trim();
-  if (!safeHtml) {
+function captureSelection(controller: EditorController, selection?: Selection): void {
+  if (!controller.editor) {
     return;
   }
 
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  range.deleteContents();
+  const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+  const currentSelection = selection ?? view.state.selection;
+  controller.selectionSnapshot = {
+    from: currentSelection.from,
+    to: currentSelection.to,
+  };
+}
 
-  const fragment = range.createContextualFragment(safeHtml);
-  const lastInsertedNode = fragment.lastChild;
-  range.insertNode(fragment);
-
-  const selection = window.getSelection();
-  if (!selection) {
+function restoreSelection(controller: EditorController): void {
+  if (!controller.editor || !controller.selectionSnapshot) {
     return;
   }
 
-  const nextRange = document.createRange();
-  if (lastInsertedNode) {
-    nextRange.setStartAfter(lastInsertedNode);
+  controller.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const maxPos = state.doc.content.size;
+    const from = Math.max(0, Math.min(controller.selectionSnapshot?.from ?? 0, maxPos));
+    const to = Math.max(from, Math.min(controller.selectionSnapshot?.to ?? from, maxPos));
+    const nextSelection = TextSelection.create(state.doc, from, to);
+    view.dispatch(state.tr.setSelection(nextSelection));
+    view.focus();
+  });
+}
+
+function hideTooltip(controller: EditorController): void {
+  if (controller.tooltipTrigger) {
+    controller.tooltipTrigger.removeAttribute("aria-describedby");
+    controller.tooltipTrigger = undefined;
+  }
+  controller.tooltipLayer.hidden = true;
+}
+
+function showTooltip(controller: EditorController, trigger: HTMLElement, label: string): void {
+  const tooltipId = controller.tooltipContent.id;
+  if (controller.tooltipTrigger && controller.tooltipTrigger !== trigger) {
+    controller.tooltipTrigger.removeAttribute("aria-describedby");
+  }
+
+  controller.tooltipTrigger = trigger;
+  trigger.setAttribute("aria-describedby", tooltipId);
+
+  const frameRect = controller.surfaceFrame.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  controller.tooltipLayer.hidden = false;
+  controller.tooltipContent.textContent = label;
+  controller.tooltipContent.dataset.state = "idle";
+
+  const tooltipWidth = controller.tooltipContent.offsetWidth || 72;
+  const tooltipHeight = controller.tooltipContent.offsetHeight || 28;
+  const centerX = triggerRect.left - frameRect.left + (triggerRect.width / 2);
+  const clampedX = Math.min(
+    Math.max(centerX, 16 + tooltipWidth / 2),
+    frameRect.width - 16 - tooltipWidth / 2,
+  );
+  const topSpace = triggerRect.top - frameRect.top;
+  const bottomSpace = frameRect.bottom - triggerRect.bottom;
+  const showBelow = topSpace < tooltipHeight + 18 && bottomSpace > topSpace;
+  const anchorTop = showBelow
+    ? triggerRect.bottom - frameRect.top - 2
+    : triggerRect.top - frameRect.top + 2;
+
+  controller.tooltipLayer.dataset.side = showBelow ? "bottom" : "top";
+
+  controller.tooltipContent.style.left = `${clampedX}px`;
+  controller.tooltipContent.style.top = `${anchorTop}px`;
+  controller.tooltipArrow.style.left = `${clampedX}px`;
+  controller.tooltipArrow.style.top = `${anchorTop}px`;
+}
+
+function hideContextMenu(controller: EditorController, restoreToolbar = true): void {
+  controller.contextMenu.hidden = true;
+  if (restoreToolbar) {
+    updateToolbarPosition(controller);
+  }
+}
+
+function positionContextMenu(controller: EditorController, clientX: number, clientY: number): void {
+  hideTooltip(controller);
+  controller.floatingToolbar.hidden = true;
+  controller.contextMenu.hidden = false;
+
+  const frameRect = controller.surfaceFrame.getBoundingClientRect();
+  const width = controller.contextMenuContent.offsetWidth || 220;
+  const height = controller.contextMenuContent.offsetHeight || 240;
+  const left = Math.min(
+    Math.max(clientX - frameRect.left, 12),
+    Math.max(12, frameRect.width - width - 12),
+  );
+  const top = Math.min(
+    Math.max(clientY - frameRect.top, 12),
+    Math.max(12, frameRect.height - height - 12),
+  );
+
+  controller.contextMenu.style.left = `${left}px`;
+  controller.contextMenu.style.top = `${top}px`;
+}
+
+function getMenuItems(controller: EditorController): HTMLButtonElement[] {
+  return Array.from(
+    controller.contextMenuContent.querySelectorAll<HTMLButtonElement>('[data-scope="menu"][data-part="item"]'),
+  );
+}
+
+function focusMenuItem(controller: EditorController, index: number): void {
+  const items = getMenuItems(controller);
+  if (items.length === 0) {
+    return;
+  }
+  const nextIndex = ((index % items.length) + items.length) % items.length;
+  items[nextIndex]?.focus();
+}
+
+function createToolbarButton(controller: EditorController, definition: ToolbarButton): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "chips-basecard-editor__toolbar-button";
+  button.dataset.scope = "button";
+  button.dataset.part = "root";
+  button.setAttribute("aria-label", controller.t(definition.labelKey));
+
+  const icon = document.createElement("span");
+  icon.className = "chips-basecard-editor__toolbar-button-icon";
+  icon.dataset.part = "icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = getIconEmoji(definition.icon);
+  button.appendChild(icon);
+
+  applyInteractiveState(button);
+
+  button.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    restoreSelection(controller);
+  });
+  button.addEventListener("click", () => {
+    void definition.run(controller);
+  });
+  button.addEventListener("mouseenter", () => {
+    showTooltip(controller, button, controller.t(definition.labelKey));
+  });
+  button.addEventListener("focus", () => {
+    showTooltip(controller, button, controller.t(definition.labelKey));
+  });
+  button.addEventListener("mouseleave", () => {
+    hideTooltip(controller);
+  });
+  button.addEventListener("blur", () => {
+    hideTooltip(controller);
+  });
+
+  return button;
+}
+
+function createContextMenuItem(controller: EditorController, action: ContextMenuAction): HTMLButtonElement {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.dataset.scope = "menu";
+  item.dataset.part = "item";
+  item.setAttribute("role", "menuitem");
+  item.setAttribute("aria-label", controller.t(action.labelKey));
+
+  const icon = document.createElement("span");
+  icon.className = "chips-basecard-editor__context-menu-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = getIconEmoji(action.icon);
+  item.appendChild(icon);
+
+  const label = document.createElement("span");
+  label.className = "chips-basecard-editor__context-menu-label";
+  label.textContent = controller.t(action.labelKey);
+  item.appendChild(label);
+
+  applyInteractiveState(item);
+
+  item.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    restoreSelection(controller);
+  });
+  item.addEventListener("click", () => {
+    hideContextMenu(controller, false);
+    void action.run(controller);
+  });
+
+  return item;
+}
+
+function setErrors(controller: EditorController, errors: string[]): void {
+  controller.pendingErrors = errors;
+  controller.errorList.innerHTML = "";
+  const wrapper = controller.errorList.parentElement as HTMLElement;
+  if (errors.length === 0) {
+    wrapper.hidden = true;
+    return;
+  }
+
+  for (const error of errors) {
+    const item = document.createElement("li");
+    item.textContent = error;
+    controller.errorList.appendChild(item);
+  }
+  wrapper.hidden = false;
+}
+
+function scheduleCommit(controller: EditorController, reason: "change" | "flush"): void {
+  if (controller.disposed || controller.isComposing) {
+    return;
+  }
+
+  if (controller.flushTimer) {
+    window.clearTimeout(controller.flushTimer);
+    controller.flushTimer = undefined;
+  }
+
+  if (reason === "flush") {
+    void commitCurrentMarkdown(controller);
+    return;
+  }
+
+  controller.flushTimer = window.setTimeout(() => {
+    controller.flushTimer = undefined;
+    void commitCurrentMarkdown(controller);
+  }, 80);
+}
+
+function buildConfigSignature(config: BasecardConfig): string {
+  return JSON.stringify(config);
+}
+
+async function commitCurrentMarkdown(controller: EditorController): Promise<void> {
+  if (controller.disposed || !controller.editor) {
+    return;
+  }
+
+  if (controller.isImporting) {
+    controller.rerunCommitAfterImport = true;
+    return;
+  }
+
+  const markdown = normalizeMarkdown(controller.editor.action(getMarkdown()));
+  controller.currentMarkdown = markdown;
+
+  const hasContent = hasMeaningfulMarkdownContent(markdown);
+  if (!hasContent) {
+    setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
+    return;
+  }
+
+  const plainTextLength = countUnicodeCharacters(extractPlainTextFromMarkdown(markdown));
+  let nextConfig: BasecardConfig;
+
+  if (shouldUseFileStorage(plainTextLength)) {
+    if (!controller.props.importResource) {
+      setErrors(controller, [controller.t("basecard.validation.importUnavailable")]);
+      return;
+    }
+
+    controller.isImporting = true;
+    try {
+      const currentPreferredPath = controller.currentFilePath || controller.sessionFileName;
+      const file = new File([markdown], currentPreferredPath, { type: "text/markdown;charset=utf-8" });
+      const imported = await controller.props.importResource({
+        file,
+        preferredPath: currentPreferredPath,
+      });
+      const nextFilePath = imported.path;
+      if (controller.currentFilePath && controller.currentFilePath !== nextFilePath && controller.props.deleteResource) {
+        await controller.props.deleteResource(controller.currentFilePath);
+      }
+      controller.currentFilePath = nextFilePath;
+      nextConfig = createFileBasecardConfig(nextFilePath, controller.locale, controller.theme);
+    } finally {
+      controller.isImporting = false;
+    }
   } else {
-    nextRange.selectNodeContents(editor);
-    nextRange.collapse(false);
+    if (controller.currentFilePath && controller.props.deleteResource) {
+      await controller.props.deleteResource(controller.currentFilePath);
+      controller.currentFilePath = undefined;
+    }
+    nextConfig = createInlineBasecardConfig(markdown, controller.locale, controller.theme);
   }
-  nextRange.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
+
+  const validation = validateBasecardConfig(nextConfig);
+  if (!validation.valid) {
+    setErrors(controller, Object.values(validation.errors));
+    return;
+  }
+
+  setErrors(controller, []);
+  const signature = buildConfigSignature(nextConfig);
+  if (signature !== controller.lastCommittedSignature) {
+    controller.lastCommittedSignature = signature;
+    controller.props.onChange(nextConfig);
+  }
+
+  if (controller.rerunCommitAfterImport) {
+    controller.rerunCommitAfterImport = false;
+    void commitCurrentMarkdown(controller);
+  }
 }
 
-function wrapSelectionWithTag(editor: HTMLElement, tagName: string): void {
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  if (range.collapsed) {
+function runCommand<T>(controller: EditorController, commandKey: string | { name?: string }, payload?: T): void {
+  if (!controller.editor) {
     return;
   }
 
-  const element = document.createElement(tagName);
-  try {
-    range.surroundContents(element);
-  } catch {
-    const contents = range.extractContents();
-    element.appendChild(contents);
-    range.insertNode(element);
-  }
+  restoreSelection(controller);
+  hideTooltip(controller);
+  hideContextMenu(controller, false);
 
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-
-  const nextRange = document.createRange();
-  nextRange.selectNodeContents(element);
-  nextRange.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
+  const key = typeof commandKey === "string" ? commandKey : (commandKey as { name?: string }).name ?? commandKey;
+  controller.editor.action(callCommand(key as never, payload));
+  void syncPreviewResources(controller);
+  scheduleCommit(controller, "change");
+  updateToolbarPosition(controller);
 }
 
-function wrapSelectionWithStyle(editor: HTMLElement, style: string): void {
-  const range = restoreEditorSelection(editor, cloneEditorSelection(editor));
-  if (range.collapsed) {
+function clearInlineFormatting(controller: EditorController): void {
+  if (!controller.editor) {
     return;
   }
 
-  const span = document.createElement("span");
-  span.setAttribute("style", style);
+  restoreSelection(controller);
+  hideTooltip(controller);
+  hideContextMenu(controller, false);
 
-  try {
-    range.surroundContents(span);
-  } catch {
-    const text = range.toString();
-    replaceSelectionWithHtml(
-      editor,
-      `<span style="${escapeHtml(style)}">${escapeHtml(text)}</span>`
-    );
-    return;
-  }
+  controller.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const { from, to } = state.selection;
+    const tr = state.tr;
+    const marks = [
+      state.schema.marks.strong,
+      state.schema.marks.em,
+      state.schema.marks.link,
+      state.schema.marks.code,
+    ].filter(Boolean);
 
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
+    for (const mark of marks) {
+      tr.removeMark(from, to, mark);
+    }
 
-  const nextRange = document.createRange();
-  nextRange.selectNodeContents(span);
-  nextRange.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(nextRange);
-}
-
-function plainTextToRichTextHtml(text: string): string {
-  const normalized = text.replace(/\r\n/g, "\n").trim();
-  if (!normalized) {
-    return EMPTY_RICH_TEXT_BODY;
-  }
-
-  return normalized
-    .split(/\n{2,}/)
-    .map((block) => {
-      const lineHtml = block
-        .split("\n")
-        .map((line) => escapeHtml(line))
-        .join("<br>");
-      return `<p>${lineHtml || "<br>"}</p>`;
-    })
-    .join("");
-}
-
-function getCurrentBlockTag(editor: HTMLElement): string {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return "p";
-  }
-
-  const range = selection.getRangeAt(0);
-  if (!isRangeInsideEditor(range, editor)) {
-    return "p";
-  }
-
-  let node: Node | null = range.startContainer;
-  if (node.nodeType === Node.TEXT_NODE) {
-    node = node.parentNode;
-  }
-
-  while (node && node !== editor) {
-    if (node instanceof HTMLElement) {
-      const tagName = node.tagName.toLowerCase();
-      if (BLOCK_TAGS.has(tagName)) {
-        return tagName === "li" ? "p" : tagName;
+    const paragraph = state.schema.nodes.paragraph;
+    if (paragraph) {
+      try {
+        tr.setBlockType(from, to, paragraph);
+      } catch {
+        // ignore block conversion failures
       }
     }
-    node = node.parentNode;
-  }
 
-  return "p";
-}
-
-function createValidatedFragmentHtml(html: string, requiredSelector?: string): string {
-  const safeHtml = sanitizeRichTextHtml(html).trim();
-  if (!safeHtml) {
-    return "";
-  }
-
-  if (!requiredSelector) {
-    return safeHtml;
-  }
-
-  const template = document.createElement("template");
-  template.innerHTML = safeHtml;
-  return template.content.querySelector(requiredSelector) ? safeHtml : "";
-}
-
-function createToolbarGroup(...children: HTMLElement[]): HTMLDivElement {
-  const group = document.createElement("div");
-  group.className = "chips-basecard-editor__toolbar-group";
-  children.forEach((child) => {
-    group.appendChild(child);
+    view.dispatch(tr.scrollIntoView());
   });
-  return group;
+
+  void syncPreviewResources(controller);
+  scheduleCommit(controller, "change");
+  updateToolbarPosition(controller);
 }
 
-export function createBasecardEditorRoot(props: BasecardEditorProps): HTMLElement {
-  const initialConfig = normalizeBasecardConfig(props.initialConfig);
-  const t = createTranslator(initialConfig.locale);
+function updateToolbarPosition(controller: EditorController, selection?: Selection): void {
+  if (!controller.editor || !controller.focused || !controller.contextMenu.hidden) {
+    controller.floatingToolbar.hidden = true;
+    return;
+  }
 
+  const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+  const currentSelection = selection ?? view.state.selection;
+  if (!hasTextSelection(currentSelection)) {
+    controller.floatingToolbar.hidden = true;
+    return;
+  }
+
+  try {
+    const start = view.coordsAtPos(currentSelection.from);
+    const end = view.coordsAtPos(currentSelection.to);
+    const frameRect = controller.surfaceFrame.getBoundingClientRect();
+    const toolbarWidth = controller.floatingToolbar.offsetWidth || 280;
+    const toolbarHeight = controller.floatingToolbar.offsetHeight || 48;
+    const centerX = ((start.left + end.right) / 2) - frameRect.left;
+    const clampedX = Math.min(
+      Math.max(centerX, 24 + toolbarWidth / 2),
+      frameRect.width - 24 - toolbarWidth / 2,
+    );
+    const selectionTop = Math.min(start.top, end.top) - frameRect.top;
+    const selectionBottom = Math.max(start.bottom, end.bottom) - frameRect.top;
+    const topSpace = selectionTop;
+    const bottomSpace = frameRect.height - selectionBottom;
+    const showBelow = topSpace < toolbarHeight + 18 && bottomSpace > topSpace;
+    const top = showBelow
+      ? Math.min(selectionBottom, Math.max(16, frameRect.height - toolbarHeight - 16))
+      : Math.max(selectionTop, 16);
+
+    controller.floatingToolbar.style.left = `${clampedX}px`;
+    controller.floatingToolbar.style.top = `${top}px`;
+    controller.floatingToolbar.dataset.side = showBelow ? "bottom" : "top";
+    controller.floatingToolbar.hidden = false;
+  } catch {
+    controller.floatingToolbar.hidden = true;
+  }
+}
+
+async function syncPreviewResources(controller: EditorController): Promise<void> {
+  if (!controller.props.resolveResourceUrl) {
+    return;
+  }
+
+  for (const resourcePath of controller.lastResolvedResources) {
+    controller.props.releaseResourceUrl?.(resourcePath);
+  }
+  controller.lastResolvedResources.clear();
+
+  const resolved = await rewriteRelativeResourceUrls(controller.editorHost, controller.props.resolveResourceUrl);
+  resolved.forEach((resourcePath) => controller.lastResolvedResources.add(resourcePath));
+}
+
+export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot {
+  const config = normalizeBasecardConfig(props.initialConfig as unknown as Record<string, unknown>);
   const root = document.createElement("div") as EditorRoot;
-  root.className = "chips-basecard-editor chips-basecard-editor--richtext";
-  root.setAttribute("data-toolbar-state", "expanded");
+  const ownerDocument = root.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView ?? window;
+  const tooltipId = `chips-basecard-editor-tooltip-${Math.random().toString(36).slice(2, 10)}`;
+
+  root.id = "chips-basecard-editor-root";
 
   const style = document.createElement("style");
   style.textContent = EDITOR_STYLE_TEXT;
   root.appendChild(style);
 
-  const toolbarShell = document.createElement("div");
-  toolbarShell.className = "chips-basecard-editor__toolbar-shell";
-
-  const toolbarPanel = document.createElement("div");
-  toolbarPanel.className = "chips-basecard-editor__toolbar-panel";
-
-  const toolbarHeader = document.createElement("div");
-  toolbarHeader.className = "chips-basecard-editor__toolbar-header";
-
-  const toolbarToggle = document.createElement("button");
-  toolbarToggle.type = "button";
-  toolbarToggle.className = "chips-basecard-editor__toolbar-toggle";
-
-  const toolbarContent = document.createElement("div");
-  toolbarContent.className = "chips-basecard-editor__toolbar-content";
-
-  toolbarHeader.appendChild(toolbarToggle);
-  toolbarPanel.appendChild(toolbarHeader);
-  toolbarPanel.appendChild(toolbarContent);
-  toolbarShell.appendChild(toolbarPanel);
-  root.appendChild(toolbarShell);
+  const editorRoot = document.createElement("div");
+  editorRoot.className = "chips-basecard-editor";
+  root.appendChild(editorRoot);
 
   const surfaceFrame = document.createElement("div");
   surfaceFrame.className = "chips-basecard-editor__surface-frame";
+  editorRoot.appendChild(surfaceFrame);
 
-  const surface = document.createElement("div");
-  surface.className = "chips-basecard-editor__surface";
+  const scrollSurface = document.createElement("div");
+  scrollSurface.className = "chips-basecard-editor__surface";
+  surfaceFrame.appendChild(scrollSurface);
 
-  const bodyEditor = document.createElement("div");
-  bodyEditor.className = "chips-basecard-editor__richtext";
-  bodyEditor.contentEditable = "true";
-  bodyEditor.spellcheck = true;
-  bodyEditor.setAttribute("role", "textbox");
-  bodyEditor.setAttribute("aria-multiline", "true");
-  bodyEditor.setAttribute("aria-label", t("basecard.body"));
-  bodyEditor.setAttribute("data-placeholder", t("basecard.placeholder"));
-  bodyEditor.innerHTML = normalizeEditorHtml(initialConfig.body);
-  surface.appendChild(bodyEditor);
-  surfaceFrame.appendChild(surface);
-  root.appendChild(surfaceFrame);
+  const editorHost = document.createElement("div");
+  editorHost.className = "chips-basecard-editor__editor-host";
+  scrollSurface.appendChild(editorHost);
 
-  const errorBox = document.createElement("div");
-  errorBox.className = "chips-basecard-editor__errors";
-  root.appendChild(errorBox);
+  const floatingToolbar = document.createElement("div");
+  floatingToolbar.className = "chips-basecard-editor__floating-toolbar";
+  floatingToolbar.hidden = true;
+  surfaceFrame.appendChild(floatingToolbar);
 
-  let draft: DraftConfig = {
-    body: normalizeEditorHtml(initialConfig.body),
+  const tooltipLayer = document.createElement("div");
+  tooltipLayer.className = "chips-basecard-editor__tooltip-layer";
+  tooltipLayer.hidden = true;
+  tooltipLayer.dataset.scope = "tooltip";
+  tooltipLayer.dataset.part = "root";
+  surfaceFrame.appendChild(tooltipLayer);
+
+  const tooltipContent = document.createElement("div");
+  tooltipContent.dataset.scope = "tooltip";
+  tooltipContent.dataset.part = "content";
+  tooltipContent.dataset.state = "idle";
+  tooltipContent.id = tooltipId;
+  tooltipContent.setAttribute("role", "tooltip");
+  tooltipLayer.appendChild(tooltipContent);
+
+  const tooltipArrow = document.createElement("div");
+  tooltipArrow.dataset.scope = "tooltip";
+  tooltipArrow.dataset.part = "arrow";
+  tooltipLayer.appendChild(tooltipArrow);
+
+  const contextMenu = document.createElement("div");
+  contextMenu.className = "chips-basecard-editor__context-menu";
+  contextMenu.dataset.scope = "menu";
+  contextMenu.dataset.part = "root";
+  contextMenu.hidden = true;
+  surfaceFrame.appendChild(contextMenu);
+
+  const contextMenuContent = document.createElement("div");
+  contextMenuContent.dataset.scope = "menu";
+  contextMenuContent.dataset.part = "content";
+  contextMenuContent.dataset.state = "idle";
+  contextMenuContent.setAttribute("role", "menu");
+  contextMenu.appendChild(contextMenuContent);
+
+  const errors = document.createElement("div");
+  errors.className = "chips-basecard-editor__errors";
+  errors.hidden = true;
+  const errorList = document.createElement("ul");
+  errorList.className = "chips-basecard-editor__errors-list";
+  errors.appendChild(errorList);
+  editorRoot.appendChild(errors);
+
+  const controller: EditorController = {
+    root,
+    surfaceFrame,
+    editorHost,
+    scrollSurface,
+    floatingToolbar,
+    tooltipLayer,
+    tooltipContent,
+    tooltipArrow,
+    contextMenu,
+    contextMenuContent,
+    errorList,
+    locale: config.locale ?? "zh-CN",
+    theme: config.theme ?? "",
+    props,
+    t: createTranslator(config.locale),
+    disposed: false,
+    focused: false,
+    currentMarkdown: "",
+    currentFilePath: config.content_source === "file" ? config.content_file : undefined,
+    sessionFileName: createRichTextMarkdownFileName(config.content_file?.replace(/\.md$/i, "")),
+    lastCommittedSignature: "",
+    lastResolvedResources: new Set<string>(),
+    isComposing: false,
+    isImporting: false,
+    rerunCommitAfterImport: false,
+    pendingErrors: [],
+    handleWindowResize: () => {
+      hideTooltip(controller);
+      hideContextMenu(controller, false);
+      updateToolbarPosition(controller);
+    },
+    handleDocumentPointerDown: (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        hideTooltip(controller);
+        hideContextMenu(controller, false);
+        return;
+      }
+
+      if (!root.contains(target)) {
+        hideTooltip(controller);
+        hideContextMenu(controller, false);
+        controller.floatingToolbar.hidden = true;
+        return;
+      }
+
+      if (!floatingToolbar.contains(target)) {
+        hideTooltip(controller);
+      }
+
+      if (!contextMenu.contains(target)) {
+        hideContextMenu(controller, true);
+      }
+    },
+    handleDocumentKeyDown: (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (!controller.contextMenu.hidden) {
+        event.preventDefault();
+        hideTooltip(controller);
+        hideContextMenu(controller, true);
+        return;
+      }
+
+      hideTooltip(controller);
+    },
+    handleWindowBlur: () => {
+      hideTooltip(controller);
+      hideContextMenu(controller, false);
+      controller.floatingToolbar.hidden = true;
+    },
   };
-  let lastCommittedSignature = JSON.stringify(draft);
-  let emitTimer: number | null = null;
-  let savedSelection: Range | null = null;
-  let isToolbarCollapsed = false;
-  let isComposingText = false;
-  let didConfigureParagraphBehavior = false;
 
-  function ensureParagraphBehavior(): void {
-    if (didConfigureParagraphBehavior) {
+  for (const definition of TOOLBAR_BUTTONS) {
+    floatingToolbar.appendChild(createToolbarButton(controller, definition));
+  }
+
+  for (const action of CONTEXT_MENU_ACTIONS) {
+    contextMenuContent.appendChild(createContextMenuItem(controller, action));
+  }
+
+  contextMenuContent.addEventListener("focusin", () => {
+    contextMenuContent.dataset.state = "focus";
+  });
+  contextMenuContent.addEventListener("focusout", () => {
+    contextMenuContent.dataset.state = "idle";
+  });
+  contextMenuContent.addEventListener("keydown", (event) => {
+    const items = getMenuItems(controller);
+    if (items.length === 0) {
       return;
     }
 
-    executeDocumentCommand("defaultParagraphSeparator", "p");
-    didConfigureParagraphBehavior = true;
-  }
-
-  function rememberSelection(): void {
-    savedSelection = cloneEditorSelection(bodyEditor);
-  }
-
-  function resolveSelection(preferLiveSelection = false): Range {
-    if (preferLiveSelection) {
-      const liveSelection = cloneEditorSelection(bodyEditor);
-      if (liveSelection) {
-        return restoreEditorSelection(bodyEditor, liveSelection);
-      }
+    const currentIndex = items.findIndex((item) => item === ownerDocument.activeElement);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        focusMenuItem(controller, currentIndex + 1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        focusMenuItem(controller, currentIndex - 1);
+        break;
+      case "Home":
+        event.preventDefault();
+        focusMenuItem(controller, 0);
+        break;
+      case "End":
+        event.preventDefault();
+        focusMenuItem(controller, items.length - 1);
+        break;
+      case "Escape":
+        event.preventDefault();
+        hideContextMenu(controller, true);
+        break;
+      default:
+        break;
     }
-    return restoreEditorSelection(bodyEditor, savedSelection);
-  }
-
-  function syncToolbarState(): void {
-    blockSelect.value = getCurrentBlockTag(bodyEditor);
-  }
-
-  function syncPlaceholderState(): void {
-    bodyEditor.setAttribute(
-      "data-empty",
-      hasMeaningfulEditorContent(bodyEditor) ? "false" : "true"
-    );
-  }
-
-  function applyToolbarState(): void {
-    const state = isToolbarCollapsed ? "collapsed" : "expanded";
-    root.setAttribute("data-toolbar-state", state);
-    toolbarContent.hidden = isToolbarCollapsed;
-    toolbarToggle.textContent = isToolbarCollapsed
-      ? t("basecard.toolbar.expand")
-      : t("basecard.toolbar.collapse");
-    toolbarToggle.setAttribute("aria-label", toolbarToggle.textContent);
-    toolbarToggle.setAttribute("aria-expanded", String(!isToolbarCollapsed));
-  }
-
-  function collectDraftFromDom(): DraftConfig {
-    return {
-      body: createSanitizedDraftBody(bodyEditor),
-    };
-  }
-
-  function renderValidation(showErrors: boolean): void {
-    errorBox.textContent = "";
-    if (!showErrors) {
-      return;
-    }
-
-    const validation = validateBasecardConfig({
-      ...initialConfig,
-      body: createSanitizedDraftBody(bodyEditor),
-    });
-    const errors = Object.values(validation.errors);
-
-    if (errors.length === 0) {
-      return;
-    }
-
-    const list = document.createElement("ul");
-    list.className = "chips-basecard-editor__errors-list";
-    errors.forEach((message) => {
-      const item = document.createElement("li");
-      item.textContent = message;
-      list.appendChild(item);
-    });
-    errorBox.appendChild(list);
-  }
-
-  function validateAndEmit(showErrors = false, normalizeDom = false): void {
-    const nextDraft = collectDraftFromDom();
-    const safeBodyHtml = normalizeEditorHtml(nextDraft.body);
-
-    if (normalizeDom && safeBodyHtml !== bodyEditor.innerHTML) {
-      bodyEditor.innerHTML = safeBodyHtml;
-    }
-    syncPlaceholderState();
-
-    draft = {
-      body: safeBodyHtml,
-    };
-
-    renderValidation(showErrors);
-
-    const next = normalizeBasecardConfig({
-      ...initialConfig,
-      body: safeBodyHtml,
-    });
-    const validation = validateBasecardConfig(next);
-
-    const signature = JSON.stringify(draft);
-    if (signature === lastCommittedSignature) {
-      return;
-    }
-
-    if (!validation.valid) {
-      return;
-    }
-
-    lastCommittedSignature = signature;
-    props.onChange(next);
-  }
-
-  function scheduleValidateAndEmit(showErrors = false, normalizeDom = false): void {
-    if (emitTimer !== null) {
-      window.clearTimeout(emitTimer);
-    }
-    emitTimer = window.setTimeout(() => {
-      emitTimer = null;
-      validateAndEmit(showErrors, normalizeDom);
-    }, EMIT_DEBOUNCE_MS);
-  }
-
-  function flushValidateAndEmit(showErrors = true, normalizeDom = true): void {
-    if (emitTimer !== null) {
-      window.clearTimeout(emitTimer);
-      emitTimer = null;
-    }
-    validateAndEmit(showErrors, normalizeDom);
-  }
-
-  function runEditorCommand(command: string, value?: string): void {
-    resolveSelection();
-    executeDocumentCommand(command, value);
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function insertParagraphBreak(): void {
-    ensureParagraphBehavior();
-    resolveSelection(true);
-    if (!executeDocumentCommand("insertParagraph")) {
-      replaceSelectionWithHtml(bodyEditor, "<p><br></p>");
-    }
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function insertLineBreak(): void {
-    ensureParagraphBehavior();
-    resolveSelection(true);
-    if (!executeDocumentCommand("insertLineBreak")) {
-      replaceSelectionWithHtml(bodyEditor, "<br>");
-    }
-    rememberSelection();
-    syncToolbarState();
-  }
-
-  function createToolbarButton(
-    text: string,
-    title: string,
-    onClick: () => void
-  ): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chips-basecard-editor__toolbar-button";
-    button.textContent = text;
-    button.title = title;
-    button.setAttribute("aria-label", title);
-    button.addEventListener("mousedown", (event) => {
-      rememberSelection();
-      event.preventDefault();
-    });
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      onClick();
-      validateAndEmit(false);
-    });
-    return button;
-  }
-
-  const boldButton = createToolbarButton("B", t("basecard.toolbar.bold"), () =>
-    runEditorCommand("bold")
-  );
-  const italicButton = createToolbarButton("I", t("basecard.toolbar.italic"), () =>
-    runEditorCommand("italic")
-  );
-  const underlineButton = createToolbarButton("U", t("basecard.toolbar.underline"), () =>
-    runEditorCommand("underline")
-  );
-  const strikeButton = createToolbarButton("S", t("basecard.toolbar.strike"), () =>
-    runEditorCommand("strikeThrough")
-  );
-  const superscriptButton = createToolbarButton(
-    "X2",
-    t("basecard.toolbar.superscript"),
-    () => runEditorCommand("superscript")
-  );
-  const subscriptButton = createToolbarButton(
-    "X_2",
-    t("basecard.toolbar.subscript"),
-    () => runEditorCommand("subscript")
-  );
-  const codeButton = createToolbarButton("Code", t("basecard.toolbar.code"), () => {
-    resolveSelection();
-    wrapSelectionWithTag(bodyEditor, "code");
-    rememberSelection();
   });
+  const handleSurfaceScroll = () => {
+    hideTooltip(controller);
+    hideContextMenu(controller, false);
+    updateToolbarPosition(controller);
+  };
 
-  const blockSelect = document.createElement("select");
-  blockSelect.className = "chips-basecard-editor__toolbar-select";
-  blockSelect.title = t("basecard.toolbar.block");
-  blockSelect.setAttribute("aria-label", t("basecard.toolbar.block"));
-  [
-    { value: "p", label: t("basecard.block.paragraph") },
-    { value: "h1", label: t("basecard.block.h1") },
-    { value: "h2", label: t("basecard.block.h2") },
-    { value: "h3", label: t("basecard.block.h3") },
-    { value: "h4", label: t("basecard.block.h4") },
-    { value: "h5", label: t("basecard.block.h5") },
-    { value: "h6", label: t("basecard.block.h6") },
-  ].forEach((option) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = option.value;
-    optionEl.textContent = option.label;
-    blockSelect.appendChild(optionEl);
-  });
-  blockSelect.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  blockSelect.addEventListener("change", () => {
-    const value = blockSelect.value;
-    runEditorCommand("formatBlock", value === "p" ? "p" : value);
-    validateAndEmit(false);
-  });
+  scrollSurface.addEventListener("scroll", handleSurfaceScroll, { passive: true });
+  ownerWindow.addEventListener("resize", controller.handleWindowResize);
+  ownerWindow.addEventListener("blur", controller.handleWindowBlur);
+  ownerDocument.addEventListener("pointerdown", controller.handleDocumentPointerDown);
+  ownerDocument.addEventListener("keydown", controller.handleDocumentKeyDown);
 
-  const orderedListButton = createToolbarButton(
-    "1.",
-    t("basecard.toolbar.orderedList"),
-    () => runEditorCommand("insertOrderedList")
-  );
-  const unorderedListButton = createToolbarButton(
-    "•",
-    t("basecard.toolbar.unorderedList"),
-    () => runEditorCommand("insertUnorderedList")
-  );
-  const blockquoteButton = createToolbarButton(
-    "\"",
-    t("basecard.toolbar.blockquote"),
-    () => runEditorCommand("formatBlock", "blockquote")
-  );
+  void (async () => {
+    try {
+      const markdown = normalizeMarkdown(await loadMarkdownFromConfig(config, props.resolveResourceUrl));
+      controller.currentMarkdown = markdown;
+      controller.editor = await Editor.make()
+        .config((ctx) => {
+          ctx.set(rootCtx, editorHost);
+          ctx.set(defaultValueCtx, markdown);
+          ctx.update(editorViewOptionsCtx, (prev) => ({
+            ...prev,
+            attributes: {
+              ...(typeof prev.attributes === "object" ? prev.attributes : {}),
+              spellcheck: "true",
+              autocapitalize: "off",
+              autocorrect: "off",
+              translate: "no",
+            },
+          }));
+        })
+        .use(commonmark)
+        .use(listener)
+        .create();
 
-  const alignLeftButton = createToolbarButton("L", t("basecard.toolbar.alignLeft"), () =>
-    runEditorCommand("justifyLeft")
-  );
-  const alignCenterButton = createToolbarButton(
-    "C",
-    t("basecard.toolbar.alignCenter"),
-    () => runEditorCommand("justifyCenter")
-  );
-  const alignRightButton = createToolbarButton("R", t("basecard.toolbar.alignRight"), () =>
-    runEditorCommand("justifyRight")
-  );
-  const alignJustifyButton = createToolbarButton(
-    "J",
-    t("basecard.toolbar.alignJustify"),
-    () => runEditorCommand("justifyFull")
-  );
-
-  const colorInput = document.createElement("input");
-  colorInput.type = "color";
-  colorInput.className = "chips-basecard-editor__toolbar-color";
-  colorInput.title = t("basecard.toolbar.textColor");
-  colorInput.setAttribute("aria-label", t("basecard.toolbar.textColor"));
-  colorInput.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  colorInput.addEventListener("input", () => {
-    if (!colorInput.value) {
-      return;
-    }
-    runEditorCommand("foreColor", colorInput.value);
-    validateAndEmit(false);
-  });
-
-  const bgColorInput = document.createElement("input");
-  bgColorInput.type = "color";
-  bgColorInput.className = "chips-basecard-editor__toolbar-color";
-  bgColorInput.title = t("basecard.toolbar.highlightColor");
-  bgColorInput.setAttribute("aria-label", t("basecard.toolbar.highlightColor"));
-  bgColorInput.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  bgColorInput.addEventListener("input", () => {
-    if (!bgColorInput.value) {
-      return;
-    }
-    runEditorCommand("hiliteColor", bgColorInput.value);
-    validateAndEmit(false);
-  });
-
-  const fontSizeSelect = document.createElement("select");
-  fontSizeSelect.className = "chips-basecard-editor__toolbar-select";
-  fontSizeSelect.title = t("basecard.toolbar.fontSize");
-  fontSizeSelect.setAttribute("aria-label", t("basecard.toolbar.fontSize"));
-  const defaultFontSizeOption = document.createElement("option");
-  defaultFontSizeOption.value = "";
-  defaultFontSizeOption.textContent = t("basecard.toolbar.fontSize");
-  fontSizeSelect.appendChild(defaultFontSizeOption);
-  [12, 14, 16, 18, 24, 32].forEach((size) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = String(size);
-    optionEl.textContent = `${size}px`;
-    fontSizeSelect.appendChild(optionEl);
-  });
-  fontSizeSelect.addEventListener("mousedown", () => {
-    rememberSelection();
-  });
-  fontSizeSelect.addEventListener("change", () => {
-    const selected = Number.parseInt(fontSizeSelect.value, 10);
-    if (!Number.isFinite(selected)) {
-      return;
-    }
-    resolveSelection();
-    wrapSelectionWithStyle(bodyEditor, `font-size: ${selected}px`);
-    rememberSelection();
-    validateAndEmit(false);
-    fontSizeSelect.value = "";
-  });
-
-  const clearFormatButton = createToolbarButton(
-    t("basecard.toolbar.clear"),
-    t("basecard.toolbar.clear"),
-    () => runEditorCommand("removeFormat")
-  );
-
-  const linkButton = createToolbarButton(
-    t("basecard.toolbar.link"),
-    t("basecard.toolbar.link"),
-    () => {
-      const selectionRange = cloneEditorSelection(bodyEditor);
-      const selectedText = selectionRange?.toString() ?? "";
-      const defaultUrl =
-        selectedText && selectedText.startsWith("http") ? selectedText : "https://";
-
-      const url = (window.prompt(t("basecard.prompt.linkUrl"), defaultUrl) ?? "").trim();
-      if (!url) {
+      if (controller.disposed) {
+        await controller.editor.destroy();
         return;
       }
 
-      const text = (
-        selectedText ||
-        window.prompt(t("basecard.prompt.linkText"), url) ||
-        url
-      ).trim();
+      controller.editor.action((ctx) => {
+        const manager = ctx.get(listenerCtx);
+        manager.markdownUpdated((_listenerCtx, nextMarkdown) => {
+          controller.currentMarkdown = normalizeMarkdown(nextMarkdown);
+          void syncPreviewResources(controller);
+          scheduleCommit(controller, "change");
+        });
+        manager.selectionUpdated((_listenerCtx, selection) => {
+          captureSelection(controller, selection);
+          updateToolbarPosition(controller, selection);
+        });
+        manager.focus(() => {
+          controller.focused = true;
+          updateToolbarPosition(controller);
+        });
+        manager.blur(() => {
+          controller.focused = false;
+          hideTooltip(controller);
+          hideContextMenu(controller, false);
+          controller.floatingToolbar.hidden = true;
+          scheduleCommit(controller, "flush");
+        });
+      });
 
-      const linkHtml = createValidatedFragmentHtml(
-        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`,
-        'a[href]'
-      );
-      if (!linkHtml) {
-        return;
+      const view = controller.editor.action((ctx) => ctx.get(editorViewCtx));
+      view.dom.addEventListener("compositionstart", () => {
+        controller.isComposing = true;
+      });
+      view.dom.addEventListener("compositionend", () => {
+        controller.isComposing = false;
+        scheduleCommit(controller, "change");
+      });
+      view.dom.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+          event.preventDefault();
+          runCommand(controller, toggleStrongCommand.key);
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") {
+          event.preventDefault();
+          runCommand(controller, toggleEmphasisCommand.key);
+        }
+      });
+      view.dom.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        captureSelection(controller, view.state.selection);
+        positionContextMenu(controller, event.clientX, event.clientY);
+        focusMenuItem(controller, 0);
+      });
+
+      await syncPreviewResources(controller);
+      if (!hasMeaningfulMarkdownContent(markdown)) {
+        setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
       }
-
-      restoreEditorSelection(bodyEditor, selectionRange);
-      replaceSelectionWithHtml(bodyEditor, linkHtml);
-      rememberSelection();
+    } catch (error) {
+      setErrors(controller, [`${controller.t("basecard.status.loadFailed")}：${error instanceof Error ? error.message : String(error)}`]);
     }
-  );
+  })();
 
-  const imageButton = createToolbarButton(
-    t("basecard.toolbar.image"),
-    t("basecard.toolbar.image"),
-    () => {
-      const selectionRange = cloneEditorSelection(bodyEditor);
-      const src = (window.prompt(t("basecard.prompt.imageUrl"), "https://") ?? "").trim();
-      if (!src) {
-        return;
-      }
-
-      const alt = (window.prompt(t("basecard.prompt.imageAlt"), "") ?? "").trim();
-      const width = (window.prompt(t("basecard.prompt.imageWidth"), "") ?? "").trim();
-      const height = (window.prompt(t("basecard.prompt.imageHeight"), "") ?? "").trim();
-
-      const attributes: string[] = [`src="${escapeHtml(src)}"`];
-      if (alt) {
-        attributes.push(`alt="${escapeHtml(alt)}"`);
-      }
-      if (width) {
-        attributes.push(`width="${escapeHtml(width)}"`);
-      }
-      if (height) {
-        attributes.push(`height="${escapeHtml(height)}"`);
-      }
-
-      const imageHtml = createValidatedFragmentHtml(
-        `<img ${attributes.join(" ")} />`,
-        "img[src]"
-      );
-      if (!imageHtml) {
-        return;
-      }
-
-      restoreEditorSelection(bodyEditor, selectionRange);
-      replaceSelectionWithHtml(bodyEditor, imageHtml);
-      rememberSelection();
+  root.__chipsDispose = () => {
+    controller.disposed = true;
+    if (controller.flushTimer) {
+      ownerWindow.clearTimeout(controller.flushTimer);
+      controller.flushTimer = undefined;
     }
-  );
-
-  const hrButton = createToolbarButton(
-    t("basecard.toolbar.divider"),
-    t("basecard.toolbar.divider"),
-    () => runEditorCommand("insertHorizontalRule")
-  );
-
-  toolbarContent.appendChild(
-    createToolbarGroup(
-      boldButton,
-      italicButton,
-      underlineButton,
-      strikeButton,
-      superscriptButton,
-      subscriptButton,
-      codeButton
-    )
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(blockSelect, orderedListButton, unorderedListButton, blockquoteButton)
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(
-      alignLeftButton,
-      alignCenterButton,
-      alignRightButton,
-      alignJustifyButton,
-      colorInput,
-      bgColorInput,
-      fontSizeSelect
-    )
-  );
-  toolbarContent.appendChild(
-    createToolbarGroup(clearFormatButton, linkButton, imageButton, hrButton)
-  );
-
-  toolbarToggle.addEventListener("mousedown", (event) => {
-    rememberSelection();
-    event.preventDefault();
-  });
-  toolbarToggle.addEventListener("click", (event) => {
-    event.preventDefault();
-    isToolbarCollapsed = !isToolbarCollapsed;
-    applyToolbarState();
-  });
-
-  bodyEditor.addEventListener("focus", () => {
-    ensureParagraphBehavior();
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("mouseup", () => {
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("keyup", () => {
-    rememberSelection();
-    syncToolbarState();
-  });
-
-  bodyEditor.addEventListener("input", () => {
-    if (isComposingText) {
-      syncPlaceholderState();
-      return;
+    if (controller.editor) {
+      void controller.editor.destroy();
     }
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    draft = collectDraftFromDom();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("compositionstart", () => {
-    isComposingText = true;
-  });
-
-  bodyEditor.addEventListener("compositionend", () => {
-    isComposingText = false;
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("paste", (event) => {
-    event.preventDefault();
-
-    const clipboardData = event.clipboardData;
-    const pastedHtml = clipboardData?.getData("text/html") ?? "";
-    const pastedText = clipboardData?.getData("text/plain") ?? "";
-
-    const normalizedHtml = pastedHtml
-      ? sanitizeRichTextHtml(pastedHtml).trim()
-      : plainTextToRichTextHtml(pastedText);
-
-    if (!normalizedHtml) {
-      return;
+    for (const resourcePath of controller.lastResolvedResources) {
+      controller.props.releaseResourceUrl?.(resourcePath);
     }
-
-    rememberSelection();
-    resolveSelection();
-    replaceSelectionWithHtml(bodyEditor, normalizedHtml);
-    rememberSelection();
-    syncToolbarState();
-    syncPlaceholderState();
-    scheduleValidateAndEmit(false, false);
-  });
-
-  bodyEditor.addEventListener("keydown", (event) => {
-    if (isComposingText || event.isComposing) {
-      return;
-    }
-
-    if (
-      event.key === "Enter" &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
-      if (event.shiftKey) {
-        insertLineBreak();
-      } else {
-        insertParagraphBreak();
-      }
-      syncPlaceholderState();
-      scheduleValidateAndEmit(false, false);
-      return;
-    }
-
-    if (!(event.ctrlKey || event.metaKey)) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-    if (key === "b") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("bold");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    } else if (key === "i") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("italic");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    } else if (key === "u") {
-      event.preventDefault();
-      resolveSelection(true);
-      executeDocumentCommand("underline");
-      rememberSelection();
-      syncToolbarState();
-      scheduleValidateAndEmit(false, false);
-    }
-  });
-
-  root.addEventListener("focusout", (event) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && root.contains(nextTarget)) {
-      return;
-    }
-    flushValidateAndEmit(true, true);
-  });
-
-  syncToolbarState();
-  syncPlaceholderState();
-  applyToolbarState();
-
-  root.__chipsDispose = () => undefined;
+    controller.lastResolvedResources.clear();
+    scrollSurface.removeEventListener("scroll", handleSurfaceScroll);
+    ownerWindow.removeEventListener("resize", controller.handleWindowResize);
+    ownerWindow.removeEventListener("blur", controller.handleWindowBlur);
+    ownerDocument.removeEventListener("pointerdown", controller.handleDocumentPointerDown);
+    ownerDocument.removeEventListener("keydown", controller.handleDocumentKeyDown);
+  };
 
   return root;
 }

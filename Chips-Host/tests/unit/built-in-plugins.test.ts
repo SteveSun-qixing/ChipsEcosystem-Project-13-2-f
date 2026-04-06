@@ -27,6 +27,13 @@ const defaultTheme = {
   autoEnable: true
 } satisfies BuiltInPluginDefinition;
 
+const photoViewerPlugin = {
+  id: 'com.chips.photo-viewer',
+  manifestRelativePath: 'com.chips.photo-viewer/manifest.yaml',
+  autoEnable: true,
+  required: false
+} satisfies BuiltInPluginDefinition;
+
 const createBuiltInTheme = async (): Promise<void> => {
   const pluginDir = path.join(builtInRoot, defaultTheme.id);
   await fs.mkdir(path.join(pluginDir, 'dist'), { recursive: true });
@@ -155,5 +162,24 @@ describe('built-in plugin bootstrap', () => {
       pluginId: 'com.chips.eco-settings-panel',
       replace: false
     });
+  });
+
+  it('skips optional built-in plugins when the bundle is not shipped', async () => {
+    const summary = await ensureBuiltInPlugins({
+      runtime,
+      pluginRoots: [builtInRoot],
+      plugins: [defaultTheme, settingsPlugin, photoViewerPlugin]
+    });
+
+    expect(summary.installedPluginIds).toEqual([
+      'theme.theme.chips-official-default-theme',
+      'com.chips.eco-settings-panel'
+    ]);
+    expect(summary.enabledPluginIds).toEqual([
+      'theme.theme.chips-official-default-theme',
+      'com.chips.eco-settings-panel'
+    ]);
+    expect(summary.shortcutPluginIds).toEqual(['com.chips.eco-settings-panel']);
+    expect(runtime.query().some((record) => record.manifest.id === 'com.chips.photo-viewer')).toBe(false);
   });
 });

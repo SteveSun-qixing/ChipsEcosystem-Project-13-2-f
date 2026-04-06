@@ -8,6 +8,7 @@ export interface BuiltInPluginDefinition {
   id: string;
   manifestRelativePath: string;
   autoEnable: boolean;
+  required?: boolean;
   createShortcut?: boolean;
   launchOnFirstInstall?: boolean;
 }
@@ -31,6 +32,7 @@ interface RuntimeInvokerLike {
 
 const SETTINGS_PANEL_PLUGIN_ID = 'com.chips.eco-settings-panel';
 const DEFAULT_THEME_PLUGIN_ID = 'theme.theme.chips-official-default-theme';
+const PHOTO_VIEWER_PLUGIN_ID = 'com.chips.photo-viewer';
 
 export const DEFAULT_BUILT_IN_PLUGINS: BuiltInPluginDefinition[] = [
   {
@@ -44,6 +46,12 @@ export const DEFAULT_BUILT_IN_PLUGINS: BuiltInPluginDefinition[] = [
     autoEnable: true,
     createShortcut: true,
     launchOnFirstInstall: true
+  },
+  {
+    id: PHOTO_VIEWER_PLUGIN_ID,
+    manifestRelativePath: `${PHOTO_VIEWER_PLUGIN_ID}/manifest.yaml`,
+    autoEnable: true,
+    required: false
   }
 ];
 
@@ -120,6 +128,9 @@ export const ensureBuiltInPlugins = async (
   for (const plugin of plugins) {
     const manifestPath = await resolveBuiltInManifestPath(plugin, roots);
     if (!manifestPath) {
+      if (plugin.required === false) {
+        continue;
+      }
       throw createError('HOST_BUILTIN_PLUGIN_NOT_FOUND', `Built-in plugin manifest is unavailable: ${plugin.id}`, {
         pluginId: plugin.id,
         roots

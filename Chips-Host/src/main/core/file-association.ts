@@ -15,7 +15,7 @@ interface PluginQueryResponse {
 export interface FileAssociationOpenResult {
   targetPath: string;
   extension: string;
-  mode: 'card' | 'box' | 'shell';
+  mode: 'card' | 'box' | 'plugin' | 'shell';
   windowId?: string;
   pluginId?: string;
 }
@@ -42,15 +42,19 @@ const openByPlugin = async (
   runtime: RuntimeClient,
   plugin: { id: string },
   targetPath: string,
-  mode: 'card' | 'box'
+  mode?: 'card' | 'box'
 ): Promise<{ pluginId: string; windowId: string }> => {
+  const launchParams: Record<string, unknown> = {
+    targetPath,
+    trigger: 'file-association'
+  };
+  if (mode) {
+    launchParams.fileOpenMode = mode;
+  }
+
   const launched = await runtime.invoke<{ pluginId: string; window: { id: string } }>('plugin.launch', {
     pluginId: plugin.id,
-    launchParams: {
-      targetPath,
-      fileOpenMode: mode,
-      trigger: 'file-association'
-    }
+    launchParams
   });
   return {
     pluginId: plugin.id,
@@ -97,6 +101,18 @@ export const openAssociatedFile = async (runtime: RuntimeClient, inputPath: stri
       extension,
       expectedCapability: 'file-handler:.box'
     });
+  }
+
+  const plugin = await findEnabledHandlerPlugin(runtime, extension);
+  if (plugin) {
+    const opened = await openByPlugin(runtime, plugin, targetPath);
+    return {
+      targetPath,
+      extension,
+      mode: 'plugin',
+      pluginId: opened.pluginId,
+      windowId: opened.windowId
+    };
   }
 
   await runtime.invoke('platform.shellOpenPath', { path: targetPath });

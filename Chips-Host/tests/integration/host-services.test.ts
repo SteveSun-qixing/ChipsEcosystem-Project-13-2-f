@@ -144,6 +144,21 @@ describe('Host services integration', () => {
     );
   });
 
+  it('resolves local resource paths as encoded file urls', async () => {
+    const imageDir = path.join(workspace, '资源目录');
+    const imageFile = path.join(imageDir, '图 片.png');
+    await fs.mkdir(imageDir, { recursive: true });
+    await fs.writeFile(imageFile, 'png', 'utf-8');
+
+    const resolved = await runtime.invoke<{ uri: string }>('resource.resolve', {
+      resourceId: imageFile
+    });
+
+    expect(resolved.uri.startsWith('file://')).toBe(true);
+    expect(resolved.uri).toContain('%20');
+    expect(fileURLToPath(resolved.uri)).toBe(imageFile);
+  });
+
   it('renders card through unified rendering target options', async () => {
     const install = await runtime.invoke<{ pluginId: string }>('plugin.install', {
       manifestPath: path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP/manifest.yaml')
@@ -1154,5 +1169,41 @@ describe('Host services integration', () => {
     const handler = queried.plugins.find((plugin) => plugin.id === 'chips.card.handler');
     expect(handler?.ui?.window?.chrome?.backgroundColor).toBe('#ffffff');
     expect(handler?.ui?.window?.chrome?.titleBarStyle).toBe('hidden');
+  });
+
+  it('routes associated image files to enabled app plugins through generic file-handler capabilities', async () => {
+    const pluginDir = path.join(workspace, 'image-handler-plugin');
+    await fs.mkdir(path.join(pluginDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(pluginDir, 'manifest.yaml'),
+      [
+        'id: chips.image.handler',
+        'version: "1.0.0"',
+        'type: app',
+        'name: Image Handler',
+        'permissions:',
+        '  - file.read',
+        'entry: dist/index.html',
+        'capabilities:',
+        '  - file-handler:.png'
+      ].join('\n'),
+      'utf-8'
+    );
+    await fs.writeFile(path.join(pluginDir, 'dist/index.html'), '<html><body>image handler</body></html>', 'utf-8');
+
+    const zip = new StoreZipService();
+    const cpkPath = path.join(workspace, 'chips.image.handler.cpk');
+    await zip.compress(pluginDir, cpkPath);
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: cpkPath });
+    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+
+    const imageFile = path.join(workspace, 'associated image.png');
+    await fs.writeFile(imageFile, 'png', 'utf-8');
+
+    const result = await openAssociatedFile(runtime, imageFile);
+    expect(result.mode).toBe('plugin');
+    expect(result.extension).toBe('.png');
+    expect(result.pluginId).toBe('chips.image.handler');
+    expect(result.windowId).toBeTypeOf('string');
   });
 });

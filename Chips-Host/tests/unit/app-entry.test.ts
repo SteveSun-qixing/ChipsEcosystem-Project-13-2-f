@@ -18,10 +18,10 @@ describe('electron app entry', () => {
     const target = extractAssociatedFilePath([
       '/Applications/Chips.app/Contents/MacOS/Chips',
       '--workspace=/tmp/chips-workspace',
-      '/tmp/demo.card',
+      '/tmp/demo.png',
     ]);
 
-    expect(target).toBe(path.resolve('/tmp/demo.card'));
+    expect(target).toBe(path.resolve('/tmp/demo.png'));
     expect(extractAssociatedFilePath(['/Applications/Chips.app/Contents/MacOS/Chips', '--workspace=/tmp/chips-workspace'])).toBeNull();
   });
 

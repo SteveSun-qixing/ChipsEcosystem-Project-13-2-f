@@ -46,8 +46,6 @@ interface RunElectronAppEntryOptions {
 const LAUNCH_PLUGIN_PREFIX = '--chips-launch-plugin=';
 const LAUNCH_PAYLOAD_PREFIX = '--chips-launch-payload=';
 const WORKSPACE_PREFIX = '--workspace=';
-const ASSOCIATED_FILE_EXTENSIONS = new Set(['.card', '.box']);
-
 const resolveWorkspacePath = (argv: string[]): string => {
   const workspaceArg = argv.find((item) => item.startsWith(WORKSPACE_PREFIX));
   if (!workspaceArg) {
@@ -110,7 +108,7 @@ export const extractAssociatedFilePath = (argv: string[]): string | null => {
       continue;
     }
     const extension = path.extname(value).toLowerCase();
-    if (!ASSOCIATED_FILE_EXTENSIONS.has(extension)) {
+    if (!extension) {
       continue;
     }
     return path.resolve(value);
@@ -167,7 +165,7 @@ export const runElectronAppEntry = async (options: RunElectronAppEntryOptions = 
 
   const queueAssociatedFile = (filePath: string): void => {
     const extension = path.extname(filePath).toLowerCase();
-    if (!ASSOCIATED_FILE_EXTENSIONS.has(extension)) {
+    if (!extension) {
       return;
     }
     pendingAssociatedFiles.push(path.resolve(filePath));

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { createError } from '../../shared/errors';
+import { parseYamlLite } from '../../shared/yaml-lite';
 
 const execFile = promisify(childProcess.execFile);
 
@@ -11,6 +12,7 @@ export interface BuiltInPluginBundleSpec {
   id: string;
   sourceDir: string;
   includePaths: string[];
+  required?: boolean;
 }
 
 export interface PrepareMacHostAppBundleOptions {
@@ -53,8 +55,28 @@ const APP_PACKAGE_NAME = 'chips-host';
 const APP_BUNDLE_IDENTIFIER = 'local.chips.host';
 const COMPONENT_PACKAGE_IDENTIFIER = 'local.chips.host.component';
 const SETTINGS_PANEL_PLUGIN_ID = 'com.chips.eco-settings-panel';
+const PHOTO_VIEWER_PLUGIN_ID = 'com.chips.photo-viewer';
 const SETTINGS_PANEL_DISPLAY_NAME = '生态设置面板';
 const SETTINGS_PANEL_EXECUTABLE_NAME = 'chips-eco-settings-panel';
+const CARD_FILE_EXTENSION = 'card';
+const CARD_FILE_MIME_TYPE = 'application/x-card';
+
+const FILE_HANDLER_MIME_TYPES: Record<string, string> = {
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp'
+};
+
+interface InstallerDocumentTypeSpec {
+  displayName: string;
+  extensions: string[];
+  mimeTypes: string[];
+}
 
 const pathExists = async (targetPath: string): Promise<boolean> => {
   try {
@@ -69,6 +91,34 @@ const ensureFile = async (targetPath: string, message: string): Promise<void> =>
   if (!(await pathExists(targetPath))) {
     throw createError('HOST_INSTALLER_INPUT_MISSING', message, { targetPath });
   }
+};
+
+const resolveAvailableBuiltInPluginBundles = async (
+  bundles: BuiltInPluginBundleSpec[]
+): Promise<BuiltInPluginBundleSpec[]> => {
+  const available: BuiltInPluginBundleSpec[] = [];
+
+  for (const bundle of bundles) {
+    const sourceDir = path.resolve(bundle.sourceDir);
+    if (await pathExists(sourceDir)) {
+      available.push({
+        ...bundle,
+        sourceDir
+      });
+      continue;
+    }
+
+    if (bundle.required === false) {
+      continue;
+    }
+
+    throw createError('HOST_INSTALLER_INPUT_MISSING', 'Built-in plugin source directory is unavailable.', {
+      pluginId: bundle.id,
+      sourceDir
+    });
+  }
+
+  return available;
 };
 
 const defaultRunCommand: RunCommandFn = async (command, args, options) => {
@@ -98,8 +148,82 @@ const defaultBuiltInPluginBundles = (workspaceRoot: string): BuiltInPluginBundle
       id: 'com.chips.eco-settings-panel',
       sourceDir: path.join(workspaceRoot, 'Chips-EcoSettingsPanel'),
       includePaths: ['manifest.yaml', 'dist', 'assets']
+    },
+    {
+      id: PHOTO_VIEWER_PLUGIN_ID,
+      sourceDir: path.join(workspaceRoot, 'Chips-PhotoViewer'),
+      includePaths: ['manifest.yaml', 'dist', 'assets'],
+      required: false
     }
   ];
+};
+
+const unique = (items: string[]): string[] => {
+  return [...new Set(items.map((item) => item.trim()).filter((item) => item.length > 0))];
+};
+
+const normalizeFileHandlerExtension = (capability: string): string | null => {
+  if (!capability.startsWith('file-handler:.')) {
+    return null;
+  }
+  const extension = capability.slice('file-handler:'.length).trim().toLowerCase();
+  if (!/^\.[a-z0-9]+$/.test(extension)) {
+    return null;
+  }
+  return extension;
+};
+
+const collectBuiltInDocumentTypes = async (bundles: BuiltInPluginBundleSpec[]): Promise<InstallerDocumentTypeSpec[]> => {
+  const collected: InstallerDocumentTypeSpec[] = [];
+  const seenExtensions = new Set<string>([CARD_FILE_EXTENSION]);
+
+  for (const bundle of bundles) {
+    const manifestPath = path.join(bundle.sourceDir, 'manifest.yaml');
+    if (!(await pathExists(manifestPath))) {
+      continue;
+    }
+
+    const raw = await fs.readFile(manifestPath, 'utf-8');
+    const parsed = parseYamlLite(raw);
+    if (parsed.type !== 'app') {
+      continue;
+    }
+
+    const capabilities = Array.isArray(parsed.capabilities)
+      ? parsed.capabilities.filter((item): item is string => typeof item === 'string')
+      : [];
+    const extensions = unique(
+      capabilities
+        .map((capability) => normalizeFileHandlerExtension(capability))
+        .filter((item): item is string => item !== null)
+        .filter((extension) => extension.slice(1) !== CARD_FILE_EXTENSION)
+        .filter((extension) => {
+          const normalized = extension.slice(1);
+          if (seenExtensions.has(normalized)) {
+            return false;
+          }
+          seenExtensions.add(normalized);
+          return true;
+        })
+        .map((extension) => extension.slice(1))
+    );
+
+    if (extensions.length === 0) {
+      continue;
+    }
+
+    collected.push({
+      displayName: typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? parsed.name.trim() : bundle.id,
+      extensions,
+      mimeTypes: unique(
+        extensions
+          .map((extension) => FILE_HANDLER_MIME_TYPES[`.${extension}`])
+          .filter((item): item is string => typeof item === 'string' && item.length > 0)
+      )
+    });
+  }
+
+  return collected;
 };
 
 const removeCopiedBundleArtifacts = async (rootPath: string): Promise<void> => {
@@ -437,7 +561,45 @@ const stageMacInstallerPayloadRoot = async (appBundlePath: string, payloadRoot: 
   return stagedAppBundlePath;
 };
 
-const createInfoPlist = (version: string): string => {
+const renderDocumentTypePlist = (documentType: InstallerDocumentTypeSpec): string[] => {
+  const lines = [
+    '    <dict>',
+    '      <key>CFBundleTypeName</key>',
+    `      <string>${documentType.displayName}</string>`,
+    '      <key>CFBundleTypeExtensions</key>',
+    '      <array>',
+    ...documentType.extensions.map((extension) => `        <string>${extension}</string>`),
+    '      </array>'
+  ];
+
+  if (documentType.mimeTypes.length > 0) {
+    lines.push(
+      '      <key>CFBundleTypeMIMETypes</key>',
+      '      <array>',
+      ...documentType.mimeTypes.map((mimeType) => `        <string>${mimeType}</string>`),
+      '      </array>'
+    );
+  }
+
+  lines.push(
+    '      <key>LSHandlerRank</key>',
+    '      <string>Owner</string>',
+    '    </dict>'
+  );
+
+  return lines;
+};
+
+const createInfoPlist = (version: string, additionalDocumentTypes: InstallerDocumentTypeSpec[]): string => {
+  const documentTypes = [
+    {
+      displayName: 'Chips Card File',
+      extensions: [CARD_FILE_EXTENSION],
+      mimeTypes: [CARD_FILE_MIME_TYPE]
+    },
+    ...additionalDocumentTypes
+  ];
+
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -469,20 +631,7 @@ const createInfoPlist = (version: string): string => {
     '  <string>AtomApplication</string>',
     '  <key>CFBundleDocumentTypes</key>',
     '  <array>',
-    '    <dict>',
-    '      <key>CFBundleTypeName</key>',
-    '      <string>Chips Card File</string>',
-    '      <key>CFBundleTypeExtensions</key>',
-    '      <array>',
-    '        <string>card</string>',
-    '      </array>',
-    '      <key>CFBundleTypeMIMETypes</key>',
-    '      <array>',
-    '        <string>application/x-card</string>',
-    '      </array>',
-    '      <key>LSHandlerRank</key>',
-    '      <string>Owner</string>',
-    '    </dict>',
+    ...documentTypes.flatMap((documentType) => renderDocumentTypePlist(documentType)),
     '  </array>',
     '</dict>',
     '</plist>',
@@ -501,7 +650,9 @@ export const prepareMacHostAppBundle = async (
     ...(options.runtimeDependencyPackageDirs ?? {}),
     ...(options.yamlPackageDir ? { yaml: path.resolve(options.yamlPackageDir) } : {})
   };
-  const builtInPluginBundles = options.builtInPluginBundles ?? defaultBuiltInPluginBundles(workspaceRoot);
+  const builtInPluginBundles = await resolveAvailableBuiltInPluginBundles(
+    options.builtInPluginBundles ?? defaultBuiltInPluginBundles(workspaceRoot)
+  );
   const hostManifest = await readHostPackageManifest(hostProjectDir);
   const version = hostManifest.version;
   const runtimeDependencies = await collectRuntimeDependencySpecs(
@@ -513,6 +664,7 @@ export const prepareMacHostAppBundle = async (
   const hostDistDir = path.join(hostProjectDir, 'dist');
   await ensureFile(hostDistDir, 'Chips-Host dist output is unavailable. Please build Host first.');
   await ensureFile(electronAppPath, 'Electron.app template is unavailable.');
+  const documentTypes = await collectBuiltInDocumentTypes(builtInPluginBundles);
 
   const appBundlePath = path.join(outputDir, APP_BUNDLE_NAME);
   const resourcesPath = path.join(appBundlePath, 'Contents', 'Resources');
@@ -543,7 +695,7 @@ export const prepareMacHostAppBundle = async (
   }
 
   await removeCopiedBundleArtifacts(appBundlePath);
-  await fs.writeFile(path.join(appBundlePath, 'Contents', 'Info.plist'), createInfoPlist(version), 'utf-8');
+  await fs.writeFile(path.join(appBundlePath, 'Contents', 'Info.plist'), createInfoPlist(version, documentTypes), 'utf-8');
 
   return {
     appBundlePath,
@@ -743,10 +895,15 @@ export const buildMacHostInstaller = async (
   const hostProjectDir = path.resolve(options.hostProjectDir);
   const workspaceRoot = path.resolve(options.workspaceRoot);
   const outputDir = path.resolve(options.outputDir);
+  const builtInPluginBundles = await resolveAvailableBuiltInPluginBundles(
+    options.builtInPluginBundles ?? defaultBuiltInPluginBundles(workspaceRoot)
+  );
 
   if (options.buildPrerequisites !== false) {
-    await buildProject(path.join(workspaceRoot, 'Chips-EcoSettingsPanel'), 'build', runCommand);
-    await buildProject(path.join(workspaceRoot, 'ThemePack', 'Chips-default'), 'build', runCommand);
+    const uniqueBuildDirs = unique(builtInPluginBundles.map((bundle) => bundle.sourceDir));
+    for (const dir of uniqueBuildDirs) {
+      await buildProject(dir, 'build', runCommand);
+    }
     await buildProject(hostProjectDir, 'build', runCommand);
   }
 
@@ -756,7 +913,7 @@ export const buildMacHostInstaller = async (
     outputDir,
     electronAppPath: options.electronAppPath,
     yamlPackageDir: options.yamlPackageDir,
-    builtInPluginBundles: options.builtInPluginBundles
+    builtInPluginBundles
   });
 
   const installerPath = path.join(outputDir, `Chips-Host-${prepared.packageVersion}-macos.pkg`);

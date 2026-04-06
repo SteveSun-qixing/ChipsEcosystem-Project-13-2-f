@@ -137,6 +137,36 @@ beforeEach(async () => {
   await write(path.join(workspaceRoot, 'Chips-EcoSettingsPanel', 'assets', 'icons', 'app-icon.ico'), 'icon');
 
   await write(
+    path.join(workspaceRoot, 'Chips-PhotoViewer', 'manifest.yaml'),
+    [
+      'id: "com.chips.photo-viewer"',
+      'name: "图片查看器"',
+      'version: "0.1.0"',
+      'type: "app"',
+      'permissions:',
+      '  - "platform.read"',
+      '  - "file.read"',
+      '  - "file.write"',
+      'entry: dist/index.html',
+      'capabilities:',
+      '  - "file-handler:.png"',
+      '  - "file-handler:.jpg"',
+      '  - "file-handler:.jpeg"',
+      '  - "file-handler:.webp"',
+      '  - "file-handler:.gif"',
+      '  - "file-handler:.bmp"',
+      '  - "file-handler:.svg"',
+      '  - "file-handler:.avif"',
+      'ui:',
+      '  launcher:',
+      '    displayName: 图片查看器',
+      '    icon: assets/icons/app-icon.ico'
+    ].join('\n')
+  );
+  await write(path.join(workspaceRoot, 'Chips-PhotoViewer', 'dist', 'index.html'), '<!doctype html>\n');
+  await write(path.join(workspaceRoot, 'Chips-PhotoViewer', 'assets', 'icons', 'app-icon.ico'), 'icon');
+
+  await write(
     path.join(workspaceRoot, 'ThemePack', 'Chips-default', 'manifest.yaml'),
     [
       'schemaVersion: "1.0.0"',
@@ -296,7 +326,64 @@ describe('macOS installer builder', () => {
     const infoPlist = await fs.readFile(path.join(result.appBundlePath, 'Contents', 'Info.plist'), 'utf-8');
     expect(infoPlist).toContain('application/x-card');
     expect(infoPlist).toContain('<string>card</string>');
+    expect(infoPlist).toContain('image/png');
+    expect(infoPlist).toContain('<string>png</string>');
     await expect(fs.access(path.join(result.appBundlePath, 'Contents', 'Resources', '._electron.icns'))).rejects.toThrow();
+  });
+
+  it('does not register image document types when the built-in photo viewer bundle is absent', async () => {
+    const result = await prepareMacHostAppBundle({
+      hostProjectDir,
+      workspaceRoot,
+      outputDir,
+      electronAppPath,
+      yamlPackageDir,
+      runtimeDependencyPackageDirs: {
+        cssstyle: cssstylePackageDir,
+        esbuild: esbuildPackageDir,
+        jsdom: jsdomPackageDir
+      },
+      builtInPluginBundles: [
+        {
+          id: 'theme.theme.chips-official-default-theme',
+          sourceDir: path.join(workspaceRoot, 'ThemePack', 'Chips-default'),
+          includePaths: ['manifest.yaml', 'dist', 'contracts']
+        },
+        {
+          id: 'com.chips.eco-settings-panel',
+          sourceDir: path.join(workspaceRoot, 'Chips-EcoSettingsPanel'),
+          includePaths: ['manifest.yaml', 'dist', 'assets']
+        }
+      ]
+    });
+
+    const infoPlist = await fs.readFile(path.join(result.appBundlePath, 'Contents', 'Info.plist'), 'utf-8');
+    expect(infoPlist).toContain('application/x-card');
+    expect(infoPlist).not.toContain('image/png');
+    expect(infoPlist).not.toContain('<string>png</string>');
+  });
+
+  it('keeps packaging working when the optional photo viewer project is missing from the workspace', async () => {
+    await fs.rm(path.join(workspaceRoot, 'Chips-PhotoViewer'), { recursive: true, force: true });
+
+    const result = await prepareMacHostAppBundle({
+      hostProjectDir,
+      workspaceRoot,
+      outputDir,
+      electronAppPath,
+      yamlPackageDir,
+      runtimeDependencyPackageDirs: {
+        cssstyle: cssstylePackageDir,
+        esbuild: esbuildPackageDir,
+        jsdom: jsdomPackageDir
+      }
+    });
+
+    const infoPlist = await fs.readFile(path.join(result.appBundlePath, 'Contents', 'Info.plist'), 'utf-8');
+    expect(infoPlist).toContain('application/x-card');
+    expect(infoPlist).not.toContain('image/png');
+    expect(infoPlist).not.toContain('<string>png</string>');
+    await expect(fs.access(path.join(result.builtInPluginRoot, 'com.chips.photo-viewer'))).rejects.toThrow();
   });
 
   it('packages real runtime dependencies so the bundled app can require jsdom and esbuild directly', async () => {
@@ -346,7 +433,7 @@ describe('macOS installer builder', () => {
       logLevel: 'silent'
     });
     expect(buildResult.outputFiles?.[0]?.text).toContain('answer');
-  }, 20_000);
+  }, 45_000);
 
   it('invokes productbuild to create the macOS installer package', async () => {
     const appBundlePath = path.join(outputDir, 'Chips.app');

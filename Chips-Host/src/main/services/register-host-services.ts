@@ -2243,7 +2243,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'resource.resolve', async (input) => {
-            const uri = input.resourceId.startsWith('file://') ? input.resourceId : `file://${input.resourceId}`;
+            const uri = input.resourceId.startsWith('file://') ? input.resourceId : pathToFileURL(input.resourceId).href;
             return { uri };
           })
         )

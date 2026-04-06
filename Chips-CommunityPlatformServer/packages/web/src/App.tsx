@@ -1,20 +1,19 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppPreferencesProvider, useAppPreferences } from './contexts/AppPreferencesContext';
-import { GlobalNav } from './components/GlobalNav';
-import './styles/tokens.css';
-
-// 懒加载页面
-const HomePage = React.lazy(() => import('./pages/HomePage'));
-const LoginPage = React.lazy(() => import('./pages/LoginPage'));
-const RegisterPage = React.lazy(() => import('./pages/RegisterPage'));
-const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
-const SpacePage = React.lazy(() => import('./pages/SpacePage'));
-const CardUploadPage = React.lazy(() => import('./pages/CardUploadPage'));
-const RoomPage = React.lazy(() => import('./pages/RoomPage'));
-const CardDetailPage = React.lazy(() => import('./pages/CardDetailPage'));
-const BoxDetailPage = React.lazy(() => import('./pages/BoxDetailPage'));
+import { SiteFooter } from './components/SiteFooter';
+import HomePage from './pages/HomePage';
+import AboutPage from './pages/AboutPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+import WorkspacePage from './pages/WorkspacePage';
+import CardDetailPage from './pages/CardDetailPage';
+import BoxDetailPage from './pages/BoxDetailPage';
+import AdminRedirectPage from './pages/AdminRedirectPage';
+import { getPostAuthPath } from './lib/ui';
+import './styles/runtime.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { t } = useAppPreferences();
@@ -22,7 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   if (isLoading) {
-    return <div className="loading-screen">{t('common.loading')}</div>;
+    return <div className="page-loader">{t('common.loading')}</div>;
   }
 
   if (!isAuthenticated) {
@@ -32,49 +31,103 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function GlobalLayout() {
+function GuestRoute({ children }: { children: React.ReactNode }) {
+  const { t } = useAppPreferences();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return <div className="page-loader">{t('common.loading')}</div>;
+  }
+
+  if (isAuthenticated && user) {
+    return <Navigate to={getPostAuthPath(user)} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function RootRedirect() {
+  const { t } = useAppPreferences();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return <div className="page-loader">{t('common.loading')}</div>;
+  }
+
+  if (isAuthenticated && user?.role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (isAuthenticated && user) {
+    return <Navigate to={`/@${user.username}`} replace />;
+  }
+
+  return <HomePage />;
+}
+
+function NotFoundPage() {
   const { t } = useAppPreferences();
 
   return (
-    <>
-      <GlobalNav />
-      <main className="page-content">
-        <React.Suspense fallback={<div className="container loading-screen">{t('common.loading')}</div>}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/cards/:cardId" element={<CardDetailPage />} />
-            <Route path="/boxes/:boxId" element={<BoxDetailPage />} />
-            <Route path="/@:username" element={<SpacePage />} />
-            <Route path="/@:username/rooms/:roomSlug" element={<RoomPage />} />
+    <div className="page-container">
+      <section className="panel empty-panel">
+        <h1>404</h1>
+        <p>{t('detail.notFound')}</p>
+      </section>
+    </div>
+  );
+}
 
-            <Route path="/dashboard/*" element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            } />
+function AppRoutes() {
+  return (
+    <main className="app-shell__main">
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route
+          path="/login"
+          element={
+            <GuestRoute>
+              <LoginPage />
+            </GuestRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <GuestRoute>
+              <RegisterPage />
+            </GuestRoute>
+          }
+        />
+        <Route path="/:username" element={<ProfilePage />} />
+        <Route path="/admin" element={<AdminRedirectPage />} />
+        <Route
+          path="/workspace"
+          element={
+            <ProtectedRoute>
+              <WorkspacePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/cards/:cardId" element={<CardDetailPage />} />
+        <Route path="/boxes/:boxId" element={<BoxDetailPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </main>
+  );
+}
 
-            <Route path="/upload" element={
-              <ProtectedRoute>
-                <CardUploadPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/upload/card" element={<Navigate to="/upload" replace />} />
-            
-            <Route
-              path="*"
-              element={
-                <div className="container stack-lg centered-state">
-                  <h2>404</h2>
-                  <p>{t('detail.notFound')}</p>
-                </div>
-              }
-            />
-          </Routes>
-        </React.Suspense>
-      </main>
-    </>
+function AppChrome() {
+  const location = useLocation();
+  const isContentDirectRoute =
+    location.pathname.startsWith('/cards/') || location.pathname.startsWith('/boxes/');
+
+  return (
+    <div className="app-shell">
+      <AppRoutes />
+      {!isContentDirectRoute ? <SiteFooter /> : null}
+    </div>
   );
 }
 
@@ -83,7 +136,7 @@ function App() {
     <BrowserRouter>
       <AppPreferencesProvider>
         <AuthProvider>
-          <GlobalLayout />
+          <AppChrome />
         </AuthProvider>
       </AppPreferencesProvider>
     </BrowserRouter>

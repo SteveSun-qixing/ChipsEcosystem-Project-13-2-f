@@ -6,10 +6,10 @@ interface AuthContextValue {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<UserProfile>;
+  register: (username: string, password: string) => Promise<UserProfile>;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<UserProfile>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -18,7 +18,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 应用启动时尝试通过 refresh token 还原登录态
   useEffect(() => {
     const tryRestore = async () => {
       try {
@@ -37,33 +36,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(profile);
         }
       } catch {
-        // 未登录，ignore
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    tryRestore();
+    void tryRestore();
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const { user: profile } = await authApi.login(username, password);
     setUser(profile);
+    return profile;
   }, []);
 
   const register = useCallback(async (username: string, password: string) => {
     const { user: profile } = await authApi.register(username, password);
     setUser(profile);
+    return profile;
   }, []);
 
   const logout = useCallback(async () => {
-    await authApi.logout();
+    await authApi.logout().catch(() => undefined);
     setUser(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
     const profile = await authApi.getMe();
     setUser(profile);
+    return profile;
   }, []);
 
   const value: AuthContextValue = {

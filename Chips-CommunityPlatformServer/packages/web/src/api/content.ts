@@ -1,7 +1,26 @@
 import { apiClient } from './client';
-import type { CardSummary } from './rooms';
 import type { PublicUserProfile } from './auth';
-import type { BoxSummary } from './rooms';
+
+export interface CardSummary {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  coverRatio: string | null;
+  htmlUrl: string | null;
+  status: 'pending' | 'processing' | 'ready' | 'error';
+  visibility: 'public' | 'private';
+  createdAt: string;
+}
+
+export interface BoxSummary {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  coverRatio: string | null;
+  layoutPlugin: string | null;
+  visibility: 'public' | 'private';
+  createdAt: string;
+}
 
 export interface CardDetail {
   id: string;
@@ -10,6 +29,7 @@ export interface CardDetail {
   roomId: string | null;
   title: string;
   coverUrl: string | null;
+  coverRatio: string | null;
   htmlUrl: string | null;
   status: 'pending' | 'processing' | 'ready' | 'error';
   visibility: 'public' | 'private';
@@ -36,6 +56,7 @@ export interface BoxDetail {
   roomId: string | null;
   title: string;
   coverUrl: string | null;
+  coverRatio: string | null;
   layoutPlugin: string | null;
   visibility: 'public' | 'private';
   fileSizeBytes: number | null;
@@ -60,6 +81,42 @@ export interface Pagination {
   pageSize: number;
   total: number;
   totalPages: number;
+}
+
+interface SearchResultEnvelope {
+  data: {
+    cards?: CardSummary[];
+    boxes?: BoxSummary[];
+    users?: PublicUserProfile[];
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+  };
+}
+
+interface PaginatedEnvelope<T> {
+  data: T[];
+  pagination: Pagination;
+}
+
+async function fetchAllPages<T>(
+  loader: (page: number, pageSize: number) => Promise<PaginatedEnvelope<T>>,
+  pageSize = 100,
+): Promise<T[]> {
+  const firstPage = await loader(1, pageSize);
+
+  if (firstPage.pagination.totalPages <= 1) {
+    return firstPage.data;
+  }
+
+  const remainingPages = Array.from(
+    { length: firstPage.pagination.totalPages - 1 },
+    (_, index) => loader(index + 2, pageSize),
+  );
+  const rest = await Promise.all(remainingPages);
+
+  return [firstPage, ...rest].flatMap((page) => page.data);
 }
 
 export const cardsApi = {
@@ -104,11 +161,23 @@ export const cardsApi = {
   },
 
   async getMyCards(params?: { page?: number; pageSize?: number }) {
-    const res = await apiClient.get<{ data: CardDetail[]; pagination: Pagination }>(
+    const res = await apiClient.get<PaginatedEnvelope<CardDetail>>(
       '/users/me/cards',
       params as Record<string, number>,
     );
     return res;
+  },
+
+  async getUserCards(username: string, params?: { page?: number; pageSize?: number }) {
+    const res = await apiClient.get<PaginatedEnvelope<CardSummary>>(
+      `/users/${username}/cards`,
+      params as Record<string, number>,
+    );
+    return res;
+  },
+
+  async getAllUserCards(username: string) {
+    return fetchAllPages<CardSummary>((page, pageSize) => cardsApi.getUserCards(username, { page, pageSize }));
   },
 };
 
@@ -116,6 +185,7 @@ export const boxesApi = {
   async uploadBox(
     file: File,
     options: { roomId?: string; visibility?: 'public' | 'private' },
+    onProgress?: (pct: number) => void,
   ) {
     const fd = new FormData();
     fd.append('file', file);
@@ -125,6 +195,7 @@ export const boxesApi = {
     const res = await apiClient.upload<{ data: { boxId: string; title: string } }>(
       '/upload/box',
       fd,
+      onProgress,
     );
     return res.data;
   },
@@ -147,37 +218,45 @@ export const boxesApi = {
   },
 
   async getMyBoxes(params?: { page?: number; pageSize?: number }) {
-    const res = await apiClient.get<{ data: BoxDetail[]; pagination: Pagination }>(
+    const res = await apiClient.get<PaginatedEnvelope<BoxDetail>>(
       '/users/me/boxes',
       params as Record<string, number>,
     );
     return res;
   },
+
+  async getUserBoxes(username: string, params?: { page?: number; pageSize?: number }) {
+    const res = await apiClient.get<PaginatedEnvelope<BoxSummary>>(
+      `/users/${username}/boxes`,
+      params as Record<string, number>,
+    );
+    return res;
+  },
+
+  async getAllUserBoxes(username: string) {
+    return fetchAllPages<BoxSummary>((page, pageSize) => boxesApi.getUserBoxes(username, { page, pageSize }));
+  },
 };
 
 export const discoverApi = {
   async getLatestCards(params?: { page?: number; pageSize?: number }) {
-    return apiClient.get<{ data: CardSummary[]; pagination: Pagination }>(
+    return apiClient.get<PaginatedEnvelope<CardSummary>>(
       '/discover/cards',
       params as Record<string, number>,
     );
   },
 
   async getLatestBoxes(params?: { page?: number; pageSize?: number }) {
-    return apiClient.get<{ data: BoxSummary[]; pagination: Pagination }>(
+    return apiClient.get<PaginatedEnvelope<BoxSummary>>(
       '/discover/boxes',
       params as Record<string, number>,
     );
   },
 
   async search(params: { q: string; type?: string; page?: number; pageSize?: number }) {
-    return apiClient.get<{
-      data: {
-        cards?: CardSummary[];
-        boxes?: BoxDetail[];
-        users?: import('./auth').PublicUserProfile[];
-      };
-      pagination: { page: number; pageSize: number };
-    }>('/search', params as Record<string, string | number>);
+    return apiClient.get<SearchResultEnvelope>(
+      '/search',
+      params as Record<string, string | number>,
+    );
   },
 };

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
-import { getErrorMessage } from '../lib/ui';
+import { getErrorMessage, getPostAuthPath } from '../lib/ui';
 import './AuthForm.css';
 
 export default function RegisterPage() {
@@ -48,8 +48,8 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await register(username, password);
-      navigate('/dashboard', { replace: true });
+      const profile = await register(username, password);
+      navigate(getPostAuthPath(profile), { replace: true });
     } catch (nextError) {
       setError(getErrorMessage(nextError, t('common.error')));
     } finally {
@@ -58,73 +58,65 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-page container">
-      <div className="auth-layout">
-        <section className="auth-panel surface-panel">
+    <div className="page-container auth-page">
+      <section className="panel auth-card">
+        <div className="auth-card__top">
           <span className="eyebrow">{t('brand.name')}</span>
           <h1>{t('auth.registerTitle')}</h1>
-          <p>{t('auth.registerSubtitle')}</p>
-          {error ? <div className="inline-notice inline-notice--danger">{error}</div> : null}
+          <p className="muted">{t('auth.registerSubtitle')}</p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="stack-lg">
-            <div className="field">
-              <label htmlFor="username">{t('auth.username')}</label>
-              <input
-                id="username"
-                type="text"
-                className="input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                disabled={loading}
-              />
-            </div>
+        {error ? <div className="inline-notice inline-notice--danger">{error}</div> : null}
 
-            <div className="field">
-              <label htmlFor="password">{t('auth.password')}</label>
-              <input
-                id="password"
-                type="password"
-                className="input"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="field">
+            <label htmlFor="username">{t('auth.username')}</label>
+            <input
+              id="username"
+              type="text"
+              className="input"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              disabled={loading}
+            />
+          </div>
 
-            <div className="field">
-              <label htmlFor="confirmPassword">{t('auth.confirmPassword')}</label>
-              <input
-                id="confirmPassword"
-                type="password"
-                className="input"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </div>
+          <div className="field">
+            <label htmlFor="password">{t('auth.password')}</label>
+            <input
+              id="password"
+              type="password"
+              className="input"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              disabled={loading}
+            />
+          </div>
 
-            <button type="submit" className="button button-primary button-block" disabled={loading}>
-              {loading ? t('common.loading') : t('auth.registerAction')}
-            </button>
-          </form>
+          <div className="field">
+            <label htmlFor="confirmPassword">{t('auth.confirmPassword')}</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              className="input"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              autoComplete="new-password"
+              disabled={loading}
+            />
+          </div>
 
-          <p className="supporting-text">
-            {t('auth.hasAccount')} <Link to="/login">{t('auth.toLogin')}</Link>
-          </p>
-        </section>
+          <button type="submit" className="button button--primary auth-form__submit" disabled={loading}>
+            {loading ? t('common.loading') : t('auth.registerAction')}
+          </button>
+        </form>
 
-        <aside className="auth-side surface-card">
-          <h2>{t('home.stepsTitle')}</h2>
-          <ol className="stack-md">
-            <li>{t('home.stepUpload')}</li>
-            <li>{t('home.stepPipeline')}</li>
-            <li>{t('home.stepPublish')}</li>
-          </ol>
-        </aside>
-      </div>
+        <p className="auth-card__footer">
+          {t('auth.hasAccount')} <Link to="/login">{t('auth.toLogin')}</Link>
+        </p>
+      </section>
     </div>
   );
 }

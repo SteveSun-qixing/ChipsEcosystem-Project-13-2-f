@@ -6,8 +6,6 @@ import { ErrorCode } from '../errors/codes';
 import {
   RegisterSchema,
   LoginSchema,
-  ChangePasswordSchema,
-  UpdateProfileSchema,
 } from '../schemas/auth.schemas';
 import { env } from '../config/env';
 

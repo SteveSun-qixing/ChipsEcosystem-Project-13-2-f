@@ -108,6 +108,7 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
         owner.id,
         request.user?.userId ?? null,
         qs,
+        { visibility: 'public', status: 'ready' },
       );
 
       return {

@@ -43,29 +43,36 @@ export default function BoxDetailPage() {
   }, [boxId, t]);
 
   if (loading) {
-    return <div className="container loading-screen">{t('common.loading')}</div>;
+    return <div className="page-loader">{t('common.loading')}</div>;
   }
 
   if (error || !box) {
-    return <div className="container empty-state">{error || t('detail.notFound')}</div>;
+    return (
+      <div className="page-container detail-page">
+        <section className="panel error-panel">
+          <h1>{error || t('detail.notFound')}</h1>
+        </section>
+      </div>
+    );
   }
 
   const entries = box.cards ?? [];
 
   return (
-    <div className="container detail-page stack-xl">
-      <header className="surface-panel detail-hero">
-        <div className="stack-md">
+    <div className="page-container detail-page">
+      <header className="panel detail-hero">
+        <div className="detail-hero__content">
           <span className="eyebrow">{t('box.summaryTitle')}</span>
           <h1>{box.title}</h1>
-          <div className="cluster">
+          <div className="detail-meta">
             <span>{box.visibility === 'public' ? t('common.public') : t('common.private')}</span>
             <span>{formatDate(box.createdAt)}</span>
             <span>{formatBytes(box.fileSizeBytes)}</span>
           </div>
-          <div className="cluster">
+
+          <div className="detail-actions">
             {box.user ? (
-              <Link to={`/@${box.user.username}`} className="button button-secondary">
+              <Link to={`/@${box.user.username}`} className="button button--secondary">
                 {t('detail.ownerSpace')}
               </Link>
             ) : null}
@@ -74,15 +81,15 @@ export default function BoxDetailPage() {
       </header>
 
       <div className="detail-grid">
-        <aside className="surface-card stack-lg detail-sidebar">
-          <div className="section-heading">
+        <aside className="panel detail-sidebar">
+          <div className="detail-section-heading">
             <div>
               <span className="eyebrow">{t('box.summaryTitle')}</span>
               <h2>{t('box.summaryTitle')}</h2>
             </div>
           </div>
 
-          <dl className="meta-list">
+          <dl className="detail-list">
             <div>
               <dt>{t('common.owner')}</dt>
               <dd>{box.user?.displayName || box.user?.username || '—'}</dd>
@@ -102,8 +109,8 @@ export default function BoxDetailPage() {
           </dl>
         </aside>
 
-        <section className="surface-card stack-lg">
-          <div className="section-heading">
+        <section className="panel detail-content">
+          <div className="detail-section-heading">
             <div>
               <span className="eyebrow">{t('box.referenceTitle')}</span>
               <h2>{t('box.referenceTitle')}</h2>
@@ -116,17 +123,18 @@ export default function BoxDetailPage() {
             <div className="reference-list">
               {entries.map((entry) => (
                 <article key={`${entry.url}-${entry.card_id ?? ''}`} className="reference-card">
-                  <div className="stack-sm">
+                  <div className="reference-card__copy">
                     <strong>{entry.title || entry.card_id || entry.url}</strong>
                     <span>{entry.cover_url || entry.url}</span>
                   </div>
-                  <div className="cluster">
+
+                  <div className="reference-card__actions">
                     {entry.communityCardId ? (
-                      <Link to={`/cards/${entry.communityCardId}`} className="button button-secondary">
+                      <Link to={`/cards/${entry.communityCardId}`} className="button button--secondary">
                         {t('box.communityCard')}
                       </Link>
                     ) : null}
-                    <a href={entry.communityHtmlUrl || entry.url} target="_blank" rel="noreferrer" className="button button-ghost">
+                    <a href={entry.communityHtmlUrl || entry.url} target="_blank" rel="noreferrer" className="button button--ghost">
                       {t('box.sourceLink')}
                     </a>
                   </div>

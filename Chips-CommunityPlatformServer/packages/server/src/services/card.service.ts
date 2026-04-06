@@ -17,6 +17,15 @@ export interface PagedResult<T> {
   };
 }
 
+function getCoverRatioFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const rawRatio = (metadata as { cover_ratio?: unknown }).cover_ratio;
+  return typeof rawRatio === 'string' && rawRatio.trim() ? rawRatio.trim() : null;
+}
+
 export const CardService = {
   async create(params: {
     userId: string;
@@ -84,6 +93,7 @@ export const CardService = {
     // 删除 CDN 资源
     await deleteObjectsByPrefix(Bucket.CARD_RESOURCES, `${userId}/${cardId}/`);
     await deleteObjectsByPrefix(Bucket.CARD_HTML, `${userId}/${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.COVERS, `cards/${userId}/${cardId}/`);
     // 删除数据库记录
     await db.delete(cards).where(eq(cards.id, cardId));
   },
@@ -101,7 +111,7 @@ export const CardService = {
     const allCards = await db.query.cards.findMany({
       where: and(
         eq(cards.userId, userId),
-        isOwner ? undefined : eq(cards.visibility, 'public'),
+        filters?.visibility ? eq(cards.visibility, filters.visibility as Card['visibility']) : isOwner ? undefined : eq(cards.visibility, 'public'),
         filters?.status ? eq(cards.status, filters.status as Card['status']) : undefined,
       ),
       orderBy: [desc(cards.createdAt)],
@@ -181,6 +191,7 @@ export const CardService = {
       roomId: card.roomId,
       title: card.title,
       coverUrl: card.coverUrl,
+      coverRatio: getCoverRatioFromMetadata(card.cardMetadata),
       htmlUrl: card.htmlUrl,
       status: card.status,
       visibility: card.visibility,
@@ -197,6 +208,7 @@ export const CardService = {
       id: card.id,
       title: card.title,
       coverUrl: card.coverUrl,
+      coverRatio: getCoverRatioFromMetadata(card.cardMetadata),
       htmlUrl: card.htmlUrl,
       status: card.status,
       visibility: card.visibility,

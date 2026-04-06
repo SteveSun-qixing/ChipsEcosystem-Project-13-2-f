@@ -14,6 +14,15 @@ import type { BoxMetadata, BoxStructure, BoxUnpackResult, BoxCardRef } from '../
 import type { PaginationInput, UpdateBoxInput } from '../schemas/content.schemas';
 import type { PagedResult } from './card.service';
 
+function getCoverRatioFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const rawRatio = (metadata as { cover_ratio?: unknown }).cover_ratio;
+  return typeof rawRatio === 'string' && rawRatio.trim() ? rawRatio.trim() : null;
+}
+
 /** ZIP 魔数 */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -196,6 +205,7 @@ export const BoxService = {
     userId: string,
     requesterId: string | null,
     pagination: PaginationInput,
+    filters?: { visibility?: string },
   ): Promise<PagedResult<Box>> {
     const isOwner = userId === requesterId;
     const { page, pageSize } = pagination;
@@ -204,7 +214,7 @@ export const BoxService = {
     const allBoxes = await db.query.boxes.findMany({
       where: and(
         eq(boxes.userId, userId),
-        isOwner ? undefined : eq(boxes.visibility, 'public'),
+        filters?.visibility ? eq(boxes.visibility, filters.visibility as Box['visibility']) : isOwner ? undefined : eq(boxes.visibility, 'public'),
       ),
       orderBy: [desc(boxes.createdAt)],
     });
@@ -274,6 +284,7 @@ export const BoxService = {
       roomId: box.roomId,
       title: box.title,
       coverUrl: box.coverUrl,
+      coverRatio: getCoverRatioFromMetadata(box.metadata),
       layoutPlugin: box.layoutPlugin,
       visibility: box.visibility,
       fileSizeBytes: box.fileSizeBytes,

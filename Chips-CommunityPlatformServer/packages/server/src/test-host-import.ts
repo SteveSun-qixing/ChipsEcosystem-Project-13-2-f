@@ -6,6 +6,7 @@ async function test() {
   const host = new HostApplication({
     workspacePath: path.resolve('./.test-host-workspace')
   });
+  void host;
   console.log('HostApplication instance created');
 }
 

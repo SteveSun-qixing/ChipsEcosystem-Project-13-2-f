@@ -87,7 +87,9 @@ const boxRoutes: FastifyPluginAsync = async (fastify) => {
         throw AppError.notFound(ErrorCode.USER_NOT_FOUND, 'User not found');
       }
 
-      const result = await BoxService.listByUser(owner.id, request.user?.userId ?? null, qs);
+      const result = await BoxService.listByUser(owner.id, request.user?.userId ?? null, qs, {
+        visibility: 'public',
+      });
       return {
         data: result.items.map(BoxService.toDTO),
         pagination: result.pagination,

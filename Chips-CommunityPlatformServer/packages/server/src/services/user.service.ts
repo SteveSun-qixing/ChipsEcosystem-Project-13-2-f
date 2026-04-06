@@ -127,7 +127,8 @@ export const UserService = {
    * 返回用户私有信息（含 email 等，但去除密码哈希）
    */
   toPrivateProfile(user: User) {
-    const { passwordHash: _pw, ...rest } = user;
+    const { passwordHash, ...rest } = user;
+    void passwordHash;
     return rest;
   },
 };

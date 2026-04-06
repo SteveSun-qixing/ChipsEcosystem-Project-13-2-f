@@ -32,6 +32,7 @@ export async function buildApp() {
           }
         : true,
     trustProxy: true,
+    pluginTimeout: 60000,
   });
 
   // ─── 核心插件 ───────────────────────────────────────────────────

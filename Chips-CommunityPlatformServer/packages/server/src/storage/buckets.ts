@@ -7,6 +7,7 @@
  *   chips-card-html/{userId}/{cardId}/index.html
  *   chips-avatars/{userId}/avatar.{ext}
  *   chips-covers/rooms/{roomId}/cover.{ext}
+ *   chips-covers/cards/{userId}/{cardId}/index.html
  */
 export const Bucket = {
   /** 卡片内嵌资源文件（图片、视频、音频等），公开读 */
@@ -18,7 +19,7 @@ export const Bucket = {
   /** 用户头像，公开读 */
   AVATARS: 'chips-avatars',
 
-  /** 封面图（房间、箱子等），公开读 */
+  /** 封面产物（房间/箱子图片与卡片封面 HTML），公开读 */
   COVERS: 'chips-covers',
 } as const;
 

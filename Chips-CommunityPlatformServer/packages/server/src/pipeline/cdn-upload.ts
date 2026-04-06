@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { uploadFile } from '../storage/s3';
 import { Bucket } from '../storage/buckets';
 import type { ResourceFile } from '../types/card';
@@ -12,7 +11,7 @@ export interface CdnUploadResult {
 }
 
 /**
- * 并发上传资源文件到 MinIO，返回文件名 → CDN URL 的映射表
+ * 并发上传资源文件到 MinIO，返回卡片内规范相对路径 → CDN URL 的映射表
  */
 export async function uploadResourcesToCdn(
   resourceFiles: ResourceFile[],
@@ -34,7 +33,6 @@ export async function uploadResourcesToCdn(
           filePath: file.absolutePath,
         });
         urlMap.set(file.relativePath, url);
-        urlMap.set(file.filename, url); // 同时用文件名作为 key，方便匹配
       }),
     );
   }

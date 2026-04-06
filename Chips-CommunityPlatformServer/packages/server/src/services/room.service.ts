@@ -15,7 +15,7 @@ async function ensureUniqueSlug(userId: string, base: string, excludeId?: string
   let candidate = base;
   let counter = 1;
 
-  while (true) {
+  for (;;) {
     const existing = await db.query.rooms.findFirst({
       where: and(eq(rooms.userId, userId), eq(rooms.slug, candidate)),
     });

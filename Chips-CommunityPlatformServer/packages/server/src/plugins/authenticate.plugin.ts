@@ -46,7 +46,7 @@ const authenticatePlugin: FastifyPluginAsync = async (fastify) => {
     }
   }
 
-  fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.decorate('authenticate', async (request: FastifyRequest, _reply: FastifyReply) => {
     const payload = await decodeToken(request);
     if (!payload) {
       throw AppError.unauthorized(
@@ -62,7 +62,7 @@ const authenticatePlugin: FastifyPluginAsync = async (fastify) => {
     (request as unknown as { user: AuthTokenPayload | null }).user = payload;
   });
 
-  fastify.decorate('requireAdmin', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.decorate('requireAdmin', async (request: FastifyRequest, _reply: FastifyReply) => {
     const payload = await decodeToken(request);
     if (!payload) {
       throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'Authentication required');

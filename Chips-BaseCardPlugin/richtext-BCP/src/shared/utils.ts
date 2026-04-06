@@ -64,6 +64,8 @@ export function extractPlainTextFromMarkdown(markdown: string): string {
   }
 
   return normalized
+    .replace(/\$\$([\s\S]*?)\$\$/g, "$1")
+    .replace(/(?<!\$)\$([^$\n]+)\$(?!\$)/g, "$1")
     .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
     .replace(/`([^`]+)`/g, "$1")
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
@@ -73,6 +75,10 @@ export function extractPlainTextFromMarkdown(markdown: string): string {
     .replace(/^\s{0,3}(?:[-*+] |\d+\. )/gm, "")
     .replace(/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/gm, " ")
     .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/==([^=]+)==/g, "$1")
+    .replace(/\+\+([^+]+)\+\+/g, "$1")
+    .replace(/\^([^^]+)\^/g, "$1")
+    .replace(/~([^~]+)~/g, "$1")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")

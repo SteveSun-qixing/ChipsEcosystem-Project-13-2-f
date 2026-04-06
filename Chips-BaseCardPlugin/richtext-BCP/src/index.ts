@@ -51,7 +51,7 @@ export const basecardDefinition = {
   description: "提供基于 Milkdown 的 Markdown 富文本编辑与查看能力。",
   icon: "📝",
   aliases: ["RichTextCard"],
-  commitDebounceMs: 260,
+  commitDebounceMs: 0,
   createInitialConfig(_baseCardId: string) {
     return createInitialBasecardConfig() as unknown as Record<string, unknown>;
   },

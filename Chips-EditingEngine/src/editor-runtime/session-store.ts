@@ -44,6 +44,30 @@ function syncDirtyFlag(session: InternalEditorSession): void {
   session.dirty = session.draftSignature !== session.sourceSignature || session.hasPendingResourceChanges;
 }
 
+function canCommitResourceOnlyMutations(
+  session: InternalEditorSession,
+  descriptor: BasecardDescriptor,
+  committedConfig: Record<string, unknown>,
+): boolean {
+  if (!hasPendingResourceMutations(session)) {
+    return false;
+  }
+
+  const referencedPaths = new Set(descriptor.collectResourcePaths?.(committedConfig) ?? []);
+  const importPaths = Array.from(session.resourceImports.keys());
+  const deletionPaths = Array.from(session.resourceDeletions);
+
+  if (importPaths.some((resourcePath) => !referencedPaths.has(resourcePath))) {
+    return false;
+  }
+
+  if (deletionPaths.some((resourcePath) => referencedPaths.has(resourcePath))) {
+    return false;
+  }
+
+  return importPaths.length > 0 || deletionPaths.length > 0;
+}
+
 export class EditorSessionStore {
   private listeners = new Map<string, Set<() => void>>();
   private sessions = new Map<string, InternalEditorSession>();
@@ -269,6 +293,14 @@ export class EditorSessionStore {
 
     const committedConfig = descriptor.normalizeConfig(session.draftConfig, session.baseCardId);
     const committedSignature = toSignature(committedConfig);
+    const canCommitWithoutConfigDelta =
+      committedSignature === session.sourceSignature
+      && canCommitResourceOnlyMutations(session, descriptor, committedConfig);
+
+    if (committedSignature === session.sourceSignature && !canCommitWithoutConfigDelta) {
+      return this.getSnapshot(key)!;
+    }
+
     const resourceOperations = {
       imports: Array.from(session.resourceImports.values()).map(cloneResourceImport),
       deletions: Array.from(session.resourceDeletions),

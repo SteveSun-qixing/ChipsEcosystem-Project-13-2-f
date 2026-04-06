@@ -69,6 +69,29 @@ html, body {
   color: #475467;
 }
 
+.chips-richtext-card__surface del {
+  text-decoration-thickness: 1.5px;
+}
+
+.chips-richtext-card__surface u,
+.chips-richtext-card__surface ins {
+  text-decoration-thickness: 1.5px;
+  text-decoration-skip-ink: auto;
+}
+
+.chips-richtext-card__surface mark {
+  padding: 0 0.18em;
+  border-radius: 0.28em;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 16%, #fff5b1);
+  color: inherit;
+}
+
+.chips-richtext-card__surface sup,
+.chips-richtext-card__surface sub {
+  font-size: 0.78em;
+  line-height: 0;
+}
+
 .chips-richtext-card__surface code {
   padding: 2px 6px;
   border-radius: 6px;
@@ -87,6 +110,76 @@ html, body {
   border: 0;
   border-top: 1px solid rgba(15, 23, 42, 0.12);
   margin: 16px 0;
+}
+
+.chips-richtext-card__surface pre {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface-container, #f8fafc) 90%, #eef2ff);
+  color: var(--chips-sys-color-on-surface, #111827);
+  white-space: pre-wrap;
+}
+
+.chips-richtext-card__surface pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.95em;
+}
+
+.chips-richtext-card__surface table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+}
+
+.chips-richtext-card__surface th,
+.chips-richtext-card__surface td {
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.chips-richtext-card__surface th {
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 7%, #f8fafc);
+  font-weight: 600;
+}
+
+.chips-richtext-card__surface input[type="checkbox"] {
+  margin-right: 8px;
+  pointer-events: none;
+}
+
+.chips-richtext-card__surface .chips-richtext-math {
+  overflow-x: auto;
+}
+
+.chips-richtext-card__surface .chips-richtext-math--inline {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+.chips-richtext-card__surface .chips-richtext-math--block {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface-container, #f8fafc) 90%, #ffffff);
+}
+
+.chips-richtext-card__surface .chips-richtext-math__fallback {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 0.94em/1.6 "SFMono-Regular", Consolas, monospace;
 }
 
 .chips-richtext-card__status {

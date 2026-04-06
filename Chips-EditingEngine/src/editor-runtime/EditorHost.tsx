@@ -111,6 +111,7 @@ export function EditorHost({
   const [isLoading, setIsLoading] = useState(true);
   const [renderRevision, setRenderRevision] = useState(0);
   const mountRevision = snapshot?.mountRevision ?? 0;
+  const latestDraftConfigRef = useRef<Record<string, unknown>>(sourceConfig);
   const resolvedResourceUrlsRef = useRef(new Map<string, string>());
   const pendingResourceResolvesRef = useRef(new Map<string, Promise<string>>());
 
@@ -153,6 +154,10 @@ export function EditorHost({
   }, []);
 
   useEffect(() => {
+    latestDraftConfigRef.current = snapshot?.draftConfig ?? sourceConfig;
+  }, [snapshot?.draftConfig, sourceConfig]);
+
+  useEffect(() => {
     if (!descriptor) {
       setSnapshot(null);
       return;
@@ -182,16 +187,11 @@ export function EditorHost({
   }, [baseCardId, cardId, cardType]);
 
   const commitSession = useCallback(async () => {
-    const hasConfigDelta = snapshot
-      ? JSON.stringify(snapshot.draftConfig) !== JSON.stringify(snapshot.sourceConfig)
-      : false;
-
     if (
       !descriptor
       || !onConfigChange
       || !snapshot?.dirty
       || !snapshot.validation.valid
-      || (snapshot.hasPendingResourceChanges && !hasConfigDelta)
     ) {
       return;
     }
@@ -254,6 +254,14 @@ export function EditorHost({
 
   const pickAvailableResourcePath = useCallback(async (fileName: string) => {
     const sanitizedName = sanitizeImportedFileName(fileName);
+    const activeConfig = latestDraftConfigRef.current;
+    const referencedPaths = new Set(
+      descriptor?.collectResourcePaths?.(activeConfig) ?? [],
+    );
+    if (referencedPaths.has(sanitizedName)) {
+      return sanitizedName;
+    }
+
     const dotIndex = sanitizedName.lastIndexOf('.');
     const basename = dotIndex > 0 ? sanitizedName.slice(0, dotIndex) : sanitizedName;
     const extension = dotIndex > 0 ? sanitizedName.slice(dotIndex) : '';
@@ -272,7 +280,7 @@ export function EditorHost({
       counter += 1;
       candidate = `${basename}-${counter}${extension}`;
     }
-  }, [cardPath, sessionKey, store]);
+  }, [cardPath, descriptor, sessionKey, store]);
 
   const importResource = useCallback(async (input: { file: File; preferredPath?: string }) => {
     const nextPath = await pickAvailableResourcePath(input.preferredPath ?? input.file.name);
@@ -306,10 +314,6 @@ export function EditorHost({
 
     const hasConfigDelta =
       JSON.stringify(snapshot.draftConfig) !== JSON.stringify(snapshot.sourceConfig);
-    if (snapshot.hasPendingResourceChanges && !hasConfigDelta) {
-      return;
-    }
-
     const commitDelayMs = snapshot.hasPendingResourceChanges && hasConfigDelta
       ? 0
       : snapshot.commitDebounceMs;

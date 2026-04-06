@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { getCardService, type CompositeCard, type CardServiceState } from '../core/card-service';
+import {
+    getCardService,
+    type CompositeCard,
+    type CardServiceState,
+    type UpdateBasicCardOptions,
+} from '../core/card-service';
 import { globalEventEmitter } from '../core/event-emitter';
 import type { BasecardResourceOperations } from '../basecard-runtime/contracts';
 import type { CardCoverResource } from '../utils/card-cover';
@@ -29,6 +34,7 @@ export interface CardContextType extends CardState {
         basicCardId: string,
         data: Record<string, unknown>,
         resourceOperations?: BasecardResourceOperations,
+        options?: UpdateBasicCardOptions,
     ) => void;
     toggleEditMode: (id: string) => void;
     getCard: (id: string) => CompositeCard | undefined;
@@ -164,8 +170,9 @@ export function CardProvider({ children }: { children: ReactNode }) {
         basicCardId: string,
         data: Record<string, unknown>,
         resourceOperations?: BasecardResourceOperations,
+        options?: UpdateBasicCardOptions,
     ) => {
-        cardService.updateBasicCard(cardId, basicCardId, data, resourceOperations);
+        cardService.updateBasicCard(cardId, basicCardId, data, resourceOperations, options);
     }, [cardService]);
 
     const toggleEditMode = useCallback((id: string) => {

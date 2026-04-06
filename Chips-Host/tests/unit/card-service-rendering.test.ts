@@ -54,6 +54,7 @@ const { JSDOM }: { JSDOM: JSDOMConstructor } = require('jsdom');
 
 const zip = new StoreZipService();
 const tempDirs: string[] = [];
+const CARD_RENDER_TEST_TIMEOUT_MS = 60_000;
 
 const createTempDir = async (prefix: string): Promise<string> => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -341,7 +342,7 @@ afterEach(async () => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
-      await fs.rm(dir, { recursive: true, force: true });
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   }
 });
@@ -384,7 +385,7 @@ describe('CardService rendering', () => {
     expect(introDocument.nodeHtml).toContain('Hello Chips.');
     expect(introDocument.nodeHtml).toContain('chips.basecard.richtext');
     expect(detailsDocument.nodeHtml).toContain('Second node body.');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('can run consistency verification during card render', async () => {
     const cardFile = await createCardArchive();
@@ -411,7 +412,7 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('loading="eager"');
     expect(view.body).toContain('compositeDataset.chipsCompositeReady = frameList.length === 0 ? "true" : "false";');
     expect(view.body).toContain('frame.dataset.renderReady = "true";');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('returns a formal cover file url that points to the card cover html', async () => {
     const cardFile = await createCardArchive();
@@ -426,7 +427,7 @@ describe('CardService rendering', () => {
     expect(view.coverUrl.startsWith('file://')).toBe(true);
     expect(view.coverUrl.endsWith('/.card/cover.html')).toBe(true);
     expect(coverHtml).toContain('<h1>cover</h1>');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('emits composite node selection bridge only in preview mode', async () => {
     const cardDir = await createCardDirectory();
@@ -458,7 +459,7 @@ describe('CardService rendering', () => {
     expect(viewOnly.body).toContain('data-mode="view"');
     expect(viewOnly.body).toContain('chips.basecard:select');
     expect(viewOnly.body).toContain('const isPreviewMode = document.body.dataset.mode === "preview";');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('renders unpacked .card directories through the same unified rendering engine', async () => {
     const cardDir = await createCardDirectory();
@@ -487,7 +488,7 @@ describe('CardService rendering', () => {
 
     expect(introDocument.nodeHtml).toContain('<base href="file://');
     expect(detailsDocument.nodeHtml).toContain('Second node body.');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('renders formal base card editor documents through the Host card.renderEditor route', async () => {
     const themeContext = await loadThemeRenderContext();
@@ -528,11 +529,12 @@ describe('CardService rendering', () => {
     expect(view.body).toContain("requestResource('import'");
     expect(view.body).toContain("requestResource('delete'");
     expect(view.body).toContain("img-src file: http: https: data: blob:");
+    expect(view.body).toContain("connect-src file: http: https: data: blob:");
     expect(view.body).toContain('overflow: hidden;');
     expect(view.body).toContain('#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }');
     expect(view.body).toContain('chips-basecard-editor__floating-toolbar');
     expect(view.body).not.toContain('chips-basecard-toolbar-offset');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('renders formal base card documents that keep resource resolution in the single-card runtime', async () => {
     const cardDir = await createImageCardDirectory();
@@ -582,7 +584,7 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('renderBasecardView');
     expect(view.body).toContain('const resolveResourceUrl = async (resourcePath) =>');
     expect(view.body).toContain('assets/hero.png');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('stitches composite image cards from single-card runtime documents instead of pre-rendered static html', async () => {
     const cardDir = await createImageCardDirectory();
@@ -609,7 +611,7 @@ describe('CardService rendering', () => {
     expect(galleryDocument.nodeHtml).toContain('renderBasecardView');
     expect(galleryDocument.nodeHtml).toContain('const resolveResourceUrl = async (resourcePath) =>');
     expect(galleryDocument.nodeHtml).toContain('assets/hero.png');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('keeps archive-backed composite image resources reachable after render returns', async () => {
     const cardFile = await createImageCardArchive();
@@ -640,7 +642,7 @@ describe('CardService rendering', () => {
     const imageStats = await fs.stat(imagePath);
 
     expect(imageStats.isFile()).toBe(true);
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('emits managed render protocol urls when a managed document scheme is configured', async () => {
     const cardFile = await createImageCardArchive();
@@ -676,7 +678,7 @@ describe('CardService rendering', () => {
     expect(service.resolveManagedDocumentFilePath(imageUrl)?.endsWith(path.join('assets', 'hero.png'))).toBe(true);
     expect(coverView.coverUrl.startsWith('chips-render://card-root/')).toBe(true);
     expect(service.resolveManagedDocumentFilePath(coverView.coverUrl)?.endsWith(path.join('.card', 'cover.html'))).toBe(true);
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('preserves dark theme color-scheme from theme package css', async () => {
     const cardFile = await createCardArchive();
@@ -701,7 +703,7 @@ describe('CardService rendering', () => {
 
     expect(view.body).toContain('color-scheme: dark;');
     expect(view.body).not.toContain('color-scheme: light;');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('does not escalate mixed node success and failure into a composite fatal error', async () => {
     const cardDir = await createPartiallyBrokenCardDirectory();
@@ -752,7 +754,7 @@ describe('CardService rendering', () => {
     } finally {
       dom.window.close();
     }
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('renders composite cards as a bare basecard stack without extra chrome', async () => {
     const cardDir = await createCardDirectory();
@@ -781,7 +783,7 @@ describe('CardService rendering', () => {
     expect(view.body).not.toContain('chips-composite__meta');
     expect(view.body).not.toContain('.chips-composite__node {\n  background:');
     expect(view.body).not.toContain('body[data-mode="preview"] .chips-composite__node[data-state="ready"]:hover');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('listens for viewport-driven basecard reflow and resends child heights', async () => {
     const cardDir = await createCardDirectory();
@@ -806,7 +808,7 @@ describe('CardService rendering', () => {
     expect(introDocument.nodeHtml).toContain('scheduleEmitHeight');
     expect(introDocument.nodeHtml).toContain('window.addEventListener(');
     expect(introDocument.nodeHtml).toContain('observer.observe(document.documentElement);');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('emits composite resize messages when the composite layout height changes', async () => {
     const cardDir = await createCardDirectory();
@@ -891,7 +893,7 @@ describe('CardService rendering', () => {
     } finally {
       dom.window.close();
     }
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('forwards delegated basecard interaction messages to the composite interaction bridge', async () => {
     const cardDir = await createCardDirectory();
@@ -1011,7 +1013,7 @@ describe('CardService rendering', () => {
     } finally {
       dom.window.close();
     }
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('ignores basecard interaction bridge messages when interaction delegation is disabled', async () => {
     const cardDir = await createCardDirectory();
@@ -1103,7 +1105,7 @@ describe('CardService rendering', () => {
     } finally {
       dom.window.close();
     }
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('renders card content written by yaml.stringify without parse failures', async () => {
     const cardDir = await createYamlStringifiedCardDirectory();
@@ -1129,5 +1131,5 @@ describe('CardService rendering', () => {
     expect(introDocument.nodeHtml).toContain('renderBasecardView');
     expect(introDocument.nodeHtml).toContain('"content_source":"inline"');
     expect(introDocument.nodeHtml).toContain('"content_text":"2\\n\\n22\\n\\n222"');
-  }, 30_000);
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
 });

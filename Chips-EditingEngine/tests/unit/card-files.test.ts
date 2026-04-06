@@ -386,4 +386,40 @@ describe('unpacked .card files', () => {
       theme: '',
     });
   });
+
+  it('keeps basic card edits in memory until the caller explicitly saves', async () => {
+    seedCardDirectory();
+    const service = createCardService();
+    await service.openCard('demo-card', '/workspace/demo.card');
+
+    service.updateBasicCard(
+      'demo-card',
+      'intro',
+      {
+        content_text: '只更新内存中的草稿',
+      },
+      undefined,
+      { persist: false },
+    );
+
+    const inMemoryCard = service.getCard('demo-card');
+    const beforeSaveIntro = yaml.parse(files.get('/workspace/demo.card/content/intro.yaml') ?? '');
+
+    expect(inMemoryCard?.isDirty).toBe(true);
+    expect(beforeSaveIntro).toMatchObject({
+      content_text: '# Intro\n\nHello Chips.',
+    });
+
+    await service.saveCard('demo-card');
+
+    const persistedIntro = yaml.parse(files.get('/workspace/demo.card/content/intro.yaml') ?? '');
+    expect(persistedIntro).toMatchObject({
+      card_type: 'RichTextCard',
+      content_format: 'markdown',
+      content_source: 'inline',
+      content_text: '只更新内存中的草稿',
+      locale: 'zh-CN',
+      theme: '',
+    });
+  });
 });

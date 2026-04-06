@@ -57,4 +57,44 @@ describe("basecard integration flow (markdown richtext)", () => {
     disposeEditor();
     disposeView();
   });
+
+  it("passes resolveResourceUrl through the editor runtime wrapper for file-backed markdown", async () => {
+    const editorContainer = document.createElement("div");
+    const resolveResourceUrl = vi.fn(async (resourcePath: string) => {
+      expect(resourcePath).toBe("docs/runtime-wrapper.md");
+      return "file:///workspace/docs/runtime-wrapper.md";
+    });
+    const previousChips = (window as typeof window & {
+      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
+    }).chips;
+    (window as typeof window & {
+      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
+    }).chips = {
+      invoke: vi.fn(async () => ({ content: "# Runtime Wrapper\n\n来自统一资源 URL" })),
+    };
+
+    try {
+      const disposeEditor = mountBasecardEditor({
+        container: editorContainer,
+        initialConfig: createConfig({
+          content_source: "file",
+          content_file: "docs/runtime-wrapper.md",
+          content_text: undefined,
+        }),
+        onChange: vi.fn(),
+        resolveResourceUrl,
+      });
+
+      await waitFor(() => Boolean(editorContainer.querySelector(".ProseMirror")));
+
+      expect(resolveResourceUrl).toHaveBeenCalledWith("docs/runtime-wrapper.md");
+      expect(editorContainer.textContent).toContain("Runtime Wrapper");
+
+      disposeEditor();
+    } finally {
+      (window as typeof window & {
+        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
+      }).chips = previousChips;
+    }
+  });
 });

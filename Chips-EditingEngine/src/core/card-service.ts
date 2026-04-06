@@ -82,6 +82,10 @@ export interface CardServiceState {
     selectedBasicCardId: string | null;
 }
 
+export interface UpdateBasicCardOptions {
+    persist?: boolean;
+}
+
 export type CardServiceListener = (state: CardServiceState) => void;
 
 let cardServiceInstance: CardService | null = null;
@@ -625,6 +629,7 @@ export class CardService {
         basicCardId: string,
         data: Record<string, unknown>,
         resourceOperations?: BasecardResourceOperations,
+        options?: UpdateBasicCardOptions,
     ): void {
         const card = this.state.openedCards.get(cardId);
         if (!card) return;
@@ -680,7 +685,9 @@ export class CardService {
         card.metadata.modifiedAt = now();
 
         this.notify();
-        void this.queuePersist(cardId);
+        if (options?.persist !== false) {
+            void this.queuePersist(cardId);
+        }
         globalEventEmitter.emit('card:basic-card-updated', { cardId, basicCardId, data: basicCard.data });
     }
 

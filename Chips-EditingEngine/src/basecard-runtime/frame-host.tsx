@@ -249,7 +249,6 @@ export function BasecardFrameHost({
       URL.revokeObjectURL(currentUrl);
       resolvedResourceUrlsRef.current.delete(normalizedResourcePath);
     };
-
     setStatus((current) => {
       if (current.state === 'ready') {
         return {

@@ -224,6 +224,8 @@ client.card.editorPanel.render({
 
 - `resourcePath` 一律使用相对于卡片根目录的路径；
 - 只读场景可只传 `rootPath`，SDK 会用它为 `resolveResourceUrl` 生成 `file://` URL；
+- `resolveResourceUrl(...)` 返回的是正式运行时资源 URL；若编辑器需要读取 Markdown、纯文本、JSON 等正文内容，应由编辑器自己基于该 URL 读取并解析，而不是依赖富文本专用正文读取接口；
+- 对 `file://` 资源，请求方应通过正式文件服务读取正文；对 `blob:` 或 Host 受控协议 URL，请求方可按对应协议自行读取；
 - 若编辑器支持导入或删除卡片内部资源，宿主必须实现 `importResource/deleteResource`；
 - 若宿主返回 `blob:` URL，应负责在适当时机响应 `releaseResourceUrl` 释放临时资源。
 

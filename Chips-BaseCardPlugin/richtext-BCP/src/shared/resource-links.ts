@@ -1,9 +1,71 @@
 import type { BasecardConfig } from "../schema/card-config";
 import { isRelativeResourcePath, normalizeResourcePath } from "./utils";
 
+type ChipsBridgeLike = {
+  invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown>;
+};
+
+function detectResourceProtocol(resourceUrl: string): string | null {
+  const match = resourceUrl.match(/^([a-zA-Z][a-zA-Z\d+.-]*):/);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function decodeFileUrlPath(resourceUrl: string): string | null {
+  try {
+    const url = new URL(resourceUrl);
+    if (url.protocol !== "file:") {
+      return null;
+    }
+
+    if (url.hostname && url.hostname !== "localhost") {
+      return `//${url.hostname}${decodeURIComponent(url.pathname)}`;
+    }
+
+    const decodedPath = decodeURIComponent(url.pathname);
+    if (/^\/[a-zA-Z]:\//.test(decodedPath)) {
+      return decodedPath.slice(1);
+    }
+
+    return decodedPath;
+  } catch {
+    return null;
+  }
+}
+
+async function readTextViaBridge(resourceUrl: string): Promise<string | null> {
+  const absolutePath = decodeFileUrlPath(resourceUrl);
+  if (!absolutePath) {
+    return null;
+  }
+
+  const bridge = (globalThis as { window?: { chips?: ChipsBridgeLike }; chips?: ChipsBridgeLike }).window?.chips
+    ?? (globalThis as { chips?: ChipsBridgeLike }).chips;
+  if (!bridge || typeof bridge.invoke !== "function") {
+    return null;
+  }
+
+  const result = await bridge.invoke("file.read", {
+    path: absolutePath,
+    options: { encoding: "utf-8" },
+  });
+  const content = (result as { content?: unknown } | null)?.content ?? result;
+  return typeof content === "string" ? content : null;
+}
+
+async function readTextViaFetch(resourceUrl: string, resourcePath: string): Promise<string> {
+  const response = await fetch(resourceUrl);
+  if (!response.ok) {
+    throw new Error(`无法读取 Markdown 资源：${resourcePath}`);
+  }
+
+  return await response.text();
+}
+
 export async function loadMarkdownFromConfig(
   config: BasecardConfig,
-  resolveResourceUrl?: (resourcePath: string) => Promise<string>,
+  options?: {
+    resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+  },
 ): Promise<string> {
   if (config.content_source === "inline") {
     return config.content_text ?? "";
@@ -14,16 +76,22 @@ export async function loadMarkdownFromConfig(
     return "";
   }
 
+  const resolveResourceUrl = options?.resolveResourceUrl;
   const resourceUrl = resolveResourceUrl
     ? await resolveResourceUrl(resourcePath)
     : resourcePath;
+  const protocol = detectResourceProtocol(resourceUrl);
 
-  const response = await fetch(resourceUrl);
-  if (!response.ok) {
-    throw new Error(`无法读取 Markdown 资源：${resourcePath}`);
+  if (protocol === "file") {
+    const bridgeText = await readTextViaBridge(resourceUrl);
+    if (typeof bridgeText === "string") {
+      return bridgeText;
+    }
+
+    throw new Error(`无法通过正式文件服务读取 Markdown 资源：${resourcePath}`);
   }
 
-  return await response.text();
+  return readTextViaFetch(resourceUrl, resourcePath);
 }
 
 export async function rewriteRelativeResourceUrls(

@@ -260,6 +260,58 @@ describe('BasecardFrameHost', () => {
     expect(previewImage?.getAttribute('src')?.startsWith('blob:')).toBe(true);
   });
 
+  it('resolves pending preview text resources through runtime resource urls', async () => {
+    const resolvedUrls: string[] = [];
+    mockRenderView.mockReset();
+    mockRenderView.mockImplementation(({ resolveResourceUrl }: {
+      resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    }) => {
+      void resolveResourceUrl?.('docs/article.md').then((resourceUrl) => {
+        resolvedUrls.push(resourceUrl);
+      });
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          pendingResourceImports={new Map([
+            ['docs/article.md', { path: 'docs/article.md', data: new TextEncoder().encode('# Pending Preview') }],
+          ])}
+          interactionPolicy="native"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
+    expect(frameWindow).not.toBeNull();
+    Object.defineProperty(frameWindow, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as (cb: FrameRequestCallback) => number,
+    });
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(resolvedUrls.length).toBeGreaterThan(0);
+    expect(new Set(resolvedUrls).size).toBe(1);
+    expect(resolvedUrls[0]?.startsWith('blob:')).toBe(true);
+  });
+
   it('keeps previously rendered preview visible while a config refresh is remounting', async () => {
     await act(async () => {
       root.render(<RefreshHarness />);

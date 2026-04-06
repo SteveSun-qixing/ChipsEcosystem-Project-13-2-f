@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorRuntimeProvider } from '../../src/editor-runtime/context';
 import { PluginHost } from '../../src/components/EditPanel/PluginHost';
+import { fileService } from '../../src/services/file-service';
 
 const mockRenderEditor = vi.fn();
 let editorChangeHandler: ((nextConfig: Record<string, unknown>) => void) | null = null;
@@ -30,6 +31,23 @@ vi.mock('../../src/basecard-runtime/registry', () => ({
       valid: true,
       errors: {},
     }),
+    collectResourcePaths: (config: Record<string, unknown>) => {
+      const resourcePaths: string[] = [];
+      if (config.content_source === 'file' && typeof config.content_file === 'string') {
+        resourcePaths.push(config.content_file);
+      }
+      for (const image of Array.isArray(config.images) ? config.images : []) {
+        if (
+          image
+          && typeof image === 'object'
+          && (image as { source?: unknown }).source === 'file'
+          && typeof (image as { file_path?: unknown }).file_path === 'string'
+        ) {
+          resourcePaths.push((image as { file_path: string }).file_path);
+        }
+      }
+      return resourcePaths;
+    },
     renderView: () => () => undefined,
     renderEditor: mockRenderEditor,
   }),
@@ -45,6 +63,7 @@ vi.mock('../../src/hooks/useTranslation', () => ({
 
 vi.mock('../../src/services/file-service', () => ({
   fileService: {
+    readText: vi.fn(async (path: string) => `text:${path}`),
     readBinary: vi.fn(async () => new Uint8Array([1, 2, 3])),
     exists: vi.fn(async () => false),
   },
@@ -78,6 +97,7 @@ describe('PluginHost', () => {
     mockRenderEditor.mockReset();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
+    vi.mocked(fileService.exists).mockResolvedValue(false);
     mockRenderEditor.mockImplementation(({ onChange, importResource, resolveResourceUrl }) => {
       editorChangeHandler = onChange;
       editorImportResource = importResource;
@@ -188,6 +208,35 @@ describe('PluginHost', () => {
       },
       undefined,
     );
+  });
+
+  it('keeps the editor mounted while draft config changes are still local', async () => {
+    vi.useFakeTimers();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'init' }}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'a' });
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'ab' });
+      await Promise.resolve();
+    });
+
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
   });
 
   it('commits immediately after a draft starts referencing newly imported resources', async () => {
@@ -337,6 +386,101 @@ describe('PluginHost', () => {
         deletions: [],
       },
     );
+  });
+
+  it('reuses an already referenced resource path instead of allocating a new file name', async () => {
+    vi.mocked(fileService.exists).mockResolvedValue(true);
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              card_type: 'RichTextCard',
+              content_format: 'markdown',
+              content_source: 'file',
+              content_file: 'notes/article.md',
+            }}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    const imported = await editorImportResource?.({
+      file: new File(['# updated'], 'article.md', { type: 'text/markdown' }),
+      preferredPath: 'notes/article.md',
+    });
+
+    expect(imported).toEqual({ path: 'notes/article.md' });
+  });
+
+  it('commits referenced resource-only updates without remounting the editor', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              card_type: 'RichTextCard',
+              content_format: 'markdown',
+              content_source: 'file',
+              content_file: 'notes/article.md',
+            }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await editorImportResource?.({
+        file: new File(['# updated'], 'article.md', { type: 'text/markdown' }),
+        preferredPath: 'notes/article.md',
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(260);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'file',
+        content_file: 'notes/article.md',
+      },
+      {
+        imports: [
+          expect.objectContaining({
+            path: 'notes/article.md',
+            mimeType: 'text/markdown',
+          }),
+        ],
+        deletions: [],
+      },
+    );
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
   });
 
   it('resolves persisted image resources to card-root file urls for editor previews', async () => {
@@ -521,5 +665,45 @@ describe('PluginHost', () => {
     });
 
     expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves pending text resources through runtime resource urls', async () => {
+    const resolvedUrls: string[] = [];
+    mockRenderEditor.mockReset();
+    mockRenderEditor.mockImplementation(({ resolveResourceUrl }) => {
+      void resolveResourceUrl?.('docs/article.md').then((resourceUrl: string) => {
+        resolvedUrls.push(resourceUrl);
+      });
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              card_type: 'RichTextCard',
+              content_format: 'markdown',
+              content_source: 'file',
+              content_file: 'docs/article.md',
+            }}
+            pendingResourceImports={new Map([
+              ['docs/article.md', { path: 'docs/article.md', data: new TextEncoder().encode('# Pending Markdown') }],
+            ])}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(resolvedUrls).toHaveLength(1);
+    expect(resolvedUrls[0]?.startsWith('blob:')).toBe(true);
   });
 });

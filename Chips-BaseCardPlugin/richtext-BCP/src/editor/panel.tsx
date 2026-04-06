@@ -20,8 +20,10 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/preset-commonmark";
+import { gfm } from "@milkdown/preset-gfm";
 import { TextSelection, type Selection } from "@milkdown/prose/state";
-import { callCommand, getMarkdown } from "@milkdown/utils";
+import type { EditorState } from "@milkdown/prose/state";
+import { callCommand, getMarkdown, insertPos, replaceAll, replaceRange } from "@milkdown/utils";
 import type { BasecardResourceImportRequest, BasecardResourceImportResult } from "../index";
 import {
   createFileBasecardConfig,
@@ -31,6 +33,7 @@ import {
   type BasecardConfig,
 } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
+import { configureRichTextMarkdown, richTextMarkdownPlugins } from "../shared/markdown-extensions";
 import { loadMarkdownFromConfig, rewriteRelativeResourceUrls } from "../shared/resource-links";
 import {
   countUnicodeCharacters,
@@ -117,7 +120,7 @@ type EditorController = {
   isComposing: boolean;
   isImporting: boolean;
   rerunCommitAfterImport: boolean;
-  flushTimer?: number;
+  previewTimer?: number;
   pendingErrors: string[];
   selectionSnapshot?: SelectionSnapshot;
   tooltipTrigger?: HTMLElement;
@@ -191,6 +194,7 @@ html, body {
 .chips-basecard-editor__editor-host {
   min-height: 100%;
   padding: 20px 24px 56px;
+  cursor: text;
 }
 
 .chips-basecard-editor__editor-host .milkdown,
@@ -204,6 +208,7 @@ html, body {
   color: inherit;
   white-space: break-spaces;
   word-break: break-word;
+  cursor: text;
 }
 
 .chips-basecard-editor__editor-host .ProseMirror > :first-child {
@@ -234,6 +239,29 @@ html, body {
   color: var(--chips-sys-color-on-surface-variant, #667085);
 }
 
+.chips-basecard-editor__editor-host .ProseMirror del {
+  text-decoration-thickness: 1.5px;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror u,
+.chips-basecard-editor__editor-host .ProseMirror ins {
+  text-decoration-thickness: 1.5px;
+  text-decoration-skip-ink: auto;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror mark {
+  padding: 0 0.18em;
+  border-radius: 0.28em;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 16%, #fff5b1);
+  color: inherit;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror sup,
+.chips-basecard-editor__editor-host .ProseMirror sub {
+  font-size: 0.78em;
+  line-height: 0;
+}
+
 .chips-basecard-editor__editor-host .ProseMirror code {
   padding: 2px 6px;
   border-radius: 6px;
@@ -246,6 +274,76 @@ html, body {
   max-width: 100%;
   height: auto;
   border-radius: 12px;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror pre {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface-container, #f8fafc) 90%, #eef2ff);
+  color: var(--chips-sys-color-on-surface, #111827);
+  white-space: pre-wrap;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.95em;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror th,
+.chips-basecard-editor__editor-host .ProseMirror td {
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror th {
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 7%, #f8fafc);
+  font-weight: 600;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror input[type="checkbox"] {
+  margin-right: 8px;
+  pointer-events: none;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror .chips-richtext-math {
+  overflow-x: auto;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror .chips-richtext-math--inline {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+}
+
+.chips-basecard-editor__editor-host .ProseMirror .chips-richtext-math--block {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface-container, #f8fafc) 90%, #ffffff);
+}
+
+.chips-basecard-editor__editor-host .ProseMirror .chips-richtext-math__fallback {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 0.94em/1.6 "SFMono-Regular", Consolas, monospace;
 }
 
 .chips-basecard-editor__floating-toolbar {
@@ -461,6 +559,8 @@ html, body {
   padding-left: 18px;
 }
 `;
+
+const PREVIEW_COMMIT_DELAY_MS = 120;
 
 const TOOLBAR_BUTTONS: ToolbarButton[] = [
   {
@@ -857,25 +957,65 @@ function setErrors(controller: EditorController, errors: string[]): void {
   wrapper.hidden = false;
 }
 
+function syncValidationErrors(controller: EditorController, markdown: string): void {
+  if (hasMeaningfulMarkdownContent(markdown)) {
+    setErrors(controller, []);
+    return;
+  }
+
+  setErrors(controller, [controller.t("basecard.validation.bodyRequired")]);
+}
+
+function clearPreviewTimer(controller: EditorController): void {
+  if (controller.previewTimer) {
+    window.clearTimeout(controller.previewTimer);
+    controller.previewTimer = undefined;
+  }
+}
+
+function emitPreviewConfig(controller: EditorController): void {
+  if (controller.disposed) {
+    return;
+  }
+
+  const markdown = normalizeMarkdown(controller.currentMarkdown);
+  controller.currentMarkdown = markdown;
+  syncValidationErrors(controller, markdown);
+  if (!hasMeaningfulMarkdownContent(markdown)) {
+    return;
+  }
+
+  const nextConfig = createInlineBasecardConfig(markdown, controller.locale, controller.theme);
+  const validation = validateBasecardConfig(nextConfig);
+  if (!validation.valid) {
+    setErrors(controller, Object.values(validation.errors));
+    return;
+  }
+
+  setErrors(controller, []);
+  const signature = buildConfigSignature(nextConfig);
+  if (signature !== controller.lastCommittedSignature) {
+    controller.lastCommittedSignature = signature;
+    controller.props.onChange(nextConfig);
+  }
+}
+
 function scheduleCommit(controller: EditorController, reason: "change" | "flush"): void {
   if (controller.disposed || controller.isComposing) {
     return;
   }
 
-  if (controller.flushTimer) {
-    window.clearTimeout(controller.flushTimer);
-    controller.flushTimer = undefined;
-  }
-
-  if (reason === "flush") {
-    void commitCurrentMarkdown(controller);
+  if (reason === "change") {
+    clearPreviewTimer(controller);
+    controller.previewTimer = window.setTimeout(() => {
+      controller.previewTimer = undefined;
+      emitPreviewConfig(controller);
+    }, PREVIEW_COMMIT_DELAY_MS);
     return;
   }
 
-  controller.flushTimer = window.setTimeout(() => {
-    controller.flushTimer = undefined;
-    void commitCurrentMarkdown(controller);
-  }, 80);
+  clearPreviewTimer(controller);
+  void commitCurrentMarkdown(controller);
 }
 
 function buildConfigSignature(config: BasecardConfig): string {
@@ -989,6 +1129,11 @@ function clearInlineFormatting(controller: EditorController): void {
       state.schema.marks.em,
       state.schema.marks.link,
       state.schema.marks.code,
+      state.schema.marks.strike_through,
+      state.schema.marks.highlight,
+      state.schema.marks.underline,
+      state.schema.marks.superscript,
+      state.schema.marks.subscript,
     ].filter(Boolean);
 
     for (const mark of marks) {
@@ -1010,6 +1155,81 @@ function clearInlineFormatting(controller: EditorController): void {
   void syncPreviewResources(controller);
   scheduleCommit(controller, "change");
   updateToolbarPosition(controller);
+}
+
+function pasteMarkdownAtSelection(controller: EditorController, markdown: string): void {
+  if (!controller.editor) {
+    return;
+  }
+
+  const normalizedMarkdown = normalizeMarkdown(markdown);
+  if (!normalizedMarkdown) {
+    return;
+  }
+
+  controller.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { from, to, empty } = view.state.selection;
+    const currentDocumentMarkdown = normalizeMarkdown(getMarkdown()(ctx));
+    const isBlockPaste = /(^|\n)\s{0,3}(#{1,6}\s|>\s|[-*+]\s|\d+\.\s|```|~~~|---\s*$|\*\*\*\s*$|___\s*$)/m.test(normalizedMarkdown);
+    const emptyBlockRange = getEmptyTextBlockRange(view.state);
+
+    if (isBlockPaste && !hasMeaningfulMarkdownContent(currentDocumentMarkdown)) {
+      replaceAll(normalizedMarkdown)(ctx);
+      view.focus();
+      return;
+    }
+
+    if (isBlockPaste && emptyBlockRange) {
+      replaceRange(normalizedMarkdown, emptyBlockRange)(ctx);
+      view.focus();
+      return;
+    }
+
+    if (isBlockPaste && empty) {
+      insertPos(normalizedMarkdown, from, false)(ctx);
+      view.focus();
+      return;
+    }
+
+    replaceRange(normalizedMarkdown, { from, to })(ctx);
+    view.focus();
+  });
+}
+
+function getEmptyTextBlockRange(
+  state: EditorState,
+): { from: number; to: number } | null {
+  const { selection } = state;
+  if (!selection.empty) {
+    return null;
+  }
+
+  const { $from } = selection;
+  const parent = $from.parent;
+  if (!parent.isTextblock || parent.content.size !== 0) {
+    return null;
+  }
+
+  const depth = $from.depth;
+  return {
+    from: $from.before(depth),
+    to: $from.after(depth),
+  };
+}
+
+function handleMarkdownPaste(
+  controller: EditorController,
+  event: Pick<ClipboardEvent, "preventDefault" | "clipboardData">,
+): boolean {
+  const clipboardText = event.clipboardData?.getData("text/plain") ?? "";
+  if (!clipboardText.trim()) {
+    return false;
+  }
+
+  event.preventDefault();
+  pasteMarkdownAtSelection(controller, clipboardText);
+  return true;
 }
 
 function updateToolbarPosition(controller: EditorController, selection?: Selection): void {
@@ -1280,14 +1500,29 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
 
   void (async () => {
     try {
-      const markdown = normalizeMarkdown(await loadMarkdownFromConfig(config, props.resolveResourceUrl));
+      const markdown = normalizeMarkdown(await loadMarkdownFromConfig(config, {
+        resolveResourceUrl: props.resolveResourceUrl,
+      }));
       controller.currentMarkdown = markdown;
       controller.editor = await Editor.make()
         .config((ctx) => {
           ctx.set(rootCtx, editorHost);
           ctx.set(defaultValueCtx, markdown);
+          configureRichTextMarkdown(ctx);
           ctx.update(editorViewOptionsCtx, (prev) => ({
             ...prev,
+            handlePaste: (view, event) => {
+              if (handleMarkdownPaste(controller, event)) {
+                view.focus();
+                return true;
+              }
+
+              if (typeof prev.handlePaste === "function") {
+                return prev.handlePaste(view, event);
+              }
+
+              return false;
+            },
             attributes: {
               ...(typeof prev.attributes === "object" ? prev.attributes : {}),
               spellcheck: "true",
@@ -1298,6 +1533,8 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
           }));
         })
         .use(commonmark)
+        .use(gfm)
+        .use(richTextMarkdownPlugins)
         .use(listener)
         .create();
 
@@ -1365,13 +1602,15 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
   })();
 
   root.__chipsDispose = () => {
-    controller.disposed = true;
-    if (controller.flushTimer) {
-      ownerWindow.clearTimeout(controller.flushTimer);
-      controller.flushTimer = undefined;
+    const editor = controller.editor;
+    clearPreviewTimer(controller);
+    if (editor) {
+      void commitCurrentMarkdown(controller).catch(() => undefined);
     }
-    if (controller.editor) {
-      void controller.editor.destroy();
+
+    controller.disposed = true;
+    if (editor) {
+      void editor.destroy();
     }
     for (const resourcePath of controller.lastResolvedResources) {
       controller.props.releaseResourceUrl?.(resourcePath);

@@ -1,8 +1,10 @@
 import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from "@milkdown/core";
 import { commonmark } from "@milkdown/preset-commonmark";
+import { gfm } from "@milkdown/preset-gfm";
 import type { Editor as MilkdownEditor } from "@milkdown/core";
 import type { BasecardRenderContext } from "../index";
 import { normalizeBasecardConfig } from "../schema/card-config";
+import { configureRichTextMarkdown, richTextMarkdownPlugins } from "../shared/markdown-extensions";
 import { loadMarkdownFromConfig, rewriteRelativeResourceUrls } from "../shared/resource-links";
 import { createTranslator } from "../shared/i18n";
 import { VIEW_STYLE_TEXT } from "./view";
@@ -58,7 +60,9 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
 
   void (async () => {
     try {
-      const markdown = await loadMarkdownFromConfig(config, ctx.resolveResourceUrl);
+      const markdown = await loadMarkdownFromConfig(config, {
+        resolveResourceUrl: ctx.resolveResourceUrl,
+      });
       if (state.disposed) {
         return;
       }
@@ -67,6 +71,7 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
         .config((editorCtx) => {
           editorCtx.set(rootCtx, surface);
           editorCtx.set(defaultValueCtx, markdown);
+          configureRichTextMarkdown(editorCtx);
           editorCtx.update(editorViewOptionsCtx, (prev) => ({
             ...prev,
             editable: () => false,
@@ -80,6 +85,8 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
           }));
         })
         .use(commonmark)
+        .use(gfm)
+        .use(richTextMarkdownPlugins)
         .create();
 
       if (state.disposed) {

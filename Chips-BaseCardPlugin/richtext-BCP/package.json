@@ -11,14 +11,22 @@
     "validate": "chipsdev validate"
   },
   "dependencies": {
-    "@milkdown/core": "^7.19.2",
-    "@milkdown/ctx": "^7.19.2",
-    "@milkdown/plugin-listener": "^7.19.2",
-    "@milkdown/preset-commonmark": "^7.19.2",
-    "@milkdown/prose": "^7.19.2",
-    "@milkdown/theme-nord": "^7.19.2",
+    "@milkdown/core": "7.19.2",
+    "@milkdown/ctx": "7.19.2",
+    "@milkdown/plugin-listener": "7.19.2",
+    "@milkdown/preset-commonmark": "7.19.2",
+    "@milkdown/preset-gfm": "7.19.2",
+    "@milkdown/prose": "7.19.2",
+    "@milkdown/theme-nord": "7.19.2",
+    "@milkdown/utils": "7.19.2",
+    "katex": "^0.16.44",
+    "mdast-util-mark": "^1.0.0",
+    "micromark-extension-mark": "^1.0.2",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "remark-ins": "^1.2.3",
+    "remark-math": "^6.0.0",
+    "remark-supersub": "^1.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",

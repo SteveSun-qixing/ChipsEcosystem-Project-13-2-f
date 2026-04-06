@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 interface ModuleInvokeResult<TOutput> {
   mode: 'sync' | 'job';
@@ -19,6 +20,28 @@ interface ModuleJobView<TOutput> {
     message?: string;
     details?: unknown;
     retryable?: boolean;
+  };
+}
+
+interface MinimalPluginManifest {
+  entry?: string | Record<string, unknown>;
+  preview?: string;
+  ui?: {
+    layout?: {
+      contract?: string;
+      minFunctionalSet?: string;
+    };
+    launcher?: {
+      icon?: string;
+    };
+  };
+  module?: {
+    provides?: Array<{
+      methods?: Array<{
+        inputSchema?: string;
+        outputSchema?: string;
+      }>;
+    }>;
   };
 }
 
@@ -166,18 +189,23 @@ export class HostIntegrationService {
   }
 
   private async installAndEnablePlugin(sourcePath: string): Promise<string> {
-    const installResult = await this.host.kernel.invoke<{ manifestPath: string }, { pluginId: string }>(
-      'plugin.install',
-      { manifestPath: sourcePath },
-      this.createKernelContext()
-    );
-    await this.host.kernel.invoke(
-      'plugin.enable',
-      { pluginId: installResult.pluginId },
-      this.createKernelContext()
-    );
-    console.log(`[HostIntegration] Installed and enabled plugin: ${installResult.pluginId}`);
-    return installResult.pluginId;
+    const stagedSource = await this.preparePluginInstallSource(sourcePath);
+    try {
+      const installResult = await this.host.kernel.invoke<{ manifestPath: string }, { pluginId: string }>(
+        'plugin.install',
+        { manifestPath: stagedSource.installPath },
+        this.createKernelContext()
+      );
+      await this.host.kernel.invoke(
+        'plugin.enable',
+        { pluginId: installResult.pluginId },
+        this.createKernelContext()
+      );
+      console.log(`[HostIntegration] Installed and enabled plugin: ${installResult.pluginId}`);
+      return installResult.pluginId;
+    } finally {
+      await stagedSource.cleanup();
+    }
   }
 
   private async invokeModule<TOutput>(params: {
@@ -214,7 +242,7 @@ export class HostIntegrationService {
       throw new Error(`Module ${params.capability}.${params.method} returned no job id`);
     }
 
-    while (true) {
+    for (;;) {
       await this.sleep(MODULE_JOB_POLL_MS);
 
       const snapshot = await this.host.kernel.invoke<{ jobId: string }, { job: ModuleJobView<TOutput> }>(
@@ -247,11 +275,11 @@ export class HostIntegrationService {
     const root = this.resolveEcosystemRoot();
 
     const defaultCardPlugins = [
-      path.join(root, 'Chips-BaseCardPlugin/richtext-BCP/manifest.yaml'),
-      path.join(root, 'Chips-BaseCardPlugin/image-BCP/manifest.yaml'),
+      path.join(root, 'Chips-BaseCardPlugin/richtext-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/image-BCP'),
     ];
     const defaultThemePlugins = [
-      path.join(root, 'ThemePack/Chips-default/manifest.yaml'),
+      path.join(root, 'ThemePack/Chips-default'),
     ];
     const defaultModulePlugins = [
       this.resolvePackagedPluginSource(path.join(root, 'Chips-ModulePlugin/Chips-CardtoHTML-Plugin')),
@@ -296,7 +324,90 @@ export class HostIntegrationService {
       }
     }
 
-    return path.join(pluginRoot, 'manifest.yaml');
+    return pluginRoot;
+  }
+
+  private async preparePluginInstallSource(sourcePath: string): Promise<{
+    installPath: string;
+    cleanup: () => Promise<void>;
+  }> {
+    const absoluteSourcePath = path.resolve(sourcePath);
+    const stats = await fs.stat(absoluteSourcePath);
+
+    if (!stats.isDirectory()) {
+      return {
+        installPath: absoluteSourcePath,
+        cleanup: async () => {},
+      };
+    }
+
+    const manifestPath = path.join(absoluteSourcePath, 'manifest.yaml');
+    const manifestRaw = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = yaml.load(manifestRaw) as MinimalPluginManifest;
+    const stagingRoot = await fs.mkdtemp(path.join(this.workspacePath, 'plugin-stage-'));
+    const stagedManifestPath = path.join(stagingRoot, 'manifest.yaml');
+
+    await fs.copyFile(manifestPath, stagedManifestPath);
+
+    const rootsToCopy = this.collectManifestAssetRoots(manifest);
+    for (const root of rootsToCopy) {
+      const sourceRootPath = path.join(absoluteSourcePath, root);
+      if (!fsSync.existsSync(sourceRootPath)) {
+        continue;
+      }
+
+      const stagedRootPath = path.join(stagingRoot, root);
+      await fs.mkdir(path.dirname(stagedRootPath), { recursive: true });
+      await fs.cp(sourceRootPath, stagedRootPath, { recursive: true });
+    }
+
+    return {
+      installPath: stagedManifestPath,
+      cleanup: async () => {
+        await fs.rm(stagingRoot, { recursive: true, force: true });
+      },
+    };
+  }
+
+  private collectManifestAssetRoots(manifest: MinimalPluginManifest): string[] {
+    const roots = new Set<string>();
+    const pushAsset = (assetPath: unknown) => {
+      if (typeof assetPath !== 'string') {
+        return;
+      }
+
+      const normalized = assetPath.trim().replace(/^[.][\\/]/, '');
+      if (!normalized) {
+        return;
+      }
+
+      const firstSegment = normalized.split(/[\\/]+/)[0];
+      if (firstSegment) {
+        roots.add(firstSegment);
+      }
+    };
+
+    if (typeof manifest.entry === 'string') {
+      pushAsset(manifest.entry);
+    } else if (manifest.entry && typeof manifest.entry === 'object') {
+      for (const value of Object.values(manifest.entry)) {
+        pushAsset(value);
+      }
+    }
+
+    pushAsset(manifest.preview);
+    pushAsset(manifest.ui?.layout?.contract);
+    pushAsset(manifest.ui?.layout?.minFunctionalSet);
+    pushAsset(manifest.ui?.launcher?.icon);
+
+    for (const provide of manifest.module?.provides ?? []) {
+      for (const method of provide.methods ?? []) {
+        pushAsset(method.inputSchema);
+        pushAsset(method.outputSchema);
+      }
+    }
+
+    return [...roots];
   }
 
   private createKernelContext() {

@@ -2,15 +2,16 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { cards } from '../db/schema/cards.js';
 import { unpackCard } from './card-unpack.js';
 import { uploadResourcesToCdn } from './cdn-upload.js';
 import { replaceContentUrls, replaceCoverHtmlUrls } from './url-replace.js';
 import { Bucket } from '../storage/buckets.js';
-import { uploadFile } from '../storage/s3.js';
+import { buildObjectUrl, uploadFile } from '../storage/s3.js';
 import { hostIntegration } from '../services/host-integration.js';
+import { inlineFileBackedRichTextContent } from './richtext-inline.js';
 
 function writeYamlFile(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, yaml.dump(value, { noRefs: true }), 'utf-8');
@@ -20,9 +21,9 @@ function persistRewrittenCard(params: {
   tempDir: string;
   contentMap: Map<string, Record<string, unknown>>;
   coverHtml?: string;
-  resourceFiles: Array<{ absolutePath: string }>;
+  removableFiles: Array<{ absolutePath: string }>;
 }): void {
-  const { tempDir, contentMap, coverHtml, resourceFiles } = params;
+  const { tempDir, contentMap, coverHtml, removableFiles } = params;
 
   for (const [id, content] of contentMap) {
     writeYamlFile(path.join(tempDir, 'content', `${id}.yaml`), content);
@@ -32,7 +33,7 @@ function persistRewrittenCard(params: {
     fs.writeFileSync(path.join(tempDir, '.card', 'cover.html'), coverHtml, 'utf-8');
   }
 
-  for (const resourceFile of resourceFiles) {
+  for (const resourceFile of removableFiles) {
     fs.rmSync(resourceFile.absolutePath, { force: true });
   }
 }
@@ -70,19 +71,126 @@ function readYamlFile<T>(filePath: string): T {
   return yaml.load(raw) as T;
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function injectHeadLink(params: {
+  html: string;
+  href: string;
+  relation: 'cover' | 'content';
+}): string {
+  const linkTag = `<link rel="alternate" href="${escapeHtmlAttribute(params.href)}" data-chips-related="${params.relation}">`;
+
+  if (/<\/head>/i.test(params.html)) {
+    return params.html.replace(/<\/head>/i, `  ${linkTag}\n</head>`);
+  }
+
+  return `${linkTag}\n${params.html}`;
+}
+
+function createDefaultCoverHtml(title: string): string {
+  const safeTitle = escapeHtmlText(title);
+
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${safeTitle}</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+      }
+
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: stretch;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.72), transparent 30%),
+          radial-gradient(circle at 82% 24%, rgba(255, 215, 146, 0.58), transparent 34%),
+          linear-gradient(155deg, #fff3dd 0%, #ffd59a 44%, #ffb768 100%);
+        color: #1f1408;
+        font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+      }
+
+      .chips-card-cover {
+        min-height: 100vh;
+        display: grid;
+        place-items: end stretch;
+        padding: clamp(18px, 5vw, 32px);
+      }
+
+      .chips-card-cover__title {
+        margin: 0;
+        font-size: clamp(28px, 7vw, 54px);
+        line-height: 0.96;
+        letter-spacing: -0.05em;
+        text-wrap: balance;
+        text-shadow: 0 12px 28px rgba(255, 255, 255, 0.28);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="chips-card-cover">
+      <h1 class="chips-card-cover__title">${safeTitle}</h1>
+    </main>
+  </body>
+</html>`;
+}
+
+function shouldFallbackToDefaultCover(coverHtml: string | undefined): boolean {
+  if (!coverHtml) {
+    return true;
+  }
+
+  const normalized = coverHtml.replace(/\s+/g, ' ').trim();
+  return !normalized;
+}
+
+function writeHtmlFile(filePath: string, html: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, html, 'utf-8');
+}
+
 /**
  * 卡片上传处理流水线编排器
  *
  * 执行顺序：
  *   1. 解包
- *   2. 上传卡片资源到 CDN
- *   3. 替换 content / cover 内资源链接
- *   4. 删除原始本地资源并重新打包为新的 .card
- *   5. 删除原始上传包
- *   6. 通过正式文件转换模块输出 HTML 目录
- *   7. 上传 HTML 目录到 CDN
- *   8. 更新数据库
- *   9. finally 清理临时目录
+ *   2. 将 file 模式富文本 markdown 资源吸收到 content YAML
+ *   3. 上传剩余卡片资源到 CDN
+ *   4. 替换 content / cover 内资源链接
+ *   5. 删除原始本地资源并重新打包为新的 .card
+ *   6. 删除原始上传包
+ *   7. 通过正式文件转换模块输出 HTML 目录
+ *   8. 单独导出封面 HTML 产物
+ *   9. 上传内容 HTML 与封面 HTML
+ *  10. 更新数据库
+ *  11. finally 清理临时目录
  */
 export async function runCardPipeline(params: {
   cardFilePath: string;
@@ -94,6 +202,7 @@ export async function runCardPipeline(params: {
   let tempDir: string | null = null;
   let rewrittenCardPath: string | null = null;
   let htmlOutputDir: string | null = null;
+  let coverOutputDir: string | null = null;
   let originalCardRemoved = false;
 
   try {
@@ -112,7 +221,7 @@ export async function runCardPipeline(params: {
         eq(cards.userId, userId),
         eq(cards.cardFileId, unpackResult.metadata.id),
         ne(cards.id, cardDbId),
-        ne(cards.status, 'error'),
+        inArray(cards.status, ['pending', 'processing']),
       ),
     });
 
@@ -120,21 +229,27 @@ export async function runCardPipeline(params: {
       throw new Error(`Duplicate card upload detected for card file id ${unpackResult.metadata.id}`);
     }
 
-    console.log(`[Pipeline] Step 2: Uploading resources for card ${cardDbId}...`);
-    const cdnUrlMap = await uploadResourcesToCdn(unpackResult.resourceFiles, userId, cardDbId);
+    console.log(`[Pipeline] Step 2: Inlining file-backed richtext markdown resources...`);
+    const normalizedRichText = inlineFileBackedRichTextContent(
+      unpackResult.contentMap,
+      unpackResult.resourceFiles,
+    );
 
-    console.log(`[Pipeline] Step 3: Rewriting card resource URLs...`);
-    const replacedContentMap = replaceContentUrls(unpackResult.contentMap, cdnUrlMap);
+    console.log(`[Pipeline] Step 3: Uploading resources for card ${cardDbId}...`);
+    const cdnUrlMap = await uploadResourcesToCdn(normalizedRichText.uploadResourceFiles, userId, cardDbId);
+
+    console.log(`[Pipeline] Step 4: Rewriting card resource URLs...`);
+    const replacedContentMap = replaceContentUrls(normalizedRichText.contentMap, cdnUrlMap);
     const replacedCoverHtml = unpackResult.coverHtml
       ? replaceCoverHtmlUrls(unpackResult.coverHtml, cdnUrlMap)
       : undefined;
 
-    console.log(`[Pipeline] Step 4: Repacking rewritten card...`);
+    console.log(`[Pipeline] Step 5: Repacking rewritten card...`);
     persistRewrittenCard({
       tempDir,
       contentMap: replacedContentMap,
       coverHtml: replacedCoverHtml,
-      resourceFiles: unpackResult.resourceFiles,
+      removableFiles: unpackResult.resourceFiles,
     });
 
     rewrittenCardPath = path.join(os.tmpdir(), `ccps-card-repacked-${cardDbId}.card`);
@@ -143,7 +258,7 @@ export async function runCardPipeline(params: {
     fs.rmSync(cardFilePath, { force: true });
     originalCardRemoved = true;
 
-    console.log(`[Pipeline] Step 5: Converting rewritten card through file conversion plugin...`);
+    console.log(`[Pipeline] Step 7: Converting rewritten card through file conversion plugin...`);
     htmlOutputDir = path.join(os.tmpdir(), `ccps-card-html-${cardDbId}`);
     const convertResult = await hostIntegration.convertCardToHtml({
       cardFile: rewrittenCardPath,
@@ -153,8 +268,41 @@ export async function runCardPipeline(params: {
 
     const htmlRootDir = convertResult.outputPath;
     const htmlFiles = listFilesRecursive(htmlRootDir);
+    const contentIndexKey = `${userId}/${cardDbId}/index.html`;
+    const coverIndexKey = `cards/${userId}/${cardDbId}/index.html`;
+    const contentHtmlUrl = buildObjectUrl(Bucket.CARD_HTML, contentIndexKey);
+    const coverHtmlUrl = buildObjectUrl(Bucket.COVERS, coverIndexKey);
 
-    console.log(`[Pipeline] Step 6: Uploading converted HTML directory to CDN...`);
+    const contentIndexPath = path.join(htmlRootDir, 'index.html');
+    if (fs.existsSync(contentIndexPath)) {
+      const indexHtml = fs.readFileSync(contentIndexPath, 'utf-8');
+      fs.writeFileSync(
+        contentIndexPath,
+        injectHeadLink({
+          html: indexHtml,
+          href: coverHtmlUrl,
+          relation: 'cover',
+        }),
+        'utf-8',
+      );
+    }
+
+    console.log(`[Pipeline] Step 8: Creating standalone cover HTML output...`);
+    coverOutputDir = path.join(os.tmpdir(), `ccps-card-cover-${cardDbId}`);
+    const coverSourceHtml = shouldFallbackToDefaultCover(replacedCoverHtml)
+      ? createDefaultCoverHtml(String(unpackResult.metadata.name))
+      : (replacedCoverHtml as string);
+
+    writeHtmlFile(
+      path.join(coverOutputDir, 'index.html'),
+      injectHeadLink({
+        html: coverSourceHtml,
+        href: contentHtmlUrl,
+        relation: 'content',
+      }),
+    );
+
+    console.log(`[Pipeline] Step 9: Uploading converted HTML directory to CDN...`);
     let indexHtmlUrl = '';
     for (const relativePath of htmlFiles) {
       const absolutePath = path.join(htmlRootDir, relativePath);
@@ -168,38 +316,33 @@ export async function runCardPipeline(params: {
       }
     }
 
-    if (replacedCoverHtml) {
-      await uploadFile({
-        bucket: Bucket.CARD_HTML,
-        key: `${userId}/${cardDbId}/cover.html`,
-        filePath: path.join(tempDir, '.card', 'cover.html'),
+    console.log(`[Pipeline] Step 9: Uploading standalone cover HTML output...`);
+    const coverFiles = listFilesRecursive(coverOutputDir);
+    let coverUrl: string | null = null;
+    for (const relativePath of coverFiles) {
+      const absolutePath = path.join(coverOutputDir, relativePath);
+      const url = await uploadFile({
+        bucket: Bucket.COVERS,
+        key: `cards/${userId}/${cardDbId}/${relativePath}`,
+        filePath: absolutePath,
       });
+
+      if (relativePath === 'index.html') {
+        coverUrl = url;
+      }
     }
 
     const repackedMetadata = readYamlFile<Record<string, unknown>>(path.join(tempDir, '.card', 'metadata.yaml'));
     const repackedStructure = readYamlFile<Record<string, unknown>>(path.join(tempDir, '.card', 'structure.yaml'));
 
-    let coverUrl: string | undefined;
-    for (const [, url] of cdnUrlMap) {
-      if (
-        !coverUrl &&
-        (url.endsWith('.jpg') ||
-          url.endsWith('.jpeg') ||
-          url.endsWith('.png') ||
-          url.endsWith('.webp'))
-      ) {
-        coverUrl = url;
-      }
-    }
-
-    console.log(`[Pipeline] Step 7: Updating database status to ready for card ${cardDbId}...`);
+    console.log(`[Pipeline] Step 10: Updating database status to ready for card ${cardDbId}...`);
     await db
       .update(cards)
       .set({
         cardFileId: String(repackedMetadata.id ?? unpackResult.metadata.id),
         title: String(repackedMetadata.name ?? unpackResult.metadata.name),
         htmlUrl: indexHtmlUrl,
-        coverUrl: coverUrl ?? null,
+        coverUrl,
         cardMetadata: repackedMetadata,
         cardStructure: repackedStructure,
         status: 'ready',
@@ -246,6 +389,14 @@ export async function runCardPipeline(params: {
     if (htmlOutputDir) {
       try {
         fs.rmSync(htmlOutputDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    }
+
+    if (coverOutputDir) {
+      try {
+        fs.rmSync(coverOutputDir, { recursive: true, force: true });
       } catch {
         // ignore
       }

@@ -22,6 +22,11 @@ export function getPublicBucketBaseUrl(bucket: string): string {
     return `${trimTrailingSlash(env.S3_PUBLIC_URL)}/${bucket}`;
   }
 
+  // 开发态直连对象存储，避免生成依赖 80 端口反向代理的失效 URL。
+  if (env.NODE_ENV === 'development') {
+    return `${trimTrailingSlash(env.S3_ENDPOINT)}/${bucket}`;
+  }
+
   return `${trimTrailingSlash(env.BASE_URL)}/cdn/${bucket}`;
 }
 

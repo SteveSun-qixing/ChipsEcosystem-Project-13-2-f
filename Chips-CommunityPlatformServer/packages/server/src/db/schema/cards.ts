@@ -42,7 +42,7 @@ export const cards = pgTable('cards', {
   /** 卡片标题（来自 metadata.yaml 的 name 字段） */
   title: text('title').notNull(),
 
-  /** 封面缩略图 CDN URL（来自 .card/cover.html 对应图片，CDN 化后） */
+  /** 卡片封面入口 URL（来自独立保存的封面 HTML 产物） */
   coverUrl: text('cover_url'),
 
   /** 渲染后 HTML 的 CDN 访问 URL */

@@ -1,0 +1,46 @@
+{
+  "photo-viewer": {
+    "app": {
+      "title": "Photo Viewer",
+      "subtitle": "A lightweight Chips image viewer focused only on opening, zooming, and saving images."
+    },
+    "actions": {
+      "open": "Open Image",
+      "save": "Save Image",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fit": "Fit Window",
+      "actualSize": "Actual Size"
+    },
+    "dialogs": {
+      "openFileTitle": "Choose an image to view",
+      "saveFileTitle": "Save image copy"
+    },
+    "viewer": {
+      "emptyPrompt": "Drag or click to import an image",
+      "dragPrompt": "Release to import image",
+      "loading": "Loading image...",
+      "resolutionLabel": "Resolution",
+      "zoomLabel": "Zoom",
+      "pathLabel": "Current Path",
+      "fileSizeLabel": "File Size",
+      "fitMode": "Fit Window",
+      "manualMode": "Manual Zoom"
+    },
+    "status": {
+      "ready": "Ready",
+      "idle": "Waiting to open",
+      "saving": "Saving...",
+      "saveSuccess": "Image saved to {path}",
+      "samePath": "The selected location already matches the current image path.",
+      "launchTrigger": "Launch source: {trigger}"
+    },
+    "errors": {
+      "missingPath": "No image path is available right now.",
+      "unsupportedFile": "Only these image formats are supported: {extensions}",
+      "openFailed": "Failed to open the image. Please check Host routing and resource permissions.",
+      "loadFailed": "The image could not be loaded. Make sure the resource exists and the format is valid.",
+      "saveFailed": "Failed to save the image. Please check the destination path and file write permissions."
+    }
+  }
+}

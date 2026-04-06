@@ -1,0 +1,54 @@
+id: com.chips.photo-viewer
+name: 图片查看器
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态图片查看器应用插件，用于查看图片、缩放图片并保存图片。
+
+author:
+  name: PhotoViewer
+  email: dev@chips.local
+
+keywords:
+  - chips
+  - image
+  - photo
+  - viewer
+
+capabilities:
+  - file-handler:.png
+  - file-handler:.jpg
+  - file-handler:.jpeg
+  - file-handler:.webp
+  - file-handler:.gif
+  - file-handler:.bmp
+  - file-handler:.svg
+  - file-handler:.avif
+
+permissions:
+  - resource.read
+  - file.write
+  - platform.read
+  - theme.read
+  - i18n.read
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 图片查看器
+    icon: assets/icons/app-icon.ico
+  window:
+    chrome:
+      titleBarStyle: default

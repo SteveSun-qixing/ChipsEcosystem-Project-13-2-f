@@ -102,30 +102,51 @@ function parseYamlFile<T>(filePath: string): T {
   return yaml.load(content) as T;
 }
 
-/**
- * 枚举卡片根目录中的资源文件（排除 .card/ 和 content/ 目录）
- */
-function enumerateResourceFiles(tempDir: string): ResourceFile[] {
-  const excludeDirs = new Set(['.card', 'content']);
-  const result: ResourceFile[] = [];
+function normalizeCardPath(relativePath: string): string {
+  return path.posix.normalize(relativePath.replace(/\\/g, '/')).replace(/^\.\/+/, '');
+}
 
-  const walk = (currentDir: string, currentRelativeDir = ''): void => {
+function isStructuralCardFile(relativePath: string): boolean {
+  const normalizedPath = normalizeCardPath(relativePath);
+  if (
+    normalizedPath === '.card/metadata.yaml' ||
+    normalizedPath === '.card/structure.yaml' ||
+    normalizedPath === '.card/cover.html'
+  ) {
+    return true;
+  }
+
+  return normalizedPath.startsWith('content/') && normalizedPath.endsWith('.yaml');
+}
+
+/**
+ * 枚举卡片中的所有非结构配置文件资源
+ */
+export function enumerateResourceFiles(tempDir: string): ResourceFile[] {
+  const result: ResourceFile[] = [];
+  const stack = [tempDir];
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    if (!currentDir) {
+      continue;
+    }
+
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
-      const relativePath = currentRelativeDir
-        ? path.posix.join(currentRelativeDir, entry.name)
-        : entry.name;
       const absolutePath = path.join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
-        if (!currentRelativeDir && excludeDirs.has(entry.name)) {
-          continue;
-        }
-        walk(absolutePath, relativePath);
+        stack.push(absolutePath);
         continue;
       }
 
       if (!entry.isFile()) {
+        continue;
+      }
+
+      const relativePath = normalizeCardPath(path.relative(tempDir, absolutePath));
+      if (isStructuralCardFile(relativePath)) {
         continue;
       }
 
@@ -134,13 +155,12 @@ function enumerateResourceFiles(tempDir: string): ResourceFile[] {
         relativePath,
         absolutePath,
         size: stat.size,
-        filename: entry.name,
+        filename: path.basename(relativePath),
       });
     }
-  };
+  }
 
-  walk(tempDir);
-
+  result.sort((a, b) => a.relativePath.localeCompare(b.relativePath, 'en'));
   return result;
 }
 

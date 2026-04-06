@@ -59,7 +59,7 @@ export interface CardUnpackResult {
   tempDir: string;
   metadata: CardMetadata;
   structure: CardStructure;
-  /** 卡片根目录中的资源文件列表（排除 .card/ 和 content/ 目录） */
+  /** 卡片内所有非结构配置文件资源（会进入上传与替换链路） */
   resourceFiles: ResourceFile[];
   /**
    * content/*.yaml 内容映射表

@@ -3,6 +3,9 @@ import { useParams } from 'react-router-dom';
 import { cardsApi, type CardDetail } from '../api/content';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { getErrorMessage } from '../lib/ui';
+import './DetailPage.css';
+
+const CARD_REDIRECT_LOADER_DELAY_MS = 180;
 
 export default function CardDetailPage() {
   const { t } = useAppPreferences();
@@ -10,6 +13,7 @@ export default function CardDetailPage() {
   const [card, setCard] = useState<CardDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showRedirectLoader, setShowRedirectLoader] = useState(false);
 
   useEffect(() => {
     if (!cardId) {
@@ -47,17 +51,40 @@ export default function CardDetailPage() {
     }
   }, [card]);
 
-  if (loading) {
-    return <div className="container loading-screen">{t('common.loading')}</div>;
+  const waitingState = loading || (!!card && card.status !== 'error' && !error);
+
+  useEffect(() => {
+    if (!waitingState) {
+      setShowRedirectLoader(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowRedirectLoader(true);
+    }, CARD_REDIRECT_LOADER_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [waitingState]);
+
+  if (waitingState) {
+    return showRedirectLoader ? (
+      <div className="detail-transition-shell">
+        <span className="detail-transition-spinner" />
+      </div>
+    ) : null;
   }
 
   if (error || !card) {
-    return <div className="container empty-state">{error || t('detail.notFound')}</div>;
+    return (
+      <div className="page-container detail-page">
+        <section className="panel error-panel">
+          <h1>{error || t('detail.notFound')}</h1>
+        </section>
+      </div>
+    );
   }
 
-  if (card.status === 'error') {
-    return <div className="container empty-state">{t('card.errorState')}</div>;
-  }
-
-  return <div className="container loading-screen">{t('common.loading')}</div>;
+  return null;
 }

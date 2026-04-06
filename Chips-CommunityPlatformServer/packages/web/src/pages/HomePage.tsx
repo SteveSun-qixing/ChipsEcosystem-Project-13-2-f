@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { discoverApi } from '../api/content';
-import type { BoxSummary, CardSummary } from '../api/rooms';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getErrorMessage, getInitial } from '../lib/ui';
@@ -10,28 +9,28 @@ import './HomePage.css';
 export default function HomePage() {
   const { t, formatDate } = useAppPreferences();
   const { user } = useAuth();
-  const [cards, setCards] = useState<CardSummary[]>([]);
-  const [boxes, setBoxes] = useState<BoxSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cards, setCards] = useState<Awaited<ReturnType<typeof discoverApi.getLatestCards>>['data']>([]);
+  const [boxes, setBoxes] = useState<Awaited<ReturnType<typeof discoverApi.getLatestBoxes>>['data']>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Awaited<ReturnType<typeof discoverApi.search>>['data'] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
-  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     let active = true;
 
-    Promise.all([
-      discoverApi.getLatestCards({ pageSize: 6 }),
-      discoverApi.getLatestBoxes({ pageSize: 6 }),
+    void Promise.all([
+      discoverApi.getLatestCards({ pageSize: 4 }),
+      discoverApi.getLatestBoxes({ pageSize: 4 }),
     ])
-      .then(([cardRes, boxRes]) => {
+      .then(([cardResponse, boxResponse]) => {
         if (!active) {
           return;
         }
 
-        setCards(cardRes.data);
-        setBoxes(boxRes.data);
+        setCards(cardResponse.data);
+        setBoxes(boxResponse.data);
       })
       .catch((nextError) => {
         if (active) {
@@ -49,232 +48,201 @@ export default function HomePage() {
     };
   }, [t]);
 
-  const searchResultCount = useMemo(() => {
+  const searchCount = useMemo(() => {
     if (!results) {
       return 0;
     }
 
-    return (
-      (results.cards?.length ?? 0) +
-      (results.boxes?.length ?? 0) +
-      (results.users?.length ?? 0)
-    );
+    return (results.users?.length ?? 0) + (results.cards?.length ?? 0) + (results.boxes?.length ?? 0);
   }, [results]);
 
-  const handleSearch = (event: React.FormEvent) => {
+  const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
-    const keyword = query.trim();
 
+    const keyword = query.trim();
     if (!keyword) {
       setResults(null);
       return;
     }
 
+    setSearching(true);
     setError('');
-    startTransition(() => {
-      discoverApi
-        .search({ q: keyword, pageSize: 6 })
-        .then((response) => setResults(response.data))
-        .catch((nextError) => setError(getErrorMessage(nextError, t('common.error'))));
-    });
+
+    try {
+      const response = await discoverApi.search({ q: keyword, pageSize: 5 });
+      setResults(response.data);
+    } catch (nextError) {
+      setError(getErrorMessage(nextError, t('common.error')));
+    } finally {
+      setSearching(false);
+    }
   };
 
-  const primaryHref = user ? '/upload' : '/register';
-  const secondaryHref = user ? `/@${user.username}` : '/login';
+  const primaryHref = user ? `/@${user.username}` : '/register';
+  const secondaryHref = '/about';
+  const loginHref = '/login';
 
   return (
-    <div className="home-page">
-      <section className="hero-panel surface-panel">
-        <div className="container hero-panel__grid">
-          <div className="hero-panel__copy">
-            <span className="eyebrow">{t('brand.name')}</span>
-            <h1>{t('home.heroTitle')}</h1>
-            <p>{t('home.heroSubtitle')}</p>
-            <div className="hero-panel__actions">
-              <Link to={primaryHref} className="button button-primary">
-                {t('home.heroPrimary')}
-              </Link>
-              <Link to={secondaryHref} className="button button-secondary">
-                {t('home.heroSecondary')}
-              </Link>
-            </div>
+    <div className="page-container home-page">
+      <section className="panel home-hero">
+        <div className="home-hero__copy">
+          <span className="eyebrow">{t('brand.name')}</span>
+          <h1>{t('home.heroTitle')}</h1>
+          <p className="muted">{t('home.heroSubtitle')}</p>
+
+          <div className="home-hero__actions">
+            <Link to={primaryHref} className="button button--primary">{t('home.heroPrimary')}</Link>
+            <Link to={secondaryHref} className="button button--secondary">{t('home.heroSecondary')}</Link>
+            {!user ? (
+              <Link to={loginHref} className="button button--ghost">{t('home.heroLogin')}</Link>
+            ) : null}
           </div>
 
-          <div className="hero-panel__card surface-card">
-            <h2>{t('home.stepsTitle')}</h2>
-            <ol className="hero-panel__steps">
-              <li>{t('home.stepUpload')}</li>
-              <li>{t('home.stepPipeline')}</li>
-              <li>{t('home.stepPublish')}</li>
-            </ol>
-          </div>
+          <p className="home-hero__hint">{t('home.loginHint')}</p>
+        </div>
+
+        <div className="home-hero__panel">
+          <article className="home-orbit-card">
+            <span className="eyebrow">{t('home.featureProfileTitle')}</span>
+            <strong>{t('home.featureProfileBody')}</strong>
+          </article>
+          <article className="home-orbit-card">
+            <span className="eyebrow">{t('home.featureWorkspaceTitle')}</span>
+            <strong>{t('home.featureWorkspaceBody')}</strong>
+          </article>
+          <article className="home-orbit-card">
+            <span className="eyebrow">{t('home.featureAdminTitle')}</span>
+            <strong>{t('home.featureAdminBody')}</strong>
+          </article>
         </div>
       </section>
 
-      <section className="container stack-xl">
-        <div className="surface-panel search-panel">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">{t('nav.discover')}</span>
-              <h2>{t('home.searchTitle')}</h2>
-            </div>
-          </div>
+      <section className="home-feature-grid">
+        {[
+          ['home.featureWelcomeTitle', 'home.featureWelcomeBody'],
+          ['home.featureProfileTitle', 'home.featureProfileBody'],
+          ['home.featureWorkspaceTitle', 'home.featureWorkspaceBody'],
+          ['home.featureAdminTitle', 'home.featureAdminBody'],
+        ].map(([titleKey, bodyKey]) => (
+          <article key={titleKey} className="panel home-feature-card">
+            <span className="eyebrow">{t(titleKey)}</span>
+            <h2>{t(titleKey)}</h2>
+            <p className="muted">{t(bodyKey)}</p>
+          </article>
+        ))}
+      </section>
 
-          <form className="search-panel__form" onSubmit={handleSearch}>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('home.searchPlaceholder')}
-              className="input"
-            />
-            <button className="button button-primary" type="submit">
-              {isPending ? t('common.loading') : t('common.search')}
-            </button>
-          </form>
-          <p className="supporting-text">{t('home.searchHint')}</p>
+      <section className="home-discover">
+        <div className="home-section-head">
+          <div>
+            <span className="eyebrow">{t('home.discoverTitle')}</span>
+            <h2>{t('home.discoverTitle')}</h2>
+            <p className="muted">{t('home.discoverSubtitle')}</p>
+          </div>
         </div>
+
+        {loading ? (
+          <div className="home-discover__grid">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="panel skeleton-tile" />
+            ))}
+          </div>
+        ) : (
+          <div className="home-discover__grid">
+            {cards.map((card) => (
+              <Link key={card.id} to={`/cards/${card.id}`} className="home-discover__tile">
+                <div className="home-discover__cover">
+                  {card.coverUrl ? (
+                    <iframe
+                      src={card.coverUrl}
+                      title={card.title}
+                      loading="lazy"
+                      sandbox="allow-same-origin"
+                      scrolling="no"
+                    />
+                  ) : (
+                    <span>{getInitial(card.title)}</span>
+                  )}
+                </div>
+                <div className="home-discover__body">
+                  <strong>{card.title}</strong>
+                  <span>{formatDate(card.createdAt)}</span>
+                </div>
+              </Link>
+            ))}
+
+            {boxes.map((box) => (
+              <Link key={box.id} to={`/boxes/${box.id}`} className="home-discover__tile">
+                <div className="home-discover__cover home-discover__cover--box">
+                  {box.coverUrl ? <img src={box.coverUrl} alt={box.title} loading="lazy" /> : <span>{getInitial(box.title)}</span>}
+                </div>
+                <div className="home-discover__body">
+                  <strong>{box.title}</strong>
+                  <span>{formatDate(box.createdAt)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel home-search">
+        <div className="home-section-head">
+          <div>
+            <span className="eyebrow">{t('home.searchTitle')}</span>
+            <h2>{t('home.searchTitle')}</h2>
+          </div>
+          {user ? (
+            <Link to="/workspace" className="button button--secondary">{t('home.openWorkspace')}</Link>
+          ) : null}
+        </div>
+
+        <form className="home-search__form" onSubmit={(event) => void handleSearch(event)}>
+          <input
+            className="input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('home.searchPlaceholder')}
+          />
+          <button type="submit" className="button button--primary" disabled={searching}>
+            {searching ? t('common.loading') : t('common.open')}
+          </button>
+        </form>
 
         {error ? <div className="inline-notice inline-notice--danger">{error}</div> : null}
 
         {results ? (
-          <section className="stack-lg">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">{t('home.resultsTitle')}</span>
-                <h2>{`${t('home.resultsTitle')} · ${searchResultCount}`}</h2>
-              </div>
+          searchCount > 0 ? (
+            <div className="home-search__results">
+              {results.users?.map((resultUser) => (
+                <Link key={resultUser.username} to={`/@${resultUser.username}`} className="panel search-result-card">
+                  <strong>{resultUser.displayName || resultUser.username}</strong>
+                  <span>@{resultUser.username}</span>
+                </Link>
+              ))}
+              {results.cards?.map((card) => (
+                <Link key={card.id} to={`/cards/${card.id}`} className="panel search-result-card">
+                  <strong>{card.title}</strong>
+                  <span>{t('common.card')}</span>
+                </Link>
+              ))}
+              {results.boxes?.map((box) => (
+                <Link key={box.id} to={`/boxes/${box.id}`} className="panel search-result-card">
+                  <strong>{box.title}</strong>
+                  <span>{t('common.box')}</span>
+                </Link>
+              ))}
             </div>
-
-            {searchResultCount === 0 ? (
-              <div className="empty-state surface-panel">{t('home.noSearchResults')}</div>
-            ) : (
-              <div className="search-results">
-                {(results.users?.length ?? 0) > 0 ? (
-                  <div className="surface-card stack-md">
-                    <h3>{t('common.users')}</h3>
-                    <div className="tile-grid tile-grid--compact">
-                      {results.users?.map((resultUser) => (
-                        <Link key={resultUser.username} to={`/@${resultUser.username}`} className="content-tile">
-                          <div className="content-tile__cover content-tile__cover--avatar">
-                            {resultUser.avatarUrl ? (
-                              <img src={resultUser.avatarUrl} alt={resultUser.displayName} />
-                            ) : (
-                              <span>{getInitial(resultUser.displayName || resultUser.username)}</span>
-                            )}
-                          </div>
-                          <div className="content-tile__body">
-                            <strong>{resultUser.displayName || resultUser.username}</strong>
-                            <span>@{resultUser.username}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {(results.cards?.length ?? 0) > 0 ? (
-                  <div className="surface-card stack-md">
-                    <h3>{t('common.cards')}</h3>
-                    <div className="tile-grid">
-                      {results.cards?.map((card) => (
-                        <Link key={card.id} to={`/cards/${card.id}`} className="content-tile">
-                          <div className="content-tile__cover">
-                            {card.coverUrl ? (
-                              <img src={card.coverUrl} alt={card.title} loading="lazy" />
-                            ) : (
-                              <span>{getInitial(card.title)}</span>
-                            )}
-                          </div>
-                          <div className="content-tile__body">
-                            <strong>{card.title}</strong>
-                            <span>{formatDate(card.createdAt)}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {(results.boxes?.length ?? 0) > 0 ? (
-                  <div className="surface-card stack-md">
-                    <h3>{t('common.boxes')}</h3>
-                    <div className="tile-grid">
-                      {results.boxes?.map((box) => (
-                        <Link key={box.id} to={`/boxes/${box.id}`} className="content-tile">
-                          <div className="content-tile__cover content-tile__cover--box">
-                            <span>{getInitial(box.title)}</span>
-                          </div>
-                          <div className="content-tile__body">
-                            <strong>{box.title}</strong>
-                            <span>{box.layoutPlugin || t('common.noDescription')}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </section>
+          ) : (
+            <div className="panel empty-panel">{t('home.searchEmpty')}</div>
+          )
         ) : null}
+      </section>
 
-        <section className="stack-lg">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">{t('home.latestCards')}</span>
-              <h2>{t('home.latestCards')}</h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="loading-state surface-panel">{t('common.loading')}</div>
-          ) : (
-            <div className="tile-grid">
-              {cards.map((card) => (
-                <Link key={card.id} to={`/cards/${card.id}`} className="content-tile">
-                  <div className="content-tile__cover">
-                    {card.coverUrl ? (
-                      <img src={card.coverUrl} alt={card.title} loading="lazy" />
-                    ) : (
-                      <span>{getInitial(card.title)}</span>
-                    )}
-                  </div>
-                  <div className="content-tile__body">
-                    <strong>{card.title}</strong>
-                    <span>{formatDate(card.createdAt)}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="stack-lg">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">{t('home.latestBoxes')}</span>
-              <h2>{t('home.latestBoxes')}</h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="loading-state surface-panel">{t('common.loading')}</div>
-          ) : (
-            <div className="tile-grid">
-              {boxes.map((box) => (
-                <Link key={box.id} to={`/boxes/${box.id}`} className="content-tile">
-                  <div className="content-tile__cover content-tile__cover--box">
-                    <span>{getInitial(box.title)}</span>
-                  </div>
-                  <div className="content-tile__body">
-                    <strong>{box.title}</strong>
-                    <span>{box.layoutPlugin || t('common.noDescription')}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+      <section className="panel home-about-callout">
+        <span className="eyebrow">{t('home.aboutBlockTitle')}</span>
+        <h2>{t('home.aboutBlockTitle')}</h2>
+        <p className="muted">{t('home.aboutBlockBody')}</p>
       </section>
     </div>
   );

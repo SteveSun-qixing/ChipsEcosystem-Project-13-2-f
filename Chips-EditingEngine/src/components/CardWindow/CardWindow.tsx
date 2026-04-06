@@ -10,6 +10,8 @@ import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { CardWindowConfig, Position, Size } from '../../types/window';
 import { CompositeCardAssembler } from '../../basecard-runtime/CompositeCardAssembler';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import { normalizeCoverRatio, parseCoverRatio } from '../../utils/card-cover';
 import './CardWindow.css';
 
@@ -365,7 +367,9 @@ export function CardWindow({
                 <div className="card-window__content">
                     {!cardInfo ? (
                         <div className="card-window__loading">
-                            <span className="card-window__loading-icon">⏳</span>
+                            <span className="card-window__loading-icon">
+                                <RuntimeIcon icon={ENGINE_ICONS.loading} />
+                            </span>
                             <span className="card-window__loading-text">{t('card_window.loading')}</span>
                         </div>
                     ) : visibleBaseCards.length === 0 ? (
@@ -376,7 +380,9 @@ export function CardWindow({
                             data-chips-base-card-count="0"
                             data-chips-drop-accept={isEditing ? 'true' : 'false'}
                         >
-                            <span className="card-window__empty-icon">📄</span>
+                            <span className="card-window__empty-icon">
+                                <RuntimeIcon icon={ENGINE_ICONS.document} />
+                            </span>
                             <span className="card-window__empty-text">{t('card_window.empty')}</span>
                             {isEditing && (
                                 <span className="card-window__empty-hint">{t('card_window.empty_hint')}</span>
@@ -426,14 +432,18 @@ export function CardWindow({
 
                                 {isPreviewLoading && previewHeight === null && (
                                     <div className="card-window__overlay">
-                                        <span className="card-window__loading-icon">⏳</span>
+                                        <span className="card-window__loading-icon">
+                                            <RuntimeIcon icon={ENGINE_ICONS.loading} />
+                                        </span>
                                         <span className="card-window__loading-text">{t('card_window.loading')}</span>
                                     </div>
                                 )}
 
                                 {previewError && (
                                     <div className="card-window__overlay card-window__overlay--error">
-                                        <span className="card-window__empty-icon">⚠️</span>
+                                        <span className="card-window__empty-icon">
+                                            <RuntimeIcon icon={ENGINE_ICONS.warning} />
+                                        </span>
                                         <span className="card-window__empty-text">{previewError}</span>
                                     </div>
                                 )}

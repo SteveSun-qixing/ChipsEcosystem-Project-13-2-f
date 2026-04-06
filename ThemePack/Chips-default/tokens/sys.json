@@ -7,6 +7,14 @@
         "primary": "{chips.ref.color.blue-500}",
         "error": "{chips.ref.color.red-500}"
       },
+      "icon": {
+        "color": "{chips.ref.color.gray-1000}",
+        "size": "1em",
+        "fill": 0,
+        "wght": 400,
+        "grad": 0,
+        "opsz": 24
+      },
       "radius": {
         "container": "{chips.ref.radius.md}"
       }

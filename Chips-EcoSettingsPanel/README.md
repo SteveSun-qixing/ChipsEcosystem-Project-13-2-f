@@ -74,3 +74,5 @@ Chips-EcoSettingsPanel/
 - 已完成组件展示注册表与当前正式组件分组接入。
 - 已完成窄屏菜单切换器、左侧菜单精简与当前设置面板插件的自保护限制。
 - 已将脚手架遗留的同名 `.js` 副本移入 `归档/`，工程源码基线统一收口为 TypeScript。
+- 应用插件治理页当前优先展示 `PluginShortcutRecord.iconPath`，缺失时回退到正式运行时图标组件，不再显示 emoji 或路径字符串。
+- 当前工程 `assets/icons/app-icon.ico`、`assets/icons/app-icon.icns`、`assets/icons/app-icon.png` 已与 `design-assets/Appicon/EcoSettingsPanel.*` 对齐。

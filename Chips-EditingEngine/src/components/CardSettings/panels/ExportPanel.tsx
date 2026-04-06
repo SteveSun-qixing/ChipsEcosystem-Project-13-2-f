@@ -4,6 +4,8 @@ import { useTranslation } from '../../../hooks/useTranslation';
 import { useCard } from '../../../context/CardContext';
 import { getChipsClient } from '../../../services/bridge-client';
 import { fileService } from '../../../services/file-service';
+import { ENGINE_ICONS } from '../../../icons/descriptors';
+import { RuntimeIcon } from '../../../icons/RuntimeIcon';
 import './ExportPanel.css';
 
 interface ExportPanelProps {
@@ -312,28 +314,28 @@ export function ExportPanel({ cardId, onBeforeExport }: ExportPanelProps) {
   const exportFormats = useMemo(() => [
     {
       key: 'card',
-      icon: '📦',
+      icon: ENGINE_ICONS.box,
       label: t('card_settings.export_card') || '导出为 .card',
       desc: '.card',
       available: exportAvailability.card,
     },
     {
       key: 'html',
-      icon: '🌐',
+      icon: ENGINE_ICONS.html,
       label: t('card_settings.export_html') || '导出为 HTML',
       desc: 'HTML ZIP',
       available: exportAvailability.html,
     },
     {
       key: 'pdf',
-      icon: '📄',
+      icon: ENGINE_ICONS.pdf,
       label: t('card_settings.export_pdf') || '导出为 PDF',
       desc: 'PDF',
       available: exportAvailability.pdf,
     },
     {
       key: 'image',
-      icon: '🖼️',
+      icon: ENGINE_ICONS.image,
       label: t('card_settings.export_image') || '导出为图片',
       desc: 'PNG',
       available: exportAvailability.image,
@@ -492,7 +494,9 @@ export function ExportPanel({ cardId, onBeforeExport }: ExportPanelProps) {
                 : undefined}
               onClick={() => handleExport(fmt.key as ExportFormat)}
             >
-              <span className="export-panel__format-icon" aria-hidden="true">{fmt.icon}</span>
+              <span className="export-panel__format-icon" aria-hidden="true">
+                <RuntimeIcon icon={fmt.icon} />
+              </span>
               <div className="export-panel__format-text">
                 <span className="export-panel__format-title">{fmt.label}</span>
                 <span className="export-panel__format-desc">{fmt.desc}</span>

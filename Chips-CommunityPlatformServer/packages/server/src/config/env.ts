@@ -55,7 +55,7 @@ export type Env = z.infer<typeof EnvSchema>;
 function loadEnv(): Env {
   const result = EnvSchema.safeParse(process.env);
   if (!result.success) {
-    console.error('❌ Invalid environment variables:');
+    console.error('Invalid environment variables:');
     console.error(result.error.format());
     process.exit(1);
   }

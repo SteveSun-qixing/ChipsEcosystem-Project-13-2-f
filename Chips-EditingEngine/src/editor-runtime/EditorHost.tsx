@@ -10,6 +10,8 @@ import { fileService } from '../services/file-service';
 import type { BasecardPendingResourceImport, BasecardResourceOperations } from '../basecard-runtime/contracts';
 import type { EditorSessionSnapshot } from './contracts';
 import { useEditorRuntime } from './context';
+import { ENGINE_ICONS } from '../icons/descriptors';
+import { RuntimeIcon } from '../icons/RuntimeIcon';
 
 function joinPath(...parts: string[]): string {
   return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
@@ -484,7 +486,9 @@ export function EditorHost({
 
       {!isLoading && (loadError || snapshot?.errorMessage) && (
         <div className="plugin-host__error">
-          <div className="plugin-host__error-icon">⚠️</div>
+          <div className="plugin-host__error-icon">
+            <RuntimeIcon icon={ENGINE_ICONS.warning} />
+          </div>
           <p className="plugin-host__error-text">{errorText}</p>
           <button
             type="button"

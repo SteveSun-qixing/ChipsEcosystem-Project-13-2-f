@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react';
+import type { IconDescriptor } from 'chips-sdk';
 import { useSettings } from '../../../context/SettingsContext';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../../icons/descriptors';
+import { RuntimeIcon } from '../../../icons/RuntimeIcon';
 import './FileModeSettingsPanel.css';
 
 const CATEGORY_ID = 'fileMode';
@@ -26,15 +29,15 @@ export function FileModeSettingsPanel() {
       id: 'link' as const,
       labelKey: 'engine_settings.file_mode_link',
       descKey: 'engine_settings.file_mode_link_desc',
-      icon: '🔗',
+      icon: ENGINE_ICONS.link,
     },
     {
       id: 'copy' as const,
       labelKey: 'engine_settings.file_mode_copy',
       descKey: 'engine_settings.file_mode_copy_desc',
-      icon: '📋',
+      icon: ENGINE_ICONS.copy,
     },
-  ], []);
+  ] satisfies Array<{ id: 'link' | 'copy'; labelKey: string; descKey: string; icon: IconDescriptor }>, []);
 
   const handleSelectMode = (mode: 'link' | 'copy') => {
     setSetting<FileModeSettingsData>(CATEGORY_ID, {
@@ -62,11 +65,13 @@ export function FileModeSettingsPanel() {
             onClick={() => handleSelectMode(mode.id)}
           >
             <div className="file-mode-option__header">
-              <span className="file-mode-option__icon">{mode.icon}</span>
+              <span className="file-mode-option__icon">
+                <RuntimeIcon icon={mode.icon} />
+              </span>
               <span className="file-mode-option__name">{t(mode.labelKey) || (mode.id === 'link' ? '保持只读链接 (推荐)' : '复制到工作区')}</span>
               {fileModeData.fileMode === mode.id && (
                 <span className="settings-option-card__check" aria-hidden="true">
-                  ✓
+                  <RuntimeIcon icon={ENGINE_ICONS.check} />
                 </span>
               )}
             </div>

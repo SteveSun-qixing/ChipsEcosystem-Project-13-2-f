@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import type { IconDescriptor } from 'chips-sdk';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useSettings } from '../../context/SettingsContext';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './EngineSettingsDialog.css';
 
 interface EngineSettingsDialogProps {
@@ -10,10 +13,18 @@ interface EngineSettingsDialogProps {
 }
 
 const categories = [
-  { id: 'general', labelKey: 'engine_settings.category_general', icon: '⚙️' },
-  { id: 'appearance', labelKey: 'engine_settings.category_appearance', icon: '🎨' },
-  { id: 'shortcuts', labelKey: 'engine_settings.category_shortcuts', icon: '⌨️' },
+  { id: 'general', labelKey: 'engine_settings.category_general', icon: ENGINE_ICONS.settings },
+  { id: 'appearance', labelKey: 'engine_settings.category_appearance', icon: ENGINE_ICONS.palette },
+  { id: 'shortcuts', labelKey: 'engine_settings.category_shortcuts', icon: ENGINE_ICONS.shortcuts },
 ];
+
+type SettingsCategory = {
+  id: string;
+  labelKey: string;
+  icon: IconDescriptor;
+};
+
+const RESETTABLE_CATEGORY_IDS = new Set(['general', 'appearance', 'shortcuts']);
 
 export function EngineSettingsDialog({
   visible,
@@ -49,7 +60,18 @@ export function EngineSettingsDialog({
   };
 
   const handleResetCategory = () => {
-    console.log('Reset category:', activeCategoryId);
+    switch (activeCategoryId) {
+      case 'general':
+        setSetting('defaultWorkspacePath', '');
+        return;
+      case 'appearance':
+        setSetting('theme', 'default');
+        return;
+      case 'shortcuts':
+        return;
+      default:
+        return;
+    }
   };
 
   useEffect(() => {
@@ -60,16 +82,18 @@ export function EngineSettingsDialog({
   }, [visible]);
 
   const categoryGroups = useMemo(() => {
-    const allCategories = [...categories];
+    const allCategories: SettingsCategory[] = [...categories];
     registeredPanels.forEach(panel => {
       allCategories.push({
         id: panel.id,
         labelKey: panel.name,
-        icon: '📋',
+        icon: ENGINE_ICONS.layout,
       });
     });
     return [allCategories];
   }, [registeredPanels]);
+
+  const canResetActiveCategory = RESETTABLE_CATEGORY_IDS.has(activeCategoryId);
 
   const renderCategoryContent = () => {
     switch (activeCategoryId) {
@@ -137,7 +161,7 @@ export function EngineSettingsDialog({
             aria-label={t('engine_settings.close') || '关闭'}
             onClick={onClose}
           >
-            ✕
+            <RuntimeIcon icon={ENGINE_ICONS.close} />
           </button>
         </div>
 
@@ -152,7 +176,9 @@ export function EngineSettingsDialog({
                     className={`engine-settings-dialog__category-btn ${activeCategoryId === category.id ? 'active' : ''}`}
                     onClick={() => setActiveCategoryId(category.id)}
                   >
-                    <span className="engine-settings-dialog__category-icon">{category.icon}</span>
+                    <span className="engine-settings-dialog__category-icon">
+                      <RuntimeIcon icon={category.icon} />
+                    </span>
                     <span className="engine-settings-dialog__category-label">{t(category.labelKey)}</span>
                   </button>
                 ))}
@@ -170,6 +196,7 @@ export function EngineSettingsDialog({
             type="button"
             className="engine-settings-dialog__btn"
             onClick={handleResetCategory}
+            disabled={!canResetActiveCategory}
           >
             {t('engine_settings.reset') || '重置'}
           </button>

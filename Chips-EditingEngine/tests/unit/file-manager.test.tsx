@@ -39,6 +39,7 @@ const { workspaceServiceMock } = vi.hoisted(() => {
 });
 
 vi.mock('@chips/component-library', () => ({
+  ChipsIcon: ({ descriptor }: { descriptor: { name: string } }) => <span data-icon-name={descriptor.name} />,
   ChipsInput: React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
     function MockChipsInput(props, ref) {
       return <input ref={ref} {...props} />;

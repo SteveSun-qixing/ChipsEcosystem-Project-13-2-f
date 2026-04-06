@@ -29,6 +29,30 @@ const flattenLayer = (layer: Record<string, unknown>, prefix?: string): Record<s
   return flat;
 };
 
+export const REQUIRED_THEME_TOKENS: string[] = [
+  "chips.sys.icon.color",
+  "chips.sys.icon.size",
+  "chips.sys.icon.fill",
+  "chips.sys.icon.wght",
+  "chips.sys.icon.grad",
+  "chips.sys.icon.opsz",
+  "chips.comp.button.root.radius",
+  "chips.comp.button.root.surface.idle",
+  "chips.comp.button.root.surface.hover",
+  "chips.comp.button.root.surface.active",
+  "chips.comp.button.root.surface.disabled",
+  "chips.comp.button.label.color.idle",
+  "chips.comp.button.label.color.disabled",
+  "chips.comp.button.focus.outline",
+  "chips.comp.input.root.radius",
+  "chips.comp.input.root.surface.idle",
+  "chips.comp.input.root.surface.focus",
+  "chips.comp.input.root.border.idle",
+  "chips.comp.input.root.border.error",
+  "chips.comp.input.value.color",
+  "chips.comp.input.placeholder.color"
+];
+
 const main = async (): Promise<void> => {
   const projectRoot = process.cwd();
   const tokensPath = path.join(projectRoot, "dist", "tokens.json");
@@ -57,12 +81,7 @@ const main = async (): Promise<void> => {
     ...layoutFlat
   };
 
-  const requiredComponentTokens = [
-    "chips.comp.button.background",
-    "chips.comp.button.color"
-  ];
-
-  const missing = requiredComponentTokens.filter((key) => !(key in variables));
+  const missing = REQUIRED_THEME_TOKENS.filter((key) => !(key in variables));
 
   if (missing.length > 0) {
     // eslint-disable-next-line no-console
@@ -76,4 +95,3 @@ const main = async (): Promise<void> => {
 };
 
 void main();
-

@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FileItem } from './FileItem';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileTree.css';
 
 interface FileTreeProps {
@@ -36,7 +38,6 @@ export function FileTree({
     onDragStart,
 }: FileTreeProps) {
     const { t } = useTranslation();
-    const treeRef = useRef<HTMLDivElement>(null);
     const [focusIndex, setFocusIndex] = useState(-1);
     const rootDepth = useMemo(
         () => (rootPath ?? '').split('/').filter(Boolean).length,
@@ -177,7 +178,6 @@ export function FileTree({
 
     return (
         <div
-            ref={treeRef}
             className="file-tree"
             tabIndex={0}
             role="tree"
@@ -203,7 +203,9 @@ export function FileTree({
                 ))
             ) : (
                 <div className="file-tree__empty">
-                    <span className="file-tree__empty-icon">📁</span>
+                    <span className="file-tree__empty-icon">
+                        <RuntimeIcon icon={ENGINE_ICONS.folderClosed} />
+                    </span>
                     <span className="file-tree__empty-text">{t('file.empty_folder') || '文件夹为空'}</span>
                 </div>
             )}

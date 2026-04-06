@@ -7,6 +7,7 @@ import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
 import { loadElectronModule } from '../electron/electron-loader';
+import { rewriteThemeCssAssetUrls } from '../theme-runtime/css-assets';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
 import { buildThemeContractsView, type ThemeContract, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
 import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
@@ -713,7 +714,7 @@ const loadThemeRecordFromPlugin = async (plugin: ReturnType<PluginRuntime['query
     publisher: themeMeta.publisher,
     parentTheme: themeMeta.parentTheme,
     isDefault: themeMeta.isDefault,
-    css,
+    css: rewriteThemeCssAssetUrls(css, resolvedThemeCssPath),
     tokens,
     contract
   };

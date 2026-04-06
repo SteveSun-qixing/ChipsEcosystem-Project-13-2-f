@@ -31,6 +31,23 @@ const symlinkDir = async (source, target) => {
   await fsp.symlink(source, target, type);
 };
 
+const shouldCopyWorkspacePath = (sourceRoot, entryPath) => {
+  const relativePath = path.relative(sourceRoot, entryPath);
+  if (relativePath.length === 0) {
+    return true;
+  }
+  const segments = relativePath.split(path.sep);
+  return !segments.includes('node_modules') && !segments.includes('.git');
+};
+
+const copyDir = async (source, target) => {
+  await fsp.cp(source, target, {
+    recursive: true,
+    dereference: true,
+    filter: (entryPath) => shouldCopyWorkspacePath(source, entryPath)
+  });
+};
+
 const withWritableNpmCache = (env, cacheRoot) => ({
   ...env,
   NPM_CONFIG_CACHE: cacheRoot,
@@ -41,11 +58,21 @@ const main = async () => {
   console.log('Running chipsdev create layout workspace integration tests...');
 
   const sandboxRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'chipsdev-create-layout-workspace-'));
-  const linkedEntries = ['Chips-SDK', 'Chips-Scaffold', 'Chips-ComponentLibrary'];
+  const workspaceEntries = [
+    { name: 'Chips-SDK', mode: 'symlink' },
+    { name: 'Chips-Scaffold', mode: 'symlink' },
+    { name: 'Chips-ComponentLibrary', mode: 'copy' }
+  ];
 
   try {
-    for (const entry of linkedEntries) {
-      await symlinkDir(path.join(ecosystemRoot, entry), path.join(sandboxRoot, entry));
+    for (const entry of workspaceEntries) {
+      const sourceDir = path.join(ecosystemRoot, entry.name);
+      const targetDir = path.join(sandboxRoot, entry.name);
+      if (entry.mode === 'copy') {
+        await copyDir(sourceDir, targetDir);
+        continue;
+      }
+      await symlinkDir(sourceDir, targetDir);
     }
 
     await fsp.writeFile(

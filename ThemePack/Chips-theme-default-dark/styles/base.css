@@ -14,6 +14,12 @@
   --chips-base-shadow-color: var(--chips-sys-color-shadow, rgba(0, 0, 0, 0.46));
   --chips-base-text-muted: var(--chips-sys-color-on-surface-muted, #b6bfd0);
   --chips-base-text-soft: var(--chips-sys-color-on-surface-soft, #8f99ad);
+  --chips-base-icon-color: var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor));
+  --chips-base-icon-size: var(--chips-sys-icon-size, 1em);
+  --chips-base-icon-fill: var(--chips-sys-icon-fill, 0);
+  --chips-base-icon-wght: var(--chips-sys-icon-wght, 400);
+  --chips-base-icon-grad: var(--chips-sys-icon-grad, 0);
+  --chips-base-icon-opsz: var(--chips-sys-icon-opsz, 24);
 }
 
 html,
@@ -62,4 +68,27 @@ body {
 [data-scope] {
   box-sizing: border-box;
   font-family: inherit;
+}
+
+[data-scope="icon"][data-part="root"] {
+  color: var(--chips-icon-color, var(--chips-base-icon-color));
+  font-size: var(--chips-icon-size, var(--chips-base-icon-size));
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-scope="icon"][data-part="root"][data-icon-style="rounded"] {
+  font-family: "Material Symbols Rounded";
+}
+
+[data-scope="icon"][data-part="root"][data-icon-style="sharp"] {
+  font-family: "Material Symbols Sharp";
 }

@@ -20,6 +20,7 @@ import type { BasicCardConfig } from './core/card-initializer';
 import type { DragData } from './components/CardBoxLibrary/types';
 import { generateId62 } from './utils/id';
 import { setLocale } from './i18n';
+import { getToolWindowIcon } from './icons/descriptors';
 import {
   createInitialBasecardConfig,
   normalizeBasecardType,
@@ -86,7 +87,7 @@ function MainWorkspace() {
     createToolWindow('FileManager', {
       component: 'FileManager',
       title: t('app.tool_file_manager'),
-      icon: '📁',
+      icon: getToolWindowIcon('FileManager'),
       position: { x: 20, y: 20 },
       size: { width: 280, height: 500 },
       closable: false,
@@ -95,7 +96,7 @@ function MainWorkspace() {
     createToolWindow('EditPanel', {
       component: 'EditPanel',
       title: t('app.tool_edit_panel'),
-      icon: '✏️',
+      icon: getToolWindowIcon('EditPanel'),
       position: { x: w - 340, y: 20 },
       size: { width: 320, height: 500 },
       closable: false,
@@ -104,7 +105,7 @@ function MainWorkspace() {
     createToolWindow('CardBoxLibrary', {
       component: 'CardBoxLibrary',
       title: t('app.tool_card_box_library'),
-      icon: '📦',
+      icon: getToolWindowIcon('CardBoxLibrary'),
       position: { x: 20, y: h - 350 },
       size: { width: 400, height: 300 },
       closable: false,

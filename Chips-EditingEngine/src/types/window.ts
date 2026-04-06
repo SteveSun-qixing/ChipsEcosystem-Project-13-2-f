@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import type { Position, Size } from './editor';
 
 export type WindowPosition = Position;
@@ -11,7 +12,7 @@ export interface BaseWindowConfig {
     id: string;
     type: WindowType;
     title: string;
-    icon?: string;
+    icon?: IconDescriptor;
     position: WindowPosition;
     size: WindowSize;
     state: WindowState;

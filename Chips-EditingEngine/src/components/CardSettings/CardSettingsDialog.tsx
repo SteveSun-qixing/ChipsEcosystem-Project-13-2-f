@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { ChipsTabs } from '@chips/component-library';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCard } from '../../context/CardContext';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import { BasicInfoPanel } from './panels/BasicInfoPanel';
 import { CoverPanel, type CoverPanelDraft } from './panels/CoverPanel';
 import { ThemePanel } from './panels/ThemePanel';
@@ -112,7 +114,7 @@ export function CardSettingsDialog({
             aria-label={t('card_settings.close') || '关闭'}
             onClick={onClose}
           >
-            ✕
+            <RuntimeIcon icon={ENGINE_ICONS.close} />
           </button>
         </div>
 

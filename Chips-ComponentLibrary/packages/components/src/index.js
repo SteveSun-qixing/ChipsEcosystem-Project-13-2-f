@@ -22,68 +22,140 @@ const INITIAL_INTERACTION_STATE = {
   active: false
 };
 
-function createGlyphIcon(pathDefinition, options = {}) {
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function normalizeIconName(name) {
+  if (!isNonEmptyString(name)) {
+    throw new Error("ICON_DESCRIPTOR_INVALID:name");
+  }
+  return name.trim().replace(/[\s-]+/g, "_");
+}
+
+function normalizeIconStyle(style) {
+  return style === "rounded" || style === "sharp" ? style : "outlined";
+}
+
+function normalizeIconFill(fill) {
+  return fill === 1 ? 1 : 0;
+}
+
+function normalizeIconAxis(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeIconDescriptor(descriptor = {}) {
+  return {
+    name: normalizeIconName(descriptor.name),
+    style: normalizeIconStyle(descriptor.style),
+    fill: normalizeIconFill(descriptor.fill),
+    wght: normalizeIconAxis(descriptor.wght, 400),
+    grad: normalizeIconAxis(descriptor.grad, 0),
+    opsz: normalizeIconAxis(descriptor.opsz, 24),
+    decorative: descriptor.label ? false : descriptor.decorative !== false,
+    label: isNonEmptyString(descriptor.label) ? descriptor.label.trim() : undefined
+  };
+}
+
+const DEFAULT_ICON_DESCRIPTOR_MAP = Object.freeze({
+  "chevron-down": Object.freeze({ name: "keyboard_arrow_down" }),
+  close: Object.freeze({ name: "close" }),
+  expand: Object.freeze({ name: "add" }),
+  collapse: Object.freeze({ name: "remove" }),
+  calendar: Object.freeze({ name: "calendar_month" })
+});
+
+function getDefaultIconDescriptor(type) {
+  if (!isNonEmptyString(type)) {
+    return null;
+  }
+  return DEFAULT_ICON_DESCRIPTOR_MAP[type] ?? null;
+}
+
+export const ChipsIcon = React.forwardRef((props, ref) => {
   const {
-    viewBox = "0 0 16 16",
-    strokeWidth = "1.5",
-    strokeLinecap = "round",
-    strokeLinejoin = "round"
-  } = options;
+    descriptor,
+    size,
+    color,
+    style,
+    title,
+    ...rest
+  } = props;
+
+  const normalized = normalizeIconDescriptor(descriptor);
+  const ariaLabel = normalized.label
+    || (isNonEmptyString(rest["aria-label"]) ? rest["aria-label"].trim() : undefined);
+  const ariaLabelledBy = isNonEmptyString(rest["aria-labelledby"])
+    ? rest["aria-labelledby"].trim()
+    : undefined;
+
+  if (!normalized.decorative && !ariaLabel && !ariaLabelledBy) {
+    throw new Error("ICON_A11Y_LABEL_REQUIRED");
+  }
+
+  const rootStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    lineHeight: 1,
+    fontSize: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
+    width: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
+    height: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
+    color: "var(--chips-icon-color, var(--chips-sys-icon-color, currentColor))",
+    fontVariationSettings:
+      "\"FILL\" var(--chips-icon-fill, var(--chips-sys-icon-fill, 0)), "
+      + "\"wght\" var(--chips-icon-wght, var(--chips-sys-icon-wght, 400)), "
+      + "\"GRAD\" var(--chips-icon-grad, var(--chips-sys-icon-grad, 0)), "
+      + "\"opsz\" var(--chips-icon-opsz, var(--chips-sys-icon-opsz, 24))",
+    fontFeatureSettings: "\"liga\"",
+    ...style
+  };
+
+  if (size !== undefined) {
+    rootStyle["--chips-icon-size"] = typeof size === "number" ? `${size}px` : size;
+  }
+  if (color !== undefined) {
+    rootStyle["--chips-icon-color"] = color;
+  }
+  rootStyle["--chips-icon-fill"] = String(normalized.fill);
+  rootStyle["--chips-icon-wght"] = String(normalized.wght);
+  rootStyle["--chips-icon-grad"] = String(normalized.grad);
+  rootStyle["--chips-icon-opsz"] = String(normalized.opsz);
+
   return React.createElement(
-    "svg",
+    "span",
     {
-      width: "12",
-      height: "12",
-      viewBox,
-      fill: "none",
-      "aria-hidden": "true",
-      focusable: "false"
+      ...createScopeAttributes("icon", "root", "idle"),
+      ...rest,
+      ref,
+      style: rootStyle,
+      title: isNonEmptyString(title) ? title.trim() : title,
+      "data-icon-name": normalized.name,
+      "data-icon-style": normalized.style,
+      role: normalized.decorative ? undefined : "img",
+      "aria-hidden": normalized.decorative ? "true" : undefined,
+      "aria-label": normalized.decorative ? undefined : ariaLabel,
+      "aria-labelledby": normalized.decorative ? undefined : ariaLabelledBy
     },
-    React.createElement("path", {
-      d: pathDefinition,
-      stroke: "currentColor",
-      strokeWidth,
-      strokeLinecap,
-      strokeLinejoin
-    })
+    normalized.name
   );
-}
+});
 
-function getDefaultIconContent(type) {
-  if (type === "chevron-down") {
-    return createGlyphIcon("M4 6L8 10L12 6");
-  }
-
-  if (type === "close") {
-    return createGlyphIcon("M4 4L12 12M12 4L4 12");
-  }
-
-  if (type === "expand") {
-    return createGlyphIcon("M8 4V12M4 8H12");
-  }
-
-  if (type === "collapse") {
-    return createGlyphIcon("M4 8H12");
-  }
-
-  if (type === "calendar") {
-    return createGlyphIcon(
-      "M5 2.5V4.5M11 2.5V4.5M3.5 6H12.5M4 4.5H12C12.6 4.5 13 4.9 13 5.5V12C13 12.6 12.6 13 12 13H4C3.4 13 3 12.6 3 12V5.5C3 4.9 3.4 4.5 4 4.5",
-      {
-      viewBox: "0 0 16 16",
-      strokeWidth: "1.4"
-      }
-    );
-  }
-
-  return null;
-}
+ChipsIcon.displayName = "ChipsIcon";
 
 function resolveIconContent(content, fallbackType) {
-  if (content === undefined) {
-    return getDefaultIconContent(fallbackType);
+  if (content !== undefined) {
+    return content;
   }
-  return content;
+
+  const descriptor = getDefaultIconDescriptor(fallbackType);
+  return descriptor
+    ? React.createElement(ChipsIcon, {
+        descriptor
+      })
+    : null;
 }
 
 export const InteractiveEventType = {
@@ -96,6 +168,14 @@ export const InteractiveEventType = {
 };
 
 export const COMPONENT_TOKEN_MAP = {
+  icon: [
+    "chips.sys.icon.color",
+    "chips.sys.icon.size",
+    "chips.sys.icon.fill",
+    "chips.sys.icon.wght",
+    "chips.sys.icon.grad",
+    "chips.sys.icon.opsz"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -381,6 +461,12 @@ export function buildComponentContract(component) {
   }
 
   const contractMap = {
+    icon: {
+      component: "icon",
+      scope: "icon",
+      parts: ["root"],
+      states: ["idle"]
+    },
     button: {
       component: "button",
       scope: "button",
@@ -5780,6 +5866,19 @@ export const ChipsToast = React.forwardRef((props, ref) => {
 ChipsToast.displayName = "ChipsToast";
 
 export function validateComponentA11y(component, props) {
+  if (component === "icon") {
+    const decorative = props["aria-hidden"] === "true";
+    const hasLabel = isNonEmptyString(props["aria-label"]) || isNonEmptyString(props["aria-labelledby"]);
+
+    if (!decorative && !hasLabel) {
+      const error = new Error("Either aria-hidden=true or an accessible label is required.");
+      error.code = "A11Y_ICON_LABEL_MISSING";
+      throw error;
+    }
+
+    return true;
+  }
+
   if (component === "button") {
     assertAriaProps(props, {
       role: "button",

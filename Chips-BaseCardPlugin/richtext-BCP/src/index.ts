@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
 import {
@@ -44,12 +45,17 @@ export function renderBasecardEditor(ctx: BasecardEditorContext): () => void {
   return mountBasecardEditor(ctx);
 }
 
+const richtextBasecardIcon: IconDescriptor = {
+  name: "article",
+  decorative: true,
+};
+
 export const basecardDefinition = {
   pluginId: "chips.basecard.richtext",
   cardType: "base.richtext",
   displayName: "富文本基础卡片",
   description: "提供基于 Milkdown 的 Markdown 富文本编辑与查看能力。",
-  icon: "📝",
+  icon: richtextBasecardIcon,
   aliases: ["RichTextCard"],
   commitDebounceMs: 0,
   createInitialConfig(_baseCardId: string) {

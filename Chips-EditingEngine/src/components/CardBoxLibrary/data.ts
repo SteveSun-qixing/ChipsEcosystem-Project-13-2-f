@@ -1,16 +1,18 @@
 import React from 'react';
 import type { PluginRecord } from 'chips-sdk';
+import { loadLayoutDefinition } from 'chips-box-layout-host';
 import { getInstalledBasecardDescriptors, subscribeBasecardRegistry } from '../../basecard-runtime/registry';
 import { getChipsClient } from '../../services/bridge-client';
 import type { CardTypeDefinition, LayoutTypeDefinition } from './types';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
 
 function createCardTypeDefinitions(): CardTypeDefinition[] {
   return getInstalledBasecardDescriptors()
     .map((descriptor) => ({
       id: descriptor.cardType,
       name: descriptor.displayName,
-      icon: descriptor.icon ?? '🧩',
+      icon: descriptor.icon ?? ENGINE_ICONS.card,
       description: descriptor.description ?? '',
       keywords: [
         descriptor.displayName,
@@ -23,23 +25,43 @@ function createCardTypeDefinitions(): CardTypeDefinition[] {
     .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
-function createLayoutTypeDefinitions(records: PluginRecord[]): LayoutTypeDefinition[] {
-  return records
+async function createLayoutTypeDefinitions(
+  client: ReturnType<typeof getChipsClient>,
+  records: PluginRecord[],
+): Promise<LayoutTypeDefinition[]> {
+  const definitions = await Promise.all(records
     .filter((record) => record.type === 'layout' && record.enabled)
-    .map((record) => ({
-      id: record.layout?.layoutType ?? record.id,
-      name: record.layout?.displayName ?? record.name,
-      icon: '📦',
-      description: record.description ?? '',
-      keywords: [
-        record.name,
-        record.description ?? '',
-        record.id,
-        record.layout?.layoutType ?? '',
-        ...(record.capabilities ?? []),
-      ].filter(Boolean),
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+    .map(async (record) => {
+      const layoutType = record.layout?.layoutType ?? record.id;
+      let name = record.layout?.displayName ?? record.name;
+      let icon = ENGINE_ICONS.layout;
+
+      if (record.layout?.layoutType) {
+        try {
+          const layoutDefinition = await loadLayoutDefinition(client, record.layout.layoutType);
+          name = layoutDefinition.displayName || name;
+          icon = layoutDefinition.icon ?? icon;
+        } catch (error) {
+          console.error('[CardBoxLibrary] Failed to load layout definition metadata.', error);
+        }
+      }
+
+      return {
+        id: layoutType,
+        name,
+        icon,
+        description: record.description ?? '',
+        keywords: [
+          record.name,
+          record.description ?? '',
+          record.id,
+          record.layout?.layoutType ?? '',
+          ...(record.capabilities ?? []),
+        ].filter(Boolean),
+      };
+    }));
+
+  return definitions.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
 export function useCardTypeDefinitions(): CardTypeDefinition[] {
@@ -67,7 +89,11 @@ export function useLayoutTypeDefinitions(): LayoutTypeDefinition[] {
       if (!active) {
         return;
       }
-      setLayoutTypes(createLayoutTypeDefinitions(plugins));
+      const nextLayoutTypes = await createLayoutTypeDefinitions(client, plugins);
+      if (!active) {
+        return;
+      }
+      setLayoutTypes(nextLayoutTypes);
     };
 
     void refresh().catch((error) => {

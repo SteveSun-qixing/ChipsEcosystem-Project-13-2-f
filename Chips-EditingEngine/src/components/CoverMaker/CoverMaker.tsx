@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChipsInput } from '@chips/component-library';
+import type { IconDescriptor } from 'chips-sdk';
 import { useTranslation } from '../../hooks/useTranslation';
 import type {
   CoverCreationMode,
@@ -11,6 +11,8 @@ import type {
 import { TemplateGrid } from './TemplateGrid';
 import { TemplatePreview } from './TemplatePreview';
 import { generateImageCoverHtml } from './templates/index';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './CoverMaker.css';
 
 export function CoverMaker({
@@ -22,15 +24,16 @@ export function CoverMaker({
   onPreview,
 }: CoverMakerProps) {
   const { t } = useTranslation();
+  const titleId = useMemo(() => `cover-maker-title-${cardId}`, [cardId]);
 
   const [currentMode, setCurrentMode] = useState<CoverCreationMode>('template');
 
   const modeOptions = useMemo(() => [
-    { id: 'image' as CoverCreationMode, name: t('cover_maker.mode_image') || '图片封面', icon: '🖼️', description: t('cover_maker.mode_image_desc') || '上传图片' },
-    { id: 'html' as CoverCreationMode, name: t('cover_maker.mode_html') || 'HTML封面', icon: '📝', description: t('cover_maker.mode_html_desc') || '手写HTML代码' },
-    { id: 'zip' as CoverCreationMode, name: t('cover_maker.mode_zip') || 'ZIP封面', icon: '📦', description: t('cover_maker.mode_zip_desc') || '上传ZIP文件' },
-    { id: 'template' as CoverCreationMode, name: t('cover_maker.mode_template') || '模板', icon: '🎨', description: t('cover_maker.mode_template_desc') || '使用模板生成' },
-  ], [t]);
+    { id: 'image' as CoverCreationMode, name: t('cover_maker.mode_image') || '图片封面', icon: ENGINE_ICONS.image, description: t('cover_maker.mode_image_desc') || '上传图片' },
+    { id: 'html' as CoverCreationMode, name: t('cover_maker.mode_html') || 'HTML封面', icon: ENGINE_ICONS.code, description: t('cover_maker.mode_html_desc') || '手写HTML代码' },
+    { id: 'zip' as CoverCreationMode, name: t('cover_maker.mode_zip') || 'ZIP封面', icon: ENGINE_ICONS.zip, description: t('cover_maker.mode_zip_desc') || '上传ZIP文件' },
+    { id: 'template' as CoverCreationMode, name: t('cover_maker.mode_template') || '模板', icon: ENGINE_ICONS.palette, description: t('cover_maker.mode_template_desc') || '使用模板生成' },
+  ] satisfies Array<{ id: CoverCreationMode; name: string; icon: IconDescriptor; description: string }>, [t]);
 
   // Image mode state
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -209,6 +212,29 @@ export function CoverMaker({
   }, [visible, onClose]);
 
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    if (typeof currentCoverHtml === 'string' && currentCoverHtml.trim().length > 0) {
+      setHtmlCode(currentCoverHtml);
+      setCurrentMode('html');
+      return;
+    }
+
+    setHtmlCode('');
+    setCurrentMode('template');
+  }, [currentCoverHtml, visible]);
+
+  useEffect(() => {
+    if (!visible || !onPreview) {
+      return;
+    }
+
+    onPreview(previewHtml);
+  }, [onPreview, previewHtml, visible]);
+
+  useEffect(() => {
     document.addEventListener('keydown', handleGlobalKeydown);
     return () => {
       document.removeEventListener('keydown', handleGlobalKeydown);
@@ -227,16 +253,16 @@ export function CoverMaker({
 
   return (
     <div className="cover-maker-overlay" onClick={handleOverlayClick}>
-      <div className="cover-maker">
+      <div className="cover-maker" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="cover-maker__header">
-          <h2 className="cover-maker__title">{t('cover_maker.title') || '快速制作封面'}</h2>
+          <h2 id={titleId} className="cover-maker__title">{t('cover_maker.title') || '快速制作封面'}</h2>
           <button
             className="cover-maker__close"
             type="button"
             aria-label={t('cover_maker.close') || '关闭'}
             onClick={handleCancel}
           >
-            ✕
+            <RuntimeIcon icon={ENGINE_ICONS.close} />
           </button>
         </div>
 
@@ -248,7 +274,9 @@ export function CoverMaker({
               type="button"
               onClick={() => switchMode(mode.id)}
             >
-              <span className="cover-maker__mode-icon">{mode.icon}</span>
+              <span className="cover-maker__mode-icon">
+                <RuntimeIcon icon={mode.icon} />
+              </span>
               <span className="cover-maker__mode-name">{mode.name}</span>
             </button>
           ))}
@@ -270,7 +298,9 @@ export function CoverMaker({
                   />
                   {!selectedImage ? (
                     <div className="cover-maker__upload-placeholder">
-                      <span className="cover-maker__upload-icon">🖼️</span>
+                      <span className="cover-maker__upload-icon">
+                        <RuntimeIcon icon={ENGINE_ICONS.image} />
+                      </span>
                       <span className="cover-maker__upload-text">{t('cover_maker.image_upload_text') || '点击或拖拽图片到此处上传'}</span>
                       <span className="cover-maker__upload-hint">{t('cover_maker.image_upload_hint') || '建议比例 3:4，文件大小不超过 5MB'}</span>
                     </div>
@@ -331,13 +361,17 @@ export function CoverMaker({
                   />
                   {!selectedZip ? (
                     <div className="cover-maker__upload-placeholder">
-                      <span className="cover-maker__upload-icon">📦</span>
+                      <span className="cover-maker__upload-icon">
+                        <RuntimeIcon icon={ENGINE_ICONS.zip} />
+                      </span>
                       <span className="cover-maker__upload-text">{t('cover_maker.zip_upload_text') || '点击或拖拽 ZIP 包到此处上传'}</span>
                       <span className="cover-maker__upload-hint">{t('cover_maker.zip_upload_hint') || '根目录必须包含 index.html'}</span>
                     </div>
                   ) : (
                     <div className="cover-maker__upload-selected">
-                      <span className="cover-maker__zip-icon">📦</span>
+                      <span className="cover-maker__zip-icon">
+                        <RuntimeIcon icon={ENGINE_ICONS.zip} />
+                      </span>
                       <div className="cover-maker__file-info">
                         <span className="cover-maker__file-name">{zipFileName}</span>
                         <button
@@ -352,7 +386,9 @@ export function CoverMaker({
                   )}
                 </div>
                 <div className="cover-maker__notice">
-                  <span className="cover-maker__notice-icon">ℹ️</span>
+                  <span className="cover-maker__notice-icon">
+                    <RuntimeIcon icon={ENGINE_ICONS.info} />
+                  </span>
                   <span className="cover-maker__notice-text">
                     {t('cover_maker.zip_notice') || '注意：ZIP 资源包将被解压并存储，如果包含外部链接可能会导致导出为单文件时无法离线查看。'}
                   </span>
@@ -453,7 +489,9 @@ export function CoverMaker({
               />
             ) : (
               <div className="cover-maker__preview-placeholder">
-                <span className="cover-maker__preview-placeholder-icon">👁️</span>
+                <span className="cover-maker__preview-placeholder-icon">
+                  <RuntimeIcon icon={ENGINE_ICONS.preview} />
+                </span>
                 <span className="cover-maker__preview-placeholder-text">
                   {currentMode === 'zip' ? (t('cover_maker.preview_zip') || 'ZIP 资源包无法实时预览') : (t('cover_maker.preview_default') || '请完善配置以查看效果')}
                 </span>

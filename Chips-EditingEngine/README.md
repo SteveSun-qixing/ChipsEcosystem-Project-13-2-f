@@ -1,71 +1,103 @@
-# {{ DISPLAY_NAME }} 应用插件工程（由 chips-scaffold-app 生成）
+# 编辑引擎
 
-> 插件 ID：`{{ PLUGIN_ID }}`  
-> 模板：`app-standard`  
-> 生成自：`chips-scaffold-app`
+> 插件 ID：`chips-official.editing-engine`  
+> 插件类型：应用插件（`type: app`）  
+> 工程角色：薯片生态正式卡片编辑引擎
 
-## 1. 快速开始
+## 1. 工程定位
+
+编辑引擎是薯片生态当前的正式编辑工作台应用，负责：
+
+- 打开与管理工作区；
+- 装配基础卡片插件与布局插件；
+- 提供工具窗口、卡片窗口、箱子窗口与工作台布局；
+- 通过 Host / Bridge / `chips-sdk` 正式链路访问文件、配置、主题、多语言、插件与模块能力；
+- 在运行时统一消费 `ChipsIcon + IconDescriptor` 图标系统，而不是 emoji 或字符串图标。
+
+当前工程不是脚手架示例，不允许再按模板工程理解其目录、脚本与运行边界。
+
+## 2. 快速开始
 
 ```bash
-cd <生态根工作区>
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task008-图标系统搭建
 npm install
-cd {{ PROJECT_NAME }}
-npm run dev        # 启动开发服务器（等价 chips dev server）
+cd Chips-EditingEngine
+npm run dev
 ```
 
-应用插件的一方依赖（如 `chips-sdk`、`@chips/component-library`）统一通过生态根工作区解析，本工程应通过 `chipsdev create` 接入生态工作区，不再单独在项目目录执行首次 `npm install`。
+常用命令：
 
-开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认启用白色窗口壳层与隐藏式标题栏覆盖层。
+- `npm run dev`：启动开发服务器
+- `npm run run`：通过 `chipsdev run` 在真实 Host 开发链路中运行
+- `npm run build`：构建插件产物
+- `npm test`：运行测试
+- `npm run lint`：执行 ESLint
+- `npm run validate`：执行插件契约校验
 
-## 2. 可用脚本
+## 3. 正式运行边界
 
-- `npm run dev`：启动开发服务器（`chips dev server`）
-- `npm run build`：构建 `cpk` 插件包（`chips dev build`）
-- `npm test`：运行单元测试与组件测试（`chips dev test`，基于 Vitest）
-- `npm run lint`：运行代码规范检查（`chips dev lint`）
-- `npm run validate`：执行插件规范校验（`chips dev validate`）
+- 系统能力访问统一经 `chips-sdk` 与 `window.chips.*`，不直连 Host 内部实现。
+- 基础卡片装配与编辑运行时统一经 `src/basecard-runtime/`。
+- 箱子查看与布局渲染统一经 `chips-box-layout-host` 与 Host `box.*` 能力。
+- 工作区、文件、资源、设置、主题与多语言统一经 `src/services/`、`src/context/` 与 Host 事件链路。
 
-## 3. 目录结构总览
+## 4. 目录概览
 
 ```text
-{{ PROJECT_NAME }}/
-├─ .eslintrc.cjs        # 工程级 ESLint 配置（供 chipsdev lint 调用）
-├─ manifest.yaml        # 插件清单（id/name/version/type/permissions/entry 等）
-├─ package.json         # NPM 包描述与脚本
-├─ tsconfig.json        # TypeScript 配置
-├─ chips.config.mjs     # Chips Dev 构建/运行配置
-├─ index.html           # HTML 入口文件
-├─ src/
-│  ├─ main.tsx          # React 入口（挂载到 index.html）
-│  ├─ App.tsx           # 根组件
-│  ├─ components/       # 示例组件
-│  ├─ hooks/            # 示例 hooks（如 useChipsBridge）
-│  └─ layouts/          # 布局与外壳组件
-├─ config/
-│  ├─ app-config.ts     # 应用级配置（Feature Flag 等）
-│  └─ logging.ts        # 日志封装（预留接入 Host 日志服务）
+Chips-EditingEngine/
+├─ manifest.yaml
+├─ package.json
+├─ chips.config.mjs
+├─ assets/
+│  └─ icons/
 ├─ i18n/
-│  ├─ zh-CN.json        # 中文文案
-│  └─ en-US.json        # 英文文案
-├─ tests/
-│  ├─ unit/             # 单元/组件测试
-│  └─ e2e/              # 端到端测试
-└─ assets/
-   └─ icons/            # 图标等静态资源
+├─ src/
+│  ├─ App.tsx
+│  ├─ main.tsx
+│  ├─ basecard-runtime/   # 基础卡片描述符、注册表与装配运行时
+│  ├─ components/         # 工具窗口、卡片窗口、文件管理器、设置面板等 UI
+│  ├─ context/            # 编辑器、卡片、UI 等全局上下文
+│  ├─ core/               # 核心初始化与业务底层逻辑
+│  ├─ editor-runtime/     # 编辑宿主运行时
+│  ├─ hooks/              # 运行时 hooks
+│  ├─ icons/              # 运行时图标描述符与统一图标包装
+│  ├─ layouts/            # InfiniteCanvas / Workbench 等布局
+│  ├─ services/           # Bridge / SDK / 文件 / 工作区 / 箱子 等服务封装
+│  ├─ types/
+│  └─ utils/
+└─ tests/
 ```
 
-## 4. 技术栈与规范
+## 5. 图标系统
 
-- 前端框架：React（参见生态设计原稿与应用插件开发指南）
-- UI 能力：`@chips/component-library`（组件库对外使用总览）
-- 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本
-- 主题系统：通过组件库 `ChipsThemeProvider` 接入主题运行时，并监听 `theme.changed` 事件，不在业务代码中硬编码颜色/圆角/阴影
-- 系统能力调用：仅通过 `window.chips.*`（Bridge API），不越层直接访问 Host 内部模块
+编辑引擎当前图标链路已经收口为正式实现：
 
-## 5. 下一步开发建议
+- 运行时 UI 图标入口：`src/icons/descriptors.ts`
+- 统一运行时组件：`src/icons/RuntimeIcon.tsx`
+- 应用品牌图标组件：`src/icons/AppBrandIcon.tsx`
+- 基础卡片、布局、工具窗口与菜单图标均使用 `IconDescriptor`
 
-1. 根据业务需要在 `src/features/` 或 `src/components/` 中扩展页面与组件；
-2. 通过组件库与主题系统接入真实 UI 并补充交互测试；
-3. 按需扩展 `manifest.yaml` 中的权限与 capabilities（遵循插件开发规范与 Manifest 配置规范）；
-4. 若模板启用了隐藏式标题栏，页面头部必须提供拖拽区，并将交互控件显式标记为 `no-drag`；
-5. 在编写或调整 Host/Bridge 调用前，查阅生态共用技术文档中的协议与接口标准章节，避免契约漂移。
+正式规则：
+
+- 运行时 UI 图标统一走 `ChipsIcon + IconDescriptor`
+- 不再保留 emoji、字符图标或 `icon: string`
+- `manifest.yaml -> ui.launcher.icon` 只表示系统入口图标文件路径
+
+## 6. 启动图标资产
+
+- `manifest.yaml` 当前声明：`ui.launcher.icon: assets/icons/app-icon.ico`
+- `assets/icons/app-icon.ico`、`assets/icons/app-icon.icns`、`assets/icons/app-icon.png` 已与 `design-assets/Appicon/EditingEngine.*` 对齐
+- 资产来源说明见 `assets/icons/SOURCE.md`
+
+这些文件属于操作系统入口图标，不属于运行时 `ChipsIcon` 图标模型。
+
+## 7. 主题与多语言
+
+- 主题运行时通过组件库 `ChipsThemeProvider` 与 Host 主题事件接入
+- 多语言通过 `i18n/` 资源、`src/i18n/` 与运行时语言服务接入
+- 业务层不得硬编码正式界面文案、颜色、尺寸与阴影
+
+## 8. 相关说明
+
+- 若公共图标契约、基础卡片装配标准或设置治理口径发生变化，应先更新 `生态共用技术文档/`
+- 若项目文档与 `manifest.yaml`、真实代码冲突，以真实代码与正式共享文档为准

@@ -126,6 +126,11 @@ SDK 必须统一为 `StandardError`，并在必要时附带 `requestId/traceId` 
   - 路由实现与服务语义；
   - 错误码定义与稳定性；
   - 路由清单与契约快照导出（供 SDK 消费）。
+- 图标边界补充：
+  - `PluginUiConfig.launcher.icon` 表示系统入口图标文件路径；
+  - `PluginShortcutRecord.iconPath` 表示 Host 解析后的系统入口图标文件路径；
+  - `notification.show({ icon })` 与 `tray.set({ icon })` 中的 `icon` 也属于操作系统壳层图标路径；
+  - 上述字段都不属于运行时 `IconDescriptor`，SDK 不能把它们包装成 `ChipsIcon` 图标模型。
 
 ### 5.2 与组件库的协作
 

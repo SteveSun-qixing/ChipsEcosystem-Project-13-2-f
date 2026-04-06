@@ -8,6 +8,7 @@ import { FileTree } from '../../src/components/FileManager/FileTree';
 import type { WorkspaceFile } from '../../src/types/workspace';
 
 vi.mock('@chips/component-library', () => ({
+  ChipsIcon: ({ descriptor }: { descriptor: { name: string } }) => <span data-icon-name={descriptor.name} />,
   ChipsInput: React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
     function MockChipsInput(props, ref) {
       return <input ref={ref} {...props} />;

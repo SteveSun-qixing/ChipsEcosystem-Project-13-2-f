@@ -11,8 +11,6 @@
 - `<= 200` 字内容保存在 `content/*.yaml`；
 - `> 200` 字内容保存为卡片根目录 `.md` 文件，并在内容配置中保存引用。
 
-当前图标先使用 emoji 占位实现，后续接入统一图标系统时可无缝替换，不影响交互结构与配置契约。
-
 当前正式 Markdown 渲染栈已覆盖：
 
 - CommonMark / GFM 基础能力
@@ -35,9 +33,11 @@
 
 其中：
 
-- `basecardDefinition.cardType = "base.richtext"`
-- `basecardDefinition.aliases = ["RichTextCard"]`
-- `basecardDefinition.createInitialConfig()` 默认生成 Markdown inline 配置
+- `basecardDefinition.cardType = "base.richtext"` 与 `manifest.yaml -> capabilities.cardTypes` 保持一致；
+- `basecardDefinition.aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
+- `basecardDefinition.createInitialConfig()` 默认生成 Markdown inline 配置；
+- `basecardDefinition.icon` 是运行时正式图标描述符；
+- `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 配置结构
 

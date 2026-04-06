@@ -1,4 +1,7 @@
 import React from 'react';
+import type { IconDescriptor } from 'chips-sdk';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './MainArea.css';
 
 export interface TabInfo {
@@ -6,7 +9,7 @@ export interface TabInfo {
     title: string;
     modified?: boolean;
     closable?: boolean;
-    icon?: string;
+    icon?: IconDescriptor;
 }
 
 export interface MainAreaProps {
@@ -14,7 +17,7 @@ export interface MainAreaProps {
     tabs?: TabInfo[];
     showTabs?: boolean;
     emptyText?: string;
-    emptyIcon?: string;
+    emptyIcon?: IconDescriptor;
     onTabChange?: (tabId: string) => void;
     onTabClose?: (tabId: string) => void;
     tabContentRenderer?: (tab: TabInfo) => React.ReactNode;
@@ -26,7 +29,7 @@ export function MainArea({
     tabs = [],
     showTabs = true,
     emptyText = '无已打开的卡片',
-    emptyIcon = '📄',
+    emptyIcon = ENGINE_ICONS.document,
     onTabChange,
     onTabClose,
     tabContentRenderer,
@@ -60,7 +63,11 @@ export function MainArea({
                             onMouseDown={e => handleTabMiddleClick(e, tab.id)}
                             onContextMenu={e => handleTabContextMenu(e, tab.id)}
                         >
-                            {tab.icon && <span className="main-area__tab-icon">{tab.icon}</span>}
+                            {tab.icon && (
+                                <span className="main-area__tab-icon">
+                                    <RuntimeIcon icon={tab.icon} />
+                                </span>
+                            )}
                             <span className="main-area__tab-title">{tab.title}</span>
                             {tab.modified && <span className="main-area__tab-indicator">●</span>}
                             {tab.closable && (
@@ -99,7 +106,9 @@ export function MainArea({
                     ))
                 ) : (
                     <div className="main-area__empty">
-                        <span className="main-area__empty-icon">{emptyIcon}</span>
+                        <span className="main-area__empty-icon">
+                            <RuntimeIcon icon={emptyIcon} />
+                        </span>
                         <p className="main-area__empty-text">{emptyText}</p>
                         {emptyActionsSlot}
                     </div>

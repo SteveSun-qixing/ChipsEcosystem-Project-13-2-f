@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../../icons/descriptors';
+import { RuntimeIcon } from '../../../icons/RuntimeIcon';
 import { blobToDataUrl } from '../../../utils/card-cover';
 import {
   clampCropRect,
@@ -269,7 +271,7 @@ export function CoverCropDialog({
             aria-label={t('card_settings.close') || '关闭'}
             onClick={onClose}
           >
-            ✕
+            <RuntimeIcon icon={ENGINE_ICONS.close} />
           </button>
         </div>
 

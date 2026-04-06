@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, ReactNode } from 'react';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './SidePanel.css';
 
 export type SidePanelPosition = 'left' | 'right';
@@ -38,7 +40,6 @@ export function SidePanel({
 
     const resizeStartX = useRef(0);
     const resizeStartWidth = useRef(0);
-    const panelRef = useRef<HTMLElement>(null);
 
     useEffect(() => {
         setCurrentWidth(width);
@@ -117,7 +118,6 @@ export function SidePanel({
 
     return (
         <aside
-            ref={panelRef}
             className={panelClass}
             style={{ width: `${displayWidth}px`, '--panel-width': `${displayWidth}px` } as React.CSSProperties}
             role="complementary"
@@ -133,7 +133,9 @@ export function SidePanel({
                         onClick={toggleExpand}
                     >
                         <span className="side-panel__toggle-icon">
-                            {isExpanded ? (position === 'left' ? '◀' : '▶') : (position === 'left' ? '▶' : '◀')}
+                            <RuntimeIcon icon={isExpanded
+                                ? (position === 'left' ? ENGINE_ICONS.chevronLeft : ENGINE_ICONS.chevronRight)
+                                : (position === 'left' ? ENGINE_ICONS.chevronRight : ENGINE_ICONS.chevronLeft)} />
                         </span>
                     </button>
                 </header>
@@ -152,7 +154,7 @@ export function SidePanel({
                     onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && expand()}
                 >
                     <span className="side-panel__collapsed-icon">
-                        {position === 'left' ? '▶' : '◀'}
+                        <RuntimeIcon icon={position === 'left' ? ENGINE_ICONS.chevronRight : ENGINE_ICONS.chevronLeft} />
                     </span>
                 </div>
             )}

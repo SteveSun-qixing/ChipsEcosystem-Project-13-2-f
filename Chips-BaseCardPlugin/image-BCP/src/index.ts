@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
@@ -43,12 +44,17 @@ export function renderBasecardEditor(ctx: BasecardEditorContext): () => void {
   return mountBasecardEditor(ctx);
 }
 
+const imageBasecardIcon: IconDescriptor = {
+  name: "image",
+  decorative: true,
+};
+
 export const basecardDefinition = {
   pluginId: "chips.basecard.image",
   cardType: "base.image",
   displayName: "图片基础卡片",
   description: "提供图片内容的查看、排版与编辑能力。",
-  icon: "🖼️",
+  icon: imageBasecardIcon,
   aliases: ["ImageCard"],
   commitDebounceMs: 260,
   createInitialConfig(_baseCardId: string) {

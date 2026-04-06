@@ -1,4 +1,6 @@
 import React, { useState, useCallback, type ReactNode } from 'react';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './NestableCard.css';
 
 interface NestableCardProps {
@@ -56,7 +58,7 @@ export function NestableCard({
                     className="nestable-card__toggle"
                     onClick={handleToggleCollapse}
                 >
-                    {isCollapsed ? '▶' : '▼'}
+                    <RuntimeIcon icon={isCollapsed ? ENGINE_ICONS.chevronRight : ENGINE_ICONS.chevronDown} />
                 </button>
             )}
             <div className="nestable-card__content">

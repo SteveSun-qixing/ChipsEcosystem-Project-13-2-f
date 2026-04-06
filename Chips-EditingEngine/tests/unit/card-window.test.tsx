@@ -89,6 +89,7 @@ vi.mock('../../src/context/CardContext', () => ({
 }));
 
 vi.mock('@chips/component-library', () => ({
+  ChipsIcon: ({ descriptor }: { descriptor: { name: string } }) => <span data-icon-name={descriptor.name} />,
   useThemeRuntime: () => ({
     cacheKey: 'theme-cache-key',
   }),

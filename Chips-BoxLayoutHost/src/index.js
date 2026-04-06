@@ -1,5 +1,12 @@
 const CARD_MIME_TYPE = 'application/vnd.chips.card+zip';
 
+function isIconDescriptor(icon) {
+  return Boolean(icon)
+    && typeof icon === 'object'
+    && typeof icon.name === 'string'
+    && icon.name.trim().length > 0;
+}
+
 function toFileModuleUrl(filePath) {
   const normalized = String(filePath).replace(/\\/g, '/');
   if (/^[a-zA-Z]:\//.test(normalized)) {
@@ -51,6 +58,9 @@ function toLayoutDefinition(plugin, module) {
   }
   if (typeof definition.renderView !== 'function') {
     throw new Error(`布局插件缺少 renderView: ${plugin.id}`);
+  }
+  if (definition.icon !== undefined && !isIconDescriptor(definition.icon)) {
+    throw new Error(`布局插件 icon 必须为正式 IconDescriptor: ${plugin.id}`);
   }
   return definition;
 }

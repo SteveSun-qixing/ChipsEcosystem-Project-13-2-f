@@ -17,6 +17,12 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 
 开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认启用白色窗口壳层与隐藏式标题栏覆盖层。
 
+模板已默认纳入 `assets/icons/app-icon.ico/.icns/.png/.svg` 与 `assets/icons/SOURCE.md`：
+
+- `app-icon.ico` 是 `manifest.yaml -> ui.launcher.icon` 的正式默认文件；
+- Host 会按平台解析 `ico / icns / png` 作为系统入口图标；
+- 这些文件只用于操作系统入口、快捷方式与安装分发，不属于运行时 `ChipsIcon` 图标模型。
+
 ## 2. 可用脚本
 
 - `npm run dev`：启动开发服务器（`chips dev server`）

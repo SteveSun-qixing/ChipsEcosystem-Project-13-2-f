@@ -102,6 +102,25 @@ export interface InspectorSection {
   [key: string]: unknown;
 }
 
+export type ChipsIconStyle = "outlined" | "rounded" | "sharp";
+
+export interface ChipsIconDescriptor {
+  name: string;
+  style?: ChipsIconStyle;
+  fill?: 0 | 1;
+  wght?: number;
+  grad?: number;
+  opsz?: number;
+  decorative?: boolean;
+  label?: string;
+}
+
+export interface ChipsIconProps extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> {
+  descriptor: ChipsIconDescriptor;
+  size?: number | string;
+  color?: string;
+}
+
 export interface ButtonProps {
   children?: React.ReactNode;
   type?: "button" | "submit" | "reset";
@@ -642,6 +661,7 @@ export const InteractiveEventType: {
 
 export const COMPONENT_TOKEN_MAP: Record<string, string[]>;
 
+export const ChipsIcon: React.ForwardRefExoticComponent<ChipsIconProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsButton: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<HTMLButtonElement>>;
 export const ChipsInput: React.ForwardRefExoticComponent<InputProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsCheckbox: React.ForwardRefExoticComponent<CheckboxProps & React.RefAttributes<HTMLInputElement>>;
@@ -683,7 +703,13 @@ export function interactiveStateReducer(
   state: { hovered?: boolean; focused?: boolean; active?: boolean },
   event: { type: (typeof InteractiveEventType)[keyof typeof InteractiveEventType] },
 ): { hovered: boolean; focused: boolean; active: boolean };
-export function buildComponentContract(meta: ComponentMeta): ComponentMeta;
+export function buildComponentContract(component: string): {
+  component: string;
+  scope: string;
+  parts: string[];
+  states: string[];
+  tokens: string[];
+};
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];
 export const P0_DATA_FORM_COMPONENTS: ComponentMeta[];

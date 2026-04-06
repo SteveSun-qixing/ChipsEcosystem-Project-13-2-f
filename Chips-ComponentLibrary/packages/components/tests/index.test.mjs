@@ -10,6 +10,7 @@ import {
   ChipsDockPanel,
   ChipsDialog,
   ChipsEmptyState,
+  ChipsIcon,
   ChipsErrorBoundary,
   ChipsFormField,
   ChipsFormGroup,
@@ -147,6 +148,12 @@ test("buildComponentContract validates component key", () => {
   );
 });
 
+test("buildComponentContract returns icon component contract", () => {
+  const contract = buildComponentContract("icon");
+  assert.equal(contract.scope, "icon");
+  assert.deepEqual(contract.parts, ["root"]);
+});
+
 test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
@@ -181,6 +188,13 @@ test("component token map includes complete P0 base interactive keys", () => {
 });
 
 test("validateComponentA11y validates known components and rejects missing rule", () => {
+  assert.equal(
+    validateComponentA11y("icon", {
+      "aria-hidden": "true"
+    }),
+    true
+  );
+
   assert.equal(
     validateComponentA11y("input", {
       "aria-label": "name"
@@ -396,6 +410,46 @@ test("validateComponentA11y validates known components and rejects missing rule"
   assert.throws(
     () => validateComponentA11y("calendar", {}),
     /COMPONENT_A11Y_RULE_MISSING/
+  );
+});
+
+test("ChipsIcon normalizes ligature name and axis variables", () => {
+  const rendered = ChipsIcon.render(
+    {
+      descriptor: {
+        name: "calendar-month",
+        style: "rounded",
+        fill: 1,
+        wght: 500,
+        grad: 25,
+        opsz: 20
+      },
+      size: 20,
+      color: "rebeccapurple"
+    },
+    null
+  );
+
+  assert.equal(rendered.props["data-icon-name"], "calendar_month");
+  assert.equal(rendered.props["data-icon-style"], "rounded");
+  assert.equal(rendered.props.style["--chips-icon-fill"], "1");
+  assert.equal(rendered.props.style["--chips-icon-size"], "20px");
+  assert.equal(rendered.props.children, "calendar_month");
+});
+
+test("ChipsIcon requires a label for non-decorative icons", () => {
+  assert.throws(
+    () =>
+      ChipsIcon.render(
+        {
+          descriptor: {
+            name: "warning",
+            decorative: false
+          }
+        },
+        null
+      ),
+    /ICON_A11Y_LABEL_REQUIRED/
   );
 });
 

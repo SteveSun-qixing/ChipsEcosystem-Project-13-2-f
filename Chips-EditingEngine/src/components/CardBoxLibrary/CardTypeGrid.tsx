@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { CardTypeDefinition, CardLibraryDragData } from './types';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useDrag } from './DragContext';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './CardTypeGrid.css';
 
 interface CardTypeGridProps {
@@ -34,7 +35,9 @@ export function CardTypeGrid({ types }: CardTypeGridProps) {
             title={t(type.description) || type.description}
             onDragStart={(e) => handleDragStart(type, e)}
           >
-            <span className="card-type-grid__item-icon">{type.icon}</span>
+            <span className="card-type-grid__item-icon">
+              <RuntimeIcon icon={type.icon} />
+            </span>
             <span className="card-type-grid__item-name">{t(type.name) || type.name}</span>
           </div>
         ))}

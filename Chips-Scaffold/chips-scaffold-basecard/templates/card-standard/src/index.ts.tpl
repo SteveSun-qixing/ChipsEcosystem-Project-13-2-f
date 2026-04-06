@@ -1,3 +1,4 @@
+import type { IconDescriptor } from "chips-sdk";
 import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
@@ -42,10 +43,16 @@ export function renderBasecardEditor(ctx: BasecardEditorContext): () => void {
   return mountBasecardEditor(ctx);
 }
 
+const basecardIcon: IconDescriptor = {
+  name: "style",
+  decorative: true,
+};
+
 export const basecardDefinition = {
   pluginId: "{{ PLUGIN_ID }}",
   cardType: "{{ CARD_TYPE }}",
   displayName: "{{ DISPLAY_NAME }}",
+  icon: basecardIcon,
   commitDebounceMs: 260,
   createInitialConfig(_baseCardId: string) {
     return normalizeBasecardConfig(

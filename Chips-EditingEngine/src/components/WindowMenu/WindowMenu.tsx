@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './WindowMenu.css';
 
 export interface WindowMenuProps {
@@ -110,7 +112,9 @@ export function WindowMenu({
                         className={`window-menu__button ${isEditing ? 'window-menu__button--active' : ''}`}
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onToggleEdit?.(); }}
                     >
-                        <span className="window-menu__button-icon">{isEditing ? '🔓' : '🔒'}</span>
+                        <span className="window-menu__button-icon">
+                            <RuntimeIcon icon={isEditing ? ENGINE_ICONS.lockOpen : ENGINE_ICONS.lock} />
+                        </span>
                     </button>
                 )}
 
@@ -120,7 +124,9 @@ export function WindowMenu({
                         className="window-menu__button"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSwitchToCover?.(); }}
                     >
-                        <span className="window-menu__button-icon">🖼️</span>
+                        <span className="window-menu__button-icon">
+                            <RuntimeIcon icon={ENGINE_ICONS.image} />
+                        </span>
                     </button>
                 )}
 
@@ -130,7 +136,9 @@ export function WindowMenu({
                         className="window-menu__button"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSettings?.(); }}
                     >
-                        <span className="window-menu__button-icon">⚙️</span>
+                        <span className="window-menu__button-icon">
+                            <RuntimeIcon icon={ENGINE_ICONS.settings} />
+                        </span>
                     </button>
                 )}
             </div>

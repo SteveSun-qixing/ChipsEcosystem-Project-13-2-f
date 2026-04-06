@@ -10,6 +10,7 @@ import type {
   BoxPrefetchTarget,
   BoxSessionInfo,
   Client,
+  IconDescriptor,
   PluginRecord,
   ResolvedRuntimeResource,
 } from 'chips-sdk';
@@ -67,6 +68,7 @@ export interface BoxLayoutDefinition {
   pluginId: string;
   layoutType: string;
   displayName: string;
+  icon?: IconDescriptor;
   createDefaultConfig(): Record<string, unknown>;
   normalizeConfig(input: Record<string, unknown>): Record<string, unknown>;
   validateConfig(config: Record<string, unknown>): {

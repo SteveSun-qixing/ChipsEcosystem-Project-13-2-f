@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../../../hooks/useTranslation';
+import { AppBrandIcon } from '../../../icons/AppBrandIcon';
 import './AboutPanel.css';
 
 export function AboutPanel() {
@@ -24,7 +25,9 @@ export function AboutPanel() {
       </div>
 
       <div className="about-hero">
-        <div className="about-hero__icon">🥔</div>
+        <div className="about-hero__icon">
+          <AppBrandIcon className="about-hero__icon-image" aria-hidden="true" />
+        </div>
         <h2 className="about-hero__name">{appInfo.name}</h2>
         <span className="about-hero__version">v{appInfo.version}</span>
       </div>

@@ -10,7 +10,3 @@ output
 **/coverage
 **/playwright-report
 **/.chips-server-host
-!Chips-Host/dist
-!Chips-Host/dist/**
-!Chips-ModulePlugin/**/dist
-!Chips-ModulePlugin/**/dist/**

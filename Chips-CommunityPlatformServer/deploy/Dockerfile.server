@@ -1,3 +1,30 @@
+FROM node:20-alpine AS ecosystem-artifacts
+
+WORKDIR /app
+
+COPY package.json ./
+COPY package-lock.json ./
+COPY Chips-SDK /app/Chips-SDK
+COPY Chips-Host /app/Chips-Host
+COPY Chips-CommunityPlatformServer /app/Chips-CommunityPlatformServer
+COPY Chips-ComponentLibrary /app/Chips-ComponentLibrary
+COPY Chips-BaseCardPlugin /app/Chips-BaseCardPlugin
+COPY Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
+COPY Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
+COPY Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
+COPY Chips-Scaffold /app/Chips-Scaffold
+COPY ThemePack/Chips-default /app/ThemePack/Chips-default
+
+RUN npm ci --no-audit --no-fund
+
+RUN npm run build --workspace chips-host \
+ && npm run build --workspace chips.basecard.image \
+ && npm run build --workspace chips.basecard.richtext \
+ && npm run build --workspace chips.module.chips.htmltoimage.plugin \
+ && npm run build --workspace chips.module.chips.cardtohtml.plugin \
+ && npm run build --workspace chips.module.chips.fileconversion.plugin \
+ && npm run build --workspace theme.theme.chips-official-default-theme
+
 FROM node:20-alpine AS builder
 
 WORKDIR /app/Chips-CommunityPlatformServer
@@ -11,18 +38,19 @@ COPY Chips-CommunityPlatformServer/tsconfig.base.json ./
 COPY Chips-CommunityPlatformServer/packages/web/package.json ./packages/web/
 COPY Chips-CommunityPlatformServer/packages/admin/package.json ./packages/admin/
 COPY Chips-CommunityPlatformServer/packages/server/package.json ./packages/server/
+COPY Chips-CommunityPlatformServer/scripts ./scripts
 
-COPY Chips-Host /app/Chips-Host
-COPY Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
-COPY Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
-COPY Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
-COPY ThemePack/Chips-default /app/ThemePack/Chips-default
+COPY --from=ecosystem-artifacts /app/Chips-Host /app/Chips-Host
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
+COPY --from=ecosystem-artifacts /app/ThemePack/Chips-default /app/ThemePack/Chips-default
 
 RUN pnpm install --frozen-lockfile
 
 COPY Chips-CommunityPlatformServer/packages/server ./packages/server
-COPY Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
-COPY Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
 
 RUN pnpm --filter @ccps/server build
 
@@ -42,13 +70,13 @@ COPY Chips-CommunityPlatformServer/packages/web/package.json ./packages/web/
 COPY Chips-CommunityPlatformServer/packages/admin/package.json ./packages/admin/
 COPY Chips-CommunityPlatformServer/packages/server/package.json ./packages/server/
 
-COPY Chips-Host /app/Chips-Host
-COPY Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
-COPY Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
-COPY Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
-COPY Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
-COPY Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
-COPY ThemePack/Chips-default /app/ThemePack/Chips-default
+COPY --from=ecosystem-artifacts /app/Chips-Host /app/Chips-Host
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
+COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
+COPY --from=ecosystem-artifacts /app/ThemePack/Chips-default /app/ThemePack/Chips-default
 
 RUN pnpm install --frozen-lockfile --prod
 

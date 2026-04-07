@@ -19,7 +19,6 @@ COPY Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-H
 COPY ThemePack/Chips-default /app/ThemePack/Chips-default
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --dir /app/Chips-Host build
 
 COPY Chips-CommunityPlatformServer/packages/server ./packages/server
 COPY Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
@@ -54,7 +53,6 @@ COPY ThemePack/Chips-default /app/ThemePack/Chips-default
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/Chips-CommunityPlatformServer/packages/server/dist ./packages/server/dist
-COPY --from=builder /app/Chips-Host/dist /app/Chips-Host/dist
 
 WORKDIR /app/Chips-CommunityPlatformServer/packages/server
 

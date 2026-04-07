@@ -1,4 +1,4 @@
-import { HostApplication } from 'chips-host/src/main/core/host-application';
+import { HostApplication } from 'chips-host/host-application';
 import * as path from 'path';
 
 async function test() {

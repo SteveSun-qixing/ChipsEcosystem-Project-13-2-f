@@ -9,10 +9,8 @@ COPY Chips-CommunityPlatformServer/pnpm-lock.yaml ./
 COPY Chips-CommunityPlatformServer/pnpm-workspace.yaml ./
 COPY Chips-CommunityPlatformServer/tsconfig.base.json ./
 COPY Chips-CommunityPlatformServer/packages/web/package.json ./packages/web/
-COPY Chips-CommunityPlatformServer/packages/admin/package.json ./packages/admin/
-COPY Chips-CommunityPlatformServer/packages/server/package.json ./packages/server/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --filter @ccps/web --frozen-lockfile
 
 COPY Chips-CommunityPlatformServer/packages/web ./packages/web
 

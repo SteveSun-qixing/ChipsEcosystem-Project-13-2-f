@@ -4,6 +4,29 @@
   "private": true,
   "type": "commonjs",
   "main": "dist/src/main/electron/app-entry.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/main/electron/app-entry.d.ts",
+      "require": "./dist/src/main/electron/app-entry.js",
+      "default": "./dist/src/main/electron/app-entry.js"
+    },
+    "./main": {
+      "types": "./dist/src/main/index.d.ts",
+      "require": "./dist/src/main/index.js",
+      "default": "./dist/src/main/index.js"
+    },
+    "./host-application": {
+      "types": "./dist/src/main/core/host-application.d.ts",
+      "require": "./dist/src/main/core/host-application.js",
+      "default": "./dist/src/main/core/host-application.js"
+    },
+    "./card-service": {
+      "types": "./dist/packages/card-service/src/index.d.ts",
+      "require": "./dist/packages/card-service/src/index.js",
+      "default": "./dist/packages/card-service/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "chips": "dist/src/main/cli/index.js"
   },

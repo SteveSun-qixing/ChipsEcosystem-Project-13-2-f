@@ -4,6 +4,20 @@
   "private": true,
   "type": "commonjs",
   "main": "dist/src/main/electron/app-entry.js",
+  "types": "dist/src/main/electron/app-entry.d.ts",
+  "typesVersions": {
+    "*": {
+      "main": [
+        "dist/src/main/index.d.ts"
+      ],
+      "host-application": [
+        "dist/src/main/core/host-application.d.ts"
+      ],
+      "card-service": [
+        "dist/packages/card-service/src/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/src/main/electron/app-entry.d.ts",

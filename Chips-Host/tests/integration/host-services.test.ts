@@ -1206,4 +1206,59 @@ describe('Host services integration', () => {
     expect(result.pluginId).toBe('chips.image.handler');
     expect(result.windowId).toBeTypeOf('string');
   });
+
+  it('routes local resources to enabled app plugins through resource-handler capabilities', async () => {
+    const pluginDir = path.join(workspace, 'resource-handler-plugin');
+    await fs.mkdir(path.join(pluginDir, 'dist'), { recursive: true });
+    await fs.writeFile(
+      path.join(pluginDir, 'manifest.yaml'),
+      [
+        'id: chips.resource.image.viewer',
+        'version: "1.0.0"',
+        'type: app',
+        'name: Resource Image Viewer',
+        'permissions:',
+        '  - resource.read',
+        'entry: dist/index.html',
+        'capabilities:',
+        '  - resource-handler:view:image/*'
+      ].join('\n'),
+      'utf-8',
+    );
+    await fs.writeFile(path.join(pluginDir, 'dist/index.html'), '<html><body>resource handler</body></html>', 'utf-8');
+
+    const zip = new StoreZipService();
+    const cpkPath = path.join(workspace, 'chips.resource.image.viewer.cpk');
+    await zip.compress(pluginDir, cpkPath);
+    const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath: cpkPath });
+    await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+
+    const imageFile = path.join(workspace, 'nested', 'resource image.png');
+    await fs.mkdir(path.dirname(imageFile), { recursive: true });
+    await fs.writeFile(imageFile, 'png', 'utf-8');
+
+    const result = await runtime.invoke<{
+      result: {
+        mode: string;
+        pluginId?: string;
+        windowId?: string;
+        matchedCapability?: string;
+        resolved: {
+          filePath?: string;
+          mimeType?: string;
+        };
+      };
+    }>('resource.open', {
+      resource: {
+        resourceId: imageFile,
+      },
+    });
+
+    expect(result.result.mode).toBe('plugin');
+    expect(result.result.pluginId).toBe('chips.resource.image.viewer');
+    expect(result.result.windowId).toBeTypeOf('string');
+    expect(result.result.matchedCapability).toBe('resource-handler:view:image/*');
+    expect(result.result.resolved.filePath).toBe(imageFile);
+    expect(result.result.resolved.mimeType).toBe('image/png');
+  });
 });

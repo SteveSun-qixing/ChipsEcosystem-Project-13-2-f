@@ -265,6 +265,8 @@ export function App() {
         containerErrorLabel={t("card-viewer.viewer.cardContainerError")}
         fatalErrorFallback={t("card-viewer.viewer.cardFatalError")}
         renderErrorFallback={t("card-viewer.viewer.cardRenderError")}
+        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
+        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
       />
     ) : (
       <BoxWindow

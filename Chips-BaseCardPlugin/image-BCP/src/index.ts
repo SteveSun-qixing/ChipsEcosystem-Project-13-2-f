@@ -24,6 +24,12 @@ export interface BasecardRenderContext {
   themeCssText?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: {
+    resourceId: string;
+    mimeType?: string;
+    title?: string;
+    fileName?: string;
+  }) => void;
 }
 
 export interface BasecardEditorContext {
@@ -79,6 +85,12 @@ export const basecardDefinition = {
     themeCssText?: string;
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    openResource?: (input: {
+      resourceId: string;
+      mimeType?: string;
+      title?: string;
+      fileName?: string;
+    }) => void;
   }) {
     return renderBasecardView({
       container: ctx.container,
@@ -86,6 +98,7 @@ export const basecardDefinition = {
       themeCssText: ctx.themeCssText,
       resolveResourceUrl: ctx.resolveResourceUrl,
       releaseResourceUrl: ctx.releaseResourceUrl,
+      openResource: ctx.openResource,
     });
   },
   renderEditor(ctx: {

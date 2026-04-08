@@ -57,6 +57,25 @@ emit方法用于发送事件到主进程，语法是window.chips.emit(eventType,
 
 file子域提供文件操作能力，包括file.read(path, options)读取文件，file.write(path, data)写入文件，file.exists(path)检查文件是否存在，file.mkdir(path)创建目录，file.delete(path)删除文件，file.list(path)列出目录内容，file.copy(src, dest)复制文件，file.move(src, dest)移动文件。
 
+### resource子域
+
+resource 子域采用 vNext 动作口径：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `resource.resolve({ resourceId })` | 解析资源为当前运行时可访问地址 | 是 |
+| `resource.open({ intent?, resource })` | 统一走 Host 资源处理器路由 | 否 |
+| `resource.readMetadata({ resourceId })` | 读取资源元数据 | 是 |
+| `resource.readBinary({ resourceId })` | 读取资源二进制 | 是 |
+
+`resource.open` 正式约束：
+
+- `resource.resourceId` 必填；
+- `resource.mimeType/title/fileName` 为可选提示字段；
+- Host 优先匹配 `resource-handler:<intent>:<mime>`，其次匹配主类型通配能力，最后回退 `file-handler:<ext>`；
+- 命中应用插件后，Host 统一注入 `launchParams.resourceOpen`；
+- 当本地文件或外部 URL 没有处理器时，Host 可分别回退到系统路径打开或外链打开。
+
 ### dialog子域
 
 dialog子域提供对话框能力，包括dialog.open(options)打开文件选择对话框，dialog.save(options)打开文件保存对话框，dialog.message(options)显示消息对话框，dialog.confirm(options)显示确认对话框。
@@ -208,6 +227,7 @@ card 子域采用 vNext 动作口径：
 - `chips.composite:resize`
 - `chips.composite:interaction`
 - `chips.composite:node-select`
+- `chips.composite:resource-open`
 - `chips.composite:node-error`
 - `chips.composite:fatal-error`
 
@@ -249,6 +269,27 @@ card 子域采用 vNext 动作口径：
   pointerCount: number;
 }
 ```
+
+其中 `resource-open` 事件必须至少包含：
+
+```ts
+{
+  nodeId: string;
+  cardType: string;
+  pluginId?: string;
+  intent: string;
+  resourceId: string;
+  mimeType?: string;
+  title?: string;
+  fileName?: string;
+}
+```
+
+正式要求：
+
+- 基础卡片 iframe 若需要请求外层容器打开资源，应通过 `chips.basecard:resource-open` 向复合壳层表达意图；
+- 复合壳层对外统一转发为 `chips.composite:resource-open`；
+- 容器应用收到该事件后，应继续调用正式 `resource.open` 路由，而不是直接硬编码目标应用插件。
 
 编辑器 iframe 事件协议：
 
@@ -421,7 +462,10 @@ interface StandardError {
 | `chips.invoke('file.read')` | file.read | 读取文件 |
 | `chips.invoke('file.write')` | file.write | 写入文件 |
 | `chips.invoke('file.delete')` | file.delete | 删除文件 |
-| `chips.invoke('resource.fetch')` | resource.fetch | 网络请求 |
+| `chips.invoke('resource.resolve')` | resource.read | 解析资源 |
+| `chips.invoke('resource.open')` | resource.read | 打开资源 |
+| `chips.invoke('resource.readMetadata')` | resource.read | 读取资源元数据 |
+| `chips.invoke('resource.readBinary')` | resource.read | 读取资源二进制 |
 | `chips.invoke('card.read*')` | card.read | 读取卡片 |
 | `chips.invoke('card.write*')` | card.write | 修改卡片 |
 | `chips.invoke('window.open', { config })` | window.open | 创建窗口 |

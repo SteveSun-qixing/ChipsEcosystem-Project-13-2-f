@@ -27,6 +27,7 @@ describe('route manifest contract', () => {
       'file.list',
       'file.watch',
       'resource.resolve',
+      'resource.open',
       'resource.readMetadata',
       'resource.readBinary',
       'config.get',

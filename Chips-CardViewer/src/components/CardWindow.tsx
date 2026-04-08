@@ -12,6 +12,8 @@ interface CardWindowProps {
   containerErrorLabel: string;
   fatalErrorFallback: string;
   renderErrorFallback: string;
+  resourceOpenErrorTitle: string;
+  resourceOpenErrorFallback: string;
 }
 
 export function CardWindow({
@@ -21,6 +23,8 @@ export function CardWindow({
   containerErrorLabel,
   fatalErrorFallback,
   renderErrorFallback,
+  resourceOpenErrorTitle,
+  resourceOpenErrorFallback,
 }: CardWindowProps) {
   const themeRuntime = useThemeRuntime();
   const logger = useMemo(
@@ -47,6 +51,16 @@ export function CardWindow({
     const api = client.card.compositeWindow as {
       render: (options: { cardFile: string; mode?: "view" | "preview" }) => Promise<FrameRenderResult>;
       onReady?: (frame: HTMLIFrameElement, handler: () => void) => () => void;
+      onResourceOpen?: (
+        frame: HTMLIFrameElement,
+        handler: (payload: {
+          intent: string;
+          resourceId: string;
+          mimeType?: string;
+          title?: string;
+          fileName?: string;
+        }) => void,
+      ) => () => void;
       onNodeError?: (
         frame: HTMLIFrameElement,
         handler: (payload: { nodeId: string; code: string; message: string; stage?: string }) => void,
@@ -152,6 +166,48 @@ export function CardWindow({
           );
         } else {
           logger.warn("SDK 未提供 onNodeError 事件订阅接口");
+        }
+
+        if (api.onResourceOpen) {
+          cleanupTasks.push(
+            api.onResourceOpen(frame, (payload) => {
+              void client.resource
+                .open({
+                  intent: payload.intent,
+                  resource: {
+                    resourceId: payload.resourceId,
+                    mimeType: payload.mimeType,
+                    title: payload.title,
+                    fileName: payload.fileName,
+                  },
+                })
+                .then((result) => {
+                  logger.info("已通过正式资源路由打开卡片内部资源", {
+                    cardFile,
+                    resourceId: payload.resourceId,
+                    pluginId: result.pluginId ?? null,
+                    mode: result.mode,
+                    matchedCapability: result.matchedCapability ?? null,
+                  });
+                })
+                .catch((resourceError) => {
+                  const message =
+                    typeof resourceError === "object" &&
+                    resourceError !== null &&
+                    "message" in resourceError &&
+                    typeof (resourceError as { message?: unknown }).message === "string"
+                      ? (resourceError as { message: string }).message
+                      : resourceOpenErrorFallback;
+                  logger.error("通过正式资源路由打开卡片内部资源失败", resourceError);
+                  void client.platform.showMessage({
+                    title: resourceOpenErrorTitle,
+                    message,
+                  }).catch(() => undefined);
+                });
+            }),
+          );
+        } else {
+          logger.warn("SDK 未提供 onResourceOpen 事件订阅接口");
         }
       })
       .catch((err: { code?: string; message?: string }) => {

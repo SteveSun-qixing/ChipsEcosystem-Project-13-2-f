@@ -23,6 +23,7 @@ permissions:
   - card.read
   - box.read
   - plugin.read
+  - resource.read
   - platform.read
   - theme.read
   - i18n.read

@@ -6,6 +6,7 @@ import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsBridge } from "./hooks/useChipsBridge";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { isSupportedImagePath, SUPPORTED_IMAGE_EXTENSION_LABEL, type ImageDimensions } from "./utils/image-viewer";
+import { resolveLaunchImagePath } from "./utils/launch-resource";
 import { createLogger } from "../config/logging";
 
 interface ThemeSnapshot {
@@ -280,10 +281,7 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     const launchContext = client.platform.getLaunchContext();
-    const targetPath =
-      typeof launchContext.launchParams.targetPath === "string"
-        ? launchContext.launchParams.targetPath
-        : "";
+    const targetPath = resolveLaunchImagePath(launchContext) ?? "";
 
     if (!targetPath) {
       return;

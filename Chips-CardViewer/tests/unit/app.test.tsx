@@ -30,6 +30,8 @@ describe("App（卡片查看器根组件）", () => {
         containerErrorLabel="容器不可用"
         fatalErrorFallback="严重错误"
         renderErrorFallback="渲染失败"
+        resourceOpenErrorTitle="无法打开资源"
+        resourceOpenErrorFallback="资源打开失败"
       />,
     );
 

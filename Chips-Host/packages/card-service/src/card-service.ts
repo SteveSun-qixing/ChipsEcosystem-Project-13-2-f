@@ -149,6 +149,12 @@ interface BaseCardPluginModule {
     themeCssText?: string;
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    openResource?: (input: {
+      resourceId: string;
+      mimeType?: string;
+      title?: string;
+      fileName?: string;
+    }) => void;
   }) => unknown;
   renderBasecardEditor?: (ctx: {
     container: unknown;
@@ -960,6 +966,22 @@ const createBasecardFrameDocument = (options: {
     '        return normalizedResourcePath;',
     '      };',
     '      const releaseResourceUrl = () => undefined;',
+    '      const openResource = (input) => {',
+    '        if (!input || typeof input !== "object") {',
+    '          return;',
+    '        }',
+    '        if (typeof input.resourceId !== "string" || input.resourceId.trim().length === 0) {',
+    '          return;',
+    '        }',
+    "        emit('chips.basecard:resource-open', {",
+    '          nodeId,',
+    '          resourceId: input.resourceId.trim(),',
+    '          mimeType: typeof input.mimeType === "string" ? input.mimeType : undefined,',
+    '          title: typeof input.title === "string" ? input.title : undefined,',
+    '          fileName: typeof input.fileName === "string" ? input.fileName : undefined,',
+    "          intent: 'view',",
+    '        });',
+    '      };',
     '      let pendingHeightTask = 0;',
     '      const emitHeight = () => {',
     '        const height = Math.max(',
@@ -1019,6 +1041,7 @@ const createBasecardFrameDocument = (options: {
     '          themeCssText,',
     '          resolveResourceUrl,',
     '          releaseResourceUrl,',
+    '          openResource,',
     '        });',
     '        scheduleEmitHeight();',
     '      } catch (error) {',
@@ -1519,6 +1542,33 @@ const createCompositeDocument = (
     '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
     '          const source = typeof payload.source === "string" ? payload.source : "basecard";',
     '          emitNodeSelect(nodeId, source);',
+    '          return;',
+    '        }',
+    '        if (data.type === "chips.basecard:resource-open") {',
+    '          const payload = data.payload ?? {};',
+    '          const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";',
+    '          const resourceId = typeof payload.resourceId === "string" ? payload.resourceId : "";',
+    '          if (!nodeId || !resourceId) {',
+    '            return;',
+    '          }',
+    '          const frame = frameByNodeId.get(nodeId);',
+    '          if (!frame) {',
+    '            return;',
+    '          }',
+    '          if (frame.contentWindow && event.source && event.source !== frame.contentWindow) {',
+    '            return;',
+    '          }',
+    '          const node = nodeById.get(nodeId);',
+    '          emit("chips.composite:resource-open", {',
+    '            nodeId,',
+    '            cardType: node?.dataset?.cardType ?? "",',
+    '            pluginId: node?.dataset?.pluginId || undefined,',
+    '            intent: typeof payload.intent === "string" ? payload.intent : "view",',
+    '            resourceId,',
+    '            mimeType: typeof payload.mimeType === "string" ? payload.mimeType : undefined,',
+    '            title: typeof payload.title === "string" ? payload.title : undefined,',
+    '            fileName: typeof payload.fileName === "string" ? payload.fileName : undefined,',
+    '          });',
     '        }',
     '      });',
     "      if ('ResizeObserver' in window) {",

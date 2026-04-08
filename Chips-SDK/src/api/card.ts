@@ -205,6 +205,17 @@ export interface CompositeNodeSelectPayload {
   source?: string;
 }
 
+export interface CompositeResourceOpenPayload {
+  nodeId: string;
+  cardType: string;
+  pluginId?: string;
+  intent: string;
+  resourceId: string;
+  mimeType?: string;
+  title?: string;
+  fileName?: string;
+}
+
 export type CompositeResizeReason =
   | "initial"
   | "ready"
@@ -279,6 +290,10 @@ export interface CardApi {
     onNodeSelect(
       frame: HTMLIFrameElement,
       handler: (payload: CompositeNodeSelectPayload) => void,
+    ): () => void;
+    onResourceOpen(
+      frame: HTMLIFrameElement,
+      handler: (payload: CompositeResourceOpenPayload) => void,
     ): () => void;
     onNodeError(
       frame: HTMLIFrameElement,
@@ -478,6 +493,13 @@ export function createCardApi(client: CoreClient): CardApi {
         return subscribeToCompositeEvent<CompositeNodeSelectPayload>(
           frame,
           "chips.composite:node-select",
+          handler,
+        );
+      },
+      onResourceOpen(frame, handler) {
+        return subscribeToCompositeEvent<CompositeResourceOpenPayload>(
+          frame,
+          "chips.composite:resource-open",
           handler,
         );
       },

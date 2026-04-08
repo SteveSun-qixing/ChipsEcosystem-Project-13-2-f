@@ -215,9 +215,38 @@ interface RenderNodeDiagnostic {
 - 响应字段：
   - `path: string`
 - 运行时语义：
-  - 把 Host 托管的渲染文档 URL 解析回当前设备上的绝对文件路径；
-  - 同时适用于 `card.render` 返回的 `documentUrl`，以及该文档内部继续引用的受控卡片根目录资源 URL；
-  - 当前 Host 必须同时支持 `file://` 与受控渲染协议 URL（当前为 `chips-render://`）。
+- 把 Host 托管的渲染文档 URL 解析回当前设备上的绝对文件路径；
+- 同时适用于 `card.render` 返回的 `documentUrl`，以及该文档内部继续引用的受控卡片根目录资源 URL；
+- 当前 Host 必须同时支持 `file://` 与受控渲染协议 URL（当前为 `chips-render://`）。
+
+### 3.5 resource.open（统一资源打开入口）
+
+- 动作：`resource.open`
+- 必填入参：
+  - `resource.resourceId: string`
+- 可选入参：
+  - `intent: string`
+  - `resource.mimeType: string`
+  - `resource.title: string`
+  - `resource.fileName: string`
+- 响应字段：
+  - `result.mode: 'plugin' | 'shell' | 'external'`
+  - `result.pluginId?: string`
+  - `result.windowId?: string`
+  - `result.matchedCapability?: string`
+  - `result.resolved.resourceId: string`
+  - `result.resolved.filePath?: string`
+  - `result.resolved.mimeType?: string`
+  - `result.resolved.extension?: string`
+  - `result.resolved.fileName?: string`
+
+运行时语义：
+
+- `intent` 当前缺省按 `view` 处理；
+- Host 优先匹配 `resource-handler:<intent>:<mime>`，其次匹配主类型通配能力，最后才回退 `file-handler:<ext>`；
+- 命中应用插件时，Host 负责统一启动目标应用，并把 `launchParams.resourceOpen` 注入启动上下文；
+- 当没有正式处理器时，Host 可以对本地文件回退 `shell.openPath(...)`，对外部 URL 回退 `shell.openExternal(...)`；
+- 具体请求/响应结构与能力规则以 `生态共用技术文档/协议与契约/10-资源打开契约.md` 为准。
 
 补充约束：
 

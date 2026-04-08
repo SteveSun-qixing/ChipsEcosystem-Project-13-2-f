@@ -117,6 +117,68 @@ client.card.render(cardFile: string, options?: RenderOptions): Promise<CardView>
 
 > 注意：旧版 `cards.read`、`cards.create`、`cards.update`、`cards.delete` 方法已归档，请使用 `card.pack/unpack/readMetadata/parse/render/validate` 接口。
 
+## 资源打开路由
+
+SDK 提供统一资源 API，直接映射 Host `resource.*` 服务动作。
+
+### `client.resource.open(...)`
+
+推荐用法：
+
+```typescript
+const result = await client.resource.open({
+  intent: "view",
+  resource: {
+    resourceId: "chips-render://card-root/session-1/assets/cover.png",
+    mimeType: "image/png",
+    title: "封面图",
+    fileName: "cover.png",
+  },
+});
+```
+
+返回结构：
+
+```typescript
+{
+  mode: "plugin" | "shell" | "external";
+  pluginId?: string;
+  windowId?: string;
+  matchedCapability?: string;
+  resolved: {
+    resourceId: string;
+    filePath?: string;
+    mimeType?: string;
+    extension?: string;
+    fileName?: string;
+  };
+}
+```
+
+使用语义：
+
+- `client.resource.open(...)` 是跨应用资源打开的正式入口；
+- SDK 调用方不需要也不应该自行查找图片查看器、PDF 查看器等目标应用；
+- Host 会优先匹配 `resource-handler:<intent>:<mime>`，再匹配 `file-handler:<ext>`；
+- 若没有命中应用处理器，Host 可能回退到系统路径打开或系统外链打开；
+- 该接口要求插件声明 `resource.read` 权限。
+
+### 资源处理器应用的启动恢复
+
+如果当前应用自身就是资源处理器，应从正式启动上下文读取：
+
+```typescript
+const launchContext = client.platform.getLaunchContext();
+const resourceOpen = launchContext.launchParams.resourceOpen;
+const targetPath = launchContext.launchParams.targetPath;
+```
+
+正式建议：
+
+- 优先读取 `launchParams.resourceOpen`；
+- 在文件查看器类场景下，可继续把 `targetPath` 作为兼容回退；
+- 不要要求上游应用显式传递自己的插件 ID。
+
 ## 内容渲染
 
 SDK提供 Host 渲染能力的调用封装。
@@ -257,12 +319,35 @@ const disposeInteraction = client.card.compositeWindow.onInteraction(preview.fra
 });
 ```
 
+如果复合卡片内部某个基础卡片节点希望“让外层应用帮它打开资源”，可以订阅：
+
+```typescript
+const disposeResourceOpen = client.card.compositeWindow.onResourceOpen(preview.frame, async (payload) => {
+  await client.resource.open({
+    intent: payload.intent,
+    resource: {
+      resourceId: payload.resourceId,
+      mimeType: payload.mimeType,
+      title: payload.title,
+      fileName: payload.fileName,
+    },
+  });
+});
+```
+
 `onInteraction` 载荷说明：
 
 - `intent = 'scroll'`：表示复合卡片内部发生了需要由外层壳层消费的滚动意图；
 - `intent = 'zoom'`：表示复合卡片内部发生了捏合或等价缩放意图；
 - `source` 用于区分事件来自基础卡片 iframe、复合壳层还是降级节点；
 - `clientX/clientY` 是相对于复合 iframe 视口的坐标，应用若要把缩放锚定到外层桌面坐标，应先加上外层 iframe 自身的 `getBoundingClientRect().left/top`。
+
+`onResourceOpen` 载荷说明：
+
+- `intent`：当前资源打开意图；
+- `resourceId`：基础卡片希望外层容器打开的正式资源标识；
+- `mimeType/title/fileName`：可选提示字段；
+- `nodeId/cardType/pluginId`：用于日志、审计与问题诊断。
 
 ### 基础卡片编辑器面板
 

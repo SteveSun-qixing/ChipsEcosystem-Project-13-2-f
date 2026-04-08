@@ -107,6 +107,28 @@ const validateCardRenderEditorRequest: SchemaValidator = (input: unknown) => {
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+const validateResourceOpenRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  validateOptionalString(input.intent, 'intent', errors);
+
+  if (!isRecord(input.resource)) {
+    errors.push('resource must be an object');
+  } else {
+    if (typeof input.resource.resourceId !== 'string' || input.resource.resourceId.trim().length === 0) {
+      errors.push('resource.resourceId must be a non-empty string');
+    }
+    validateOptionalString(input.resource.mimeType, 'resource.mimeType', errors);
+    validateOptionalString(input.resource.title, 'resource.title', errors);
+    validateOptionalString(input.resource.fileName, 'resource.fileName', errors);
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 const validateOptionalString = (value: unknown, field: string, errors: string[]): void => {
   if (typeof value !== 'undefined' && (typeof value !== 'string' || value.trim().length === 0)) {
     errors.push(`${field} must be a non-empty string when provided`);
@@ -286,6 +308,8 @@ export const registerHostSchemas = (): void => {
   registerPair('file.copy', ['sourcePath', 'destPath']);
 
   registerPair('resource.resolve', ['resourceId']);
+  schemaRegistry.register('schemas/resource.open.request.json', validateResourceOpenRequest);
+  schemaRegistry.register('schemas/resource.open.response.json', objectWithKeys(['result']));
   registerPair('resource.readMetadata', ['resourceId']);
   registerPair('resource.readBinary', ['resourceId']);
 

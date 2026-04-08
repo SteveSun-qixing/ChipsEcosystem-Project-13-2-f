@@ -21,6 +21,7 @@ import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src'
 import { CardService } from '../../../packages/card-service/src';
 import { CardInfoService } from '../../../packages/card-info-service/src';
 import { CardOpenService } from '../../../packages/card-open-service/src';
+import { ResourceOpenService } from '../../../packages/resource-open-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import {
@@ -1077,6 +1078,32 @@ const createCardOpenService = (ctx: HostServiceContext, state: RuntimeState): Ca
       width: 1200,
       height: 760
     }
+  });
+};
+
+const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState): ResourceOpenService => {
+  return new ResourceOpenService({
+    queryHandlerPlugins: async () => {
+      return ctx.runtime.query({ type: 'app' }).map((record) => ({
+        id: record.manifest.id,
+        enabled: record.enabled,
+        type: record.manifest.type,
+        capabilities: [...(record.manifest.capabilities ?? [])],
+      }));
+    },
+    launchPlugin: async (pluginId, launchParams) => {
+      const launched = await openPluginWindow(ctx, state, pluginId, launchParams);
+      return {
+        windowId: launched.window.id,
+      };
+    },
+    resolveResourceFilePath: (resourceId) => ctx.getCardService().resolveDocumentFilePath(resourceId),
+    openPath: async (filePath) => {
+      await ctx.pal.shell.openPath(filePath);
+    },
+    openExternalUrl: async (url) => {
+      await ctx.pal.shell.openExternal(url);
+    },
   });
 };
 
@@ -2246,6 +2273,30 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'resource.resolve', async (input) => {
             const uri = input.resourceId.startsWith('file://') ? input.resourceId : pathToFileURL(input.resourceId).href;
             return { uri };
+          })
+        )
+      },
+      open: {
+        descriptor: descriptor<
+          {
+            intent?: string;
+            resource: {
+              resourceId: string;
+              mimeType?: string;
+              title?: string;
+              fileName?: string;
+            };
+          },
+          { result: unknown }
+        >(
+          'resource.open',
+          ['resource.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'resource.open', async (input) => {
+            const result = await createResourceOpenService(ctx, state).openResource(input);
+            return { result };
           })
         )
       },

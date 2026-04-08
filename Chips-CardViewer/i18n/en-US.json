@@ -22,7 +22,9 @@
     },
     "errors": {
       "hostActionFailed": "The action failed. Check Host logs and the bridge chain.",
-      "unsupportedFile": "Only .card and .box files are supported."
+      "unsupportedFile": "Only .card and .box files are supported.",
+      "resourceOpenFailedTitle": "Unable to open resource",
+      "resourceOpenFailed": "The selected resource could not be opened through the official route. Check the handler plugins and Host logs."
     },
     "bridge": {
       "themeLabel": "Current theme"

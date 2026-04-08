@@ -22,7 +22,9 @@
     },
     "errors": {
       "hostActionFailed": "操作失败，请检查 Host 日志与桥接链路。",
-      "unsupportedFile": "当前只支持打开 .card 或 .box 文件。"
+      "unsupportedFile": "当前只支持打开 .card 或 .box 文件。",
+      "resourceOpenFailedTitle": "无法打开资源",
+      "resourceOpenFailed": "当前资源无法通过正式路由打开，请检查处理器插件与 Host 日志。"
     },
     "bridge": {
       "themeLabel": "当前主题"

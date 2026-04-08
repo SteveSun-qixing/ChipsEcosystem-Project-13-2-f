@@ -26,6 +26,7 @@ export type {
   CardRenderView,
   CompositeInteractionPayload,
   CompositeInteractionPolicy,
+  CompositeResourceOpenPayload,
   CompositeMode,
   FrameRenderResult,
 } from "./api/card";
@@ -94,5 +95,12 @@ export type {
   BoxValidationResult,
   ResolvedRuntimeResource,
 } from "./api/box";
-export type { ResourceApi, ResourceUri, ResourceMeta } from "./api/resource";
+export type {
+  ResourceApi,
+  ResourceUri,
+  ResourceMeta,
+  ResourceOpenRequest,
+  ResourceOpenResolvedResource,
+  ResourceOpenResult,
+} from "./api/resource";
 export type { StandardError } from "./types/errors";

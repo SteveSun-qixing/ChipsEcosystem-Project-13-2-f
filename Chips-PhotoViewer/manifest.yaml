@@ -17,6 +17,7 @@ keywords:
   - viewer
 
 capabilities:
+  - resource-handler:view:image/*
   - file-handler:.png
   - file-handler:.jpg
   - file-handler:.jpeg

@@ -77,10 +77,38 @@ permissions字段声明插件需要的系统能力。数组形式，每个元素
 
 capabilities字段声明插件提供的具体能力，不同类型插件有不同结构。
 
-- 应用插件可以声明提供的功能如可打开的文件类型；
+- 应用插件可以声明提供的功能，如本地文件处理器、资源处理器等；
 - 卡片插件正式使用对象结构：`capabilities.cardTypes`；
 - 布局插件正式使用 `layout.layoutType` / `layout.displayName`；
 - 模块插件的正式能力契约不再以顶层 `capabilities: string[]` 作为主入口，而是使用 `module.provides` / `module.consumes`。
+
+### 应用插件资源处理能力
+
+应用插件当前正式支持两类“打开处理器”能力：
+
+1. `file-handler:<ext>`
+2. `resource-handler:<intent>:<mime>`
+
+示例：
+
+```yaml
+capabilities:
+  - resource-handler:view:image/*
+  - file-handler:.png
+  - file-handler:.jpg
+```
+
+规则说明：
+
+1. `resource-handler` 用于跨应用资源转交，`file-handler` 用于本地扩展名处理与系统文件关联；
+2. `resource-handler` 当前只由 `type: app` 插件作为正式处理器提供方；
+3. `intent` 当前推荐使用 `view`；
+4. `mime` 可以是精确类型，例如 `image/png`，也可以是主类型通配，例如 `image/*`；
+5. Host 解析 `resource.open` 时，匹配顺序为：
+   - `resource-handler:<intent>:<mime>`
+   - `resource-handler:<intent>:<primary>/*`
+   - `file-handler:<ext>`
+6. 若应用既支持系统文件关联，又支持被其他应用显式路由打开，建议同时声明 `resource-handler` 与 `file-handler`。
 
 ### 模块插件专属字段
 

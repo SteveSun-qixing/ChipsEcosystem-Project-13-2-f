@@ -150,6 +150,12 @@ interface ImageCardViewProps {
   config: BasecardConfig;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: {
+    resourceId: string;
+    mimeType?: string;
+    title?: string;
+    fileName?: string;
+  }) => void;
 }
 
 function ImageFrame(props: {
@@ -161,6 +167,8 @@ function ImageFrame(props: {
   aspectRatio?: string;
   radius: number;
   onResourceError?: () => void;
+  onOpenResource?: () => void;
+  canOpenResource?: boolean;
 }) {
   const {
     image,
@@ -171,7 +179,10 @@ function ImageFrame(props: {
     aspectRatio,
     radius,
     onResourceError,
+    onOpenResource,
+    canOpenResource = false,
   } = props;
+  const isInteractive = canOpenResource && typeof onOpenResource === "function" && src.trim().length > 0;
 
   return (
     <div
@@ -179,7 +190,21 @@ function ImageFrame(props: {
       style={{
         ...(aspectRatio ? { aspectRatio } : undefined),
         borderRadius: `${radius}px`,
+        ...(isInteractive ? { cursor: "pointer" } : undefined),
       }}
+      {...(isInteractive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick: onOpenResource,
+            onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpenResource?.();
+              }
+            },
+          }
+        : undefined)}
     >
       {src ? (
         <img
@@ -241,10 +266,87 @@ async function resolveResourceUrlWithRetry(
   }
 }
 
+function inferMimeTypeFromSource(image: ImageItem): string | undefined {
+  if (image.source === "url") {
+    try {
+      const parsed = new URL(image.url ?? "");
+      const pathname = parsed.pathname.toLowerCase();
+      if (pathname.endsWith(".png")) {
+        return "image/png";
+      }
+      if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) {
+        return "image/jpeg";
+      }
+      if (pathname.endsWith(".webp")) {
+        return "image/webp";
+      }
+      if (pathname.endsWith(".gif")) {
+        return "image/gif";
+      }
+      if (pathname.endsWith(".bmp")) {
+        return "image/bmp";
+      }
+      if (pathname.endsWith(".svg")) {
+        return "image/svg+xml";
+      }
+      if (pathname.endsWith(".avif")) {
+        return "image/avif";
+      }
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  }
+
+  const normalizedPath = normalizeRelativeCardResourcePath(image.file_path)?.toLowerCase() ?? "";
+  if (normalizedPath.endsWith(".png")) {
+    return "image/png";
+  }
+  if (normalizedPath.endsWith(".jpg") || normalizedPath.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (normalizedPath.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (normalizedPath.endsWith(".gif")) {
+    return "image/gif";
+  }
+  if (normalizedPath.endsWith(".bmp")) {
+    return "image/bmp";
+  }
+  if (normalizedPath.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
+  if (normalizedPath.endsWith(".avif")) {
+    return "image/avif";
+  }
+  return undefined;
+}
+
+function resolveResourceFileName(image: ImageItem): string | undefined {
+  if (image.source === "file") {
+    const normalizedPath = normalizeRelativeCardResourcePath(image.file_path);
+    if (!normalizedPath) {
+      return undefined;
+    }
+    const segments = normalizedPath.split("/");
+    return segments[segments.length - 1];
+  }
+
+  try {
+    const parsed = new URL(image.url ?? "");
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return segments[segments.length - 1];
+  } catch {
+    return undefined;
+  }
+}
+
 export function ImageCardView({
   config,
   resolveResourceUrl,
   releaseResourceUrl,
+  openResource,
 }: ImageCardViewProps) {
   const t = createTranslator(typeof navigator !== "undefined" ? navigator.language : "zh-CN");
   const horizontalRef = useRef<HTMLDivElement | null>(null);
@@ -342,6 +444,30 @@ export function ImageCardView({
     horizontalRef.current.scrollLeft += event.deltaY;
   };
 
+  const handleOpenImageResource = (image: ImageItem, src: string): void => {
+    if (!openResource || src.trim().length === 0) {
+      return;
+    }
+
+    if (image.source === "file") {
+      const normalizedPath = normalizeRelativeCardResourcePath(image.file_path);
+      if (!normalizedPath || !resolvedFileUrls.has(normalizedPath)) {
+        return;
+      }
+    }
+
+    const displayTitle = [image.title, image.alt]
+      .find((value) => typeof value === "string" && value.trim().length > 0)
+      ?.trim();
+
+    openResource({
+      resourceId: src,
+      mimeType: inferMimeTypeFromSource(image),
+      title: displayTitle,
+      fileName: resolveResourceFileName(image),
+    });
+  };
+
   if (config.images.length === 0) {
     return (
       <div className="chips-image-card">
@@ -369,6 +495,17 @@ export function ImageCardView({
                   src={getImageDisplaySource(singleImage, resolvedFileUrls)}
                   placeholderText={t("image.unavailable")}
                   radius={spacing.radius}
+                  canOpenResource={
+                    singleImage.source === "url" ||
+                    Boolean(
+                      singleImage.file_path &&
+                      normalizeRelativeCardResourcePath(singleImage.file_path) &&
+                      resolvedFileUrls.has(normalizeRelativeCardResourcePath(singleImage.file_path)!),
+                    )
+                  }
+                  onOpenResource={() => {
+                    handleOpenImageResource(singleImage, getImageDisplaySource(singleImage, resolvedFileUrls));
+                  }}
                   onResourceError={() => {
                     if (singleImage.source === "file") {
                       retryResource(singleImage.file_path);
@@ -414,6 +551,17 @@ export function ImageCardView({
                     aspectRatio="1 / 1"
                     placeholderText={t("image.unavailable")}
                     radius={spacing.radius}
+                    canOpenResource={
+                      image.source === "url" ||
+                      Boolean(
+                        image.file_path &&
+                        normalizeRelativeCardResourcePath(image.file_path) &&
+                        resolvedFileUrls.has(normalizeRelativeCardResourcePath(image.file_path)!),
+                      )
+                    }
+                    onOpenResource={() => {
+                      handleOpenImageResource(image, src);
+                    }}
                     onResourceError={() => {
                       if (image.source === "file") {
                         retryResource(image.file_path);
@@ -444,6 +592,17 @@ export function ImageCardView({
                 src={getImageDisplaySource(image, resolvedFileUrls)}
                 placeholderText={t("image.unavailable")}
                 radius={spacing.radius}
+                canOpenResource={
+                  image.source === "url" ||
+                  Boolean(
+                    image.file_path &&
+                    normalizeRelativeCardResourcePath(image.file_path) &&
+                    resolvedFileUrls.has(normalizeRelativeCardResourcePath(image.file_path)!),
+                  )
+                }
+                onOpenResource={() => {
+                  handleOpenImageResource(image, getImageDisplaySource(image, resolvedFileUrls));
+                }}
                 onResourceError={() => {
                   if (image.source === "file") {
                     retryResource(image.file_path);
@@ -474,6 +633,17 @@ export function ImageCardView({
                   fillHeight={true}
                   placeholderText={t("image.unavailable")}
                   radius={spacing.radius}
+                  canOpenResource={
+                    image.source === "url" ||
+                    Boolean(
+                      image.file_path &&
+                      normalizeRelativeCardResourcePath(image.file_path) &&
+                      resolvedFileUrls.has(normalizeRelativeCardResourcePath(image.file_path)!),
+                    )
+                  }
+                  onOpenResource={() => {
+                    handleOpenImageResource(image, getImageDisplaySource(image, resolvedFileUrls));
+                  }}
                   onResourceError={() => {
                     if (image.source === "file") {
                       retryResource(image.file_path);

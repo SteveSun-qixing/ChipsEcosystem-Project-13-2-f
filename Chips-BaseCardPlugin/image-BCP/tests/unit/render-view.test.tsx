@@ -174,6 +174,90 @@ describe("mountBasecardView", () => {
     expect(releaseResourceUrl).toHaveBeenCalledWith("cover.png");
   });
 
+  it("requests resource opening when the user clicks a resolved image resource", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const openResource = vi.fn();
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        images: [
+          {
+            id: "image-1",
+            source: "file",
+            file_path: "assets/cover.png",
+            title: "Cover",
+            alt: "Cover",
+          },
+        ],
+      }),
+      resolveResourceUrl: async (resourcePath: string) => `chips-render://card-root/test-token/${resourcePath}`,
+      openResource,
+    });
+
+    await flushAsyncWork();
+
+    const interactiveFrame = container.querySelector(".chips-image-card__image-frame") as HTMLDivElement | null;
+    if (!interactiveFrame) {
+      throw new Error("未找到可交互的图片容器");
+    }
+
+    interactiveFrame.click();
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "chips-render://card-root/test-token/assets/cover.png",
+      mimeType: "image/png",
+      title: "Cover",
+      fileName: "cover.png",
+    });
+
+    cleanup();
+  });
+
+  it("does not forward an empty title when the image metadata is blank", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const openResource = vi.fn();
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        images: [
+          {
+            id: "image-1",
+            source: "file",
+            file_path: "assets/cover.png",
+            title: "   ",
+            alt: "",
+          },
+        ],
+      }),
+      resolveResourceUrl: async (resourcePath: string) => `chips-render://card-root/test-token/${resourcePath}`,
+      openResource,
+    });
+
+    await flushAsyncWork();
+
+    const interactiveFrame = container.querySelector(".chips-image-card__image-frame") as HTMLDivElement | null;
+    if (!interactiveFrame) {
+      throw new Error("未找到可交互的图片容器");
+    }
+
+    interactiveFrame.click();
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "chips-render://card-root/test-token/assets/cover.png",
+      mimeType: "image/png",
+      title: undefined,
+      fileName: "cover.png",
+    });
+
+    cleanup();
+  });
+
   it("renders long-scroll without nested fixed-height clipping", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

@@ -324,6 +324,9 @@
     "resource.readBinary": {
       "action": "resource.readBinary"
     },
+    "resource.open": {
+      "action": "resource.open"
+    },
     "resource.readMetadata": {
       "action": "resource.readMetadata"
     },

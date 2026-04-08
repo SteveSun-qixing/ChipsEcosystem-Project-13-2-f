@@ -1,34 +1,34 @@
 import { Link } from 'react-router-dom';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { Icon } from '../runtime/icons/Icon';
-import type { CommunityWorkItem } from '../types/community';
+import { getCommunityWorkSelectionKey, type CommunityWorkItem } from '../types/community';
 import { WorkTile } from './WorkTile';
 
 interface WorkGridProps {
   items: CommunityWorkItem[];
   isOwner: boolean;
   manageMode: boolean;
-  selectedCardIds: ReadonlySet<string>;
+  selectedWorkKeys: ReadonlySet<string>;
   manageError: string;
   isDeleting: boolean;
   onToggleManageMode: () => void;
-  onToggleCardSelection: (item: CommunityWorkItem) => void;
-  onDeleteSelectedCards: () => void;
+  onToggleWorkSelection: (item: CommunityWorkItem) => void;
+  onDeleteSelectedWorks: () => void;
 }
 
 export function WorkGrid({
   items,
   isOwner,
   manageMode,
-  selectedCardIds,
+  selectedWorkKeys,
   manageError,
   isDeleting,
   onToggleManageMode,
-  onToggleCardSelection,
-  onDeleteSelectedCards,
+  onToggleWorkSelection,
+  onDeleteSelectedWorks,
 }: WorkGridProps) {
   const { t } = useAppPreferences();
-  const cardCount = items.filter((item) => item.type === 'card').length;
+  const workCount = items.length;
 
   return (
     <section className="works-section">
@@ -46,7 +46,7 @@ export function WorkGrid({
               type="button"
               className={`button ${manageMode ? 'button--primary' : 'button--secondary'}`}
               onClick={onToggleManageMode}
-              disabled={isDeleting || cardCount === 0}
+              disabled={isDeleting || workCount === 0}
             >
               {manageMode ? t('profile.manageDone') : t('profile.manageAction')}
             </button>
@@ -64,13 +64,13 @@ export function WorkGrid({
 
           <div className="works-section__manage-actions">
             <span className="works-section__manage-count">
-              {t('profile.manageSelectedCount', { count: selectedCardIds.size })}
+              {t('profile.manageSelectedCount', { count: selectedWorkKeys.size })}
             </span>
             <button
               type="button"
               className="button button--secondary"
-              onClick={onDeleteSelectedCards}
-              disabled={isDeleting || selectedCardIds.size === 0}
+              onClick={onDeleteSelectedWorks}
+              disabled={isDeleting || selectedWorkKeys.size === 0}
             >
               {isDeleting ? t('profile.manageDeleting') : t('profile.manageDelete')}
             </button>
@@ -85,13 +85,13 @@ export function WorkGrid({
               key={`${item.type}-${item.id}`}
               item={item}
               manageMode={manageMode}
-              selected={selectedCardIds.has(item.id)}
-              onToggleSelection={onToggleCardSelection}
+              selected={selectedWorkKeys.has(getCommunityWorkSelectionKey(item))}
+              onToggleSelection={onToggleWorkSelection}
             />
           ))}
         </div>
       ) : (
-        <div className="panel empty-panel works-section__empty">{t('profile.empty')}</div>
+        <div className="works-section__empty">{t('profile.empty')}</div>
       )}
     </section>
   );

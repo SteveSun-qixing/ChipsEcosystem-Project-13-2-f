@@ -8,7 +8,7 @@ import { WorkGrid } from '../components/WorkGrid';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getErrorMessage } from '../lib/ui';
-import type { CommunityWorkItem } from '../types/community';
+import { getCommunityWorkSelectionKey, type CommunityWorkItem } from '../types/community';
 import './ProfilePage.css';
 
 interface ProfileState {
@@ -349,7 +349,7 @@ export default function ProfilePage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
   const [manageMode, setManageMode] = useState(false);
-  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [selectedWorkKeys, setSelectedWorkKeys] = useState<string[]>([]);
   const [manageError, setManageError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [state, setState] = useState<ProfileState>({
@@ -429,11 +429,11 @@ export default function ProfilePage() {
     return authUser.username.toLowerCase() === state.user.username.toLowerCase();
   }, [authUser, isAuthLoading, state.user]);
 
-  const selectedCardIdSet = useMemo(() => new Set(selectedCardIds), [selectedCardIds]);
+  const selectedWorkKeySet = useMemo(() => new Set(selectedWorkKeys), [selectedWorkKeys]);
 
   useEffect(() => {
     setManageMode(false);
-    setSelectedCardIds([]);
+    setSelectedWorkKeys([]);
     setManageError('');
     setIsDeleting(false);
     setIsProfileSettingsOpen(false);
@@ -451,31 +451,38 @@ export default function ProfilePage() {
     }
 
     setManageMode((current) => !current);
-    setSelectedCardIds([]);
+    setSelectedWorkKeys([]);
     setManageError('');
   };
 
-  const handleToggleCardSelection = (item: CommunityWorkItem) => {
-    if (!manageMode || item.type !== 'card' || isDeleting) {
+  const handleToggleWorkSelection = (item: CommunityWorkItem) => {
+    if (!manageMode || isDeleting) {
       return;
     }
 
-    setSelectedCardIds((current) => (
-      current.includes(item.id)
-        ? current.filter((id) => id !== item.id)
-        : [...current, item.id]
+    const selectionKey = getCommunityWorkSelectionKey(item);
+
+    setSelectedWorkKeys((current) => (
+      current.includes(selectionKey)
+        ? current.filter((key) => key !== selectionKey)
+        : [...current, selectionKey]
     ));
     setManageError('');
   };
 
-  const handleDeleteSelectedCards = async () => {
-    if (!selectedCardIds.length || isDeleting) {
+  const handleDeleteSelectedWorks = async () => {
+    if (!selectedWorkKeys.length || isDeleting) {
       return;
     }
 
-    const deleteTargets = [...selectedCardIds];
+    const selectedItems = state.items.filter((item) => selectedWorkKeySet.has(getCommunityWorkSelectionKey(item)));
+    if (selectedItems.length === 0) {
+      setSelectedWorkKeys([]);
+      return;
+    }
+
     const confirmed = window.confirm(
-      t('profile.manageDeleteConfirm', { count: deleteTargets.length }),
+      t('profile.manageDeleteConfirm', { count: selectedItems.length }),
     );
     if (!confirmed) {
       return;
@@ -485,34 +492,42 @@ export default function ProfilePage() {
     setManageError('');
 
     const results = await Promise.allSettled(
-      deleteTargets.map(async (cardId) => {
-        await cardsApi.deleteCard(cardId);
-        return cardId;
+      selectedItems.map(async (item) => {
+        if (item.type === 'card') {
+          await cardsApi.deleteCard(item.id);
+        } else {
+          await boxesApi.deleteBox(item.id);
+        }
+        return getCommunityWorkSelectionKey(item);
       }),
     );
 
-    const successIds = results
+    const successKeys = results
       .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')
       .map((result) => result.value);
     const failedResults = results.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
 
-    if (successIds.length > 0) {
-      const successIdSet = new Set(successIds);
+    if (successKeys.length > 0) {
+      const successKeySet = new Set(successKeys);
       setState((current) => ({
         ...current,
-        items: current.items.filter((item) => !(item.type === 'card' && successIdSet.has(item.id))),
+        items: current.items.filter((item) => !successKeySet.has(getCommunityWorkSelectionKey(item))),
       }));
     }
 
     if (failedResults.length > 0) {
-      setSelectedCardIds(
-        results.flatMap((result, index) => (result.status === 'rejected' ? [deleteTargets[index]] : [])),
+      setSelectedWorkKeys(
+        results.flatMap((result, index) => (
+          result.status === 'rejected'
+            ? [getCommunityWorkSelectionKey(selectedItems[index]!)]
+            : []
+        )),
       );
       setManageError(t('profile.manageDeleteFailed', { count: failedResults.length }));
     } else {
-      setSelectedCardIds([]);
+      setSelectedWorkKeys([]);
       setManageMode(false);
     }
 
@@ -603,12 +618,12 @@ export default function ProfilePage() {
           items={state.items}
           isOwner={isOwner}
           manageMode={manageMode}
-          selectedCardIds={selectedCardIdSet}
+          selectedWorkKeys={selectedWorkKeySet}
           manageError={manageError}
           isDeleting={isDeleting}
           onToggleManageMode={handleToggleManageMode}
-          onToggleCardSelection={handleToggleCardSelection}
-          onDeleteSelectedCards={handleDeleteSelectedCards}
+          onToggleWorkSelection={handleToggleWorkSelection}
+          onDeleteSelectedWorks={handleDeleteSelectedWorks}
         />
       </>
     );

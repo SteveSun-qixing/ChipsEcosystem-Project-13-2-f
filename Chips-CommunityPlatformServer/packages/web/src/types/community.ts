@@ -10,6 +10,10 @@ export interface CommunityWorkItem {
   createdAt: string;
 }
 
+export function getCommunityWorkSelectionKey(item: Pick<CommunityWorkItem, 'type' | 'id'>): string {
+  return `${item.type}:${item.id}`;
+}
+
 export type UploadQueueStatus = 'queued' | 'uploading' | 'processing' | 'success' | 'error';
 
 export interface UploadQueueItem {

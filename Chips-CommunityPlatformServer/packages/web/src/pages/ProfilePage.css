@@ -368,6 +368,14 @@
 
 .works-section__empty {
   min-height: 180px;
+  display: grid;
+  place-items: center;
+  padding: 20px 12px;
+  border: 1px dashed color-mix(in srgb, var(--ccps-sys-border) 58%, transparent);
+  border-radius: 24px;
+  background: transparent;
+  color: var(--ccps-sys-text-muted);
+  text-align: center;
 }
 
 .work-grid {
@@ -397,10 +405,6 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
-}
-
-.work-tile--manage.is-readonly {
-  cursor: default;
 }
 
 .work-tile__surface {
@@ -451,10 +455,6 @@
   box-shadow:
     0 20px 42px rgba(32, 42, 66, 0.18),
     0 0 0 2px color-mix(in srgb, var(--ccps-sys-accent) 46%, white 54%);
-}
-
-.work-tile--manage.is-readonly .work-tile__cover-clip {
-  filter: saturate(0.82);
 }
 
 .work-tile__cover-frame,
@@ -517,10 +517,6 @@
   background: linear-gradient(135deg, var(--ccps-sys-accent), var(--ccps-sys-accent-strong));
   color: #fff;
   transform: scale(1.04);
-}
-
-.work-tile__selection-badge.is-disabled {
-  opacity: 0.46;
 }
 
 .work-tile__label {

@@ -15,7 +15,7 @@ interface WorkTileProps {
 export function WorkTile({ item, manageMode = false, selected = false, onToggleSelection }: WorkTileProps) {
   const { t } = useAppPreferences();
   const isCard = item.type === 'card';
-  const selectable = manageMode && isCard;
+  const selectable = manageMode;
   const coverStyle = getWorkCoverStyle(item.coverRatio) as CSSProperties;
 
   const content = (
@@ -43,10 +43,10 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
 
           {manageMode ? (
             <span
-              className={`work-tile__selection-badge${selected ? ' is-selected' : ''}${selectable ? '' : ' is-disabled'}`}
+              className={`work-tile__selection-badge${selected ? ' is-selected' : ''}`}
               aria-hidden="true"
             >
-              {selectable && selected ? <Icon name="check" size={16} /> : null}
+              {selected ? <Icon name="check" size={16} /> : null}
             </span>
           ) : null}
         </div>
@@ -62,12 +62,14 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
     return (
       <button
         type="button"
-        className={`work-tile work-tile--${item.type} work-tile--manage${selected ? ' is-selected' : ''}${selectable ? '' : ' is-readonly'}`}
+        className={`work-tile work-tile--${item.type} work-tile--manage${selected ? ' is-selected' : ''}`}
         style={coverStyle}
-        onClick={selectable ? () => onToggleSelection?.(item) : undefined}
-        disabled={!selectable}
-        aria-pressed={selectable ? selected : undefined}
-        aria-label={selectable ? t('profile.manageTileSelect', { title: item.title }) : `${item.title} · ${t('common.box')}`}
+        onClick={() => onToggleSelection?.(item)}
+        aria-pressed={selected}
+        aria-label={t('profile.manageTileSelect', {
+          title: item.title,
+          type: item.type === 'card' ? t('common.card') : t('common.box'),
+        })}
       >
         {content}
       </button>

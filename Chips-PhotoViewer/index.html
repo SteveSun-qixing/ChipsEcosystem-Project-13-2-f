@@ -10,10 +10,10 @@
         default-src 'self' file: blob:;
         script-src 'self';
         style-src 'self' 'unsafe-inline';
-        img-src 'self' file: data: blob: https:;
-        font-src 'self' file: data:;
-        connect-src 'self';
-        frame-src 'self' file: blob:;
+        img-src 'self' file: data: blob: http: https:;
+        font-src 'self' file: data: http: https:;
+        connect-src 'self' http: https:;
+        frame-src 'self' file: blob: http: https:;
         worker-src 'self' blob:;
         object-src 'none';
         base-uri 'self';

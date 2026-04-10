@@ -7,6 +7,17 @@ description: {{description}}
 permissions:
   - theme.read
 
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+
 entry:
   tokens: dist/tokens.json
   themeCss: dist/theme.css
@@ -25,4 +36,3 @@ ui:
     baseWidth: 1024
     contract: ./contracts/theme-interface.contract.json
     minFunctionalSet: ./contracts/theme-min-functional-set.json
-

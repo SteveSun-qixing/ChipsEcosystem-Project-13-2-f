@@ -31,6 +31,289 @@ describe("createClient", () => {
     });
   });
 
+  it("unwraps platform/surface responses and sends updated window payloads", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const windowState = {
+      id: "window-1",
+      kind: "window" as const,
+      title: "图片查看器",
+      width: 1280,
+      height: 800,
+      focused: true,
+      state: "normal" as const,
+      pluginId: "com.chips.photo-viewer",
+    };
+    const surfaceState = {
+      id: "surface-1",
+      kind: "route" as const,
+      title: "图片页",
+      width: 1280,
+      height: 800,
+      focused: false,
+      state: "normal" as const,
+      url: "/image-viewer",
+    };
+    const capabilitySnapshot = {
+      hostKind: "desktop" as const,
+      platform: "darwin" as const,
+      facets: {
+        surface: {
+          supported: true,
+          interactive: true,
+          supportedKinds: ["window", "route"],
+        },
+        storage: {
+          localWorkspace: true,
+          sandboxFilePicker: false,
+          remoteBacked: false,
+        },
+        selection: {
+          openFile: true,
+          saveFile: true,
+          directory: true,
+          multiple: true,
+        },
+        transfer: {
+          upload: false,
+          download: true,
+          share: true,
+          externalOpen: true,
+          revealInShell: true,
+        },
+        association: {
+          fileAssociation: true,
+          urlScheme: false,
+          shareTarget: false,
+        },
+        device: {
+          screen: true,
+          power: true,
+          network: false,
+        },
+        systemUi: {
+          clipboard: true,
+          tray: true,
+          globalShortcut: true,
+          notification: true,
+        },
+        background: {
+          keepAlive: true,
+          wakeEvents: true,
+        },
+        ipc: {
+          namedPipe: true,
+          unixSocket: true,
+          sharedMemory: true,
+        },
+        offscreenRender: {
+          htmlToPdf: true,
+          htmlToImage: true,
+        },
+      },
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "window.open":
+            return { window: windowState };
+          case "window.getState":
+            return { state: windowState };
+          case "window.focus":
+          case "window.resize":
+          case "window.setState":
+          case "window.close":
+          case "surface.focus":
+          case "surface.resize":
+          case "surface.setState":
+          case "surface.close":
+          case "transfer.openPath":
+          case "transfer.openExternal":
+          case "transfer.revealInShell":
+            return { ack: true };
+          case "platform.getInfo":
+            return {
+              info: {
+                hostKind: "desktop",
+                platform: "darwin",
+                arch: "arm64",
+                release: "24.0.0",
+              },
+            };
+          case "platform.getCapabilities":
+            return { capabilities: capabilitySnapshot };
+          case "platform.getScreenInfo":
+            return {
+              screen: {
+                id: "screen-1",
+                width: 3024,
+                height: 1964,
+                scaleFactor: 2,
+                x: 0,
+                y: 0,
+                primary: true,
+              },
+            };
+          case "platform.listScreens":
+            return {
+              screens: [
+                {
+                  id: "screen-1",
+                  width: 3024,
+                  height: 1964,
+                  scaleFactor: 2,
+                  x: 0,
+                  y: 0,
+                  primary: true,
+                },
+              ],
+            };
+          case "platform.powerGetState":
+            return {
+              state: {
+                idleSeconds: 0,
+                preventSleep: false,
+              },
+            };
+          case "platform.powerSetPreventSleep":
+            return { preventSleep: true };
+          case "surface.open":
+            return { surface: surfaceState };
+          case "surface.getState":
+            return { state: surfaceState };
+          case "surface.list":
+            return { surfaces: [surfaceState] };
+          case "transfer.share":
+            return { shared: true };
+          case "association.getCapabilities":
+            return {
+              capabilities: {
+                fileAssociation: true,
+                urlScheme: false,
+                shareTarget: false,
+              },
+            };
+          case "association.openPath":
+            return {
+              result: {
+                targetPath: "/tmp/example.card",
+                extension: ".card",
+                mode: "card",
+                windowId: "window-1",
+              },
+            };
+          case "association.openUrl":
+            return {
+              result: {
+                url: "https://chips.example/image-viewer",
+                mode: "external",
+              },
+            };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(
+      client.window.open({
+        title: "图片查看器",
+        width: 1280,
+        height: 800,
+        pluginId: "com.chips.photo-viewer",
+      })
+    ).resolves.toEqual(windowState);
+    await client.window.focus("window-1");
+    await client.window.resize("window-1", { width: 1400, height: 900 });
+    await client.window.setState("window-1", "fullscreen");
+    await expect(client.window.getState("window-1")).resolves.toEqual(windowState);
+    await client.window.close("window-1");
+
+    await expect(client.platform.getInfo()).resolves.toEqual({
+      hostKind: "desktop",
+      platform: "darwin",
+      arch: "arm64",
+      release: "24.0.0",
+    });
+    await expect(client.platform.getCapabilities()).resolves.toEqual(capabilitySnapshot);
+    await expect(client.platform.getScreenInfo()).resolves.toEqual({
+      id: "screen-1",
+      width: 3024,
+      height: 1964,
+      scaleFactor: 2,
+      x: 0,
+      y: 0,
+      primary: true,
+    });
+    await expect(client.platform.listScreens()).resolves.toHaveLength(1);
+    await expect(client.platform.powerGetState()).resolves.toEqual({
+      idleSeconds: 0,
+      preventSleep: false,
+    });
+    await expect(client.platform.powerSetPreventSleep(true)).resolves.toBe(true);
+
+    await expect(
+      client.surface.open({
+        kind: "route",
+        target: {
+          type: "url",
+          url: "/image-viewer",
+        },
+      })
+    ).resolves.toEqual(surfaceState);
+    await client.surface.focus("surface-1");
+    await client.surface.resize("surface-1", { width: 1024, height: 768 });
+    await client.surface.setState("surface-1", "fullscreen");
+    await expect(client.surface.getState("surface-1")).resolves.toEqual(surfaceState);
+    await expect(client.surface.list()).resolves.toEqual([surfaceState]);
+    await client.surface.close("surface-1");
+
+    await expect(client.transfer.share({ title: "share" })).resolves.toBe(true);
+    await client.transfer.openPath("/tmp/example.card");
+    await client.transfer.openExternal("https://chips.example");
+    await client.transfer.revealInShell("/tmp/example.card");
+
+    await expect(client.association.getCapabilities()).resolves.toEqual({
+      fileAssociation: true,
+      urlScheme: false,
+      shareTarget: false,
+    });
+    await expect(client.association.openPath("/tmp/example.card")).resolves.toEqual({
+      targetPath: "/tmp/example.card",
+      extension: ".card",
+      mode: "card",
+      windowId: "window-1",
+    });
+    await expect(client.association.openUrl("https://chips.example/image-viewer")).resolves.toEqual({
+      url: "https://chips.example/image-viewer",
+      mode: "external",
+    });
+
+    expect(calls.find((entry) => entry.action === "window.focus")?.payload).toEqual({
+      windowId: "window-1",
+    });
+    expect(calls.find((entry) => entry.action === "window.resize")?.payload).toEqual({
+      windowId: "window-1",
+      width: 1400,
+      height: 900,
+    });
+    expect(calls.find((entry) => entry.action === "window.setState")?.payload).toEqual({
+      windowId: "window-1",
+      state: "fullscreen",
+    });
+    expect(calls.find((entry) => entry.action === "surface.open")?.payload).toEqual({
+      request: {
+        kind: "route",
+        target: {
+          type: "url",
+          url: "/image-viewer",
+        },
+      },
+    });
+  });
+
   it("sends nested read options for file.read", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 

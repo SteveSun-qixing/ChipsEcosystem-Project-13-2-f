@@ -122,7 +122,6 @@ export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactEleme
                 camera.isPanningImage ? " photo-viewer-viewport--panning" : ""
               }`}
               ref={camera.viewportRef}
-              onWheel={camera.handleWheel}
               onPointerDown={camera.handlePointerDown}
               onPointerMove={camera.handlePointerMove}
               onPointerUp={camera.handlePointerUp}

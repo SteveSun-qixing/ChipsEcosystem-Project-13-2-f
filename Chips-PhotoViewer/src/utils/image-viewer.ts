@@ -18,7 +18,7 @@ export const SUPPORTED_IMAGE_EXTENSION_LABEL = SUPPORTED_IMAGE_EXTENSIONS.join("
 export const MIN_ZOOM_SCALE = 0.1;
 export const MAX_ZOOM_SCALE = 8;
 export const ZOOM_STEP_RATIO = 1.25;
-export const FIT_VIEWPORT_EDGE_RATIO = 0.8;
+export const FIT_VIEWPORT_EDGE_RATIO = 1;
 
 export function normalizeImageExtension(filePath: string): string {
   const normalized = filePath.trim().toLowerCase();

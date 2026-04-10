@@ -4,6 +4,7 @@ import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
 import { CardWindow } from "./components/CardWindow";
 import { BoxWindow } from "./components/BoxWindow";
+import { HostedDocumentWindow } from "./components/HostedDocumentWindow";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { useChipsBridge } from "./hooks/useChipsBridge";
@@ -15,10 +16,15 @@ interface AppThemeState {
   version: string;
 }
 
-interface OpenedTarget {
-  filePath: string;
-  mode: "card" | "box";
-}
+type OpenedTarget =
+  | {
+      filePath: string;
+      mode: "card" | "box";
+    }
+  | {
+      mode: "document";
+      documentUrl: string;
+    };
 
 const DEFAULT_THEME_STATE: AppThemeState = {
   themeId: "chips-official.default-theme",
@@ -73,6 +79,11 @@ function resolveOpenedTarget(filePath: string): OpenedTarget | null {
   };
 }
 
+function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string | null {
+  const documentUrl = typeof launchParams.webDocumentUrl === "string" ? launchParams.webDocumentUrl.trim() : "";
+  return documentUrl.length > 0 ? documentUrl : null;
+}
+
 export function App() {
   const bridge = useChipsBridge();
   const themeEventSource = typeof window !== "undefined" ? (window as any).chips : undefined;
@@ -94,6 +105,7 @@ export function App() {
     (key: string, params?: Record<string, string | number>) => formatMessage(locale, key, params),
     [locale],
   );
+  const surfaceMode = openedTarget?.mode === "document" ? "document" : "immersive";
 
   useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -152,6 +164,20 @@ export function App() {
 
   useEffect(() => {
     const launchContext = client.platform.getLaunchContext();
+    const webDocumentUrl = resolveWebDocumentUrl(launchContext.launchParams);
+    if (webDocumentUrl) {
+      logger.info("从 Web 启动上下文恢复托管文档查看态", {
+        documentUrl: webDocumentUrl,
+        trigger: launchContext.launchParams.trigger,
+      });
+      setOpenedTarget({
+        mode: "document",
+        documentUrl: webDocumentUrl,
+      });
+      setError(null);
+      return;
+    }
+
     const targetPath = typeof launchContext.launchParams.targetPath === "string"
       ? launchContext.launchParams.targetPath
       : "";
@@ -202,6 +228,20 @@ export function App() {
       unsubscribe();
     };
   }, [bridge]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.documentElement.setAttribute("data-chips-surface-mode", surfaceMode);
+    document.body.setAttribute("data-chips-surface-mode", surfaceMode);
+
+    return () => {
+      document.documentElement.removeAttribute("data-chips-surface-mode");
+      document.body.removeAttribute("data-chips-surface-mode");
+    };
+  }, [surfaceMode]);
 
   const handleResolvedFilePath = useCallback((filePath: string) => {
     const nextTarget = resolveOpenedTarget(filePath);
@@ -268,6 +308,15 @@ export function App() {
         resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
         resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
       />
+    ) : openedTarget.mode === "document" ? (
+      <HostedDocumentWindow
+        documentUrl={openedTarget.documentUrl}
+        traceId={traceId}
+        loadingLabel={t("card-viewer.viewer.cardLoading")}
+        containerErrorLabel={t("card-viewer.viewer.cardContainerError")}
+        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
+        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
+      />
     ) : (
       <BoxWindow
         boxFile={openedTarget.filePath}
@@ -287,6 +336,7 @@ export function App() {
       eventName="theme.changed"
     >
       <CardViewerShell
+        surfaceMode={surfaceMode}
         content={content}
       />
     </ChipsThemeProvider>

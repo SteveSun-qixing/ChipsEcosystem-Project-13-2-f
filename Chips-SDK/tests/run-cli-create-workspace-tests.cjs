@@ -110,6 +110,9 @@ const main = async () => {
     assert.equal(createdPackage.dependencies['@chips/component-library'], '^0.1.0');
     assert.equal(createdPackage.devDependencies['chips-sdk'], '^0.1.0');
     assert.equal(createdPackage.volta.extends, '../../package.json');
+    const manifestText = await fsp.readFile(path.join(targetDir, 'manifest.yaml'), 'utf-8');
+    assert.match(manifestText, /runtime:\s*\n\s*targets:/);
+    assert.match(manifestText, /surface:\s*\n\s*defaultKind:\s*window/);
 
     await runBinary('npm', ['install'], sandboxRoot, env);
     await runBinary('npm', ['run', 'lint'], targetDir, env);

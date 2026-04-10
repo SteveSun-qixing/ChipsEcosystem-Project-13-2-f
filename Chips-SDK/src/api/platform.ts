@@ -1,21 +1,94 @@
 import type { CoreClient } from "../types/client";
 import { createError } from "../types/errors";
 
+export type PlatformHostKind = "desktop" | "web" | "mobile" | "headless";
+export type PlatformId = NodeJS.Platform | "web" | "android" | "ios" | "server";
+
 export interface PlatformInfo {
-  os: string;
+  hostKind: PlatformHostKind;
+  platform: PlatformId;
   arch: string;
-  version: string;
-  locale?: string;
+  release: string;
 }
 
-export interface PlatformCapabilities {
-  [key: string]: boolean;
+export interface PlatformCapabilitySnapshot {
+  hostKind: PlatformHostKind;
+  platform: PlatformId;
+  facets: {
+    surface: {
+      supported: boolean;
+      interactive: boolean;
+      supportedKinds: Array<"window" | "tab" | "route" | "modal" | "sheet" | "fullscreen">;
+    };
+    storage: {
+      localWorkspace: boolean;
+      sandboxFilePicker: boolean;
+      remoteBacked: boolean;
+    };
+    selection: {
+      openFile: boolean;
+      saveFile: boolean;
+      directory: boolean;
+      multiple: boolean;
+    };
+    transfer: {
+      upload: boolean;
+      download: boolean;
+      share: boolean;
+      externalOpen: boolean;
+      revealInShell: boolean;
+    };
+    association: {
+      fileAssociation: boolean;
+      urlScheme: boolean;
+      shareTarget: boolean;
+    };
+    device: {
+      screen: boolean;
+      power: boolean;
+      network: boolean;
+    };
+    systemUi: {
+      clipboard: boolean;
+      tray: boolean;
+      globalShortcut: boolean;
+      notification: boolean;
+    };
+    background: {
+      keepAlive: boolean;
+      wakeEvents: boolean;
+    };
+    ipc: {
+      namedPipe: boolean;
+      unixSocket: boolean;
+      sharedMemory: boolean;
+    };
+    offscreenRender: {
+      htmlToPdf: boolean;
+      htmlToImage: boolean;
+    };
+  };
 }
 
 export interface PlatformLaunchContext {
   pluginId?: string;
   sessionId?: string;
   launchParams: Record<string, unknown>;
+}
+
+export interface PlatformScreenInfo {
+  id: string;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
+export interface PlatformPowerState {
+  idleSeconds: number;
+  preventSleep: boolean;
 }
 
 export interface PlatformDialogFileOptions {
@@ -81,7 +154,11 @@ export interface PlatformRenderHtmlToImageResult {
 
 export interface PlatformApi {
   getInfo(): Promise<PlatformInfo>;
-  getCapabilities(): Promise<PlatformCapabilities>;
+  getCapabilities(): Promise<PlatformCapabilitySnapshot>;
+  getScreenInfo(): Promise<PlatformScreenInfo>;
+  listScreens(): Promise<PlatformScreenInfo[]>;
+  powerGetState(): Promise<PlatformPowerState>;
+  powerSetPreventSleep(prevent: boolean): Promise<boolean>;
   openExternal(url: string): Promise<void>;
   renderHtmlToPdf(request: PlatformRenderHtmlToPdfRequest): Promise<PlatformRenderHtmlToPdfResult>;
   renderHtmlToImage(request: PlatformRenderHtmlToImageRequest): Promise<PlatformRenderHtmlToImageResult>;
@@ -142,13 +219,37 @@ const resolveBridgeLaunchContext = (): PlatformLaunchContext => {
 export function createPlatformApi(client: CoreClient): PlatformApi {
   return {
     async getInfo() {
-      return client.invoke("platform.getInfo", {});
+      const result = await client.invoke<Record<string, never>, { info: PlatformInfo }>("platform.getInfo", {});
+      return result.info;
     },
     async getCapabilities() {
-      return client.invoke("platform.getCapabilities", {});
+      const result = await client.invoke<Record<string, never>, { capabilities: PlatformCapabilitySnapshot }>(
+        "platform.getCapabilities",
+        {}
+      );
+      return result.capabilities;
+    },
+    async getScreenInfo() {
+      const result = await client.invoke<Record<string, never>, { screen: PlatformScreenInfo }>("platform.getScreenInfo", {});
+      return result.screen;
+    },
+    async listScreens() {
+      const result = await client.invoke<Record<string, never>, { screens: PlatformScreenInfo[] }>("platform.listScreens", {});
+      return result.screens;
+    },
+    async powerGetState() {
+      const result = await client.invoke<Record<string, never>, { state: PlatformPowerState }>("platform.powerGetState", {});
+      return result.state;
+    },
+    async powerSetPreventSleep(prevent) {
+      const result = await client.invoke<{ prevent: boolean }, { preventSleep: boolean }>(
+        "platform.powerSetPreventSleep",
+        { prevent }
+      );
+      return result.preventSleep;
     },
     async openExternal(url) {
-      return client.invoke("platform.openExternal", { url });
+      await client.invoke("platform.openExternal", { url });
     },
     async renderHtmlToPdf(request) {
       if (!request?.htmlDir || !request?.outputFile) {
@@ -206,3 +307,5 @@ export function createPlatformApi(client: CoreClient): PlatformApi {
     },
   };
 }
+
+export type PlatformCapabilities = PlatformCapabilitySnapshot;

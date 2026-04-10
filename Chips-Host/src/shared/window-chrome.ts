@@ -1,6 +1,8 @@
 import { createError } from './errors';
 
 export type WindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+export type PluginSurfaceKind = 'window' | 'tab' | 'route' | 'modal' | 'sheet' | 'fullscreen';
+export type PluginRuntimeTargetId = 'desktop' | 'web' | 'mobile' | 'headless';
 
 export interface WindowChromeOverlayOptions {
   color?: string;
@@ -25,12 +27,20 @@ export interface PluginLauncherUiConfig {
   icon?: string;
 }
 
+export interface PluginSurfaceUiConfig {
+  defaultKind?: PluginSurfaceKind;
+  preferredKinds?: Partial<Record<PluginRuntimeTargetId, PluginSurfaceKind>>;
+}
+
 export interface PluginUiConfig {
   window?: PluginWindowUiConfig;
   launcher?: PluginLauncherUiConfig;
+  surface?: PluginSurfaceUiConfig;
 }
 
 const titleBarStyles: WindowChromeTitleBarStyle[] = ['default', 'hidden', 'hiddenInset', 'customButtonsOnHover'];
+const surfaceKinds: PluginSurfaceKind[] = ['window', 'tab', 'route', 'modal', 'sheet', 'fullscreen'];
+const runtimeTargetIds: PluginRuntimeTargetId[] = ['desktop', 'web', 'mobile', 'headless'];
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -139,6 +149,17 @@ export const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined
   };
 };
 
+const clonePluginSurfaceUiConfig = (surface: PluginSurfaceUiConfig | undefined): PluginSurfaceUiConfig | undefined => {
+  if (!surface) {
+    return undefined;
+  }
+
+  return {
+    defaultKind: surface.defaultKind,
+    preferredKinds: surface.preferredKinds ? { ...surface.preferredKinds } : undefined
+  };
+};
+
 export const parseWindowChromeOptions = (
   value: unknown,
   manifestPath: string,
@@ -227,7 +248,70 @@ export const parsePluginUiConfig = (value: unknown, manifestPath: string): Plugi
           });
         })();
 
-  if (!window?.chrome && !launcher) {
+  const surface = isRecord(value.surface)
+    ? (() => {
+        const defaultKind = asNonEmptyString(value.surface.defaultKind, manifestPath, 'ui.surface.defaultKind');
+        if (defaultKind && !surfaceKinds.includes(defaultKind as PluginSurfaceKind)) {
+          throw createError('PLUGIN_INVALID', 'ui.surface.defaultKind is invalid', {
+            manifestPath,
+            field: 'ui.surface.defaultKind',
+            value: defaultKind
+          });
+        }
+
+        const preferredKindsValue = value.surface.preferredKinds;
+        if (typeof preferredKindsValue !== 'undefined' && !isRecord(preferredKindsValue)) {
+          throw createError('PLUGIN_INVALID', 'ui.surface.preferredKinds must be an object', {
+            manifestPath,
+            field: 'ui.surface.preferredKinds'
+          });
+        }
+
+        const preferredKinds: Partial<Record<PluginRuntimeTargetId, PluginSurfaceKind>> = {};
+        if (isRecord(preferredKindsValue)) {
+          for (const [targetId, targetKindValue] of Object.entries(preferredKindsValue)) {
+            if (!runtimeTargetIds.includes(targetId as PluginRuntimeTargetId)) {
+              throw createError('PLUGIN_INVALID', `ui.surface.preferredKinds.${targetId} is invalid`, {
+                manifestPath,
+                field: `ui.surface.preferredKinds.${targetId}`,
+                value: targetId
+              });
+            }
+            const targetKind = asNonEmptyString(
+              targetKindValue,
+              manifestPath,
+              `ui.surface.preferredKinds.${targetId}`
+            );
+            if (!targetKind || !surfaceKinds.includes(targetKind as PluginSurfaceKind)) {
+              throw createError('PLUGIN_INVALID', `ui.surface.preferredKinds.${targetId} must be a valid surface kind`, {
+                manifestPath,
+                field: `ui.surface.preferredKinds.${targetId}`,
+                value: targetKindValue
+              });
+            }
+            preferredKinds[targetId as PluginRuntimeTargetId] = targetKind as PluginSurfaceKind;
+          }
+        }
+
+        if (!defaultKind && Object.keys(preferredKinds).length === 0) {
+          return undefined;
+        }
+
+        return {
+          defaultKind: defaultKind as PluginSurfaceKind | undefined,
+          preferredKinds: Object.keys(preferredKinds).length > 0 ? preferredKinds : undefined
+        };
+      })()
+    : typeof value.surface === 'undefined'
+      ? undefined
+      : (() => {
+          throw createError('PLUGIN_INVALID', 'ui.surface must be an object', {
+            manifestPath,
+            field: 'ui.surface'
+          });
+        })();
+
+  if (!window?.chrome && !launcher && !surface) {
     return undefined;
   }
 
@@ -243,7 +327,8 @@ export const parsePluginUiConfig = (value: unknown, manifestPath: string): Plugi
             displayName: launcher.displayName,
             icon: launcher.icon
           }
-        : undefined
+        : undefined,
+    surface: clonePluginSurfaceUiConfig(surface)
   };
 };
 

@@ -11,6 +11,16 @@ permissions:
   - box.read
   - theme.read
   - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
 engines:
   chips: "^0.1.0"
 os:

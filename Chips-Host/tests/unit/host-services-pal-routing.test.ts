@@ -55,41 +55,103 @@ const createContextFactory = () => {
 const createPal = (state: PalState): PALAdapter => {
   let ipcSequence = 0;
 
-  return {
-    launcher: {
-      async launch() { },
-      async getStatus() { return { pid: 0, status: 'stopped' }; },
-      async kill() { },
-      async execute() { return { stdout: '', stderr: '', code: 0 }; }
-    } as any,
-    window: {
-      async create(options) {
-        state.windowCreateArgs.push(options);
-        return {
-          id: 'window-1',
-          title: options.title,
-          width: options.width,
-          height: options.height,
-          focused: false,
-          state: 'normal'
-        };
+  const capabilitySnapshot: Awaited<ReturnType<PALAdapter['environment']['getCapabilities']>> = {
+    hostKind: 'desktop',
+    platform: process.platform as any,
+    facets: {
+      surface: {
+        supported: true,
+        interactive: true,
+        supportedKinds: ['window']
       },
-      async focus() { },
-      async resize() { },
-      async setState() { },
-      async getState() {
-        return {
-          id: 'window-1',
-          title: 'Window',
-          width: 800,
-          height: 600,
-          focused: false,
-          state: 'normal'
-        };
+      storage: {
+        localWorkspace: true,
+        sandboxFilePicker: false,
+        remoteBacked: false
       },
-      async close() { }
+      selection: {
+        openFile: true,
+        saveFile: true,
+        directory: true,
+        multiple: true
+      },
+      transfer: {
+        upload: false,
+        download: true,
+        share: false,
+        externalOpen: true,
+        revealInShell: true
+      },
+      association: {
+        fileAssociation: true,
+        urlScheme: true,
+        shareTarget: false
+      },
+      device: {
+        screen: true,
+        power: true,
+        network: false
+      },
+      systemUi: {
+        clipboard: true,
+        tray: true,
+        globalShortcut: true,
+        notification: true
+      },
+      background: {
+        keepAlive: true,
+        wakeEvents: true
+      },
+      ipc: {
+        namedPipe: true,
+        unixSocket: process.platform !== 'win32',
+        sharedMemory: true
+      },
+      offscreenRender: {
+        htmlToPdf: true,
+        htmlToImage: true
+      }
+    }
+  } as const;
+
+  const windowManager: PALAdapter['window'] = {
+    async create(options) {
+      state.windowCreateArgs.push(options);
+      return {
+        id: 'window-1',
+        kind: 'window' as const,
+        title: options.title,
+        width: options.width,
+        height: options.height,
+        focused: false,
+        state: 'normal' as const,
+        url: options.url,
+        pluginId: options.pluginId,
+        sessionId: options.sessionId,
+        chrome: options.chrome
+      };
     },
-    fs: {
+    async focus() { },
+    async resize() { },
+    async setState() { },
+    async getState() {
+      return {
+        id: 'window-1',
+        kind: 'window' as const,
+        title: 'Window',
+        width: 800,
+        height: 600,
+        focused: false,
+        state: 'normal' as const
+      };
+    },
+    async close() { },
+    async list() {
+      return [await this.getState('window-1')];
+    }
+  };
+
+  const storage: PALAdapter['storage'] = {
       normalize: (inputPath) => path.normalize(inputPath),
       async readFile(inputPath, options) {
         if (options?.encoding) {
@@ -141,8 +203,9 @@ const createPal = (state: PalState): PALAdapter => {
           await fs.copyFile(sourcePath, destPath);
         }
       }
-    },
-    dialog: {
+    };
+
+  const selection: PALAdapter['selection'] = {
       async openFile(options) {
         state.dialogOpenArgs.push(options ?? null);
         return ['/virtual/opened.txt'];
@@ -159,8 +222,9 @@ const createPal = (state: PalState): PALAdapter => {
         state.dialogConfirmArgs.push(options);
         return true;
       }
-    },
-    clipboard: {
+    };
+
+  const clipboard: PALAdapter['clipboard'] = {
       async read(format = 'text') {
         if (format === 'image') {
           return {
@@ -184,8 +248,9 @@ const createPal = (state: PalState): PALAdapter => {
         }
         state.clipboardText = String(data);
       }
-    },
-    shell: {
+    };
+
+  const shell: PALAdapter['shell'] = {
       async openPath(targetPath) {
         state.shellOpenPath.push(targetPath);
       },
@@ -195,8 +260,38 @@ const createPal = (state: PalState): PALAdapter => {
       async showItemInFolder(targetPath) {
         state.shellShowInFolder.push(targetPath);
       }
+    };
+
+  const transfer: PALAdapter['transfer'] = {
+    async openPath(targetPath: string) {
+      await shell.openPath(targetPath);
     },
-    platform: {
+    async openExternal(url: string) {
+      await shell.openExternal(url);
+    },
+    async revealInShell(targetPath: string) {
+      await shell.showItemInFolder(targetPath);
+    },
+    async share() {
+      return { shared: false };
+    }
+  };
+
+  const environment: PALAdapter['environment'] = {
+    async getInfo() {
+      return {
+        hostKind: 'desktop' as const,
+        platform: process.platform as any,
+        arch: process.arch,
+        release: 'test'
+      };
+    },
+    async getCapabilities() {
+      return capabilitySnapshot;
+    }
+  };
+
+  const platform: PALAdapter['platform'] = {
       async getInfo() {
         return {
           platform: process.platform,
@@ -207,8 +302,9 @@ const createPal = (state: PalState): PALAdapter => {
       async getCapabilities() {
         return ['dialog', 'clipboard', 'shell', 'tray', 'notification', 'shortcut', 'power'];
       }
-    },
-    screen: {
+    };
+
+  const screen: PALAdapter['screen'] = {
       async getPrimary() {
         return {
           id: 'screen-1',
@@ -233,8 +329,9 @@ const createPal = (state: PalState): PALAdapter => {
           }
         ];
       }
-    },
-    tray: {
+    };
+
+  const tray: PALAdapter['tray'] = {
       async set() {
         state.trayActive = true;
         return { active: true };
@@ -245,13 +342,15 @@ const createPal = (state: PalState): PALAdapter => {
       async getState() {
         return { active: state.trayActive };
       }
-    },
-    notification: {
+    };
+
+  const notification: PALAdapter['notification'] = {
       async show(options) {
         state.notifications.push({ title: options.title, body: options.body });
       }
-    },
-    shortcut: {
+    };
+
+  const shortcut: PALAdapter['shortcut'] = {
       async register(accelerator) {
         if (!state.shortcuts.includes(accelerator)) {
           state.shortcuts.push(accelerator);
@@ -270,8 +369,9 @@ const createPal = (state: PalState): PALAdapter => {
       async clear() {
         state.shortcuts = [];
       }
-    },
-    power: {
+    };
+
+  const power: PALAdapter['power'] = {
       async getState() {
         return {
           idleSeconds: 0,
@@ -282,8 +382,105 @@ const createPal = (state: PalState): PALAdapter => {
         state.preventSleep = prevent;
         return prevent;
       }
+    };
+
+  const device: PALAdapter['device'] = {
+    async getPrimaryScreen() {
+      return screen.getPrimary();
     },
-    ipc: {
+    async getAllScreens() {
+      return screen.getAll();
+    },
+    async getPowerState() {
+      return power.getState();
+    }
+  };
+
+  const systemUi: PALAdapter['systemUi'] = {
+    clipboard,
+    tray,
+    notification,
+    shortcut
+  };
+
+  const background: PALAdapter['background'] = {
+    async getState() {
+      return power.getState();
+    },
+    async setPreventSleep(prevent: boolean) {
+      return power.setPreventSleep(prevent);
+    }
+  };
+
+  const association: PALAdapter['association'] = {
+    async getCapabilities() {
+      return capabilitySnapshot.facets.association;
+    }
+  };
+
+  const surface: PALAdapter['surface'] = {
+    async open(request) {
+      const created = await windowManager.create({
+        title: request.presentation?.title ?? 'Surface',
+        width: request.presentation?.width ?? 800,
+        height: request.presentation?.height ?? 600,
+        resizable: request.presentation?.resizable,
+        alwaysOnTop: request.presentation?.alwaysOnTop,
+        url:
+          request.target.type === 'url'
+            ? request.target.url
+            : request.target.type === 'plugin'
+              ? request.target.url
+              : request.target.url,
+        pluginId: request.target.type === 'plugin' ? request.target.pluginId : undefined,
+        sessionId: request.target.type === 'plugin' ? request.target.sessionId : undefined,
+        permissions: request.target.type === 'plugin' ? request.target.permissions : undefined,
+        launchParams: request.target.type === 'plugin' ? request.target.launchParams : undefined,
+        chrome: request.presentation?.chrome
+      });
+      return {
+        ...created,
+        metadata: request.kind && request.kind !== 'window' ? { requestedKind: request.kind } : undefined
+      };
+    },
+    async focus(id: string) {
+      await windowManager.focus(id);
+    },
+    async resize(id: string, width: number, height: number) {
+      await windowManager.resize(id, width, height);
+    },
+    async setState(id: string, currentState: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden') {
+      await windowManager.setState(id, currentState === 'hidden' ? 'normal' : currentState);
+    },
+    async getState(id: string) {
+      return windowManager.getState(id);
+    },
+    async close(id: string) {
+      await windowManager.close(id);
+    },
+    async list() {
+      return windowManager.list();
+    }
+  };
+
+  const offscreenRender: PALAdapter['offscreenRender'] = {
+    async renderHtmlToPdf(input) {
+      return {
+        outputFile: input.outputFile,
+        pageCount: 1
+      };
+    },
+    async renderHtmlToImage(input) {
+      return {
+        outputFile: input.outputFile,
+        width: input.options?.width,
+        height: input.options?.height,
+        format: input.options?.format ?? 'png'
+      };
+    }
+  };
+
+  const ipc: PALAdapter['ipc'] = {
       async createChannel(options) {
         ipcSequence += 1;
         const channelId = `ipc-${ipcSequence}`;
@@ -327,7 +524,69 @@ const createPal = (state: PalState): PALAdapter => {
           transport: channel.transport
         }));
       }
+    };
+
+  const launcher: PALAdapter['launcher'] = {
+    async getDefaultPath(name) {
+      return {
+        launcherPath: path.join(os.tmpdir(), `${name}.desktop`),
+        location: 'desktop'
+      };
+    },
+    async create(options) {
+      return {
+        pluginId: options.pluginId,
+        name: options.name,
+        location: 'desktop',
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        executablePath: options.executablePath,
+        args: [...options.args],
+        iconPath: options.iconPath
+      };
+    },
+    async getRecord(options) {
+      return {
+        pluginId: options.pluginId,
+        name: options.name,
+        location: 'desktop',
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        executablePath: '',
+        args: []
+      };
+    },
+    async remove(options) {
+      return {
+        removed: true,
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        location: 'desktop'
+      };
     }
+  };
+
+  return {
+    environment,
+    surface,
+    storage,
+    selection,
+    transfer,
+    association,
+    device,
+    systemUi,
+    background,
+    offscreenRender,
+    launcher,
+    window: windowManager,
+    fs: storage,
+    dialog: selection,
+    clipboard,
+    shell,
+    platform,
+    screen,
+    tray,
+    notification,
+    shortcut,
+    power,
+    ipc
   };
 };
 
@@ -692,6 +951,232 @@ describe('Host services PAL routing', () => {
         })
       })
     );
+  });
+
+  it('opens app plugins through surface.open with a managed plugin session', async () => {
+    const state: PalState = {
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
+      windowCreateArgs: [],
+      dialogOpenArgs: [],
+      dialogSaveArgs: [],
+      dialogMessageArgs: [],
+      dialogConfirmArgs: [],
+      shellOpenPath: [],
+      shellOpenExternal: [],
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false,
+      ipcChannels: new Map()
+    };
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'surface-launchable.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.surface.launchable.plugin',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Surface Launchable Plugin',
+          permissions: ['file.read'],
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            launcher: {
+              displayName: 'Surface Launchable'
+            },
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>surface-plugin</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.surface.launchable.plugin');
+
+    const context = createContextFactory();
+    const opened = await kernel.invoke<
+      {
+        request: {
+          kind: 'route';
+          target: { type: 'plugin'; pluginId: string; launchParams: Record<string, unknown> };
+          presentation: { title: string; width: number; height: number; resizable: boolean };
+        };
+      },
+      {
+        surface: {
+          id: string;
+          pluginId?: string;
+          sessionId?: string;
+          metadata?: Record<string, unknown>;
+        };
+      }
+    >(
+      'surface.open',
+      {
+        request: {
+          kind: 'route',
+          target: {
+            type: 'plugin',
+            pluginId: 'chips.surface.launchable.plugin',
+            launchParams: {
+              source: 'surface.open'
+            }
+          },
+          presentation: {
+            title: 'Surface Launch Title',
+            width: 1440,
+            height: 900,
+            resizable: false
+          }
+        }
+      },
+      context(['window.control', 'plugin.manage'])
+    );
+
+    expect(opened.surface.id).toBe('window-1');
+    expect(opened.surface.pluginId).toBe('chips.surface.launchable.plugin');
+    expect(opened.surface.sessionId).toBeTruthy();
+    expect(opened.surface.metadata).toEqual(
+      expect.objectContaining({
+        requestedKind: 'route'
+      })
+    );
+    expect(state.windowCreateArgs).toHaveLength(1);
+    expect(state.windowCreateArgs[0]).toEqual(
+      expect.objectContaining({
+        title: 'Surface Launch Title',
+        width: 1440,
+        height: 900,
+        resizable: false,
+        pluginId: 'chips.surface.launchable.plugin',
+        launchParams: expect.objectContaining({
+          source: 'surface.open',
+          workspacePath: workspace
+        })
+      })
+    );
+    const snapshot = runtime.snapshot();
+    expect(snapshot.sessions).toHaveLength(1);
+    expect(snapshot.sessions[0]?.sessionId).toBe(opened.surface.sessionId);
+    expect(snapshot.sessions[0]?.status).toBe('running');
+  });
+
+  it('requires plugin.manage when surface.open targets a plugin surface', async () => {
+    const state: PalState = {
+      clipboardText: '',
+      clipboardImageBase64: null,
+      clipboardFiles: [],
+      windowCreateArgs: [],
+      dialogOpenArgs: [],
+      dialogSaveArgs: [],
+      dialogMessageArgs: [],
+      dialogConfirmArgs: [],
+      shellOpenPath: [],
+      shellOpenExternal: [],
+      shellShowInFolder: [],
+      notifications: [],
+      trayActive: false,
+      shortcuts: [],
+      preventSleep: false,
+      ipcChannels: new Map()
+    };
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'surface-permission.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.surface.permission.plugin',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Surface Permission Plugin',
+          permissions: ['file.read'],
+          entry: 'dist/index.html'
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>permission-plugin</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.surface.permission.plugin');
+
+    const context = createContextFactory();
+    await expect(
+      kernel.invoke(
+        'surface.open',
+        {
+          request: {
+            target: {
+              type: 'plugin',
+              pluginId: 'chips.surface.permission.plugin'
+            }
+          }
+        },
+        context(['window.control'])
+      )
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED'
+    });
+
+    expect(state.windowCreateArgs).toHaveLength(0);
+    expect(runtime.snapshot().sessions).toHaveLength(0);
   });
 
   it('returns a readable shortcut permission error when macOS launchpad directory is not writable', async () => {

@@ -66,6 +66,8 @@ describe("module template-engine", () => {
 
       expect(manifest).toMatch(/type:\s+module/);
       expect(manifest).toMatch(/entry:\s+dist\/index\.mjs/);
+      expect(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
+      expect(manifest).toMatch(/headless:\n      supported:\s+true/);
       expect(manifest).toMatch(/module:\n/);
       expect(manifest).toMatch(/capability:\s+module\.standard\.project/);
       expect(pkg.devDependencies.react).toBeUndefined();

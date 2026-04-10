@@ -41,6 +41,8 @@ describe('chips-scaffold-theme', () => {
       expect(manifestContent).toContain('type: theme');
       expect(manifestContent).toContain('themeId: chips-official.default-theme');
       expect(manifestContent).toContain('schemaVersion: "1.0.0"');
+      expect(manifestContent).toContain('runtime:');
+      expect(manifestContent).toContain('headless:');
       expect(manifestContent).toContain('tokens: dist/tokens.json');
       expect(manifestContent).toContain('themeCss: dist/theme.css');
       expect(manifestContent).toContain('薯片官方 · 默认主题');

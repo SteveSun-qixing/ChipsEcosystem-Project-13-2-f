@@ -8,6 +8,17 @@ description: "Chips 官方默认内置主题"
 permissions:
   - "theme.read"
 
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+
 entry:
   tokens: "dist/tokens.json"
   themeCss: "dist/theme.css"

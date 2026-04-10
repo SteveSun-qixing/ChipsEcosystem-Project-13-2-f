@@ -11,12 +11,28 @@ body,
 #root {
   margin: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html,
+body {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+}
+
+#root {
+  position: absolute;
+  inset: 0;
 }
 
 body {
   font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
-  background: #edf2f7;
   color: #111111;
 }
 
@@ -32,9 +48,11 @@ button {
 }
 
 .photo-viewer-shell {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #ffffff;
 }
 
 .photo-viewer-stage {
@@ -42,21 +60,19 @@ button {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.7), transparent 48%),
-    linear-gradient(180deg, #f7fafc 0%, #e8edf4 100%);
+  overscroll-behavior: none;
+  background: #ffffff;
 }
 
 .photo-viewer-stage--drag-active {
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.92), transparent 48%),
-    linear-gradient(180deg, #fbfdff 0%, #edf3f8 100%);
+  background: #f5f7fb;
 }
 
 .photo-viewer-frame {
   position: absolute;
   inset: 0;
   padding: 0;
+  background: #ffffff;
 }
 
 .photo-viewer-empty,
@@ -82,8 +98,9 @@ button {
   overflow: hidden;
   border-radius: 0;
   border: 0;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
+  background: #ffffff;
   touch-action: none;
+  overscroll-behavior: none;
 }
 
 .photo-viewer-viewport--interactive {

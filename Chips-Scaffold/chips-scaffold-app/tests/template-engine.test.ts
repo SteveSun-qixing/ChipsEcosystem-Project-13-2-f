@@ -65,6 +65,14 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       manifestContent.includes("titleBarStyle: hidden"),
       "manifest.yaml 应包含标准应用窗口 chrome 配置",
     );
+    assert.ok(
+      manifestContent.includes("runtime:\n  targets:"),
+      "manifest.yaml 应包含 runtime.targets",
+    );
+    assert.ok(
+      manifestContent.includes("surface:\n    defaultKind: window"),
+      "manifest.yaml 应包含 ui.surface 默认容器配置",
+    );
     assert.equal(
       packageContent.dependencies["@chips/component-library"],
       "^0.1.0",

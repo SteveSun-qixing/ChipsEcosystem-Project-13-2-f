@@ -19,6 +19,23 @@ permissions:
   - theme.read
   - i18n.read
 
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: reject
+
 engines:
   chips: "^1.0.0"
 
@@ -35,6 +52,13 @@ ui:
   launcher:
     displayName: {{ DISPLAY_NAME }}
     icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
   window:
     chrome:
       backgroundColor: "#ffffff"

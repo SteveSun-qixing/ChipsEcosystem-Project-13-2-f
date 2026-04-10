@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppPreferencesProvider, useAppPreferences } from './contexts/AppPreferencesContext';
@@ -11,9 +11,24 @@ import ProfilePage from './pages/ProfilePage';
 import WorkspacePage from './pages/WorkspacePage';
 import CardDetailPage from './pages/CardDetailPage';
 import BoxDetailPage from './pages/BoxDetailPage';
+import HostedPluginSessionPage from './pages/HostedPluginSessionPage';
 import AdminRedirectPage from './pages/AdminRedirectPage';
 import { getPostAuthPath } from './lib/ui';
 import './styles/runtime.css';
+
+type AppRouteMode = 'default' | 'document' | 'immersive';
+
+function resolveAppRouteMode(pathname: string): AppRouteMode {
+  if (pathname.startsWith('/host/plugins/') || pathname.startsWith('/boxes/')) {
+    return 'immersive';
+  }
+
+  if (pathname.startsWith('/cards/')) {
+    return 'document';
+  }
+
+  return 'default';
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { t } = useAppPreferences();
@@ -79,8 +94,17 @@ function NotFoundPage() {
 }
 
 function AppRoutes() {
+  const location = useLocation();
+  const routeMode = resolveAppRouteMode(location.pathname);
+
   return (
-    <main className="app-shell__main">
+    <main
+      className={[
+        'app-shell__main',
+        routeMode === 'document' ? 'app-shell__main--document' : '',
+        routeMode === 'immersive' ? 'app-shell__main--immersive' : '',
+      ].filter(Boolean).join(' ')}
+    >
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/about" element={<AboutPage />} />
@@ -111,6 +135,7 @@ function AppRoutes() {
           }
         />
         <Route path="/cards/:cardId" element={<CardDetailPage />} />
+        <Route path="/host/plugins/:sessionId" element={<HostedPluginSessionPage />} />
         <Route path="/boxes/:boxId" element={<BoxDetailPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
@@ -120,13 +145,29 @@ function AppRoutes() {
 
 function AppChrome() {
   const location = useLocation();
-  const isContentDirectRoute =
-    location.pathname.startsWith('/cards/') || location.pathname.startsWith('/boxes/');
+  const routeMode = resolveAppRouteMode(location.pathname);
+  const isChromeVisible = routeMode === 'default';
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-ccps-route-mode', routeMode);
+    document.body.setAttribute('data-ccps-route-mode', routeMode);
+
+    return () => {
+      document.documentElement.removeAttribute('data-ccps-route-mode');
+      document.body.removeAttribute('data-ccps-route-mode');
+    };
+  }, [routeMode]);
 
   return (
-    <div className="app-shell">
+    <div
+      className={[
+        'app-shell',
+        routeMode === 'document' ? 'app-shell--document' : '',
+        routeMode === 'immersive' ? 'app-shell--immersive' : '',
+      ].filter(Boolean).join(' ')}
+    >
       <AppRoutes />
-      {!isContentDirectRoute ? <SiteFooter /> : null}
+      {isChromeVisible ? <SiteFooter /> : null}
     </div>
   );
 }

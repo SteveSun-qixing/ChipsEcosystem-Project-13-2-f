@@ -1,10 +1,183 @@
 import { EventEmitter } from 'node:events';
+import { createHostAccessTransport, type HostAccessTransport } from './transport';
 
 export interface BridgeInvokeHandler {
   <T>(action: string, payload: unknown): Promise<T>;
 }
 
 export type BridgeEventHandler = (data: unknown) => void;
+
+export type BridgeHostKind = 'desktop' | 'web' | 'mobile' | 'headless';
+export type BridgePlatformId = NodeJS.Platform | 'web' | 'android' | 'ios' | 'server';
+export type BridgeSurfaceKind = 'window' | 'tab' | 'route' | 'modal' | 'sheet' | 'fullscreen';
+export type BridgeSurfaceStateKind = 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden';
+export type BridgeWindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+
+export interface BridgeWindowChromeOverlayOptions {
+  color?: string;
+  symbolColor?: string;
+  height?: number;
+}
+
+export interface BridgeWindowChromeOptions {
+  frame?: boolean;
+  transparent?: boolean;
+  backgroundColor?: string;
+  titleBarStyle?: BridgeWindowChromeTitleBarStyle;
+  titleBarOverlay?: boolean | BridgeWindowChromeOverlayOptions;
+}
+
+export interface BridgePlatformInfo {
+  hostKind: BridgeHostKind;
+  platform: BridgePlatformId;
+  arch: string;
+  release: string;
+}
+
+export interface BridgeScreenInfo {
+  id: string;
+  width: number;
+  height: number;
+  scaleFactor: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
+export interface BridgePalCapabilitySnapshot {
+  hostKind: BridgeHostKind;
+  platform: BridgePlatformId;
+  facets: {
+    surface: {
+      supported: boolean;
+      interactive: boolean;
+      supportedKinds: BridgeSurfaceKind[];
+    };
+    storage: {
+      localWorkspace: boolean;
+      sandboxFilePicker: boolean;
+      remoteBacked: boolean;
+    };
+    selection: {
+      openFile: boolean;
+      saveFile: boolean;
+      directory: boolean;
+      multiple: boolean;
+    };
+    transfer: {
+      upload: boolean;
+      download: boolean;
+      share: boolean;
+      externalOpen: boolean;
+      revealInShell: boolean;
+    };
+    association: {
+      fileAssociation: boolean;
+      urlScheme: boolean;
+      shareTarget: boolean;
+    };
+    device: {
+      screen: boolean;
+      power: boolean;
+      network: boolean;
+    };
+    systemUi: {
+      clipboard: boolean;
+      tray: boolean;
+      globalShortcut: boolean;
+      notification: boolean;
+    };
+    background: {
+      keepAlive: boolean;
+      wakeEvents: boolean;
+    };
+    ipc: {
+      namedPipe: boolean;
+      unixSocket: boolean;
+      sharedMemory: boolean;
+    };
+    offscreenRender: {
+      htmlToPdf: boolean;
+      htmlToImage: boolean;
+    };
+  };
+}
+
+export interface BridgeSurfacePresentation {
+  title?: string;
+  width?: number;
+  height?: number;
+  resizable?: boolean;
+  alwaysOnTop?: boolean;
+  chrome?: BridgeWindowChromeOptions;
+}
+
+export type BridgeSurfaceTarget =
+  | {
+      type: 'plugin';
+      pluginId: string;
+      url?: string;
+      sessionId?: string;
+      permissions?: string[];
+      launchParams?: Record<string, unknown>;
+    }
+  | {
+      type: 'url';
+      url: string;
+    }
+  | {
+      type: 'document';
+      documentId: string;
+      title?: string;
+      url?: string;
+    };
+
+export interface BridgeSurfaceOpenRequest {
+  kind?: BridgeSurfaceKind;
+  target: BridgeSurfaceTarget;
+  presentation?: BridgeSurfacePresentation;
+}
+
+export interface BridgeSurfaceState {
+  id: string;
+  kind: BridgeSurfaceKind;
+  title?: string;
+  width?: number;
+  height?: number;
+  focused: boolean;
+  state: BridgeSurfaceStateKind;
+  url?: string;
+  pluginId?: string;
+  sessionId?: string;
+  chrome?: BridgeWindowChromeOptions;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BridgeTransferShareInput {
+  title?: string;
+  text?: string;
+  url?: string;
+  files?: string[];
+}
+
+export interface BridgeAssociationCapabilities {
+  fileAssociation: boolean;
+  urlScheme: boolean;
+  shareTarget: boolean;
+}
+
+export type BridgeAssociationOpenPathResult =
+  | {
+      targetPath: string;
+      extension: string;
+      mode: 'card' | 'box' | 'plugin' | 'shell';
+      windowId?: string;
+      pluginId?: string;
+    }
+  | {
+      url: string;
+      mode: 'external';
+    };
 
 export interface BridgeEventAdapter {
   on(event: string, handler: BridgeEventHandler): () => void;
@@ -20,17 +193,17 @@ export interface ChipsBridge {
   emit(event: string, data?: unknown): void;
   emitScoped?(event: string, data: unknown, scope: { token: string }): Promise<void>;
   window: {
-    open(config: unknown): Promise<unknown>;
+    open(config: unknown): Promise<BridgeSurfaceState>;
     focus(windowId: string): Promise<void>;
     resize(windowId: string, width: number, height: number): Promise<void>;
     setState(windowId: string, state: string): Promise<void>;
-    getState(windowId: string): Promise<unknown>;
+    getState(windowId: string): Promise<BridgeSurfaceState>;
     close(windowId: string): Promise<void>;
   };
   dialog: {
-    openFile(options?: unknown): Promise<unknown>;
-    saveFile(options?: unknown): Promise<unknown>;
-    showMessage(options: unknown): Promise<unknown>;
+    openFile(options?: unknown): Promise<string[] | null>;
+    saveFile(options?: unknown): Promise<string | null>;
+    showMessage(options: unknown): Promise<number>;
     showConfirm(options: unknown): Promise<boolean>;
   };
   plugin: {
@@ -58,11 +231,31 @@ export interface ChipsBridge {
     openExternal(url: string): Promise<void>;
     showItemInFolder(path: string): Promise<void>;
   };
+  surface: {
+    open(request: BridgeSurfaceOpenRequest): Promise<BridgeSurfaceState>;
+    focus(surfaceId: string): Promise<void>;
+    resize(surfaceId: string, width: number, height: number): Promise<void>;
+    setState(surfaceId: string, state: BridgeSurfaceStateKind): Promise<void>;
+    getState(surfaceId: string): Promise<BridgeSurfaceState>;
+    close(surfaceId: string): Promise<void>;
+    list(): Promise<BridgeSurfaceState[]>;
+  };
+  transfer: {
+    openPath(path: string): Promise<void>;
+    openExternal(url: string): Promise<void>;
+    revealInShell(path: string): Promise<void>;
+    share(input: BridgeTransferShareInput): Promise<boolean>;
+  };
+  association: {
+    getCapabilities(): Promise<BridgeAssociationCapabilities>;
+    openPath(path: string): Promise<BridgeAssociationOpenPathResult>;
+    openUrl(url: string): Promise<{ url: string; mode: 'external' }>;
+  };
   platform: {
-    getInfo(): Promise<unknown>;
-    getCapabilities(): Promise<string[]>;
-    getScreenInfo(): Promise<unknown>;
-    listScreens(): Promise<unknown[]>;
+    getInfo(): Promise<BridgePlatformInfo>;
+    getCapabilities(): Promise<BridgePalCapabilitySnapshot>;
+    getScreenInfo(): Promise<BridgeScreenInfo>;
+    listScreens(): Promise<BridgeScreenInfo[]>;
     openExternal(url: string): Promise<void>;
     powerGetState(): Promise<unknown>;
     powerSetPreventSleep(prevent: boolean): Promise<boolean>;
@@ -104,21 +297,57 @@ export interface ChipsBridge {
 export class BridgeTransport implements ChipsBridge {
   private readonly emitter = new EventEmitter();
   private readonly eventAdapter?: BridgeEventAdapter;
+  private readonly transport: HostAccessTransport;
   public readonly window: ChipsBridge['window'];
   public readonly dialog: ChipsBridge['dialog'];
   public readonly plugin: ChipsBridge['plugin'];
   public readonly clipboard: ChipsBridge['clipboard'];
   public readonly shell: ChipsBridge['shell'];
+  public readonly surface: ChipsBridge['surface'];
+  public readonly transfer: ChipsBridge['transfer'];
+  public readonly association: ChipsBridge['association'];
   public readonly platform: ChipsBridge['platform'];
   public readonly notification: ChipsBridge['notification'];
   public readonly tray: ChipsBridge['tray'];
   public readonly shortcut: ChipsBridge['shortcut'];
   public readonly ipc: ChipsBridge['ipc'];
 
-  public constructor(private readonly invokeHandler: BridgeInvokeHandler, options?: { eventAdapter?: BridgeEventAdapter }) {
+  public constructor(source: BridgeInvokeHandler | HostAccessTransport, options?: { eventAdapter?: BridgeEventAdapter }) {
     this.eventAdapter = options?.eventAdapter;
+    this.transport =
+      typeof source === 'function'
+        ? createHostAccessTransport({
+            invoke: async <T>(action: string, payload: unknown) => source(action, payload) as Promise<T>,
+            on: (event, handler) => {
+              if (this.eventAdapter) {
+                return this.eventAdapter.on(event, handler);
+              }
+              this.emitter.on(event, handler);
+              return () => {
+                this.emitter.off(event, handler);
+              };
+            },
+            once: (event, handler) => {
+              if (this.eventAdapter) {
+                this.eventAdapter.once(event, handler);
+                return;
+              }
+              this.emitter.once(event, handler);
+            },
+            emit: (event, data) => {
+              if (this.eventAdapter) {
+                this.eventAdapter.emit(event, data);
+                return;
+              }
+              this.emitter.emit(event, data);
+            }
+          })
+        : source;
     this.window = {
-      open: async (config) => this.invoke<unknown>('window.open', { config }),
+      open: async (config) => {
+        const result = await this.invoke<{ window: BridgeSurfaceState }>('window.open', { config });
+        return result.window;
+      },
       focus: async (windowId) => {
         await this.invoke('window.focus', { windowId });
       },
@@ -128,17 +357,32 @@ export class BridgeTransport implements ChipsBridge {
       setState: async (windowId, state) => {
         await this.invoke('window.setState', { windowId, state });
       },
-      getState: async (windowId) => this.invoke<unknown>('window.getState', { windowId }),
+      getState: async (windowId) => {
+        const result = await this.invoke<{ state: BridgeSurfaceState }>('window.getState', { windowId });
+        return result.state;
+      },
       close: async (windowId) => {
         await this.invoke('window.close', { windowId });
       }
     };
 
     this.dialog = {
-      openFile: async (options) => this.invoke<unknown>('platform.dialogOpenFile', { options }),
-      saveFile: async (options) => this.invoke<unknown>('platform.dialogSaveFile', { options }),
-      showMessage: async (options) => this.invoke<unknown>('platform.dialogShowMessage', { options }),
-      showConfirm: async (options) => this.invoke<boolean>('platform.dialogShowConfirm', { options })
+      openFile: async (options) => {
+        const result = await this.invoke<{ filePaths: string[] | null }>('platform.dialogOpenFile', { options });
+        return result.filePaths;
+      },
+      saveFile: async (options) => {
+        const result = await this.invoke<{ filePath: string | null }>('platform.dialogSaveFile', { options });
+        return result.filePath;
+      },
+      showMessage: async (options) => {
+        const result = await this.invoke<{ response: number }>('platform.dialogShowMessage', { options });
+        return result.response;
+      },
+      showConfirm: async (options) => {
+        const result = await this.invoke<{ confirmed: boolean }>('platform.dialogShowConfirm', { options });
+        return result.confirmed;
+      }
     };
 
     this.plugin = {
@@ -165,7 +409,10 @@ export class BridgeTransport implements ChipsBridge {
     };
 
     this.clipboard = {
-      read: async (format) => this.invoke<unknown>('platform.clipboardRead', { format }),
+      read: async (format) => {
+        const result = await this.invoke<{ data: unknown }>('platform.clipboardRead', { format });
+        return result.data;
+      },
       write: async (data, format) => {
         await this.invoke('platform.clipboardWrite', { data, format });
       }
@@ -183,18 +430,92 @@ export class BridgeTransport implements ChipsBridge {
       }
     };
 
+    this.surface = {
+      open: async (request) => {
+        const result = await this.invoke<{ surface: BridgeSurfaceState }>('surface.open', { request });
+        return result.surface;
+      },
+      focus: async (surfaceId) => {
+        await this.invoke('surface.focus', { surfaceId });
+      },
+      resize: async (surfaceId, width, height) => {
+        await this.invoke('surface.resize', { surfaceId, width, height });
+      },
+      setState: async (surfaceId, state) => {
+        await this.invoke('surface.setState', { surfaceId, state });
+      },
+      getState: async (surfaceId) => {
+        const result = await this.invoke<{ state: BridgeSurfaceState }>('surface.getState', { surfaceId });
+        return result.state;
+      },
+      close: async (surfaceId) => {
+        await this.invoke('surface.close', { surfaceId });
+      },
+      list: async () => {
+        const result = await this.invoke<{ surfaces: BridgeSurfaceState[] }>('surface.list', {});
+        return result.surfaces;
+      }
+    };
+
+    this.transfer = {
+      openPath: async (targetPath) => {
+        await this.invoke('transfer.openPath', { path: targetPath });
+      },
+      openExternal: async (url) => {
+        await this.invoke('transfer.openExternal', { url });
+      },
+      revealInShell: async (targetPath) => {
+        await this.invoke('transfer.revealInShell', { path: targetPath });
+      },
+      share: async (input) => {
+        const result = await this.invoke<{ shared: boolean }>('transfer.share', { input });
+        return result.shared;
+      }
+    };
+
+    this.association = {
+      getCapabilities: async () => {
+        const result = await this.invoke<{ capabilities: BridgeAssociationCapabilities }>('association.getCapabilities', {});
+        return result.capabilities;
+      },
+      openPath: async (targetPath) => {
+        const result = await this.invoke<{ result: BridgeAssociationOpenPathResult }>('association.openPath', {
+          path: targetPath
+        });
+        return result.result;
+      },
+      openUrl: async (url) => {
+        const result = await this.invoke<{ result: { url: string; mode: 'external' } }>('association.openUrl', {
+          url
+        });
+        return result.result;
+      }
+    };
+
     this.platform = {
-      getInfo: async () => this.invoke<unknown>('platform.getInfo', {}),
-      getCapabilities: async () => this.invoke<string[]>('platform.getCapabilities', {}),
-      getScreenInfo: async () => this.invoke<unknown>('platform.getScreenInfo', {}),
+      getInfo: async () => {
+        const result = await this.invoke<{ info: BridgePlatformInfo }>('platform.getInfo', {});
+        return result.info;
+      },
+      getCapabilities: async () => {
+        const result = await this.invoke<{ capabilities: BridgePalCapabilitySnapshot }>('platform.getCapabilities', {});
+        return result.capabilities;
+      },
+      getScreenInfo: async () => {
+        const result = await this.invoke<{ screen: BridgeScreenInfo }>('platform.getScreenInfo', {});
+        return result.screen;
+      },
       listScreens: async () => {
-        const result = await this.invoke<{ screens: unknown[] }>('platform.listScreens', {});
+        const result = await this.invoke<{ screens: BridgeScreenInfo[] }>('platform.listScreens', {});
         return result.screens;
       },
       openExternal: async (url) => {
         await this.invoke('platform.openExternal', { url });
       },
-      powerGetState: async () => this.invoke<unknown>('platform.powerGetState', {}),
+      powerGetState: async () => {
+        const result = await this.invoke<{ state: unknown }>('platform.powerGetState', {});
+        return result.state;
+      },
       powerSetPreventSleep: async (prevent) => {
         const result = await this.invoke<{ preventSleep: boolean }>('platform.powerSetPreventSleep', { prevent });
         return result.preventSleep;
@@ -209,13 +530,15 @@ export class BridgeTransport implements ChipsBridge {
 
     this.tray = {
       set: async (options) => {
-        return this.invoke<unknown>('platform.traySet', { options });
+        const result = await this.invoke<{ tray: unknown }>('platform.traySet', { options });
+        return result.tray;
       },
       clear: async () => {
         await this.invoke('platform.trayClear', {});
       },
       getState: async () => {
-        return this.invoke<unknown>('platform.trayGetState', {});
+        const result = await this.invoke<{ tray: unknown }>('platform.trayGetState', {});
+        return result.tray;
       }
     };
 
@@ -240,12 +563,17 @@ export class BridgeTransport implements ChipsBridge {
     };
 
     this.ipc = {
-      createChannel: async (options) => this.invoke<unknown>('platform.ipcCreateChannel', options),
+      createChannel: async (options) => {
+        const result = await this.invoke<{ channel: unknown }>('platform.ipcCreateChannel', options);
+        return result.channel;
+      },
       send: async (channelId, payload, encoding) => {
         await this.invoke('platform.ipcSend', { channelId, payload, encoding });
       },
-      receive: async (channelId, timeoutMs) =>
-        this.invoke<unknown>('platform.ipcReceive', { channelId, timeoutMs }),
+      receive: async (channelId, timeoutMs) => {
+        const result = await this.invoke<{ message: unknown }>('platform.ipcReceive', { channelId, timeoutMs });
+        return result.message;
+      },
       closeChannel: async (channelId) => {
         await this.invoke('platform.ipcCloseChannel', { channelId });
       },
@@ -257,33 +585,19 @@ export class BridgeTransport implements ChipsBridge {
   }
 
   public async invoke<T = unknown>(action: string, payload?: unknown): Promise<T> {
-    return this.invokeHandler<T>(action, payload);
+    return this.transport.invoke<T>(action, payload);
   }
 
   public on(event: string, handler: BridgeEventHandler): () => void {
-    if (this.eventAdapter) {
-      return this.eventAdapter.on(event, handler);
-    }
-    this.emitter.on(event, handler);
-    return () => {
-      this.emitter.off(event, handler);
-    };
+    return this.transport.on(event, handler);
   }
 
   public once(event: string, handler: BridgeEventHandler): void {
-    if (this.eventAdapter) {
-      this.eventAdapter.once(event, handler);
-      return;
-    }
-    this.emitter.once(event, handler);
+    this.transport.once(event, handler);
   }
 
   public emit(event: string, data?: unknown): void {
-    if (this.eventAdapter) {
-      this.eventAdapter.emit(event, data);
-      return;
-    }
-    this.emitter.emit(event, data);
+    void this.transport.emit(event, data);
   }
 
   public pushFromHost(event: string, payload: unknown): void {

@@ -98,6 +98,8 @@ const linkedEntries = ['Chips-SDK', 'Chips-Scaffold', 'Chips-ComponentLibrary'];
     const manifestText = await fsp.readFile(path.join(targetDir, 'manifest.yaml'), 'utf-8');
     assert.match(manifestText, /type:\s*module/);
     assert.match(manifestText, /entry:\s*dist\/index\.mjs/);
+    assert.match(manifestText, /runtime:\s*\n\s*targets:/);
+    assert.match(manifestText, /headless:\s*\n\s*supported:\s*true/);
     assert.match(manifestText, /module:/);
     assert.match(manifestText, /provides:/);
     assert.match(manifestText, /capability:\s+module\.module\.smoke|capability:\s+module\.smoke/);

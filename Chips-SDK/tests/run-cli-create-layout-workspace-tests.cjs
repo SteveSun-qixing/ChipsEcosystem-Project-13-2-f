@@ -125,6 +125,8 @@ const main = async () => {
     const manifestText = await fsp.readFile(path.join(targetDir, 'manifest.yaml'), 'utf-8');
     assert.match(manifestText, /type:\s*layout/);
     assert.match(manifestText, /entry:\s*dist\/index\.mjs/);
+    assert.match(manifestText, /runtime:\s*\n\s*targets:/);
+    assert.match(manifestText, /headless:\s*\n\s*supported:\s*true/);
     assert.match(manifestText, /layout:/);
     assert.match(manifestText, /layoutType:\s+chips\.layout\./);
     assert.match(manifestText, /displayName:\s+Layout Smoke/);

@@ -75,6 +75,9 @@ export interface Client extends CoreClient {
   plugin: import("../api/plugin").PluginApi;
   module: import("../api/module").ModuleApi;
   window: import("../api/window").WindowApi;
+  surface: import("../api/surface").SurfaceApi;
+  transfer: import("../api/transfer").TransferApi;
+  association: import("../api/association").AssociationApi;
   platform: import("../api/platform").PlatformApi;
   box: import("../api/box").BoxApi;
   resource: import("../api/resource").ResourceApi;

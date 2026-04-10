@@ -527,9 +527,12 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('chips.card-editor:resource-release');
     expect(view.body).toContain("resolveResourceUrl(resourcePath)");
     expect(view.body).toContain("requestResource('import'");
+    expect(view.body).toContain("requestResource('importArchiveBundle'");
     expect(view.body).toContain("requestResource('delete'");
     expect(view.body).toContain("img-src file: http: https: data: blob:");
     expect(view.body).toContain("connect-src file: http: https: data: blob:");
+    expect(view.body).toContain("child-src about: file: http: https: blob:");
+    expect(view.body).toContain("frame-src about: file: http: https: blob:");
     expect(view.body).toContain('overflow: hidden;');
     expect(view.body).toContain('#chips-basecard-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; overflow: hidden; }');
     expect(view.body).toContain('chips-basecard-editor__floating-toolbar');

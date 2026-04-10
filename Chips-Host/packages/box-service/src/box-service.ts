@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,7 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
 import { createId } from '../../../src/shared/utils';
+import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import type { CardInfoField, CardReadInfoResult } from '../../card-info-service/src';
+import type { ThemeSnapshot } from '../../unified-rendering/src';
 import type { ZipEntryMeta } from '../../zip-service/src';
 import { StoreZipService } from '../../zip-service/src';
 
@@ -15,9 +18,9 @@ const BOX_MIME_TYPE = 'application/vnd.chips.box+zip';
 const CARD_MIME_TYPE = 'application/vnd.chips.card+zip';
 
 type BoxTag = string | string[];
-type EntryDetailField = 'cardInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status';
-type EntryResourceKind = 'cover' | 'preview' | 'cardFile' | 'custom';
-type PrefetchTarget = 'cover' | 'preview' | 'cardInfo';
+type EntryDetailField = 'documentInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status';
+type EntryResourceKind = 'cover' | 'preview' | 'documentFile' | 'custom';
+type PrefetchTarget = 'cover' | 'preview' | 'documentInfo';
 
 export interface BoxValidationResult {
   valid: boolean;
@@ -31,6 +34,7 @@ export interface BoxMetadata {
   createdAt: string;
   modifiedAt: string;
   activeLayoutType: string;
+  coverRatio?: string;
   description?: string;
   tags?: BoxTag[];
   coverAsset?: string;
@@ -43,7 +47,7 @@ export interface BoxEntrySnapshot {
   url: string;
   enabled: boolean;
   snapshot: {
-    cardId?: string;
+    documentId?: string;
     title?: string;
     summary?: string;
     tags?: BoxTag[];
@@ -106,6 +110,7 @@ export interface BoxSessionInfo {
   name: string;
   activeLayoutType: string;
   availableLayouts: string[];
+  coverRatio?: string;
   tags?: BoxTag[];
   coverAsset?: string;
   capabilities: {
@@ -126,10 +131,18 @@ export interface BoxOpenViewResult {
 }
 
 export interface BoxEntryOpenResult {
-  mode: 'card-window' | 'external';
+  mode: 'document-window' | 'external';
+  documentType?: 'card' | 'box';
   windowId?: string;
   pluginId?: string;
   url?: string;
+}
+
+export interface BoxCoverView {
+  title: string;
+  coverUrl: string;
+  mimeType: 'text/html';
+  ratio?: string;
 }
 
 export interface BoxEntryCoverView {
@@ -162,6 +175,7 @@ export interface BoxServiceReadEntryDetailOptions {
 
 export interface BoxServiceResolveEntryResourceOptions extends BoxServiceReadEntryDetailOptions {
   openCardFile?: (cardFile: string) => Promise<BoxEntryOpenResult>;
+  openBoxFile?: (boxFile: string) => Promise<BoxEntryOpenResult>;
   openExternalUrl?: (url: string) => Promise<void>;
 }
 
@@ -169,6 +183,62 @@ export interface BoxOpenViewOptions {
   ownerKey: string;
   layoutType?: string;
   initialQuery?: BoxEntryQuery;
+}
+
+export interface BoxLayoutDescriptorSummary {
+  pluginId: string;
+  layoutType: string;
+  displayName: string;
+  description?: string;
+  icon?: Record<string, unknown>;
+  defaultConfig: Record<string, unknown>;
+}
+
+export interface BoxLayoutValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+}
+
+export interface BoxLayoutFrameRenderOptions {
+  layoutType: string;
+  sessionId: string;
+  box: BoxSessionInfo;
+  initialView: BoxEntryPage;
+  config: Record<string, unknown>;
+  locale?: string;
+  theme?: ThemeSnapshot;
+  themeCssText?: string;
+}
+
+export interface BoxLayoutEditorRenderOptions {
+  layoutType: string;
+  entries: BoxEntrySnapshot[];
+  initialConfig: Record<string, unknown>;
+  locale?: string;
+  theme?: ThemeSnapshot;
+  themeCssText?: string;
+}
+
+export interface RenderedBoxLayoutFrameView {
+  title: string;
+  documentUrl: string;
+  sessionId: string;
+  layoutType: string;
+  pluginId: string;
+}
+
+export interface RenderedBoxLayoutEditorView {
+  title: string;
+  documentUrl: string;
+  sessionId: string;
+  layoutType: string;
+  pluginId: string;
+}
+
+export interface BoxServiceOptions {
+  runtime?: Pick<PluginRuntime, 'query'>;
+  workspaceRoot?: string;
+  managedDocumentScheme?: string;
 }
 
 interface NormalizedBoxPackage {
@@ -195,6 +265,69 @@ interface BoxSessionRecord {
   activeLayoutType: string;
   availableLayouts: string[];
   resourceCache: Map<string, ResolvedRuntimeResource>;
+}
+
+interface RenderSessionEntry {
+  rootDir: string;
+  createdAt: number;
+}
+
+interface LayoutPluginModule {
+  layoutDefinition?: {
+    pluginId?: string;
+    layoutType: string;
+    displayName?: string;
+    description?: string;
+    icon?: Record<string, unknown>;
+    createDefaultConfig(): Record<string, unknown>;
+    normalizeConfig(input: Record<string, unknown>): Record<string, unknown>;
+    validateConfig(config: Record<string, unknown>): BoxLayoutValidationResult;
+    getInitialQuery?(config: Record<string, unknown>): BoxEntryQuery | undefined;
+    renderView(ctx: {
+      container: unknown;
+      sessionId: string;
+      box: BoxSessionInfo;
+      initialView: BoxEntryPage;
+      config: Record<string, unknown>;
+      runtime: {
+        listEntries(query?: BoxEntryQuery): Promise<BoxEntryPage>;
+        readEntryDetail(request: { entryIds: string[]; fields: EntryDetailField[] }): Promise<Array<{ entryId: string; detail: Record<string, unknown> }>>;
+        renderEntryCover(entryId: string): Promise<BoxEntryCoverView>;
+        resolveEntryResource(request: {
+          entryId: string;
+          resource: {
+            kind: EntryResourceKind;
+            key?: string;
+            sizeHint?: { width?: number; height?: number };
+          };
+        }): Promise<ResolvedRuntimeResource>;
+        readBoxAsset(assetPath: string): Promise<ResolvedRuntimeResource>;
+        prefetchEntries(request: { entryIds: string[]; targets: PrefetchTarget[] }): Promise<void>;
+        openEntry(entryId: string): Promise<BoxEntryOpenResult>;
+      };
+      locale?: string;
+    }): unknown;
+    renderEditor?(ctx: {
+      container: unknown;
+      entries: BoxEntrySnapshot[];
+      initialConfig: Record<string, unknown>;
+      onChange(next: Record<string, unknown>): void;
+      readBoxAsset?(assetPath: string): Promise<ResolvedRuntimeResource>;
+      importBoxAsset?(input: { file: File; preferredPath?: string }): Promise<{ assetPath: string }>;
+      deleteBoxAsset?(assetPath: string): Promise<void>;
+      locale?: string;
+    }): unknown;
+  };
+}
+
+interface RenderableLayoutPluginRecord extends PluginRecord {
+  manifest: PluginRecord['manifest'] & {
+    entry: string;
+    layout?: {
+      layoutType?: string;
+      displayName?: string;
+    };
+  };
 }
 
 interface EntryLocator {
@@ -337,10 +470,399 @@ const compareValues = (left: unknown, right: unknown): number => {
   return String(left ?? '').localeCompare(String(right ?? ''));
 };
 
+const escapeHtml = (value: string): string => {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const escapeInlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+
+const createDocumentScriptNonce = (): string => crypto.randomBytes(18).toString('base64');
+
+const encodeManagedUrlPath = (value: string): string =>
+  value
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+
+const decodeManagedUrlPathSegments = (value: string): string[] | null => {
+  try {
+    return value
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+};
+
+const normalizeManagedRelativePath = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.replace(/\\/g, '/').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\/+/, '')
+    .replace(/^\.?\//, '')
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    return null;
+  }
+
+  return segments.join('/');
+};
+
+const normalizeManagedDocumentScheme = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/:$/, '').toLowerCase();
+  if (!normalized || !/^[a-z][a-z0-9+.-]*$/i.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+};
+
+const isPathWithinRoot = (rootDir: string, absolutePath: string): boolean => {
+  const relative = path.relative(path.resolve(rootDir), path.resolve(absolutePath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const createBoxLayoutThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
+  const declarations = Object.entries(theme.tokens ?? {})
+    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+    .map(([name, value]) => `  --${name.replaceAll('.', '-')}: ${String(value)};`)
+    .join('\n');
+
+  return [
+    ':root {',
+    declarations,
+    '}',
+    'html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; }',
+    'body { min-width: 0; color: var(--chips-sys-color-on-surface, #111111); }',
+    '#chips-box-layout-root { width: 100%; min-height: 100%; box-sizing: border-box; }',
+    extraCssText ?? '',
+  ].join('\n');
+};
+
+const createBoxLayoutViewDocument = (options: {
+  title: string;
+  pluginId: string;
+  layoutType: string;
+  pluginBundleCode: string;
+  sessionId: string;
+  box: BoxSessionInfo;
+  initialView: BoxEntryPage;
+  config: Record<string, unknown>;
+  locale?: string;
+  themeCssText: string;
+  managedDocumentScheme?: string;
+}): string => {
+  const {
+    title,
+    pluginId,
+    layoutType,
+    pluginBundleCode,
+    sessionId,
+    box,
+    initialView,
+    config,
+    locale,
+    themeCssText,
+    managedDocumentScheme,
+  } = options;
+  const scriptNonce = createDocumentScriptNonce();
+  const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
+  const managedSource = allowedManagedProtocol ? `${allowedManagedProtocol}:` : '';
+
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '  <meta charset="utf-8" />',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; child-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; frame-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
+    `  <title>${escapeHtml(title)}</title>`,
+    `  <style>${themeCssText}</style>`,
+    '</head>',
+    `<body data-layout-type="${escapeHtml(layoutType)}" data-plugin-id="${escapeHtml(pluginId)}" data-session-id="${escapeHtml(sessionId)}">`,
+    '  <div id="chips-box-layout-root"></div>',
+    `  <script nonce="${scriptNonce}">`,
+    pluginBundleCode,
+    '  </script>',
+    `  <script nonce="${scriptNonce}">`,
+    '    (() => {',
+    `      const sessionId = ${JSON.stringify(sessionId)};`,
+    `      const box = ${escapeInlineJson(box)};`,
+    `      const initialView = ${escapeInlineJson(initialView)};`,
+    `      const config = ${escapeInlineJson(config)};`,
+    `      const locale = ${JSON.stringify(locale ?? '')};`,
+    `      const layoutType = ${JSON.stringify(layoutType)};`,
+    `      const pluginId = ${JSON.stringify(pluginId)};`,
+    '      const container = document.getElementById("chips-box-layout-root");',
+    '      const emit = (type, payload) => {',
+    "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      let requestCounter = 0;',
+    '      const pendingRequests = new Map();',
+    '      const nextRequestId = (action) => `${action}-${Date.now()}-${++requestCounter}`;',
+    '      const requestRuntime = (action, payload) => {',
+    '        return new Promise((resolve, reject) => {',
+    '          const requestId = nextRequestId(action);',
+    '          const timer = window.setTimeout(() => {',
+    '            pendingRequests.delete(requestId);',
+    "            reject(new Error(`Box layout runtime request timed out: ${action}`));",
+    '          }, 30000);',
+    '          pendingRequests.set(requestId, { resolve, reject, timer });',
+    "          emit('chips.box-layout:runtime-request', { requestId, action, sessionId, layoutType, pluginId, ...payload });",
+    '        });',
+    '      };',
+    '      window.addEventListener("message", (event) => {',
+    '        const data = event.data;',
+    '        if (!data || typeof data !== "object" || data.type !== "chips.box-layout:runtime-response") {',
+    '          return;',
+    '        }',
+    '        const payload = data.payload ?? {};',
+    '        const requestId = typeof payload.requestId === "string" ? payload.requestId : "";',
+    '        if (!requestId) {',
+    '          return;',
+    '        }',
+    '        const pending = pendingRequests.get(requestId);',
+    '        if (!pending) {',
+    '          return;',
+    '        }',
+    '        window.clearTimeout(pending.timer);',
+    '        pendingRequests.delete(requestId);',
+    '        if (payload.ok === false) {',
+    '          pending.reject(new Error(typeof payload.message === "string" ? payload.message : "Box layout runtime request failed."));',
+    '          return;',
+    '        }',
+    '        pending.resolve(payload.result);',
+    '      });',
+    '      const runtime = {',
+    '        listEntries(query) {',
+    "          return requestRuntime('listEntries', { query });",
+    '        },',
+    '        readEntryDetail(request) {',
+    "          return requestRuntime('readEntryDetail', { request });",
+    '        },',
+    '        renderEntryCover(entryId) {',
+    "          return requestRuntime('renderEntryCover', { entryId });",
+    '        },',
+    '        resolveEntryResource(request) {',
+    "          return requestRuntime('resolveEntryResource', { request });",
+    '        },',
+    '        readBoxAsset(assetPath) {',
+    "          return requestRuntime('readBoxAsset', { assetPath });",
+    '        },',
+    '        prefetchEntries(request) {',
+    "          return requestRuntime('prefetchEntries', { request });",
+    '        },',
+    '        openEntry(entryId) {',
+    "          return requestRuntime('openEntry', { entryId });",
+    '        },',
+    '      };',
+    '      try {',
+    '        const plugin = globalThis.ChipsBoxLayoutPlugin || {};',
+    '        const definition = plugin.layoutDefinition;',
+    '        if (!definition || typeof definition.renderView !== "function") {',
+    "          throw new Error('Layout plugin does not export layoutDefinition.renderView.');",
+    '        }',
+    '        definition.renderView({',
+    '          container,',
+    '          sessionId,',
+    '          box,',
+    '          initialView,',
+    '          config,',
+    '          runtime,',
+    '          locale: locale || undefined,',
+    '        });',
+    "        emit('chips.box-layout:ready', { sessionId, layoutType, pluginId });",
+    '      } catch (error) {',
+    '        const message = error instanceof Error ? error.message : String(error);',
+    "        emit('chips.box-layout:error', { sessionId, layoutType, pluginId, code: 'BOX_LAYOUT_RENDER_FAILED', message });",
+    '        if (container) {',
+    '          const pre = document.createElement("pre");',
+    '          pre.textContent = message;',
+    '          pre.style.margin = "0";',
+    '          pre.style.padding = "20px";',
+    '          pre.style.whiteSpace = "pre-wrap";',
+    '          pre.style.color = "var(--chips-sys-color-error, #d92d20)";',
+    '          container.replaceChildren(pre);',
+    '        }',
+    '      }',
+    '    })();',
+    '  </script>',
+    '</body>',
+    '</html>',
+  ].join('\n');
+};
+
+const createBoxLayoutEditorDocument = (options: {
+  title: string;
+  pluginId: string;
+  layoutType: string;
+  pluginBundleCode: string;
+  entries: BoxEntrySnapshot[];
+  initialConfig: Record<string, unknown>;
+  locale?: string;
+  themeCssText: string;
+  managedDocumentScheme?: string;
+}): string => {
+  const {
+    title,
+    pluginId,
+    layoutType,
+    pluginBundleCode,
+    entries,
+    initialConfig,
+    locale,
+    themeCssText,
+    managedDocumentScheme,
+  } = options;
+  const scriptNonce = createDocumentScriptNonce();
+  const allowedManagedProtocol = normalizeManagedDocumentScheme(managedDocumentScheme);
+  const managedSource = allowedManagedProtocol ? `${allowedManagedProtocol}:` : '';
+
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '  <meta charset="utf-8" />',
+    '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; child-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; frame-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
+    `  <title>${escapeHtml(title)}</title>`,
+    `  <style>${themeCssText}</style>`,
+    '</head>',
+    `<body data-layout-type="${escapeHtml(layoutType)}" data-plugin-id="${escapeHtml(pluginId)}">`,
+    '  <div id="chips-box-layout-editor-root"></div>',
+    `  <script nonce="${scriptNonce}">`,
+    pluginBundleCode,
+    '  </script>',
+    `  <script nonce="${scriptNonce}">`,
+    '    (() => {',
+    `      const entries = ${escapeInlineJson(entries)};`,
+    `      const initialConfig = ${escapeInlineJson(initialConfig)};`,
+    `      const locale = ${JSON.stringify(locale ?? '')};`,
+    `      const layoutType = ${JSON.stringify(layoutType)};`,
+    `      const pluginId = ${JSON.stringify(pluginId)};`,
+    '      const container = document.getElementById("chips-box-layout-editor-root");',
+    '      const emit = (type, payload) => {',
+    "        window.parent?.postMessage({ type, payload }, '*');",
+    '      };',
+    '      let requestCounter = 0;',
+    '      const pendingRequests = new Map();',
+    '      const nextRequestId = (action) => `${action}-${Date.now()}-${++requestCounter}`;',
+    '      const requestAssets = (action, payload) => {',
+    '        return new Promise((resolve, reject) => {',
+    '          const requestId = nextRequestId(action);',
+    '          const timer = window.setTimeout(() => {',
+    '            pendingRequests.delete(requestId);',
+    "            reject(new Error(`Box layout editor asset request timed out: ${action}`));",
+    '          }, 30000);',
+    '          pendingRequests.set(requestId, { resolve, reject, timer });',
+    "          emit('chips.box-layout-editor:asset-request', { requestId, action, layoutType, pluginId, ...payload });",
+    '        });',
+    '      };',
+    '      window.addEventListener("message", (event) => {',
+    '        const data = event.data;',
+    '        if (!data || typeof data !== "object" || data.type !== "chips.box-layout-editor:asset-response") {',
+    '          return;',
+    '        }',
+    '        const payload = data.payload ?? {};',
+    '        const requestId = typeof payload.requestId === "string" ? payload.requestId : "";',
+    '        if (!requestId) {',
+    '          return;',
+    '        }',
+    '        const pending = pendingRequests.get(requestId);',
+    '        if (!pending) {',
+    '          return;',
+    '        }',
+    '        window.clearTimeout(pending.timer);',
+    '        pendingRequests.delete(requestId);',
+    '        if (payload.ok === false) {',
+    '          pending.reject(new Error(typeof payload.message === "string" ? payload.message : "Box layout editor asset request failed."));',
+    '          return;',
+    '        }',
+    '        pending.resolve(payload.result);',
+    '      });',
+    '      try {',
+    '        const plugin = globalThis.ChipsBoxLayoutPlugin || {};',
+    '        const definition = plugin.layoutDefinition;',
+    '        if (!definition || typeof definition.renderEditor !== "function") {',
+    "          throw new Error('Layout plugin does not export layoutDefinition.renderEditor.');",
+    '        }',
+    '        definition.renderEditor({',
+    '          container,',
+    '          entries,',
+    '          initialConfig,',
+    '          locale: locale || undefined,',
+    '          onChange(next) {',
+    "            emit('chips.box-layout-editor:change', { layoutType, pluginId, config: next });",
+    '          },',
+    '          readBoxAsset(assetPath) {',
+    "            return requestAssets('readBoxAsset', { assetPath });",
+    '          },',
+    '          importBoxAsset(input) {',
+    "            return requestAssets('importBoxAsset', { preferredPath: input?.preferredPath, file: input?.file });",
+    '          },',
+    '          deleteBoxAsset(assetPath) {',
+    "            return requestAssets('deleteBoxAsset', { assetPath });",
+    '          },',
+    '        });',
+    "        emit('chips.box-layout-editor:ready', { layoutType, pluginId });",
+    '      } catch (error) {',
+    '        const message = error instanceof Error ? error.message : String(error);',
+    "        emit('chips.box-layout-editor:error', { layoutType, pluginId, code: 'BOX_LAYOUT_EDITOR_RENDER_FAILED', message });",
+    '        if (container) {',
+    '          const pre = document.createElement("pre");',
+    '          pre.textContent = message;',
+    '          pre.style.margin = "0";',
+    '          pre.style.padding = "20px";',
+    '          pre.style.whiteSpace = "pre-wrap";',
+    '          pre.style.color = "var(--chips-sys-color-error, #d92d20)";',
+    '          container.replaceChildren(pre);',
+    '        }',
+    '      }',
+    '    })();',
+    '  </script>',
+    '</body>',
+    '</html>',
+  ].join('\n');
+};
+
 export class BoxService {
   private readonly sessions = new Map<string, BoxSessionRecord>();
+  private readonly extractedCoverRoots = new Map<string, string>();
+  private readonly runtime?: Pick<PluginRuntime, 'query'>;
+  private readonly workspaceRoot: string;
+  private readonly managedDocumentScheme?: string;
+  private readonly moduleCache = new Map<string, Promise<LayoutPluginModule>>();
+  private readonly browserBundleCache = new Map<string, Promise<string>>();
+  private readonly renderSessionCache = new Map<string, RenderSessionEntry>();
 
-  public constructor(private readonly zip = new StoreZipService()) {}
+  public constructor(
+    private readonly zip = new StoreZipService(),
+    options: BoxServiceOptions = {},
+  ) {
+    this.runtime = options.runtime;
+    this.workspaceRoot = options.workspaceRoot ?? process.cwd();
+    this.managedDocumentScheme = normalizeManagedDocumentScheme(options.managedDocumentScheme);
+  }
 
   public async pack(boxDir: string, outputPath: string): Promise<string> {
     await this.loadDirectoryPackage(boxDir);
@@ -398,6 +920,158 @@ export class BoxService {
   public async readMetadata(boxFile: string): Promise<BoxMetadata> {
     const loaded = await this.loadArchivePackage(boxFile);
     return loaded.metadata;
+  }
+
+  public async renderCover(boxFile: string): Promise<BoxCoverView> {
+    const loaded = await this.loadArchivePackage(boxFile);
+    const extractedRoot = await this.getOrCreateExtractedCoverRoot(boxFile);
+    return {
+      title: loaded.metadata.name,
+      coverUrl: pathToFileURL(path.join(extractedRoot, '.box/cover.html')).href,
+      mimeType: 'text/html',
+      ratio: loaded.metadata.coverRatio
+    };
+  }
+
+  public async listLayoutDescriptors(): Promise<BoxLayoutDescriptorSummary[]> {
+    const plugins = this.queryLayoutPlugins();
+    const descriptors = await Promise.all(
+      plugins.map(async (plugin) => {
+        const descriptor = await this.loadLayoutDescriptor(plugin);
+        return this.toLayoutDescriptorSummary(descriptor, plugin);
+      }),
+    );
+
+    return descriptors.sort((left, right) => left.displayName.localeCompare(right.displayName, 'zh-CN'));
+  }
+
+  public async readLayoutDescriptor(layoutType: string): Promise<BoxLayoutDescriptorSummary> {
+    const plugin = this.resolveLayoutPlugin(layoutType);
+    const descriptor = await this.loadLayoutDescriptor(plugin);
+    return this.toLayoutDescriptorSummary(descriptor, plugin);
+  }
+
+  public async normalizeLayoutConfig(layoutType: string, config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const descriptor = await this.loadLayoutDescriptor(this.resolveLayoutPlugin(layoutType));
+    return descriptor.normalizeConfig({ ...(config ?? {}) });
+  }
+
+  public async validateLayoutConfig(layoutType: string, config: Record<string, unknown>): Promise<BoxLayoutValidationResult> {
+    const descriptor = await this.loadLayoutDescriptor(this.resolveLayoutPlugin(layoutType));
+    const normalized = descriptor.normalizeConfig({ ...(config ?? {}) });
+    return descriptor.validateConfig(normalized);
+  }
+
+  public async getLayoutInitialQuery(
+    layoutType: string,
+    config: Record<string, unknown>,
+  ): Promise<BoxEntryQuery | undefined> {
+    const descriptor = await this.loadLayoutDescriptor(this.resolveLayoutPlugin(layoutType));
+    const normalized = descriptor.normalizeConfig({ ...(config ?? {}) });
+    return descriptor.getInitialQuery?.(normalized);
+  }
+
+  public async renderLayoutFrame(options: BoxLayoutFrameRenderOptions): Promise<RenderedBoxLayoutFrameView> {
+    const normalizedLayoutType = asString(options.layoutType)?.trim();
+    if (!normalizedLayoutType) {
+      throw createError('INVALID_ARGUMENT', 'layoutType is required for box layout render.');
+    }
+
+    const theme = options.theme;
+    if (!theme) {
+      throw createError('THEME_NOT_FOUND', 'Box layout render requires a resolved theme snapshot.');
+    }
+
+    const plugin = this.resolveLayoutPlugin(normalizedLayoutType);
+    const descriptor = await this.loadLayoutDescriptor(plugin);
+    const normalizedConfig = descriptor.normalizeConfig({ ...(options.config ?? {}) });
+    const pluginBundleCode = await this.bundleLayoutPluginForBrowser(plugin);
+    const title = options.box.name || descriptor.displayName || normalizedLayoutType;
+    const body = createBoxLayoutViewDocument({
+      title,
+      pluginId: plugin.manifest.id,
+      layoutType: descriptor.layoutType,
+      pluginBundleCode,
+      sessionId: options.sessionId,
+      box: options.box,
+      initialView: options.initialView,
+      config: normalizedConfig,
+      locale: options.locale,
+      themeCssText: createBoxLayoutThemeCss(theme, options.themeCssText),
+      managedDocumentScheme: this.managedDocumentScheme,
+    });
+    const persistedSession = await this.persistRenderSession('box-layout');
+    const indexPath = path.join(persistedSession.rootDir, 'index.html');
+    await fs.writeFile(indexPath, body, 'utf-8');
+
+    return {
+      title,
+      documentUrl: this.createRenderSessionDocumentUrl(persistedSession.sessionId, indexPath),
+      sessionId: persistedSession.sessionId,
+      layoutType: descriptor.layoutType,
+      pluginId: plugin.manifest.id,
+    };
+  }
+
+  public async renderLayoutEditor(options: BoxLayoutEditorRenderOptions): Promise<RenderedBoxLayoutEditorView> {
+    const normalizedLayoutType = asString(options.layoutType)?.trim();
+    if (!normalizedLayoutType) {
+      throw createError('INVALID_ARGUMENT', 'layoutType is required for box layout editor render.');
+    }
+
+    const theme = options.theme;
+    if (!theme) {
+      throw createError('THEME_NOT_FOUND', 'Box layout editor render requires a resolved theme snapshot.');
+    }
+
+    const plugin = this.resolveLayoutPlugin(normalizedLayoutType);
+    const descriptor = await this.loadLayoutDescriptor(plugin);
+    if (typeof descriptor.renderEditor !== 'function') {
+      throw createError('BOX_LAYOUT_EDITOR_NOT_SUPPORTED', `Layout plugin does not provide an editor: ${normalizedLayoutType}`, {
+        layoutType: normalizedLayoutType,
+      });
+    }
+
+    const normalizedConfig = descriptor.normalizeConfig({ ...(options.initialConfig ?? {}) });
+    const pluginBundleCode = await this.bundleLayoutPluginForBrowser(plugin);
+    const title = `${descriptor.displayName || normalizedLayoutType} Editor`;
+    const body = createBoxLayoutEditorDocument({
+      title,
+      pluginId: plugin.manifest.id,
+      layoutType: descriptor.layoutType,
+      pluginBundleCode,
+      entries: options.entries,
+      initialConfig: normalizedConfig,
+      locale: options.locale,
+      themeCssText: createBoxLayoutThemeCss(theme, options.themeCssText),
+      managedDocumentScheme: this.managedDocumentScheme,
+    });
+    const persistedSession = await this.persistRenderSession('box-layout-editor');
+    const indexPath = path.join(persistedSession.rootDir, 'index.html');
+    await fs.writeFile(indexPath, body, 'utf-8');
+
+    return {
+      title,
+      documentUrl: this.createRenderSessionDocumentUrl(persistedSession.sessionId, indexPath),
+      sessionId: persistedSession.sessionId,
+      layoutType: descriptor.layoutType,
+      pluginId: plugin.manifest.id,
+    };
+  }
+
+  public async releaseRenderSession(sessionId: string): Promise<void> {
+    const normalizedSessionId = asString(sessionId)?.trim();
+    if (!normalizedSessionId) {
+      throw createError('INVALID_ARGUMENT', 'sessionId is required for render session release.');
+    }
+
+    const session = this.renderSessionCache.get(normalizedSessionId);
+    if (!session) {
+      return;
+    }
+
+    this.renderSessionCache.delete(normalizedSessionId);
+    await fs.rm(session.rootDir, { recursive: true, force: true });
   }
 
   public async openView(boxFile: string, options: BoxOpenViewOptions): Promise<BoxOpenViewResult> {
@@ -469,18 +1143,8 @@ export class BoxService {
             continue;
           }
 
-          if (field === 'cardInfo') {
-            if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
-              detail.cardInfo = (await options.readCardInfo(locator.filePath, ['status', 'metadata', 'cover'])).info;
-            } else {
-              detail.cardInfo = {
-                status: {
-                  state: locator.scheme === 'file:' ? 'missing' : 'invalid',
-                  exists: false,
-                  valid: false
-                }
-              };
-            }
+          if (field === 'documentInfo') {
+            detail.documentInfo = await this.readDocumentInfo(entry, locator, options);
             continue;
           }
 
@@ -567,7 +1231,15 @@ export class BoxService {
         }
       } else {
         const locator = this.resolveEntryLocator(entry.url);
-        if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
+        const documentKind = this.resolveDocumentKind(entry, locator);
+        if (locator.scheme === 'file:' && locator.filePath && documentKind === 'box') {
+          const coverView = await this.renderCover(locator.filePath);
+          resolved = {
+            resourceUrl: coverView.coverUrl,
+            mimeType: coverView.mimeType,
+            cacheKey
+          };
+        } else if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
           const info = await options.readCardInfo(locator.filePath, ['status', 'cover']);
           if (info.info.status?.state !== 'ready' || !info.info.cover) {
             throw createError('BOX_RESOURCE_NOT_FOUND', `Entry cover resource missing: ${entryId}`, { sessionId, entryId });
@@ -585,22 +1257,22 @@ export class BoxService {
           });
         }
       }
-    } else if (resource.kind === 'cardFile') {
+    } else if (resource.kind === 'documentFile') {
       const locator = this.resolveEntryLocator(entry.url);
       if (locator.scheme === 'file:' && locator.filePath) {
         const exists = await this.pathExists(locator.filePath);
         if (!exists) {
-          throw createError('BOX_RESOURCE_NOT_FOUND', `Card file is missing: ${entryId}`, { sessionId, entryId });
+          throw createError('BOX_RESOURCE_NOT_FOUND', `Document file is missing: ${entryId}`, { sessionId, entryId });
         }
         resolved = {
           resourceUrl: pathToFileURL(locator.filePath).href,
-          mimeType: CARD_MIME_TYPE,
+          mimeType: this.mimeTypeForDocumentFile(locator.filePath, entry.snapshot.contentType),
           cacheKey
         };
       } else {
         resolved = {
           resourceUrl: entry.url,
-          mimeType: CARD_MIME_TYPE,
+          mimeType: this.mimeTypeForDocumentFile(entry.url, entry.snapshot.contentType),
           cacheKey
         };
       }
@@ -629,7 +1301,7 @@ export class BoxService {
       throw createError('BOX_ENTRY_NOT_FOUND', `Box entry not found: ${entryId}`, { sessionId, entryId });
     }
 
-    const fallbackTitle = entry.snapshot.title ?? entry.snapshot.cardId ?? entry.entryId;
+    const fallbackTitle = entry.snapshot.title ?? entry.snapshot.documentId ?? entry.entryId;
     const cover = entry.snapshot.cover;
     if (cover?.mode === 'asset' && cover.assetPath) {
       const asset = await this.readBoxAsset(sessionId, cover.assetPath, options.ownerKey);
@@ -642,7 +1314,20 @@ export class BoxService {
     }
 
     const locator = this.resolveEntryLocator(entry.url);
-    if (locator.scheme === 'file:' && locator.filePath && options.readCardInfo) {
+    if (locator.scheme === 'file:' && locator.filePath) {
+      const documentKind = this.resolveDocumentKind(entry, locator);
+      if (documentKind === 'box') {
+        const view = await this.renderCover(locator.filePath);
+        return {
+          title: view.title || fallbackTitle,
+          coverUrl: view.coverUrl,
+          mimeType: view.mimeType,
+          ratio: view.ratio
+        };
+      }
+      if (!options.readCardInfo) {
+        throw createError('BOX_RESOURCE_NOT_FOUND', `Entry cover resource missing: ${entryId}`, { sessionId, entryId });
+      }
       const info = await options.readCardInfo(locator.filePath, ['status', 'cover', 'metadata']);
       if (info.info.status?.state !== 'ready' || !info.info.cover) {
         throw createError('BOX_RESOURCE_NOT_FOUND', `Entry cover resource missing: ${entryId}`, { sessionId, entryId });
@@ -666,7 +1351,7 @@ export class BoxService {
   public async openEntry(
     sessionId: string,
     entryId: string,
-    options: Pick<BoxServiceResolveEntryResourceOptions, 'ownerKey' | 'openCardFile' | 'openExternalUrl'>
+    options: Pick<BoxServiceResolveEntryResourceOptions, 'ownerKey' | 'openCardFile' | 'openBoxFile' | 'openExternalUrl'>
   ): Promise<BoxEntryOpenResult> {
     const session = this.requireSession(sessionId, options.ownerKey);
     const entry = session.entryMap.get(entryId);
@@ -678,7 +1363,17 @@ export class BoxService {
     if (locator.scheme === 'file:' && locator.filePath) {
       const exists = await this.pathExists(locator.filePath);
       if (!exists) {
-        throw createError('BOX_RESOURCE_NOT_FOUND', `Card file is missing: ${entryId}`, { sessionId, entryId });
+        throw createError('BOX_RESOURCE_NOT_FOUND', `Document file is missing: ${entryId}`, { sessionId, entryId });
+      }
+      const documentKind = this.resolveDocumentKind(entry, locator);
+      if (documentKind === 'box') {
+        if (!options.openBoxFile) {
+          throw createError('BOX_OPEN_FAILED', 'Current Host cannot open local box files for this box session.', {
+            sessionId,
+            entryId
+          });
+        }
+        return options.openBoxFile(locator.filePath);
       }
       if (!options.openCardFile) {
         throw createError('BOX_OPEN_FAILED', 'Current Host cannot open local card files for this box session.', {
@@ -748,8 +1443,8 @@ export class BoxService {
     }
 
     const detailFields: EntryDetailField[] = [];
-    if (uniqueTargets.includes('cardInfo')) {
-      detailFields.push('cardInfo');
+    if (uniqueTargets.includes('documentInfo')) {
+      detailFields.push('documentInfo');
     }
     if (detailFields.length > 0) {
       await this.readEntryDetail(sessionId, uniqueEntryIds, detailFields, options);
@@ -822,7 +1517,7 @@ export class BoxService {
 
     const files = await collectDirectoryFiles(boxDir);
     const fileSet = new Set(files);
-    for (const requiredPath of ['.box/metadata.yaml', '.box/structure.yaml', '.box/content.yaml']) {
+    for (const requiredPath of ['.box/metadata.yaml', '.box/structure.yaml', '.box/content.yaml', '.box/cover.html']) {
       if (!fileSet.has(requiredPath)) {
         throw createError('BOX_SCHEMA_INVALID', `Missing required path: ${requiredPath}`, { boxDir, requiredPath });
       }
@@ -841,7 +1536,7 @@ export class BoxService {
     const names = new Set(entries.map((entry) => entry.path));
     const errors: string[] = [];
 
-    for (const requiredPath of ['.box/metadata.yaml', '.box/structure.yaml', '.box/content.yaml']) {
+    for (const requiredPath of ['.box/metadata.yaml', '.box/structure.yaml', '.box/content.yaml', '.box/cover.html']) {
       if (!names.has(requiredPath)) {
         errors.push(`Missing required path: ${requiredPath}`);
       }
@@ -851,8 +1546,8 @@ export class BoxService {
       if (entry.compressedSize !== entry.size) {
         errors.push(`ZIP entry must use store mode: ${entry.path}`);
       }
-      if (entry.path.toLowerCase().endsWith('.card')) {
-        errors.push(`Box package cannot embed card files: ${entry.path}`);
+      if (entry.path.toLowerCase().endsWith('.card') || entry.path.toLowerCase().endsWith('.box')) {
+        errors.push(`Box package cannot embed document files: ${entry.path}`);
       }
     }
 
@@ -916,6 +1611,11 @@ export class BoxService {
     const description = asString(raw.description);
     if (description) {
       metadata.description = description;
+    }
+
+    const coverRatio = asString(raw.cover_ratio);
+    if (coverRatio) {
+      metadata.coverRatio = coverRatio;
     }
 
     const tags = normalizeTags(raw.tags, 'metadata.tags');
@@ -1062,9 +1762,12 @@ export class BoxService {
     }
 
     const snapshot: BoxEntrySnapshot['snapshot'] = {};
-    const cardId = asString(value.card_id);
-    if (cardId) {
-      snapshot.cardId = cardId;
+    if ('card_id' in value) {
+      throw createError('BOX_SCHEMA_INVALID', `structure.entries[${index}].snapshot.card_id is no longer supported.`);
+    }
+    const documentId = asString(value.document_id);
+    if (documentId) {
+      snapshot.documentId = documentId;
     }
     const title = asString(value.title);
     if (title) {
@@ -1190,6 +1893,7 @@ export class BoxService {
       name: session.metadata.name,
       activeLayoutType: session.activeLayoutType,
       availableLayouts: session.availableLayouts,
+      coverRatio: session.metadata.coverRatio,
       tags: session.metadata.tags,
       coverAsset: session.metadata.coverAsset,
       capabilities: {
@@ -1317,6 +2021,96 @@ export class BoxService {
     };
   }
 
+  private resolveDocumentKind(entry: BoxEntrySnapshot, locator: EntryLocator): 'card' | 'box' {
+    if (entry.snapshot.contentType === 'chips/box') {
+      return 'box';
+    }
+    if (entry.snapshot.contentType === 'chips/card') {
+      return 'card';
+    }
+    const pathLike = locator.filePath ?? locator.url;
+    return path.extname(pathLike).toLowerCase() === '.box' ? 'box' : 'card';
+  }
+
+  private async readDocumentInfo(
+    entry: BoxEntrySnapshot,
+    locator: EntryLocator,
+    options: BoxServiceReadEntryDetailOptions
+  ): Promise<Record<string, unknown>> {
+    if (locator.scheme !== 'file:' || !locator.filePath) {
+      return {
+        kind: 'remote',
+        status: {
+          state: 'invalid',
+          exists: false,
+          valid: false
+        }
+      };
+    }
+
+    const documentKind = this.resolveDocumentKind(entry, locator);
+    if (documentKind === 'box') {
+      return this.readBoxDocumentInfo(locator.filePath);
+    }
+
+    if (!options.readCardInfo) {
+      return {
+        kind: 'card',
+        status: {
+          state: 'missing',
+          exists: false,
+          valid: false
+        }
+      };
+    }
+
+    return {
+      kind: 'card',
+      ...(await options.readCardInfo(locator.filePath, ['status', 'metadata', 'cover'])).info
+    };
+  }
+
+  private async readBoxDocumentInfo(boxFile: string): Promise<Record<string, unknown>> {
+    const loaded = await this.loadArchivePackage(boxFile);
+    const cover = await this.renderCover(boxFile);
+    return {
+      kind: 'box',
+      status: {
+        state: 'ready',
+        exists: true,
+        valid: true
+      },
+      metadata: {
+        boxId: loaded.metadata.boxId,
+        name: loaded.metadata.name,
+        createdAt: loaded.metadata.createdAt,
+        modifiedAt: loaded.metadata.modifiedAt,
+        activeLayoutType: loaded.metadata.activeLayoutType,
+        coverRatio: loaded.metadata.coverRatio,
+        tags: loaded.metadata.tags
+      },
+      cover: {
+        title: cover.title,
+        resourceUrl: cover.coverUrl,
+        mimeType: cover.mimeType,
+        ratio: cover.ratio
+      }
+    };
+  }
+
+  private async getOrCreateExtractedCoverRoot(boxFile: string): Promise<string> {
+    const normalizedBoxFile = path.resolve(boxFile);
+    const cached = this.extractedCoverRoots.get(normalizedBoxFile);
+    if (cached && await fs.stat(cached).then((stats) => stats.isDirectory()).catch(() => false)) {
+      return cached;
+    }
+
+    const extractedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-box-cover-'));
+    await this.zip.extract(normalizedBoxFile, extractedDir);
+    this.extractedCoverRoots.set(normalizedBoxFile, extractedDir);
+    return extractedDir;
+  }
+
   private async readEntryStatus(locator: EntryLocator): Promise<Record<string, unknown>> {
     if (locator.scheme === 'file:' && locator.filePath) {
       const exists = await this.pathExists(locator.filePath);
@@ -1334,9 +2128,346 @@ export class BoxService {
     };
   }
 
+  public resolveManagedDocumentFilePath(requestUrl: string): string | null {
+    const managedScheme = this.managedDocumentScheme;
+    if (!managedScheme) {
+      return null;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(requestUrl);
+    } catch {
+      return null;
+    }
+
+    if (parsed.protocol !== `${managedScheme}:`) {
+      return null;
+    }
+
+    const pathSegments = decodeManagedUrlPathSegments(parsed.pathname);
+    if (!pathSegments || pathSegments.length < 2) {
+      return null;
+    }
+
+    const identifier = pathSegments[0];
+    const relativePath = normalizeManagedRelativePath(pathSegments.slice(1).join('/'));
+    if (!identifier || !relativePath || parsed.hostname !== 'session') {
+      return null;
+    }
+
+    const session = this.renderSessionCache.get(identifier);
+    if (!session) {
+      return null;
+    }
+
+    const absolutePath = path.resolve(session.rootDir, relativePath);
+    return isPathWithinRoot(session.rootDir, absolutePath) ? absolutePath : null;
+  }
+
+  private queryLayoutPlugins(): RenderableLayoutPluginRecord[] {
+    const plugins = this.runtime?.query({ type: 'layout' }) ?? [];
+    return plugins.filter(
+      (record): record is RenderableLayoutPluginRecord =>
+        Boolean(
+          record.enabled
+          && typeof record.manifest.entry === 'string'
+          && record.manifest.entry.length > 0
+          && typeof record.manifest.layout?.layoutType === 'string'
+          && record.manifest.layout.layoutType.length > 0,
+        ),
+    );
+  }
+
+  private resolveLayoutPlugin(layoutType: string): RenderableLayoutPluginRecord {
+    const normalizedLayoutType = layoutType.trim().toLowerCase();
+    const plugin = this.queryLayoutPlugins().find(
+      (record) => (record.manifest.layout?.layoutType ?? '').trim().toLowerCase() === normalizedLayoutType,
+    );
+    if (!plugin) {
+      throw createError('BOX_LAYOUT_PLUGIN_NOT_FOUND', `No enabled layout plugin can render ${layoutType}.`, {
+        layoutType,
+      });
+    }
+    return plugin;
+  }
+
+  private async loadLayoutDescriptor(
+    plugin: RenderableLayoutPluginRecord,
+  ): Promise<NonNullable<LayoutPluginModule['layoutDefinition']>> {
+    const module = await this.loadPluginModule(plugin);
+    const descriptor = module.layoutDefinition;
+    if (!descriptor) {
+      throw createError('BOX_LAYOUT_PLUGIN_INVALID', `Layout plugin does not export layoutDefinition: ${plugin.manifest.id}`, {
+        pluginId: plugin.manifest.id,
+      });
+    }
+    if (descriptor.layoutType !== plugin.manifest.layout?.layoutType) {
+      throw createError('BOX_LAYOUT_PLUGIN_INVALID', `Layout plugin layoutType does not match manifest: ${plugin.manifest.id}`, {
+        pluginId: plugin.manifest.id,
+        manifestLayoutType: plugin.manifest.layout?.layoutType,
+        runtimeLayoutType: descriptor.layoutType,
+      });
+    }
+    if (typeof descriptor.createDefaultConfig !== 'function'
+      || typeof descriptor.normalizeConfig !== 'function'
+      || typeof descriptor.validateConfig !== 'function'
+      || typeof descriptor.renderView !== 'function') {
+      throw createError('BOX_LAYOUT_PLUGIN_INVALID', `Layout plugin contract is incomplete: ${plugin.manifest.id}`, {
+        pluginId: plugin.manifest.id,
+      });
+    }
+    return descriptor;
+  }
+
+  private toLayoutDescriptorSummary(
+    descriptor: NonNullable<LayoutPluginModule['layoutDefinition']>,
+    plugin: RenderableLayoutPluginRecord,
+  ): BoxLayoutDescriptorSummary {
+    return {
+      pluginId: descriptor.pluginId || plugin.manifest.id,
+      layoutType: descriptor.layoutType,
+      displayName: descriptor.displayName || plugin.manifest.layout?.displayName || plugin.manifest.name,
+      description: descriptor.description || plugin.manifest.description,
+      icon: descriptor.icon,
+      defaultConfig: descriptor.normalizeConfig(descriptor.createDefaultConfig()),
+    };
+  }
+
+  private async loadPluginModule(plugin: RenderableLayoutPluginRecord): Promise<LayoutPluginModule> {
+    const entryPath = await this.resolvePluginEntryPath(plugin);
+    const cacheKey = `${plugin.manifest.id}:${entryPath}`;
+    const cached = this.moduleCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = (async () => {
+      try {
+        if (entryPath.endsWith('.mjs')) {
+          return (await import(pathToFileURL(entryPath).href)) as LayoutPluginModule;
+        }
+        if (entryPath.endsWith('.js') || entryPath.endsWith('.ts')) {
+          const bundled = await this.bundlePluginEntry(entryPath, plugin.installPath);
+          if (bundled) {
+            return bundled;
+          }
+        }
+        const required = require(entryPath) as LayoutPluginModule;
+        if (required && Object.keys(required).length > 0) {
+          return required;
+        }
+      } catch (error) {
+        const fallback = await this.bundlePluginEntry(entryPath, plugin.installPath);
+        if (fallback) {
+          return fallback;
+        }
+        throw error;
+      }
+
+      const fallback = await this.bundlePluginEntry(entryPath, plugin.installPath);
+      if (fallback) {
+        return fallback;
+      }
+      throw createError('BOX_LAYOUT_PLUGIN_LOAD_FAILED', `Failed to load layout plugin entry ${entryPath}.`, {
+        pluginId: plugin.manifest.id,
+        entryPath,
+      });
+    })();
+
+    this.moduleCache.set(cacheKey, pending);
+    return pending;
+  }
+
+  private async bundleLayoutPluginForBrowser(plugin: RenderableLayoutPluginRecord): Promise<string> {
+    const entryPath = await this.resolvePluginEntryPath(plugin);
+    const cacheKey = `${plugin.manifest.id}:${entryPath}:browser`;
+    const cached = this.browserBundleCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = (async () => {
+      const { build } = require('esbuild') as {
+        build: (options: Record<string, unknown>) => Promise<{ outputFiles?: Array<{ text: string }> }>;
+      };
+
+      const result = await build({
+        entryPoints: [entryPath],
+        bundle: true,
+        platform: 'browser',
+        format: 'iife',
+        globalName: 'ChipsBoxLayoutPlugin',
+        write: false,
+        absWorkingDir: plugin.installPath,
+        logLevel: 'silent',
+      });
+
+      const code = result.outputFiles?.[0]?.text;
+      if (!code) {
+        throw createError('BOX_LAYOUT_PLUGIN_BUNDLE_FAILED', `Failed to bundle layout plugin ${plugin.manifest.id}.`, {
+          pluginId: plugin.manifest.id,
+          entryPath,
+        });
+      }
+
+      return code;
+    })();
+
+    this.browserBundleCache.set(cacheKey, pending);
+    return pending;
+  }
+
+  private async resolvePluginEntryPath(plugin: RenderableLayoutPluginRecord): Promise<string> {
+    const declaredEntryPath = path.resolve(plugin.installPath, plugin.manifest.entry);
+    const declaredStats = await this.safeStat(declaredEntryPath);
+    if (declaredStats?.isFile()) {
+      return declaredEntryPath;
+    }
+
+    const sourceOverride = await this.findWorkspaceSourceEntry(plugin.manifest.id);
+    if (sourceOverride) {
+      return sourceOverride;
+    }
+
+    throw createError('BOX_LAYOUT_PLUGIN_ENTRY_NOT_FOUND', `Layout plugin entry is missing: ${plugin.manifest.entry}`, {
+      pluginId: plugin.manifest.id,
+      entry: plugin.manifest.entry,
+    });
+  }
+
+  private async findWorkspaceSourceEntry(pluginId: string): Promise<string | undefined> {
+    const candidates = [
+      path.join(this.workspaceRoot, 'Chips-BoxLayoutPlugin'),
+      path.join(this.workspaceRoot, 'Chips-Scaffold', 'chips-scaffold-boxlayout', 'templates', 'boxlayout-standard'),
+    ];
+
+    for (const root of candidates) {
+      const rootStats = await this.safeStat(root);
+      if (!rootStats?.isDirectory()) {
+        continue;
+      }
+
+      const manifestPath = path.join(root, 'manifest.yaml');
+      const manifestStats = await this.safeStat(manifestPath);
+      if (!manifestStats?.isFile()) {
+        continue;
+      }
+
+      const manifest = yaml.parse(await fs.readFile(manifestPath, 'utf-8')) as Record<string, unknown> | null;
+      if (!manifest || typeof manifest !== 'object') {
+        continue;
+      }
+      if (asString(manifest.id) !== pluginId) {
+        continue;
+      }
+
+      const entryPath = asString(manifest.entry);
+      if (!entryPath) {
+        continue;
+      }
+
+      const absoluteEntryPath = path.resolve(path.dirname(manifestPath), entryPath);
+      const sourceStats = await this.safeStat(absoluteEntryPath);
+      if (sourceStats?.isFile()) {
+        return absoluteEntryPath;
+      }
+    }
+
+    return undefined;
+  }
+
+  private async bundlePluginEntry(entryPath: string, pluginRoot: string): Promise<LayoutPluginModule | undefined> {
+    try {
+      const { build } = require('esbuild') as {
+        build: (options: Record<string, unknown>) => Promise<{ outputFiles?: Array<{ text: string }> }>;
+      };
+      const result = await build({
+        entryPoints: [entryPath],
+        bundle: true,
+        platform: 'browser',
+        format: 'cjs',
+        write: false,
+        absWorkingDir: pluginRoot,
+        logLevel: 'silent',
+      });
+      const code = result.outputFiles?.[0]?.text;
+      if (!code) {
+        return undefined;
+      }
+
+      const exportsObject: Record<string, unknown> = {};
+      const moduleObject = { exports: exportsObject } as { exports: Record<string, unknown> };
+      const factory = new Function('require', 'module', 'exports', code) as (
+        requireFn: NodeRequire,
+        moduleFn: { exports: Record<string, unknown> },
+        exportsFn: Record<string, unknown>,
+      ) => void;
+      factory(require, moduleObject, exportsObject);
+      return moduleObject.exports as LayoutPluginModule;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async persistRenderSession(kind: string): Promise<{ sessionId: string; rootDir: string }> {
+    const sessionId = `${kind}-${createId()}`;
+    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), `chips-${kind}-`));
+    this.renderSessionCache.set(sessionId, {
+      rootDir,
+      createdAt: Date.now(),
+    });
+    return { sessionId, rootDir };
+  }
+
+  private async safeStat(filePath: string): Promise<import('node:fs').Stats | undefined> {
+    try {
+      return await fs.stat(filePath);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private createRenderSessionDocumentUrl(sessionId: string, absolutePath: string): string {
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    const session = this.renderSessionCache.get(sessionId);
+    if (!session) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    const relativePath = normalizeManagedRelativePath(
+      path.relative(session.rootDir, absolutePath).split(path.sep).join('/'),
+    );
+    if (!relativePath) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    return `${this.managedDocumentScheme}://session/${encodeURIComponent(sessionId)}/${encodeManagedUrlPath(relativePath)}`;
+  }
+
   private async pathExists(targetPath: string): Promise<boolean> {
     const stats = await fs.stat(targetPath).catch(() => null);
     return Boolean(stats?.isFile());
+  }
+
+  private mimeTypeForDocumentFile(pathLike: string, contentType?: string): string {
+    if (contentType === 'chips/box') {
+      return BOX_MIME_TYPE;
+    }
+    if (contentType === 'chips/card') {
+      return CARD_MIME_TYPE;
+    }
+    const extension = path.extname(pathLike).toLowerCase();
+    if (extension === '.box') {
+      return BOX_MIME_TYPE;
+    }
+    if (extension === '.card') {
+      return CARD_MIME_TYPE;
+    }
+    return CARD_MIME_TYPE;
   }
 
   private mimeTypeForPath(filePath: string): string {

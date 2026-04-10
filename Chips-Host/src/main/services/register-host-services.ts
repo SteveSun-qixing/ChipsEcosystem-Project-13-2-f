@@ -1081,6 +1081,38 @@ const createCardOpenService = (ctx: HostServiceContext, state: RuntimeState): Ca
   });
 };
 
+const openBoxDocument = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  boxFile: string
+): Promise<{ mode: 'document-window'; documentType: 'box'; windowId: string; pluginId?: string }> => {
+  await ctx.getBoxService().inspect(boxFile);
+
+  const plugin = ctx.runtime
+    .query({ type: 'app', capability: 'file-handler:.box' })
+    .find((record) => record.enabled && record.manifest.type === 'app');
+
+  if (!plugin) {
+    throw createError('FILE_ASSOCIATION_HANDLER_MISSING', 'No enabled viewer is registered for .box files.', {
+      boxFile,
+      expectedCapability: 'file-handler:.box'
+    });
+  }
+
+  const launched = await openPluginWindow(ctx, state, plugin.manifest.id, {
+    targetPath: boxFile,
+    fileOpenMode: 'box',
+    trigger: 'box-open-service'
+  });
+
+  return {
+    mode: 'document-window',
+    documentType: 'box',
+    windowId: launched.window.id,
+    pluginId: plugin.manifest.id
+  };
+};
+
 const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState): ResourceOpenService => {
   return new ResourceOpenService({
     queryHandlerPlugins: async () => {
@@ -4187,6 +4219,156 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           })
         )
       },
+      listLayoutDescriptors: {
+        descriptor: descriptor<undefined, { descriptors: unknown }>(
+          'box.listLayoutDescriptors',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.listLayoutDescriptors', async () => {
+            const descriptors = await ctx.getBoxService().listLayoutDescriptors();
+            return { descriptors };
+          })
+        )
+      },
+      readLayoutDescriptor: {
+        descriptor: descriptor<{ layoutType: string }, { descriptor: unknown }>(
+          'box.readLayoutDescriptor',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.readLayoutDescriptor', async (input) => {
+            const descriptor = await ctx.getBoxService().readLayoutDescriptor(input.layoutType);
+            return { descriptor };
+          })
+        )
+      },
+      normalizeLayoutConfig: {
+        descriptor: descriptor<{ layoutType: string; config: Record<string, unknown> }, { config: unknown }>(
+          'box.normalizeLayoutConfig',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.normalizeLayoutConfig', async (input) => {
+            const config = await ctx.getBoxService().normalizeLayoutConfig(input.layoutType, input.config ?? {});
+            return { config };
+          })
+        )
+      },
+      validateLayoutConfig: {
+        descriptor: descriptor<{ layoutType: string; config: Record<string, unknown> }, { validation: unknown }>(
+          'box.validateLayoutConfig',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.validateLayoutConfig', async (input) => {
+            const validation = await ctx.getBoxService().validateLayoutConfig(input.layoutType, input.config ?? {});
+            return { validation };
+          })
+        )
+      },
+      getLayoutInitialQuery: {
+        descriptor: descriptor<{ layoutType: string; config: Record<string, unknown> }, { query?: unknown }>(
+          'box.getLayoutInitialQuery',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.getLayoutInitialQuery', async (input) => {
+            const query = await ctx.getBoxService().getLayoutInitialQuery(input.layoutType, input.config ?? {});
+            return { query };
+          })
+        )
+      },
+      renderLayoutFrame: {
+        descriptor: descriptor<
+          {
+            layoutType: string;
+            sessionId: string;
+            box: unknown;
+            initialView: unknown;
+            config: Record<string, unknown>;
+            locale?: string;
+            themeId?: string;
+          },
+          { view: unknown }
+        >(
+          'box.renderLayoutFrame',
+          ['box.read'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'box.renderLayoutFrame', async (input) => {
+            const themeContext = resolveThemeContext(state, input.themeId ? [input.themeId] : []);
+            const locale = input.locale ?? state.locale;
+            if (!state.locales[locale]) {
+              throw createError('I18N_LOCALE_NOT_FOUND', `Locale not found: ${locale}`, { locale });
+            }
+            const view = await ctx.getBoxService().renderLayoutFrame({
+              layoutType: input.layoutType,
+              sessionId: input.sessionId,
+              box: input.box as never,
+              initialView: input.initialView as never,
+              config: input.config ?? {},
+              locale,
+              theme: themeContext.renderTheme,
+              themeCssText: themeContext.css,
+            });
+            return { view };
+          })
+        )
+      },
+      renderLayoutEditor: {
+        descriptor: descriptor<
+          {
+            layoutType: string;
+            entries: unknown[];
+            initialConfig: Record<string, unknown>;
+            locale?: string;
+            themeId?: string;
+          },
+          { view: unknown }
+        >(
+          'box.renderLayoutEditor',
+          ['box.write'],
+          10_000,
+          false,
+          0,
+          withMetrics(state, 'box.renderLayoutEditor', async (input) => {
+            const themeContext = resolveThemeContext(state, input.themeId ? [input.themeId] : []);
+            const locale = input.locale ?? state.locale;
+            if (!state.locales[locale]) {
+              throw createError('I18N_LOCALE_NOT_FOUND', `Locale not found: ${locale}`, { locale });
+            }
+            const view = await ctx.getBoxService().renderLayoutEditor({
+              layoutType: input.layoutType,
+              entries: input.entries as never,
+              initialConfig: input.initialConfig ?? {},
+              locale,
+              theme: themeContext.renderTheme,
+              themeCssText: themeContext.css,
+            });
+            return { view };
+          })
+        )
+      },
+      releaseRenderSession: {
+        descriptor: descriptor<{ sessionId: string }, { ack: true }>(
+          'box.releaseRenderSession',
+          ['box.read'],
+          8_000,
+          true,
+          0,
+          withMetrics(state, 'box.releaseRenderSession', async (input) => {
+            await ctx.getBoxService().releaseRenderSession(input.sessionId);
+            return { ack: true };
+          })
+        )
+      },
       openView: {
         descriptor: descriptor<
           { boxFile: string; layoutType?: string; initialQuery?: Record<string, unknown> },
@@ -4233,7 +4415,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       readEntryDetail: {
         descriptor: descriptor<
-          { sessionId: string; entryIds: string[]; fields: Array<'cardInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status'> },
+          { sessionId: string; entryIds: string[]; fields: Array<'documentInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status'> },
           { items: unknown }
         >(
           'box.readEntryDetail',
@@ -4266,13 +4448,26 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           })
         )
       },
+      renderCover: {
+        descriptor: descriptor<{ boxFile: string }, { view: unknown }>(
+          'box.renderCover',
+          ['box.read'],
+          10_000,
+          true,
+          0,
+          withMetrics(state, 'box.renderCover', async (input) => {
+            const view = await ctx.getBoxService().renderCover(input.boxFile);
+            return { view };
+          })
+        )
+      },
       resolveEntryResource: {
         descriptor: descriptor<
           {
             sessionId: string;
             entryId: string;
             resource: {
-              kind: 'cover' | 'preview' | 'cardFile' | 'custom';
+              kind: 'cover' | 'preview' | 'documentFile' | 'custom';
               key?: string;
               sizeHint?: {
                 width?: number;
@@ -4306,7 +4501,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'box.openEntry', async (input, routeContext) => {
             const result = await ctx.getBoxService().openEntry(input.sessionId, input.entryId, {
               ownerKey: resolveBoxSessionOwnerKey(routeContext),
-              openCardFile: (cardFile) => createCardOpenService(ctx, state).openCard(cardFile),
+              openCardFile: async (cardFile) => {
+                const result = await createCardOpenService(ctx, state).openCard(cardFile);
+                return {
+                  mode: 'document-window',
+                  documentType: 'card' as const,
+                  windowId: result.windowId,
+                  pluginId: result.pluginId,
+                };
+              },
+              openBoxFile: (boxFile) => openBoxDocument(ctx, state, boxFile),
               openExternalUrl: (url) => ctx.pal.shell.openExternal(url)
             });
             return { result };
@@ -4332,7 +4536,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       },
       prefetchEntries: {
         descriptor: descriptor<
-          { sessionId: string; entryIds: string[]; targets: Array<'cover' | 'preview' | 'cardInfo'> },
+          { sessionId: string; entryIds: string[]; targets: Array<'cover' | 'preview' | 'documentInfo'> },
           { ack: true }
         >(
           'box.prefetchEntries',

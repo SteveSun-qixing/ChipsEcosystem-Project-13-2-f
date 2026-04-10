@@ -158,6 +158,7 @@ describe("createClient", () => {
         createdAt: "2026-03-23T09:30:00.000Z",
         modifiedAt: "2026-03-23T11:20:00.000Z",
         activeLayoutType: "chips.layout.grid",
+        coverRatio: "3:4",
       },
       content: {
         activeLayoutType: "chips.layout.grid",
@@ -181,6 +182,7 @@ describe("createClient", () => {
         name: "旅行箱",
         activeLayoutType: "chips.layout.grid",
         availableLayouts: ["chips.layout.grid"],
+        coverRatio: "3:4",
         capabilities: {
           listEntries: true,
           readEntryDetail: true,
@@ -220,6 +222,16 @@ describe("createClient", () => {
         if (action === "box.readMetadata") {
           return { metadata: inspection.metadata };
         }
+        if (action === "box.renderCover") {
+          return {
+            view: {
+              title: "旅行箱",
+              coverUrl: "file:///tmp/box-cover.html",
+              mimeType: "text/html",
+              ratio: "3:4",
+            },
+          };
+        }
         if (action === "box.openView") {
           return openViewResult;
         }
@@ -253,7 +265,8 @@ describe("createClient", () => {
         if (action === "box.openEntry") {
           return {
             result: {
-              mode: "card-window",
+              mode: "document-window",
+              documentType: "card",
               windowId: "window-1",
             },
           };
@@ -273,6 +286,12 @@ describe("createClient", () => {
     await expect(client.box.inspect("/tmp/demo.box")).resolves.toEqual(inspection);
     await expect(client.box.validate("/tmp/demo.box")).resolves.toEqual({ valid: true, errors: [] });
     await expect(client.box.readMetadata("/tmp/demo.box")).resolves.toEqual(inspection.metadata);
+    await expect(client.box.renderCover("/tmp/demo.box")).resolves.toEqual({
+      title: "旅行箱",
+      coverUrl: "file:///tmp/box-cover.html",
+      mimeType: "text/html",
+      ratio: "3:4",
+    });
     await expect(
       client.box.openView("/tmp/demo.box", {
         layoutType: "chips.layout.grid",
@@ -295,7 +314,8 @@ describe("createClient", () => {
       },
     ]);
     await expect(client.box.openEntry("session-1", "e9K2m1P4q7")).resolves.toEqual({
-      mode: "card-window",
+      mode: "document-window",
+      documentType: "card",
       windowId: "window-1",
     });
     await expect(client.box.renderEntryCover("session-1", "e9K2m1P4q7")).resolves.toEqual({

@@ -55,7 +55,23 @@ emit方法用于发送事件到主进程，语法是window.chips.emit(eventType,
 
 ### file子域
 
-file子域提供文件操作能力，包括file.read(path, options)读取文件，file.write(path, data)写入文件，file.exists(path)检查文件是否存在，file.mkdir(path)创建目录，file.delete(path)删除文件，file.list(path)列出目录内容，file.copy(src, dest)复制文件，file.move(src, dest)移动文件。
+file子域提供文件操作能力，包括file.read(path, options)读取文件，file.write(path, data)写入文件，file.exists(path)检查文件是否存在，file.mkdir(path)创建目录，file.delete(path, { recursive? })删除文件或目录，file.list(path, { recursive? })列出目录内容，file.copy(src, dest)复制文件，file.move(src, dest)移动文件。
+
+### zip子域
+
+zip 子域提供正式 ZIP 操作能力：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `zip.compress({ inputDir, outputZip })` | 将目录打包为 ZIP | 否 |
+| `zip.extract({ zipPath, outputDir })` | 解压 ZIP 到目录 | 否 |
+| `zip.list({ zipPath })` | 枚举 ZIP 条目 | 是 |
+
+正式约束：
+
+- Host 必须拒绝 ZIP 条目中的绝对路径和路径穿越；
+- Host 必须支持标准目录条目与常见用户 ZIP 压缩方式；
+- 编辑引擎网页基础卡片导入场景应通过该子域完成 ZIP 预检与解压，而不是直接访问文件系统压缩包内容。
 
 ### resource子域
 
@@ -221,6 +237,48 @@ card 子域采用 vNext 动作口径：
 - 该应用使用共享文档中单独定义的本地基础卡片运行时；
 - `card.render/card.renderEditor` 继续作为 Bridge 对外公开的 Host 托管通用能力。
 
+### box子域（统一文档消费相关）
+
+box 子域采用 vNext 动作口径：
+
+| 动作 | 说明 | 幂等 |
+|---|---|---|
+| `box.pack({ boxDir, outputPath })` | 打包目录态箱子为 `.box` | 否 |
+| `box.unpack({ boxFile, outputDir })` | 解包 `.box` 到工作目录 | 否 |
+| `box.inspect({ boxFile })` | 读取箱子结构摘要 | 是 |
+| `box.validate({ boxFile })` | 校验箱子格式合法性 | 是 |
+| `box.readMetadata({ boxFile })` | 读取箱子元数据 | 是 |
+| `box.renderCover({ boxFile })` | 读取箱子本体正式封面视图 | 是 |
+| `box.listLayoutDescriptors()` | 列出已安装布局描述符摘要 | 是 |
+| `box.readLayoutDescriptor({ layoutType })` | 读取指定布局描述符 | 是 |
+| `box.normalizeLayoutConfig({ layoutType, config })` | 由 Host 归一布局配置 | 是 |
+| `box.validateLayoutConfig({ layoutType, config })` | 由 Host 校验布局配置 | 是 |
+| `box.getLayoutInitialQuery({ layoutType, config })` | 由 Host 生成布局首屏查询 | 是 |
+| `box.openView({ boxFile, layoutType?, initialQuery? })` | 创建箱子查看会话 | 否 |
+| `box.renderLayoutFrame({ layoutType, sessionId, box, initialView, config, locale?, themeId? })` | 生成箱子查看态文档 | 否 |
+| `box.renderLayoutEditor({ layoutType, entries, initialConfig, locale?, themeId? })` | 生成箱子布局编辑器文档 | 否 |
+| `box.releaseRenderSession({ sessionId })` | 释放 `box.renderLayoutFrame / box.renderLayoutEditor` 创建的 render session | 否 |
+| `box.listEntries({ sessionId, query? })` | 分页读取条目摘要 | 是 |
+| `box.readEntryDetail({ sessionId, entryIds, fields })` | 读取条目补充字段 | 是 |
+| `box.renderEntryCover({ sessionId, entryId })` | 读取条目正式封面视图 | 是 |
+| `box.openEntry({ sessionId, entryId })` | 触发条目正式打开动作 | 否 |
+| `box.resolveEntryResource({ sessionId, entryId, resource })` | 解析条目资源句柄 | 是 |
+| `box.readBoxAsset({ sessionId, assetPath })` | 读取箱子自有资源 | 是 |
+| `box.prefetchEntries({ sessionId, entryIds, targets })` | 温和预取条目资源 | 否 |
+| `box.closeView({ sessionId })` | 关闭箱子查看会话 | 是 |
+
+正式约束：
+
+- `box.renderCover` 返回的 `view.coverUrl` 必须指向受控的 `.box/cover.html` 入口；
+- `.box/cover.html` 中的相对路径必须相对于 `.box/` 目录解析，可继续引用 `.box/boxcover/*`；
+- `box.listLayoutDescriptors/readLayoutDescriptor/normalizeLayoutConfig/validateLayoutConfig/getLayoutInitialQuery/renderLayoutFrame/renderLayoutEditor` 统一由 Host `box-service` 负责；上层应用不得自行装载布局插件；
+- `box.renderLayoutFrame` 与 `box.renderLayoutEditor` 返回的 `view.documentUrl` 都是正式 iframe 入口，调用方不得回退为 `srcdoc` 或自行改写文档；
+- `box.renderLayoutEditor` 属于写能力链路，调用方必须声明 `box.write` 权限；
+- `box.readEntryDetail.fields` 中正式详情字段名使用 `documentInfo`，而不是旧设计里的 `cardInfo`；
+- `box.resolveEntryResource.resource.kind` 中正式文档入口资源类型使用 `documentFile`；
+- `box.openEntry` 统一返回 `document-window | external`，并通过 `documentType` 指明打开的是卡片还是箱子；
+- 当条目本身是箱子时，`box.renderEntryCover` 必须继续复用目标箱子的正式封面入口，而不是让布局前端自行推断。
+
 复合卡片预览 iframe 事件协议：
 
 - `chips.composite:ready`
@@ -316,9 +374,11 @@ card 子域采用 vNext 动作口径：
 
 - `resource-request` / `resource-response` 用于编辑器 iframe 与外层宿主之间的正式资源桥接；
 - `resourcePath` 一律使用相对于卡片根目录的路径；
-- `resource-request.action` 当前正式支持 `resolve | import | delete`；
+- `resource-request.action` 当前正式支持 `resolve | import | importArchiveBundle | delete`；
 - `resolve` 响应返回的 URL 只作为当前会话的运行时访问地址，若使用 `blob:` 等临时地址，后续必须支持 `resource-release`；
 - `import` 响应返回的 `path` 必须是卡片根目录相对路径，宿主应负责挑选不冲突的正式文件名；
+- `importArchiveBundle` 适用于网页基础卡片等整目录导入场景，响应必须返回 `{ rootDir, entryFile, resourcePaths }`；
+- `importArchiveBundle` 的宿主实现必须验证 ZIP 入口文件并把最终目录写入卡片根目录，而不是把压缩包内容暂存到 `content/`；
 - `delete` 表示对卡片内部资源发起删除意图，是否立即物理删除由宿主持久化链路决定；
 - `resource-release` 用于通知外层宿主释放 `blob:` 等临时资源 URL；
 - SDK `editorPanel.render({ resources })` 可以在本地桥接这组协议，但 `resources` 本身不进入 `card.renderEditor` Host 路由输入。

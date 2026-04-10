@@ -38,8 +38,9 @@ npm run dev
 
 - 系统能力访问统一经 `chips-sdk` 与 `window.chips.*`，不直连 Host 内部实现。
 - 基础卡片装配与编辑运行时统一经 `src/basecard-runtime/`。
-- 箱子查看与布局渲染统一经 `chips-box-layout-host` 与 Host `box.*` 能力。
+- 箱子查看、布局渲染与布局编辑统一经 `Host box-service -> chips-sdk -> 编辑引擎壳层` 正式链路完成。
 - 工作区、文件、资源、设置、主题与多语言统一经 `src/services/`、`src/context/` 与 Host 事件链路。
+- 应用壳层 `index.html` 的 CSP 必须允许网页基础卡片正式使用的远程 `http/https` iframe；若目标站点自身拒绝 iframe 嵌入，再由网页基础卡片按正式错误态处理。
 
 ## 4. 目录概览
 

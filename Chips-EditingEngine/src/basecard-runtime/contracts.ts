@@ -16,6 +16,18 @@ export interface BasecardResourceImportResult {
   path: string;
 }
 
+export interface BasecardArchiveImportRequest {
+  file: File;
+  preferredRootDir?: string;
+  entryFile?: string;
+}
+
+export interface BasecardArchiveImportResult {
+  rootDir: string;
+  entryFile: string;
+  resourcePaths: string[];
+}
+
 export interface BasecardPendingResourceImport {
   path: string;
   data: Uint8Array;
@@ -42,6 +54,7 @@ export interface BasecardEditorContext {
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
+  importArchiveBundle?: (input: BasecardArchiveImportRequest) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
 }
 
@@ -53,6 +66,7 @@ export interface BasecardDescriptor {
   icon?: IconDescriptor;
   aliases?: readonly string[];
   commitDebounceMs?: number;
+  previewPointerEvents?: 'native' | 'shielded';
   createInitialConfig: (baseCardId: string) => BasecardConfigRecord;
   normalizeConfig: (input: BasecardConfigRecord, baseCardId: string) => BasecardConfigRecord;
   validateConfig: (config: BasecardConfigRecord) => EditorValidationResult;

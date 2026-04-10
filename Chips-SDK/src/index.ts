@@ -11,6 +11,8 @@ export type {
   CardInfoPayload,
   CardInfoStatus,
   CardEditorChangePayload,
+  CardEditorArchiveImportRequest,
+  CardEditorArchiveImportResult,
   CardEditorErrorPayload,
   CardEditorRenderOptions,
   CardEditorRenderResult,
@@ -33,7 +35,9 @@ export type {
 export type {
   FileApi,
   FileContent,
+  FileDeleteOptions,
   FileEntry,
+  FileListOptions,
   FileReadOptions,
   FileStat,
 } from "./api/file";
@@ -103,4 +107,5 @@ export type {
   ResourceOpenResolvedResource,
   ResourceOpenResult,
 } from "./api/resource";
+export type { ZipApi, ZipEntryMeta } from "./api/zip";
 export type { StandardError } from "./types/errors";

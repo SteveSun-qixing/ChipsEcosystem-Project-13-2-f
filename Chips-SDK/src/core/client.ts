@@ -20,6 +20,7 @@ import { createWindowApi } from "../api/window";
 import { createPlatformApi } from "../api/platform";
 import { createBoxApi } from "../api/box";
 import { createResourceApi } from "../api/resource";
+import { createZipApi } from "../api/zip";
 
 export function createCoreClient(config: ClientConfig = {}): CoreClient {
   const environment: SdkEnvironment =
@@ -156,5 +157,6 @@ export function createClient(config: ClientConfig = {}): Client {
     platform: createPlatformApi(core),
     box: createBoxApi(core),
     resource: createResourceApi(core),
+    zip: createZipApi(core),
   };
 }

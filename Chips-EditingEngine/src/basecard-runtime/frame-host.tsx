@@ -147,6 +147,7 @@ export function BasecardFrameHost({
     () => normalizeBasecardConfig(cardType, baseCardId, config),
     [baseCardId, cardType, config, registryVersion],
   );
+  const selectionShieldEnabled = selectable && descriptor?.previewPointerEvents === 'shielded';
   const configSignature = useMemo(() => JSON.stringify(normalizedConfig), [normalizedConfig]);
   const readyMinHeightStyle = useMemo(
     () => ({ minHeight: status.state === 'ready' ? '0px' : `${DEFAULT_STATUS.height}px` }),
@@ -430,6 +431,22 @@ export function BasecardFrameHost({
         scrolling="no"
         style={readyMinHeightStyle}
       />
+
+      {selectionShieldEnabled && (
+        <div
+          className="basecard-frame-host__selection-shield"
+          aria-hidden="true"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onSelectRef.current?.();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        />
+      )}
 
       {status.state === 'loading' && (
         <div className="basecard-frame-host__overlay" data-state="loading">

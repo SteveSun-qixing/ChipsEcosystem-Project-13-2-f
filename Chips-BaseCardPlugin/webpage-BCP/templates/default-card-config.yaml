@@ -1,0 +1,10 @@
+card_type: "WebPageCard"
+theme: ""
+source_type: "url"
+source_url: ""
+bundle_root: ""
+entry_file: "index.html"
+resource_paths: []
+display_mode: "fixed"
+fixed_ratio: "7:16"
+max_height_ratio: 20

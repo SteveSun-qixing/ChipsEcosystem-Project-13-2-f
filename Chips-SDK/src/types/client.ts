@@ -78,6 +78,7 @@ export interface Client extends CoreClient {
   platform: import("../api/platform").PlatformApi;
   box: import("../api/box").BoxApi;
   resource: import("../api/resource").ResourceApi;
+  zip: import("../api/zip").ZipApi;
 }
 
 export interface InvocationContext {

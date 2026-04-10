@@ -2,10 +2,12 @@ import type { Client, PluginRecord } from 'chips-sdk';
 import type { BasecardConfigRecord, BasecardDescriptor, EditorValidationResult } from './contracts';
 import { imageBasecardDescriptor } from './registrations/image';
 import { richtextBasecardDescriptor } from './registrations/richtext';
+import { webpageBasecardDescriptor } from './registrations/webpage';
 
 const builtinBasecardDescriptors = [
   imageBasecardDescriptor,
   richtextBasecardDescriptor,
+  webpageBasecardDescriptor,
 ] satisfies BasecardDescriptor[];
 
 type BasecardDefinitionModule = {
@@ -26,6 +28,10 @@ function isIconDescriptor(icon: unknown): icon is { name: string } {
     && typeof icon === 'object'
     && typeof (icon as { name?: unknown }).name === 'string'
     && (icon as { name: string }).name.trim().length > 0;
+}
+
+function isPreviewPointerEventsValue(value: unknown): value is 'native' | 'shielded' {
+  return value === 'native' || value === 'shielded';
 }
 
 function toFileModuleUrl(filePath: string): string {
@@ -89,6 +95,12 @@ function toInstalledDescriptor(
   }
   if (definition.icon !== undefined && !isIconDescriptor(definition.icon)) {
     throw new Error(`基础卡片插件 icon 必须为正式 IconDescriptor: ${plugin.id}`);
+  }
+  if (
+    definition.previewPointerEvents !== undefined
+    && !isPreviewPointerEventsValue(definition.previewPointerEvents)
+  ) {
+    throw new Error(`基础卡片插件 previewPointerEvents 必须为 native 或 shielded: ${plugin.id}`);
   }
 
   return {

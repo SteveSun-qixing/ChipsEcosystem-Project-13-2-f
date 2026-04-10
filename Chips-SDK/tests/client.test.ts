@@ -53,6 +53,45 @@ describe("createClient", () => {
     });
   });
 
+  it("passes recursive list and delete options into file routes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "file.list") {
+          return { entries: [] };
+        }
+        return undefined;
+      },
+    });
+
+    await client.file.list("/workspace/card", { recursive: true });
+    await client.file.delete("/workspace/card/tmp", { recursive: true });
+
+    expect(calls).toEqual([
+      {
+        action: "file.list",
+        payload: {
+          dir: "/workspace/card",
+          options: {
+            recursive: true,
+          },
+        },
+      },
+      {
+        action: "file.delete",
+        payload: {
+          path: "/workspace/card/tmp",
+          options: {
+            recursive: true,
+          },
+        },
+      },
+    ]);
+  });
+
   it("wraps non-standard errors as StandardError", async () => {
     const client = createClient({
       environment: "node",
@@ -608,6 +647,72 @@ describe("createClient", () => {
           options: {
             format: "png",
           },
+        },
+      },
+    ]);
+  });
+
+  it("invokes zip routes through the formal sdk wrapper", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "zip.compress") {
+          return { outputZip: "/tmp/demo.zip" };
+        }
+        if (action === "zip.extract") {
+          return { outputDir: "/tmp/unpacked" };
+        }
+        if (action === "zip.list") {
+          return {
+            entries: [
+              {
+                path: "index.html",
+                size: 128,
+                compressedSize: 64,
+                crc32: 1234,
+                offset: 0,
+              },
+            ],
+          };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.zip.compress("/tmp/site", "/tmp/demo.zip")).resolves.toBe("/tmp/demo.zip");
+    await expect(client.zip.extract("/tmp/demo.zip", "/tmp/unpacked")).resolves.toBe("/tmp/unpacked");
+    await expect(client.zip.list("/tmp/demo.zip")).resolves.toEqual([
+      {
+        path: "index.html",
+        size: 128,
+        compressedSize: 64,
+        crc32: 1234,
+        offset: 0,
+      },
+    ]);
+
+    expect(calls).toEqual([
+      {
+        action: "zip.compress",
+        payload: {
+          inputDir: "/tmp/site",
+          outputZip: "/tmp/demo.zip",
+        },
+      },
+      {
+        action: "zip.extract",
+        payload: {
+          zipPath: "/tmp/demo.zip",
+          outputDir: "/tmp/unpacked",
+        },
+      },
+      {
+        action: "zip.list",
+        payload: {
+          zipPath: "/tmp/demo.zip",
         },
       },
     ]);

@@ -578,6 +578,21 @@ describe("CardApi", () => {
       const importResource = vi.fn(async ({ file, preferredPath }: { file: File; preferredPath?: string }) => ({
         path: preferredPath ?? file.name,
       }));
+      const importArchiveBundle = vi.fn(async (
+        {
+          file,
+          preferredRootDir,
+          entryFile,
+        }: {
+          file: File;
+          preferredRootDir?: string;
+          entryFile?: string;
+        },
+      ) => ({
+        rootDir: preferredRootDir ?? file.name,
+        entryFile: entryFile ?? "index.html",
+        resourcePaths: [`${preferredRootDir ?? file.name}/${entryFile ?? "index.html"}`],
+      }));
       const deleteResource = vi.fn(async () => undefined);
       const releaseResourceUrl = vi.fn();
 
@@ -587,6 +602,7 @@ describe("CardApi", () => {
         resources: {
           resolveResourceUrl,
           importResource,
+          importArchiveBundle,
           deleteResource,
           releaseResourceUrl,
         },
@@ -647,6 +663,38 @@ describe("CardApi", () => {
             requestId: "import-1",
             ok: true,
             result: { path: "images/cover.png" },
+          },
+        },
+        "*",
+      );
+
+      const archiveFile = new File(["zip"], "bundle.zip", { type: "application/zip" });
+      await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "import-archive-1",
+          action: "importArchiveBundle",
+          preferredRootDir: "webpage-bundle",
+          entryFile: "index.html",
+          file: archiveFile,
+        },
+      });
+      expect(importArchiveBundle).toHaveBeenCalledWith({
+        file: archiveFile,
+        preferredRootDir: "webpage-bundle",
+        entryFile: "index.html",
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "import-archive-1",
+            ok: true,
+            result: {
+              rootDir: "webpage-bundle",
+              entryFile: "index.html",
+              resourcePaths: ["webpage-bundle/index.html"],
+            },
           },
         },
         "*",

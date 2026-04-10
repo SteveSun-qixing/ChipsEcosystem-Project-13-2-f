@@ -7,7 +7,10 @@ import {
 import { globalEventEmitter } from '../core/event-emitter';
 import { useTranslation } from '../hooks/useTranslation';
 import { fileService } from '../services/file-service';
+import { platformService } from '../services/platform-service';
+import { zipService } from '../services/zip-service';
 import type { BasecardPendingResourceImport, BasecardResourceOperations } from '../basecard-runtime/contracts';
+import { importArchiveBundleIntoCardRoot } from './archive-import';
 import type { EditorSessionSnapshot } from './contracts';
 import { useEditorRuntime } from './context';
 import { ENGINE_ICONS } from '../icons/descriptors';
@@ -309,6 +312,45 @@ export function EditorHost({
     store.queueResourceDeletion(sessionKey, normalizedResourcePath);
   }, [releaseResolvedResourceUrl, sessionKey, store]);
 
+  const importArchiveBundle = useCallback(async (input: {
+    file: File;
+    preferredRootDir?: string;
+    entryFile?: string;
+  }) => {
+    const result = await importArchiveBundleIntoCardRoot({
+      cardRootDir: cardPath,
+      request: input,
+      services: {
+        getPathForFile(file) {
+          return platformService.getPathForFile(file);
+        },
+        async listZipEntries(zipPath) {
+          return zipService.list(zipPath);
+        },
+        async extractZip(zipPath, outputDir) {
+          return zipService.extract(zipPath, outputDir);
+        },
+        async listFiles(dir, options) {
+          return fileService.list(dir, options);
+        },
+        async move(sourcePath, destPath) {
+          await fileService.move(sourcePath, destPath);
+        },
+        async delete(path, options) {
+          await fileService.delete(path, options);
+        },
+        async exists(path) {
+          return fileService.exists(path);
+        },
+      },
+    });
+
+    result.resourcePaths.forEach((resourcePath) => {
+      releaseResolvedResourceUrl(resourcePath);
+    });
+    return result;
+  }, [cardPath, releaseResolvedResourceUrl]);
+
   useEffect(() => {
     if (!descriptor || !snapshot?.dirty || !snapshot.validation.valid) {
       return;
@@ -429,6 +471,7 @@ export function EditorHost({
           releaseResolvedResourceUrl(normalizedResourcePath);
         },
         importResource,
+        importArchiveBundle,
         deleteResource,
       });
 
@@ -464,6 +507,7 @@ export function EditorHost({
     reportEditorActivity,
     resolveResourceUrl,
     importResource,
+    importArchiveBundle,
     deleteResource,
     releaseResolvedResourceUrl,
     sessionKey,

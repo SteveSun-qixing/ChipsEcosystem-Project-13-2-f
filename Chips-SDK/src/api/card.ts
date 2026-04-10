@@ -167,6 +167,18 @@ export interface CardEditorResourceImportResult {
   path: string;
 }
 
+export interface CardEditorArchiveImportRequest {
+  file: File;
+  preferredRootDir?: string;
+  entryFile?: string;
+}
+
+export interface CardEditorArchiveImportResult {
+  rootDir: string;
+  entryFile: string;
+  resourcePaths: string[];
+}
+
 export interface CardEditorResourceBridge {
   rootPath?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string> | string;
@@ -174,6 +186,9 @@ export interface CardEditorResourceBridge {
   importResource?: (
     input: CardEditorResourceImportRequest,
   ) => Promise<CardEditorResourceImportResult> | CardEditorResourceImportResult;
+  importArchiveBundle?: (
+    input: CardEditorArchiveImportRequest,
+  ) => Promise<CardEditorArchiveImportResult> | CardEditorArchiveImportResult;
   deleteResource?: (resourcePath: string) => Promise<void> | void;
 }
 
@@ -584,13 +599,15 @@ export function createCardApi(client: CoreClient): CardApi {
   };
 }
 
-type CardEditorResourceAction = "resolve" | "import" | "delete";
+type CardEditorResourceAction = "resolve" | "import" | "importArchiveBundle" | "delete";
 
 type CardEditorResourceRequestPayload = {
   requestId: string;
   action: CardEditorResourceAction;
   resourcePath?: string;
   preferredPath?: string;
+  preferredRootDir?: string;
+  entryFile?: string;
   file?: File;
 };
 
@@ -706,6 +723,26 @@ async function handleCardEditorResourceRequest(
       return resources.importResource({
         file: payload.file,
         preferredPath: typeof payload.preferredPath === "string" ? payload.preferredPath : undefined,
+      });
+    }
+    case "importArchiveBundle": {
+      if (!resources.importArchiveBundle) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "card.editorPanel.resource.importArchiveBundle requires resources.importArchiveBundle.",
+        );
+      }
+      if (!(payload.file instanceof File)) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.importArchiveBundle requires a File payload.",
+        );
+      }
+      return resources.importArchiveBundle({
+        file: payload.file,
+        preferredRootDir:
+          typeof payload.preferredRootDir === "string" ? payload.preferredRootDir : undefined,
+        entryFile: typeof payload.entryFile === "string" ? payload.entryFile : undefined,
       });
     }
     case "delete": {

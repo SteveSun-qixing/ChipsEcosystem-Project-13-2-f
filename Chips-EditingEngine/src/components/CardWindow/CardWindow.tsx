@@ -4,6 +4,7 @@ import type { CompositeInteractionPayload } from 'chips-sdk';
 import { CardWindowBase } from '../CardWindowBase/CardWindowBase';
 import { WindowMenu } from '../WindowMenu/WindowMenu';
 import { useCard } from '../../context/CardContext';
+import { useEditorSelection } from '../../context/EditorSelectionContext';
 import { getChipsClient } from '../../services/bridge-client';
 import { workspaceService } from '../../services/workspace-service';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
@@ -47,6 +48,7 @@ export function CardWindow({
     onFocus
 }: CardWindowProps) {
     const { openCards, activeCardId, selectedBaseCardId, setActiveCard, setSelectedBaseCard } = useCard();
+    const { selectCard } = useEditorSelection();
     const canvasContext = useCanvas();
     const themeRuntime = useThemeRuntime();
     const { t } = useTranslation();
@@ -241,10 +243,18 @@ export function CardWindow({
     const selectBaseCard = useCallback((baseCardId: string) => {
         setActiveCard(config.cardId);
         setSelectedBaseCard(baseCardId);
-    }, [config.cardId, setActiveCard, setSelectedBaseCard]);
+        selectCard(config.cardId, baseCardId);
+    }, [config.cardId, selectCard, setActiveCard, setSelectedBaseCard]);
 
     const handleWindowFocus = () => {
+        const nextBaseCardId = (activeCardId === config.cardId ? selectedBaseCardId : null)
+            ?? visibleBaseCards[0]?.id
+            ?? null;
         setActiveCard(config.cardId);
+        if (nextBaseCardId) {
+            setSelectedBaseCard(nextBaseCardId);
+        }
+        selectCard(config.cardId, nextBaseCardId);
         onFocus();
     };
 

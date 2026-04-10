@@ -163,6 +163,11 @@ interface BaseCardPluginModule {
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
     importResource?: (input: { file: File; preferredPath?: string }) => Promise<{ path: string }>;
+    importArchiveBundle?: (input: {
+      file: File;
+      preferredRootDir?: string;
+      entryFile?: string;
+    }) => Promise<{ rootDir: string; entryFile: string; resourcePaths: string[] }>;
     deleteResource?: (resourcePath: string) => Promise<void>;
   }) => unknown;
 }
@@ -895,7 +900,7 @@ const createBasecardFrameDocument = (options: {
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; child-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; frame-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
     ...(resourceBaseUrl ? [`  <base href="${escapeHtml(resourceBaseUrl)}" />`] : []),
     `  <title>${escapeHtml(contentTitle)}</title>`,
     '  <style>',
@@ -1101,7 +1106,7 @@ const createEditorFrameDocument = (options: {
     '<head>',
     '  <meta charset="utf-8" />',
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
+    `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; connect-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; font-src data: file:${managedSource ? ` ${managedSource}` : ''}; media-src file: http: https: data: blob:${managedSource ? ` ${managedSource}` : ''}; child-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; frame-src about: file: http: https: blob:${managedSource ? ` ${managedSource}` : ''}; object-src 'none';" />`,
     `  <title>${escapeHtml(title)}</title>`,
     `  <style>${themeCssText}</style>`,
     '</head>',
@@ -1193,6 +1198,9 @@ const createEditorFrameDocument = (options: {
     '          releaseResourceUrl,',
     '          importResource(input) {',
     "            return requestResource('import', { preferredPath: input?.preferredPath, file: input?.file });",
+    '          },',
+    '          importArchiveBundle(input) {',
+    "            return requestResource('importArchiveBundle', { preferredRootDir: input?.preferredRootDir, entryFile: input?.entryFile, file: input?.file });",
     '          },',
     '          deleteResource(resourcePath) {',
     "            return requestResource('delete', { resourcePath });",

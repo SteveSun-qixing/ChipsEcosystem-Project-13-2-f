@@ -32,6 +32,7 @@ const createValidBoxDirectory = async (rootDir: string, cardFile: string): Promi
       'created_at: "2026-03-23T09:30:00.000Z"',
       'modified_at: "2026-03-23T11:20:00.000Z"',
       'active_layout_type: "chips.layout.grid"',
+      'cover_ratio: "3:4"',
       'tags:',
       '  - "旅行"',
       'cover_asset: "assets/placeholders/box-cover.webp"',
@@ -47,7 +48,7 @@ const createValidBoxDirectory = async (rootDir: string, cardFile: string): Promi
       `    url: "${pathToFileURL(cardFile).href}"`,
       '    enabled: true',
       '    snapshot:',
-      '      card_id: "c7H1k2L9m3"',
+      '      document_id: "c7H1k2L9m3"',
       '      title: "第一天"',
       '      summary: "抵达后的路线记录"',
       '      tags:',
@@ -67,6 +68,11 @@ const createValidBoxDirectory = async (rootDir: string, cardFile: string): Promi
       '      priority: 3',
       ''
     ].join('\n')
+  );
+
+  await writeText(
+    path.join(rootDir, '.box/cover.html'),
+    '<!doctype html><html><body>旅行箱封面</body></html>',
   );
 
   await writeText(
@@ -120,6 +126,7 @@ describe('BoxService', () => {
       boxId: BOX_ID,
       name: '旅行箱',
       activeLayoutType: 'chips.layout.grid',
+      coverRatio: '3:4',
       coverAsset: 'assets/placeholders/box-cover.webp',
     });
 
@@ -162,6 +169,7 @@ describe('BoxService', () => {
     });
 
     expect(opened.box.boxId).toBe(BOX_ID);
+    expect(opened.box.coverRatio).toBe('3:4');
     expect(opened.initialView.total).toBe(1);
     expect(opened.initialView.items[0]?.entryId).toBe(ENTRY_ID);
 
@@ -170,7 +178,7 @@ describe('BoxService', () => {
     });
 
     await expect(
-      service.readEntryDetail(opened.sessionId, [ENTRY_ID], ['status', 'cardInfo'], {
+      service.readEntryDetail(opened.sessionId, [ENTRY_ID], ['status', 'documentInfo'], {
         ownerKey: 'app:test-viewer',
         readCardInfo: async (resolvedCardFile) => ({
           cardFile: resolvedCardFile,
@@ -199,7 +207,8 @@ describe('BoxService', () => {
               scheme: 'file',
               url: pathToFileURL(cardFile).href,
             },
-            cardInfo: {
+            documentInfo: {
+              kind: 'card',
               status: {
                 state: 'ready',
                 exists: true,
@@ -282,7 +291,7 @@ describe('BoxService', () => {
     });
 
     await expect(
-      service.prefetchEntries(opened.sessionId, [ENTRY_ID], ['cover', 'cardInfo'], {
+      service.prefetchEntries(opened.sessionId, [ENTRY_ID], ['cover', 'documentInfo'], {
         ownerKey: 'app:test-viewer',
         readCardInfo: async () => ({
           cardFile,
@@ -301,12 +310,14 @@ describe('BoxService', () => {
       service.openEntry(opened.sessionId, ENTRY_ID, {
         ownerKey: 'app:test-viewer',
         openCardFile: async (resolvedCardFile) => ({
-          mode: 'card-window',
+          mode: 'document-window',
+          documentType: 'card',
           windowId: `window:${resolvedCardFile}`
         })
       })
     ).resolves.toEqual({
-      mode: 'card-window',
+      mode: 'document-window',
+      documentType: 'card',
       windowId: `window:${cardFile}`
     });
 
@@ -353,6 +364,10 @@ describe('BoxService', () => {
         '  chips.layout.grid: {}',
         ''
       ].join('\n')
+    );
+    await writeText(
+      path.join(invalidRoot, '.box/cover.html'),
+      '<!doctype html><html><body>坏箱子封面</body></html>',
     );
 
     const zipService = new StoreZipService();

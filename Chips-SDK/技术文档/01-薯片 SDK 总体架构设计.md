@@ -43,7 +43,8 @@ SDK 的职责边界：
    - 提供 `createClient` 工厂与核心调用 `invoke`。
    - 完成环境探测、Bridge 适配、错误归一与重试策略。
 2. **Domain Wrapper Layer（能力域封装层）**
-   - 按能力域划分模块：`file`, `card`, `box`, `resource`, `theme`, `config`, `i18n`, `plugin`, `module`, `window`, `platform` 等。
+   - 按能力域划分模块：`document`, `file`, `card`, `box`, `resource`, `theme`, `config`, `i18n`, `plugin`, `module`, `window`, `platform` 等。
+   - `document` 作为统一文档窗口域，负责把 `.card/.box` 分发到对应正式链路。
    - 每个模块只依赖 Core Client，不直接依赖 Bridge 或 Host。
 3. **Tooling & Contracts Layer（工具与契约层）**
    - `contracts/`：路由清单、接口契约快照。
@@ -135,7 +136,9 @@ SDK 必须统一为 `StandardError`，并在必要时附带 `requestId/traceId` 
 ### 5.2 与组件库的协作
 
 - 组件库通过统一显示链路消费 SDK 能力：
+  - `client.document.window.render`：统一文档窗口入口，按 `.card/.box` 分发到正式查看链路。
   - `client.card.coverFrame.render` → `CardCoverFrame` 组件。
+  - `client.box.renderCover` → `EmbeddedDocumentFrame` 组件。
   - `client.card.compositeWindow.render` → `CompositeCardWindow` 组件。
 - 组件库负责：
   - iframe 容器与状态机；

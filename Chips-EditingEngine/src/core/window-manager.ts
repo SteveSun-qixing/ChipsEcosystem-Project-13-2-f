@@ -26,7 +26,7 @@ export interface WindowManagerOptions {
 
 const DEFAULT_OPTIONS: Required<WindowManagerOptions> = {
     defaultCardWindowSize: { width: 400, height: 600 },
-    defaultBoxWindowSize: { width: 1100, height: 760 },
+    defaultBoxWindowSize: { width: 736, height: 508 },
     defaultToolWindowSize: { width: 300, height: 400 },
     cascadeOffset: 30,
     tileGap: 20,

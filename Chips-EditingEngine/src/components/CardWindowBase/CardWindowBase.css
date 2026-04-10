@@ -28,6 +28,14 @@
     overflow-y: auto;
 }
 
+.card-window-base__content {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .card-window-base--focused {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
@@ -107,6 +115,10 @@
     width: 16px;
     height: 16px;
     cursor: ew-resize;
+}
+
+.card-window-base__resize-handle--both {
+    cursor: nwse-resize;
 }
 
 .card-window-base__resize-handle::after {

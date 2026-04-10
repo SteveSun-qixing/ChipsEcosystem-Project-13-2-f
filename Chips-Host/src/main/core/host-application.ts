@@ -90,7 +90,17 @@ export class HostApplication {
       getCardService: () => this.getCardService(),
       getCardInfoService: () => this.getCardInfoService(),
       getBoxService: () => {
-        this.boxService ??= new BoxService();
+        if (!this.boxService) {
+          const electron = loadElectronModule();
+          this.boxService = new BoxService(undefined, {
+            runtime: this.runtime,
+            workspaceRoot: process.cwd(),
+            managedDocumentScheme:
+              electron?.protocol && typeof electron.protocol.handle === 'function' && electron?.net?.fetch
+                ? CHIPS_RENDER_DOCUMENT_SCHEME
+                : undefined,
+          });
+        }
         return this.boxService;
       },
       getZipService: () => {
@@ -101,7 +111,8 @@ export class HostApplication {
     });
 
     this.disposeRenderDocumentProtocol = registerChipsRenderDocumentProtocol((requestUrl) => {
-      return this.getCardService().resolveManagedDocumentFilePath(requestUrl);
+      return this.getCardService().resolveManagedDocumentFilePath(requestUrl)
+        ?? this.getBoxService().resolveManagedDocumentFilePath(requestUrl);
     });
 
     if (builtInBootstrap.shortcutPluginIds.length > 0) {
@@ -217,5 +228,21 @@ export class HostApplication {
     }
 
     return this.cardInfoService;
+  }
+
+  private getBoxService(): BoxService {
+    if (!this.boxService) {
+      const electron = loadElectronModule();
+      this.boxService = new BoxService(undefined, {
+        runtime: this.runtime,
+        workspaceRoot: process.cwd(),
+        managedDocumentScheme:
+          electron?.protocol && typeof electron.protocol.handle === 'function' && electron?.net?.fetch
+            ? CHIPS_RENDER_DOCUMENT_SCHEME
+            : undefined,
+      });
+    }
+
+    return this.boxService;
   }
 }

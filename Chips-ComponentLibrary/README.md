@@ -5,7 +5,7 @@
 - 技术栈：React + Ark UI + Style Dictionary + Tamagui (Core)
 - 核心定位：在 Ark UI 原语基础上二次封装，提供统一契约、状态机、无障碍与主题接口点
 - 样式原则：组件零视觉硬编码，视觉完全由主题系统注入
-- 生态特有组件：`CardCoverFrame`、`CompositeCardWindow`（iframe 高级组件）
+- 生态特有组件：`EmbeddedDocumentFrame`、`CardCoverFrame`、`CompositeCardWindow`（iframe 高级组件）
 
 ## 仓库目标
 
@@ -23,7 +23,7 @@
 ## 当前开发进度（代码）
 
 - 已创建 Monorepo 基线（`packages/*` + `packages/adapters/*` workspace）
-- 已落地 Card Runtime 组件实现（`CardCoverFrame`、`CompositeCardWindow`）与适配器契约
+- 已落地 Card Runtime 组件实现（`EmbeddedDocumentFrame`、`CardCoverFrame`、`CompositeCardWindow`）与适配器契约
 - 已落地 token 构建产物（CSS/JSON/TS/diff）与主题契约校验脚本
 - 已建立统一验证入口：`npm run verify`（token 校验 + 构建 + contract 校验 + 全量测试）
 - 已落地主题运行时核心能力（作用域解析器、`ChipsThemeProvider`、`useToken/useComponentTokens`、分片变量注入）

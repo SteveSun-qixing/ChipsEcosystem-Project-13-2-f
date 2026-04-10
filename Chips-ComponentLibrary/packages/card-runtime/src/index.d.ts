@@ -7,6 +7,21 @@ export interface StandardError {
   retryable?: boolean;
 }
 
+export interface EmbeddedDocumentFrameProps {
+  surfaceId?: string;
+  title?: string;
+  src?: string;
+  srcDoc?: string;
+  ratio?: string;
+  loading?: boolean;
+  disabled?: boolean;
+  sandbox?: string;
+  scope?: string;
+  onActivate?: (surfaceId?: string) => void;
+  onFrameReady?: (surfaceId?: string) => void;
+  onFrameError?: (error: StandardError) => void;
+}
+
 export interface CardCoverFrameProps {
   cardId?: string;
   title?: string;
@@ -135,6 +150,7 @@ export const CompositeFrameEventType: {
   readonly FATAL_ERROR: "fatal-error";
 };
 
+export function EmbeddedDocumentFrame(props: EmbeddedDocumentFrameProps): React.ReactElement;
 export function CardCoverFrame(props: CardCoverFrameProps): React.ReactElement;
 export function CompositeCardWindow(props: CompositeCardWindowProps): React.ReactElement;
 export function resolveCardCoverFrameState(input: CardCoverFrameStateInput): string;

@@ -3,7 +3,6 @@ import { ChipsThemeProvider } from "@chips/component-library";
 import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
 import { CardWindow } from "./components/CardWindow";
-import { BoxWindow } from "./components/BoxWindow";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { useChipsBridge } from "./hooks/useChipsBridge";
@@ -17,7 +16,6 @@ interface AppThemeState {
 
 interface OpenedTarget {
   filePath: string;
-  mode: "card" | "box";
 }
 
 const DEFAULT_THEME_STATE: AppThemeState = {
@@ -51,25 +49,13 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-function resolveTargetMode(filePath: string): OpenedTarget["mode"] | null {
-  const normalized = filePath.trim().toLowerCase();
-  if (normalized.endsWith(".card")) {
-    return "card";
-  }
-  if (normalized.endsWith(".box")) {
-    return "box";
-  }
-  return null;
-}
-
 function resolveOpenedTarget(filePath: string): OpenedTarget | null {
-  const mode = resolveTargetMode(filePath);
-  if (!mode) {
+  const normalized = filePath.trim();
+  if (!normalized) {
     return null;
   }
   return {
-    filePath,
-    mode,
+    filePath: normalized,
   };
 }
 
@@ -111,7 +97,6 @@ export function App() {
   useEffect(() => {
     logger.debug("当前查看目标状态已更新", {
       hasOpenedTarget: openedTarget !== null,
-      mode: openedTarget?.mode,
       filePath: openedTarget?.filePath ?? null,
     });
   }, [logger, openedTarget]);
@@ -155,31 +140,20 @@ export function App() {
     const targetPath = typeof launchContext.launchParams.targetPath === "string"
       ? launchContext.launchParams.targetPath
       : "";
-    const requestedMode =
-      typeof launchContext.launchParams.fileOpenMode === "string"
-      && (launchContext.launchParams.fileOpenMode === "card" || launchContext.launchParams.fileOpenMode === "box")
-        ? launchContext.launchParams.fileOpenMode
-        : null;
 
     if (!targetPath) {
       return;
     }
 
-    const nextTarget = requestedMode
-      ? {
-          filePath: targetPath,
-          mode: requestedMode,
-        }
-      : resolveOpenedTarget(targetPath);
+    const nextTarget = resolveOpenedTarget(targetPath);
 
-    if (!nextTarget) {
+    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
       setError(t("card-viewer.errors.unsupportedFile"));
       return;
     }
 
     logger.info("从启动上下文恢复目标文件", {
       targetPath,
-      mode: nextTarget.mode,
       trigger: launchContext.launchParams.trigger,
     });
     setOpenedTarget(nextTarget);
@@ -205,7 +179,7 @@ export function App() {
 
   const handleResolvedFilePath = useCallback((filePath: string) => {
     const nextTarget = resolveOpenedTarget(filePath);
-    if (!nextTarget) {
+    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
       logger.warn("选择的文件类型当前不受支持", {
         filePath,
       });
@@ -214,11 +188,10 @@ export function App() {
     }
     logger.info("用户已选定查看目标", {
       filePath,
-      mode: nextTarget.mode,
     });
     setError(null);
     setOpenedTarget(nextTarget);
-  }, [logger, t]);
+  }, [client.document, logger, t]);
 
   const handleOpenFile = useCallback(async () => {
     try {
@@ -257,25 +230,17 @@ export function App() {
         openLabel={t("card-viewer.actions.open")}
         onFilePath={handleResolvedFilePath}
       />
-    ) : openedTarget.mode === "card" ? (
-      <CardWindow
-        cardFile={openedTarget.filePath}
-        traceId={traceId}
-        loadingLabel={t("card-viewer.viewer.cardLoading")}
-        containerErrorLabel={t("card-viewer.viewer.cardContainerError")}
-        fatalErrorFallback={t("card-viewer.viewer.cardFatalError")}
-        renderErrorFallback={t("card-viewer.viewer.cardRenderError")}
-        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
-        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
-      />
     ) : (
-      <BoxWindow
-        boxFile={openedTarget.filePath}
+      <CardWindow
+        filePath={openedTarget.filePath}
         traceId={traceId}
         locale={locale}
-        loadingLabel={t("card-viewer.viewer.boxLoading")}
-        containerErrorLabel={t("card-viewer.viewer.boxContainerError")}
-        renderErrorFallback={t("card-viewer.viewer.boxRenderError")}
+        loadingLabel={t("card-viewer.viewer.documentLoading")}
+        containerErrorLabel={t("card-viewer.viewer.documentContainerError")}
+        fatalErrorFallback={t("card-viewer.viewer.documentFatalError")}
+        renderErrorFallback={t("card-viewer.viewer.documentRenderError")}
+        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
+        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
       />
     );
 

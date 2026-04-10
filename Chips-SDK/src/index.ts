@@ -1,5 +1,13 @@
 export { createClient } from "./core/client";
 export type { Client, ClientConfig, SdkLogRecord, SdkLogger } from "./types/client";
+export type {
+  DocumentApi,
+  DocumentType,
+  DocumentWindowErrorPayload,
+  DocumentWindowMode,
+  DocumentWindowRenderOptions,
+  DocumentWindowRenderResult,
+} from "./api/document";
 export type { IconDescriptor, IconStyle } from "./api/icon";
 export type {
   CardApi,
@@ -81,6 +89,14 @@ export type {
 export type {
   BoxApi,
   BoxContent,
+  BoxLayoutDescriptor,
+  BoxLayoutEditorAssetBridge,
+  BoxLayoutEditorChangePayload,
+  BoxLayoutEditorErrorPayload,
+  BoxLayoutFrameView,
+  BoxLayoutEditorView,
+  BoxLayoutRenderErrorPayload,
+  BoxLayoutValidation,
   BoxEntryDetailField,
   BoxEntryDetailItem,
   BoxEntryCoverView,

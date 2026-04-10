@@ -1,0 +1,11 @@
+{
+  "id": "chips-rich-text-editor",
+  "name": "富文本编辑器",
+  "description": "基于富文本基础卡片封装的单文档 Markdown 所见即所得编辑器模板元信息。",
+  "tags": ["app", "richtext", "markdown", "single-document"],
+  "supports": {
+    "multiWindow": false,
+    "sdk": true,
+    "componentLibrary": true
+  }
+}

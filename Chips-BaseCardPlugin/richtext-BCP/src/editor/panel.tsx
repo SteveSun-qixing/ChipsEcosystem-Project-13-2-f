@@ -185,10 +185,10 @@ html, body {
   height: 100%;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 22px;
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   overscroll-behavior: contain;
 }
 

@@ -6,9 +6,13 @@ import './WindowMenu.css';
 export interface WindowMenuProps {
     title: string;
     isEditing?: boolean;
+    isFileView?: boolean;
+    isCoverView?: boolean;
     showLock?: boolean;
+    showFile?: boolean;
     showSettings?: boolean;
     showCover?: boolean;
+    onSwitchToFile?: () => void;
     onToggleEdit?: () => void;
     onSwitchToCover?: () => void;
     onSettings?: () => void;
@@ -18,9 +22,13 @@ export interface WindowMenuProps {
 export function WindowMenu({
     title,
     isEditing = false,
+    isFileView = false,
+    isCoverView = false,
     showLock = false,
+    showFile = false,
     showSettings = true,
     showCover = true,
+    onSwitchToFile,
     onToggleEdit,
     onSwitchToCover,
     onSettings,
@@ -29,8 +37,12 @@ export function WindowMenu({
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editingTitle, setEditingTitle] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const isTitleEditable = typeof onUpdateTitle === 'function';
 
     const startEditTitle = (currentTitle: string) => {
+        if (!isTitleEditable) {
+            return;
+        }
         setEditingTitle(currentTitle);
         setIsEditingTitle(true);
     };
@@ -106,6 +118,18 @@ export function WindowMenu({
             </div>
 
             <div className="window-menu__right">
+                {showFile && (
+                    <button
+                        type="button"
+                        className={`window-menu__button ${isFileView ? 'window-menu__button--active' : ''}`}
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSwitchToFile?.(); }}
+                    >
+                        <span className="window-menu__button-icon">
+                            <RuntimeIcon icon={ENGINE_ICONS.document} />
+                        </span>
+                    </button>
+                )}
+
                 {showLock && (
                     <button
                         type="button"
@@ -121,7 +145,7 @@ export function WindowMenu({
                 {showCover && (
                     <button
                         type="button"
-                        className="window-menu__button"
+                        className={`window-menu__button ${isCoverView ? 'window-menu__button--active' : ''}`}
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSwitchToCover?.(); }}
                     >
                         <span className="window-menu__button-icon">

@@ -102,6 +102,11 @@ interface SurfaceOpenRequest {
 - Desktop 目前实际仍落为 `window`，若请求了其他 `kind`，PAL 会在返回的 `metadata` 中保留请求语义；
 - `plugin.launch` 保留为 app 插件兼容入口，并复用同一底层实现。
 
+补充说明：
+
+- `window.chips.emit(event, data?)` 是页面向 Host 发送事件的正式入口；
+- `file / resource / card / box / zip / module` 等服务能力当前通过 `window.chips.invoke("namespace.action", payload)` 或 `chips-sdk` 暴露，不额外扩展为新的 convenience 子域。
+
 ## 4. `transfer` 与 `association`
 
 ### 4.1 `transfer`
@@ -181,6 +186,24 @@ Bridge 返回结构说明：
 - `tray.set()` 返回当前 `TrayState`
 - `ipc.createChannel()` 返回 `PALIpcChannelInfo`
 
+### 6.3 通过 `invoke()` 暴露的正式服务命名空间
+
+当前 Bridge 页面侧还会通过 `invoke("namespace.action")` 访问以下正式服务域：
+
+- `file.*`
+- `resource.*`
+- `card.*`
+- `box.*`
+- `zip.*`
+- `module.*`
+
+其中需要特别注意：
+
+- `resource.open` 统一走 Host 资源处理器路由；
+- `box.openView / box.renderLayoutFrame / box.renderLayoutEditor / box.openEntry` 已是箱子统一文档链路的正式动作；
+- `zip.compress / zip.extract / zip.list` 是网页基础卡片等整包导入场景的正式 ZIP 能力；
+- 这些动作属于 Host 服务命名空间，不应误写为 `window.chips.resource.*` 或 `window.chips.box.*` 直接子对象。
+
 ## 7. 启动上下文
 
 Desktop preload 继续向页面暴露：
@@ -219,3 +242,4 @@ Bridge 事件命名统一采用点语义，例如：
 1. Bridge 形状变化必须同步更新 Host、SDK、路由契约与共享文档。
 2. 子域新增动作时，必须先明确权限、返回结构、错误模型和不支持语义。
 3. 任何实现都不得绕过 `window.chips.*` 直接暴露原生能力给页面。
+4. 通过 `invoke()` 暴露的正式服务命名空间，必须与 Bridge convenience 子域分开描述，避免对外形成两套冲突口径。

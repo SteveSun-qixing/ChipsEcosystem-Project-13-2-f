@@ -2,9 +2,9 @@ import type { CoreClient } from "../types/client";
 import { createError } from "../types/errors";
 
 export type BoxTag = string | string[];
-export type BoxEntryDetailField = "cardInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status";
-export type BoxEntryResourceKind = "cover" | "preview" | "cardFile" | "custom";
-export type BoxPrefetchTarget = "cover" | "preview" | "cardInfo";
+export type BoxEntryDetailField = "documentInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status";
+export type BoxEntryResourceKind = "cover" | "preview" | "documentFile" | "custom";
+export type BoxPrefetchTarget = "cover" | "preview" | "documentInfo";
 
 export interface BoxValidationResult {
   valid: boolean;
@@ -18,6 +18,7 @@ export interface BoxMetadata {
   createdAt: string;
   modifiedAt: string;
   activeLayoutType: string;
+  coverRatio?: string;
   description?: string;
   tags?: BoxTag[];
   coverAsset?: string;
@@ -30,7 +31,7 @@ export interface BoxEntrySnapshot {
   url: string;
   enabled: boolean;
   snapshot: {
-    cardId?: string;
+    documentId?: string;
     title?: string;
     summary?: string;
     tags?: BoxTag[];
@@ -93,6 +94,7 @@ export interface BoxSessionInfo {
   name: string;
   activeLayoutType: string;
   availableLayouts: string[];
+  coverRatio?: string;
   tags?: BoxTag[];
   coverAsset?: string;
   capabilities: {
@@ -113,10 +115,18 @@ export interface BoxOpenViewResult {
 }
 
 export interface BoxEntryOpenResult {
-  mode: "card-window" | "external";
+  mode: "document-window" | "external";
+  documentType?: "card" | "box";
   windowId?: string;
   pluginId?: string;
   url?: string;
+}
+
+export interface BoxCoverView {
+  title: string;
+  coverUrl: string;
+  mimeType: "text/html";
+  ratio?: string;
 }
 
 export interface BoxEntryCoverView {
@@ -140,12 +150,84 @@ export interface BoxEntryDetailItem {
   detail: Record<string, unknown>;
 }
 
+export interface BoxLayoutDescriptor {
+  pluginId: string;
+  layoutType: string;
+  displayName: string;
+  description?: string;
+  icon?: Record<string, unknown>;
+  defaultConfig: Record<string, unknown>;
+}
+
+export interface BoxLayoutValidation {
+  valid: boolean;
+  errors: Record<string, string>;
+}
+
+export interface BoxLayoutFrameView {
+  title: string;
+  documentUrl: string;
+  sessionId: string;
+  layoutType: string;
+  pluginId: string;
+}
+
+export interface BoxLayoutEditorView {
+  title: string;
+  documentUrl: string;
+  sessionId: string;
+  layoutType: string;
+  pluginId: string;
+}
+
+export interface FrameRenderResult {
+  frame: HTMLIFrameElement;
+  origin: string;
+  dispose: () => Promise<void>;
+}
+
+export interface BoxLayoutEditorAssetBridge {
+  rootPath?: string;
+  readBoxAsset?: (assetPath: string) => Promise<ResolvedRuntimeResource> | ResolvedRuntimeResource;
+  importBoxAsset?: (
+    input: { file: File; preferredPath?: string },
+  ) => Promise<{ assetPath: string }> | { assetPath: string };
+  deleteBoxAsset?: (assetPath: string) => Promise<void> | void;
+}
+
+export interface BoxLayoutEditorChangePayload {
+  layoutType: string;
+  pluginId: string;
+  config: Record<string, unknown>;
+}
+
+export interface BoxLayoutEditorErrorPayload {
+  layoutType: string;
+  pluginId: string;
+  code: string;
+  message: string;
+}
+
+export interface BoxLayoutRenderErrorPayload {
+  sessionId?: string;
+  layoutType?: string;
+  pluginId?: string;
+  code: string;
+  message: string;
+}
+
 export interface BoxApi {
   pack(boxDir: string, options?: { outputPath?: string }): Promise<string>;
   unpack(boxFile: string, outputDir: string): Promise<string>;
   inspect(boxFile: string): Promise<BoxInspectionResult>;
   validate(boxFile: string): Promise<BoxValidationResult>;
   readMetadata(boxFile: string): Promise<BoxMetadata>;
+  renderCover(boxFile: string): Promise<BoxCoverView>;
+  listLayoutDescriptors(): Promise<BoxLayoutDescriptor[]>;
+  readLayoutDescriptor(layoutType: string): Promise<BoxLayoutDescriptor>;
+  normalizeLayoutConfig(layoutType: string, config: Record<string, unknown>): Promise<Record<string, unknown>>;
+  validateLayoutConfig(layoutType: string, config: Record<string, unknown>): Promise<BoxLayoutValidation>;
+  getLayoutInitialQuery(layoutType: string, config: Record<string, unknown>): Promise<BoxEntryQuery | undefined>;
   openView(boxFile: string, options?: { layoutType?: string; initialQuery?: BoxEntryQuery }): Promise<BoxOpenViewResult>;
   listEntries(sessionId: string, query?: BoxEntryQuery): Promise<BoxEntryPage>;
   readEntryDetail(sessionId: string, entryIds: string[], fields: BoxEntryDetailField[]): Promise<BoxEntryDetailItem[]>;
@@ -166,7 +248,84 @@ export interface BoxApi {
   readBoxAsset(sessionId: string, assetPath: string): Promise<ResolvedRuntimeResource>;
   prefetchEntries(sessionId: string, entryIds: string[], targets: BoxPrefetchTarget[]): Promise<void>;
   closeView(sessionId: string): Promise<void>;
+  releaseRenderSession(sessionId: string): Promise<void>;
+  documentWindow: {
+    render(options: {
+      boxFile: string;
+      layoutType?: string;
+      locale?: string;
+      themeId?: string;
+    }): Promise<FrameRenderResult>;
+    onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onError(frame: HTMLIFrameElement, handler: (payload: BoxLayoutRenderErrorPayload) => void): () => void;
+  };
+  editorPanel: {
+    render(options: {
+      layoutType: string;
+      entries: BoxEntrySnapshot[];
+      initialConfig?: Record<string, unknown>;
+      locale?: string;
+      themeId?: string;
+      resources?: BoxLayoutEditorAssetBridge;
+    }): Promise<FrameRenderResult>;
+    onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onChange(frame: HTMLIFrameElement, handler: (payload: BoxLayoutEditorChangePayload) => void): () => void;
+    onError(frame: HTMLIFrameElement, handler: (payload: BoxLayoutEditorErrorPayload) => void): () => void;
+  };
 }
+
+type BoxLayoutRuntimeAction =
+  | "listEntries"
+  | "readEntryDetail"
+  | "renderEntryCover"
+  | "resolveEntryResource"
+  | "readBoxAsset"
+  | "prefetchEntries"
+  | "openEntry";
+
+type BoxLayoutRuntimeRequestPayload = {
+  requestId: string;
+  action: BoxLayoutRuntimeAction;
+  sessionId?: string;
+  entryId?: string;
+  request?: {
+    entryId?: string;
+    entryIds?: string[];
+    fields?: BoxEntryDetailField[];
+    resource?: {
+      kind: BoxEntryResourceKind;
+      key?: string;
+      sizeHint?: {
+        width?: number;
+        height?: number;
+      };
+    };
+    targets?: BoxPrefetchTarget[];
+    query?: BoxEntryQuery;
+  };
+  query?: BoxEntryQuery;
+  assetPath?: string;
+};
+
+type BoxLayoutEditorAssetAction = "readBoxAsset" | "importBoxAsset" | "deleteBoxAsset";
+
+type BoxLayoutEditorAssetRequestPayload = {
+  requestId: string;
+  action: BoxLayoutEditorAssetAction;
+  assetPath?: string;
+  preferredPath?: string;
+  file?: File;
+};
+
+const BOX_LAYOUT_READY_EVENT = "chips.box-layout:ready";
+const BOX_LAYOUT_ERROR_EVENT = "chips.box-layout:error";
+const BOX_LAYOUT_RUNTIME_REQUEST_EVENT = "chips.box-layout:runtime-request";
+const BOX_LAYOUT_RUNTIME_RESPONSE_EVENT = "chips.box-layout:runtime-response";
+const BOX_LAYOUT_EDITOR_READY_EVENT = "chips.box-layout-editor:ready";
+const BOX_LAYOUT_EDITOR_CHANGE_EVENT = "chips.box-layout-editor:change";
+const BOX_LAYOUT_EDITOR_ERROR_EVENT = "chips.box-layout-editor:error";
+const BOX_LAYOUT_EDITOR_ASSET_REQUEST_EVENT = "chips.box-layout-editor:asset-request";
+const BOX_LAYOUT_EDITOR_ASSET_RESPONSE_EVENT = "chips.box-layout-editor:asset-response";
 
 export function createBoxApi(client: CoreClient): BoxApi {
   return {
@@ -210,6 +369,69 @@ export function createBoxApi(client: CoreClient): BoxApi {
       }
       const result = await client.invoke<{ boxFile: string }, { metadata: BoxMetadata }>("box.readMetadata", { boxFile });
       return result.metadata;
+    },
+    async renderCover(boxFile) {
+      if (!boxFile) {
+        throw createError("INVALID_ARGUMENT", "box.renderCover: boxFile is required.");
+      }
+      const result = await client.invoke<{ boxFile: string }, { view: BoxCoverView }>("box.renderCover", { boxFile });
+      return result.view;
+    },
+    async listLayoutDescriptors() {
+      const result = await client.invoke<Record<string, never>, { descriptors: BoxLayoutDescriptor[] }>(
+        "box.listLayoutDescriptors",
+        {},
+      );
+      return result.descriptors;
+    },
+    async readLayoutDescriptor(layoutType) {
+      if (!layoutType) {
+        throw createError("INVALID_ARGUMENT", "box.readLayoutDescriptor: layoutType is required.");
+      }
+      const result = await client.invoke<{ layoutType: string }, { descriptor: BoxLayoutDescriptor }>(
+        "box.readLayoutDescriptor",
+        { layoutType },
+      );
+      return result.descriptor;
+    },
+    async normalizeLayoutConfig(layoutType, config) {
+      if (!layoutType) {
+        throw createError("INVALID_ARGUMENT", "box.normalizeLayoutConfig: layoutType is required.");
+      }
+      const result = await client.invoke<{ layoutType: string; config: Record<string, unknown> }, { config: Record<string, unknown> }>(
+        "box.normalizeLayoutConfig",
+        {
+          layoutType,
+          config: config ?? {},
+        },
+      );
+      return result.config;
+    },
+    async validateLayoutConfig(layoutType, config) {
+      if (!layoutType) {
+        throw createError("INVALID_ARGUMENT", "box.validateLayoutConfig: layoutType is required.");
+      }
+      const result = await client.invoke<{ layoutType: string; config: Record<string, unknown> }, { validation: BoxLayoutValidation }>(
+        "box.validateLayoutConfig",
+        {
+          layoutType,
+          config: config ?? {},
+        },
+      );
+      return result.validation;
+    },
+    async getLayoutInitialQuery(layoutType, config) {
+      if (!layoutType) {
+        throw createError("INVALID_ARGUMENT", "box.getLayoutInitialQuery: layoutType is required.");
+      }
+      const result = await client.invoke<{ layoutType: string; config: Record<string, unknown> }, { query?: BoxEntryQuery }>(
+        "box.getLayoutInitialQuery",
+        {
+          layoutType,
+          config: config ?? {},
+        },
+      );
+      return result.query;
     },
     async openView(boxFile, options) {
       if (!boxFile) {
@@ -343,5 +565,737 @@ export function createBoxApi(client: CoreClient): BoxApi {
       }
       await client.invoke("box.closeView", { sessionId });
     },
+    async releaseRenderSession(sessionId) {
+      if (!sessionId) {
+        throw createError("INVALID_ARGUMENT", "box.releaseRenderSession: sessionId is required.");
+      }
+      await client.invoke("box.releaseRenderSession", { sessionId });
+    },
+    documentWindow: {
+      async render({ boxFile, layoutType, locale, themeId }) {
+        if (!boxFile) {
+          throw createError("INVALID_ARGUMENT", "box.documentWindow.render: boxFile is required.");
+        }
+
+        if (typeof document === "undefined") {
+          throw createError(
+            "RUNTIME_ENV_UNSUPPORTED",
+            "box.documentWindow.render requires a DOM environment.",
+          );
+        }
+
+        const inspection = await client.invoke<{ boxFile: string }, { inspection: BoxInspectionResult }>("box.inspect", {
+          boxFile,
+        });
+        const resolvedLayoutType =
+          normalizeString(layoutType)
+          ?? normalizeString(inspection.inspection.content.activeLayoutType)
+          ?? normalizeString(inspection.inspection.metadata.activeLayoutType);
+
+        if (!resolvedLayoutType) {
+          throw createError("BOX_LAYOUT_NOT_FOUND", "box.documentWindow.render: active layoutType is missing.");
+        }
+
+        const descriptor = await client.invoke<{ layoutType: string }, { descriptor: BoxLayoutDescriptor }>(
+          "box.readLayoutDescriptor",
+          {
+            layoutType: resolvedLayoutType,
+          },
+        );
+        const rawConfig = inspection.inspection.content.layoutConfigs[resolvedLayoutType] ?? descriptor.descriptor.defaultConfig ?? {};
+        const normalizedConfig = await client.invoke<
+          { layoutType: string; config: Record<string, unknown> },
+          { config: Record<string, unknown> }
+        >("box.normalizeLayoutConfig", {
+          layoutType: resolvedLayoutType,
+          config: rawConfig,
+        });
+        const initialQuery = await client.invoke<
+          { layoutType: string; config: Record<string, unknown> },
+          { query?: BoxEntryQuery }
+        >("box.getLayoutInitialQuery", {
+          layoutType: resolvedLayoutType,
+          config: normalizedConfig.config,
+        });
+        const opened = await client.invoke<
+          { boxFile: string; layoutType?: string; initialQuery?: BoxEntryQuery },
+          BoxOpenViewResult
+        >("box.openView", {
+          boxFile,
+          layoutType: resolvedLayoutType,
+          initialQuery: initialQuery.query,
+        });
+        const rendered = await client.invoke<
+          {
+            layoutType: string;
+            sessionId: string;
+            box: BoxSessionInfo;
+            initialView: BoxEntryPage;
+            config: Record<string, unknown>;
+            locale?: string;
+            themeId?: string;
+          },
+          { view: BoxLayoutFrameView }
+        >("box.renderLayoutFrame", {
+          layoutType: resolvedLayoutType,
+          sessionId: opened.sessionId,
+          box: opened.box,
+          initialView: opened.initialView,
+          config: normalizedConfig.config,
+          locale,
+          themeId,
+        });
+
+        if (!rendered.view.documentUrl) {
+          await safeCloseBoxView(client, opened.sessionId);
+          throw createError(
+            "INTERNAL_ERROR",
+            "box.documentWindow.render requires Host to return view.documentUrl.",
+          );
+        }
+
+        const frameResult = createFrameFromUrl(
+          rendered.view.documentUrl,
+          rendered.view.title ?? opened.box.name ?? "Box",
+          "allow-scripts allow-forms",
+          {
+            release: async () => {
+              await Promise.allSettled([
+                client.invoke("box.releaseRenderSession", { sessionId: rendered.view.sessionId }),
+                client.invoke("box.closeView", { sessionId: opened.sessionId }),
+              ]);
+            },
+          },
+        );
+        const cleanupBridge = attachBoxLayoutRuntimeBridge(frameResult.frame, client, opened.sessionId);
+        const originalDispose = frameResult.dispose;
+        frameResult.dispose = async () => {
+          cleanupBridge();
+          await originalDispose();
+        };
+        return frameResult;
+      },
+      onReady(frame, handler) {
+        return subscribeToFrameReady(frame, [BOX_LAYOUT_READY_EVENT], handler);
+      },
+      onError(frame, handler) {
+        return subscribeToFrameMessage<BoxLayoutRenderErrorPayload>(
+          frame,
+          BOX_LAYOUT_ERROR_EVENT,
+          (payload) => {
+            handler({
+              code: typeof payload?.code === "string" ? payload.code : "BOX_LAYOUT_RENDER_FAILED",
+              message: typeof payload?.message === "string" ? payload.message : "Box layout render failed.",
+              layoutType: typeof payload?.layoutType === "string" ? payload.layoutType : undefined,
+              pluginId: typeof payload?.pluginId === "string" ? payload.pluginId : undefined,
+              sessionId: typeof payload?.sessionId === "string" ? payload.sessionId : undefined,
+            });
+          },
+        );
+      },
+    },
+    editorPanel: {
+      async render({ layoutType, entries, initialConfig, locale, themeId, resources }) {
+        if (!layoutType) {
+          throw createError("INVALID_ARGUMENT", "box.editorPanel.render: layoutType is required.");
+        }
+        if (!Array.isArray(entries)) {
+          throw createError("INVALID_ARGUMENT", "box.editorPanel.render: entries must be an array.");
+        }
+        if (typeof document === "undefined") {
+          throw createError(
+            "RUNTIME_ENV_UNSUPPORTED",
+            "box.editorPanel.render requires a DOM environment.",
+          );
+        }
+
+        const normalizedConfig = await client.invoke<
+          { layoutType: string; config: Record<string, unknown> },
+          { config: Record<string, unknown> }
+        >("box.normalizeLayoutConfig", {
+          layoutType,
+          config: initialConfig ?? {},
+        });
+        const rendered = await client.invoke<
+          {
+            layoutType: string;
+            entries: BoxEntrySnapshot[];
+            initialConfig: Record<string, unknown>;
+            locale?: string;
+            themeId?: string;
+          },
+          { view: BoxLayoutEditorView }
+        >("box.renderLayoutEditor", {
+          layoutType,
+          entries,
+          initialConfig: normalizedConfig.config,
+          locale,
+          themeId,
+        });
+
+        if (!rendered.view.documentUrl) {
+          throw createError(
+            "INTERNAL_ERROR",
+            "box.editorPanel.render requires Host to return view.documentUrl.",
+          );
+        }
+
+        const frameResult = createFrameFromUrl(
+          rendered.view.documentUrl,
+          rendered.view.title ?? `${layoutType} Editor`,
+          "allow-scripts allow-forms",
+          {
+            release: () => client.invoke("box.releaseRenderSession", { sessionId: rendered.view.sessionId }).then(() => undefined),
+          },
+        );
+        const cleanupBridge = attachBoxLayoutEditorAssetBridge(frameResult.frame, resources);
+        const originalDispose = frameResult.dispose;
+        frameResult.dispose = async () => {
+          cleanupBridge();
+          await originalDispose();
+        };
+        return frameResult;
+      },
+      onReady(frame, handler) {
+        return subscribeToFrameReady(frame, [BOX_LAYOUT_EDITOR_READY_EVENT], handler);
+      },
+      onChange(frame, handler) {
+        return subscribeToFrameMessage<BoxLayoutEditorChangePayload>(frame, BOX_LAYOUT_EDITOR_CHANGE_EVENT, handler);
+      },
+      onError(frame, handler) {
+        return subscribeToFrameMessage<BoxLayoutEditorErrorPayload>(frame, BOX_LAYOUT_EDITOR_ERROR_EVENT, handler);
+      },
+    },
   };
+}
+
+async function safeCloseBoxView(client: CoreClient, sessionId: string): Promise<void> {
+  await client.invoke("box.closeView", { sessionId }).catch(() => undefined);
+}
+
+function attachBoxLayoutRuntimeBridge(
+  frame: HTMLIFrameElement,
+  client: CoreClient,
+  sessionId: string,
+): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const listener = (event: MessageEvent) => {
+    if (!event || event.source !== frame.contentWindow) {
+      return;
+    }
+    if (!isAllowedFrameOrigin(frame, event.origin)) {
+      return;
+    }
+    const data = event.data;
+    if (!data || typeof data !== "object") {
+      return;
+    }
+    const record = data as { type?: string; payload?: unknown };
+    if (record.type !== BOX_LAYOUT_RUNTIME_REQUEST_EVENT) {
+      return;
+    }
+
+    const payload = record.payload as BoxLayoutRuntimeRequestPayload | undefined;
+    const source = event.source as Window | null;
+    if (!payload?.requestId || !source || typeof source.postMessage !== "function") {
+      return;
+    }
+
+    void handleBoxLayoutRuntimeRequest(client, sessionId, payload)
+      .then((result) => {
+        source.postMessage(
+          {
+            type: BOX_LAYOUT_RUNTIME_RESPONSE_EVENT,
+            payload: {
+              requestId: payload.requestId,
+              ok: true,
+              result,
+            },
+          },
+          "*",
+        );
+      })
+      .catch((error) => {
+        source.postMessage(
+          {
+            type: BOX_LAYOUT_RUNTIME_RESPONSE_EVENT,
+            payload: {
+              requestId: payload.requestId,
+              ok: false,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          },
+          "*",
+        );
+      });
+  };
+
+  window.addEventListener("message", listener);
+  return () => {
+    window.removeEventListener("message", listener);
+  };
+}
+
+async function handleBoxLayoutRuntimeRequest(
+  client: CoreClient,
+  sessionId: string,
+  payload: BoxLayoutRuntimeRequestPayload,
+): Promise<unknown> {
+  const effectiveSessionId = normalizeString(payload.sessionId) ?? sessionId;
+  if (!effectiveSessionId) {
+    throw createError("INVALID_ARGUMENT", "box.documentWindow.runtime: sessionId is required.");
+  }
+
+  switch (payload.action) {
+    case "listEntries": {
+      const result = await client.invoke<{ sessionId: string; query?: BoxEntryQuery }, { page: BoxEntryPage }>(
+        "box.listEntries",
+        {
+          sessionId: effectiveSessionId,
+          query: payload.query ?? payload.request?.query,
+        },
+      );
+      return result.page;
+    }
+    case "readEntryDetail": {
+      const entryIds = Array.isArray(payload.request?.entryIds) ? payload.request?.entryIds : [];
+      const fields = Array.isArray(payload.request?.fields) ? payload.request?.fields : [];
+      const result = await client.invoke<
+        { sessionId: string; entryIds: string[]; fields: BoxEntryDetailField[] },
+        { items: BoxEntryDetailItem[] }
+      >("box.readEntryDetail", {
+        sessionId: effectiveSessionId,
+        entryIds,
+        fields,
+      });
+      return result.items;
+    }
+    case "renderEntryCover": {
+      const entryId = normalizeString(payload.entryId);
+      if (!entryId) {
+        throw createError("INVALID_ARGUMENT", "box.documentWindow.runtime.renderEntryCover: entryId is required.");
+      }
+      const result = await client.invoke<{ sessionId: string; entryId: string }, { view: BoxEntryCoverView }>(
+        "box.renderEntryCover",
+        {
+          sessionId: effectiveSessionId,
+          entryId,
+        },
+      );
+      return result.view;
+    }
+    case "resolveEntryResource": {
+      const entryId = normalizeString(payload.request?.entryId) ?? normalizeString(payload.entryId);
+      const resource = payload.request?.resource;
+      if (!entryId || !resource?.kind) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "box.documentWindow.runtime.resolveEntryResource: entryId and resource.kind are required.",
+        );
+      }
+      const result = await client.invoke<
+        {
+          sessionId: string;
+          entryId: string;
+          resource: {
+            kind: BoxEntryResourceKind;
+            key?: string;
+            sizeHint?: {
+              width?: number;
+              height?: number;
+            };
+          };
+        },
+        { resource: ResolvedRuntimeResource }
+      >("box.resolveEntryResource", {
+        sessionId: effectiveSessionId,
+        entryId,
+        resource,
+      });
+      return result.resource;
+    }
+    case "readBoxAsset": {
+      const assetPath = normalizeString(payload.assetPath);
+      if (!assetPath) {
+        throw createError("INVALID_ARGUMENT", "box.documentWindow.runtime.readBoxAsset: assetPath is required.");
+      }
+      const result = await client.invoke<{ sessionId: string; assetPath: string }, { resource: ResolvedRuntimeResource }>(
+        "box.readBoxAsset",
+        {
+          sessionId: effectiveSessionId,
+          assetPath,
+        },
+      );
+      return result.resource;
+    }
+    case "prefetchEntries": {
+      const entryIds = Array.isArray(payload.request?.entryIds) ? payload.request.entryIds : [];
+      const targets = Array.isArray(payload.request?.targets) ? payload.request.targets : [];
+      await client.invoke("box.prefetchEntries", {
+        sessionId: effectiveSessionId,
+        entryIds,
+        targets,
+      });
+      return null;
+    }
+    case "openEntry": {
+      const entryId = normalizeString(payload.entryId);
+      if (!entryId) {
+        throw createError("INVALID_ARGUMENT", "box.documentWindow.runtime.openEntry: entryId is required.");
+      }
+      const result = await client.invoke<{ sessionId: string; entryId: string }, { result: BoxEntryOpenResult }>(
+        "box.openEntry",
+        {
+          sessionId: effectiveSessionId,
+          entryId,
+        },
+      );
+      return result.result;
+    }
+    default:
+      throw createError("INVALID_ARGUMENT", `Unsupported box layout runtime action: ${String(payload.action)}`);
+  }
+}
+
+function attachBoxLayoutEditorAssetBridge(
+  frame: HTMLIFrameElement,
+  resources?: BoxLayoutEditorAssetBridge,
+): () => void {
+  if (typeof window === "undefined" || !resources) {
+    return () => undefined;
+  }
+
+  const listener = (event: MessageEvent) => {
+    if (!event || event.source !== frame.contentWindow) {
+      return;
+    }
+    if (!isAllowedFrameOrigin(frame, event.origin)) {
+      return;
+    }
+    const data = event.data;
+    if (!data || typeof data !== "object") {
+      return;
+    }
+    const record = data as { type?: string; payload?: unknown };
+    if (record.type !== BOX_LAYOUT_EDITOR_ASSET_REQUEST_EVENT) {
+      return;
+    }
+
+    const payload = record.payload as BoxLayoutEditorAssetRequestPayload | undefined;
+    const source = event.source as Window | null;
+    if (!payload?.requestId || !source || typeof source.postMessage !== "function") {
+      return;
+    }
+
+    void handleBoxLayoutEditorAssetRequest(resources, payload)
+      .then((result) => {
+        source.postMessage(
+          {
+            type: BOX_LAYOUT_EDITOR_ASSET_RESPONSE_EVENT,
+            payload: {
+              requestId: payload.requestId,
+              ok: true,
+              result,
+            },
+          },
+          "*",
+        );
+      })
+      .catch((error) => {
+        source.postMessage(
+          {
+            type: BOX_LAYOUT_EDITOR_ASSET_RESPONSE_EVENT,
+            payload: {
+              requestId: payload.requestId,
+              ok: false,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          },
+          "*",
+        );
+      });
+  };
+
+  window.addEventListener("message", listener);
+  return () => {
+    window.removeEventListener("message", listener);
+  };
+}
+
+async function handleBoxLayoutEditorAssetRequest(
+  resources: BoxLayoutEditorAssetBridge,
+  payload: BoxLayoutEditorAssetRequestPayload,
+): Promise<unknown> {
+  switch (payload.action) {
+    case "readBoxAsset": {
+      const assetPath = normalizeRelativePath(payload.assetPath);
+      if (!assetPath) {
+        throw createError("INVALID_ARGUMENT", "box.editorPanel.asset.read: assetPath is required.");
+      }
+      if (resources.readBoxAsset) {
+        return resources.readBoxAsset(assetPath);
+      }
+      if (resources.rootPath) {
+        return {
+          resourceUrl: createFileUrl(joinPath(resources.rootPath, assetPath)),
+          mimeType: inferMimeType(assetPath),
+        } satisfies ResolvedRuntimeResource;
+      }
+      throw createError(
+        "RUNTIME_ENV_UNSUPPORTED",
+        "box.editorPanel.asset.read requires resources.readBoxAsset or resources.rootPath.",
+      );
+    }
+    case "importBoxAsset": {
+      if (!resources.importBoxAsset) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "box.editorPanel.asset.import requires resources.importBoxAsset.",
+        );
+      }
+      if (!(payload.file instanceof File)) {
+        throw createError("INVALID_ARGUMENT", "box.editorPanel.asset.import requires a File payload.");
+      }
+      return resources.importBoxAsset({
+        file: payload.file,
+        preferredPath: normalizeRelativePath(payload.preferredPath ?? payload.file.name) ?? undefined,
+      });
+    }
+    case "deleteBoxAsset": {
+      const assetPath = normalizeRelativePath(payload.assetPath);
+      if (!assetPath) {
+        throw createError("INVALID_ARGUMENT", "box.editorPanel.asset.delete: assetPath is required.");
+      }
+      if (!resources.deleteBoxAsset) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "box.editorPanel.asset.delete requires resources.deleteBoxAsset.",
+        );
+      }
+      await resources.deleteBoxAsset(assetPath);
+      return null;
+    }
+    default:
+      throw createError("INVALID_ARGUMENT", `Unsupported box editor asset action: ${String(payload.action)}`);
+  }
+}
+
+function subscribeToFrameReady(
+  frame: HTMLIFrameElement,
+  eventTypes: string[],
+  handler: () => void,
+): () => void {
+  let settled = false;
+  const invokeOnce = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    handler();
+  };
+
+  const cleanupTasks = eventTypes.map((type) => subscribeToFrameMessage(frame, type, () => invokeOnce()));
+  const handleLoad = () => {
+    invokeOnce();
+  };
+
+  if (typeof frame.addEventListener === "function" && typeof frame.removeEventListener === "function") {
+    frame.addEventListener("load", handleLoad);
+    cleanupTasks.push(() => frame.removeEventListener("load", handleLoad));
+  }
+
+  return () => {
+    cleanupTasks.forEach((task) => task());
+  };
+}
+
+function subscribeToFrameMessage<T>(
+  frame: HTMLIFrameElement,
+  type: string,
+  handler: (payload: T) => void,
+): () => void {
+  if (typeof window === "undefined") {
+    throw createError(
+      "RUNTIME_ENV_UNSUPPORTED",
+      "Frame events require a DOM environment.",
+    );
+  }
+
+  const listener = (event: MessageEvent) => {
+    if (!event || event.source !== frame.contentWindow) {
+      return;
+    }
+    if (!isAllowedFrameOrigin(frame, event.origin)) {
+      return;
+    }
+    const data = event.data;
+    if (!data || typeof data !== "object") {
+      return;
+    }
+    const record = data as { type?: string; payload?: unknown };
+    if (record.type !== type) {
+      return;
+    }
+    handler(record.payload as T);
+  };
+
+  window.addEventListener("message", listener);
+  return () => {
+    window.removeEventListener("message", listener);
+  };
+}
+
+function isAllowedFrameOrigin(frame: HTMLIFrameElement, origin: string): boolean {
+  if (origin === "null") {
+    return true;
+  }
+
+  const allowedOrigins = new Set<string>();
+  if (typeof window !== "undefined") {
+    allowedOrigins.add(window.location.origin);
+  }
+
+  const frameOrigin = frame.dataset?.chipsOrigin;
+  if (frameOrigin) {
+    allowedOrigins.add(frameOrigin);
+  }
+
+  return allowedOrigins.has(origin);
+}
+
+function createFrameFromUrl(
+  url: string,
+  title: string,
+  sandbox: string,
+  options?: {
+    release?: () => Promise<void> | void;
+  },
+): FrameRenderResult {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("sandbox", sandbox);
+  frame.setAttribute("loading", "lazy");
+  frame.title = title;
+  frame.src = url;
+
+  let origin = window.location.origin;
+  try {
+    origin = new URL(url, window.location.href).origin;
+  } catch {
+    // keep current origin as safe fallback
+  }
+
+  const frameWithDataset = frame as HTMLIFrameElement & { dataset?: DOMStringMap };
+  if (!frameWithDataset.dataset) {
+    frameWithDataset.dataset = {} as DOMStringMap;
+  }
+  frameWithDataset.dataset.chipsOrigin = origin;
+
+  const cleanupTasks: Array<() => void> = [];
+  let hasBeenConnected = false;
+  let disposed = false;
+
+  const dispose = async () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    for (const task of cleanupTasks.splice(0)) {
+      task();
+    }
+    await options?.release?.();
+  };
+
+  const handlePageHide = () => {
+    void dispose().catch(() => undefined);
+  };
+
+  if (
+    typeof (window as { addEventListener?: unknown }).addEventListener === "function"
+    && typeof (window as { removeEventListener?: unknown }).removeEventListener === "function"
+  ) {
+    window.addEventListener("pagehide", handlePageHide);
+    cleanupTasks.push(() => {
+      window.removeEventListener("pagehide", handlePageHide);
+    });
+  }
+
+  if (typeof MutationObserver === "function" && document.documentElement) {
+    const checkConnection = () => {
+      if (frame.isConnected) {
+        hasBeenConnected = true;
+        return;
+      }
+      if (hasBeenConnected) {
+        void dispose().catch(() => undefined);
+      }
+    };
+    const observer = new MutationObserver(checkConnection);
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+    cleanupTasks.push(() => {
+      observer.disconnect();
+    });
+    queueMicrotask(checkConnection);
+  }
+
+  return {
+    frame,
+    origin,
+    dispose,
+  };
+}
+
+function normalizeRelativePath(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.replace(/\\/g, "/").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized
+    .replace(/^\.?\//, "")
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== ".");
+  if (segments.length === 0 || segments.some((segment) => segment === "..")) {
+    return null;
+  }
+  return segments.join("/");
+}
+
+function normalizeString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function joinPath(...parts: string[]): string {
+  return parts.filter(Boolean).join("/").replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function createFileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  if (/^[a-zA-Z]:\//.test(normalized)) {
+    return encodeURI(`file:///${normalized}`);
+  }
+
+  const absolutePath = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  return encodeURI(`file://${absolutePath}`);
+}
+
+function inferMimeType(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".txt")) return "text/plain";
+  if (lower.endsWith(".html")) return "text/html";
+  return "application/octet-stream";
 }

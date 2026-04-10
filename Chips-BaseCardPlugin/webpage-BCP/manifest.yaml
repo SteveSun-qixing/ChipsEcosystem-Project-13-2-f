@@ -1,0 +1,29 @@
+id: chips.basecard.webpage
+name: 网页基础卡片插件
+version: 0.1.0
+type: card
+entry: dist/index.mjs
+description: 网页基础卡片插件，支持远程网址与网页 ZIP 包导入，并在卡片中显示网页内容。
+author:
+  name:
+  email:
+capabilities:
+  cardTypes:
+    - base.webpage
+permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux

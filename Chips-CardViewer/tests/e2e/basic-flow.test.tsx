@@ -4,113 +4,43 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BoxWindow } from '../../src/components/BoxWindow';
+import { CardWindow } from '../../src/components/CardWindow';
 
 const mockState = vi.hoisted(() => {
-  const inspect = vi.fn(async () => ({
-    metadata: {
-      activeLayoutType: 'chips.layout.grid',
-    },
-    content: {
-      activeLayoutType: 'chips.layout.grid',
-      layoutConfigs: {
-        'chips.layout.grid': {
-          schemaVersion: '1.0.0',
-          props: {
-            columnCount: 4,
-            gap: 16,
-          },
-          assetRefs: [],
-        },
-      },
-    },
+  const dispose = vi.fn(async () => undefined);
+  const render = vi.fn(async () => ({
+    frame: document.createElement('iframe'),
+    origin: 'file://',
+    dispose,
+    documentType: 'box' as const,
   }));
-  const openView = vi.fn(async () => ({
-    sessionId: 'session-box-1',
-    box: {
-      boxId: 'box1234567',
-      boxFile: '/tmp/demo.box',
-      name: 'Demo Box',
-      activeLayoutType: 'chips.layout.grid',
-      availableLayouts: ['chips.layout.grid'],
-      capabilities: {
-        listEntries: true,
-        readEntryDetail: true,
-        renderEntryCover: true,
-        resolveEntryResource: true,
-        readBoxAsset: true,
-        prefetchEntries: true,
-        openEntry: true,
-      },
-    },
-    initialView: {
-      items: [
-        {
-          entryId: 'entry000001',
-          url: 'https://example.com/demo',
-          enabled: true,
-          snapshot: {
-            title: 'Demo Entry',
-            summary: 'Demo Summary',
-            cover: {
-              mode: 'none',
-            },
-          },
-        },
-      ],
-      total: 1,
-    },
-  }));
-  const closeView = vi.fn(async () => undefined);
-
-  const renderView = vi.fn(() => {
-    return () => undefined;
-  });
 
   return {
     client: {
-      box: {
-        inspect,
-        openView,
-        closeView,
+      document: {
+        detectType: vi.fn((filePath: string) => filePath.endsWith('.box') ? 'box' : 'card'),
+        window: {
+          render,
+          onReady: vi.fn((_frame: HTMLIFrameElement, handler: () => void) => {
+            handler();
+            return () => undefined;
+          }),
+          onError: vi.fn(() => () => undefined),
+          onResourceOpen: vi.fn(() => () => undefined),
+        },
+      },
+      resource: {
+        open: vi.fn(async () => undefined),
+      },
+      platform: {
+        showMessage: vi.fn(async () => undefined),
       },
     },
-    renderView,
-    loadLayoutDefinition: vi.fn(async () => ({
-      pluginId: 'chips.layout.grid',
-      layoutType: 'chips.layout.grid',
-      displayName: '网格布局',
-      createDefaultConfig: () => ({
-        schemaVersion: '1.0.0',
-        props: {
-          columnCount: 4,
-          gap: 16,
-        },
-        assetRefs: [],
-      }),
-      normalizeConfig: (input: Record<string, unknown>) => input,
-      validateConfig: () => ({
-        valid: true,
-        errors: {},
-      }),
-      getInitialQuery: () => ({
-        limit: 24,
-      }),
-      renderView,
-    })),
-    createBoxLayoutRuntime: vi.fn(() => ({
-      listEntries: vi.fn(),
-      readEntryDetail: vi.fn(),
-      renderEntryCover: vi.fn(),
-      resolveEntryResource: vi.fn(),
-      readBoxAsset: vi.fn(),
-      prefetchEntries: vi.fn(),
-      openEntry: vi.fn(),
-    })),
     logger: {
       info: vi.fn(),
       error: vi.fn(),
     },
+    dispose,
   };
 });
 
@@ -118,16 +48,21 @@ vi.mock('../../src/hooks/useChipsClient', () => ({
   useChipsClient: () => mockState.client,
 }));
 
-vi.mock('../../src/box-runtime/layout-loader', () => ({
-  loadLayoutDefinition: mockState.loadLayoutDefinition,
-  createBoxLayoutRuntime: mockState.createBoxLayoutRuntime,
-}));
+vi.mock('@chips/component-library', async () => {
+  const actual = await vi.importActual('@chips/component-library');
+  return {
+    ...actual,
+    useThemeRuntime: () => ({
+      cacheKey: 'theme-cache',
+    }),
+  };
+});
 
 vi.mock('../../config/logging', () => ({
   createScopedLogger: () => mockState.logger,
 }));
 
-describe('箱子查看器端到端基础流程', () => {
+describe('统一文档查看窗口基础流程', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -146,35 +81,29 @@ describe('箱子查看器端到端基础流程', () => {
     container.remove();
   });
 
-  it('会通过 inspect -> 加载布局插件 -> openView -> renderView 完成箱子查看链路，并在卸载时关闭会话', async () => {
+  it('会通过统一 document.window.render 渲染箱子文档，并在卸载时释放 iframe 会话', async () => {
     await act(async () => {
       root.render(
-        <BoxWindow
-          boxFile="/tmp/demo.box"
-          traceId="trace-box-view"
+        <CardWindow
+          filePath="/tmp/demo.box"
+          traceId="trace-document-view"
           locale="zh-CN"
-          loadingLabel="正在加载箱子布局…"
+          loadingLabel="正在加载文档…"
           containerErrorLabel="容器不可用"
+          fatalErrorFallback="严重错误"
           renderErrorFallback="渲染失败"
+          resourceOpenErrorTitle="无法打开资源"
+          resourceOpenErrorFallback="资源打开失败"
         />,
       );
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(mockState.client.box.inspect).toHaveBeenCalledWith('/tmp/demo.box');
-    expect(mockState.loadLayoutDefinition).toHaveBeenCalledWith(mockState.client, 'chips.layout.grid');
-    expect(mockState.client.box.openView).toHaveBeenCalledWith('/tmp/demo.box', {
-      layoutType: 'chips.layout.grid',
-      initialQuery: {
-        limit: 24,
-      },
-    });
-    expect(mockState.createBoxLayoutRuntime).toHaveBeenCalledWith(mockState.client, 'session-box-1');
-    expect(mockState.renderView).toHaveBeenCalledTimes(1);
-    expect(mockState.renderView.mock.calls[0]?.[0]).toMatchObject({
-      sessionId: 'session-box-1',
+    expect(mockState.client.document.window.render).toHaveBeenCalledWith({
+      filePath: '/tmp/demo.box',
       locale: 'zh-CN',
+      mode: 'view',
     });
 
     await act(async () => {
@@ -182,6 +111,6 @@ describe('箱子查看器端到端基础流程', () => {
       await Promise.resolve();
     });
 
-    expect(mockState.client.box.closeView).toHaveBeenCalledWith('session-box-1');
+    expect(mockState.dispose).toHaveBeenCalled();
   });
 });

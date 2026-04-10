@@ -30,6 +30,22 @@ describe('basecard registry', () => {
     });
   });
 
+  it('creates webpage starter config through the descriptor and resolves the alias', () => {
+    expect(createInitialBasecardConfig('WebPageCard', 'base-3')).toMatchObject({
+      card_type: 'WebPageCard',
+      source_type: 'url',
+      source_url: '',
+      bundle_root: '',
+      entry_file: 'index.html',
+      resource_paths: [],
+      display_mode: 'fixed',
+      fixed_ratio: '7:16',
+      max_height_ratio: 20,
+    });
+    expect(getBasecardDescriptor('base.webpage')?.pluginId).toBe('chips.basecard.webpage');
+    expect(getBasecardDescriptor('base.webpage')?.previewPointerEvents).toBe('shielded');
+  });
+
   it('normalizes image resource paths and collects only card-root file references', () => {
     const descriptor = getBasecardDescriptor('base.image');
     if (!descriptor?.collectResourcePaths) {

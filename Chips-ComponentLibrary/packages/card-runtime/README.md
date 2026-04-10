@@ -2,6 +2,7 @@
 
 Card runtime iframe components:
 
+- `EmbeddedDocumentFrame`
 - `CardCoverFrame`
 - `CompositeCardWindow`
 
@@ -30,6 +31,10 @@ Adapter contract (for SDK not-yet-available phase):
 
 - `resolveCoverFrame({ cardId, cardFile, signal })`
 - `resolveCompositeWindow({ cardFile, mode, signal })` (`mode` only supports `view | preview`)
+
+Document iframe note:
+
+- `EmbeddedDocumentFrame` is the controlled iframe base for box covers, box entry covers, and app-generated iframe regions.
 
 SDK blocker tracking:
 

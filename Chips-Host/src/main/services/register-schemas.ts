@@ -447,6 +447,15 @@ export const registerHostSchemas = (): void => {
   registerPair('box.inspect', ['boxFile'], ['inspection']);
   registerPair('box.validate', ['boxFile'], ['validationResult']);
   registerPair('box.readMetadata', ['boxFile'], ['metadata']);
+  registerPair('box.listLayoutDescriptors', [], ['descriptors']);
+  registerPair('box.readLayoutDescriptor', ['layoutType'], ['descriptor']);
+  registerPair('box.normalizeLayoutConfig', ['layoutType', 'config'], ['config']);
+  registerPair('box.validateLayoutConfig', ['layoutType', 'config'], ['validation']);
+  registerPair('box.getLayoutInitialQuery', ['layoutType', 'config'], ['query']);
+  registerPair('box.renderLayoutFrame', ['layoutType', 'sessionId', 'box', 'initialView', 'config'], ['view']);
+  registerPair('box.renderLayoutEditor', ['layoutType', 'entries', 'initialConfig'], ['view']);
+  registerPair('box.releaseRenderSession', ['sessionId'], ['ack']);
+  registerPair('box.renderCover', ['boxFile'], ['view']);
   schemaRegistry.register('schemas/box.openView.request.json', objectWithKeys(['boxFile']));
   schemaRegistry.register('schemas/box.openView.response.json', objectWithKeys(['sessionId', 'box', 'initialView']));
   registerPair('box.listEntries', ['sessionId'], ['page']);

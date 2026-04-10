@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasecardFrameHost } from '../../src/basecard-runtime/frame-host';
 
 const mockRenderView = vi.fn();
+let mockPreviewPointerEvents: 'native' | 'shielded' = 'native';
 
 vi.mock('../../src/basecard-runtime/registry', () => ({
   getBasecardDescriptor: () => ({
@@ -13,6 +14,7 @@ vi.mock('../../src/basecard-runtime/registry', () => ({
     cardType: 'base.mock',
     displayName: 'Mock Basecard',
     commitDebounceMs: 260,
+    previewPointerEvents: mockPreviewPointerEvents,
     createInitialConfig: (baseCardId: string) => ({ id: baseCardId }),
     normalizeConfig: (input: Record<string, unknown>, baseCardId: string) => ({
       ...input,
@@ -118,6 +120,7 @@ describe('BasecardFrameHost', () => {
     mockRenderView.mockReset();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
+    mockPreviewPointerEvents = 'native';
     mockRenderView.mockImplementation(({ container: mountContainer, config }: {
       container: HTMLElement;
       config?: Record<string, unknown>;
@@ -258,6 +261,39 @@ describe('BasecardFrameHost', () => {
     const previewImage = frame?.contentDocument?.querySelector('[data-preview-image="true"]') as HTMLImageElement | null;
     expect(previewImage).not.toBeNull();
     expect(previewImage?.getAttribute('src')?.startsWith('blob:')).toBe(true);
+  });
+
+  it('renders a transparent selection shield when the descriptor requests shielded preview pointers', async () => {
+    mockPreviewPointerEvents = 'shielded';
+    const onSelect = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          selectable
+          interactionPolicy="native"
+          onSelect={onSelect}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const shield = container.querySelector('.basecard-frame-host__selection-shield') as HTMLDivElement | null;
+    expect(shield).not.toBeNull();
+
+    await act(async () => {
+      const pointerEvent = typeof PointerEvent === 'function'
+        ? new PointerEvent('pointerdown', { bubbles: true, cancelable: true })
+        : new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+      shield?.dispatchEvent(pointerEvent);
+      await Promise.resolve();
+    });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
   it('resolves pending preview text resources through runtime resource urls', async () => {

@@ -1,0 +1,73 @@
+id: com.chips.rich-text-editor
+name: 富文本编辑器
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 基于富文本基础卡片封装的单文档 Markdown 所见即所得编辑器，正式保存为只包含一个富文本基础卡片的复合卡片文件。
+
+author:
+  name: Chips Ecosystem
+  email: support@chips-ecosystem.com
+
+keywords:
+  - chips
+  - markdown
+  - richtext
+  - editor
+
+permissions:
+  - card.read
+  - card.write
+  - file.read
+  - file.write
+  - platform.read
+  - theme.read
+  - i18n.read
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: reject
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 富文本编辑器
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      frame: true
+      transparent: false
+      backgroundColor: "#ffffff"
+      titleBarStyle: default

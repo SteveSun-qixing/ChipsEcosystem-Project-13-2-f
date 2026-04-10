@@ -236,7 +236,47 @@ client.card.render(
 - `semanticHash` 可用于跨目标渲染一致性对比与缓存键管理。
 - SDK 调用前应做参数预校验；若透传到 Host 后触发 schema 校验失败，错误码为 `SCHEMA_VALIDATION_FAILED`。
 
-### 卡片显示窗口（vNext 统一接口）
+### 统一文档显示窗口（正式推荐入口）
+
+在需要“打开一个文档文件，不希望上层应用自己区分卡片还是箱子”时，优先使用统一文档窗口接口：
+
+```typescript
+client.document.window.render({
+  filePath: string,
+  documentType?: 'card' | 'box',
+  mode?: 'view' | 'preview',
+  interactionPolicy?: 'native' | 'delegate',
+  layoutType?: string,
+  locale?: string,
+  themeId?: string,
+}): Promise<IframeWindow & {
+  documentType: 'card' | 'box'
+}>
+```
+
+说明：
+
+- `filePath` 是正式文档文件路径，当前支持 `.card` 与 `.box`；
+- 未传 `documentType` 时，SDK 会根据文件扩展名识别类型；
+- 当识别为 `.card` 时，SDK 内部委托 `client.card.compositeWindow.render(...)`；
+- 当识别为 `.box` 时，SDK 内部委托 `client.box.documentWindow.render(...)`；
+- 上层应用不再自己区分箱子布局插件装载、布局配置归一、查看会话创建或 iframe 事件桥接；
+- `client.document.window.onReady/onError/onResourceOpen` 统一覆盖卡片与箱子文档窗口。
+
+示例：
+
+```typescript
+const result = await client.document.window.render({
+  filePath: '/workspace/demo.box',
+  locale: 'zh-CN',
+});
+
+const disposeReady = client.document.window.onReady(result.frame, () => {
+  console.log(result.documentType);
+});
+```
+
+### 卡片显示窗口（卡片专用入口）
 
 在需要展示卡片的应用中，统一使用 SDK 显示窗口接口：
 
@@ -281,6 +321,106 @@ client.card.editorPanel.render({
 - `editorPanel.resources` 是 SDK 本地资源桥配置，不会进入 `card.renderEditor` 正式路由负载。
 - `coverFrame/compositeWindow/editorPanel` 返回的 iframe URL 都是 Host 托管的正式文档入口；调用方不得假定它们一定是 `file://`，只应把它们视为可直接挂载的独立文档 URL。
 - 基础卡片分发、模板编译、iframe 拼接由 Host 内置渲染运行时完成；SDK 仅封装调用入口。
+
+### 箱子布局查看与编辑（箱子专用入口）
+
+当应用已经明确当前文档是箱子，或需要显式控制箱子布局相关参数时，使用 `client.box.*`。
+
+布局描述符与配置辅助接口：
+
+```typescript
+client.box.listLayoutDescriptors(): Promise<BoxLayoutDescriptor[]>
+client.box.readLayoutDescriptor(layoutType: string): Promise<BoxLayoutDescriptor>
+client.box.normalizeLayoutConfig(
+  layoutType: string,
+  config: Record<string, unknown>,
+): Promise<Record<string, unknown>>
+client.box.validateLayoutConfig(
+  layoutType: string,
+  config: Record<string, unknown>,
+): Promise<{
+  valid: boolean,
+  errors: Record<string, string>,
+}>
+client.box.getLayoutInitialQuery(
+  layoutType: string,
+  config: Record<string, unknown>,
+): Promise<BoxEntryQuery | undefined>
+client.box.releaseRenderSession(sessionId: string): Promise<void>
+```
+
+说明：
+
+- 这些接口统一由 Host `box-service` 实现，SDK 只做类型化封装；
+- 上层应用不得自己读取 `plugin.query(...) + installPath + entry` 后直接 import 布局插件；
+- 布局配置默认值、归一和校验以布局插件自身导出为准，但调用链路必须经过 Host。
+
+箱子查看文档接口：
+
+```typescript
+client.box.documentWindow.render({
+  boxFile: string,
+  layoutType?: string,
+  locale?: string,
+  themeId?: string,
+}): Promise<IframeWindow>
+```
+
+说明：
+
+- SDK 内部会依次调用 Host `box.inspect -> box.readLayoutDescriptor -> box.normalizeLayoutConfig -> box.getLayoutInitialQuery -> box.openView -> box.renderLayoutFrame`；
+- Host 负责装载布局插件、创建查看会话和生成正式布局文档；
+- SDK 负责挂载 iframe，并桥接 `chips.box-layout:*` 运行时消息；
+- 销毁返回的 iframe 时，正式链路需要同时关闭 `box.openView` 创建的查看会话并释放 `box.renderLayoutFrame` 创建的 render session；SDK 返回的 `dispose()` 已封装该流程。
+
+箱子编辑器面板接口：
+
+```typescript
+client.box.editorPanel.render({
+  layoutType: string,
+  entries: BoxEntrySnapshot[],
+  initialConfig?: Record<string, unknown>,
+  locale?: string,
+  themeId?: string,
+  resources?: {
+    rootPath?: string,
+    readBoxAsset?(assetPath: string): Promise<ResolvedRuntimeResource> | ResolvedRuntimeResource,
+    importBoxAsset?(
+      input: { file: File, preferredPath?: string }
+    ): Promise<{ assetPath: string }> | { assetPath: string },
+    deleteBoxAsset?(assetPath: string): Promise<void> | void,
+  }
+}): Promise<IframeWindow>
+```
+
+说明：
+
+- `editorPanel` 走 `Host box.renderLayoutEditor`，由 Host 使用正式布局插件入口执行 `layoutDefinition.renderEditor`；
+- `resources` 是 SDK 本地资源桥配置，不进入 Host 正式动作负载；
+- 编辑器文档通过 `chips.box-layout-editor:change/error` 协议回传配置和错误，通过 `chips.box-layout-editor:asset-request` 申请箱子资源操作；
+- 典型宿主应在收到 `onChange` 后，再调用 `client.box.normalizeLayoutConfig(...)`，然后持久化到正式 `.box` 工作目录。
+
+推荐事件订阅接口：
+
+```typescript
+const result = await client.box.editorPanel.render({
+  layoutType: 'chips.layout.grid',
+  entries: [],
+  initialConfig: {},
+});
+
+const disposeReady = client.box.editorPanel.onReady(result.frame, () => {
+  console.log('layout editor ready');
+});
+
+const disposeChange = client.box.editorPanel.onChange(result.frame, (payload) => {
+  console.log(payload.layoutType, payload.config);
+});
+
+const disposeError = client.box.editorPanel.onError(result.frame, (payload) => {
+  console.error(payload.code, payload.message);
+});
+```
 
 `editorPanel.resources` 规则：
 
@@ -423,6 +563,9 @@ const result = await client.card.editorPanel.render({
     async importResource({ file, preferredPath }) {
       return saveIntoCardRoot(file, preferredPath);
     },
+    async importArchiveBundle({ file, preferredRootDir, entryFile }) {
+      return importWebBundleIntoCardRoot(file, preferredRootDir, entryFile);
+    },
     async deleteResource(resourcePath) {
       await removeFromCardRoot(resourcePath);
     },
@@ -438,8 +581,26 @@ const result = await client.card.editorPanel.render({
 - Host 托管编辑器 iframe 通过 `chips.card-editor:resource-request/resource-response/resource-release` 协议请求资源操作；
 - SDK 负责把这些请求桥接到 `editorPanel.resources`；
 - `importResource(...)` 返回的 `path` 必须是卡片根目录相对路径，例如 `cover.png`；
+- `importArchiveBundle(...)` 返回 `{ rootDir, entryFile, resourcePaths }`，用于网页基础卡片这类“整目录导入”的正式场景；
+- `importArchiveBundle(...)` 的宿主职责是：验证入口文件、解压 ZIP、把最终网页目录写到卡片根目录，并返回正式相对路径；
 - 若宿主按官方资源链路保存内部文件，应把文件直接写入卡片根目录，而不是写入 `content/`；
 - `resources` 只在当前应用进程内生效，不进入 Host 正式 `card.renderEditor` 路由契约。
+
+## ZIP 能力
+
+SDK 提供正式 ZIP 子域封装，直接映射 Host `zip.*` 路由：
+
+```typescript
+const outputZip = await client.zip.compress('/tmp/site', '/tmp/site.zip');
+const outputDir = await client.zip.extract('/tmp/site.zip', '/tmp/unpacked-site');
+const entries = await client.zip.list('/tmp/site.zip');
+```
+
+使用语义：
+
+- `client.zip.compress(...)` 适用于正式 ZIP Store 打包场景；
+- `client.zip.extract(...)` 与 `client.zip.list(...)` 可用于网页 ZIP 包导入前的验证与解压；
+- ZIP 条目路径仍需由调用方按正式文件规则校验，不能把压缩包中的绝对路径或路径穿越条目直接落盘。
 
 约束：
 

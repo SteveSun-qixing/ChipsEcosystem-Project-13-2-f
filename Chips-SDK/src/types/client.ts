@@ -67,6 +67,7 @@ export interface CoreClient {
 
 export interface Client extends CoreClient {
   // Domain APIs 按模块挂载
+  document: import("../api/document").DocumentApi;
   file: import("../api/file").FileApi;
   card: import("../api/card").CardApi;
   theme: import("../api/theme").ThemeApi;
@@ -81,6 +82,7 @@ export interface Client extends CoreClient {
   platform: import("../api/platform").PlatformApi;
   box: import("../api/box").BoxApi;
   resource: import("../api/resource").ResourceApi;
+  zip: import("../api/zip").ZipApi;
 }
 
 export interface InvocationContext {

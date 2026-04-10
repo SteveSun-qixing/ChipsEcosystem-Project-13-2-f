@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { crc32 } from './crc32';
 import type { ZipEntryInput, ZipEntryMeta } from './types';
 
@@ -9,6 +10,7 @@ const EOCD_SIGNATURE = 0x06054b50;
 
 const DOS_TIME = 0;
 const DOS_DATE = 0;
+const DEFLATE_COMPRESSION_METHOD = 8;
 
 const writeUInt16LE = (value: number): Buffer => {
   const buffer = Buffer.alloc(2);
@@ -20,6 +22,34 @@ const writeUInt32LE = (value: number): Buffer => {
   const buffer = Buffer.alloc(4);
   buffer.writeUInt32LE(value >>> 0);
   return buffer;
+};
+
+const normalizeZipEntryPath = (entryPath: string, options?: { allowDirectory?: boolean }): string => {
+  const trimmed = entryPath.replace(/\\/g, '/').trim();
+  const hasTrailingSlash = trimmed.endsWith('/');
+  const normalized = hasTrailingSlash ? trimmed.slice(0, -1) : trimmed;
+
+  if (!normalized) {
+    if (options?.allowDirectory && hasTrailingSlash) {
+      return '';
+    }
+    throw new Error(`Invalid ZIP entry path: ${entryPath}`);
+  }
+
+  if (normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)) {
+    throw new Error(`ZIP entry cannot be absolute: ${entryPath}`);
+  }
+
+  const segments = normalized
+    .split('/')
+    .filter((segment) => segment.length > 0 && segment !== '.');
+
+  if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+    throw new Error(`ZIP entry path traversal is not allowed: ${entryPath}`);
+  }
+
+  const safePath = segments.join('/');
+  return options?.allowDirectory && hasTrailingSlash ? `${safePath}/` : safePath;
 };
 
 const collectFiles = async (inputDir: string): Promise<ZipEntryInput[]> => {
@@ -163,7 +193,9 @@ export class StoreZipService {
         .toString('utf-8');
 
       entries.push({
-        path: fileName,
+        path: fileName.endsWith('/')
+          ? normalizeZipEntryPath(fileName, { allowDirectory: true })
+          : normalizeZipEntryPath(fileName),
         size,
         compressedSize,
         crc32: crc,
@@ -182,7 +214,10 @@ export class StoreZipService {
     await fs.mkdir(outputDir, { recursive: true });
 
     for (const entry of entries) {
-      const destination = path.join(outputDir, entry.path);
+      const normalizedEntryPath = entry.path.endsWith('/')
+        ? normalizeZipEntryPath(entry.path, { allowDirectory: true })
+        : normalizeZipEntryPath(entry.path);
+      const destination = path.join(outputDir, normalizedEntryPath);
       if (entry.path.endsWith('/')) {
         await fs.mkdir(destination, { recursive: true });
         continue;
@@ -224,14 +259,21 @@ export class StoreZipService {
     }
 
     const compressionMethod = buffer.readUInt16LE(localHeaderOffset + 8);
-    if (compressionMethod !== 0) {
-      throw new Error('Unsupported ZIP compression method');
-    }
-
+    const compressedDataLength = entry.compressedSize;
     const fileNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
     const extraLength = buffer.readUInt16LE(localHeaderOffset + 28);
     const dataStart = localHeaderOffset + 30 + fileNameLength + extraLength;
-    const dataEnd = dataStart + entry.size;
-    return Buffer.from(buffer.subarray(dataStart, dataEnd));
+    const dataEnd = dataStart + compressedDataLength;
+    const compressedData = Buffer.from(buffer.subarray(dataStart, dataEnd));
+
+    if (compressionMethod === 0) {
+      return compressedData;
+    }
+
+    if (compressionMethod !== DEFLATE_COMPRESSION_METHOD) {
+      throw new Error('Unsupported ZIP compression method');
+    }
+
+    return zlib.inflateRawSync(compressedData);
   }
 }

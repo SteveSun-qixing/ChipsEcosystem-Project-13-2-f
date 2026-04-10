@@ -1,5 +1,13 @@
 export { createClient } from "./core/client";
 export type { Client, ClientConfig, SdkLogRecord, SdkLogger } from "./types/client";
+export type {
+  DocumentApi,
+  DocumentType,
+  DocumentWindowErrorPayload,
+  DocumentWindowMode,
+  DocumentWindowRenderOptions,
+  DocumentWindowRenderResult,
+} from "./api/document";
 export type { IconDescriptor, IconStyle } from "./api/icon";
 export type {
   CardApi,
@@ -11,6 +19,8 @@ export type {
   CardInfoPayload,
   CardInfoStatus,
   CardEditorChangePayload,
+  CardEditorArchiveImportRequest,
+  CardEditorArchiveImportResult,
   CardEditorErrorPayload,
   CardEditorRenderOptions,
   CardEditorRenderResult,
@@ -33,7 +43,9 @@ export type {
 export type {
   FileApi,
   FileContent,
+  FileDeleteOptions,
   FileEntry,
+  FileListOptions,
   FileReadOptions,
   FileStat,
 } from "./api/file";
@@ -102,6 +114,14 @@ export type {
 export type {
   BoxApi,
   BoxContent,
+  BoxLayoutDescriptor,
+  BoxLayoutEditorAssetBridge,
+  BoxLayoutEditorChangePayload,
+  BoxLayoutEditorErrorPayload,
+  BoxLayoutFrameView,
+  BoxLayoutEditorView,
+  BoxLayoutRenderErrorPayload,
+  BoxLayoutValidation,
   BoxEntryDetailField,
   BoxEntryDetailItem,
   BoxEntryCoverView,
@@ -128,4 +148,5 @@ export type {
   ResourceOpenResolvedResource,
   ResourceOpenResult,
 } from "./api/resource";
+export type { ZipApi, ZipEntryMeta } from "./api/zip";
 export type { StandardError } from "./types/errors";

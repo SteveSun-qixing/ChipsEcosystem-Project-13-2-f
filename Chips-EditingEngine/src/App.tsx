@@ -9,15 +9,18 @@ import { Workbench } from './layouts/Workbench';
 import { Dock } from './components/Dock/Dock';
 import {
   resolveCompositeCardDropTarget,
+  resolveBoxEntryImportDropTarget,
   type CanvasDropTarget,
 } from './layouts/InfiniteCanvas/canvas-drop-target';
 import { useUI } from './context/UIContext';
 import { useCard } from './context/CardContext';
+import { useEditorSelection } from './context/EditorSelectionContext';
 import { useTranslation } from './hooks/useTranslation';
 import { workspaceService, type WorkspaceOpenOptions } from './services/workspace-service';
-import { DEFAULT_BOX_LAYOUT_TYPE } from './services/box-document-service';
+import { boxDocumentService, DEFAULT_BOX_LAYOUT_TYPE } from './services/box-document-service';
 import type { BasicCardConfig } from './core/card-initializer';
 import type { DragData } from './components/CardBoxLibrary/types';
+import type { BoxWindowConfig } from './types/window';
 import { generateId62 } from './utils/id';
 import { setLocale } from './i18n';
 import { getToolWindowIcon } from './icons/descriptors';
@@ -66,6 +69,7 @@ function MainWorkspace() {
     setActiveCard,
     setSelectedBaseCard,
   } = useCard();
+  const { selectCard, selectBox } = useEditorSelection();
   const { t } = useTranslation();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const hasInitializedRef = useRef(false);
@@ -213,6 +217,7 @@ function MainWorkspace() {
 
       if (file.type === 'card') {
         await openCard(file.id, file.path);
+        selectCard(file.id, null);
         const existingWindow = windows.find((window) => window.type === 'card' && window.cardId === file.id);
         if (existingWindow) {
           const updates: Record<string, unknown> = {};
@@ -246,6 +251,7 @@ function MainWorkspace() {
       }
 
       if (file.type === 'box') {
+        selectBox(file.id);
         const existingWindow = windows.find((window) => window.type === 'box' && window.boxId === file.id);
         if (existingWindow) {
           const updates: Record<string, unknown> = {
@@ -289,7 +295,7 @@ function MainWorkspace() {
       workspaceService.off('workspace:file-opened', handleOpenWorkspaceFileSafe);
       workspaceService.off('workspace:file-created', handleOpenWorkspaceFileSafe);
     };
-  }, [createBoxWindow, createCardWindow, focusWindow, openCard, updateWindow, windows]);
+  }, [createBoxWindow, createCardWindow, focusWindow, openCard, selectBox, selectCard, updateWindow, windows]);
 
   useEffect(() => {
     const handleWorkspaceFileRenamed = (payload: {
@@ -300,7 +306,7 @@ function MainWorkspace() {
         return;
       }
 
-      const window = windows.find((item) => item.type === 'box' && item.boxId === file.id);
+      const window = windows.find((item): item is BoxWindowConfig => item.type === 'box' && item.boxId === file.id);
       if (!window) {
         return;
       }
@@ -325,7 +331,11 @@ function MainWorkspace() {
   }) => {
     void options.worldPosition;
 
-    return resolveCompositeCardDropTarget({
+    return resolveBoxEntryImportDropTarget({
+      dragData: options.dragData,
+      eventTarget: options.eventTarget,
+      screenPosition: options.screenPosition,
+    }) ?? resolveCompositeCardDropTarget({
       dragData: options.dragData,
       eventTarget: options.eventTarget,
       screenPosition: options.screenPosition,
@@ -353,7 +363,25 @@ function MainWorkspace() {
       );
       if (nextBasicCard) {
         setSelectedBaseCard(nextBasicCard.id);
+        selectCard(target.cardId, nextBasicCard.id);
       }
+      return;
+    }
+
+    if (data.type === 'workspace-file' && target?.type === 'box-entry-import') {
+      const targetWindow = windows.find((window): window is BoxWindowConfig => window.type === 'box' && window.boxId === target.boxId);
+      if (!targetWindow) {
+        return;
+      }
+
+      focusWindow(targetWindow.id);
+      selectBox(target.boxId);
+      await boxDocumentService.openBox(
+        targetWindow.boxPath,
+        workspaceService.getState().rootPath,
+        target.boxId,
+      );
+      await boxDocumentService.importDocumentFiles(target.boxId, [data.filePath]);
       return;
     }
 
@@ -404,6 +432,8 @@ function MainWorkspace() {
     focusWindow,
     setActiveCard,
     setSelectedBaseCard,
+    selectBox,
+    selectCard,
     t,
     windows,
   ]);

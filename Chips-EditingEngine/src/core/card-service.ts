@@ -144,6 +144,10 @@ function normalizeResourcePath(resourcePath: string): string | null {
     return segments.join('/');
 }
 
+function splitResourcePathSegments(resourcePath: string): string[] {
+    return resourcePath.replace(/\\/g, '/').split('/').filter(Boolean);
+}
+
 function createPendingResourceToken(): string {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -889,7 +893,7 @@ export class CardService {
         resource_count: number;
         resources: Array<{ path: string; size: number; type: string }>;
     }> {
-        const entries = await fileService.list(cardPath);
+        const entries = await fileService.list(cardPath, { recursive: true });
         const resources: Array<{ path: string; size: number; type: string }> = [];
 
         for (const entry of entries) {
@@ -903,6 +907,9 @@ export class CardService {
                 : normalizedPath;
             const resourcePath = normalizeResourcePath(relativePath);
             if (!resourcePath) {
+                continue;
+            }
+            if (resourcePath.startsWith('.card/') || resourcePath.startsWith('content/')) {
                 continue;
             }
 
@@ -919,6 +926,27 @@ export class CardService {
             resource_count: resources.length,
             resources,
         };
+    }
+
+    private async pruneEmptyResourceDirectories(cardPath: string, resourcePath: string): Promise<void> {
+        const segments = splitResourcePathSegments(resourcePath);
+        if (segments.length <= 1) {
+            return;
+        }
+
+        for (let index = segments.length - 2; index >= 0; index -= 1) {
+            const directoryPath = joinPath(cardPath, ...segments.slice(0, index + 1));
+            if (!(await fileService.exists(directoryPath))) {
+                continue;
+            }
+
+            const children = await fileService.list(directoryPath);
+            if (children.length > 0) {
+                break;
+            }
+
+            await fileService.delete(directoryPath);
+        }
     }
 
     private async finalizeCardResources(card: CompositeCard): Promise<number> {
@@ -943,6 +971,7 @@ export class CardService {
             const absolutePath = joinPath(card.path, resourcePath);
             if (await fileService.exists(absolutePath)) {
                 await fileService.delete(absolutePath);
+                await this.pruneEmptyResourceDirectories(card.path, resourcePath);
                 deletedCount += 1;
             }
 

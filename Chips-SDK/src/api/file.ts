@@ -19,6 +19,10 @@ export interface FileListOptions {
   recursive?: boolean;
 }
 
+export interface FileDeleteOptions {
+  recursive?: boolean;
+}
+
 export interface FileEntry {
   path: string;
   isFile: boolean;
@@ -31,7 +35,7 @@ export interface FileApi {
   stat(path: string): Promise<FileStat>;
   list(dir: string, options?: FileListOptions): Promise<FileEntry[]>;
   mkdir(path: string): Promise<void>;
-  delete(path: string): Promise<void>;
+  delete(path: string, options?: FileDeleteOptions): Promise<void>;
   move(sourcePath: string, destPath: string): Promise<void>;
   copy(sourcePath: string, destPath: string): Promise<void>;
 }
@@ -68,11 +72,11 @@ export function createFileApi(client: CoreClient): FileApi {
       }
       return client.invoke("file.mkdir", { path });
     },
-    async delete(path) {
+    async delete(path, options) {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.delete: path is required.");
       }
-      return client.invoke("file.delete", { path });
+      return client.invoke("file.delete", { path, options });
     },
     async move(sourcePath, destPath) {
       if (!sourcePath || !destPath) {

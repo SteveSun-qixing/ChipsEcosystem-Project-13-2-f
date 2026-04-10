@@ -7,6 +7,8 @@ export interface CardWindowBaseProps<TWindowConfig extends BaseWindowConfig = Ba
     config: TWindowConfig;
     draggable?: boolean;
     resizable?: boolean;
+    resizableAxes?: 'x' | 'both';
+    heightMode?: 'auto' | 'fixed';
     minWidth?: number;
     minHeight?: number;
     onUpdatePosition?: (position: Position) => void;
@@ -24,6 +26,8 @@ export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWind
     config,
     draggable = true,
     resizable = true,
+    resizableAxes = 'x',
+    heightMode = 'auto',
     minWidth = 200,
     minHeight = 100,
     onUpdatePosition,
@@ -53,10 +57,12 @@ export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWind
         return {
             transform: `translate(${config.position.x}px, ${config.position.y}px)`,
             width: `${width}px`,
-            height: config.state === 'collapsed' ? `${collapsedHeight}px` : 'auto',
+            height: config.state === 'collapsed'
+                ? `${collapsedHeight}px`
+                : (heightMode === 'fixed' ? `${config.size.height}px` : 'auto'),
             zIndex: config.zIndex,
         };
-    }, [config.position, config.size.width, config.state, config.zIndex]);
+    }, [config.position, config.size.height, config.size.width, config.state, config.zIndex, heightMode]);
 
     const windowClass = [
         'card-window-base',
@@ -69,7 +75,15 @@ export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWind
     ].filter(Boolean).join(' ');
 
     const handleDragStart = (e: React.MouseEvent) => {
-        if ((e.target as HTMLElement).closest('.card-window-base__action')) {
+        const targetElement = e.target as HTMLElement;
+        if (
+            targetElement.closest('.card-window-base__action')
+            || targetElement.closest('button')
+            || targetElement.closest('input')
+            || targetElement.closest('textarea')
+            || targetElement.closest('select')
+            || targetElement.closest('[role="button"]')
+        ) {
             return;
         }
         if (!draggable) return;
@@ -124,11 +138,14 @@ export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWind
     const handleResizeMove = (e: MouseEvent) => {
         const zoom = canvasContext ? canvasContext.zoom : 1;
         const deltaX = (e.clientX - resizeStart.current.x) / zoom;
+        const deltaY = (e.clientY - resizeStart.current.y) / zoom;
 
         if (onUpdateSize) {
             onUpdateSize({
                 width: Math.max(minWidth, initialSize.current.width + deltaX),
-                height: config.size.height,
+                height: resizableAxes === 'both'
+                    ? Math.max(minHeight, initialSize.current.height + deltaY)
+                    : config.size.height,
             });
         }
     };
@@ -201,7 +218,12 @@ export function CardWindowBase<TWindowConfig extends BaseWindowConfig = BaseWind
 
             {resizable && (
                 <div
-                    className="card-window-base__resize-handle"
+                    className={[
+                        'card-window-base__resize-handle',
+                        resizableAxes === 'both'
+                            ? 'card-window-base__resize-handle--both'
+                            : 'card-window-base__resize-handle--x',
+                    ].join(' ')}
                     onMouseDown={handleResizeStart}
                 />
             )}

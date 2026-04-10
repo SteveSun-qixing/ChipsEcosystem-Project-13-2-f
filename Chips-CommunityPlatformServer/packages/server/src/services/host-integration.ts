@@ -268,6 +268,9 @@ export class HostIntegrationService {
     for (const source of pluginSources.cardPlugins) {
       await this.installAndEnablePlugin(source);
     }
+    for (const source of pluginSources.layoutPlugins) {
+      await this.installAndEnablePlugin(source);
+    }
     for (const source of pluginSources.modulePlugins) {
       await this.installAndEnablePlugin(source);
     }
@@ -561,6 +564,7 @@ export class HostIntegrationService {
   private resolvePluginSources(): {
     appPlugins: string[];
     cardPlugins: string[];
+    layoutPlugins: string[];
     themePlugins: string[];
     modulePlugins: string[];
   } {
@@ -573,6 +577,10 @@ export class HostIntegrationService {
     const defaultCardPlugins = [
       path.join(root, 'Chips-BaseCardPlugin/richtext-BCP'),
       path.join(root, 'Chips-BaseCardPlugin/image-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/webpage-BCP'),
+    ];
+    const defaultLayoutPlugins = [
+      path.join(root, 'Chips-BoxLayoutPlugin'),
     ];
     const defaultThemePlugins = [
       path.join(root, 'ThemePack/Chips-default'),
@@ -585,6 +593,7 @@ export class HostIntegrationService {
     return {
       appPlugins: this.resolveConfiguredPluginList(env.HOST_APP_PLUGIN_PATHS, defaultAppPlugins),
       cardPlugins: this.resolveConfiguredPluginList(env.HOST_CARD_PLUGIN_PATHS, defaultCardPlugins),
+      layoutPlugins: this.resolveConfiguredPluginList(env.HOST_LAYOUT_PLUGIN_PATHS, defaultLayoutPlugins),
       themePlugins: this.resolveConfiguredPluginList(env.HOST_THEME_PLUGIN_PATHS, defaultThemePlugins),
       modulePlugins: this.resolveConfiguredPluginList(env.HOST_MODULE_PLUGIN_PATHS, defaultModulePlugins),
     };

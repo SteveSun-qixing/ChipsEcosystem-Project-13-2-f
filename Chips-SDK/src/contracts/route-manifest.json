@@ -12,6 +12,9 @@
     "box.readMetadata": {
       "action": "box.readMetadata"
     },
+    "box.renderCover": {
+      "action": "box.renderCover"
+    },
     "box.openView": {
       "action": "box.openView"
     },

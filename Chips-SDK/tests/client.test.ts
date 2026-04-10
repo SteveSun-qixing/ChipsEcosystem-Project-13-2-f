@@ -336,6 +336,45 @@ describe("createClient", () => {
     });
   });
 
+  it("passes recursive list and delete options into file routes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "file.list") {
+          return { entries: [] };
+        }
+        return undefined;
+      },
+    });
+
+    await client.file.list("/workspace/card", { recursive: true });
+    await client.file.delete("/workspace/card/tmp", { recursive: true });
+
+    expect(calls).toEqual([
+      {
+        action: "file.list",
+        payload: {
+          dir: "/workspace/card",
+          options: {
+            recursive: true,
+          },
+        },
+      },
+      {
+        action: "file.delete",
+        payload: {
+          path: "/workspace/card/tmp",
+          options: {
+            recursive: true,
+          },
+        },
+      },
+    ]);
+  });
+
   it("wraps non-standard errors as StandardError", async () => {
     const client = createClient({
       environment: "node",
@@ -441,6 +480,7 @@ describe("createClient", () => {
         createdAt: "2026-03-23T09:30:00.000Z",
         modifiedAt: "2026-03-23T11:20:00.000Z",
         activeLayoutType: "chips.layout.grid",
+        coverRatio: "3:4",
       },
       content: {
         activeLayoutType: "chips.layout.grid",
@@ -464,6 +504,7 @@ describe("createClient", () => {
         name: "旅行箱",
         activeLayoutType: "chips.layout.grid",
         availableLayouts: ["chips.layout.grid"],
+        coverRatio: "3:4",
         capabilities: {
           listEntries: true,
           readEntryDetail: true,
@@ -503,6 +544,16 @@ describe("createClient", () => {
         if (action === "box.readMetadata") {
           return { metadata: inspection.metadata };
         }
+        if (action === "box.renderCover") {
+          return {
+            view: {
+              title: "旅行箱",
+              coverUrl: "file:///tmp/box-cover.html",
+              mimeType: "text/html",
+              ratio: "3:4",
+            },
+          };
+        }
         if (action === "box.openView") {
           return openViewResult;
         }
@@ -536,7 +587,8 @@ describe("createClient", () => {
         if (action === "box.openEntry") {
           return {
             result: {
-              mode: "card-window",
+              mode: "document-window",
+              documentType: "card",
               windowId: "window-1",
             },
           };
@@ -556,6 +608,12 @@ describe("createClient", () => {
     await expect(client.box.inspect("/tmp/demo.box")).resolves.toEqual(inspection);
     await expect(client.box.validate("/tmp/demo.box")).resolves.toEqual({ valid: true, errors: [] });
     await expect(client.box.readMetadata("/tmp/demo.box")).resolves.toEqual(inspection.metadata);
+    await expect(client.box.renderCover("/tmp/demo.box")).resolves.toEqual({
+      title: "旅行箱",
+      coverUrl: "file:///tmp/box-cover.html",
+      mimeType: "text/html",
+      ratio: "3:4",
+    });
     await expect(
       client.box.openView("/tmp/demo.box", {
         layoutType: "chips.layout.grid",
@@ -578,7 +636,8 @@ describe("createClient", () => {
       },
     ]);
     await expect(client.box.openEntry("session-1", "e9K2m1P4q7")).resolves.toEqual({
-      mode: "card-window",
+      mode: "document-window",
+      documentType: "card",
       windowId: "window-1",
     });
     await expect(client.box.renderEntryCover("session-1", "e9K2m1P4q7")).resolves.toEqual({
@@ -891,6 +950,72 @@ describe("createClient", () => {
           options: {
             format: "png",
           },
+        },
+      },
+    ]);
+  });
+
+  it("invokes zip routes through the formal sdk wrapper", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "zip.compress") {
+          return { outputZip: "/tmp/demo.zip" };
+        }
+        if (action === "zip.extract") {
+          return { outputDir: "/tmp/unpacked" };
+        }
+        if (action === "zip.list") {
+          return {
+            entries: [
+              {
+                path: "index.html",
+                size: 128,
+                compressedSize: 64,
+                crc32: 1234,
+                offset: 0,
+              },
+            ],
+          };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.zip.compress("/tmp/site", "/tmp/demo.zip")).resolves.toBe("/tmp/demo.zip");
+    await expect(client.zip.extract("/tmp/demo.zip", "/tmp/unpacked")).resolves.toBe("/tmp/unpacked");
+    await expect(client.zip.list("/tmp/demo.zip")).resolves.toEqual([
+      {
+        path: "index.html",
+        size: 128,
+        compressedSize: 64,
+        crc32: 1234,
+        offset: 0,
+      },
+    ]);
+
+    expect(calls).toEqual([
+      {
+        action: "zip.compress",
+        payload: {
+          inputDir: "/tmp/site",
+          outputZip: "/tmp/demo.zip",
+        },
+      },
+      {
+        action: "zip.extract",
+        payload: {
+          zipPath: "/tmp/demo.zip",
+          outputDir: "/tmp/unpacked",
+        },
+      },
+      {
+        action: "zip.list",
+        payload: {
+          zipPath: "/tmp/demo.zip",
         },
       },
     ]);

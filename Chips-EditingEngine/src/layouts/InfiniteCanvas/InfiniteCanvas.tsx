@@ -397,7 +397,7 @@ export function InfiniteCanvas({
         e.dataTransfer.dropEffect = 'copy';
 
         const { target } = resolveDragTarget(e);
-        setInsertIndicator(target?.indicator ?? null);
+        setInsertIndicator(target?.type === 'composite-card-insert' ? target.indicator : null);
     };
 
     const handleDragLeave = (e: React.DragEvent) => {

@@ -1,5 +1,5 @@
 import { getChipsClient } from './bridge-client';
-import type { FileStat, FileEntry } from 'chips-sdk';
+import type { FileStat, FileEntry, FileDeleteOptions, FileListOptions } from 'chips-sdk';
 
 /**
  * 文件服务 — 封装 Chips Host 提供的文件操作路由。
@@ -37,8 +37,8 @@ export const fileService = {
         await getChipsClient().file.write(path, content, { encoding: 'binary' });
     },
 
-    async list(dir: string): Promise<FileEntry[]> {
-        const result = await getChipsClient().file.list(dir);
+    async list(dir: string, options?: FileListOptions): Promise<FileEntry[]> {
+        const result = await getChipsClient().file.list(dir, options);
         const entries = (result as any)?.entries ?? result;
         return Array.isArray(entries) ? entries : [];
     },
@@ -68,8 +68,8 @@ export const fileService = {
         }
     },
 
-    async delete(path: string): Promise<void> {
-        await getChipsClient().file.delete(path);
+    async delete(path: string, options?: FileDeleteOptions): Promise<void> {
+        await getChipsClient().file.delete(path, options);
     },
 
     async move(sourcePath: string, destPath: string): Promise<void> {

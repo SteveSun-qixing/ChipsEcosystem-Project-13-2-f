@@ -165,6 +165,35 @@
 - `platform.shortcut*`
 - `platform.ipc*`
 
+### 6.6 `box.*` 统一文档链路补充
+
+当前 `box` 命名空间已经正式公开以下统一文档链路动作：
+
+- `box.listLayoutDescriptors`
+- `box.readLayoutDescriptor`
+- `box.normalizeLayoutConfig`
+- `box.validateLayoutConfig`
+- `box.getLayoutInitialQuery`
+- `box.openView`
+- `box.renderLayoutFrame`
+- `box.renderLayoutEditor`
+- `box.releaseRenderSession`
+- `box.listEntries`
+- `box.readEntryDetail`
+- `box.renderEntryCover`
+- `box.openEntry`
+- `box.resolveEntryResource`
+- `box.readBoxAsset`
+- `box.prefetchEntries`
+- `box.closeView`
+
+关键约束：
+
+- 布局描述符解析、布局配置归一/校验，以及查看态/编辑态文档生成，统一由 Host `box-service` 托管；
+- `box.renderLayoutFrame` 与 `box.renderLayoutEditor` 返回的 `documentUrl` 是正式 iframe 入口，不允许上层退化为 `srcdoc` 或自行改写文档；
+- `box.openEntry` 正式返回 `document-window | external`，并通过 `documentType` 区分打开的是卡片还是箱子；
+- 通过 SDK `client.box.documentWindow.render` 或 `client.document.window.render` 创建的箱子查看文档，在销毁时必须释放 render session，并同步关闭对应 `box.openView` 查看会话。
+
 ## 7. 事件基线
 
 当前重要对外事件：

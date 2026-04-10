@@ -20,6 +20,15 @@ interface BasicInfoPanelProps {
   cardInfo?: CardInfo;
   onUpdateName?: (name: string) => void;
   onUpdateTags?: (tags: string[]) => void;
+  documentIdLabel?: string;
+  nameLabel?: string;
+  namePlaceholder?: string;
+  tagsLabel?: string;
+  tagPlaceholder?: string;
+  addTagLabel?: string;
+  metadataLabel?: string;
+  createdAtLabel?: string;
+  modifiedAtLabel?: string;
 }
 
 export function BasicInfoPanel({
@@ -27,8 +36,26 @@ export function BasicInfoPanel({
   cardInfo,
   onUpdateName,
   onUpdateTags,
+  documentIdLabel,
+  nameLabel,
+  namePlaceholder,
+  tagsLabel,
+  tagPlaceholder,
+  addTagLabel,
+  metadataLabel,
+  createdAtLabel,
+  modifiedAtLabel,
 }: BasicInfoPanelProps) {
   const { t } = useTranslation();
+  const resolvedDocumentIdLabel = documentIdLabel ?? (t('card_settings.card_id') || '卡片 ID');
+  const resolvedCreatedAtLabel = createdAtLabel ?? (t('card_settings.created_at') || '创建时间');
+  const resolvedModifiedAtLabel = modifiedAtLabel ?? (t('card_settings.modified_at') || '修改时间');
+  const resolvedNameLabel = nameLabel ?? (t('card_settings.name') || '资源名称');
+  const resolvedNamePlaceholder = namePlaceholder ?? (t('card_settings.name_placeholder') || '请输入名称');
+  const resolvedTagsLabel = tagsLabel ?? (t('card_settings.tags') || '标签');
+  const resolvedTagPlaceholder = tagPlaceholder ?? (t('card_settings.tag_placeholder') || '输入标签按回车添加');
+  const resolvedAddTagLabel = addTagLabel ?? (t('card_settings.tag_add') || '添加');
+  const resolvedMetadataLabel = metadataLabel ?? (t('card_settings.metadata') || '元数据');
 
   const [editName, setEditName] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
@@ -91,45 +118,45 @@ export function BasicInfoPanel({
 
   const metadataItems = useMemo(() => [
     {
-      label: t('card_settings.card_id') || '卡片 ID',
+      label: resolvedDocumentIdLabel,
       value: cardId,
       mono: true,
     },
     {
-      label: t('card_settings.created_at') || '创建时间',
+      label: resolvedCreatedAtLabel,
       value: formatDateTime(cardInfo?.metadata?.createdAt ?? cardInfo?.metadata?.created_at),
       mono: false,
     },
     {
-      label: t('card_settings.modified_at') || '修改时间',
+      label: resolvedModifiedAtLabel,
       value: formatDateTime(cardInfo?.metadata?.modifiedAt ?? cardInfo?.metadata?.modified_at),
       mono: false,
     },
-  ], [cardId, cardInfo, t]);
+  ], [cardId, cardInfo, resolvedCreatedAtLabel, resolvedDocumentIdLabel, resolvedModifiedAtLabel]);
 
   return (
     <div className="basic-info-panel">
       <div className="basic-info-panel__field">
         <label className="basic-info-panel__label">
-          {t('card_settings.name') || '资源名称'}
+          {resolvedNameLabel}
         </label>
         <ChipsInput
           value={editName}
           onChange={handleNameChange}
-          placeholder={t('card_settings.name_placeholder') || '请输入名称'}
+          placeholder={resolvedNamePlaceholder}
           className="basic-info-panel__input"
         />
       </div>
 
       <div className="basic-info-panel__field">
         <label className="basic-info-panel__label">
-          {t('card_settings.tags') || '标签'}
+          {resolvedTagsLabel}
         </label>
         <div className="basic-info-panel__tag-input-row">
           <ChipsInput
             value={newTag}
             onChange={setNewTag}
-            placeholder={t('card_settings.tag_placeholder') || '输入标签按回车添加'}
+            placeholder={resolvedTagPlaceholder}
             onKeyDown={handleKeydown}
             className="basic-info-panel__tag-input"
           />
@@ -138,7 +165,7 @@ export function BasicInfoPanel({
             className="basic-info-panel__tag-add-btn"
             onClick={addTag}
           >
-            {t('card_settings.tag_add') || '添加'}
+            {resolvedAddTagLabel}
           </button>
         </div>
         {editTags.length > 0 && (
@@ -158,7 +185,7 @@ export function BasicInfoPanel({
 
       <div className="basic-info-panel__field">
         <label className="basic-info-panel__label">
-          {t('card_settings.metadata') || '元数据'}
+          {resolvedMetadataLabel}
         </label>
         <div className="basic-info-panel__metadata">
           {metadataItems.map((item) => (

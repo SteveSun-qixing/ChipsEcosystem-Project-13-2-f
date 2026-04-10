@@ -33,7 +33,8 @@
 - 完成卡片统一显示链路封装：
   - `client.card.render` 统一渲染入口封装；
   - `client.card.coverFrame.render` 与 `client.card.compositeWindow.render` 两个统一显示接口；
-  - 与组件库 `CardCoverFrame` / `CompositeCardWindow` 的事件协议与 origin 安全联动。
+  - `client.box.renderCover` 箱子本体封面接口；
+  - 与组件库 `EmbeddedDocumentFrame` / `CardCoverFrame` / `CompositeCardWindow` 的事件协议与 origin 安全联动。
 - 建立完整的错误模型、日志与可观测性约束，并提供调试辅助工具。
 - 建立测试与质量门禁（契约测试、单元测试、集成测试），达到“零临时实现、零占位代码”标准。
 

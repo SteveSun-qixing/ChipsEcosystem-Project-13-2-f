@@ -45,6 +45,7 @@ const EnvSchema = z.object({
 
   // Host 插件安装配置
   HOST_CARD_PLUGIN_PATHS: z.string().optional(),
+  HOST_LAYOUT_PLUGIN_PATHS: z.string().optional(),
   HOST_APP_PLUGIN_PATHS: z.string().optional(),
   HOST_THEME_PLUGIN_PATHS: z.string().optional(),
   HOST_MODULE_PLUGIN_PATHS: z.string().optional(),

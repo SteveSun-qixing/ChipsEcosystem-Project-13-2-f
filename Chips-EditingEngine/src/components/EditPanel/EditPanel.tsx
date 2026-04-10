@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useCard } from '../../context/CardContext';
+import { useEditorSelection } from '../../context/EditorSelectionContext';
+import { useUI } from '../../context/UIContext';
+import { boxDocumentService } from '../../services/box-document-service';
+import { workspaceService } from '../../services/workspace-service';
+import type { BoxWindowConfig } from '../../types/window';
 import { PluginHost } from './PluginHost';
+import { BoxEditorPanel } from './BoxEditorPanel';
 import { ENGINE_ICONS } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './EditPanel.css';
@@ -15,13 +21,28 @@ export default function EditPanel({
 }: EditPanelProps) {
   const { t } = useTranslation();
   const { activeCardId, selectedBaseCardId, getCard, saveCard, updateBasicCard } = useCard();
+  const { target } = useEditorSelection();
+  const { windows } = useUI();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const pendingSaveOnBlurRef = useRef(false);
   const [isPanelFocused, setIsPanelFocused] = useState(false);
 
-  const activeCard = activeCardId ? getCard(activeCardId) : null;
-  const selectedBaseCard = activeCard && selectedBaseCardId
-    ? activeCard.structure.basicCards.find(bc => bc.id === selectedBaseCardId)
+  const selectedCardId = target?.kind === 'card' ? target.cardId : activeCardId;
+  const activeCard = selectedCardId ? getCard(selectedCardId) : null;
+  const preferredBaseCardId = target?.kind === 'card'
+    ? (target.baseCardId ?? selectedBaseCardId)
+    : selectedBaseCardId;
+  const selectedBaseCard = activeCard
+    ? (
+      (preferredBaseCardId
+        ? activeCard.structure.basicCards.find((basicCard) => basicCard.id === preferredBaseCardId)
+        : null)
+      ?? activeCard.structure.basicCards[0]
+      ?? null
+    )
+    : null;
+  const selectedBoxWindow = target?.kind === 'box'
+    ? windows.find((window): window is BoxWindowConfig => window.type === 'box' && window.boxId === target.boxId)
     : null;
   const persistedRevision = activeCard?.persistedRevision ?? 0;
   const pendingPersistRevision = activeCard?.pendingPersistRevision ?? persistedRevision;
@@ -59,13 +80,26 @@ export default function EditPanel({
   }, []);
 
   useEffect(() => {
-    if (!activeCard || isPanelFocused || !pendingSaveOnBlurRef.current || !hasPendingPersist) {
+    if (isPanelFocused || !pendingSaveOnBlurRef.current) {
       return;
     }
 
     pendingSaveOnBlurRef.current = false;
-    void saveCard(activeCard.id);
-  }, [activeCard, hasPendingPersist, isPanelFocused, saveCard]);
+    if (target?.kind === 'box') {
+      const session = boxDocumentService.getSession(target.boxId);
+      if (session?.isDirty) {
+        void (async () => {
+          await boxDocumentService.saveBox(target.boxId);
+          await workspaceService.refresh();
+        })();
+      }
+      return;
+    }
+
+    if (activeCard && hasPendingPersist) {
+      void saveCard(activeCard.id);
+    }
+  }, [activeCard, hasPendingPersist, isPanelFocused, saveCard, target]);
 
   return (
     <div
@@ -77,7 +111,12 @@ export default function EditPanel({
       onBlurCapture={handlePanelBlurCapture}
     >
       <div className="edit-panel__content">
-        {activeCard && selectedBaseCard ? (
+        {selectedBoxWindow ? (
+          <BoxEditorPanel
+            boxId={selectedBoxWindow.boxId}
+            boxPath={selectedBoxWindow.boxPath}
+          />
+        ) : activeCard && selectedBaseCard ? (
           <PluginHost
             cardId={activeCard.id}
             cardPath={activeCard.path}

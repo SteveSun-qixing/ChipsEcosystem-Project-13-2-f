@@ -34,6 +34,8 @@ SDK封装了生态的核心能力，提供给开发者使用。
 正式边界补充：
 
 - `CompositeCardWindow` 与 `editorPanel` 仍然是 SDK 对外公开的通用 Host 托管链路；
+- `EmbeddedDocumentFrame` 是统一受控文档 iframe 基组件，`CardCoverFrame` 只是其卡片封面专用包装；
+- 箱子本体正式封面通过 `client.box.renderCover(boxFile)` 获取 `coverUrl`，由应用层交给 `EmbeddedDocumentFrame` 承载；
 - 官方编辑引擎的编辑态预览与编辑链路不再把这两条接口作为主路径；
 - 官方编辑引擎改为在应用内使用本地基础卡片运行时，但仍复用同一套基础卡片插件导出、主题 token 和 `cardType` 匹配规则。
 
@@ -65,18 +67,21 @@ SDK封装了生态的核心能力，提供给开发者使用。
 - 模块运行时内部访问 Host 正式服务动作时，不通过 SDK 或 Bridge，改为使用 Host 注入的 `ctx.host.invoke(action, payload?)`；
 - 模块运行时内部调用其他模块能力时，继续使用 `ctx.module.invoke(...)` / `ctx.module.job.*`。
 
-卡片显示相关的正式协议分为三条并列链路：
+文档显示相关的正式协议分为四条正式链路：
 
 - `card.render` / `client.card.compositeWindow.render(...)`：复合卡片显示链路
 - `card.renderCover` / `client.card.coverFrame.render(...)`：封面显示链路
+- `box.renderCover` / `client.box.renderCover(...)`：箱子本体封面显示链路
 - `card.renderEditor` / `client.card.editorPanel.render(...)`：基础卡片编辑器链路
 
 其中封面显示链路的正式约束是：
 
 - Host 读取 `.card/cover.html` 并返回受控 `coverUrl`
-- SDK 使用 `coverUrl` 创建 iframe,不允许把封面 HTML 直接当作字符串注入
+- Host 读取 `.box/cover.html` 并通过 `box.renderCover` 返回受控 `coverUrl`
+- SDK 使用 `coverUrl` 创建 iframe,不允许把正式卡片 / 箱子封面 HTML 直接当作字符串注入
 - 封面内容只由 `cover.html` 决定,不自动接入主题和多语言系统
-- `.card/cover.html` 中的相对路径按 `.card/` 目录解析
+- `.card/cover.html` 与 `.box/cover.html` 中的相对路径分别按 `.card/` 与 `.box/` 目录解析
+- `EmbeddedDocumentFrame` 可以承载受控 `src` 或受控 `srcDoc`，但正式卡片 / 箱子封面链路只能消费 Host 返回的 `coverUrl`
 
 其中编辑器链路的正式资源约束是：
 
@@ -91,7 +96,7 @@ SDK封装了生态的核心能力，提供给开发者使用。
 SDK 支持多种集成使用场景：
 
 - 生态内部应用场景：
-  - 在查看器等应用插件内部，通过统一显示接口调用 Host 渲染链路并展示卡片内容；
+  - 在查看器等应用插件内部，通过统一显示接口调用 Host 渲染链路并展示卡片内容或箱子封面；
   - 在生态内部工具中，通过文件与资源能力操作 `.card` / `.box` 文件；
   - 在主题、配置、多语言相关的生态内部模块中，通过统一接口访问 Host 服务域能力。
 - 官方编辑引擎场景：
@@ -100,6 +105,7 @@ SDK 支持多种集成使用场景：
 - 第三方应用场景（以卡片显示为主）：
   - 在博客系统中，通过 SDK 调用卡片渲染能力，将卡片内容以 iframe 或其他形式嵌入页面；
   - 在知识库软件中，通过 SDK 导入或展示薯片卡片文件；
-  - 在课程平台中，用卡片制作课件，并通过 SDK 提供的显示接口渲染卡片。
+  - 在课程平台中，用卡片制作课件，并通过 SDK 提供的显示接口渲染卡片；
+  - 在需要展示箱子入口或箱子封面的宿主中，通过 `client.box.renderCover(...)` 与 `EmbeddedDocumentFrame` 承载箱子正式封面。
 
 第三方应用如何与 Host 建立具体通信通道（本地守护进程、Bridge、服务端接口等），可以根据实际部署场景选择；SDK 在设计上保持卡片显示与渲染链路的开放性，提供统一的调用与类型封装。

@@ -8,26 +8,42 @@ import {
 describe("layout-config", () => {
   it("creates default config", () => {
     const config = createDefaultLayoutConfig();
-    expect(config.props.columnCount).toBe(4);
-    expect(config.props.gap).toBe(16);
+    expect(config.props.sortMode).toBe("manual");
+    expect(config.props.background).toEqual({
+      mode: "none",
+    });
+    expect(config.props.topRegion).toEqual({
+      mode: "none",
+    });
     expect(config.assetRefs).toEqual([]);
   });
 
   it("normalizes invalid values into bounded config", () => {
     const config = normalizeLayoutConfig({
       props: {
-        columnCount: 99,
-        gap: -5,
-        coverRatio: 9,
-        informationDensity: "invalid",
+        sortMode: "unexpected",
+        background: {
+          mode: "image",
+          assetPath: " assets/layouts/grid/background/hero.webp ",
+        },
+        topRegion: {
+          mode: "html",
+          html: "<div>Top Region</div>",
+        },
       },
-      assetRefs: ["assets/layouts/grid/background.webp", "", 1],
+      assetRefs: ["assets/layouts/grid/background/hero.webp", "", 1],
     });
-    expect(config.props.columnCount).toBe(12);
-    expect(config.props.gap).toBe(0);
-    expect(config.props.coverRatio).toBe(3);
-    expect(config.props.informationDensity).toBe("comfortable");
-    expect(config.assetRefs).toEqual(["assets/layouts/grid/background.webp"]);
+
+    expect(config.props.sortMode).toBe("manual");
+    expect(config.props.background).toEqual({
+      mode: "image",
+      assetPath: "assets/layouts/grid/background/hero.webp",
+    });
+    expect(config.props.topRegion).toEqual({
+      mode: "html",
+      html: "<div>Top Region</div>",
+    });
+    expect(config.assetRefs).toEqual(["assets/layouts/grid/background/hero.webp"]);
   });
 
   it("validates config", () => {

@@ -85,9 +85,8 @@ export const layoutDefinition: BoxLayoutDefinition = {
     );
   },
   getInitialQuery(config) {
-    const normalized = normalizeLayoutConfig(config);
     return {
-      limit: Math.max(24, normalized.props.columnCount * 12),
+      limit: 120,
     };
   },
   renderView(ctx) {
@@ -105,6 +104,9 @@ export const layoutDefinition: BoxLayoutDefinition = {
       entries: ctx.entries,
       initialConfig: normalizeLayoutConfig(ctx.initialConfig),
       locale: ctx.locale,
+      readBoxAsset: ctx.readBoxAsset,
+      importBoxAsset: ctx.importBoxAsset,
+      deleteBoxAsset: ctx.deleteBoxAsset,
       onChange(next) {
         ctx.onChange(next as unknown as Record<string, unknown>);
       },

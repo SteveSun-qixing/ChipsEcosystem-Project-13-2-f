@@ -12,13 +12,10 @@
       "description": "将 .card 或 .box 文件拖到当前窗口，或者点击下方按钮选择打开。导入后会直接进入对应的正式查看模式。"
     },
     "viewer": {
-      "cardLoading": "正在加载卡片…",
-      "cardContainerError": "找不到卡片窗口容器",
-      "cardFatalError": "卡片窗口发生严重错误",
-      "cardRenderError": "卡片窗口渲染失败",
-      "boxLoading": "正在加载箱子布局…",
-      "boxContainerError": "找不到箱子布局容器",
-      "boxRenderError": "箱子布局渲染失败"
+      "documentLoading": "正在加载文档…",
+      "documentContainerError": "找不到文档窗口容器",
+      "documentFatalError": "文档窗口发生严重错误",
+      "documentRenderError": "文档窗口渲染失败"
     },
     "errors": {
       "hostActionFailed": "操作失败，请检查 Host 日志与桥接链路。",

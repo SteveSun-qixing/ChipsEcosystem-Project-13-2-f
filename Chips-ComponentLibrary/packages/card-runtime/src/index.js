@@ -1,3 +1,4 @@
+export { EmbeddedDocumentFrame } from "./embedded-document-frame.js";
 export { CardCoverFrame } from "./card-cover-frame.js";
 export { CompositeCardWindow } from "./composite-card-window.js";
 export { resolveCardCoverFrameState, resolveCompositeCardWindowState } from "./states.js";

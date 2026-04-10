@@ -291,6 +291,55 @@ interface RenderNodeDiagnostic {
   - 权限：`card.read`
   - 语义：直接读取 `.card/metadata.yaml`，不要求调用方先完整解包
 
+### 3.6 box 布局描述符、查看会话与渲染文档补充基线
+
+- `box.listLayoutDescriptors`：
+  - 入参：`{}`
+  - 权限：`box.read`
+  - 语义：列出 Host 当前已安装布局插件的公开描述符摘要
+- `box.readLayoutDescriptor`：
+  - 入参：`{ layoutType }`
+  - 权限：`box.read`
+  - 语义：读取指定布局类型的公开描述符
+- `box.normalizeLayoutConfig`：
+  - 入参：`{ layoutType, config }`
+  - 权限：`box.read`
+  - 语义：由 Host 统一执行布局配置归一
+- `box.validateLayoutConfig`：
+  - 入参：`{ layoutType, config }`
+  - 权限：`box.read`
+  - 语义：由 Host 统一执行布局配置校验
+- `box.getLayoutInitialQuery`：
+  - 入参：`{ layoutType, config }`
+  - 权限：`box.read`
+  - 语义：由 Host 根据布局配置生成首屏查询
+- `box.openView`：
+  - 入参：`{ boxFile, layoutType?, initialQuery? }`
+  - 权限：`box.read`
+  - 语义：创建箱子查看会话，返回 `sessionId + box + initialView`
+- `box.renderLayoutFrame`：
+  - 入参：`{ layoutType, sessionId, box, initialView, config, locale?, themeId? }`
+  - 权限：`box.read`
+  - 语义：由 Host 装载布局插件并生成箱子查看态文档，返回 `view.documentUrl/view.sessionId`
+  - 约束：
+    - Host 必须基于已安装布局插件记录解析 `layoutType`，禁止从应用目录或源码目录回退加载；
+    - `themeId/locale` 属于单次调用覆盖参数，不改变 Host 当前全局主题或全局语言；
+    - `locale` 未注册时，Host 必须返回 `I18N_LOCALE_NOT_FOUND`。
+- `box.renderLayoutEditor`：
+  - 入参：`{ layoutType, entries, initialConfig, locale?, themeId? }`
+  - 权限：`box.write`
+  - 语义：由 Host 装载布局插件并生成箱子布局编辑器文档，返回 `view.documentUrl/view.sessionId`
+  - 约束：
+    - Host 必须使用正式布局插件入口调用 `layoutDefinition.renderEditor`；
+    - 普通应用不得自行扫描插件目录后直接 import 布局编辑器。
+- `box.releaseRenderSession`：
+  - 入参：`{ sessionId }`
+  - 权限：`box.read`
+  - 语义：回收 `box.renderLayoutFrame / box.renderLayoutEditor` 创建的 render session
+  - 约束：
+    - 当调用方销毁箱子查看 iframe 或箱子编辑器 iframe 时，必须释放对应 render session；
+    - 通过 SDK `client.box.documentWindow.render` 或 `client.document.window.render` 创建的箱子查看文档，销毁时还应同时关闭 `box.openView` 创建的查看会话。
+
 ---
 
 ## 4. 事件与错误语义基线

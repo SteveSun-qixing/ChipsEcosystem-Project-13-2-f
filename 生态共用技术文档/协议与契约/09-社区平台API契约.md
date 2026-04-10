@@ -87,6 +87,9 @@ Authorization: Bearer <access_token>
 - Cookie 名称：`chips_refresh_token`
 - HttpOnly
 - path：`/api/v1/auth`
+- `Secure` 属性跟随公共访问基地址协议：
+  - `BASE_URL` 为 `https://...` 时启用 `Secure`
+  - `BASE_URL` 为 `http://...` 时不启用 `Secure`
 
 ### 2.3 登录 / 注册响应
 
@@ -106,7 +109,10 @@ Authorization: Bearer <access_token>
 1. Cookie 中的 refresh token
 2. 或请求体中的 `refreshToken`
 
-当前成功响应体只返回新的 `accessToken`，同时服务端会重新设置 refresh token Cookie。
+当前返回口径：
+
+- 若存在可恢复会话：返回 `200`，响应体只包含新的 `accessToken`，同时服务端会重新设置 refresh token Cookie；
+- 若当前没有可恢复会话（例如未携带 refresh token、refresh token 已失效、已吊销或用户已不可用）：返回 `204 No Content`，表示“当前没有可恢复登录态”，不再把这类情况视为接口错误。
 
 ## 3. 权限总则
 

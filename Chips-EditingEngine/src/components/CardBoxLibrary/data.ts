@@ -1,11 +1,10 @@
 import React from 'react';
-import type { PluginRecord } from 'chips-sdk';
-import { loadLayoutDefinition } from 'chips-box-layout-host';
 import { getInstalledBasecardDescriptors, subscribeBasecardRegistry } from '../../basecard-runtime/registry';
-import { getChipsClient } from '../../services/bridge-client';
+import type { BoxLayoutDescriptor } from 'chips-sdk';
 import type { CardTypeDefinition, LayoutTypeDefinition } from './types';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENGINE_ICONS } from '../../icons/descriptors';
+import { getChipsClient } from '../../services/bridge-client';
 
 function createCardTypeDefinitions(): CardTypeDefinition[] {
   return getInstalledBasecardDescriptors()
@@ -25,43 +24,21 @@ function createCardTypeDefinitions(): CardTypeDefinition[] {
     .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
-async function createLayoutTypeDefinitions(
-  client: ReturnType<typeof getChipsClient>,
-  records: PluginRecord[],
-): Promise<LayoutTypeDefinition[]> {
-  const definitions = await Promise.all(records
-    .filter((record) => record.type === 'layout' && record.enabled)
-    .map(async (record) => {
-      const layoutType = record.layout?.layoutType ?? record.id;
-      let name = record.layout?.displayName ?? record.name;
-      let icon = ENGINE_ICONS.layout;
-
-      if (record.layout?.layoutType) {
-        try {
-          const layoutDefinition = await loadLayoutDefinition(client, record.layout.layoutType);
-          name = layoutDefinition.displayName || name;
-          icon = layoutDefinition.icon ?? icon;
-        } catch (error) {
-          console.error('[CardBoxLibrary] Failed to load layout definition metadata.', error);
-        }
-      }
-
-      return {
-        id: layoutType,
-        name,
-        icon,
-        description: record.description ?? '',
-        keywords: [
-          record.name,
-          record.description ?? '',
-          record.id,
-          record.layout?.layoutType ?? '',
-          ...(record.capabilities ?? []),
-        ].filter(Boolean),
-      };
-    }));
-
-  return definitions.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+function toLayoutTypeDefinitions(descriptors: BoxLayoutDescriptor[]): LayoutTypeDefinition[] {
+  return descriptors
+    .map((descriptor) => ({
+      id: descriptor.layoutType,
+      name: descriptor.displayName,
+      icon: descriptor.icon ?? ENGINE_ICONS.layout,
+      description: descriptor.description ?? '',
+      keywords: [
+        descriptor.displayName,
+        descriptor.description ?? '',
+        descriptor.layoutType,
+        descriptor.pluginId,
+      ].filter(Boolean),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 }
 
 export function useCardTypeDefinitions(): CardTypeDefinition[] {
@@ -82,40 +59,41 @@ export function useLayoutTypeDefinitions(): LayoutTypeDefinition[] {
   const [layoutTypes, setLayoutTypes] = React.useState<LayoutTypeDefinition[]>([]);
 
   React.useEffect(() => {
-    let active = true;
+    let disposed = false;
 
-    const refresh = async () => {
-      const plugins = await client.plugin.query({ type: 'layout' });
-      if (!active) {
-        return;
+    const load = async () => {
+      const descriptors = await client.box.listLayoutDescriptors();
+      if (!disposed) {
+        setLayoutTypes(toLayoutTypeDefinitions(descriptors));
       }
-      const nextLayoutTypes = await createLayoutTypeDefinitions(client, plugins);
-      if (!active) {
-        return;
-      }
-      setLayoutTypes(nextLayoutTypes);
     };
 
-    void refresh().catch((error) => {
-      console.error('[CardBoxLibrary] Failed to load installed layout plugins.', error);
-      if (active) {
+    void load().catch((error) => {
+      console.error('[CardBoxLibrary] Failed to load layout descriptors.', error);
+      if (!disposed) {
         setLayoutTypes([]);
       }
     });
 
-    const refreshSafe = () => {
-      void refresh().catch((error) => {
-        console.error('[CardBoxLibrary] Failed to refresh installed layout plugins.', error);
+    if (!client.events || typeof client.events.on !== 'function') {
+      return () => {
+        disposed = true;
+      };
+    }
+
+    const refresh = () => {
+      void load().catch((error) => {
+        console.error('[CardBoxLibrary] Failed to refresh layout descriptors.', error);
       });
     };
 
-    const unsubscribeInstalled = client.events.on('plugin.installed', refreshSafe);
-    const unsubscribeEnabled = client.events.on('plugin.enabled', refreshSafe);
-    const unsubscribeDisabled = client.events.on('plugin.disabled', refreshSafe);
-    const unsubscribeUninstalled = client.events.on('plugin.uninstalled', refreshSafe);
+    const unsubscribeInstalled = client.events.on('plugin.installed', refresh);
+    const unsubscribeEnabled = client.events.on('plugin.enabled', refresh);
+    const unsubscribeDisabled = client.events.on('plugin.disabled', refresh);
+    const unsubscribeUninstalled = client.events.on('plugin.uninstalled', refresh);
 
     return () => {
-      active = false;
+      disposed = true;
       unsubscribeInstalled();
       unsubscribeEnabled();
       unsubscribeDisabled();

@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BoxWindow } from '../../src/components/BoxWindow/BoxWindow';
+import { BoxEditorPanel } from '../../src/components/EditPanel/BoxEditorPanel';
 
 const mockState = vi.hoisted(() => {
   const listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -60,12 +61,15 @@ const mockState = vi.hoisted(() => {
     }
   };
 
+  const previewDispose = vi.fn(async () => undefined);
+  const editorDispose = vi.fn(async () => undefined);
+
   return {
     listeners,
     session,
     emit,
-    renderEditor: vi.fn(() => () => undefined),
-    renderView: vi.fn(() => () => undefined),
+    previewDispose,
+    editorDispose,
     onClose: vi.fn(),
     onFocus: vi.fn(),
     onUpdateConfig: vi.fn(),
@@ -75,17 +79,65 @@ const mockState = vi.hoisted(() => {
       emit();
       return { ...session, entries: [...session.entries] };
     }),
+    client: {
+      platform: {
+        openFile: vi.fn(async () => null),
+      },
+      document: {
+        window: {
+          render: vi.fn(async () => ({
+            frame: document.createElement('iframe'),
+            origin: 'file://',
+            dispose: previewDispose,
+            documentType: 'box' as const,
+          })),
+          onReady: vi.fn((_frame: HTMLIFrameElement, handler: () => void) => {
+            handler();
+            return () => undefined;
+          }),
+          onError: vi.fn(() => () => undefined),
+          onResourceOpen: vi.fn(() => () => undefined),
+        },
+      },
+      box: {
+        readLayoutDescriptor: vi.fn(async () => ({
+          pluginId: 'chips.layout.grid',
+          layoutType: 'chips.layout.grid',
+          displayName: '网格布局',
+          defaultConfig: {
+            schemaVersion: '1.0.0',
+            props: {
+              columnCount: 4,
+              gap: 16,
+            },
+            assetRefs: [],
+          },
+        })),
+        normalizeLayoutConfig: vi.fn(async (_layoutType: string, input: Record<string, unknown>) => input),
+        editorPanel: {
+          render: vi.fn(async () => ({
+            frame: document.createElement('iframe'),
+            origin: 'file://',
+            dispose: editorDispose,
+          })),
+          onReady: vi.fn(() => () => undefined),
+          onChange: vi.fn(() => () => undefined),
+          onError: vi.fn(() => () => undefined),
+        },
+      },
+    },
   };
 });
 
 vi.mock('../../src/hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
+    locale: 'zh-CN',
   }),
 }));
 
 vi.mock('../../src/services/bridge-client', () => ({
-  getChipsClient: () => ({ plugin: { query: vi.fn(async () => []) } }),
+  getChipsClient: () => mockState.client,
 }));
 
 vi.mock('../../src/services/workspace-service', () => ({
@@ -93,6 +145,9 @@ vi.mock('../../src/services/workspace-service', () => ({
     getState: () => ({
       rootPath: '/workspace',
     }),
+    refresh: vi.fn(async () => undefined),
+    getFileByPath: vi.fn(() => undefined),
+    openFile: vi.fn(),
   },
 }));
 
@@ -103,6 +158,27 @@ vi.mock('../../src/components/CardWindowBase/CardWindowBase', () => ({
       <div>{children}</div>
     </div>
   ),
+}));
+
+vi.mock('../../src/layouts/InfiniteCanvas/CanvasContext', () => ({
+  useCanvas: () => ({
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    panByInput: vi.fn(),
+    panByScreenDelta: vi.fn(),
+    zoomByFactorAtPoint: vi.fn(),
+    markInteractionSequence: vi.fn(),
+    clearInteractionSequence: vi.fn(),
+    isDesktopZoomSuppressed: vi.fn(() => false),
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    zoomTo: vi.fn(),
+    resetView: vi.fn(),
+    fitToContent: vi.fn(),
+    screenToWorld: vi.fn(() => ({ x: 0, y: 0 })),
+    worldToScreen: vi.fn(() => ({ x: 0, y: 0 })),
+  }),
 }));
 
 vi.mock('../../src/services/box-document-service', () => ({
@@ -131,68 +207,21 @@ vi.mock('../../src/services/box-document-service', () => ({
       mockState.emit();
       return { ...mockState.session, entries: [...mockState.session.entries] };
     }),
-    addEntry: vi.fn((_boxId: string, url: string) => {
-      mockState.session.entries = [
-        ...mockState.session.entries,
-        {
-          entryId: `entry-${mockState.session.entries.length + 1}`,
-          url,
-          enabled: true,
-          snapshot: {
-            title: url,
-            summary: url,
-            cover: {
-              mode: 'none',
-            },
-          },
-          layoutHints: {},
-        },
-      ];
+    importDocumentFiles: vi.fn(async () => ({ ...mockState.session, entries: [...mockState.session.entries] })),
+    moveEntryToIndex: vi.fn(),
+    updateMetadata: vi.fn((_boxId: string, patch: Record<string, unknown>) => {
+      mockState.session.metadata = {
+        ...mockState.session.metadata,
+        ...patch,
+      };
       mockState.session.isDirty = true;
       mockState.emit();
       return { ...mockState.session, entries: [...mockState.session.entries] };
     }),
-    updateEntry: vi.fn((_boxId: string, entryId: string, patch: Record<string, unknown>) => {
-      mockState.session.entries = mockState.session.entries.map((entry) =>
-        entry.entryId === entryId ? { ...entry, ...patch } : entry
-      );
-      mockState.session.isDirty = true;
-      mockState.emit();
-      return { ...mockState.session, entries: [...mockState.session.entries] };
-    }),
+    updateCover: vi.fn(async () => ({ ...mockState.session, entries: [...mockState.session.entries] })),
     moveEntry: vi.fn(),
     removeEntry: vi.fn(),
   },
-}));
-
-vi.mock('chips-box-layout-host', () => ({
-  loadLayoutDefinition: vi.fn(async () => ({
-    pluginId: 'chips.layout.grid',
-    layoutType: 'chips.layout.grid',
-    displayName: '网格布局',
-    createDefaultConfig: () => ({
-      schemaVersion: '1.0.0',
-      props: {
-        columnCount: 4,
-        gap: 16,
-      },
-      assetRefs: [],
-    }),
-    normalizeConfig: (input: Record<string, unknown>) => input,
-    validateConfig: () => ({
-      valid: true,
-      errors: {},
-    }),
-    renderEditor: mockState.renderEditor,
-    renderView: mockState.renderView,
-  })),
-  createInMemoryBoxLayoutRuntime: vi.fn(() => ({
-    listEntries: vi.fn(),
-    readEntryDetail: vi.fn(),
-    resolveEntryResource: vi.fn(),
-    readBoxAsset: vi.fn(),
-    prefetchEntries: vi.fn(),
-  })),
 }));
 
 describe('编辑引擎箱子编辑链路基础流程', () => {
@@ -206,21 +235,6 @@ describe('编辑引擎箱子编辑链路基础流程', () => {
     root = createRoot(container);
     vi.clearAllMocks();
     mockState.listeners.clear();
-    mockState.session.entries = [
-      {
-        entryId: 'entry000001',
-        url: 'file:///workspace/demo.card',
-        enabled: true,
-        snapshot: {
-          title: 'Demo Card',
-          summary: 'Demo Summary',
-          cover: {
-            mode: 'none',
-          },
-        },
-        layoutHints: {},
-      },
-    ];
     mockState.session.isDirty = false;
   });
 
@@ -231,64 +245,44 @@ describe('编辑引擎箱子编辑链路基础流程', () => {
     container.remove();
   });
 
-  it('会加载箱子会话、挂载布局编辑与预览，并支持新增条目后保存', async () => {
+  it('会分别通过统一文档窗口和 Host 布局编辑面板渲染箱子预览与编辑界面', async () => {
     await act(async () => {
       root.render(
-        <BoxWindow
-          config={{
-            id: 'box-window-1',
-            type: 'box',
-            title: 'Demo Box',
-            boxId: 'box1234567',
-            boxPath: '/workspace/demo.box',
-            position: { x: 0, y: 0 },
-            size: { width: 1200, height: 800 },
-            state: 'normal',
-            zIndex: 1,
-          }}
-          onUpdateConfig={mockState.onUpdateConfig}
-          onClose={mockState.onClose}
-          onFocus={mockState.onFocus}
-        />,
+        <>
+          <BoxWindow
+            config={{
+              id: 'box-window-1',
+              type: 'box',
+              title: 'Demo Box',
+              boxId: 'box1234567',
+              boxPath: '/workspace/demo.box',
+              position: { x: 0, y: 0 },
+              size: { width: 1200, height: 800 },
+              state: 'normal',
+              zIndex: 1,
+            }}
+            onUpdateConfig={mockState.onUpdateConfig}
+            onClose={mockState.onClose}
+            onFocus={mockState.onFocus}
+          />
+          <BoxEditorPanel
+            boxId="box1234567"
+            boxPath="/workspace/demo.box"
+          />
+        </>,
       );
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(mockState.renderEditor).toHaveBeenCalled();
-    expect(mockState.renderView).toHaveBeenCalled();
-    expect(container.querySelectorAll('input[type="text"]').length).toBeGreaterThan(0);
-
-    const inputs = container.querySelectorAll('input[type="text"]');
-    const addUrlInput = Array.from(inputs).find((input) => input.getAttribute('placeholder') === 'box_window.entry_url_placeholder');
-    expect(addUrlInput).toBeTruthy();
-
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-      setter?.call(addUrlInput, 'https://example.com/new-entry');
-      addUrlInput!.dispatchEvent(new Event('input', { bubbles: true }));
-      await Promise.resolve();
+    expect(mockState.client.document.window.render).toHaveBeenCalledWith({
+      filePath: '/workspace/demo.box',
+      documentType: 'box',
+      locale: 'zh-CN',
     });
-
-    const addButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'box_window.add_entry');
-    expect(addButton).toBeTruthy();
-
-    await act(async () => {
-      addButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(mockState.session.entries).toHaveLength(2);
-    expect(mockState.session.entries[1]?.url).toBe('https://example.com/new-entry');
-
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'box_window.save');
-    expect(saveButton).toBeTruthy();
-
-    await act(async () => {
-      saveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(mockState.saveBox).toHaveBeenCalledWith('box1234567');
+    expect(mockState.client.box.readLayoutDescriptor).toHaveBeenCalledWith('chips.layout.grid');
+    expect(mockState.client.box.editorPanel.render).toHaveBeenCalled();
+    expect(container.querySelector('.window-menu')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'common.save')).toBe(false);
   });
 });

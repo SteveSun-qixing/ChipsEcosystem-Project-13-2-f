@@ -42,6 +42,8 @@ interface CoverPanelProps {
   cardId: string;
   cardPath: string;
   cardName: string;
+  packageDirectoryName?: '.card' | '.box';
+  assetDirectoryName?: string;
   currentCoverHtml?: string;
   currentRatio?: string;
   onDraftChange?: (draft: CoverPanelDraft) => void;
@@ -130,6 +132,8 @@ export function CoverPanel({
   cardId,
   cardPath,
   cardName,
+  packageDirectoryName = '.card',
+  assetDirectoryName = 'cardcover',
   currentCoverHtml,
   currentRatio,
   onDraftChange,
@@ -192,7 +196,7 @@ export function CoverPanel({
       return undefined;
     }
 
-    const resourcePath = joinPath(cardPath, '.card', initialGeneratedImageSource.replace(/^\.\//, ''));
+    const resourcePath = joinPath(cardPath, packageDirectoryName, initialGeneratedImageSource.replace(/^\.\//, ''));
 
     void (async () => {
       try {
@@ -296,7 +300,7 @@ export function CoverPanel({
       sourceUrl,
       previewUrl: sourceUrl,
       resource: {
-        path: `cardcover/cover-image.${extension}`,
+        path: `${assetDirectoryName}/cover-image.${extension}`,
         data: fileData,
       },
     };
@@ -322,7 +326,7 @@ export function CoverPanel({
       ...currentDraft,
       previewUrl: result.previewUrl,
       resource: {
-        path: 'cardcover/cover-image.png',
+        path: `${assetDirectoryName}/cover-image.png`,
         data: result.data,
       },
     };

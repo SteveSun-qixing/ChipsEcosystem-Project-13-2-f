@@ -2,6 +2,7 @@ import type { DragData } from '../../components/CardBoxLibrary/types';
 import type { CompositeCard } from '../../core/card-service';
 
 const COMPOSITE_DROP_SURFACE_SELECTOR = '[data-chips-drop-surface="composite-preview"]';
+const BOX_DROP_SURFACE_SELECTOR = '[data-chips-drop-surface="box-preview"]';
 const BASECARD_NODE_SELECTOR = '[data-base-card-id]';
 const DEFAULT_COMPOSITE_PADDING_PX = 16;
 const MIN_INDICATOR_WIDTH_PX = 24;
@@ -24,13 +25,24 @@ export interface CompositeCardInsertDropTarget {
     indicator: CanvasInsertIndicator;
 }
 
-export type CanvasDropTarget = CompositeCardInsertDropTarget;
+export interface BoxEntryImportDropTarget {
+    type: 'box-entry-import';
+    boxId: string;
+}
+
+export type CanvasDropTarget = CompositeCardInsertDropTarget | BoxEntryImportDropTarget;
 
 export interface ResolveCompositeCardDropTargetOptions {
     dragData: DragData | null;
     eventTarget: EventTarget | null;
     screenPosition: CanvasDropPoint;
     openCards: Map<string, CompositeCard>;
+}
+
+export interface ResolveBoxEntryImportDropTargetOptions {
+    dragData: DragData | null;
+    eventTarget: EventTarget | null;
+    screenPosition: CanvasDropPoint;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -63,6 +75,24 @@ function resolvePreviewSurface(
     return document
         .elementFromPoint(screenPosition.x, screenPosition.y)
         ?.closest<HTMLElement>(COMPOSITE_DROP_SURFACE_SELECTOR) ?? null;
+}
+
+function resolveBoxPreviewSurface(
+    eventTarget: EventTarget | null,
+    screenPosition: CanvasDropPoint,
+): HTMLElement | null {
+    const directTarget = asElement(eventTarget)?.closest<HTMLElement>(BOX_DROP_SURFACE_SELECTOR);
+    if (directTarget) {
+        return directTarget;
+    }
+
+    if (typeof document.elementFromPoint !== 'function') {
+        return null;
+    }
+
+    return document
+        .elementFromPoint(screenPosition.x, screenPosition.y)
+        ?.closest<HTMLElement>(BOX_DROP_SURFACE_SELECTOR) ?? null;
 }
 
 function getBaseCardNodes(previewSurface: HTMLElement): HTMLElement[] {
@@ -177,5 +207,34 @@ export function resolveCompositeCardDropTarget({
         cardId,
         insertionIndex,
         indicator,
+    };
+}
+
+export function resolveBoxEntryImportDropTarget({
+    dragData,
+    eventTarget,
+    screenPosition,
+}: ResolveBoxEntryImportDropTargetOptions): CanvasDropTarget | null {
+    if (!dragData || dragData.type !== 'workspace-file') {
+        return null;
+    }
+
+    if (dragData.fileType !== 'card' && dragData.fileType !== 'box') {
+        return null;
+    }
+
+    const previewSurface = resolveBoxPreviewSurface(eventTarget, screenPosition);
+    const boxId = previewSurface?.dataset.chipsBoxId;
+    if (!previewSurface || !boxId) {
+        return null;
+    }
+
+    if (previewSurface.dataset.chipsDropAccept !== 'true') {
+        return null;
+    }
+
+    return {
+        type: 'box-entry-import',
+        boxId,
     };
 }

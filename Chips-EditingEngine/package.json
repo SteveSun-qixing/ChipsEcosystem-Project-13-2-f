@@ -15,7 +15,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@chips/component-library": "*",
-    "chips-box-layout-host": "*",
     "yaml": "^2.3.4"
   },
   "devDependencies": {

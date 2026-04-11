@@ -110,15 +110,16 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
 
 当前导出 HTML 在 `<body>` 外层统一补充导出展示容器：
 
-- `body` 增加导出专用背景，不复用查看器运行时容器标识
-- `.chips-export-stage` 负责整页背景区、上下留白和水平居中
-- `.chips-export-stage__viewport` 负责响应式最大宽度
+- `body` 使用纯内容背景，不再额外叠加舞台渐变
+- `.chips-export-stage` 负责全视口承载和水平居中，不再引入顶部块向留白
+- `.chips-export-stage__viewport` 负责响应式最大宽度，并与视口高度保持对齐
 - `.chips-export-stage__content` 负责承载 Host 返回的 `.chips-composite`
 
 设计原则：
 
 - 桌面端维持稳定阅读宽度，避免卡片内容无限拉伸
-- 移动端降级为全宽内容区，仅保留较小安全边距
+- 移动端降级为全宽内容区，不额外保留导出舞台边距
+- 导出页首屏不应露出额外顶部背景条
 - 导出样式必须保持幂等，多次处理同一 HTML 不得重复注入
 ## 7. Manifest 策略
 

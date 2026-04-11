@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { createError } from '../../../src/shared/errors';
 import {
   loadElectronModule,
@@ -22,28 +23,47 @@ import type {
   FileWatchSubscription,
   FileListOptions,
   FileReadOptions,
+  HostKind,
+  PALAssociation,
   PALAdapter,
+  PALBackground,
   PALClipboard,
+  PALDevice,
   PALDialog,
+  PALEnvironment,
   PALFileSystem,
   PALIPC,
   PALLauncher,
   PALNotification,
+  PALOffscreenRender,
   PALPlatform,
   PALPower,
   PALScreen,
+  PALSelection,
+  PALSurface,
+  PALStorage,
+  PALSystemUi,
+  PALTransfer,
   PALIpcChannelInfo,
   PALIpcCreateOptions,
   PALIpcMessage,
   PALIpcReceiveOptions,
   PALIpcTransport,
+  PalCapabilitySnapshot,
+  PalPlatformId,
   PALShell,
   PALShortcut,
   PALTray,
   PALWindow,
+  RenderHtmlToImageRequest,
+  RenderHtmlToImageResult,
+  RenderHtmlToPdfRequest,
+  RenderHtmlToPdfResult,
   NotificationOptions,
   PowerState,
   ScreenInfo,
+  SurfaceOpenRequest,
+  SurfaceState,
   LauncherCreateOptions,
   LauncherLocation,
   LauncherRecord,
@@ -73,6 +93,13 @@ const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined): Wind
       chrome.titleBarOverlay && typeof chrome.titleBarOverlay === 'object'
         ? { ...chrome.titleBarOverlay }
         : chrome.titleBarOverlay
+  };
+};
+
+const cloneWindowState = (state: WindowState): WindowState => {
+  return {
+    ...state,
+    chrome: cloneWindowChromeOptions(state.chrome)
   };
 };
 
@@ -183,7 +210,7 @@ interface WindowManagerOptions {
   electronPreloadPath?: string;
 }
 
-class NodeWindowManager implements PALWindow {
+class NodeWindowManager implements PALWindow, PALSurface {
   private readonly windows = new Map<string, WindowState>();
   private readonly electronWindows = new Map<string, ElectronBrowserWindowLike>();
   private readonly electronBrowserWindow?: ElectronBrowserWindowCtorLike;
@@ -195,6 +222,48 @@ class NodeWindowManager implements PALWindow {
     this.electronPreloadPath = options?.electronPreloadPath;
   }
 
+  public async open(request: SurfaceOpenRequest): Promise<SurfaceState> {
+    const target = request.target;
+    const presentation = request.presentation ?? {};
+    const requestedKind = request.kind ?? 'window';
+    const created = await this.create({
+      title:
+        presentation.title ??
+        (target.type === 'plugin'
+          ? target.pluginId
+          : target.type === 'document'
+            ? target.title ?? target.documentId
+            : target.url),
+      width: presentation.width ?? 1280,
+      height: presentation.height ?? 800,
+      resizable: presentation.resizable,
+      alwaysOnTop: presentation.alwaysOnTop,
+      url:
+        target.type === 'url'
+          ? target.url
+          : target.type === 'document'
+            ? target.url ?? target.documentId
+            : target.url,
+      pluginId: target.type === 'plugin' ? target.pluginId : undefined,
+      sessionId: target.type === 'plugin' ? target.sessionId : undefined,
+      permissions: target.type === 'plugin' ? target.permissions : undefined,
+      launchParams: target.type === 'plugin' ? target.launchParams : undefined,
+      chrome: presentation.chrome
+    });
+
+    return {
+      ...created,
+      kind: 'window',
+      metadata:
+        requestedKind === 'window'
+          ? undefined
+          : {
+              requestedKind,
+              targetType: target.type
+            }
+    };
+  }
+
   public async create(options: WindowOptions): Promise<WindowState> {
     const id = createId();
     const title = options.title;
@@ -202,6 +271,7 @@ class NodeWindowManager implements PALWindow {
     const height = options.height;
     const state: WindowState = {
       id,
+      kind: 'window',
       title,
       width,
       height,
@@ -257,7 +327,7 @@ class NodeWindowManager implements PALWindow {
     }
 
     this.windows.set(id, state);
-    return state;
+    return cloneWindowState(state);
   }
 
   public async focus(id: string): Promise<void> {
@@ -350,6 +420,10 @@ class NodeWindowManager implements PALWindow {
     }
 
     this.windows.delete(id);
+  }
+
+  public async list(): Promise<WindowState[]> {
+    return [...this.windows.values()].map((state) => cloneWindowState(state));
   }
 
   private getWindowState(id: string): WindowState | undefined {
@@ -1462,17 +1536,271 @@ class NodePower implements PALPower {
   }
 }
 
-class NodePlatform implements PALPlatform {
+const buildDesktopCapabilitySnapshot = (): PalCapabilitySnapshot => {
+  return {
+    hostKind: 'desktop',
+    platform: process.platform,
+    facets: {
+      surface: {
+        supported: true,
+        interactive: true,
+        supportedKinds: ['window']
+      },
+      storage: {
+        localWorkspace: true,
+        sandboxFilePicker: false,
+        remoteBacked: false
+      },
+      selection: {
+        openFile: true,
+        saveFile: true,
+        directory: true,
+        multiple: true
+      },
+      transfer: {
+        upload: false,
+        download: true,
+        share: false,
+        externalOpen: true,
+        revealInShell: true
+      },
+      association: {
+        fileAssociation: true,
+        urlScheme: true,
+        shareTarget: false
+      },
+      device: {
+        screen: true,
+        power: true,
+        network: false
+      },
+      systemUi: {
+        clipboard: true,
+        tray: true,
+        globalShortcut: true,
+        notification: true
+      },
+      background: {
+        keepAlive: true,
+        wakeEvents: true
+      },
+      ipc: {
+        namedPipe: true,
+        unixSocket: process.platform !== 'win32',
+        sharedMemory: true
+      },
+      offscreenRender: {
+        htmlToPdf: true,
+        htmlToImage: true
+      }
+    }
+  };
+};
+
+const buildHeadlessCapabilitySnapshot = (): PalCapabilitySnapshot => {
+  return {
+    hostKind: 'headless',
+    platform: 'server',
+    facets: {
+      surface: {
+        supported: false,
+        interactive: false,
+        supportedKinds: []
+      },
+      storage: {
+        localWorkspace: true,
+        sandboxFilePicker: false,
+        remoteBacked: false
+      },
+      selection: {
+        openFile: false,
+        saveFile: false,
+        directory: false,
+        multiple: false
+      },
+      transfer: {
+        upload: false,
+        download: false,
+        share: false,
+        externalOpen: false,
+        revealInShell: false
+      },
+      association: {
+        fileAssociation: false,
+        urlScheme: false,
+        shareTarget: false
+      },
+      device: {
+        screen: false,
+        power: true,
+        network: false
+      },
+      systemUi: {
+        clipboard: false,
+        tray: false,
+        globalShortcut: false,
+        notification: false
+      },
+      background: {
+        keepAlive: true,
+        wakeEvents: false
+      },
+      ipc: {
+        namedPipe: true,
+        unixSocket: process.platform !== 'win32',
+        sharedMemory: true
+      },
+      offscreenRender: {
+        htmlToPdf: false,
+        htmlToImage: false
+      }
+    }
+  };
+};
+
+const toLegacyCapabilities = (snapshot: PalCapabilitySnapshot): string[] => {
+  const capabilities = new Set<string>();
+  if (snapshot.facets.surface.supported) {
+    capabilities.add('window');
+  }
+  if (snapshot.facets.storage.localWorkspace) {
+    capabilities.add('file');
+  }
+  if (snapshot.facets.selection.openFile || snapshot.facets.selection.saveFile) {
+    capabilities.add('dialog');
+  }
+  if (snapshot.facets.systemUi.clipboard) {
+    capabilities.add('clipboard');
+  }
+  if (snapshot.facets.transfer.externalOpen || snapshot.facets.transfer.revealInShell) {
+    capabilities.add('shell');
+  }
+  if (snapshot.facets.device.screen) {
+    capabilities.add('screen');
+  }
+  if (snapshot.facets.systemUi.tray) {
+    capabilities.add('tray');
+  }
+  if (snapshot.facets.systemUi.notification) {
+    capabilities.add('notification');
+  }
+  if (snapshot.facets.device.power) {
+    capabilities.add('power');
+  }
+  if (snapshot.facets.systemUi.globalShortcut) {
+    capabilities.add('shortcut');
+  }
+  if (snapshot.facets.ipc.namedPipe || snapshot.facets.ipc.sharedMemory || snapshot.facets.ipc.unixSocket) {
+    capabilities.add('ipc');
+  }
+  if (snapshot.facets.offscreenRender.htmlToPdf || snapshot.facets.offscreenRender.htmlToImage) {
+    capabilities.add('offscreen-render');
+  }
+
+  return [...capabilities];
+};
+
+class NodeEnvironment implements PALEnvironment {
+  public constructor(private readonly hostKind: HostKind) {}
+
   public async getInfo() {
+    const platform: PalPlatformId = this.hostKind === 'headless' ? 'server' : process.platform;
     return {
-      platform: process.platform,
+      hostKind: this.hostKind,
+      platform,
       arch: process.arch,
       release: os.release()
     };
   }
 
+  public async getCapabilities(): Promise<PalCapabilitySnapshot> {
+    return this.hostKind === 'headless' ? buildHeadlessCapabilitySnapshot() : buildDesktopCapabilitySnapshot();
+  }
+}
+
+class NodeAssociation implements PALAssociation {
+  public constructor(private readonly environment: PALEnvironment) {}
+
+  public async getCapabilities(): Promise<PalCapabilitySnapshot['facets']['association']> {
+    const snapshot = await this.environment.getCapabilities();
+    return { ...snapshot.facets.association };
+  }
+}
+
+class NodeDevice implements PALDevice {
+  public constructor(
+    private readonly screen: PALScreen,
+    private readonly power: PALPower
+  ) {}
+
+  public async getPrimaryScreen(): Promise<ScreenInfo> {
+    return this.screen.getPrimary();
+  }
+
+  public async getAllScreens(): Promise<ScreenInfo[]> {
+    return this.screen.getAll();
+  }
+
+  public async getPowerState(): Promise<PowerState> {
+    return this.power.getState();
+  }
+}
+
+class NodeSystemUi implements PALSystemUi {
+  public constructor(
+    public readonly clipboard: PALClipboard,
+    public readonly tray: PALTray,
+    public readonly notification: PALNotification,
+    public readonly shortcut: PALShortcut
+  ) {}
+}
+
+class NodeBackground implements PALBackground {
+  public constructor(private readonly power: PALPower) {}
+
+  public async getState(): Promise<PowerState> {
+    return this.power.getState();
+  }
+
+  public async setPreventSleep(prevent: boolean): Promise<boolean> {
+    return this.power.setPreventSleep(prevent);
+  }
+}
+
+class NodeTransfer implements PALTransfer {
+  public constructor(private readonly shell: PALShell) {}
+
+  public async openPath(targetPath: string): Promise<void> {
+    await this.shell.openPath(targetPath);
+  }
+
+  public async openExternal(url: string): Promise<void> {
+    await this.shell.openExternal(url);
+  }
+
+  public async revealInShell(targetPath: string): Promise<void> {
+    await this.shell.showItemInFolder(targetPath);
+  }
+
+  public async share(): Promise<{ shared: boolean }> {
+    throw createError('PAL_TRANSFER_UNSUPPORTED', 'Share is not supported by the current PAL adapter');
+  }
+}
+
+class NodePlatform implements PALPlatform {
+  public constructor(private readonly environment: PALEnvironment) {}
+
+  public async getInfo() {
+    const info = await this.environment.getInfo();
+    return {
+      platform: info.platform,
+      arch: info.arch,
+      release: info.release
+    };
+  }
+
   public async getCapabilities(): Promise<string[]> {
-    return ['window', 'file', 'dialog', 'clipboard', 'shell', 'screen', 'tray', 'notification', 'power', 'shortcut', 'ipc'];
+    return toLegacyCapabilities(await this.environment.getCapabilities());
   }
 }
 
@@ -1510,6 +1838,344 @@ class NodeScreen implements PALScreen {
         primary: true
       }
     ];
+  }
+}
+
+const asPositiveFiniteNumber = (value: unknown): number | undefined => {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+};
+
+const isPathInside = (parentPath: string, targetPath: string): boolean => {
+  const relative = path.relative(parentPath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const normalizeHtmlEntryFile = (entryFile?: string): string => {
+  const normalized = (typeof entryFile === 'string' && entryFile.trim().length > 0 ? entryFile.trim() : 'index.html').replace(/\\/g, '/');
+  const candidate = path.posix.normalize(normalized);
+  if (candidate.startsWith('/') || candidate === '..' || candidate.startsWith('../')) {
+    throw createError('INVALID_ARGUMENT', 'entryFile must stay inside htmlDir', { entryFile });
+  }
+  return candidate;
+};
+
+const resolveHtmlExportPaths = async (input: {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+}): Promise<{ entryPath: string; outputFile: string }> => {
+  const htmlDir = path.resolve(input.htmlDir);
+  const htmlDirStat = await fs.stat(htmlDir).catch(() => null);
+  if (!htmlDirStat?.isDirectory()) {
+    throw createError('FILE_NOT_FOUND', 'htmlDir does not exist or is not a directory', { htmlDir });
+  }
+
+  const entryFile = normalizeHtmlEntryFile(input.entryFile);
+  const entryPath = path.resolve(htmlDir, entryFile);
+  if (!isPathInside(htmlDir, entryPath)) {
+    throw createError('INVALID_ARGUMENT', 'entryFile must stay inside htmlDir', { entryFile });
+  }
+
+  const entryStat = await fs.stat(entryPath).catch(() => null);
+  if (!entryStat?.isFile()) {
+    throw createError('FILE_NOT_FOUND', 'HTML entry file does not exist', { htmlDir, entryFile, entryPath });
+  }
+
+  const outputFile = path.resolve(input.outputFile);
+  await fs.mkdir(path.dirname(outputFile), { recursive: true });
+  return { entryPath, outputFile };
+};
+
+const countPdfPages = (buffer: Buffer): number | undefined => {
+  const matches = buffer.toString('latin1').match(/\/Type\s*\/Page\b/g);
+  return matches && matches.length > 0 ? matches.length : undefined;
+};
+
+const waitForExportDocumentReady = async (browserWindow: {
+  webContents: { executeJavaScript?: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> };
+}): Promise<void> => {
+  if (typeof browserWindow.webContents.executeJavaScript !== 'function') {
+    return;
+  }
+
+  await browserWindow.webContents.executeJavaScript(
+    [
+      'new Promise((resolve) => {',
+      '  let settled = false;',
+      '  const finish = () => {',
+      '    if (settled) { return; }',
+      '    settled = true;',
+      '    const raf = typeof window.requestAnimationFrame === "function"',
+      '      ? window.requestAnimationFrame.bind(window)',
+      '      : (callback) => window.setTimeout(callback, 0);',
+      '    raf(() => raf(() => resolve(true)));',
+      '  };',
+      '  const waitImages = Promise.all(Array.from(document.images || []).map((image) => {',
+      '    if (image.complete) { return Promise.resolve(); }',
+      '    return new Promise((done) => {',
+      '      image.addEventListener("load", () => done(undefined), { once: true });',
+      '      image.addEventListener("error", () => done(undefined), { once: true });',
+      '    });',
+      '  }));',
+      '  const waitFonts = document.fonts && typeof document.fonts.ready?.then === "function"',
+      '    ? document.fonts.ready',
+      '    : Promise.resolve();',
+      '  const waitWindowLoad = document.readyState === "complete"',
+      '    ? Promise.resolve()',
+      '    : new Promise((done) => window.addEventListener("load", () => done(undefined), { once: true }));',
+      '  const frameList = Array.from(document.querySelectorAll(".chips-composite__frame"));',
+      '  const compositeBodyDataset = document.body?.dataset;',
+      '  for (const frame of frameList) {',
+      '    try {',
+      '      frame.loading = "eager";',
+      '      frame.setAttribute("loading", "eager");',
+      '    } catch {}',
+      '  }',
+      '  const waitFrames = Promise.all(frameList.map((frame) => new Promise((done) => {',
+      '    const finishFrame = () => done(undefined);',
+      '    if (frame.dataset.loaded === "true") {',
+      '      finishFrame();',
+      '      return;',
+      '    }',
+      '    frame.addEventListener("load", finishFrame, { once: true });',
+      '    frame.addEventListener("error", finishFrame, { once: true });',
+      '    window.setTimeout(finishFrame, 3000);',
+      '  })));',
+      '  const isCompositeSettled = () => {',
+      '    if (frameList.length === 0) {',
+      '      return true;',
+      '    }',
+      '    const ready = compositeBodyDataset?.chipsCompositeReady === "true";',
+      '    const lastResizeAt = Number(compositeBodyDataset?.chipsCompositeLastResizeAt ?? "0");',
+      '    const quietForMs = Number.isFinite(lastResizeAt) && lastResizeAt > 0 ? Date.now() - lastResizeAt : Number.POSITIVE_INFINITY;',
+      '    const framesReady = frameList.every((frame) => frame.dataset.loaded === "true" && frame.dataset.renderReady === "true");',
+      '    return ready && framesReady && quietForMs >= 180;',
+      '  };',
+      '  const waitCompositeSettled = frameList.length === 0',
+      '    ? Promise.resolve()',
+      '    : new Promise((done) => {',
+      '        const startedAt = Date.now();',
+      '        const scheduleCheck = () => {',
+      '          if (isCompositeSettled()) {',
+      '            window.setTimeout(() => done(undefined), 120);',
+      '            return;',
+      '          }',
+      '          if (Date.now() - startedAt >= 8000) {',
+      '            done(undefined);',
+      '            return;',
+      '          }',
+      '          window.setTimeout(scheduleCheck, 60);',
+      '        };',
+      '        window.addEventListener("message", (event) => {',
+      '          const type = event?.data?.type;',
+      '          if (type === "chips.composite:ready" || type === "chips.composite:resize" || type === "chips.basecard:height" || type === "chips.basecard:error") {',
+      '            window.setTimeout(scheduleCheck, 0);',
+      '          }',
+      '        });',
+      '        scheduleCheck();',
+      '      });',
+      '  Promise.all([waitWindowLoad, waitImages, waitFonts, waitFrames, waitCompositeSettled])',
+      '    .then(() => window.setTimeout(finish, 80))',
+      '    .catch(() => window.setTimeout(finish, 80));',
+      '  window.setTimeout(finish, 10000);',
+      '})'
+    ].join('\n'),
+    true
+  );
+};
+
+const measureExportDocumentBounds = async (browserWindow: {
+  webContents: { executeJavaScript?: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> };
+}): Promise<{ width?: number; height?: number }> => {
+  let measuredWidth: number | undefined;
+  let measuredHeight: number | undefined;
+
+  if (typeof browserWindow.webContents.executeJavaScript === 'function') {
+    const measured = await browserWindow.webContents
+      .executeJavaScript<{ width?: number; height?: number }>(
+        [
+          '(() => ({',
+          '  width: Math.max(',
+          '    document.documentElement?.scrollWidth ?? 0,',
+          '    document.body?.scrollWidth ?? 0,',
+          '    document.documentElement?.offsetWidth ?? 0,',
+          '    document.body?.offsetWidth ?? 0,',
+          '    window.innerWidth ?? 0',
+          '  ),',
+          '  height: Math.max(',
+          '    document.documentElement?.scrollHeight ?? 0,',
+          '    document.body?.scrollHeight ?? 0,',
+          '    document.documentElement?.offsetHeight ?? 0,',
+          '    document.body?.offsetHeight ?? 0,',
+          '    Number(document.body?.dataset?.chipsCompositeLastHeight ?? "0") || 0,',
+          '    window.innerHeight ?? 0',
+          '  )',
+          '}))()'
+        ].join('\n'),
+        true
+      )
+      .catch(() => ({ width: undefined, height: undefined }));
+    measuredWidth = asPositiveFiniteNumber(measured.width);
+    measuredHeight = asPositiveFiniteNumber(measured.height);
+  }
+
+  return { width: measuredWidth, height: measuredHeight };
+};
+
+const resolveExportViewport = (
+  measuredBounds: { width?: number; height?: number },
+  requestedWidth?: number,
+  requestedHeight?: number,
+  scaleFactor = 1
+): { width: number; height: number } => {
+  const effectiveScale = asPositiveFiniteNumber(scaleFactor) ?? 1;
+  const width = Math.max(1, Math.ceil((requestedWidth ?? measuredBounds.width ?? 1200) * effectiveScale));
+  const height = Math.max(1, Math.ceil((requestedHeight ?? measuredBounds.height ?? 900) * effectiveScale));
+  return { width, height };
+};
+
+class NodeOffscreenRender implements PALOffscreenRender {
+  public async renderHtmlToPdf(input: RenderHtmlToPdfRequest): Promise<RenderHtmlToPdfResult> {
+    const electron = loadElectronModule();
+    if (!electron?.BrowserWindow) {
+      throw createError('PLATFORM_UNSUPPORTED', 'HTML to PDF export requires Electron BrowserWindow support');
+    }
+
+    const resolved = await resolveHtmlExportPaths(input);
+    const browserWindow = new electron.BrowserWindow({
+      show: false,
+      width: 1280,
+      height: 960,
+      backgroundColor: '#ffffff',
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true
+      }
+    });
+
+    try {
+      await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
+      await waitForExportDocumentReady(browserWindow);
+
+      if (typeof browserWindow.webContents.printToPDF !== 'function') {
+        throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose printToPDF');
+      }
+
+      const marginMm = input.options?.marginMm;
+      const pdfBuffer = await browserWindow.webContents.printToPDF({
+        pageSize: input.options?.pageSize ?? 'A4',
+        landscape: input.options?.landscape === true,
+        printBackground: input.options?.printBackground !== false,
+        margins: marginMm
+          ? {
+              top: (marginMm.top ?? 0) / 25.4,
+              right: (marginMm.right ?? 0) / 25.4,
+              bottom: (marginMm.bottom ?? 0) / 25.4,
+              left: (marginMm.left ?? 0) / 25.4
+            }
+          : undefined
+      });
+
+      await fs.writeFile(resolved.outputFile, pdfBuffer);
+      return {
+        outputFile: resolved.outputFile,
+        pageCount: countPdfPages(pdfBuffer)
+      };
+    } finally {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.close();
+      }
+    }
+  }
+
+  public async renderHtmlToImage(input: RenderHtmlToImageRequest): Promise<RenderHtmlToImageResult> {
+    const electron = loadElectronModule();
+    if (!electron?.BrowserWindow) {
+      throw createError('PLATFORM_UNSUPPORTED', 'HTML to image export requires Electron BrowserWindow support');
+    }
+
+    const resolved = await resolveHtmlExportPaths(input);
+    const format = input.options?.format ?? 'png';
+    const background = input.options?.background ?? (format === 'jpeg' ? 'white' : 'transparent');
+    const themeBackgroundColor =
+      typeof (input.options as Record<string, unknown> | undefined)?.themeBackgroundColor === 'string'
+        ? String((input.options as Record<string, unknown>).themeBackgroundColor)
+        : undefined;
+    const backgroundColor = background === 'theme' ? themeBackgroundColor ?? '#ffffff' : background === 'white' ? '#ffffff' : '#00000000';
+    const browserWindow = new electron.BrowserWindow({
+      show: false,
+      width: 1280,
+      height: 960,
+      transparent: background === 'transparent' && format !== 'jpeg',
+      backgroundColor,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true
+      }
+    });
+
+    try {
+      await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
+      await waitForExportDocumentReady(browserWindow);
+
+      if (typeof browserWindow.webContents.capturePage !== 'function') {
+        throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose capturePage');
+      }
+
+      const initialBounds = await measureExportDocumentBounds(browserWindow);
+      let viewport = resolveExportViewport(
+        initialBounds,
+        asPositiveFiniteNumber(input.options?.width),
+        asPositiveFiniteNumber(input.options?.height),
+        asPositiveFiniteNumber(input.options?.scaleFactor) ?? 1
+      );
+      browserWindow.setSize(viewport.width, viewport.height);
+      await waitForExportDocumentReady(browserWindow);
+
+      const settledBounds = await measureExportDocumentBounds(browserWindow);
+      const settledViewport = resolveExportViewport(
+        {
+          width: Math.max(initialBounds.width ?? 0, settledBounds.width ?? 0) || undefined,
+          height: Math.max(initialBounds.height ?? 0, settledBounds.height ?? 0) || undefined
+        },
+        asPositiveFiniteNumber(input.options?.width),
+        asPositiveFiniteNumber(input.options?.height),
+        asPositiveFiniteNumber(input.options?.scaleFactor) ?? 1
+      );
+
+      if (settledViewport.width !== viewport.width || settledViewport.height !== viewport.height) {
+        viewport = settledViewport;
+        browserWindow.setSize(viewport.width, viewport.height);
+        await waitForExportDocumentReady(browserWindow);
+      }
+
+      const image = await browserWindow.webContents.capturePage({
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height
+      });
+
+      const output =
+        format === 'jpeg'
+          ? typeof image.toJPEG === 'function'
+            ? image.toJPEG(90)
+            : image.toPNG()
+          : image.toPNG();
+      const size = typeof image.getSize === 'function' ? image.getSize() : { width: viewport.width, height: viewport.height };
+
+      await fs.writeFile(resolved.outputFile, output);
+      return {
+        outputFile: resolved.outputFile,
+        width: size.width,
+        height: size.height,
+        format
+      };
+    } finally {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.close();
+      }
+    }
   }
 }
 
@@ -1738,22 +2404,270 @@ class NodeIPC implements PALIPC {
   }
 }
 
-export class NodePalAdapter implements PALAdapter {
-  public readonly window: PALWindow;
-  public readonly fs: PALFileSystem = new NodeFileSystem();
-  public readonly dialog: PALDialog = new NodeDialog();
-  public readonly clipboard: PALClipboard = new NodeClipboard();
-  public readonly shell: PALShell = new NodeShell();
-  public readonly platform: PALPlatform = new NodePlatform();
-  public readonly screen: PALScreen = new NodeScreen();
-  public readonly tray: PALTray = new NodeTray();
-  public readonly notification: PALNotification = new NodeNotification();
-  public readonly shortcut: PALShortcut = new NodeShortcut();
-  public readonly launcher: PALLauncher = new NodeLauncher();
-  public readonly power: PALPower = new NodePower();
-  public readonly ipc: PALIPC = new NodeIPC();
+const createUnsupportedError = (feature: string): Error => {
+  const error = createError('PAL_UNSUPPORTED', `${feature} is not supported by the current PAL adapter`, { feature });
+  return Object.assign(new Error(error.message), error);
+};
 
-  public constructor(options?: { window?: WindowManagerOptions }) {
-    this.window = new NodeWindowManager(options?.window);
+class UnsupportedSurfaceManager implements PALWindow, PALSurface {
+  public async open(): Promise<SurfaceState> {
+    throw createUnsupportedError('surface.open');
+  }
+
+  public async create(): Promise<WindowState> {
+    throw createUnsupportedError('window.create');
+  }
+
+  public async focus(): Promise<void> {
+    throw createUnsupportedError('surface.focus');
+  }
+
+  public async resize(): Promise<void> {
+    throw createUnsupportedError('surface.resize');
+  }
+
+  public async setState(): Promise<void> {
+    throw createUnsupportedError('surface.setState');
+  }
+
+  public async getState(): Promise<WindowState> {
+    throw createUnsupportedError('surface.getState');
+  }
+
+  public async close(): Promise<void> {
+    throw createUnsupportedError('surface.close');
+  }
+
+  public async list(): Promise<WindowState[]> {
+    return [];
   }
 }
+
+class UnsupportedDialog implements PALDialog {
+  public async openFile(): Promise<string[] | null> {
+    throw createUnsupportedError('selection.openFile');
+  }
+
+  public async saveFile(): Promise<string | null> {
+    throw createUnsupportedError('selection.saveFile');
+  }
+
+  public async showMessage(): Promise<number> {
+    throw createUnsupportedError('selection.showMessage');
+  }
+
+  public async showConfirm(): Promise<boolean> {
+    throw createUnsupportedError('selection.showConfirm');
+  }
+}
+
+class UnsupportedClipboard implements PALClipboard {
+  public async read(): Promise<ClipboardPayload> {
+    throw createUnsupportedError('clipboard.read');
+  }
+
+  public async write(): Promise<void> {
+    throw createUnsupportedError('clipboard.write');
+  }
+}
+
+class UnsupportedShell implements PALShell, PALTransfer {
+  public async openPath(): Promise<void> {
+    throw createUnsupportedError('transfer.openPath');
+  }
+
+  public async openExternal(): Promise<void> {
+    throw createUnsupportedError('transfer.openExternal');
+  }
+
+  public async showItemInFolder(): Promise<void> {
+    throw createUnsupportedError('transfer.revealInShell');
+  }
+
+  public async revealInShell(): Promise<void> {
+    throw createUnsupportedError('transfer.revealInShell');
+  }
+
+  public async share(): Promise<{ shared: boolean }> {
+    throw createUnsupportedError('transfer.share');
+  }
+}
+
+class UnsupportedTray implements PALTray {
+  public async set(): Promise<TrayState> {
+    throw createUnsupportedError('systemUi.tray');
+  }
+
+  public async clear(): Promise<void> {
+    throw createUnsupportedError('systemUi.tray');
+  }
+
+  public async getState(): Promise<TrayState> {
+    return { active: false };
+  }
+}
+
+class UnsupportedNotification implements PALNotification {
+  public async show(): Promise<void> {
+    throw createUnsupportedError('systemUi.notification');
+  }
+}
+
+class UnsupportedShortcut implements PALShortcut {
+  public async register(): Promise<boolean> {
+    throw createUnsupportedError('systemUi.shortcut');
+  }
+
+  public async unregister(): Promise<void> {
+    throw createUnsupportedError('systemUi.shortcut');
+  }
+
+  public async isRegistered(): Promise<boolean> {
+    return false;
+  }
+
+  public async list(): Promise<string[]> {
+    return [];
+  }
+
+  public async clear(): Promise<void> {}
+}
+
+class HeadlessScreen implements PALScreen {
+  public async getPrimary(): Promise<ScreenInfo> {
+    return {
+      id: 'headless-screen',
+      width: 0,
+      height: 0,
+      scaleFactor: 1,
+      x: 0,
+      y: 0,
+      primary: true
+    };
+  }
+
+  public async getAll(): Promise<ScreenInfo[]> {
+    return [await this.getPrimary()];
+  }
+}
+
+class HeadlessOffscreenRender implements PALOffscreenRender {
+  public async renderHtmlToPdf(): Promise<RenderHtmlToPdfResult> {
+    throw createUnsupportedError('offscreenRender.renderHtmlToPdf');
+  }
+
+  public async renderHtmlToImage(): Promise<RenderHtmlToImageResult> {
+    throw createUnsupportedError('offscreenRender.renderHtmlToImage');
+  }
+}
+
+export class DesktopPalAdapter implements PALAdapter {
+  public readonly environment: PALEnvironment;
+  public readonly surface: PALSurface;
+  public readonly storage: PALStorage;
+  public readonly selection: PALSelection;
+  public readonly transfer: PALTransfer;
+  public readonly association: PALAssociation;
+  public readonly device: PALDevice;
+  public readonly systemUi: PALSystemUi;
+  public readonly background: PALBackground;
+  public readonly offscreenRender: PALOffscreenRender;
+
+  public readonly window: PALWindow;
+  public readonly fs: PALFileSystem;
+  public readonly dialog: PALDialog;
+  public readonly clipboard: PALClipboard;
+  public readonly shell: PALShell;
+  public readonly platform: PALPlatform;
+  public readonly screen: PALScreen;
+  public readonly tray: PALTray;
+  public readonly notification: PALNotification;
+  public readonly shortcut: PALShortcut;
+  public readonly launcher: PALLauncher;
+  public readonly power: PALPower;
+  public readonly ipc: PALIPC;
+
+  public constructor(options?: { window?: WindowManagerOptions }) {
+    this.environment = new NodeEnvironment('desktop');
+    const windowManager = new NodeWindowManager(options?.window);
+    this.window = windowManager;
+    this.surface = windowManager;
+    this.fs = new NodeFileSystem();
+    this.storage = this.fs;
+    this.dialog = new NodeDialog();
+    this.selection = this.dialog;
+    this.clipboard = new NodeClipboard();
+    this.shell = new NodeShell();
+    this.transfer = new NodeTransfer(this.shell);
+    this.association = new NodeAssociation(this.environment);
+    this.platform = new NodePlatform(this.environment);
+    this.screen = new NodeScreen();
+    this.tray = new NodeTray();
+    this.notification = new NodeNotification();
+    this.shortcut = new NodeShortcut();
+    this.launcher = new NodeLauncher();
+    this.power = new NodePower();
+    this.device = new NodeDevice(this.screen, this.power);
+    this.systemUi = new NodeSystemUi(this.clipboard, this.tray, this.notification, this.shortcut);
+    this.background = new NodeBackground(this.power);
+    this.ipc = new NodeIPC();
+    this.offscreenRender = new NodeOffscreenRender();
+  }
+}
+
+export class HeadlessPalAdapter implements PALAdapter {
+  public readonly environment: PALEnvironment;
+  public readonly surface: PALSurface;
+  public readonly storage: PALStorage;
+  public readonly selection: PALSelection;
+  public readonly transfer: PALTransfer;
+  public readonly association: PALAssociation;
+  public readonly device: PALDevice;
+  public readonly systemUi: PALSystemUi;
+  public readonly background: PALBackground;
+  public readonly offscreenRender: PALOffscreenRender;
+
+  public readonly window: PALWindow;
+  public readonly fs: PALFileSystem;
+  public readonly dialog: PALDialog;
+  public readonly clipboard: PALClipboard;
+  public readonly shell: PALShell;
+  public readonly platform: PALPlatform;
+  public readonly screen: PALScreen;
+  public readonly tray: PALTray;
+  public readonly notification: PALNotification;
+  public readonly shortcut: PALShortcut;
+  public readonly launcher: PALLauncher;
+  public readonly power: PALPower;
+  public readonly ipc: PALIPC;
+
+  public constructor() {
+    this.environment = new NodeEnvironment('headless');
+    const surface = new UnsupportedSurfaceManager();
+    this.window = surface;
+    this.surface = surface;
+    this.fs = new NodeFileSystem();
+    this.storage = this.fs;
+    this.dialog = new UnsupportedDialog();
+    this.selection = this.dialog;
+    this.clipboard = new UnsupportedClipboard();
+    const shell = new UnsupportedShell();
+    this.shell = shell;
+    this.transfer = shell;
+    this.association = new NodeAssociation(this.environment);
+    this.platform = new NodePlatform(this.environment);
+    this.screen = new HeadlessScreen();
+    this.tray = new UnsupportedTray();
+    this.notification = new UnsupportedNotification();
+    this.shortcut = new UnsupportedShortcut();
+    this.launcher = new NodeLauncher();
+    this.power = new NodePower();
+    this.device = new NodeDevice(this.screen, this.power);
+    this.systemUi = new NodeSystemUi(this.clipboard, this.tray, this.notification, this.shortcut);
+    this.background = new NodeBackground(this.power);
+    this.ipc = new NodeIPC();
+    this.offscreenRender = new HeadlessOffscreenRender();
+  }
+}
+
+export class NodePalAdapter extends DesktopPalAdapter {}

@@ -17,5 +17,10 @@ export function resolveLaunchImagePath(launchContext: PlatformLaunchContext): st
       ? (launchContext.launchParams.resourceOpen as Record<string, unknown>)
       : null;
 
-  return readNonEmptyString(resourceOpen?.filePath);
+  const resourceFilePath = readNonEmptyString(resourceOpen?.filePath);
+  if (resourceFilePath) {
+    return resourceFilePath;
+  }
+
+  return readNonEmptyString(resourceOpen?.resourceId);
 }

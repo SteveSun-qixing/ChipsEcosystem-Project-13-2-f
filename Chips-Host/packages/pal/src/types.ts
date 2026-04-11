@@ -1,6 +1,11 @@
 import type { StandardError } from '../../../src/shared/types';
 
+export type HostKind = 'desktop' | 'web' | 'mobile' | 'headless';
+export type PalPlatformId = NodeJS.Platform | 'web' | 'android' | 'ios' | 'server';
+
 export type WindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+export type SurfaceKind = 'window' | 'tab' | 'route' | 'modal' | 'sheet' | 'fullscreen';
+export type SurfaceStateKind = 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden';
 
 export interface WindowChromeOverlayOptions {
   color?: string;
@@ -14,6 +19,56 @@ export interface WindowChromeOptions {
   backgroundColor?: string;
   titleBarStyle?: WindowChromeTitleBarStyle;
   titleBarOverlay?: boolean | WindowChromeOverlayOptions;
+}
+
+export interface SurfacePresentation {
+  title?: string;
+  width?: number;
+  height?: number;
+  resizable?: boolean;
+  alwaysOnTop?: boolean;
+  chrome?: WindowChromeOptions;
+}
+
+export type SurfaceTarget =
+  | {
+      type: 'plugin';
+      pluginId: string;
+      url?: string;
+      sessionId?: string;
+      permissions?: string[];
+      launchParams?: Record<string, unknown>;
+    }
+  | {
+      type: 'url';
+      url: string;
+    }
+  | {
+      type: 'document';
+      documentId: string;
+      title?: string;
+      url?: string;
+    };
+
+export interface SurfaceOpenRequest {
+  kind?: SurfaceKind;
+  target: SurfaceTarget;
+  presentation?: SurfacePresentation;
+}
+
+export interface SurfaceState {
+  id: string;
+  kind: SurfaceKind;
+  title?: string;
+  width?: number;
+  height?: number;
+  focused: boolean;
+  state: SurfaceStateKind;
+  url?: string;
+  pluginId?: string;
+  sessionId?: string;
+  chrome?: WindowChromeOptions;
+  metadata?: Record<string, unknown>;
 }
 
 export interface WindowOptions {
@@ -30,17 +85,12 @@ export interface WindowOptions {
   chrome?: WindowChromeOptions;
 }
 
-export interface WindowState {
-  id: string;
+export interface WindowState extends SurfaceState {
   title: string;
   width: number;
   height: number;
-  focused: boolean;
+  kind: 'window';
   state: 'normal' | 'minimized' | 'maximized' | 'fullscreen';
-  url?: string;
-  pluginId?: string;
-  sessionId?: string;
-  chrome?: WindowChromeOptions;
 }
 
 export interface FileReadOptions {
@@ -70,7 +120,8 @@ export interface FileWatchSubscription {
 }
 
 export interface PlatformInfo {
-  platform: NodeJS.Platform;
+  hostKind: HostKind;
+  platform: PalPlatformId;
   arch: string;
   release: string;
 }
@@ -131,16 +182,136 @@ export interface PowerState {
   preventSleep: boolean;
 }
 
-export interface PALWindow {
-  create(options: WindowOptions): Promise<WindowState>;
-  focus(id: string): Promise<void>;
-  resize(id: string, width: number, height: number): Promise<void>;
-  setState(id: string, state: WindowState['state']): Promise<void>;
-  getState(id: string): Promise<WindowState>;
-  close(id: string): Promise<void>;
+export type ClipboardFormat = 'text' | 'image' | 'files';
+
+export interface ClipboardImagePayload {
+  base64: string;
+  mimeType?: string;
 }
 
-export interface PALFileSystem {
+export type ClipboardPayload = string | ClipboardImagePayload | string[];
+
+export interface HtmlToPdfOptions {
+  pageSize?: 'A4' | 'A3' | 'Letter' | 'Legal';
+  landscape?: boolean;
+  printBackground?: boolean;
+  marginMm?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
+}
+
+export interface RenderHtmlToPdfRequest {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+  options?: HtmlToPdfOptions;
+}
+
+export interface RenderHtmlToPdfResult {
+  outputFile: string;
+  pageCount?: number;
+}
+
+export interface HtmlToImageOptions {
+  format?: 'png' | 'jpeg' | 'webp';
+  width?: number;
+  height?: number;
+  scaleFactor?: number;
+  background?: 'transparent' | 'white' | 'theme';
+}
+
+export interface RenderHtmlToImageRequest {
+  htmlDir: string;
+  entryFile?: string;
+  outputFile: string;
+  options?: HtmlToImageOptions;
+}
+
+export interface RenderHtmlToImageResult {
+  outputFile: string;
+  width?: number;
+  height?: number;
+  format: 'png' | 'jpeg' | 'webp';
+}
+
+export interface PalCapabilitySnapshot {
+  hostKind: HostKind;
+  platform: PalPlatformId;
+  facets: {
+    surface: {
+      supported: boolean;
+      interactive: boolean;
+      supportedKinds: SurfaceKind[];
+    };
+    storage: {
+      localWorkspace: boolean;
+      sandboxFilePicker: boolean;
+      remoteBacked: boolean;
+    };
+    selection: {
+      openFile: boolean;
+      saveFile: boolean;
+      directory: boolean;
+      multiple: boolean;
+    };
+    transfer: {
+      upload: boolean;
+      download: boolean;
+      share: boolean;
+      externalOpen: boolean;
+      revealInShell: boolean;
+    };
+    association: {
+      fileAssociation: boolean;
+      urlScheme: boolean;
+      shareTarget: boolean;
+    };
+    device: {
+      screen: boolean;
+      power: boolean;
+      network: boolean;
+    };
+    systemUi: {
+      clipboard: boolean;
+      tray: boolean;
+      globalShortcut: boolean;
+      notification: boolean;
+    };
+    background: {
+      keepAlive: boolean;
+      wakeEvents: boolean;
+    };
+    ipc: {
+      namedPipe: boolean;
+      unixSocket: boolean;
+      sharedMemory: boolean;
+    };
+    offscreenRender: {
+      htmlToPdf: boolean;
+      htmlToImage: boolean;
+    };
+  };
+}
+
+export interface PALEnvironment {
+  getInfo(): Promise<PlatformInfo>;
+  getCapabilities(): Promise<PalCapabilitySnapshot>;
+}
+
+export interface PALSurface {
+  open(request: SurfaceOpenRequest): Promise<SurfaceState>;
+  focus(id: string): Promise<void>;
+  resize(id: string, width: number, height: number): Promise<void>;
+  setState(id: string, state: SurfaceState['state']): Promise<void>;
+  getState(id: string): Promise<SurfaceState>;
+  close(id: string): Promise<void>;
+  list(): Promise<SurfaceState[]>;
+}
+
+export interface PALStorage {
   normalize(path: string): string;
   readFile(path: string, options?: FileReadOptions): Promise<string | Buffer>;
   writeFile(path: string, data: string | Buffer): Promise<void>;
@@ -153,26 +324,65 @@ export interface PALFileSystem {
   copy(sourcePath: string, destPath: string): Promise<void>;
 }
 
-export interface PALDialog {
+export interface PALSelection {
   openFile(options?: DialogFileOptions): Promise<string[] | null>;
   saveFile(options?: DialogSaveOptions): Promise<string | null>;
   showMessage(options: DialogMessageOptions): Promise<number>;
   showConfirm(options: DialogMessageOptions): Promise<boolean>;
 }
 
-export type ClipboardFormat = 'text' | 'image' | 'files';
-
-export interface ClipboardImagePayload {
-  base64: string;
-  mimeType?: string;
-}
-
-export type ClipboardPayload = string | ClipboardImagePayload | string[];
-
 export interface PALClipboard {
   read(format?: ClipboardFormat): Promise<ClipboardPayload>;
   write(data: ClipboardPayload, format?: ClipboardFormat): Promise<void>;
 }
+
+export interface PALTransfer {
+  openPath(targetPath: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
+  revealInShell(targetPath: string): Promise<void>;
+  share?(input: { title?: string; text?: string; url?: string; files?: string[] }): Promise<{ shared: boolean }>;
+}
+
+export interface PALAssociation {
+  getCapabilities(): Promise<PalCapabilitySnapshot['facets']['association']>;
+}
+
+export interface PALDevice {
+  getPrimaryScreen(): Promise<ScreenInfo>;
+  getAllScreens(): Promise<ScreenInfo[]>;
+  getPowerState(): Promise<PowerState>;
+}
+
+export interface PALSystemUi {
+  clipboard: PALClipboard;
+  tray: PALTray;
+  notification: PALNotification;
+  shortcut: PALShortcut;
+}
+
+export interface PALBackground {
+  getState(): Promise<PowerState>;
+  setPreventSleep(prevent: boolean): Promise<boolean>;
+}
+
+export interface PALOffscreenRender {
+  renderHtmlToPdf(input: RenderHtmlToPdfRequest): Promise<RenderHtmlToPdfResult>;
+  renderHtmlToImage(input: RenderHtmlToImageRequest): Promise<RenderHtmlToImageResult>;
+}
+
+export interface PALWindow {
+  create(options: WindowOptions): Promise<WindowState>;
+  focus(id: string): Promise<void>;
+  resize(id: string, width: number, height: number): Promise<void>;
+  setState(id: string, state: WindowState['state']): Promise<void>;
+  getState(id: string): Promise<WindowState>;
+  close(id: string): Promise<void>;
+  list(): Promise<WindowState[]>;
+}
+
+export interface PALFileSystem extends PALStorage {}
+
+export interface PALDialog extends PALSelection {}
 
 export interface PALShell {
   openPath(targetPath: string): Promise<void>;
@@ -181,7 +391,7 @@ export interface PALShell {
 }
 
 export interface PALPlatform {
-  getInfo(): Promise<PlatformInfo>;
+  getInfo(): Promise<Omit<PlatformInfo, 'hostKind'>>;
   getCapabilities(): Promise<string[]>;
 }
 
@@ -275,6 +485,20 @@ export interface PALIPC {
 }
 
 export interface PALAdapter {
+  environment: PALEnvironment;
+  surface: PALSurface;
+  storage: PALStorage;
+  selection: PALSelection;
+  transfer: PALTransfer;
+  association: PALAssociation;
+  device: PALDevice;
+  systemUi: PALSystemUi;
+  background: PALBackground;
+  ipc: PALIPC;
+  offscreenRender: PALOffscreenRender;
+  launcher: PALLauncher;
+
+  // Legacy aliases retained for existing desktop chains and current tests.
   window: PALWindow;
   fs: PALFileSystem;
   dialog: PALDialog;
@@ -285,9 +509,7 @@ export interface PALAdapter {
   tray: PALTray;
   notification: PALNotification;
   shortcut: PALShortcut;
-  launcher: PALLauncher;
   power: PALPower;
-  ipc: PALIPC;
 }
 
 export interface PALError extends StandardError {

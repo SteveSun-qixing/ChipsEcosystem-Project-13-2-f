@@ -1,32 +1,29 @@
 import React from "react";
+import "./CardViewerShell.css";
 
 interface CardViewerShellProps {
+  surfaceMode: "immersive" | "document";
   content: React.ReactNode;
 }
 
-export function CardViewerShell({ content }: CardViewerShellProps) {
+export function CardViewerShell({ surfaceMode, content }: CardViewerShellProps) {
   return (
     <div
       data-chips-app="card-viewer.shell"
-      style={{
-        width: "100%",
-        height: "100%",
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--chips-sys-color-surface, #ffffff)",
-        color: "var(--chips-sys-color-on-surface, #111111)",
-        overflow: "hidden",
-      }}
+      data-chips-surface-mode={surfaceMode}
+      className={[
+        "card-viewer-shell",
+        surfaceMode === "document" ? "card-viewer-shell--document" : "card-viewer-shell--immersive",
+      ].join(" ")}
     >
       <main
         data-chips-app="card-viewer.main"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          overflow: "hidden",
-        }}
+        className={[
+          "card-viewer-shell__main",
+          surfaceMode === "document"
+            ? "card-viewer-shell__main--document"
+            : "card-viewer-shell__main--immersive",
+        ].join(" ")}
       >
         {content}
       </main>

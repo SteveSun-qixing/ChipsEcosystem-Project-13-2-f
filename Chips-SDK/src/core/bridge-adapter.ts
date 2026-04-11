@@ -12,8 +12,13 @@ export interface ChipsBridge {
   once(event: string, handler: (payload: unknown) => void): void;
   emit(event: string, payload?: unknown): Promise<void>;
   emitScoped?(event: string, payload: unknown, scope: { token: string }): Promise<void>;
+  window?: Record<string, unknown>;
+  surface?: Record<string, unknown>;
+  transfer?: Record<string, unknown>;
+  association?: Record<string, unknown>;
   platform?: {
     getPathForFile?(file: unknown): string;
+    getLaunchContext?(): unknown;
   };
 }
 

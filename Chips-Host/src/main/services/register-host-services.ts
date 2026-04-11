@@ -13,11 +13,11 @@ import { buildThemeContractsView, type ThemeContract, validateThemeContractWithT
 import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
 import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
-import { resolveManifestWindowChrome } from '../../shared/window-chrome';
+import { cloneWindowChromeOptions, resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
 import type { PluginRecord } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
-import type { PALAdapter, WindowChromeOptions } from '../../../packages/pal/src';
+import type { HostKind, PALAdapter, SurfaceKind, SurfacePresentation, SurfaceState, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
 import { CardInfoService } from '../../../packages/card-info-service/src';
 import { CardOpenService } from '../../../packages/card-open-service/src';
@@ -793,11 +793,11 @@ const writeShortcutRegistry = async (workspacePath: string, registry: Record<str
   await fs.writeFile(shortcutRegistryPath(workspacePath), JSON.stringify(registry, null, 2), 'utf-8');
 };
 
-const getPreferredLauncherIconExtensions = (): string[] => {
-  if (process.platform === 'darwin') {
+const getPreferredLauncherIconExtensions = (platform: string): string[] => {
+  if (platform === 'darwin') {
     return ['.icns', '.png', '.ico', '.svg'];
   }
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     return ['.ico', '.png', '.svg', '.icns'];
   }
   return ['.png', '.svg', '.ico', '.icns'];
@@ -818,12 +818,15 @@ const resolveExistingIconCandidate = async (candidates: string[]): Promise<strin
   return undefined;
 };
 
-const resolvePluginIconPath = async (record: ReturnType<PluginRuntime['get']>): Promise<string | undefined> => {
+const resolvePluginIconPath = async (
+  record: ReturnType<PluginRuntime['get']>,
+  platform: string
+): Promise<string | undefined> => {
   const declaredIconPath = record.manifest.ui?.launcher?.icon;
   if (typeof declaredIconPath === 'string' && declaredIconPath.trim().length > 0) {
     const resolvedDeclaredPath = path.resolve(record.installPath, declaredIconPath);
     const preferredDeclaredVariants = [
-      ...getPreferredLauncherIconExtensions().map((extension) => {
+      ...getPreferredLauncherIconExtensions(platform).map((extension) => {
         return `${resolvedDeclaredPath.slice(0, resolvedDeclaredPath.length - path.extname(resolvedDeclaredPath).length)}${extension}`;
       }),
       resolvedDeclaredPath
@@ -836,7 +839,7 @@ const resolvePluginIconPath = async (record: ReturnType<PluginRuntime['get']>): 
 
   const candidates = [
     ...['app-icon', 'icon'].flatMap((name) => {
-      return getPreferredLauncherIconExtensions().map((extension) => `assets/icons/${name}${extension}`);
+      return getPreferredLauncherIconExtensions(platform).map((extension) => `assets/icons/${name}${extension}`);
     })
   ].map((relativePath) => path.join(record.installPath, relativePath));
 
@@ -974,13 +977,70 @@ const buildPluginShortcutArgs = (workspacePath: string, pluginId: string): strin
   return [...target.argsPrefix, `--workspace=${workspacePath}`, `--chips-launch-plugin=${pluginId}`];
 };
 
-const openPluginWindow = async (
+const defaultPluginSurfaceKindByHostKind: Record<HostKind, SurfaceKind> = {
+  desktop: 'window',
+  web: 'route',
+  mobile: 'fullscreen',
+  headless: 'window'
+};
+
+const mergeWindowChromeOptions = (
+  base: WindowChromeOptions | undefined,
+  override: WindowChromeOptions | undefined
+): WindowChromeOptions | undefined => {
+  const merged = {
+    ...(cloneWindowChromeOptions(base) ?? {}),
+    ...(cloneWindowChromeOptions(override) ?? {})
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+};
+
+const resolvePluginSurfaceKind = (
+  plugin: PluginRecord,
+  hostKind: HostKind,
+  requestedKind: SurfaceKind | undefined
+): SurfaceKind => {
+  if (requestedKind) {
+    return requestedKind;
+  }
+
+  return (
+    plugin.manifest.ui?.surface?.preferredKinds?.[hostKind] ??
+    plugin.manifest.ui?.surface?.defaultKind ??
+    defaultPluginSurfaceKindByHostKind[hostKind]
+  );
+};
+
+const ensureCallerPermission = (
+  routeContext: RouteInvocationContext,
+  permission: string,
+  action: `${string}.${string}`
+): void => {
+  const grantedPermissions = routeContext.caller.permissions ?? [];
+  if (grantedPermissions.includes(permission)) {
+    return;
+  }
+
+  throw createError('PERMISSION_DENIED', `Caller lacks permission: ${permission}`, {
+    action,
+    permission,
+    callerId: routeContext.caller.id,
+    callerType: routeContext.caller.type
+  });
+};
+
+const openPluginSurface = async (
   ctx: HostServiceContext,
   state: RuntimeState,
   pluginId: string,
-  launchParams: Record<string, unknown> = {}
+  options?: {
+    kind?: SurfaceKind;
+    presentation?: SurfacePresentation;
+    launchParams?: Record<string, unknown>;
+    url?: string;
+  }
 ): Promise<{
-  window: { id: string; chrome?: WindowChromeOptions };
+  surface: SurfaceState;
   session: { sessionId: string; sessionNonce: string; permissions: string[] };
 }> => {
   const plugin = ctx.runtime.get(pluginId);
@@ -991,51 +1051,121 @@ const openPluginWindow = async (
     throw createError('PLUGIN_DISABLED', `Plugin disabled: ${pluginId}`);
   }
 
+  const platformInfo = await ctx.pal.environment.getInfo();
+  const runtimeTargets = plugin.manifest.runtime?.targets;
+  const currentHostKind = platformInfo.hostKind;
+  const supportedOnCurrentHost =
+    runtimeTargets?.[currentHostKind]?.supported ??
+    (currentHostKind === 'desktop');
+  if (!supportedOnCurrentHost) {
+    throw createError('PLUGIN_TARGET_UNSUPPORTED', `Plugin ${pluginId} does not support host kind ${currentHostKind}`, {
+      pluginId,
+      hostKind: currentHostKind
+    });
+  }
+
   const session = ctx.runtime.pluginInit(pluginId, {
-    ...launchParams,
+    ...(options?.launchParams ?? {}),
     workspacePath: ctx.workspacePath
   });
   await ctx.kernel.events.emit('plugin.init', 'plugin-service', { pluginId, sessionId: session.sessionId });
   ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
   await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId, sessionId: session.sessionId });
 
-  const chrome = resolveManifestWindowChrome(plugin.manifest.ui);
+  const surfaceKind = resolvePluginSurfaceKind(plugin, currentHostKind, options?.kind);
+  const chrome = resolveThemedWindowChrome(
+    state,
+    mergeWindowChromeOptions(resolveManifestWindowChrome(plugin.manifest.ui), options?.presentation?.chrome)
+  );
   const defaultWidth = Number(state.configUser.get('window.defaultWidth') ?? state.configWorkspace.get('window.defaultWidth') ?? 1280);
   const defaultHeight = Number(state.configUser.get('window.defaultHeight') ?? state.configWorkspace.get('window.defaultHeight') ?? 800);
   const url =
-    plugin.installPath && typeof plugin.manifest.entry === 'string'
+    options?.url ??
+    (plugin.installPath && typeof plugin.manifest.entry === 'string'
       ? path.resolve(plugin.installPath, plugin.manifest.entry)
-      : undefined;
-  const windowTitle = plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+      : undefined);
+  const surfaceTitle = options?.presentation?.title ?? plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name;
+  const surfaceWidth = Number.isFinite(options?.presentation?.width)
+    ? options?.presentation?.width
+    : Number.isFinite(defaultWidth)
+      ? defaultWidth
+      : 1280;
+  const surfaceHeight = Number.isFinite(options?.presentation?.height)
+    ? options?.presentation?.height
+    : Number.isFinite(defaultHeight)
+      ? defaultHeight
+      : 800;
 
-  const window = await ctx.pal.window.create({
-    title: windowTitle,
-    width: Number.isFinite(defaultWidth) ? defaultWidth : 1280,
-    height: Number.isFinite(defaultHeight) ? defaultHeight : 800,
-    pluginId,
-    sessionId: session.sessionId,
-    permissions: session.permissions,
-    launchParams: session.launchParams,
-    url,
-    chrome
-  });
+  try {
+    const surface = await ctx.pal.surface.open({
+      kind: surfaceKind,
+      target: {
+        type: 'plugin',
+        pluginId,
+        url,
+        sessionId: session.sessionId,
+        permissions: session.permissions,
+        launchParams: session.launchParams
+      },
+      presentation: {
+        title: surfaceTitle,
+        width: surfaceWidth,
+        height: surfaceHeight,
+        resizable: options?.presentation?.resizable,
+        alwaysOnTop: options?.presentation?.alwaysOnTop,
+        chrome
+      }
+    });
 
-  await ctx.kernel.events.emit('window.opened', 'plugin-service', window);
-  await ctx.kernel.events.emit('plugin.launched', 'plugin-service', {
-    pluginId,
-    sessionId: session.sessionId,
-    windowId: window.id
+    await ctx.kernel.events.emit('surface.opened', 'plugin-service', surface);
+    if (surface.kind === 'window') {
+      await ctx.kernel.events.emit('window.opened', 'plugin-service', surface);
+    }
+    await ctx.kernel.events.emit('plugin.launched', 'plugin-service', {
+      pluginId,
+      sessionId: session.sessionId,
+      surfaceId: surface.id,
+      surfaceKind: surface.kind,
+      windowId: surface.kind === 'window' ? surface.id : undefined
+    });
+
+    return {
+      surface,
+      session: {
+        sessionId: session.sessionId,
+        sessionNonce: session.sessionNonce,
+        permissions: [...session.permissions]
+      }
+    };
+  } catch (error) {
+    ctx.runtime.stopSession(session.sessionId);
+    throw error;
+  }
+};
+
+const openPluginWindow = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  launchParams: Record<string, unknown> = {}
+): Promise<{
+  window: { id: string; chrome?: WindowChromeOptions };
+  session: { sessionId: string; sessionNonce: string; permissions: string[] };
+}> => {
+  const opened = await openPluginSurface(ctx, state, pluginId, {
+    kind: 'window',
+    launchParams
   });
 
   return {
     window: {
-      id: window.id,
-      chrome
+      id: opened.surface.id,
+      chrome: opened.surface.chrome
     },
     session: {
-      sessionId: session.sessionId,
-      sessionNonce: session.sessionNonce,
-      permissions: [...session.permissions]
+      sessionId: opened.session.sessionId,
+      sessionNonce: opened.session.sessionNonce,
+      permissions: [...opened.session.permissions]
     }
   };
 };
@@ -1065,13 +1195,20 @@ const createCardOpenService = (ctx: HostServiceContext, state: RuntimeState): Ca
       };
     },
     openWindow: async (config) => {
-      const window = await ctx.pal.window.create({
-        title: config.title,
-        width: config.width,
-        height: config.height
+      const surface = await ctx.pal.surface.open({
+        kind: 'window',
+        target: {
+          type: 'url',
+          url: ''
+        },
+        presentation: {
+          title: config.title,
+          width: config.width,
+          height: config.height
+        }
       });
       return {
-        windowId: window.id
+        windowId: surface.id
       };
     },
     defaultWindowSize: {
@@ -1131,12 +1268,77 @@ const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState)
     },
     resolveResourceFilePath: (resourceId) => ctx.getCardService().resolveDocumentFilePath(resourceId),
     openPath: async (filePath) => {
-      await ctx.pal.shell.openPath(filePath);
+      await ctx.pal.transfer.openPath(filePath);
     },
     openExternalUrl: async (url) => {
-      await ctx.pal.shell.openExternal(url);
+      await ctx.pal.transfer.openExternal(url);
     },
   });
+};
+
+const openAssociatedPathInternal = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  targetPath: string
+): Promise<{
+  targetPath: string;
+  extension: string;
+  mode: 'card' | 'box' | 'plugin' | 'shell';
+  windowId?: string;
+  pluginId?: string;
+}> => {
+  const resolvedPath = path.resolve(targetPath);
+  const stats = await fs.stat(resolvedPath).catch(() => null);
+  if (!stats?.isFile()) {
+    throw createError('FILE_ASSOCIATION_TARGET_INVALID', `Target file does not exist: ${resolvedPath}`, {
+      targetPath: resolvedPath
+    });
+  }
+
+  const extension = path.extname(resolvedPath).toLowerCase();
+  if (!extension) {
+    throw createError('FILE_ASSOCIATION_TARGET_INVALID', 'Associated file must carry a file extension', {
+      targetPath: resolvedPath
+    });
+  }
+
+  if (extension === '.card') {
+    const opened = await createCardOpenService(ctx, state).openCard(resolvedPath);
+    return {
+      targetPath: resolvedPath,
+      extension,
+      mode: 'card',
+      windowId: opened.windowId,
+      pluginId: opened.pluginId
+    };
+  }
+
+  const capability = `file-handler:${extension}`;
+  const plugin = ctx.runtime
+    .query({ type: 'app', capability })
+    .find((record) => record.enabled && record.manifest.type === 'app');
+
+  if (plugin) {
+    const launched = await openPluginWindow(ctx, state, plugin.manifest.id, {
+      targetPath: resolvedPath,
+      trigger: 'association-open',
+      ...(extension === '.box' ? { fileOpenMode: 'box' } : {})
+    });
+    return {
+      targetPath: resolvedPath,
+      extension,
+      mode: extension === '.box' ? 'box' : 'plugin',
+      windowId: launched.window.id,
+      pluginId: plugin.manifest.id
+    };
+  }
+
+  await ctx.pal.transfer.openPath(resolvedPath);
+  return {
+    targetPath: resolvedPath,
+    extension,
+    mode: 'shell'
+  };
 };
 
 const readPluginShortcut = async (
@@ -1161,7 +1363,7 @@ const readPluginShortcut = async (
         pluginId,
         name: shortcutName
       });
-  const iconPath = await resolvePluginIconPath(plugin);
+  const iconPath = await resolvePluginIconPath(plugin, (await ctx.pal.environment.getInfo()).platform);
   const existing = await fs
     .stat(target.launcherPath)
     .then((stats) => stats.isFile() || stats.isDirectory())
@@ -1198,7 +1400,7 @@ const createPluginShortcut = async (
   }
 
   const launchTarget = resolveLaunchExecutable();
-  const iconPath = await resolvePluginIconPath(plugin);
+  const iconPath = await resolvePluginIconPath(plugin, (await ctx.pal.environment.getInfo()).platform);
   const created = await ctx.pal.launcher
     .create({
       pluginId,
@@ -2684,6 +2886,240 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     }
   };
 
+  const surfaceService: ServiceRegistration = {
+    name: 'surface',
+    actions: {
+      open: {
+        descriptor: descriptor<{ request: Parameters<PALAdapter['surface']['open']>[0] }, { surface: unknown }>(
+          'surface.open',
+          ['window.control'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'surface.open', async (input, routeContext) => {
+            const request = input.request;
+            if (request.target.type === 'plugin') {
+              ensureCallerPermission(routeContext, 'plugin.manage', 'surface.open');
+              const opened = await openPluginSurface(ctx, state, request.target.pluginId, {
+                kind: request.kind,
+                presentation: request.presentation,
+                launchParams: request.target.launchParams,
+                url: request.target.url
+              });
+              return { surface: opened.surface };
+            }
+
+            const surface = await ctx.pal.surface.open({
+              ...request,
+              presentation: request.presentation
+                ? {
+                    ...request.presentation,
+                    chrome: resolveThemedWindowChrome(state, request.presentation.chrome)
+                  }
+                : undefined
+            });
+            await ctx.kernel.events.emit('surface.opened', 'surface-service', surface);
+            if (surface.kind === 'window') {
+              await ctx.kernel.events.emit('window.opened', 'surface-service', surface);
+            }
+            return { surface };
+          })
+        )
+      },
+      focus: {
+        descriptor: descriptor<{ surfaceId: string }, { ack: true }>(
+          'surface.focus',
+          ['window.control'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'surface.focus', async (input) => {
+            await ctx.pal.surface.focus(input.surfaceId);
+            return { ack: true };
+          })
+        )
+      },
+      resize: {
+        descriptor: descriptor<{ surfaceId: string; width: number; height: number }, { ack: true }>(
+          'surface.resize',
+          ['window.control'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'surface.resize', async (input) => {
+            await ctx.pal.surface.resize(input.surfaceId, input.width, input.height);
+            return { ack: true };
+          })
+        )
+      },
+      setState: {
+        descriptor: descriptor<{ surfaceId: string; state: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden' }, { ack: true }>(
+          'surface.setState',
+          ['window.control'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'surface.setState', async (input) => {
+            await ctx.pal.surface.setState(input.surfaceId, input.state);
+            return { ack: true };
+          })
+        )
+      },
+      getState: {
+        descriptor: descriptor<{ surfaceId: string }, { state: unknown }>(
+          'surface.getState',
+          ['window.control'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'surface.getState', async (input) => {
+            const currentState = await ctx.pal.surface.getState(input.surfaceId);
+            return { state: currentState };
+          })
+        )
+      },
+      close: {
+        descriptor: descriptor<{ surfaceId: string }, { ack: true }>(
+          'surface.close',
+          ['window.control'],
+          2_000,
+          false,
+          0,
+          withMetrics(state, 'surface.close', async (input) => {
+            await ctx.pal.surface.close(input.surfaceId);
+            return { ack: true };
+          })
+        )
+      },
+      list: {
+        descriptor: descriptor<Record<string, unknown>, { surfaces: unknown[] }>(
+          'surface.list',
+          ['window.control'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'surface.list', async () => {
+            const surfaces = await ctx.pal.surface.list();
+            return { surfaces };
+          })
+        )
+      }
+    }
+  };
+
+  const transferService: ServiceRegistration = {
+    name: 'transfer',
+    actions: {
+      openPath: {
+        descriptor: descriptor<{ path: string }, { ack: true }>(
+          'transfer.openPath',
+          ['platform.external'],
+          5_000,
+          false,
+          0,
+          withMetrics(state, 'transfer.openPath', async (input) => {
+            await ctx.pal.transfer.openPath(input.path);
+            return { ack: true };
+          })
+        )
+      },
+      openExternal: {
+        descriptor: descriptor<{ url: string }, { ack: true }>(
+          'transfer.openExternal',
+          ['platform.external'],
+          8_000,
+          false,
+          0,
+          withMetrics(state, 'transfer.openExternal', async (input) => {
+            await ctx.pal.transfer.openExternal(input.url);
+            return { ack: true };
+          })
+        )
+      },
+      revealInShell: {
+        descriptor: descriptor<{ path: string }, { ack: true }>(
+          'transfer.revealInShell',
+          ['platform.external'],
+          5_000,
+          true,
+          0,
+          withMetrics(state, 'transfer.revealInShell', async (input) => {
+            await ctx.pal.transfer.revealInShell(input.path);
+            return { ack: true };
+          })
+        )
+      },
+      share: {
+        descriptor: descriptor<
+          { input: { title?: string; text?: string; url?: string; files?: string[] } },
+          { shared: boolean }
+        >(
+          'transfer.share',
+          ['platform.external'],
+          8_000,
+          false,
+          0,
+          withMetrics(state, 'transfer.share', async (input) => {
+            if (typeof ctx.pal.transfer.share !== 'function') {
+              throw createError('PLATFORM_UNSUPPORTED', 'Current PAL adapter does not support transfer.share');
+            }
+            return ctx.pal.transfer.share(input.input ?? {});
+          })
+        )
+      }
+    }
+  };
+
+  const associationService: ServiceRegistration = {
+    name: 'association',
+    actions: {
+      getCapabilities: {
+        descriptor: descriptor<Record<string, unknown>, { capabilities: unknown }>(
+          'association.getCapabilities',
+          ['platform.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'association.getCapabilities', async () => {
+            const capabilities = await ctx.pal.association.getCapabilities();
+            return { capabilities };
+          })
+        )
+      },
+      openPath: {
+        descriptor: descriptor<{ path: string }, { result: unknown }>(
+          'association.openPath',
+          ['platform.external'],
+          12_000,
+          false,
+          0,
+          withMetrics(state, 'association.openPath', async (input) => {
+            const result = await openAssociatedPathInternal(ctx, state, input.path);
+            return { result };
+          })
+        )
+      },
+      openUrl: {
+        descriptor: descriptor<{ url: string }, { result: { url: string; mode: 'external' } }>(
+          'association.openUrl',
+          ['platform.external'],
+          8_000,
+          false,
+          0,
+          withMetrics(state, 'association.openUrl', async (input) => {
+            await ctx.pal.transfer.openExternal(input.url);
+            return {
+              result: {
+                url: input.url,
+                mode: 'external'
+              }
+            };
+          })
+        )
+      }
+    }
+  };
+
   const windowService: ServiceRegistration = {
     name: 'window',
     actions: {
@@ -2698,6 +3134,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               pluginId?: string;
               sessionId?: string;
               permissions?: string[];
+              launchParams?: Record<string, unknown>;
               chrome?: WindowChromeOptions;
             };
           },
@@ -2709,12 +3146,30 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.open', async (input) => {
-            const window = await ctx.pal.window.create({
-              ...input.config,
-              chrome: resolveThemedWindowChrome(state, input.config.chrome)
+            const surface = await ctx.pal.surface.open({
+              kind: 'window',
+              target: input.config.pluginId
+                ? {
+                    type: 'plugin',
+                    pluginId: input.config.pluginId,
+                    url: input.config.url,
+                    sessionId: input.config.sessionId,
+                    permissions: input.config.permissions,
+                    launchParams: input.config.launchParams
+                  }
+                : {
+                    type: 'url',
+                    url: input.config.url ?? ''
+                  },
+              presentation: {
+                title: input.config.title,
+                width: input.config.width,
+                height: input.config.height,
+                chrome: resolveThemedWindowChrome(state, input.config.chrome)
+              }
             });
-            await ctx.kernel.events.emit('window.opened', 'window-service', window);
-            return { window };
+            await ctx.kernel.events.emit('window.opened', 'window-service', surface);
+            return { window: surface };
           })
         )
       },
@@ -2726,7 +3181,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'window.focus', async (input) => {
-            await ctx.pal.window.focus(input.windowId);
+            await ctx.pal.surface.focus(input.windowId);
             return { ack: true };
           })
         )
@@ -2739,7 +3194,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.resize', async (input) => {
-            await ctx.pal.window.resize(input.windowId, input.width, input.height);
+            await ctx.pal.surface.resize(input.windowId, input.width, input.height);
             return { ack: true };
           })
         )
@@ -2752,7 +3207,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.setState', async (input) => {
-            await ctx.pal.window.setState(input.windowId, input.state);
+            await ctx.pal.surface.setState(input.windowId, input.state);
             return { ack: true };
           })
         )
@@ -2765,8 +3220,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'window.getState', async (input) => {
-            const state = await ctx.pal.window.getState(input.windowId);
-            return { state };
+            const currentState = await ctx.pal.surface.getState(input.windowId);
+            return { state: currentState };
           })
         )
       },
@@ -2778,7 +3233,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.close', async (input) => {
-            await ctx.pal.window.close(input.windowId);
+            await ctx.pal.surface.close(input.windowId);
             return { ack: true };
           })
         )
@@ -3208,20 +3663,20 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.getInfo', async () => {
-            const info = await ctx.pal.platform.getInfo();
+            const info = await ctx.pal.environment.getInfo();
             return { info };
           })
         )
       },
       getCapabilities: {
-        descriptor: descriptor<Record<string, unknown>, { capabilities: string[] }>(
+        descriptor: descriptor<Record<string, unknown>, { capabilities: unknown }>(
           'platform.getCapabilities',
           ['platform.read'],
           3_000,
           true,
           0,
           withMetrics(state, 'platform.getCapabilities', async () => {
-            const capabilities = await ctx.pal.platform.getCapabilities();
+            const capabilities = await ctx.pal.environment.getCapabilities();
             return { capabilities };
           })
         )
@@ -3234,7 +3689,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.getScreenInfo', async () => {
-            const screen = await ctx.pal.screen.getPrimary();
+            const screen = await ctx.pal.device.getPrimaryScreen();
             return { screen };
           })
         )
@@ -3247,7 +3702,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.listScreens', async () => {
-            const screens = await ctx.pal.screen.getAll();
+            const screens = await ctx.pal.device.getAllScreens();
             return { screens };
           })
         )
@@ -3278,7 +3733,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.renderHtmlToPdf', async (input) => {
-            return renderHtmlToPdfFile(state, input);
+            return ctx.pal.offscreenRender.renderHtmlToPdf(input);
           })
         )
       },
@@ -3304,7 +3759,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.renderHtmlToImage', async (input) => {
-            return renderHtmlToImageFile(state, input);
+            return ctx.pal.offscreenRender.renderHtmlToImage({
+              ...input,
+              options:
+                input.options?.background === 'theme'
+                  ? {
+                      ...input.options,
+                      themeBackgroundColor: resolveThemeBackgroundColor(state)
+                    }
+                  : input.options
+            } as never);
           })
         )
       },
@@ -3316,7 +3780,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.openExternal', async (input) => {
-            await ctx.pal.shell.openExternal(input.url);
+            await ctx.pal.transfer.openExternal(input.url);
             return { ack: true };
           })
         )
@@ -3329,7 +3793,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.dialogOpenFile', async (input) => {
-            const filePaths = await ctx.pal.dialog.openFile(input.options);
+            const filePaths = await ctx.pal.selection.openFile(input.options);
             return { filePaths };
           })
         )
@@ -3342,7 +3806,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.dialogSaveFile', async (input) => {
-            const filePath = await ctx.pal.dialog.saveFile(input.options);
+            const filePath = await ctx.pal.selection.saveFile(input.options);
             return { filePath };
           })
         )
@@ -3358,7 +3822,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (typeof input.options.message !== 'string') {
               throw createError('DIALOG_INVALID_OPTIONS', 'platform.dialogShowMessage requires options.message');
             }
-            const response = await ctx.pal.dialog.showMessage({
+            const response = await ctx.pal.selection.showMessage({
               title: typeof input.options.title === 'string' ? input.options.title : undefined,
               message: input.options.message,
               detail: typeof input.options.detail === 'string' ? input.options.detail : undefined
@@ -3378,7 +3842,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (typeof input.options.message !== 'string') {
               throw createError('DIALOG_INVALID_OPTIONS', 'platform.dialogShowConfirm requires options.message');
             }
-            const confirmed = await ctx.pal.dialog.showConfirm({
+            const confirmed = await ctx.pal.selection.showConfirm({
               title: typeof input.options.title === 'string' ? input.options.title : undefined,
               message: input.options.message,
               detail: typeof input.options.detail === 'string' ? input.options.detail : undefined
@@ -3399,7 +3863,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (format !== 'text' && format !== 'image' && format !== 'files') {
               throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
             }
-            const data = await ctx.pal.clipboard.read(format);
+            const data = await ctx.pal.systemUi.clipboard.read(format);
             state.clipboard = data;
             return { data };
           })
@@ -3434,7 +3898,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (format !== 'text' && format !== 'image' && format !== 'files') {
               throw createError('CLIPBOARD_INVALID_FORMAT', `Unsupported clipboard format: ${input.format}`);
             }
-            await ctx.pal.clipboard.write(input.data as never, format);
+            await ctx.pal.systemUi.clipboard.write(input.data as never, format);
             state.clipboard = input.data;
             return { ack: true };
           })
@@ -3448,7 +3912,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.shellOpenPath', async (input) => {
-            await ctx.pal.shell.openPath(input.path);
+            await ctx.pal.transfer.openPath(input.path);
             return { ack: true };
           })
         )
@@ -3461,7 +3925,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.shellOpenExternal', async (input) => {
-            await ctx.pal.shell.openExternal(input.url);
+            await ctx.pal.transfer.openExternal(input.url);
             return { ack: true };
           })
         )
@@ -3474,7 +3938,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.shellShowItemInFolder', async (input) => {
-            await ctx.pal.shell.showItemInFolder(input.path);
+            await ctx.pal.transfer.revealInShell(input.path);
             return { ack: true };
           })
         )
@@ -3490,7 +3954,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (typeof input.options.title !== 'string' || typeof input.options.body !== 'string') {
               throw createError('PLATFORM_NOTIFICATION_INVALID', 'platform.notificationShow requires title/body');
             }
-            await ctx.pal.notification.show(input.options);
+            await ctx.pal.systemUi.notification.show(input.options);
             return { ack: true };
           })
         )
@@ -3503,7 +3967,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.traySet', async (input) => {
-            const tray = await ctx.pal.tray.set(input.options ?? {});
+            const tray = await ctx.pal.systemUi.tray.set(input.options ?? {});
             await ctx.kernel.events.emit('platform.tray.changed', 'platform-service', { tray });
             return { tray };
           })
@@ -3517,7 +3981,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.trayClear', async () => {
-            await ctx.pal.tray.clear();
+            await ctx.pal.systemUi.tray.clear();
             await ctx.kernel.events.emit('platform.tray.changed', 'platform-service', { tray: { active: false } });
             return { ack: true };
           })
@@ -3531,7 +3995,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.trayGetState', async () => {
-            const tray = await ctx.pal.tray.getState();
+            const tray = await ctx.pal.systemUi.tray.getState();
             return { tray };
           })
         )
@@ -3550,7 +4014,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const eventName = typeof input.eventName === 'string' && input.eventName.length > 0
               ? input.eventName
               : 'platform.shortcut.triggered';
-            const registered = await ctx.pal.shortcut.register(input.accelerator, () => {
+            const registered = await ctx.pal.systemUi.shortcut.register(input.accelerator, () => {
               void ctx.kernel.events.emit(eventName, 'platform-shortcut', { accelerator: input.accelerator });
             });
             if (!registered) {
@@ -3568,7 +4032,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.shortcutUnregister', async (input) => {
-            await ctx.pal.shortcut.unregister(input.accelerator);
+            await ctx.pal.systemUi.shortcut.unregister(input.accelerator);
             return { ack: true };
           })
         )
@@ -3581,7 +4045,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.shortcutIsRegistered', async (input) => {
-            const registered = await ctx.pal.shortcut.isRegistered(input.accelerator);
+            const registered = await ctx.pal.systemUi.shortcut.isRegistered(input.accelerator);
             return { registered };
           })
         )
@@ -3594,7 +4058,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.shortcutList', async () => {
-            const accelerators = await ctx.pal.shortcut.list();
+            const accelerators = await ctx.pal.systemUi.shortcut.list();
             return { accelerators };
           })
         )
@@ -3607,7 +4071,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.shortcutClear', async () => {
-            await ctx.pal.shortcut.clear();
+            await ctx.pal.systemUi.shortcut.clear();
             return { ack: true };
           })
         )
@@ -3620,7 +4084,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'platform.powerGetState', async () => {
-            const powerState = await ctx.pal.power.getState();
+            const powerState = await ctx.pal.background.getState();
             return { state: powerState };
           })
         )
@@ -3633,7 +4097,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'platform.powerSetPreventSleep', async (input) => {
-            const preventSleep = await ctx.pal.power.setPreventSleep(Boolean(input.prevent));
+            const preventSleep = await ctx.pal.background.setPreventSleep(Boolean(input.prevent));
             return { preventSleep };
           })
         )
@@ -4511,7 +4975,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
                 };
               },
               openBoxFile: (boxFile) => openBoxDocument(ctx, state, boxFile),
-              openExternalUrl: (url) => ctx.pal.shell.openExternal(url)
+              openExternalUrl: (url) => ctx.pal.transfer.openExternal(url)
             });
             return { result };
           })
@@ -4759,6 +5223,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     configService,
     themeService,
     i18nService,
+    surfaceService,
+    transferService,
+    associationService,
     windowService,
     pluginService,
     moduleService,

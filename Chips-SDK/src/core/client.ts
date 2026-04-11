@@ -18,6 +18,9 @@ import { createI18nApi } from "../api/i18n";
 import { createPluginApi } from "../api/plugin";
 import { createModuleApi } from "../api/module";
 import { createWindowApi } from "../api/window";
+import { createSurfaceApi } from "../api/surface";
+import { createTransferApi } from "../api/transfer";
+import { createAssociationApi } from "../api/association";
 import { createPlatformApi } from "../api/platform";
 import { createBoxApi } from "../api/box";
 import { createResourceApi } from "../api/resource";
@@ -156,6 +159,9 @@ export function createClient(config: ClientConfig = {}): Client {
     plugin: createPluginApi(core),
     module: createModuleApi(core),
     window: createWindowApi(core),
+    surface: createSurfaceApi(core),
+    transfer: createTransferApi(core),
+    association: createAssociationApi(core),
     platform: createPlatformApi(core),
     box: createBoxApi(core),
     resource: createResourceApi(core),

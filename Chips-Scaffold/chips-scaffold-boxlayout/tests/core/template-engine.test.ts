@@ -61,6 +61,8 @@ describe("template-engine", () => {
       const manifest = await fs.readFile(path.join(targetDir, "manifest.yaml"), "utf8");
       const pkg = JSON.parse(await fs.readFile(path.join(targetDir, "package.json"), "utf8"));
       expect(manifest).toMatch(/type:\s+layout/);
+      expect(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
+      expect(manifest).toMatch(/headless:\n      supported:\s+true/);
       expect(manifest).toMatch(/layout:/);
       expect(manifest).toMatch(/layoutType:\s+chips\.layout\.grid/);
       expect(manifest).toMatch(/displayName:\s+Standard Box Layout Plugin/);

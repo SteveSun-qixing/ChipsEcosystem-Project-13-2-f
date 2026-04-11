@@ -1,2 +1,2 @@
 export * from './types';
-export { NodePalAdapter } from './node-adapter';
+export { DesktopPalAdapter, HeadlessPalAdapter, NodePalAdapter } from './node-adapter';

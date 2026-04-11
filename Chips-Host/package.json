@@ -10,6 +10,15 @@
       "main": [
         "dist/src/main/index.d.ts"
       ],
+      "host-core": [
+        "dist/src/main/core/host-core.d.ts"
+      ],
+      "desktop-host-shell": [
+        "dist/src/main/shells/desktop-host-shell.d.ts"
+      ],
+      "headless-host-shell": [
+        "dist/src/main/shells/headless-host-shell.d.ts"
+      ],
       "host-application": [
         "dist/src/main/core/host-application.d.ts"
       ],
@@ -28,6 +37,21 @@
       "types": "./dist/src/main/index.d.ts",
       "require": "./dist/src/main/index.js",
       "default": "./dist/src/main/index.js"
+    },
+    "./host-core": {
+      "types": "./dist/src/main/core/host-core.d.ts",
+      "require": "./dist/src/main/core/host-core.js",
+      "default": "./dist/src/main/core/host-core.js"
+    },
+    "./desktop-host-shell": {
+      "types": "./dist/src/main/shells/desktop-host-shell.d.ts",
+      "require": "./dist/src/main/shells/desktop-host-shell.js",
+      "default": "./dist/src/main/shells/desktop-host-shell.js"
+    },
+    "./headless-host-shell": {
+      "types": "./dist/src/main/shells/headless-host-shell.d.ts",
+      "require": "./dist/src/main/shells/headless-host-shell.js",
+      "default": "./dist/src/main/shells/headless-host-shell.js"
     },
     "./host-application": {
       "types": "./dist/src/main/core/host-application.d.ts",

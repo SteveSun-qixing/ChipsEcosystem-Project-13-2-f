@@ -1,0 +1,36 @@
+.card-viewer-shell {
+  width: 100%;
+  background: var(--chips-sys-color-surface, #ffffff);
+  color: var(--chips-sys-color-on-surface, #111111);
+}
+
+.card-viewer-shell--immersive {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.card-viewer-shell--document {
+  display: block;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.card-viewer-shell__main {
+  width: 100%;
+}
+
+.card-viewer-shell__main--immersive {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.card-viewer-shell__main--document {
+  display: block;
+  min-height: 100%;
+  overflow: visible;
+}

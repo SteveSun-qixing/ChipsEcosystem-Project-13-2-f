@@ -10,10 +10,10 @@
         default-src 'self' file: blob: chips-render:;
         script-src 'self';
         style-src 'self' 'unsafe-inline';
-        img-src 'self' file: data: blob: https: chips-render:;
-        font-src 'self' file: data: chips-render:;
-        connect-src 'self' chips-render:;
-        frame-src 'self' file: blob: chips-render:;
+        img-src 'self' file: data: blob: http: https: chips-render:;
+        font-src 'self' file: data: http: https: chips-render:;
+        connect-src 'self' http: https: chips-render:;
+        frame-src 'self' file: blob: http: https: chips-render:;
         worker-src 'self' blob:;
         object-src 'none';
         base-uri 'self';

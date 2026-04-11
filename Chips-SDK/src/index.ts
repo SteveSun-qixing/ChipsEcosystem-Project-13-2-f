@@ -78,13 +78,38 @@ export type {
 } from "./api/module";
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type {
+  SurfaceApi,
+  SurfaceKind,
+  SurfaceOpenRequest,
+  SurfacePresentation,
+  SurfaceState,
+  SurfaceStateKind,
+  SurfaceTarget,
+} from "./api/surface";
+export type {
+  TransferApi,
+  TransferShareInput,
+} from "./api/transfer";
+export type {
+  AssociationApi,
+  AssociationCapabilities,
+  AssociationOpenPathResult,
+  AssociationOpenResult,
+  AssociationOpenUrlResult,
+} from "./api/association";
+export type {
   PlatformApi,
+  PlatformCapabilitySnapshot,
+  PlatformHostKind,
   PlatformInfo,
   PlatformCapabilities,
+  PlatformId,
   PlatformLaunchContext,
+  PlatformPowerState,
   PlatformDialogFileOptions,
   PlatformDialogSaveOptions,
   PlatformDialogMessageOptions,
+  PlatformScreenInfo,
 } from "./api/platform";
 export type {
   BoxApi,

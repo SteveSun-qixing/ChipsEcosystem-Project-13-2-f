@@ -336,6 +336,27 @@
     "resource.resolve": {
       "action": "resource.resolve"
     },
+    "surface.open": {
+      "action": "surface.open"
+    },
+    "surface.focus": {
+      "action": "surface.focus"
+    },
+    "surface.resize": {
+      "action": "surface.resize"
+    },
+    "surface.setState": {
+      "action": "surface.setState"
+    },
+    "surface.getState": {
+      "action": "surface.getState"
+    },
+    "surface.close": {
+      "action": "surface.close"
+    },
+    "surface.list": {
+      "action": "surface.list"
+    },
     "serializer.decode": {
       "action": "serializer.decode"
     },
@@ -362,6 +383,27 @@
     },
     "theme.resolve": {
       "action": "theme.resolve"
+    },
+    "transfer.openPath": {
+      "action": "transfer.openPath"
+    },
+    "transfer.openExternal": {
+      "action": "transfer.openExternal"
+    },
+    "transfer.revealInShell": {
+      "action": "transfer.revealInShell"
+    },
+    "transfer.share": {
+      "action": "transfer.share"
+    },
+    "association.getCapabilities": {
+      "action": "association.getCapabilities"
+    },
+    "association.openPath": {
+      "action": "association.openPath"
+    },
+    "association.openUrl": {
+      "action": "association.openUrl"
     },
     "window.close": {
       "action": "window.close"

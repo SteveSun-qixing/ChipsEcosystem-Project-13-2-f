@@ -330,12 +330,29 @@ export const registerHostSchemas = (): void => {
   registerPair('i18n.translate', ['key']);
   registerPair('i18n.listLocales', []);
 
-  registerPair('window.open', ['config']);
-  registerPair('window.focus', ['windowId']);
-  registerPair('window.resize', ['windowId', 'width', 'height']);
-  registerPair('window.setState', ['windowId', 'state']);
-  registerPair('window.getState', ['windowId']);
-  registerPair('window.close', ['windowId']);
+  registerPair('surface.open', ['request'], ['surface']);
+  registerPair('surface.focus', ['surfaceId'], ['ack']);
+  registerPair('surface.resize', ['surfaceId', 'width', 'height'], ['ack']);
+  registerPair('surface.setState', ['surfaceId', 'state'], ['ack']);
+  registerPair('surface.getState', ['surfaceId'], ['state']);
+  registerPair('surface.close', ['surfaceId'], ['ack']);
+  registerPair('surface.list', [], ['surfaces']);
+
+  registerPair('transfer.openPath', ['path'], ['ack']);
+  registerPair('transfer.openExternal', ['url'], ['ack']);
+  registerPair('transfer.revealInShell', ['path'], ['ack']);
+  registerPair('transfer.share', ['input'], ['shared']);
+
+  registerPair('association.getCapabilities', [], ['capabilities']);
+  registerPair('association.openPath', ['path'], ['result']);
+  registerPair('association.openUrl', ['url'], ['result']);
+
+  registerPair('window.open', ['config'], ['window']);
+  registerPair('window.focus', ['windowId'], ['ack']);
+  registerPair('window.resize', ['windowId', 'width', 'height'], ['ack']);
+  registerPair('window.setState', ['windowId', 'state'], ['ack']);
+  registerPair('window.getState', ['windowId'], ['state']);
+  registerPair('window.close', ['windowId'], ['ack']);
 
   registerPair('platform.dialogOpenFile', []);
   registerPair('platform.dialogSaveFile', []);
@@ -395,11 +412,11 @@ export const registerHostSchemas = (): void => {
   schemaRegistry.register('schemas/module.job.cancel.request.json', validateModuleJobRequest);
   schemaRegistry.register('schemas/module.job.cancel.response.json', objectWithKeys(['ack']));
 
-  registerPair('platform.getInfo', []);
-  registerPair('platform.getCapabilities', []);
-  registerPair('platform.getScreenInfo', []);
-  registerPair('platform.listScreens', []);
-  registerPair('platform.openExternal', ['url']);
+  registerPair('platform.getInfo', [], ['info']);
+  registerPair('platform.getCapabilities', [], ['capabilities']);
+  registerPair('platform.getScreenInfo', [], ['screen']);
+  registerPair('platform.listScreens', [], ['screens']);
+  registerPair('platform.openExternal', ['url'], ['ack']);
 
   registerPair('log.write', ['level', 'message']);
   registerPair('log.query', []);

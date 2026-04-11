@@ -1,575 +1,170 @@
 # Bridge三层设计
 
-> **版本**：vNext 架构设计冻结稿  
+> **版本**：vNext 已落地口径  
 > **层级**：L5 Bridge Transport、L6 Runtime Client、L7 UI Hooks  
-> **适用阶段**：阶段18及后续重构实施阶段
+> **当前实现状态**：Desktop preload transport + Direct transport 已落地
 
-## Bridge架构概述
-
-Bridge三层是插件与系统能力交互的完整通道，从底层到顶层分为：
-- **L5 Bridge Transport**：桥接传输层，负责IPC传输
-- **L6 Runtime Client**：运行时客户端，负责协议编解码、错误归一
-- **L7 UI Hooks**：UI钩子层，面向页面的能力调用接口
-
-## 架构归属声明（2026-03-06）
+## 架构归属声明（2026-04-08）
 
 - L5-L7 运行时链路由 Host 内置实现并随 Host 发布。
-- L8/L9 前端渲染层同属 Host 运行时，不属于 SDK 运行时实现范围。
-- SDK 仅作为开发者工具包提供类型化封装与调用入口，不承载 Runtime Client 主实现。
+- SDK 只消费 Bridge / Runtime Client 的正式契约，不承载 L5-L7 主实现。
+- `window.chips.*` 是公共接口形状，不是 Electron 私有特性。
 
-**设计目标**：
-- 应用层不感知IPC/route细节
-- 统一错误归一
-- 支持重试与回退
-- 动作名历史差异吸收
+## 1. Bridge 三层总览
 
-## 层级定位
+Bridge 三层是插件访问 Host 正式能力的完整链路：
 
-| 层级 | 名称 | 核心职责 | 只允许依赖 | 禁止依赖 |
-|---|---|---|---|---|
-| L4 | Plugin Runtime | 插件加载、隔离、会话、权限 | Kernel+Services | 业务域实现细节 |
-| **L5** | **Bridge Transport** | **`window.chips.*` IPC 传输** | **Runtime** | **页面业务状态** |
-| **L6** | **Runtime Client** | **协议编解码、错误归一、重试** | **Bridge Transport** | **组件渲染实现** |
-| **L7** | **UI Hooks** | **面向页面的能力调用接口** | **Runtime Client** | **Transport 细节** |
-| L8 | Declarative UI | `View/Stack/Grid/Form/List` 语义原语 | UI Hooks + Component Layer | Host 服务细节 |
+| 层级 | 名称 | 核心职责 |
+|---|---|---|
+| L5 | Bridge Transport | 暴露 `window.chips.*`，承接调用与事件传输 |
+| L6 | Runtime Client | 统一请求封装、错误归一、返回结构解包 |
+| L7 | UI Hooks / API | 面向应用代码公开能力接口 |
 
----
+当前变化重点：
 
-## L5 Bridge Transport（桥接传输层）
+- L5 已抽象为 **Host Access Transport**，不再等同于 Electron preload；
+- L6 已对齐新的 `surface / transfer / association` 子域；
+- L7 继续以 `chips-sdk` API 和 Host 内置 UI Hooks 为主入口。
 
-### 概述
+## 2. L5：Bridge Transport
 
-Bridge Transport通过Electron的contextBridge机制暴露标准API，是插件访问底层能力的唯一通道。
+### 2.1 正式入口
 
-### 对外入口接口
+当前 `ChipsBridge` 公开的核心入口如下：
 
-```typescript
-interface ChipsBridge {
-  // ==================== 核心调用 ====================
-  
-  /**
-   * 异步调用系统能力
-   * @param action - 动作名称，格式：namespace.action
-   * @param payload - 请求载荷
-   * @returns Promise<T> - 响应数据
-   */
-  invoke<T = unknown>(action: string, payload?: unknown): Promise<T>;
-  
-  // ==================== 事件订阅 ====================
-  
-  /**
-   * 订阅事件
-   * @param event - 事件名称
-   * @param handler - 事件处理函数
-   * @returns 取消订阅函数
-   */
-  on(event: string, handler: (data: unknown) => void): () => void;
-  
-  /**
-   * 订阅一次性事件
-   * @param event - 事件名称
-   * @param handler - 事件处理函数
-   */
-  once(event: string, handler: (data: unknown) => void): void;
-  
-  // ==================== 事件发布 ====================
-  
-  /**
-   * 发布事件
-   * @param event - 事件名称
-   * @param data - 事件数据
-   */
-  emit(event: string, data?: unknown): void;
-  
-  // ==================== 子域API ====================
-  
-  /**
-   * 窗口管理
-   */
-  window: WindowBridge;
-  
-  /**
-   * 对话框
-   */
-  dialog: DialogBridge;
-  
-  /**
-   * 插件管理
-   */
-  plugin: PluginBridge;
-  
-  /**
-   * 剪贴板
-   */
-  clipboard: ClipboardBridge;
-  
-  /**
-   * Shell操作
-   */
-  shell: ShellBridge;
-}
-```
+- `invoke(action, payload?)`
+- `invokeScoped(action, payload, { token })`
+- `on(event, handler)`
+- `once(event, handler)`
+- `emit(event, data?)`
+- `emitScoped(event, data, { token })`
 
-### 子域API定义
+其中：
 
-#### WindowBridge
-```typescript
-interface WindowBridge {
-  open(config: WindowOpenConfig): Promise<WindowHandle>;
-  focus(windowId: WindowHandle): Promise<void>;
-  resize(windowId: WindowHandle, width: number, height: number): Promise<void>;
-  setState(windowId: WindowHandle, state: WindowState): Promise<void>;
-  getState(windowId: WindowHandle): Promise<WindowState>;
-  close(windowId: WindowHandle): Promise<void>;
-}
-```
+- `invokeScoped / emitScoped` 属于高级受控接口；
+- 普通应用插件开发默认不依赖 scoped 接口。
 
-#### DialogBridge
-```typescript
-interface DialogBridge {
-  openFile(options?: OpenFileOptions): Promise<string[] | null>;
-  saveFile(options?: SaveFileOptions): Promise<string | null>;
-  showMessage(options: MessageOptions): Promise<number>;
-  showConfirm(options: MessageOptions): Promise<boolean>;
-}
-```
+### 2.2 子域基线
 
-#### PluginBridge
-```typescript
-interface PluginBridge {
-  install(manifestPath: string): Promise<PluginId>;
-  enable(pluginId: PluginId): Promise<void>;
-  disable(pluginId: PluginId): Promise<void>;
-  uninstall(pluginId: PluginId): Promise<void>;
-  query(filter?: PluginFilter): Promise<Plugin[]>;
-  getInfo(pluginId: PluginId): Promise<PluginInfo>;
-}
-```
+当前 Host 已在 Bridge 层正式暴露以下子域：
 
-#### ClipboardBridge
-```typescript
-interface ClipboardBridge {
-  read(format?: ClipboardFormat): Promise<ClipboardData>;
-  write(data: ClipboardData, format?: ClipboardFormat): Promise<void>;
-}
-```
+- `window`
+- `dialog`
+- `plugin`
+- `clipboard`
+- `shell`
+- `surface`
+- `transfer`
+- `association`
+- `platform`
+- `notification`
+- `tray`
+- `shortcut`
+- `ipc`
 
-#### ShellBridge
-```typescript
-interface ShellBridge {
-  openPath(path: string): Promise<void>;
-  openExternal(url: string): Promise<void>;
-  showItemInFolder(path: string): Promise<void>;
-}
-```
+新增正式子域：
 
-### IPC通道设计
+- `surface`：跨平台界面容器语义
+- `transfer`：打开、导出、分享、定位文件
+- `association`：文件关联 / URL scheme / share target 入口治理
 
-| 通道类型 | 通道名称 | 用途 |
-|----------|----------|------|
-| 主通道 | `chips:invoke` | 核心能力调用 |
-| 窗口通道 | `chips:window:*` | 窗口管理 |
-| 对话框通道 | `chips:dialog:*` | 系统对话框 |
-| 插件通道 | `chips:plugin:*` | 插件管理 |
-| 剪贴板通道 | `chips:clipboard:*` | 剪贴板操作 |
-| Shell通道 | `chips:shell:*` | Shell操作 |
+### 2.3 当前已落地的 Transport
 
-### 事件命名规范
+| Transport | 当前状态 | 说明 |
+|---|---|---|
+| Electron preload transport | 已落地 | `DesktopHostShell` 注入 `window.chips.*` |
+| Direct transport | 已落地 | Headless、测试、Host 内部直接复用 |
+| Browser Worker transport | 预留 | 供未来 Web Shell 使用 |
+| WebView native bridge | 预留 | 供未来 Mobile Shell 使用 |
 
-**强制采用点语义**：
-- 正确示例：`theme.changed`
-- 正确示例：`language.changed`
-- 正确示例：`plugin.enabled`
-- 正确示例：`window.focused`
+### 2.4 传输通道
 
-**禁止混用**：
-- 禁止示例：`theme:changed`
-- 禁止示例：`language-changed`
+Desktop 当前继续使用：
 
-### 安全约束
+- `chips:invoke`
+- `chips:emit`
+- `chips:event:<name>`
 
-- 插件只能通过`window.chips.*`访问系统能力
-- 禁止直接访问Node.js API
-- 禁止直接读写文件系统
-- 禁止直接发起网络请求
+这些是 Desktop Shell 的物理实现，不是公共接口边界；未来其他 Shell 可以替换底层通道，但不得改变 `window.chips.*` 形状。
 
----
+### 2.5 安全边界
 
-## L6 Runtime Client（运行时客户端）
+- 页面侧只允许访问 `window.chips.*`
+- 不允许直接暴露 Node.js / Electron 原生对象
+- 作用域恢复、权限、schema、审计都在 Host 侧统一处理
 
-### 概述
+## 3. L6：Runtime Client
 
-Runtime Client负责协议编解码、错误归一、超时控制、重试与回退。
+Runtime Client 的正式职责：
 
-**核心目标**：应用层不感知IPC/route细节。
+1. 统一 action / payload 形状
+2. 标准错误对象归一
+3. Host 返回结构解包
+4. 环境与上下文保护
+5. 为页面提供稳定 API 形状
 
-### 核心职责
+当前已经对齐的新能力包括：
 
-#### 1. 参数规范化
-```typescript
-// 将页面调用转换为标准协议格式
-interface RequestPayload {
-  action: string;
-  namespace: string;
-  payload: unknown;
-  requestId: string;
-  timestamp: number;
-  source: {
-    type: 'app' | 'card' | 'layout' | 'module' | 'theme';
-    pluginId?: string;
-  };
-}
-```
+- `client.surface.*`
+- `client.transfer.*`
+- `client.association.*`
+- `client.platform.getCapabilities()` 返回结构化能力快照
 
-#### 2. 协议映射
-历史动作名差异吸收：
-```typescript
-// 动作名映射表（兼容旧口径）
-const ACTION_ALIASES: Record<string, string> = {
-  'theme.getCSS': 'theme.getAllCss',
-  'theme.setCurrent': 'theme.apply',
-  'i18n.getCurrentLanguage': 'i18n.getCurrent',
-  'i18n.setLanguage': 'i18n.setCurrent',
-};
-```
+## 4. L7：UI Hooks / API
 
-#### 3. 错误归一
-底层错误映射到标准错误码：
-```typescript
-// 错误归一映射
-const ERROR_MAPPING: Record<string, StandardError> = {
-  // Bridge层错误
-  'BRIDGE_TIMEOUT': {
-    code: 'BRIDGE_TIMEOUT',
-    message: 'Bridge调用超时',
-    retryable: true,
-  },
-  'BRIDGE_DISCONNECTED': {
-    code: 'BRIDGE_DISCONNECTED',
-    message: 'Bridge连接断开',
-    retryable: true,
-  },
-  
-  // 服务层错误
-  'SERVICE_NOT_FOUND': {
-    code: 'SERVICE_NOT_FOUND',
-    message: '服务不存在',
-    retryable: false,
-  },
-  'SERVICE_UNAVAILABLE': {
-    code: 'SERVICE_UNAVAILABLE',
-    message: '服务不可用',
-    retryable: true,
-  },
-  
-  // 运行时错误
-  'RUNTIME_TIMEOUT': {
-    code: 'RUNTIME_TIMEOUT',
-    message: '操作超时',
-    retryable: true,
-  },
-  'RUNTIME_RETRY_EXHAUSTED': {
-    code: 'RUNTIME_RETRY_EXHAUSTED',
-    message: '重试次数耗尽',
-    retryable: false,
-  },
-};
+L7 面向业务代码的正式调用顺序：
 
-// 统一错误对象
-interface StandardError {
-  code: string;
-  message: string;
-  details?: unknown;
-  retryable?: boolean;
-}
-```
+1. 优先使用 `chips-sdk` 的 API / `createClient()`
+2. 在必须直连 Bridge 的场景使用 `window.chips.*`
+3. 不允许页面代码直接依赖任何 transport 实现细节
 
-#### 4. 超时控制
-```typescript
-interface ClientOptions {
-  defaultTimeout: number;        // 默认超时时间（毫秒）
-  enableRetry: boolean;          // 是否启用重试
-  maxRetries: number;           // 最大重试次数
-  retryDelay: number;           // 初始重试延迟（毫秒）
-  retryBackoff: number;         // 退避系数
-}
+## 5. 应用插件启动链路
 
-const DEFAULT_OPTIONS: ClientOptions = {
-  defaultTimeout: 30000,
-  enableRetry: true,
-  maxRetries: 3,
-  retryDelay: 200,
-  retryBackoff: 2,
-};
-```
+当前应用插件正式启动链路已经统一到以下模型：
 
-#### 5. 重试策略
-```typescript
-// 指数退避重试
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: ClientOptions
-): Promise<T> {
-  let lastError: Error;
-  
-  for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      
-      // 只有retryable=true才重试
-      if (!isRetryable(error) || attempt >= options.maxRetries) {
-        throw error;
-      }
-      
-      // 指数退避
-      const delay = options.retryDelay * Math.pow(options.retryBackoff, attempt);
-      await sleep(delay);
-    }
-  }
-  
-  throw lastError!;
-}
-```
+1. 调用 `surface.open({ target: { type: "plugin" } })` 或 `plugin.launch(...)`
+2. Host Runtime 创建插件会话并完成握手
+3. PAL `surface.open()` 创建实际容器
+4. preload 读取 launch context，向页面注入 `window.chips`
 
-### Runtime Client API
-```typescript
-class RuntimeClient {
-  constructor(bridge: ChipsBridge, options?: Partial<ClientOptions>);
-  
-  // 调用系统能力
-  invoke<T = unknown>(action: string, payload?: unknown): Promise<T>;
-  
-  // 调用并指定超时
-  invokeWithTimeout<T>(action: string, payload: unknown, timeoutMs: number): Promise<T>;
-  
-  // 批量调用
-  invokeBatch<T>(requests: InvokeRequest[]): Promise<InvokeResponse<T>[]>;
-  
-  // 事件订阅
-  on(event: string, handler: EventHandler): Unsubscribe;
-  once(event: string, handler: EventHandler): void;
-  
-  // 取消订阅
-  off(event: string, handler?: EventHandler): void;
-}
-```
+当前语义：
 
----
+- `surface.open(target=plugin)` 已走正式插件会话主链路
+- `plugin.launch` 保留为 app 插件兼容入口，并复用同一底层实现
+- `window.open` 继续存在，但它是桌面窗口别名，不再承担新的跨平台插件生命周期语义
 
-## L7 UI Hooks（UI钩子层）
+## 6. 统一事件语义
 
-### 概述
+Bridge / Runtime 当前重点事件包括：
 
-UI Hooks是面向页面的能力调用接口，提供声明式的系统能力调用方式。
+- `theme.changed`
+- `plugin.init`
+- `plugin.ready`
+- `plugin.launched`
+- `surface.opened`
+- `window.opened`
+- `module.runtime.started`
+- `module.runtime.stopped`
 
-**约束**：
-- Hook仅允许调用Runtime Client，不可直连Transport
-- Hook返回的是客户端代理对象，实际调用通过Bridge传输
+事件命名强制采用点语义，不得混用冒号或短横线命名。
 
-### 标准Hooks定义
+## 7. 依赖方向
 
-#### 主题 Hooks
-```typescript
-// 主题客户端
-interface ThemeClient {
-  list(publisher?: string): Promise<ThemeMeta[]>;
-  apply(id: string): Promise<void>;
-  getCurrent(appId?: string, pluginId?: string): Promise<ThemeState>;
-  getAllCss(): Promise<{ css: string; themeId: string }>;
-  resolve(chain: string[]): Promise<ResolvedTokens>;
-  contract.get(component?: string): Promise<ThemeContract>;
-}
-
-// Hooks
-function useTheme(): ThemeClient;
-function useCurrentTheme(): ThemeState;
-function useApplyTheme(): (themeId: string) => Promise<void>;
-```
-
-#### 国际化 Hooks
-```typescript
-// 国际化客户端
-interface I18nClient {
-  getCurrent(): Promise<string>;
-  setCurrent(locale: string): Promise<void>;
-  translate(key: string, params?: Record<string, unknown>): Promise<string>;
-  listLocales(): Promise<LocaleInfo[]>;
-}
-
-// Hooks
-function useI18n(): I18nClient;
-function useTranslation(key: string, params?: Record<string, unknown>): string;
-function useCurrentLocale(): string;
-function useSetLocale(): (locale: string) => Promise<void>;
-```
-
-#### 文件 Hooks
-```typescript
-// 文件客户端
-interface FileClient {
-  read(path: string, options?: FileReadOptions): Promise<FileContent>;
-  write(path: string, content: FileContent, options?: FileWriteOptions): Promise<void>;
-  stat(path: string): Promise<FileStat>;
-  list(dir: string, options?: FileListOptions): Promise<FileEntry[]>;
-  exists(path: string): Promise<boolean>;
-  remove(path: string): Promise<void>;
-  copy(src: string, dest: string): Promise<void>;
-  move(src: string, dest: string): Promise<void>;
-}
-
-// Hooks
-function useFile(): FileClient;
-function useReadFile(path: string, options?: FileReadOptions): FileContent | null;
-function useWriteFile(path: string, content: FileContent, options?: FileWriteOptions): Promise<void>;
-```
-
-#### 窗口 Hooks
-```typescript
-// 窗口客户端
-interface WindowClient {
-  open(config: WindowOpenConfig): Promise<WindowId>;
-  focus(windowId: WindowId): Promise<void>;
-  resize(windowId: WindowId, width: number, height: number): Promise<void>;
-  setState(windowId: WindowId, state: Partial<WindowState>): Promise<void>;
-  getState(windowId: WindowId): Promise<WindowState>;
-  close(windowId: WindowId): Promise<void>;
-  getCurrent(): Promise<WindowId>;
-}
-
-// Hooks
-function useWindow(): WindowClient;
-function useOpenWindow(config: WindowOpenConfig): Promise<WindowId>;
-function useCurrentWindow(): WindowId;
-function useWindowState(windowId: WindowId): WindowState;
-```
-
-#### 插件 Hooks
-```typescript
-// 插件客户端
-interface PluginClient {
-  install(manifestPath: string): Promise<PluginId>;
-  enable(pluginId: PluginId): Promise<void>;
-  disable(pluginId: PluginId): Promise<void>;
-  uninstall(pluginId: PluginId): Promise<void>;
-  query(filter?: PluginFilter): Promise<Plugin[]>;
-  getInfo(pluginId: PluginId): Promise<PluginInfo>;
-  getInstalled(): Promise<Plugin[]>;
-}
-
-// Hooks
-function usePlugin(): PluginClient;
-function useQueryPlugin(filter?: PluginFilter): Plugin[];
-function useInstalledPlugins(): Plugin[];
-function useEnablePlugin(): (pluginId: string) => Promise<void>;
-function useDisablePlugin(): (pluginId: string) => Promise<void>;
-```
-
-#### 配置 Hooks
-```typescript
-// 配置客户端
-interface ConfigClient {
-  get<T = unknown>(key: string): Promise<T | null>;
-  set<T = unknown>(key: string, value: T): Promise<void>;
-  batchSet(entries: Record<string, unknown>): Promise<void>;
-  reset(key?: string): Promise<void>;
-  getAll(): Promise<Record<string, unknown>>;
-}
-
-// Hooks
-function useConfig(): ConfigClient;
-function useGetConfig<T = unknown>(key: string): T | null;
-function useSetConfig<T = unknown>(key: string, value: T): Promise<void>;
-```
-
-#### 日志 Hooks
-```typescript
-// 日志客户端
-interface LogClient {
-  write(level: LogLevel, message: string, metadata?: Record<string, unknown>): Promise<void>;
-  query(filter: LogFilter): Promise<LogEntry[]>;
-  export(filter: LogFilter): Promise<LogBundle>;
-  getLevels(): Promise<LogLevel[]>;
-}
-
-// Hooks
-function useLog(): LogClient;
-```
-
-### Hooks使用示例
-```tsx
-// 示例：使用主题Hook
-function ThemeSwitcher() {
-  const { list, apply, getCurrent } = useTheme();
-  const currentTheme = useCurrentTheme();
-  const [themes, setThemes] = useState<ThemeMeta[]>([]);
-  
-  useEffect(() => {
-    list().then(setThemes);
-  }, []);
-  
-  const handleChange = async (themeId: string) => {
-    await apply(themeId);
-  };
-  
-  return (
-    <select value={currentTheme?.id} onChange={e => handleChange(e.target.value)}>
-      {themes.map(theme => (
-        <option key={theme.id} value={theme.id}>{theme.name}</option>
-      ))}
-    </select>
-  );
-}
-
-// 示例：使用文件Hook
-function FileViewer({ path }) {
-  const { read } = useFile();
-  const content = useReadFile(path);
-  
-  if (!content) return <div>Loading...</div>;
-  
-  return <pre>{content}</pre>;
-}
-```
-
----
-
-## 依赖方向约束
-
-```
+```text
 L4 Plugin Runtime
-    ↓ (提供 window.chips.*)
-L5 Bridge Transport
-    ↓ (封装IPC细节)
-L6 Runtime Client
-    ↓ (提供代理对象)
-L7 UI Hooks
-    ↓ (调用Hooks)
-L8 Declarative UI
+  -> L5 Bridge Transport
+  -> L6 Runtime Client
+  -> L7 UI Hooks / API
 ```
 
-**禁止反向依赖**：
-- L7不可直接依赖L5（Transport细节）
-- L6不可直接依赖L4（Plugin Runtime实现）
-- L5不可依赖页面业务状态
+禁止项：
 
----
+- L7 不能直接依赖 L5 transport 细节
+- L6 不能重新实现 Host 运行时主体
+- L5 不能依赖页面业务状态
 
-## 验收标准
+## 8. 质量门禁
 
-### Bridge Transport验收
-- `window.chips.invoke/on/once/emit`接口完整
-- IPC主通道和子通道正确实现
-- 事件命名采用点语义
-
-### Runtime Client验收
-- 参数规范化正确
-- 错误归一到StandardError
-- 指数退避重试正确实现
-- 超时控制生效
-
-### UI Hooks验收
-- 所有Hooks只依赖Runtime Client
-- Hooks返回代理对象而非直连Transport
-- 主题/i18n/file/window/plugin/config等核心Hooks完整
+1. 新增 Bridge 子域时，必须同步更新 Host、SDK、路由契约与共享文档。
+2. 新增 Transport 时，只能替换传输后端，不能改变动作名、权限模型和错误模型。
+3. `window.chips.*` 形状必须对 Desktop / Headless / 未来 Web / Mobile 保持一致。

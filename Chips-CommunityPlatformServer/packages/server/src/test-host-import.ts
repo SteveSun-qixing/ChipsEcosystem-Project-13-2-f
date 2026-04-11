@@ -1,13 +1,13 @@
-import { HostApplication } from 'chips-host/host-application';
+import { HeadlessHostShell } from 'chips-host/headless-host-shell';
 import * as path from 'path';
 
 async function test() {
-  console.log('HostApplication imported');
-  const host = new HostApplication({
+  console.log('HeadlessHostShell imported');
+  const host = new HeadlessHostShell({
     workspacePath: path.resolve('./.test-host-workspace')
   });
   void host;
-  console.log('HostApplication instance created');
+  console.log('HeadlessHostShell instance created');
 }
 
 test().catch(console.error);

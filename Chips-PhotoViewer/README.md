@@ -12,7 +12,7 @@
 
 ## 2. 当前正式能力
 
-- 通过 `launchParams.targetPath` 打开图片；
+- 通过 `launchParams.resourceOpen` 或 `launchParams.targetPath` 打开图片；
 - 在应用内手动选择图片文件；
 - 接收 Host 文件关联分发的图片文件；
 - 放大、缩小、适应窗口、实际大小；
@@ -32,6 +32,8 @@
 
 ## 3. Host 接入结论
 
+- Host 正式资源打开链路会优先通过 `launchParams.resourceOpen` 把图片资源交给图片查看器；
+- 当 Host 还能解析出本地文件路径时，会继续补充 `launchParams.targetPath`；
 - Host 现在会通过通用 `file-handler:<ext>` 链路把图片文件路由到图片查看器；
 - macOS 安装器会根据内置 app 插件 manifest 的 `file-handler:<ext>` 能力条件注册图片文件关联；
 - 如果 Host 发行包没有携带 `Chips-PhotoViewer`，安装器不会注册这些图片类型，因此 Host 不会接住这些图片文件。

@@ -97,6 +97,8 @@ const main = async () => {
 
     const manifestText = await fsp.readFile(path.join(targetDir, 'manifest.yaml'), 'utf-8');
     assert.match(manifestText, /entry:\s*dist\/index\.mjs/);
+    assert.match(manifestText, /runtime:\s*\n\s*targets:/);
+    assert.match(manifestText, /headless:\s*\n\s*supported:\s*true/);
 
     const vitestConfig = await fsp.readFile(path.join(targetDir, 'vitest.config.mts'), 'utf-8');
     assert.match(vitestConfig, /environment:\s*"jsdom"/);

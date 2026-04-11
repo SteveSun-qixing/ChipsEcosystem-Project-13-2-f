@@ -1,4 +1,4 @@
-import { HostApplication } from 'chips-host/host-application';
+import { HeadlessHostShell } from 'chips-host/headless-host-shell';
 import * as crypto from 'crypto';
 import { env } from '../config/env.js';
 import * as fs from 'fs/promises';
@@ -45,6 +45,71 @@ interface MinimalPluginManifest {
   };
 }
 
+interface RuntimePluginRecord {
+  manifest: {
+    id: string;
+    name: string;
+    type: 'app' | 'card' | 'layout' | 'module' | 'theme';
+    entry?: string | Record<string, unknown>;
+    permissions: string[];
+    runtime?: {
+      targets?: Record<string, { supported?: boolean }>;
+    };
+    ui?: {
+      launcher?: {
+        displayName?: string;
+      };
+    };
+    capabilities?: string[];
+  };
+  installPath: string;
+  enabled: boolean;
+}
+
+interface RuntimeSessionRecord {
+  sessionId: string;
+  pluginId: string;
+  permissions: string[];
+  launchParams: Record<string, unknown>;
+  sessionNonce: string;
+  status: 'handshaking' | 'running' | 'stopped';
+}
+
+export interface WebPluginSessionView {
+  sessionId: string;
+  pluginId: string;
+  title: string;
+  launchParams: Record<string, unknown>;
+  permissions: string[];
+}
+
+export interface WebPluginEntryView extends WebPluginSessionView {
+  entryPath: string;
+  entryDir: string;
+}
+
+export interface WebResourceOpenRequest {
+  intent?: string;
+  resource: {
+    resourceId: string;
+    mimeType?: string;
+    title?: string;
+    fileName?: string;
+  };
+}
+
+export interface WebResourceOpenPlan {
+  mode: 'plugin' | 'external';
+  pluginId?: string;
+  matchedCapability?: string;
+  resolved: {
+    resourceId: string;
+    mimeType?: string;
+    extension?: string;
+    fileName?: string;
+  };
+}
+
 export interface FileConvertResult {
   outputPath: string;
   artifacts: Array<{
@@ -61,10 +126,95 @@ export interface FileConvertResult {
 }
 
 const MODULE_JOB_POLL_MS = 50;
+const WEB_RUNTIME_TARGET = 'web';
+
+const WEB_RESOURCE_MIME_BY_EXTENSION: Record<string, string> = {
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+};
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeResourceIntent(value: string | undefined): string {
+  return normalizeOptionalString(value)?.toLowerCase() ?? 'view';
+}
+
+function inferResourceExtension(resourceId: string, fileName?: string): string | undefined {
+  const candidate = normalizeOptionalString(fileName) ?? resourceId;
+  if (!candidate) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    const extension = path.extname(parsed.pathname).trim().toLowerCase();
+    return extension.length > 0 ? extension : undefined;
+  } catch {
+    const extension = path.extname(candidate).trim().toLowerCase();
+    return extension.length > 0 ? extension : undefined;
+  }
+}
+
+function inferResourceMimeType(mimeType: string | undefined, extension: string | undefined): string | undefined {
+  const normalizedMimeType = normalizeOptionalString(mimeType)?.toLowerCase();
+  if (normalizedMimeType) {
+    return normalizedMimeType;
+  }
+
+  if (!extension) {
+    return undefined;
+  }
+
+  return WEB_RESOURCE_MIME_BY_EXTENSION[extension];
+}
+
+function buildResourceHandlerCapabilities(intent: string, mimeType: string | undefined, extension: string | undefined): string[] {
+  const capabilities: string[] = [];
+
+  if (mimeType) {
+    capabilities.push(`resource-handler:${intent}:${mimeType}`);
+    const slashIndex = mimeType.indexOf('/');
+    if (slashIndex > 0) {
+      capabilities.push(`resource-handler:${intent}:${mimeType.slice(0, slashIndex)}/*`);
+    }
+  }
+
+  if (extension) {
+    capabilities.push(`file-handler:${extension}`);
+  }
+
+  return capabilities;
+}
+
+function isExternalUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'data:' || parsed.protocol === 'blob:';
+  } catch {
+    return false;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 export class HostIntegrationService {
   private static instance: HostIntegrationService;
-  private host!: HostApplication;
+  private host!: HeadlessHostShell;
   private workspacePath: string;
   private initialized = false;
   private ecosystemRoot?: string;
@@ -93,7 +243,7 @@ export class HostIntegrationService {
     await fs.rm(this.workspacePath, { recursive: true, force: true });
     await fs.mkdir(this.workspacePath, { recursive: true });
 
-    this.host = new HostApplication({
+    this.host = new HeadlessHostShell({
       workspacePath: this.workspacePath,
       builtInPlugins: []
     });
@@ -104,7 +254,7 @@ export class HostIntegrationService {
       console.warn('[HostIntegration] Host start failed, wiping workspace and retrying...', error);
       await fs.rm(this.workspacePath, { recursive: true, force: true });
       await fs.mkdir(this.workspacePath, { recursive: true });
-      this.host = new HostApplication({
+      this.host = new HeadlessHostShell({
         workspacePath: this.workspacePath,
         builtInPlugins: []
       });
@@ -112,7 +262,13 @@ export class HostIntegrationService {
     }
 
     const pluginSources = this.resolvePluginSources();
+    for (const source of pluginSources.appPlugins) {
+      await this.installAndEnablePlugin(source);
+    }
     for (const source of pluginSources.cardPlugins) {
+      await this.installAndEnablePlugin(source);
+    }
+    for (const source of pluginSources.layoutPlugins) {
       await this.installAndEnablePlugin(source);
     }
     for (const source of pluginSources.modulePlugins) {
@@ -186,6 +342,144 @@ export class HostIntegrationService {
     if (this.host) {
       await this.host.stop();
     }
+  }
+
+  public async openWebPluginSession(params: {
+    pluginId: string;
+    launchParams?: Record<string, unknown>;
+  }): Promise<WebPluginSessionView> {
+    if (!this.initialized) {
+      await this.init();
+    }
+
+    const plugin = this.getRuntimePluginRecord(params.pluginId);
+    this.ensurePluginSupportsWeb(plugin);
+    const entryPath = this.resolvePluginEntryPath(plugin);
+    if (!entryPath.toLowerCase().endsWith('.html')) {
+      throw new Error(`Web plugin entry must be an HTML file: ${entryPath}`);
+    }
+
+    const session = this.host.runtime.pluginInit(params.pluginId, params.launchParams ?? {});
+    this.host.runtime.completeHandshake(session.sessionId, session.sessionNonce);
+
+    return {
+      sessionId: session.sessionId,
+      pluginId: session.pluginId,
+      title: plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name,
+      launchParams: { ...session.launchParams },
+      permissions: [...session.permissions],
+    };
+  }
+
+  public getWebPluginSession(sessionId: string): WebPluginSessionView {
+    const session = this.getRuntimeSession(sessionId);
+    const plugin = this.getRuntimePluginRecord(session.pluginId);
+    this.ensurePluginSupportsWeb(plugin);
+
+    return {
+      sessionId: session.sessionId,
+      pluginId: session.pluginId,
+      title: plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name,
+      launchParams: { ...session.launchParams },
+      permissions: [...session.permissions],
+    };
+  }
+
+  public getWebPluginEntry(sessionId: string): WebPluginEntryView {
+    const session = this.getRuntimeSession(sessionId);
+    const plugin = this.getRuntimePluginRecord(session.pluginId);
+    this.ensurePluginSupportsWeb(plugin);
+    const entryPath = this.resolvePluginEntryPath(plugin);
+
+    return {
+      sessionId: session.sessionId,
+      pluginId: session.pluginId,
+      title: plugin.manifest.ui?.launcher?.displayName ?? plugin.manifest.name,
+      launchParams: { ...session.launchParams },
+      permissions: [...session.permissions],
+      entryPath,
+      entryDir: path.dirname(entryPath),
+    };
+  }
+
+  public resolveWebPluginAssetPath(sessionId: string, assetPath: string): string {
+    const entry = this.getWebPluginEntry(sessionId);
+    const normalizedAssetPath = assetPath.replace(/^\/+/, '');
+    const candidateRoots = [path.join(entry.entryDir, 'assets'), entry.entryDir];
+
+    for (const candidateRoot of candidateRoots) {
+      const resolvedPath = path.resolve(candidateRoot, normalizedAssetPath);
+      const relative = path.relative(candidateRoot, resolvedPath);
+
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        continue;
+      }
+
+      if (fsSync.existsSync(resolvedPath) && fsSync.statSync(resolvedPath).isFile()) {
+        return resolvedPath;
+      }
+    }
+
+    throw new Error(`Resolved plugin asset not found: ${assetPath}`);
+  }
+
+  public closeWebPluginSession(sessionId: string): void {
+    if (!this.initialized) {
+      return;
+    }
+
+    this.host.runtime.stopSession(sessionId);
+  }
+
+  public async resolveWebResourceOpenPlan(request: WebResourceOpenRequest): Promise<WebResourceOpenPlan> {
+    if (!this.initialized) {
+      await this.init();
+    }
+
+    const resourceId = normalizeOptionalString(request.resource.resourceId);
+    if (!resourceId) {
+      throw new Error('resource.resourceId is required');
+    }
+
+    const extension = inferResourceExtension(resourceId, request.resource.fileName);
+    const mimeType = inferResourceMimeType(request.resource.mimeType, extension);
+    const intent = normalizeResourceIntent(request.intent);
+    const candidates = buildResourceHandlerCapabilities(intent, mimeType, extension);
+    const plugins = this.host.runtime
+      .query({ type: 'app' })
+      .filter((record) => record.enabled)
+      .filter((record) => (record.manifest.runtime?.targets?.[WEB_RUNTIME_TARGET]?.supported ?? false));
+
+    for (const capability of candidates) {
+      const matched = plugins.find((record) => (record.manifest.capabilities ?? []).includes(capability));
+      if (matched) {
+        return {
+          mode: 'plugin',
+          pluginId: matched.manifest.id,
+          matchedCapability: capability,
+          resolved: {
+            resourceId,
+            mimeType,
+            extension,
+            fileName: normalizeOptionalString(request.resource.fileName),
+          },
+        };
+      }
+    }
+
+    if (isExternalUrl(resourceId)) {
+      return {
+        mode: 'external',
+        resolved: {
+          resourceId,
+          mimeType,
+          extension,
+          fileName: normalizeOptionalString(request.resource.fileName),
+        },
+      };
+    }
+
+    throw new Error(`No web-capable plugin can open resource: ${resourceId}`);
   }
 
   private async installAndEnablePlugin(sourcePath: string): Promise<string> {
@@ -268,15 +562,25 @@ export class HostIntegrationService {
   }
 
   private resolvePluginSources(): {
+    appPlugins: string[];
     cardPlugins: string[];
+    layoutPlugins: string[];
     themePlugins: string[];
     modulePlugins: string[];
   } {
     const root = this.resolveEcosystemRoot();
 
+    const defaultAppPlugins = [
+      path.join(root, 'Chips-CardViewer'),
+      path.join(root, 'Chips-PhotoViewer'),
+    ];
     const defaultCardPlugins = [
       path.join(root, 'Chips-BaseCardPlugin/richtext-BCP'),
       path.join(root, 'Chips-BaseCardPlugin/image-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/webpage-BCP'),
+    ];
+    const defaultLayoutPlugins = [
+      path.join(root, 'Chips-BoxLayoutPlugin'),
     ];
     const defaultThemePlugins = [
       path.join(root, 'ThemePack/Chips-default'),
@@ -287,7 +591,9 @@ export class HostIntegrationService {
     ];
 
     return {
+      appPlugins: this.resolveConfiguredPluginList(env.HOST_APP_PLUGIN_PATHS, defaultAppPlugins),
       cardPlugins: this.resolveConfiguredPluginList(env.HOST_CARD_PLUGIN_PATHS, defaultCardPlugins),
+      layoutPlugins: this.resolveConfiguredPluginList(env.HOST_LAYOUT_PLUGIN_PATHS, defaultLayoutPlugins),
       themePlugins: this.resolveConfiguredPluginList(env.HOST_THEME_PLUGIN_PATHS, defaultThemePlugins),
       modulePlugins: this.resolveConfiguredPluginList(env.HOST_MODULE_PLUGIN_PATHS, defaultModulePlugins),
     };
@@ -415,6 +721,55 @@ export class HostIntegrationService {
       caller: this.kernelCaller,
       requestId: crypto.randomUUID()
     } as any;
+  }
+
+  private getRuntimePluginRecord(pluginId: string): RuntimePluginRecord {
+    const plugin = this.host.runtime.get(pluginId) as RuntimePluginRecord;
+    return plugin;
+  }
+
+  private getRuntimeSession(sessionId: string): RuntimeSessionRecord {
+    const session = this.host.runtime
+      .snapshot()
+      .sessions
+      .find((record) => record.sessionId === sessionId) as RuntimeSessionRecord | undefined;
+
+    if (!session || session.status !== 'running') {
+      throw new Error(`Web plugin session not found or not running: ${sessionId}`);
+    }
+
+    return session;
+  }
+
+  private ensurePluginSupportsWeb(plugin: RuntimePluginRecord): void {
+    if (plugin.manifest.type !== 'app') {
+      throw new Error(`Only app plugins can open web sessions: ${plugin.manifest.id}`);
+    }
+
+    if (!plugin.enabled) {
+      throw new Error(`Plugin is disabled: ${plugin.manifest.id}`);
+    }
+
+    const supported = plugin.manifest.runtime?.targets?.[WEB_RUNTIME_TARGET]?.supported;
+    if (supported !== true) {
+      throw new Error(`Plugin does not support web host sessions: ${plugin.manifest.id}`);
+    }
+  }
+
+  private resolvePluginEntryPath(plugin: RuntimePluginRecord): string {
+    const entry = plugin.manifest.entry;
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      throw new Error(`Plugin is missing a string entry path: ${plugin.manifest.id}`);
+    }
+
+    const normalizedEntry = entry.replace(/^\/+/, '');
+    const resolvedPath = path.resolve(plugin.installPath, normalizedEntry);
+    const relative = path.relative(plugin.installPath, resolvedPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`Plugin entry escaped install root: ${plugin.manifest.id}`);
+    }
+
+    return resolvedPath;
   }
 
   private resolveEcosystemRoot(): string {

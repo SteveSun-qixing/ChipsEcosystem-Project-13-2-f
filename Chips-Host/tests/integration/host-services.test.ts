@@ -617,7 +617,7 @@ describe('Host services integration', () => {
   it('returns control-plane health report', async () => {
     const report = await runtime.invoke<{ status: string; report: { routes: number; services: number } }>('control-plane.health', {});
     expect(report.status).toBe('ok');
-    expect(report.report.services).toBe(16);
+    expect(report.report.services).toBe(19);
     expect(report.report.routes).toBeGreaterThan(30);
   });
 

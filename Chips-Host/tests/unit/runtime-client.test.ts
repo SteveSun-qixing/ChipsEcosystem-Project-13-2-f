@@ -8,17 +8,27 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
   once: () => undefined,
   emit: () => undefined,
   window: {
-    open: async () => ({}),
+    open: async () => ({
+      id: 'window-1',
+      kind: 'window',
+      focused: false,
+      state: 'normal'
+    }),
     focus: async () => undefined,
     resize: async () => undefined,
     setState: async () => undefined,
-    getState: async () => ({}),
+    getState: async () => ({
+      id: 'window-1',
+      kind: 'window',
+      focused: false,
+      state: 'normal'
+    }),
     close: async () => undefined
   },
   dialog: {
-    openFile: async () => ({}),
-    saveFile: async () => ({}),
-    showMessage: async () => ({}),
+    openFile: async () => null,
+    saveFile: async () => null,
+    showMessage: async () => 0,
     showConfirm: async () => true
   },
   plugin: {
@@ -46,10 +56,121 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     openExternal: async () => undefined,
     showItemInFolder: async () => undefined
   },
+  surface: {
+    open: async () => ({
+      id: 'surface-1',
+      kind: 'window',
+      focused: false,
+      state: 'normal'
+    }),
+    focus: async () => undefined,
+    resize: async () => undefined,
+    setState: async () => undefined,
+    getState: async () => ({
+      id: 'surface-1',
+      kind: 'window',
+      focused: false,
+      state: 'normal'
+    }),
+    close: async () => undefined,
+    list: async () => []
+  },
+  transfer: {
+    openPath: async () => undefined,
+    openExternal: async () => undefined,
+    revealInShell: async () => undefined,
+    share: async () => false
+  },
+  association: {
+    getCapabilities: async () => ({
+      fileAssociation: false,
+      urlScheme: false,
+      shareTarget: false
+    }),
+    openPath: async () => ({
+      targetPath: '',
+      extension: '.card',
+      mode: 'shell'
+    }),
+    openUrl: async () => ({
+      url: '',
+      mode: 'external'
+    })
+  },
   platform: {
-    getInfo: async () => ({}),
-    getCapabilities: async () => [],
-    getScreenInfo: async () => ({}),
+    getInfo: async () => ({
+      hostKind: 'desktop',
+      platform: 'darwin',
+      arch: 'arm64',
+      release: '0.0.0'
+    }),
+    getCapabilities: async () => ({
+      hostKind: 'desktop',
+      platform: 'darwin',
+      facets: {
+        surface: {
+          supported: true,
+          interactive: true,
+          supportedKinds: ['window']
+        },
+        storage: {
+          localWorkspace: true,
+          sandboxFilePicker: false,
+          remoteBacked: false
+        },
+        selection: {
+          openFile: true,
+          saveFile: true,
+          directory: true,
+          multiple: true
+        },
+        transfer: {
+          upload: false,
+          download: false,
+          share: false,
+          externalOpen: true,
+          revealInShell: true
+        },
+        association: {
+          fileAssociation: false,
+          urlScheme: false,
+          shareTarget: false
+        },
+        device: {
+          screen: true,
+          power: true,
+          network: false
+        },
+        systemUi: {
+          clipboard: true,
+          tray: false,
+          globalShortcut: false,
+          notification: true
+        },
+        background: {
+          keepAlive: true,
+          wakeEvents: false
+        },
+        ipc: {
+          namedPipe: true,
+          unixSocket: true,
+          sharedMemory: true
+        },
+        offscreenRender: {
+          htmlToPdf: true,
+          htmlToImage: true
+        }
+      }
+    }),
+    getScreenInfo: async () => ({
+      id: 'screen-1',
+      width: 1280,
+      height: 800,
+      scaleFactor: 1,
+      x: 0,
+      y: 0,
+      primary: true
+    }),
     listScreens: async () => [],
     openExternal: async () => undefined,
     powerGetState: async () => ({}),

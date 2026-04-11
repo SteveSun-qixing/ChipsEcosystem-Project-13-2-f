@@ -32,22 +32,34 @@ const createContext = (permissions: string[]): RouteInvocationContext => ({
   }
 });
 
-const createPal = (): PALAdapter => ({
-  launcher: {
-    async launch() { },
-    async getStatus() { return { pid: 0, status: 'stopped' }; },
-    async kill() { },
-    async execute() { return { stdout: '', stderr: '', code: 0 }; }
-  } as any,
-  window: {
+const createPal = (): PALAdapter => {
+  const capabilitySnapshot: Awaited<ReturnType<PALAdapter['environment']['getCapabilities']>> = {
+    hostKind: 'desktop',
+    platform: process.platform as any,
+    facets: {
+      surface: { supported: true, interactive: true, supportedKinds: ['window'] },
+      storage: { localWorkspace: true, sandboxFilePicker: false, remoteBacked: false },
+      selection: { openFile: true, saveFile: true, directory: true, multiple: true },
+      transfer: { upload: false, download: true, share: false, externalOpen: true, revealInShell: true },
+      association: { fileAssociation: true, urlScheme: true, shareTarget: false },
+      device: { screen: true, power: true, network: false },
+      systemUi: { clipboard: true, tray: true, globalShortcut: true, notification: true },
+      background: { keepAlive: true, wakeEvents: true },
+      ipc: { namedPipe: true, unixSocket: process.platform !== 'win32', sharedMemory: true },
+      offscreenRender: { htmlToPdf: true, htmlToImage: true }
+    }
+  } as const;
+
+  const windowManager: PALAdapter['window'] = {
     async create(options) {
       return {
         id: 'window-1',
+        kind: 'window' as const,
         title: options.title,
         width: options.width,
         height: options.height,
         focused: false,
-        state: 'normal',
+        state: 'normal' as const,
         url: options.url,
         pluginId: options.pluginId,
         sessionId: options.sessionId
@@ -59,17 +71,22 @@ const createPal = (): PALAdapter => ({
     async getState() {
       return {
         id: 'window-1',
+        kind: 'window' as const,
         title: 'window',
         width: 800,
         height: 600,
         focused: false,
-        state: 'normal'
+        state: 'normal' as const
       };
     },
-    async close() { }
-  },
-  fs: {
-    normalize: (inputPath) => path.normalize(inputPath),
+    async close() { },
+    async list() {
+      return [await this.getState('window-1')];
+    }
+  };
+
+  const storage: PALAdapter['storage'] = {
+    normalize: (inputPath: string) => path.normalize(inputPath),
     async readFile() {
       return Buffer.from('');
     },
@@ -95,8 +112,9 @@ const createPal = (): PALAdapter => ({
     async delete() { },
     async move() { },
     async copy() { }
-  },
-  dialog: {
+  };
+
+  const selection: PALAdapter['selection'] = {
     async openFile() {
       return null;
     },
@@ -109,19 +127,51 @@ const createPal = (): PALAdapter => ({
     async showConfirm() {
       return true;
     }
-  },
-  clipboard: {
+  };
+
+  const clipboard: PALAdapter['clipboard'] = {
     async read() {
       return '';
     },
     async write() { }
-  },
-  shell: {
+  };
+
+  const shell: PALAdapter['shell'] = {
     async openPath() { },
     async openExternal() { },
     async showItemInFolder() { }
-  },
-  platform: {
+  };
+
+  const transfer: PALAdapter['transfer'] = {
+    async openPath(targetPath: string) {
+      await shell.openPath(targetPath);
+    },
+    async openExternal(url: string) {
+      await shell.openExternal(url);
+    },
+    async revealInShell(targetPath: string) {
+      await shell.showItemInFolder(targetPath);
+    },
+    async share() {
+      return { shared: false };
+    }
+  };
+
+  const environment: PALAdapter['environment'] = {
+    async getInfo() {
+      return {
+        hostKind: 'desktop' as const,
+        platform: process.platform as any,
+        arch: process.arch,
+        release: 'test'
+      };
+    },
+    async getCapabilities() {
+      return capabilitySnapshot;
+    }
+  };
+
+  const platform: PALAdapter['platform'] = {
     async getInfo() {
       return {
         platform: process.platform,
@@ -132,8 +182,9 @@ const createPal = (): PALAdapter => ({
     async getCapabilities() {
       return ['window', 'file'];
     }
-  },
-  screen: {
+  };
+
+  const screen: PALAdapter['screen'] = {
     async getPrimary() {
       return {
         id: 'screen-1',
@@ -158,8 +209,9 @@ const createPal = (): PALAdapter => ({
         }
       ];
     }
-  },
-  tray: {
+  };
+
+  const tray: PALAdapter['tray'] = {
     async set() {
       return { active: true };
     },
@@ -167,11 +219,13 @@ const createPal = (): PALAdapter => ({
     async getState() {
       return { active: false };
     }
-  },
-  notification: {
+  };
+
+  const notification: PALAdapter['notification'] = {
     async show() { }
-  },
-  shortcut: {
+  };
+
+  const shortcut: PALAdapter['shortcut'] = {
     async register() {
       return true;
     },
@@ -183,20 +237,112 @@ const createPal = (): PALAdapter => ({
       return [];
     },
     async clear() { }
-  },
-  power: {
+  };
+
+  const power: PALAdapter['power'] = {
     async getState() {
       return {
         idleSeconds: 0,
         preventSleep: false
       };
     },
-    async setPreventSleep(prevent) {
+    async setPreventSleep(prevent: boolean) {
       return prevent;
     }
-  },
-  ipc: {
-    async createChannel(options) {
+  };
+
+  const device: PALAdapter['device'] = {
+    async getPrimaryScreen() {
+      return screen.getPrimary();
+    },
+    async getAllScreens() {
+      return screen.getAll();
+    },
+    async getPowerState() {
+      return power.getState();
+    }
+  };
+
+  const systemUi: PALAdapter['systemUi'] = {
+    clipboard,
+    tray,
+    notification,
+    shortcut
+  };
+
+  const background: PALAdapter['background'] = {
+    async getState() {
+      return power.getState();
+    },
+    async setPreventSleep(prevent: boolean) {
+      return power.setPreventSleep(prevent);
+    }
+  };
+
+  const association: PALAdapter['association'] = {
+    async getCapabilities() {
+      return capabilitySnapshot.facets.association;
+    }
+  };
+
+  const surface: PALAdapter['surface'] = {
+    async open(request: Parameters<PALAdapter['surface']['open']>[0]) {
+      return windowManager.create({
+        title: request.presentation?.title ?? 'Surface',
+        width: request.presentation?.width ?? 800,
+        height: request.presentation?.height ?? 600,
+        url:
+          request.target.type === 'url'
+            ? request.target.url
+            : request.target.type === 'plugin'
+              ? request.target.url
+              : request.target.url,
+        pluginId: request.target.type === 'plugin' ? request.target.pluginId : undefined,
+        sessionId: request.target.type === 'plugin' ? request.target.sessionId : undefined,
+        permissions: request.target.type === 'plugin' ? request.target.permissions : undefined,
+        launchParams: request.target.type === 'plugin' ? request.target.launchParams : undefined,
+        chrome: request.presentation?.chrome
+      });
+    },
+    async focus(id: string) {
+      await windowManager.focus(id);
+    },
+    async resize(id: string, width: number, height: number) {
+      await windowManager.resize(id, width, height);
+    },
+    async setState(id: string, nextState: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden') {
+      await windowManager.setState(id, nextState === 'hidden' ? 'normal' : nextState);
+    },
+    async getState(id: string) {
+      return windowManager.getState(id);
+    },
+    async close(id: string) {
+      await windowManager.close(id);
+    },
+    async list() {
+      return windowManager.list();
+    }
+  };
+
+  const offscreenRender: PALAdapter['offscreenRender'] = {
+    async renderHtmlToPdf(input: { outputFile: string }) {
+      return {
+        outputFile: input.outputFile,
+        pageCount: 1
+      };
+    },
+    async renderHtmlToImage(input: { outputFile: string; options?: { width?: number; height?: number; format?: 'png' | 'jpeg' | 'webp' } }) {
+      return {
+        outputFile: input.outputFile,
+        width: input.options?.width,
+        height: input.options?.height,
+        format: input.options?.format ?? 'png'
+      };
+    }
+  };
+
+  const ipc: PALAdapter['ipc'] = {
+    async createChannel(options: { name: string; transport: 'named-pipe' | 'unix-socket' | 'shared-memory' }) {
       return {
         channelId: 'ipc-1',
         name: options.name,
@@ -207,7 +353,7 @@ const createPal = (): PALAdapter => ({
     async receive() {
       return {
         channelId: 'ipc-1',
-        transport: 'shared-memory',
+        transport: 'shared-memory' as const,
         payload: Buffer.from(''),
         receivedAt: Date.now()
       };
@@ -216,8 +362,71 @@ const createPal = (): PALAdapter => ({
     async listChannels() {
       return [];
     }
-  }
-});
+  };
+
+  const launcher: PALAdapter['launcher'] = {
+    async getDefaultPath(name) {
+      return {
+        launcherPath: path.join(os.tmpdir(), `${name}.desktop`),
+        location: 'desktop'
+      };
+    },
+    async create(options) {
+      return {
+        pluginId: options.pluginId,
+        name: options.name,
+        location: 'desktop',
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        executablePath: options.executablePath,
+        args: [...options.args],
+        iconPath: options.iconPath
+      };
+    },
+    async getRecord(options) {
+      return {
+        pluginId: options.pluginId,
+        name: options.name,
+        location: 'desktop',
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        executablePath: '',
+        args: []
+      };
+    },
+    async remove(options) {
+      return {
+        removed: true,
+        launcherPath: options.launcherPath ?? path.join(os.tmpdir(), `${options.name}.desktop`),
+        location: 'desktop'
+      };
+    }
+  };
+
+  return {
+    environment,
+    surface,
+    storage,
+    selection,
+    transfer,
+    association,
+    device,
+    systemUi,
+    background,
+    offscreenRender,
+    launcher,
+    window: windowManager,
+    fs: storage,
+    dialog: selection,
+    clipboard,
+    shell,
+    platform,
+    screen,
+    tray,
+    notification,
+    shortcut,
+    power,
+    ipc
+  };
+};
 
 describe('Service activation and lazy heavy service creation', () => {
   let workspace: string;

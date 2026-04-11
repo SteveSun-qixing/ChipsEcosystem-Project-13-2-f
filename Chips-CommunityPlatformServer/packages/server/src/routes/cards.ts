@@ -28,14 +28,10 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get(
     '/api/v1/cards/:cardId/status',
-    { preHandler: [fastify.authenticate] },
+    { preHandler: [fastify.optionalAuthenticate] },
     async (request) => {
       const { cardId } = request.params as { cardId: string };
-      const card = await CardService.findById(cardId);
-
-      if (!card || card.userId !== request.user!.userId) {
-        throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
-      }
+      const card = await CardService.getAccessible(cardId, request.user?.userId ?? null);
 
       return {
         data: {

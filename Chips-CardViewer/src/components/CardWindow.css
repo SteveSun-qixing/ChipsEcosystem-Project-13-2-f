@@ -1,6 +1,6 @@
 .card-viewer-window {
-  --card-viewer-inline-padding: clamp(var(--chips-spacing-sm, 8px), 2vw, var(--chips-spacing-xl, 32px));
-  --card-viewer-block-padding: clamp(var(--chips-spacing-sm, 8px), 1.5vh, var(--chips-spacing-lg, 24px));
+  --card-viewer-inline-padding: 0px;
+  --card-viewer-block-padding: 0px;
   --card-viewer-landscape-width: min(100%, clamp(640px, 78vw, 1024px));
 
   flex: 1;
@@ -28,6 +28,14 @@
   height: 100%;
 }
 
+.card-viewer-window__iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border: 0;
+}
+
 .card-viewer-window__overlay {
   position: absolute;
   inset: 0;
@@ -50,7 +58,7 @@
 }
 
 @media (orientation: landscape) {
-  .card-viewer-window__viewport {
+  .card-viewer-window__viewport:not(.card-viewer-window__viewport--document-flow) {
     flex: 0 1 var(--card-viewer-landscape-width);
     width: var(--card-viewer-landscape-width);
   }
@@ -58,7 +66,36 @@
 
 @media (orientation: portrait) {
   .card-viewer-window {
-    --card-viewer-inline-padding: var(--chips-spacing-sm, 8px);
-    --card-viewer-block-padding: var(--chips-spacing-sm, 8px);
+    --card-viewer-inline-padding: 0px;
+    --card-viewer-block-padding: 0px;
   }
+}
+
+.card-viewer-window--document-flow {
+  display: block;
+  flex: none;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+  background: #ffffff;
+}
+
+.card-viewer-window__viewport--document-flow {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.card-viewer-window__frame-host--document-flow {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.card-viewer-window__iframe--document-flow {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  background: #ffffff;
 }

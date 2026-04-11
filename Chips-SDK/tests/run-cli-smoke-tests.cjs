@@ -67,7 +67,25 @@ const main = async () => {
       'type: app',
       'name: Build Smoke Plugin',
       'permissions: []',
-      'entry: dist/index.html'
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: false',
+      'entry: dist/index.html',
+      'ui:',
+      '  surface:',
+      '    defaultKind: window',
+      '    preferredKinds:',
+      '      desktop: window',
+      '      web: route',
+      '      mobile: fullscreen',
+      '      headless: window'
     ].join('\n')
   );
   fs.writeFileSync(

@@ -8,6 +8,16 @@ author:
   name: {{ AUTHOR_NAME }}
   email: {{ AUTHOR_EMAIL }}
 permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
 engines:
   chips: "^0.1.0"
 os:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject, type PointerEvent, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type PointerEvent } from "react";
 import {
   clampScale,
   getFitScale,
@@ -48,7 +48,6 @@ interface PhotoViewerCamera {
   setFitMode: () => void;
   setActualSize: () => void;
   handleZoom: (direction: "in" | "out") => void;
-  handleWheel: (event: WheelEvent<HTMLDivElement>) => void;
   handlePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   handlePointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   handlePointerUp: (event: PointerEvent<HTMLDivElement>) => void;
@@ -148,7 +147,7 @@ export function usePhotoViewerCamera(options: UsePhotoViewerCameraOptions): Phot
     applyAnchoredScale(nextScale, viewportSize.width / 2, viewportSize.height / 2);
   }
 
-  function handleWheel(event: WheelEvent<HTMLDivElement>): void {
+  function handleWheelEvent(event: WheelEvent, element: HTMLDivElement): void {
     if (!imageDimensions || !isImageLoaded) {
       return;
     }
@@ -163,7 +162,7 @@ export function usePhotoViewerCamera(options: UsePhotoViewerCameraOptions): Phot
       })
     ) {
       event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
       const nextScale = getScaleFromWheelDelta(effectiveScale, event.deltaY, event.deltaMode);
       applyAnchoredScale(nextScale, event.clientX - rect.left, event.clientY - rect.top);
       return;
@@ -317,6 +316,37 @@ export function usePhotoViewerCamera(options: UsePhotoViewerCameraOptions): Phot
   }, [sessionKey]);
 
   useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) {
+      return;
+    }
+
+    const handleNativeWheel = (event: WheelEvent) => {
+      handleWheelEvent(event, element);
+    };
+
+    const handleGestureEvent = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !element.contains(target)) {
+        return;
+      }
+      event.preventDefault();
+    };
+
+    element.addEventListener("wheel", handleNativeWheel, { passive: false });
+    document.addEventListener("gesturestart", handleGestureEvent, { passive: false });
+    document.addEventListener("gesturechange", handleGestureEvent, { passive: false });
+    document.addEventListener("gestureend", handleGestureEvent, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleNativeWheel);
+      document.removeEventListener("gesturestart", handleGestureEvent);
+      document.removeEventListener("gesturechange", handleGestureEvent);
+      document.removeEventListener("gestureend", handleGestureEvent);
+    };
+  }, [effectiveScale, imageDimensions, isImageLoaded, viewportSize, zoomMode, manualScale, panOffset]);
+
+  useEffect(() => {
     clearGestureState();
     setPanOffset({ x: 0, y: 0 });
     setZoomMode("fit");
@@ -344,7 +374,6 @@ export function usePhotoViewerCamera(options: UsePhotoViewerCameraOptions): Phot
     setFitMode,
     setActualSize,
     handleZoom,
-    handleWheel,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,

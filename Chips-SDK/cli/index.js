@@ -954,6 +954,9 @@ const handlePackage = async () => {
 };
 
 const validateManifestShape = (manifest) => {
+  const runtimeTargetIds = ['desktop', 'web', 'mobile', 'headless'];
+  const surfaceKinds = ['window', 'tab', 'route', 'modal', 'sheet', 'fullscreen'];
+  const capabilityFallbackBehaviors = ['reject', 'download', 'share', 'openExternal'];
   const errors = [];
   if (!manifest || typeof manifest !== 'object') {
     errors.push('manifest 必须是对象。');
@@ -974,6 +977,81 @@ const validateManifestShape = (manifest) => {
 
   if (!Array.isArray(manifest.permissions)) {
     errors.push('manifest.permissions 必须存在且为数组。');
+  }
+
+  if (!isPlainObject(manifest.runtime)) {
+    errors.push('manifest.runtime 必须存在且为对象。');
+  } else if (!isPlainObject(manifest.runtime.targets)) {
+    errors.push('manifest.runtime.targets 必须存在且为对象。');
+  } else {
+    for (const targetId of runtimeTargetIds) {
+      const targetConfig = manifest.runtime.targets[targetId];
+      if (!isPlainObject(targetConfig) || typeof targetConfig.supported !== 'boolean') {
+        errors.push(`manifest.runtime.targets.${targetId}.supported 必须是布尔值。`);
+      }
+    }
+    for (const targetId of Object.keys(manifest.runtime.targets)) {
+      if (!runtimeTargetIds.includes(targetId)) {
+        errors.push(`manifest.runtime.targets.${targetId} 不是受支持的目标平台标识。`);
+      }
+    }
+  }
+
+  if (typeof manifest.capabilityFallbacks !== 'undefined') {
+    if (!isPlainObject(manifest.capabilityFallbacks)) {
+      errors.push('manifest.capabilityFallbacks 提供时必须是对象。');
+    } else {
+      for (const [capabilityName, fallback] of Object.entries(manifest.capabilityFallbacks)) {
+        if (capabilityName.trim().length === 0) {
+          errors.push('manifest.capabilityFallbacks 不能包含空 capability 名称。');
+          continue;
+        }
+        if (!isPlainObject(fallback)) {
+          errors.push(`manifest.capabilityFallbacks.${capabilityName} 必须是对象。`);
+          continue;
+        }
+        if (
+          typeof fallback.whenUnsupported !== 'string' ||
+          !capabilityFallbackBehaviors.includes(fallback.whenUnsupported)
+        ) {
+          errors.push(
+            `manifest.capabilityFallbacks.${capabilityName}.whenUnsupported 必须是 ${capabilityFallbackBehaviors.join(' / ')} 之一。`
+          );
+        }
+      }
+    }
+  }
+
+  if (manifest.type === 'app') {
+    if (!isPlainObject(manifest.ui)) {
+      errors.push('app 插件必须声明 manifest.ui 对象。');
+    } else if (!isPlainObject(manifest.ui.surface)) {
+      errors.push('app 插件必须声明 manifest.ui.surface 对象。');
+    } else {
+      if (
+        typeof manifest.ui.surface.defaultKind !== 'string' ||
+        !surfaceKinds.includes(manifest.ui.surface.defaultKind)
+      ) {
+        errors.push(`manifest.ui.surface.defaultKind 必须是 ${surfaceKinds.join(' / ')} 之一。`);
+      }
+      if (!isPlainObject(manifest.ui.surface.preferredKinds)) {
+        errors.push('manifest.ui.surface.preferredKinds 必须是对象。');
+      } else {
+        for (const targetId of runtimeTargetIds) {
+          const preferredKind = manifest.ui.surface.preferredKinds[targetId];
+          if (typeof preferredKind !== 'string' || !surfaceKinds.includes(preferredKind)) {
+            errors.push(`manifest.ui.surface.preferredKinds.${targetId} 必须是有效 surface kind。`);
+          }
+        }
+        for (const targetId of Object.keys(manifest.ui.surface.preferredKinds)) {
+          if (!runtimeTargetIds.includes(targetId)) {
+            errors.push(`manifest.ui.surface.preferredKinds.${targetId} 不是受支持的目标平台标识。`);
+          }
+        }
+      }
+    }
+  } else if (isPlainObject(manifest.ui) && typeof manifest.ui.surface !== 'undefined') {
+    errors.push('只有 app 插件允许声明 manifest.ui.surface。');
   }
 
   if (manifest.type === 'module') {

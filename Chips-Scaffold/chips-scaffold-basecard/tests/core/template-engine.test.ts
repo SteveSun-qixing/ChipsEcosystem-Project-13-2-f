@@ -65,6 +65,8 @@ describe("template-engine", () => {
         await fs.readFile(path.join(targetDir, "package.json"), "utf8")
       );
       expect(manifest).toMatch(/type:\s+card/);
+      expect(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
+      expect(manifest).toMatch(/headless:\n      supported:\s+true/);
       expect(manifest).toMatch(/capabilities:/);
       await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();

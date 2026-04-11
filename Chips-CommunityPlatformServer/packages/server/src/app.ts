@@ -19,6 +19,7 @@ import cardRoutes from './routes/cards';
 import boxRoutes from './routes/boxes';
 import discoverRoutes from './routes/discover';
 import adminRoutes from './routes/admin';
+import hostRuntimeRoutes from './routes/host-runtime';
 
 export async function buildApp() {
   const fastify = Fastify({
@@ -121,6 +122,7 @@ export async function buildApp() {
   await fastify.register(cardRoutes);
   await fastify.register(boxRoutes);
   await fastify.register(discoverRoutes);
+  await fastify.register(hostRuntimeRoutes);
   await fastify.register(adminRoutes, { prefix: '/admin' });
 
   // ─── 生命周期 ───────────────────────────────────────────────────

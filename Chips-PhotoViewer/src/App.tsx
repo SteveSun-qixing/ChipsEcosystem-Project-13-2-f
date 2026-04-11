@@ -26,6 +26,8 @@ interface ViewerFeedback {
   message: string;
 }
 
+type HostKind = "desktop" | "web" | "mobile" | "headless";
+
 const DEFAULT_THEME_STATE: ThemeSnapshot = {
   themeId: "chips-official.default-theme",
   version: "1.0.0",
@@ -101,6 +103,7 @@ export function App(): React.ReactElement {
   const [isResolving, setIsResolving] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [hostKind, setHostKind] = useState<HostKind>("desktop");
 
   function t(key: string, params?: Record<string, string | number>): string {
     return formatMessage(locale, key, params);
@@ -187,6 +190,23 @@ export function App(): React.ReactElement {
       return;
     }
 
+    if (hostKind === "web") {
+      const link = document.createElement("a");
+      link.href = imageSource.resourceUri;
+      link.download = imageSource.fileName || "image";
+      link.rel = "noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setFeedback({
+        tone: "success",
+        message: t("photo-viewer.status.saveSuccess", {
+          path: imageSource.fileName,
+        }),
+      });
+      return;
+    }
+
     try {
       const destinationPath = await client.platform.saveFile({
         title: t("photo-viewer.dialogs.saveFileTitle"),
@@ -257,8 +277,8 @@ export function App(): React.ReactElement {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([client.theme.getCurrent(), client.i18n.getCurrent()])
-      .then(([currentTheme, currentLocale]) => {
+    Promise.all([client.theme.getCurrent(), client.i18n.getCurrent(), client.platform.getInfo()])
+      .then(([currentTheme, currentLocale, platformInfo]) => {
         if (cancelled) {
           return;
         }
@@ -269,6 +289,7 @@ export function App(): React.ReactElement {
           version: theme.version,
         });
         setLocale(resolveLocale(currentLocale));
+        setHostKind(platformInfo.hostKind as HostKind);
       })
       .catch((error) => {
         logger.warn("初始化主题或语言失败，继续使用文档快照", error);

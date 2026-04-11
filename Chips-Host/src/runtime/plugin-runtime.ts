@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { createError } from '../shared/errors';
-import type { PluginUiConfig } from '../shared/window-chrome';
+import type { PluginRuntimeTargetId, PluginUiConfig } from '../shared/window-chrome';
 import { parsePluginUiConfig } from '../shared/window-chrome';
 import { parseYamlLite } from '../shared/yaml-lite';
 import { createId, now } from '../shared/utils';
@@ -58,6 +58,20 @@ export interface ModulePluginManifestMeta {
   consumes: ModuleConsumeManifestMeta[];
 }
 
+export interface PluginRuntimeTargetManifestMeta {
+  supported: boolean;
+}
+
+export interface PluginRuntimeManifestMeta {
+  targets: Record<PluginRuntimeTargetId, PluginRuntimeTargetManifestMeta>;
+}
+
+export type PluginCapabilityFallbackBehavior = 'reject' | 'download' | 'share' | 'openExternal';
+
+export interface PluginCapabilityFallbackManifestMeta {
+  whenUnsupported: PluginCapabilityFallbackBehavior;
+}
+
 export interface PluginManifest {
   id: string;
   version: string;
@@ -71,6 +85,8 @@ export interface PluginManifest {
   source?: 'official' | 'third-party' | 'local';
   signature?: string;
   ui?: PluginUiConfig;
+  runtime?: PluginRuntimeManifestMeta;
+  capabilityFallbacks?: Record<string, PluginCapabilityFallbackManifestMeta>;
   theme?: ThemePluginManifestMeta;
   layout?: LayoutPluginManifestMeta;
   module?: ModulePluginManifestMeta;
@@ -133,11 +149,15 @@ const defaultQuota: RuntimeQuota = {
 
 const pluginTypes: PluginType[] = ['app', 'card', 'layout', 'module', 'theme'];
 const pluginSources = ['official', 'third-party', 'local'] as const;
+const runtimeTargetIds: PluginRuntimeTargetId[] = ['desktop', 'web', 'mobile', 'headless'];
+const capabilityFallbackBehaviors: PluginCapabilityFallbackBehavior[] = ['reject', 'download', 'share', 'openExternal'];
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 const hasPluginType = (value: string): value is PluginType => pluginTypes.includes(value as PluginType);
 const hasPluginSource = (value: string): value is (typeof pluginSources)[number] =>
   pluginSources.includes(value as (typeof pluginSources)[number]);
+const hasCapabilityFallbackBehavior = (value: string): value is PluginCapabilityFallbackBehavior =>
+  capabilityFallbackBehaviors.includes(value as PluginCapabilityFallbackBehavior);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -876,6 +896,16 @@ export class PluginRuntime {
         type: record.type
       });
     }
+    if (record.type !== 'app' && ui?.surface) {
+      throw createError('PLUGIN_INVALID', 'ui.surface is only supported for app plugins', {
+        manifestPath,
+        field: 'ui.surface',
+        type: record.type
+      });
+    }
+
+    const runtime = this.parseRuntimeManifestMeta(record, manifestPath);
+    const capabilityFallbacks = this.parseCapabilityFallbacks(record, manifestPath);
 
     const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;
     const layout = record.type === 'layout' ? this.parseLayoutManifestMeta(record) : undefined;
@@ -899,10 +929,112 @@ export class PluginRuntime {
       source,
       signature,
       ui,
+      runtime,
+      capabilityFallbacks,
       theme,
       layout,
       module
     };
+  }
+
+  private parseRuntimeManifestMeta(record: Record<string, unknown>, manifestPath: string): PluginRuntimeManifestMeta | undefined {
+    const runtime = isRecord(record.runtime) ? record.runtime : undefined;
+    if (typeof record.runtime !== 'undefined' && !runtime) {
+      throw createError('PLUGIN_INVALID', 'runtime must be an object', {
+        manifestPath,
+        field: 'runtime'
+      });
+    }
+    if (!runtime) {
+      return undefined;
+    }
+
+    const targets = isRecord(runtime.targets) ? runtime.targets : undefined;
+    if (!targets) {
+      throw createError('PLUGIN_INVALID', 'runtime.targets must be an object', {
+        manifestPath,
+        field: 'runtime.targets'
+      });
+    }
+
+    const normalizedTargets = {} as Record<PluginRuntimeTargetId, PluginRuntimeTargetManifestMeta>;
+    for (const targetId of runtimeTargetIds) {
+      const value = targets[targetId];
+      if (!isRecord(value) || typeof value.supported !== 'boolean') {
+        throw createError('PLUGIN_INVALID', `runtime.targets.${targetId}.supported must be a boolean`, {
+          manifestPath,
+          field: `runtime.targets.${targetId}.supported`,
+          value
+        });
+      }
+      normalizedTargets[targetId] = {
+        supported: value.supported
+      };
+    }
+
+    for (const targetId of Object.keys(targets)) {
+      if (!runtimeTargetIds.includes(targetId as PluginRuntimeTargetId)) {
+        throw createError('PLUGIN_INVALID', `runtime.targets.${targetId} is invalid`, {
+          manifestPath,
+          field: `runtime.targets.${targetId}`,
+          value: targetId
+        });
+      }
+    }
+
+    return {
+      targets: normalizedTargets
+    };
+  }
+
+  private parseCapabilityFallbacks(
+    record: Record<string, unknown>,
+    manifestPath: string
+  ): Record<string, PluginCapabilityFallbackManifestMeta> | undefined {
+    const fallbacks = record.capabilityFallbacks;
+    if (typeof fallbacks === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(fallbacks)) {
+      throw createError('PLUGIN_INVALID', 'capabilityFallbacks must be an object', {
+        manifestPath,
+        field: 'capabilityFallbacks'
+      });
+    }
+
+    const normalized: Record<string, PluginCapabilityFallbackManifestMeta> = {};
+    for (const [capabilityName, capabilityFallback] of Object.entries(fallbacks)) {
+      const normalizedCapabilityName = capabilityName.trim();
+      if (normalizedCapabilityName.length === 0) {
+        throw createError('PLUGIN_INVALID', 'capabilityFallbacks keys must be non-empty strings', {
+          manifestPath,
+          field: 'capabilityFallbacks'
+        });
+      }
+      if (!isRecord(capabilityFallback)) {
+        throw createError('PLUGIN_INVALID', `capabilityFallbacks.${capabilityName} must be an object`, {
+          manifestPath,
+          field: `capabilityFallbacks.${capabilityName}`
+        });
+      }
+      const whenUnsupported = asOptionalString(capabilityFallback.whenUnsupported);
+      if (!whenUnsupported || !hasCapabilityFallbackBehavior(whenUnsupported)) {
+        throw createError(
+          'PLUGIN_INVALID',
+          `capabilityFallbacks.${capabilityName}.whenUnsupported must be one of ${capabilityFallbackBehaviors.join(', ')}`,
+          {
+            manifestPath,
+            field: `capabilityFallbacks.${capabilityName}.whenUnsupported`,
+            value: capabilityFallback.whenUnsupported
+          }
+        );
+      }
+      normalized[normalizedCapabilityName] = {
+        whenUnsupported
+      };
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
   }
 
   private parseThemeManifestMeta(record: Record<string, unknown>, manifestPath: string): ThemePluginManifestMeta {

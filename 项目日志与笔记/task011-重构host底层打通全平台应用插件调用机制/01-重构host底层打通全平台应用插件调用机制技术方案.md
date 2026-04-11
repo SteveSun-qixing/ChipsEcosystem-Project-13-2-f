@@ -199,6 +199,7 @@ SDK 已同步提供：
 13. `CardViewer` 与 `PhotoViewer` 根视口样式已按 `surfaceMode` 区分 `document` / `immersive` 两类语义，减少背景露底与额外滚动；
 14. 卡片 HTML 正式导出壳层已移除顶部渐变和块向舞台留白，社区 Web 中打开卡片时不再额外叠加导出背景条；
 15. 临时图片查看页实现已归档，不再参与正式编译。
+16. 社区前台开发代理已支持通过环境变量切换 API / CDN 目标实例，便于在本机多套 dev 进程并存时验证新架构链路。
 
 ## 5. 验证结果
 
@@ -211,18 +212,23 @@ SDK 已同步提供：
   - `npm run build`
 - `Chips-CommunityPlatformServer/packages/web`
   - `npm run build`
+- `Chips-BoxLayoutPlugin`
+  - `npm run build`
+- `Chips-PhotoViewer`
+  - `npx vitest run tests/unit/launch-resource.test.ts tests/unit/image-viewer.test.ts`
 - `Chips-CardViewer`
   - `npm run build`
 - `Chips-PhotoViewer`
   - `npm run build`
-- 浏览器级定向验证
-  - 使用 macOS 本机 Chrome headless 打开 `/cards/:cardId`
-  - 验证社区前台已进入 `document` 路由壳
-  - 验证卡片页背景已收口为纯白页面背景
-  - 验证卡片页滚动回到页面级文档流，而不是内部小窗滚动
-  - 验证原版 `CardViewer` 已承载卡片内容
-  - 验证 `resource-open-plan` 能正确命中 `com.chips.photo-viewer`
-  - 验证原版 `PhotoViewer` 能从 `launchParams.resourceOpen` 正式恢复图片查看态
+- 本地最新实例联调验证
+  - 启动 `@ccps/server` 于 `http://localhost:3001`
+  - 启动 `@ccps/web` 于 `http://localhost:5175`
+  - 验证 `GET /api/v1/discover/cards` 返回 ready 卡片
+  - 验证 `/api/v1/host/resource-open-plan` 能正确命中 `com.chips.photo-viewer`
+  - 验证 `com.chips.card-viewer` Web 会话可创建，并且 `entry / bootstrap.js / assets/*` 全部返回 `200`
+  - 验证 `com.chips.photo-viewer` Web 会话可创建，并且 `entry / bootstrap.js / assets/*` 全部返回 `200`
+  - 验证 `PhotoViewer` bootstrap 已收到正式 `launchParams.resourceOpen`
+  - 验证 `CardViewer` bootstrap 已收到正式 `community-card-route + webDocumentUrl`
 - `Chips-Scaffold/chips-scaffold-app`
   - `npm test`
   - `npm run test:templates`
@@ -242,7 +248,7 @@ SDK 已同步提供：
 
 - 用户已明确要求不必执行完整全套测试；
 - 本轮主要补做与正式 Web 插件宿主、资源打开链路、卡片 HTML 输出直接相关的定向构建与定向测试；
-- Playwright 包装脚本当前在本机不可直接调用 `playwright-cli`，因此浏览器级核查改为使用本机 Chrome headless 进行页面截图与 DOM 验证。
+- 本机浏览器自动化运行时对 Playwright 启动系统 Chrome 存在限制，因此本轮真实链路核查以“最新 dev 实例 + HTTP / 插件会话 / 资源规划接口联调”方式完成。
 
 ## 6. 当前已知边界
 

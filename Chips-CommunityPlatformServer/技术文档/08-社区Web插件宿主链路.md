@@ -68,6 +68,7 @@
 1. 由插件内部触发的“打开新网页”动作，默认优先使用新标签页承载；
 2. 若浏览器阻止弹窗，再回退到当前页导航；
 3. 社区前台自己的入口路由，例如用户直接进入 `/cards/:cardId`，仍然沿用当前标签页进入。
+4. `resource.open` 在命中图片查看器等二级应用时，会先预打开空白标签页，再把会话路由替换进去，避免一次点击同时打开当前页和新标签页。
 
 ## 6. 浏览器侧 `window.chips` 注入
 
@@ -169,3 +170,21 @@
 3. Web 场景下承载远端卡片 HTML 或图片资源的 app 插件，入口 HTML 的 CSP 必须显式放行 `http:` 与 `https:` 的 `img-src / font-src / connect-src / frame-src`；
 4. 对象存储中历史导出的卡片 HTML 如果早于本轮 Host 输出修正，重新导出后才能获得新的 HTML CSP；
 5. 社区前台归档目录中的临时图片查看页实现已停用，不再参与正式编译。
+
+## 12. 本地联调补充
+
+当前社区前台开发代理已支持通过环境变量覆盖目标实例：
+
+1. `CCPS_WEB_PORT`
+2. `CCPS_API_PROXY_TARGET`
+3. `CCPS_CDN_PROXY_TARGET`
+
+这使得当前分支可以在不停止旧版 `3000 / 5173` 进程的情况下，额外拉起一套新的联调实例，例如：
+
+1. 社区 API：`PORT=3001 BASE_URL=http://localhost:3001 npm run dev`
+2. 社区前台：`CCPS_WEB_PORT=5175 CCPS_API_PROXY_TARGET=http://localhost:3001 CCPS_CDN_PROXY_TARGET=http://localhost:9000 npm run dev`
+
+补充约束：
+
+1. `HeadlessHostShell` 启动前，默认纳入安装的 `Chips-BoxLayoutPlugin` 必须先完成构建，使其 `dist/` 入口存在；
+2. 若默认 layout 插件尚未构建，服务端会在 Host 插件安装阶段报 `PLUGIN_ENTRY_NOT_FOUND: dist`，而不是进入业务接口阶段。

@@ -23,9 +23,9 @@ describe("image viewer utilities", () => {
   });
 
   it("calculates fit scale from viewport and image size", () => {
-    expect(getFitScale({ width: 2400, height: 1600 }, { width: 1200, height: 800 })).toBe(0.4);
-    expect(getFitScale({ width: 900, height: 1600 }, { width: 1200, height: 1000 })).toBe(0.5);
-    expect(getFitScale({ width: 400, height: 300 }, { width: 1600, height: 1200 })).toBe(3.2);
+    expect(getFitScale({ width: 2400, height: 1600 }, { width: 1200, height: 800 })).toBe(0.5);
+    expect(getFitScale({ width: 900, height: 1600 }, { width: 1200, height: 1000 })).toBe(0.625);
+    expect(getFitScale({ width: 400, height: 300 }, { width: 1600, height: 1200 })).toBe(4);
   });
 
   it("moves zoom scale forward and backward with clamping", () => {

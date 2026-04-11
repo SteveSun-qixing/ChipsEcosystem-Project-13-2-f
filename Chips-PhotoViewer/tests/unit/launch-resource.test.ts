@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveLaunchImagePath } from "../../src/utils/launch-resource";
 
 describe("resolveLaunchImagePath", () => {
-  it("优先读取直接 targetPath", () => {
+  it("在只有 targetPath 时回退到直接路径", () => {
     expect(
       resolveLaunchImagePath({
         launchParams: {
@@ -25,12 +25,24 @@ describe("resolveLaunchImagePath", () => {
     ).toBe("/tmp/demo.png");
   });
 
-  it("当没有可用路径时返回 null", () => {
+  it("在 Web 资源打开场景下允许回退到 resourceId", () => {
     expect(
       resolveLaunchImagePath({
         launchParams: {
           resourceOpen: {
             resourceId: "https://example.com/demo.png",
+          },
+        },
+      }),
+    ).toBe("https://example.com/demo.png");
+  });
+
+  it("当没有可用路径时返回 null", () => {
+    expect(
+      resolveLaunchImagePath({
+        launchParams: {
+          resourceOpen: {
+            mimeType: "image/png",
           },
         },
       }),

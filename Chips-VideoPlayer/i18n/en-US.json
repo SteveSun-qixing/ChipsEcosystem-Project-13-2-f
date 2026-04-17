@@ -1,0 +1,92 @@
+{
+  "video-player": {
+    "app": {
+      "title": "Video Player",
+      "localBadge": "Local",
+      "remoteBadge": "Remote"
+    },
+    "actions": {
+      "open": "Open video",
+      "save": "Save copy",
+      "play": "Play",
+      "pause": "Pause",
+      "seekBackward": "Back 5s",
+      "seekForward": "Forward 5s",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen",
+      "pictureInPicture": "Picture-in-picture",
+      "exitPictureInPicture": "Exit PiP",
+      "speed": "Speed",
+      "more": "More",
+      "closeMore": "Close more panel"
+    },
+    "dialogs": {
+      "openFileTitle": "Choose a video",
+      "saveFileTitle": "Save video copy"
+    },
+    "viewer": {
+      "emptyLine": "Open a video or drop a file here",
+      "dragPromptLine": "Release to open the video",
+      "loading": "Loading video...",
+      "resolving": "Preparing video resource...",
+      "keyboardHint": "Shortcuts: Space play or pause, Left and Right seek, Up and Down change volume, F fullscreen, M mute",
+      "unsupportedPictureInPicture": "Picture-in-picture is unavailable in the current host",
+      "unsupportedFullscreen": "Fullscreen is unavailable in the current host",
+      "resolutionUnknown": "Unknown resolution",
+      "durationUnknown": "Unknown duration"
+    },
+    "labels": {
+      "timeline": "Playback progress",
+      "volume": "Volume",
+      "currentRate": "{rate} playback",
+      "buffered": "Buffered to {time}",
+      "source": "Source",
+      "unknown": "Unknown"
+    },
+    "more": {
+      "tabs": {
+        "info": "Video info",
+        "subtitles": "Subtitles",
+        "audio": "Audio"
+      },
+      "info": {
+        "title": "Title",
+        "sourceType": "Source type",
+        "format": "Format",
+        "duration": "Duration",
+        "position": "Current position",
+        "resolution": "Resolution",
+        "source": "Resource path",
+        "playbackSpeed": "Playback speed"
+      },
+      "empty": {
+        "noVideoInfo": "No video is open yet",
+        "noSubtitles": "This video does not expose switchable subtitle tracks.",
+        "noAudioTracks": "This video does not expose switchable audio tracks."
+      },
+      "subtitlesOff": "Subtitles off",
+      "subtitlesFallback": "Subtitle track {index}",
+      "subtitlesFallbackWithLanguage": "Subtitle track {index} ({language})",
+      "audioFallback": "Audio track {index}",
+      "audioFallbackWithLanguage": "Audio track {index} ({language})"
+    },
+    "errors": {
+      "missingPath": "No playable video target was provided.",
+      "unsupportedFile": "Unsupported video format.",
+      "openFailed": "Unable to open the video.",
+      "loadFailed": "The video failed to load or the current runtime cannot decode it.",
+      "saveFailed": "Unable to save the video copy.",
+      "mediaAborted": "Video loading was cancelled.",
+      "mediaNetwork": "A network error occurred while loading the video.",
+      "mediaDecode": "The current runtime cannot decode this video.",
+      "mediaSource": "The video source is unavailable."
+    },
+    "status": {
+      "samePath": "The selected path is identical to the current source. No copy was written.",
+      "saveSuccess": "Saved a copy to {path}",
+      "downloadFallback": "The current source will be downloaded instead of copied."
+    }
+  }
+}

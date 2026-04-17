@@ -1,0 +1,77 @@
+id: com.chips.video-player
+name: 视频播放器
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态视频播放器应用插件，用于查看本地或被 Host 资源路由唤起的视频内容。
+
+author:
+  name: VideoPlayer
+  email: dev@chips.local
+
+keywords:
+  - chips
+  - video
+  - player
+  - viewer
+
+capabilities:
+  - resource-handler:view:video/*
+  - file-handler:.mp4
+  - file-handler:.webm
+  - file-handler:.mov
+  - file-handler:.m4v
+  - file-handler:.ogv
+  - file-handler:.ogg
+
+permissions:
+  - resource.read
+  - file.write
+  - platform.read
+  - theme.read
+  - i18n.read
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: true
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: reject
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 视频播放器
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      titleBarStyle: default

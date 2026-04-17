@@ -1,0 +1,92 @@
+{
+  "video-player": {
+    "app": {
+      "title": "视频播放器",
+      "localBadge": "本地",
+      "remoteBadge": "远端"
+    },
+    "actions": {
+      "open": "打开视频",
+      "save": "另存副本",
+      "play": "播放",
+      "pause": "暂停",
+      "seekBackward": "后退 5 秒",
+      "seekForward": "前进 5 秒",
+      "mute": "静音",
+      "unmute": "取消静音",
+      "fullscreen": "全屏",
+      "exitFullscreen": "退出全屏",
+      "pictureInPicture": "画中画",
+      "exitPictureInPicture": "退出画中画",
+      "speed": "倍速",
+      "more": "更多",
+      "closeMore": "收起更多"
+    },
+    "dialogs": {
+      "openFileTitle": "选择视频文件",
+      "saveFileTitle": "保存视频副本"
+    },
+    "viewer": {
+      "emptyLine": "打开视频或拖入文件",
+      "dragPromptLine": "松开鼠标即可打开视频",
+      "loading": "正在加载视频...",
+      "resolving": "正在准备视频资源...",
+      "keyboardHint": "快捷键：空格播放或暂停，左右方向键跳转，上下方向键调节音量，F 全屏，M 静音",
+      "unsupportedPictureInPicture": "当前宿主不支持画中画",
+      "unsupportedFullscreen": "当前宿主不支持全屏",
+      "resolutionUnknown": "分辨率未知",
+      "durationUnknown": "时长未知"
+    },
+    "labels": {
+      "timeline": "播放进度",
+      "volume": "音量",
+      "currentRate": "{rate} 倍速",
+      "buffered": "已缓冲到 {time}",
+      "source": "来源",
+      "unknown": "未知"
+    },
+    "more": {
+      "tabs": {
+        "info": "视频信息",
+        "subtitles": "字幕",
+        "audio": "音频"
+      },
+      "info": {
+        "title": "标题",
+        "sourceType": "来源类型",
+        "format": "格式",
+        "duration": "总时长",
+        "position": "当前位置",
+        "resolution": "分辨率",
+        "source": "资源路径",
+        "playbackSpeed": "播放速度"
+      },
+      "empty": {
+        "noVideoInfo": "尚未打开视频",
+        "noSubtitles": "当前视频没有可切换的字幕轨道。",
+        "noAudioTracks": "当前视频没有可切换的音频轨道。"
+      },
+      "subtitlesOff": "关闭字幕",
+      "subtitlesFallback": "字幕轨 {index}",
+      "subtitlesFallbackWithLanguage": "字幕轨 {index} ({language})",
+      "audioFallback": "音轨 {index}",
+      "audioFallbackWithLanguage": "音轨 {index} ({language})"
+    },
+    "errors": {
+      "missingPath": "没有可播放的视频目标。",
+      "unsupportedFile": "当前视频格式不受支持。",
+      "openFailed": "打开视频失败。",
+      "loadFailed": "视频加载失败，或当前运行时无法解码该视频。",
+      "saveFailed": "保存视频副本失败。",
+      "mediaAborted": "视频加载已取消。",
+      "mediaNetwork": "加载视频时发生网络错误。",
+      "mediaDecode": "当前运行时无法解码该视频。",
+      "mediaSource": "视频资源不可用。"
+    },
+    "status": {
+      "samePath": "目标路径与当前来源一致，未执行重复写入。",
+      "saveSuccess": "已将视频副本保存到 {path}",
+      "downloadFallback": "当前来源将以下载方式保存，而不是文件复制。"
+    }
+  }
+}

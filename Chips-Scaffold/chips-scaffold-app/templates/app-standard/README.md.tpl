@@ -15,7 +15,7 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 
 应用插件的一方依赖（如 `chips-sdk`、`@chips/component-library`）统一通过生态根工作区解析，本工程应通过 `chipsdev create` 接入生态工作区，不再单独在项目目录执行首次 `npm install`。
 
-开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认启用白色窗口壳层与隐藏式标题栏覆盖层。
+开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认保留白色窗口壳层与原生窗口标题栏。
 
 模板已默认纳入 `assets/icons/app-icon.ico/.icns/.png/.svg` 与 `assets/icons/SOURCE.md`：
 
@@ -46,7 +46,6 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 │  ├─ App.tsx           # 根组件
 │  ├─ components/       # 示例组件
 │  ├─ hooks/            # 示例 hooks（如 useChipsBridge）
-│  └─ layouts/          # 布局与外壳组件
 ├─ config/
 │  ├─ app-config.ts     # 应用级配置（Feature Flag 等）
 │  └─ logging.ts        # 日志封装（预留接入 Host 日志服务）
@@ -73,5 +72,5 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 1. 根据业务需要在 `src/features/` 或 `src/components/` 中扩展页面与组件；
 2. 通过组件库与主题系统接入真实 UI 并补充交互测试；
 3. 按需扩展 `manifest.yaml` 中的权限与 capabilities（遵循插件开发规范与 Manifest 配置规范）；
-4. 若模板启用了隐藏式标题栏，页面头部必须提供拖拽区，并将交互控件显式标记为 `no-drag`；
+4. 标准模板默认保留原生窗口标题栏；若后续改为 `ui.window.chrome.titleBarStyle: hidden` 等自绘标题栏模式，页面头部必须补充拖拽区，并将交互控件显式标记为 `no-drag`；
 5. 在编写或调整 Host/Bridge 调用前，查阅生态共用技术文档中的协议与接口标准章节，避免契约漂移。

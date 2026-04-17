@@ -62,8 +62,12 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "manifest.yaml 应声明 type: app",
     );
     assert.ok(
-      manifestContent.includes("titleBarStyle: hidden"),
-      "manifest.yaml 应包含标准应用窗口 chrome 配置",
+      manifestContent.includes("frame: true"),
+      "manifest.yaml 应显式保留标准应用的原生窗口标题栏",
+    );
+    assert.ok(
+      !manifestContent.includes("titleBarStyle: hidden"),
+      "manifest.yaml 不应再默认生成隐藏式标题栏配置",
     );
     assert.ok(
       manifestContent.includes("runtime:\n  targets:"),

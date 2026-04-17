@@ -61,9 +61,5 @@ ui:
       headless: window
   window:
     chrome:
+      frame: true
       backgroundColor: "#ffffff"
-      titleBarStyle: hidden
-      titleBarOverlay:
-        color: "#ffffff00"
-        symbolColor: "#667085"
-        height: 44

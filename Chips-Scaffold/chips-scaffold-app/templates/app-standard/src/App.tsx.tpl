@@ -47,9 +47,8 @@ function Header() {
     <header
       data-chips-app="app-standard.header"
       style={{
-        padding: "44px 24px 16px",
+        padding: "24px 24px 16px",
         borderBottom: "1px solid var(--chips-border-subtle, rgba(17,17,17,0.12))",
-        WebkitAppRegion: "drag",
       }}
     >
       <h1 style={{ margin: 0, fontSize: 18 }}>{{ DISPLAY_NAME }}</h1>

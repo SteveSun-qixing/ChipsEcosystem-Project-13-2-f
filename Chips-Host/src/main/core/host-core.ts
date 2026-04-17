@@ -81,10 +81,7 @@ export class HostCore {
       logger: this.logger,
       getCardService: () => this.getCardService(),
       getCardInfoService: () => this.getCardInfoService(),
-      getBoxService: () => {
-        this.boxService ??= new BoxService();
-        return this.boxService;
-      },
+      getBoxService: () => this.getBoxService(),
       getZipService: () => {
         this.zipService ??= new StoreZipService();
         return this.zipService;
@@ -192,5 +189,16 @@ export class HostCore {
     }
 
     return this.cardInfoService;
+  }
+
+  private getBoxService(): BoxService {
+    if (!this.boxService) {
+      this.boxService = new BoxService(undefined, {
+        runtime: this.runtime,
+        workspaceRoot: process.cwd(),
+      });
+    }
+
+    return this.boxService;
   }
 }

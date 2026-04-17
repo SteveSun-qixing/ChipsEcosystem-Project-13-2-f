@@ -115,6 +115,43 @@ describe('Host services integration', () => {
     expect(translated.text).toBe('System ready');
   });
 
+  it('lists enabled box layout plugins through the box service chain', async () => {
+    const install = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.resolve(process.cwd(), '../Chips-BoxLayoutPlugin/manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: install.pluginId });
+
+    const listed = await runtime.invoke<{
+      descriptors: Array<{
+        pluginId: string;
+        layoutType: string;
+        displayName: string;
+      }>;
+    }>('box.listLayoutDescriptors', {});
+
+    expect(listed.descriptors).toContainEqual(expect.objectContaining({
+      pluginId: 'chips.layout.grid',
+      layoutType: 'chips.layout.grid',
+      displayName: '网格布局插件'
+    }));
+
+    const descriptor = await runtime.invoke<{
+      descriptor: {
+        pluginId: string;
+        layoutType: string;
+        displayName: string;
+      };
+    }>('box.readLayoutDescriptor', {
+      layoutType: 'chips.layout.grid'
+    });
+
+    expect(descriptor.descriptor).toMatchObject({
+      pluginId: 'chips.layout.grid',
+      layoutType: 'chips.layout.grid',
+      displayName: '网格布局插件'
+    });
+  });
+
   it('returns structured file entries from file.list', async () => {
     const cardsDir = path.join(workspace, 'cards');
     const cardPath = path.join(cardsDir, 'demo.card');

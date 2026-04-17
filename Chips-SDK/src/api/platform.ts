@@ -170,13 +170,46 @@ export interface PlatformApi {
   getLaunchContext(): PlatformLaunchContext;
 }
 
+interface PlatformBridge {
+  getPathForFile?(input: unknown): string;
+  getLaunchContext?(): unknown;
+}
+
+interface PlatformBridgeWindow {
+  chips?: {
+    platform?: PlatformBridge;
+  };
+}
+
+const getPlatformBridge = (): PlatformBridge | undefined => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return (window as unknown as PlatformBridgeWindow).chips?.platform;
+};
+
+const normalizeLaunchParams = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return { ...(value as Record<string, unknown>) };
+};
+
+const normalizeLaunchContext = (raw: unknown): PlatformLaunchContext => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { launchParams: {} };
+  }
+
+  const candidate = raw as Record<string, unknown>;
+  return {
+    pluginId: typeof candidate.pluginId === "string" ? candidate.pluginId : undefined,
+    sessionId: typeof candidate.sessionId === "string" ? candidate.sessionId : undefined,
+    launchParams: normalizeLaunchParams(candidate.launchParams),
+  };
+};
+
 const resolveBridgePathForFile = (file: unknown): string => {
-  const bridge = (
-    typeof window !== "undefined"
-      ? (window as Window & { chips?: { platform?: { getPathForFile?: (input: unknown) => string } } })
-      : undefined
-  )?.chips;
-  const getPathForFile = bridge?.platform?.getPathForFile;
+  const getPathForFile = getPlatformBridge()?.getPathForFile;
   if (typeof getPathForFile !== "function") {
     return "";
   }
@@ -189,28 +222,13 @@ const resolveBridgePathForFile = (file: unknown): string => {
 };
 
 const resolveBridgeLaunchContext = (): PlatformLaunchContext => {
-  const bridge = (
-    typeof window !== "undefined"
-      ? (window as Window & {
-          chips?: { platform?: { getLaunchContext?: () => Partial<PlatformLaunchContext> | undefined } };
-        })
-      : undefined
-  )?.chips;
-  const getLaunchContext = bridge?.platform?.getLaunchContext;
+  const getLaunchContext = getPlatformBridge()?.getLaunchContext;
   if (typeof getLaunchContext !== "function") {
     return { launchParams: {} };
   }
 
   try {
-    const raw = getLaunchContext();
-    return {
-      pluginId: typeof raw?.pluginId === "string" ? raw.pluginId : undefined,
-      sessionId: typeof raw?.sessionId === "string" ? raw.sessionId : undefined,
-      launchParams:
-        raw?.launchParams && typeof raw.launchParams === "object" && !Array.isArray(raw.launchParams)
-          ? { ...(raw.launchParams as Record<string, unknown>) }
-          : {},
-    };
+    return normalizeLaunchContext(getLaunchContext());
   } catch {
     return { launchParams: {} };
   }

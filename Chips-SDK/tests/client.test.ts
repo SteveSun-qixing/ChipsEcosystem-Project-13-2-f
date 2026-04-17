@@ -1108,6 +1108,66 @@ describe("createClient", () => {
     }
   });
 
+  it("reads launch context from the preload bridge and normalizes invalid payloads", () => {
+    const previousWindow = globalThis.window;
+    const windowStub = {
+      chips: {
+        invoke: async () => undefined,
+        on: () => () => undefined,
+        once: () => undefined,
+        emit: async () => undefined,
+        platform: {
+          getLaunchContext: () => ({
+            pluginId: "chips.app.demo",
+            sessionId: "session-demo",
+            launchParams: {
+              targetPath: "/tmp/demo.card",
+              source: "chipsdev.run",
+            },
+          }),
+        },
+      },
+    } as unknown as Window & {
+      chips: {
+        platform: {
+          getLaunchContext: () => unknown;
+        };
+      };
+    };
+
+    globalThis.window = windowStub;
+
+    try {
+      const client = createClient({ environment: "plugin" });
+      expect(client.platform.getLaunchContext()).toEqual({
+        pluginId: "chips.app.demo",
+        sessionId: "session-demo",
+        launchParams: {
+          targetPath: "/tmp/demo.card",
+          source: "chipsdev.run",
+        },
+      });
+
+      windowStub.chips.platform.getLaunchContext = () => ({
+        pluginId: 123,
+        sessionId: null,
+        launchParams: ["invalid"],
+      });
+
+      expect(client.platform.getLaunchContext()).toEqual({
+        pluginId: undefined,
+        sessionId: undefined,
+        launchParams: {},
+      });
+    } finally {
+      if (previousWindow) {
+        globalThis.window = previousWindow;
+      } else {
+        delete (globalThis as { window?: Window }).window;
+      }
+    }
+  });
+
   it("unwraps platform dialog responses", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 

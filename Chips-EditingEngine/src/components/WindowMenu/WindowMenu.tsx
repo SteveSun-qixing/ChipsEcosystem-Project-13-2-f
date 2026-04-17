@@ -6,13 +6,10 @@ import './WindowMenu.css';
 export interface WindowMenuProps {
     title: string;
     isEditing?: boolean;
-    isFileView?: boolean;
     isCoverView?: boolean;
     showLock?: boolean;
-    showFile?: boolean;
     showSettings?: boolean;
     showCover?: boolean;
-    onSwitchToFile?: () => void;
     onToggleEdit?: () => void;
     onSwitchToCover?: () => void;
     onSettings?: () => void;
@@ -22,13 +19,10 @@ export interface WindowMenuProps {
 export function WindowMenu({
     title,
     isEditing = false,
-    isFileView = false,
     isCoverView = false,
     showLock = false,
-    showFile = false,
     showSettings = true,
     showCover = true,
-    onSwitchToFile,
     onToggleEdit,
     onSwitchToCover,
     onSettings,
@@ -118,18 +112,6 @@ export function WindowMenu({
             </div>
 
             <div className="window-menu__right">
-                {showFile && (
-                    <button
-                        type="button"
-                        className={`window-menu__button ${isFileView ? 'window-menu__button--active' : ''}`}
-                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSwitchToFile?.(); }}
-                    >
-                        <span className="window-menu__button-icon">
-                            <RuntimeIcon icon={ENGINE_ICONS.document} />
-                        </span>
-                    </button>
-                )}
-
                 {showLock && (
                     <button
                         type="button"

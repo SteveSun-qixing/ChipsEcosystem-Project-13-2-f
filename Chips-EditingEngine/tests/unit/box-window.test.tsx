@@ -85,13 +85,10 @@ vi.mock('../../src/components/CardWindowBase/CardWindowBase', () => ({
 vi.mock('../../src/components/WindowMenu/WindowMenu', () => ({
   WindowMenu: ({
     onSettings,
-    onSwitchToFile,
   }: {
     onSettings?: () => void;
-    onSwitchToFile?: () => void;
   }) => (
     <div>
-      <button type="button" data-testid="window-file" onClick={() => onSwitchToFile?.()}>file</button>
       <button type="button" data-testid="window-settings" onClick={() => onSettings?.()}>settings</button>
     </div>
   ),
@@ -173,14 +170,8 @@ describe('BoxWindow', () => {
     });
   }
 
-  it('opens the dedicated box settings dialog from the settings button only', async () => {
+  it('opens the dedicated box settings dialog from the settings button', async () => {
     await renderBoxWindow();
-
-    expect(container.querySelector('[data-testid="box-settings-dialog"]')).toBeNull();
-
-    await act(async () => {
-      (container.querySelector('[data-testid="window-file"]') as HTMLButtonElement).click();
-    });
 
     expect(container.querySelector('[data-testid="box-settings-dialog"]')).toBeNull();
 

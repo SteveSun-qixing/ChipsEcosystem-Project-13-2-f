@@ -19,17 +19,31 @@
 }
 
 .box-editor-panel [data-scope="tabs"][data-part="panel"] {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .box-editor-panel__tab-content {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: 16px;
+  min-height: 0;
   min-width: 0;
   padding: 14px 2px 18px;
   box-sizing: border-box;
+}
+
+.box-editor-panel__tab-content--layout {
+  overflow: hidden;
+}
+
+.box-editor-panel__tab-content--content {
+  overflow: auto;
 }
 
 .box-editor-panel__section-header {
@@ -52,9 +66,21 @@
   color: var(--chips-sys-color-on-surface-variant, #6b7280);
 }
 
-.box-editor-panel__layout-editor {
+.box-editor-panel__layout-slot {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
+}
+
+.box-editor-panel__layout-editor {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 .box-editor-panel__entry-list {

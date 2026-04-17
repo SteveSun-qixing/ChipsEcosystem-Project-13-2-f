@@ -110,12 +110,12 @@ function BoxLayoutEditorSlot({
   }, [activeLayoutConfig, activeLayoutType, boxId, client, entries, layoutDefinition, locale]);
 
   return (
-    <>
+    <div className="box-editor-panel__layout-slot">
       <div ref={containerRef} className="box-editor-panel__layout-editor" />
       {runtimeError ? (
         <div className="box-editor-panel__state box-editor-panel__state--error">{runtimeError}</div>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -208,7 +208,7 @@ export function BoxEditorPanel({
             value: 'config',
             label: t('box_editor.tab_config') || '配置',
             content: (
-              <div className="box-editor-panel__tab-content">
+              <div className="box-editor-panel__tab-content box-editor-panel__tab-content--layout">
                 <div className="box-editor-panel__section-header">
                   <h3 className="box-editor-panel__section-title">{t('box_editor.section_layout') || '布局配置'}</h3>
                   <span className="box-editor-panel__layout-type">
@@ -234,7 +234,7 @@ export function BoxEditorPanel({
             value: 'content',
             label: t('box_editor.tab_content') || '内容列表',
             content: (
-              <div className="box-editor-panel__tab-content">
+              <div className="box-editor-panel__tab-content box-editor-panel__tab-content--content">
                 <div className="box-editor-panel__section-header">
                   <h3 className="box-editor-panel__section-title">{t('box_editor.section_content') || '作品列表'}</h3>
                   <button

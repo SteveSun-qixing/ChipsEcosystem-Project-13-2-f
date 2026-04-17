@@ -207,11 +207,8 @@ export function BoxWindow({
       headerSlot={(
         <WindowMenu
           title={session?.metadata.name || config.title}
-          isFileView
-          showFile
           showCover
           showSettings
-          onSwitchToFile={handleSwitchToFile}
           onSwitchToCover={handleSwitchToCover}
           onSettings={handleOpenSettings}
         />

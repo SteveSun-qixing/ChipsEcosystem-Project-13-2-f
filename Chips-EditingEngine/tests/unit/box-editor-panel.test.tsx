@@ -176,7 +176,7 @@ describe('BoxEditorPanel', () => {
     container.remove();
   });
 
-  async function renderPanel() {
+  async function renderPanel(tab: 'config' | 'content' = 'content') {
     await act(async () => {
       root.render(
         <BoxEditorPanel
@@ -187,11 +187,24 @@ describe('BoxEditorPanel', () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      (container.querySelector('[data-testid="tab-content"]') as HTMLButtonElement).click();
-      await Promise.resolve();
-    });
+    if (tab === 'content') {
+      await act(async () => {
+        (container.querySelector('[data-testid="tab-content"]') as HTMLButtonElement).click();
+        await Promise.resolve();
+      });
+    }
   }
+
+  it('mounts the layout editor in a dedicated fill container for the config tab', async () => {
+    await renderPanel('config');
+
+    expect(container.querySelector('.box-editor-panel__tab-content--layout')).not.toBeNull();
+    expect(container.querySelector('.box-editor-panel__layout-slot')).not.toBeNull();
+    const frame = container.querySelector('.box-editor-panel__layout-editor iframe') as HTMLIFrameElement | null;
+    expect(frame).not.toBeNull();
+    expect(frame?.style.width).toBe('100%');
+    expect(frame?.style.height).toBe('100%');
+  });
 
   it('shows entry titles only in the content list', async () => {
     await renderPanel();

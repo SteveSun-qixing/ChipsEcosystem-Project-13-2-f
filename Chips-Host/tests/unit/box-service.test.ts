@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BoxService } from '../../packages/box-service/src';
 import { StoreZipService } from '../../packages/zip-service/src';
+import type { PluginRuntime } from '../../src/runtime';
 
 const BOX_ID = 'b1C2d3E4f5';
 const ENTRY_ID = 'e9K2m1P4q7';
@@ -378,5 +379,73 @@ describe('BoxService', () => {
       valid: false,
       errors: ['structure.entries[0] contains legacy location fields.'],
     });
+  });
+
+  it('renders box layout editor documents with a full-height editor root', async () => {
+    const workspace = await createWorkspace();
+    const pluginDir = path.join(workspace, 'plugins/chips-layout-grid');
+    await writeText(
+      path.join(pluginDir, 'index.mjs'),
+      [
+        'export const layoutDefinition = {',
+        '  pluginId: "chips.layout.grid.plugin",',
+        '  layoutType: "chips.layout.grid",',
+        '  displayName: "Grid Layout",',
+        '  createDefaultConfig() { return {}; },',
+        '  normalizeConfig(input = {}) { return input; },',
+        '  validateConfig() { return { valid: true, errors: {} }; },',
+        '  renderView() {},',
+        '  renderEditor() {},',
+        '};',
+        '',
+      ].join('\n'),
+    );
+
+    const runtime: Pick<PluginRuntime, 'query'> = {
+      query(filter) {
+        if (filter?.type !== 'layout') {
+          return [];
+        }
+        return [
+          {
+            enabled: true,
+            installPath: pluginDir,
+            manifestPath: path.join(pluginDir, 'manifest.yaml'),
+            installedAt: Date.now(),
+            manifest: {
+              id: 'chips.layout.grid.plugin',
+              version: '1.0.0',
+              type: 'layout',
+              name: 'Grid Layout',
+              permissions: [],
+              entry: 'index.mjs',
+              layout: {
+                layoutType: 'chips.layout.grid',
+                displayName: 'Grid Layout',
+              },
+            },
+          },
+        ];
+      },
+    };
+
+    const service = new BoxService(undefined, { runtime });
+
+    const rendered = await service.renderLayoutEditor({
+      layoutType: 'chips.layout.grid',
+      entries: [],
+      initialConfig: {},
+      theme: {
+        id: 'theme.test',
+        tokens: {},
+      },
+    });
+
+    const documentPath = fileURLToPath(rendered.documentUrl);
+    const body = await fs.readFile(documentPath, 'utf-8');
+    expect(body).toContain('html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }');
+    expect(body).toContain('#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }');
+
+    await service.releaseRenderSession(rendered.sessionId);
   });
 });

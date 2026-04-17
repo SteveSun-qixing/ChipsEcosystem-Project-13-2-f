@@ -559,6 +559,23 @@ const createBoxLayoutThemeCss = (theme: ThemeSnapshot, extraCssText?: string): s
   ].join('\n');
 };
 
+const createBoxLayoutEditorThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
+  const declarations = Object.entries(theme.tokens ?? {})
+    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+    .map(([name, value]) => `  --${name.replaceAll('.', '-')}: ${String(value)};`)
+    .join('\n');
+
+  return [
+    ':root {',
+    declarations,
+    '}',
+    'html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }',
+    'body { min-width: 0; min-height: 0; color: var(--chips-sys-color-on-surface, #111111); overflow: hidden; }',
+    '#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }',
+    extraCssText ?? '',
+  ].join('\n');
+};
+
 const createBoxLayoutViewDocument = (options: {
   title: string;
   pluginId: string;
@@ -1043,7 +1060,7 @@ export class BoxService {
       entries: options.entries,
       initialConfig: normalizedConfig,
       locale: options.locale,
-      themeCssText: createBoxLayoutThemeCss(theme, options.themeCssText),
+      themeCssText: createBoxLayoutEditorThemeCss(theme, options.themeCssText),
       managedDocumentScheme: this.managedDocumentScheme,
     });
     const persistedSession = await this.persistRenderSession('box-layout-editor');

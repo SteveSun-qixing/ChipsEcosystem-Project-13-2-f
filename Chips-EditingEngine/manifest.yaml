@@ -21,6 +21,7 @@ permissions:
   - i18n.read
   - file.read
   - file.write
+  - zip.manage
   - config.read
   - config.write
   - window.control

@@ -583,6 +583,8 @@ const result = await client.card.editorPanel.render({
 - `importResource(...)` 返回的 `path` 必须是卡片根目录相对路径，例如 `cover.png`；
 - `importArchiveBundle(...)` 返回 `{ rootDir, entryFile, resourcePaths }`，用于网页基础卡片这类“整目录导入”的正式场景；
 - `importArchiveBundle(...)` 的宿主职责是：验证入口文件、解压 ZIP、把最终网页目录写到卡片根目录，并返回正式相对路径；
+- 若宿主通过 `client.zip.list(...)` / `client.zip.extract(...)` 实现 `importArchiveBundle(...)`，对应应用插件必须在 `manifest.permissions` 中声明 `zip.manage`；
+- 当宿主无法通过 `client.platform.getPathForFile(file)` 拿到所选 ZIP 的真实磁盘路径时，可以先通过正式文件服务把该 `File` 内容写入会话暂存路径，再继续调用 `client.zip.list(...)` / `client.zip.extract(...)`；
 - 若宿主按官方资源链路保存内部文件，应把文件直接写入卡片根目录，而不是写入 `content/`；
 - `resources` 只在当前应用进程内生效，不进入 Host 正式 `card.renderEditor` 路由契约。
 
@@ -600,6 +602,7 @@ const entries = await client.zip.list('/tmp/site.zip');
 
 - `client.zip.compress(...)` 适用于正式 ZIP Store 打包场景；
 - `client.zip.extract(...)` 与 `client.zip.list(...)` 可用于网页 ZIP 包导入前的验证与解压；
+- 使用 `client.zip.*` 的调用方必须具备 `zip.manage` 权限；
 - ZIP 条目路径仍需由调用方按正式文件规则校验，不能把压缩包中的绝对路径或路径穿越条目直接落盘。
 
 约束：

@@ -59,6 +59,10 @@ function createServices(input: {
     async listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]> {
       return collectEntries(dir, Boolean(options?.recursive));
     },
+    async writeBinary(targetPath: string, content: Uint8Array): Promise<void> {
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, Buffer.from(content));
+    },
     async move(sourcePath: string, destPath: string): Promise<void> {
       await fs.mkdir(path.dirname(destPath), { recursive: true });
       await fs.rename(sourcePath, destPath);
@@ -146,6 +150,81 @@ describe('archive-import', () => {
     await expect(
       fs.readFile(path.join(cardRootDir, result.rootDir, 'index.html'), 'utf-8'),
     ).resolves.toContain('<html>');
+    await expect(
+      fs.readdir(path.join(cardRootDir, '.card', '__archive_import__')),
+    ).resolves.toEqual([]);
+  });
+
+  it('stages the selected zip bytes when the platform bridge cannot expose a file path', async () => {
+    const cardRootDir = await createTempDir('chips-card-root-file-fallback-');
+    const zipBuffer = Buffer.from('mock webpage zip');
+    const zipArrayBuffer = zipBuffer.buffer.slice(
+      zipBuffer.byteOffset,
+      zipBuffer.byteOffset + zipBuffer.byteLength,
+    );
+    let stagedZipPath = '';
+
+    const result = await importArchiveBundleIntoCardRoot({
+      cardRootDir: toPosixPath(cardRootDir),
+      request: {
+        file: {
+          name: 'website.zip',
+          async arrayBuffer() {
+            return zipArrayBuffer;
+          },
+        } as File,
+        preferredRootDir: 'webpage-bundle',
+        entryFile: 'index.html',
+      },
+      services: {
+        getPathForFile(): string {
+          return '';
+        },
+        async listZipEntries(targetZipPath: string): Promise<ZipEntryMeta[]> {
+          stagedZipPath = targetZipPath;
+          await expect(fs.readFile(targetZipPath)).resolves.toEqual(zipBuffer);
+          return [
+            { path: 'site/index.html', size: 10, compressedSize: 10, crc32: 1, offset: 0 },
+            { path: 'site/assets/app.js', size: 12, compressedSize: 12, crc32: 2, offset: 10 },
+          ];
+        },
+        async extractZip(targetZipPath: string, outputDir: string): Promise<string> {
+          expect(targetZipPath).toBe(stagedZipPath);
+          await fs.mkdir(path.join(outputDir, 'site', 'assets'), { recursive: true });
+          await fs.writeFile(path.join(outputDir, 'site', 'index.html'), '<html></html>', 'utf-8');
+          await fs.writeFile(path.join(outputDir, 'site', 'assets', 'app.js'), 'console.log(1);', 'utf-8');
+          return outputDir;
+        },
+        async listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]> {
+          return collectEntries(dir, Boolean(options?.recursive));
+        },
+        async writeBinary(targetPath: string, content: Uint8Array): Promise<void> {
+          await fs.mkdir(path.dirname(targetPath), { recursive: true });
+          await fs.writeFile(targetPath, Buffer.from(content));
+        },
+        async move(sourcePath: string, destPath: string): Promise<void> {
+          await fs.mkdir(path.dirname(destPath), { recursive: true });
+          await fs.rename(sourcePath, destPath);
+        },
+        async delete(targetPath: string, options?: { recursive?: boolean }): Promise<void> {
+          await fs.rm(targetPath, { recursive: Boolean(options?.recursive), force: true });
+        },
+        async exists(targetPath: string): Promise<boolean> {
+          try {
+            await fs.access(targetPath);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      },
+    });
+
+    expect(result.rootDir).toMatch(/^webpage-bundle-[0-9a-z]{6}$/);
+    expect(result.resourcePaths).toEqual([
+      `${result.rootDir}/assets/app.js`,
+      `${result.rootDir}/index.html`,
+    ]);
     await expect(
       fs.readdir(path.join(cardRootDir, '.card', '__archive_import__')),
     ).resolves.toEqual([]);

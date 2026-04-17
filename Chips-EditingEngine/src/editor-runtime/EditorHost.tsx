@@ -333,6 +333,9 @@ export function EditorHost({
         async listFiles(dir, options) {
           return fileService.list(dir, options);
         },
+        async writeBinary(path, content) {
+          await fileService.writeBinary(path, content);
+        },
         async move(sourcePath, destPath) {
           await fileService.move(sourcePath, destPath);
         },

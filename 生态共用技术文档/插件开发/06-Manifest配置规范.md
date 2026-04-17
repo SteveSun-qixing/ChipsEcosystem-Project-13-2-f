@@ -140,6 +140,16 @@ ui:
 - `ui.surface` 只允许 `app` 插件声明
 - `ui.window.chrome` 允许 `app` 插件声明
 
+### 5.1 权限补充
+
+`permissions` 字段继续用于声明插件会调用的正式宿主能力。
+
+补充约束：
+
+- 任何直接调用 `zip.compress / zip.extract / zip.list` 的插件，都必须声明 `zip.manage`；
+- 若应用插件承载网页基础卡片这类 `importArchiveBundle(...)` 整包导入能力，并在内部复用 ZIP 子域完成校验与解压，也必须声明 `zip.manage`；
+- 仅声明 `file.read / file.write` 并不能替代 `zip.manage`。
+
 ## 6. 能力缺失时的正式策略：`capabilityFallbacks`
 
 应用插件可以声明当宿主缺失某项能力时的正式行为：

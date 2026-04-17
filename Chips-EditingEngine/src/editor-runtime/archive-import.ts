@@ -10,6 +10,7 @@ interface ArchiveImportServices {
     listZipEntries(zipPath: string): Promise<ZipEntryMeta[]>;
     extractZip(zipPath: string, outputDir: string): Promise<string>;
     listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
+    writeBinary(path: string, content: Uint8Array): Promise<void>;
     move(sourcePath: string, destPath: string): Promise<void>;
     delete(path: string, options?: { recursive?: boolean }): Promise<void>;
     exists(path: string): Promise<boolean>;
@@ -49,6 +50,20 @@ function sanitizeRootDirName(value: string): string {
         .toLowerCase();
 
     return normalized.length > 0 ? normalized : 'archive-bundle';
+}
+
+async function readBinaryFromFileLike(file: unknown): Promise<Uint8Array | null> {
+    if (!file || typeof file !== 'object' || !('arrayBuffer' in file)) {
+        return null;
+    }
+
+    const arrayBufferFn = (file as { arrayBuffer?: unknown }).arrayBuffer;
+    if (typeof arrayBufferFn !== 'function') {
+        return null;
+    }
+
+    const arrayBuffer = await arrayBufferFn.call(file) as ArrayBuffer;
+    return new Uint8Array(arrayBuffer);
 }
 
 function toRelativeChildPath(rootDir: string, absolutePath: string): string | null {
@@ -178,22 +193,29 @@ export async function importArchiveBundleIntoCardRoot(input: {
     services: ArchiveImportServices;
 }): Promise<BasecardArchiveImportResult> {
     const { cardRootDir, request, services } = input;
-    const zipPath = services.getPathForFile(request.file);
-    if (!zipPath) {
-        throw new Error('当前宿主无法读取所选压缩包文件路径。');
-    }
-
-    const { payloadRoot, entryFile } = resolveArchivePayloadRoot(
-        await services.listZipEntries(zipPath),
-        request.entryFile,
-    );
     const stageRootDir = joinPath(cardRootDir, '.card', '__archive_import__', generateId62(8).toLowerCase());
     const stageExtractDir = joinPath(stageRootDir, 'payload');
-    const bundleRootDir = await chooseBundleRootDir(cardRootDir, request.preferredRootDir ?? request.file.name, services);
-    const finalBundleDir = joinPath(cardRootDir, bundleRootDir);
+    const stageZipPath = joinPath(stageRootDir, 'source.zip');
+    let zipPath = services.getPathForFile(request.file);
+    if (!zipPath) {
+        const stagedZipData = await readBinaryFromFileLike(request.file);
+        if (!stagedZipData) {
+            throw new Error('当前宿主无法读取所选压缩包文件。');
+        }
+        await services.writeBinary(stageZipPath, stagedZipData);
+        zipPath = stageZipPath;
+    }
+
     let shouldCleanupFinalDir = true;
+    let finalBundleDir = '';
 
     try {
+        const { payloadRoot, entryFile } = resolveArchivePayloadRoot(
+            await services.listZipEntries(zipPath),
+            request.entryFile,
+        );
+        const bundleRootDir = await chooseBundleRootDir(cardRootDir, request.preferredRootDir ?? request.file.name, services);
+        finalBundleDir = joinPath(cardRootDir, bundleRootDir);
         await services.extractZip(zipPath, stageExtractDir);
         await cleanupIgnoredArchiveArtifacts(stageExtractDir, services);
 
@@ -218,7 +240,7 @@ export async function importArchiveBundleIntoCardRoot(input: {
             resourcePaths,
         };
     } catch (error) {
-        if (shouldCleanupFinalDir && (await services.exists(finalBundleDir))) {
+        if (shouldCleanupFinalDir && finalBundleDir && (await services.exists(finalBundleDir))) {
             await services.delete(finalBundleDir, { recursive: true });
         }
         throw error;

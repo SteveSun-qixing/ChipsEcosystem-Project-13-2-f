@@ -20,7 +20,51 @@ function calculateFixedHeight(width: number): number {
   return Math.max(MIN_FREE_VIEWPORT_HEIGHT, Math.round((width / FIXED_RATIO_WIDTH) * FIXED_RATIO_HEIGHT));
 }
 
-function calculateInitialViewportHeight(width: number, displayMode: BasecardConfig["display_mode"]): number {
+function getRuntimeViewportHeight(): number {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  const candidates: number[] = [];
+  try {
+    if (window.top && typeof window.top.innerHeight === "number") {
+      candidates.push(window.top.innerHeight);
+    }
+  } catch {
+    // Ignore cross-origin access failures and fall back to local measurements.
+  }
+
+  candidates.push(
+    window.screen?.availHeight ?? 0,
+    window.screen?.height ?? 0,
+    window.innerHeight,
+  );
+
+  for (const candidate of candidates) {
+    const normalized = clampPositiveNumber(candidate);
+    if (normalized > 0) {
+      return normalized;
+    }
+  }
+
+  return 0;
+}
+
+function calculateProtocolViewportHeight(width: number, displayMode: BasecardConfig["display_mode"]): number {
+  const fixedHeight = calculateFixedHeight(width);
+  if (displayMode === "fixed") {
+    return fixedHeight;
+  }
+
+  const runtimeViewportHeight = getRuntimeViewportHeight();
+  if (runtimeViewportHeight <= 0) {
+    return fixedHeight;
+  }
+
+  return Math.max(MIN_FREE_VIEWPORT_HEIGHT, Math.min(fixedHeight, runtimeViewportHeight));
+}
+
+function calculateInitialLayoutHeight(width: number, displayMode: BasecardConfig["display_mode"]): number {
   if (displayMode === "fixed") {
     return calculateFixedHeight(width);
   }
@@ -237,10 +281,11 @@ export function WebpageCardView({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const width = useContainerWidth(rootRef);
-  const baseHeight = calculateInitialViewportHeight(width, config.display_mode);
+  const protocolViewportHeight = calculateProtocolViewportHeight(width, config.display_mode);
+  const baseHeight = calculateInitialLayoutHeight(width, config.display_mode);
   const [status, setStatus] = useState<"empty" | "loading" | "ready" | "error">("empty");
   const [errorText, setErrorText] = useState("");
-  const [viewportHeight, setViewportHeight] = useState(baseHeight);
+  const [layoutHeight, setLayoutHeight] = useState(baseHeight);
   const [scrollMode, setScrollMode] = useState(false);
   const [bundleSrcDoc, setBundleSrcDoc] = useState<string | null>(null);
 
@@ -248,8 +293,17 @@ export function WebpageCardView({
   const hasBundleSource = config.source_type === "bundle" && Boolean(config.bundle_root?.trim());
   const validUrl = hasUrlSource ? validateWebpageUrl(config.source_url ?? "") : false;
   const viewportPayload = useMemo(
-    () => createViewportPayload(width, viewportHeight, baseHeight, config, config.max_height_ratio, scrollMode),
-    [baseHeight, config, config.max_height_ratio, scrollMode, viewportHeight, width],
+    // Free mode may grow the outer iframe to the measured content height, but the embedded page
+    // must keep receiving a stable viewport height to avoid measurement feedback loops.
+    () => createViewportPayload(
+      width,
+      protocolViewportHeight,
+      baseHeight,
+      config,
+      config.max_height_ratio,
+      scrollMode,
+    ),
+    [baseHeight, config, config.max_height_ratio, protocolViewportHeight, scrollMode, width],
   );
   const baseHeightRef = useRef(baseHeight);
   const viewportPayloadRef = useRef<WebpageViewportPayload>(viewportPayload);
@@ -264,11 +318,11 @@ export function WebpageCardView({
 
   useEffect(() => {
     if (config.display_mode === "fixed") {
-      setViewportHeight(baseHeight);
+      setLayoutHeight(baseHeight);
       return;
     }
 
-    setViewportHeight((current) => Math.max(current, baseHeight));
+    setLayoutHeight((current) => Math.max(current, baseHeight));
   }, [baseHeight, config.display_mode]);
 
   useEffect(() => {
@@ -282,7 +336,7 @@ export function WebpageCardView({
     setStatus("loading");
     setErrorText("");
     setScrollMode(false);
-    setViewportHeight(baseHeightRef.current);
+    setLayoutHeight(baseHeightRef.current);
 
     void (async () => {
       try {
@@ -359,7 +413,7 @@ export function WebpageCardView({
     setStatus("loading");
     setErrorText("");
     setScrollMode(false);
-    setViewportHeight(baseHeightRef.current);
+    setLayoutHeight(baseHeightRef.current);
   }, [hasBundleSource, hasUrlSource, iframeSource, t, validUrl]);
 
   useEffect(() => {
@@ -409,7 +463,7 @@ export function WebpageCardView({
     const applyUnmeasurableFallback = () => {
       setStatus("ready");
       setScrollMode(true);
-      setViewportHeight(baseHeight);
+      setLayoutHeight(baseHeight);
     };
 
     function applyMeasurement(reportedHeight?: number) {
@@ -418,7 +472,7 @@ export function WebpageCardView({
         setStatus("error");
         setScrollMode(false);
         setErrorText(t("view.embed_blocked"));
-        setViewportHeight(baseHeight);
+        setLayoutHeight(baseHeight);
         return;
       }
 
@@ -443,7 +497,7 @@ export function WebpageCardView({
       setStatus("ready");
       setErrorText("");
       setScrollMode(nextLayout.scrollMode);
-      setViewportHeight(nextLayout.height);
+      setLayoutHeight(nextLayout.height);
     }
 
     const attachToFrameDocument = () => {
@@ -518,7 +572,7 @@ export function WebpageCardView({
       setStatus("error");
       setScrollMode(false);
       setErrorText(t("view.load_failed"));
-      setViewportHeight(baseHeight);
+      setLayoutHeight(baseHeight);
     };
 
     frameElement.addEventListener("load", handleLoad);
@@ -547,7 +601,7 @@ export function WebpageCardView({
     <div className="chips-webpage-card" ref={rootRef}>
       <div
         className={`chips-webpage-card__viewport ${scrollMode ? "chips-webpage-card__viewport--scroll" : ""}`}
-        style={{ height: `${viewportHeight}px` }}
+        style={{ height: `${layoutHeight}px` }}
       >
         {status === "error" ? (
           <div className="chips-webpage-card__message chips-webpage-card__message--error">

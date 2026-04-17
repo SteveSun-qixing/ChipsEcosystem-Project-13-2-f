@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>昙花夜放</title>
+  <meta
+    name="description"
+    content="一篇关于昙花与夜色的连续散文，以及一张海报感植物单页。"
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;700;900&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="scene" aria-hidden="true">
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <div class="ambient ambient-c"></div>
+    <div class="beam beam-a"></div>
+    <div class="beam beam-b"></div>
+    <div class="halo halo-a"></div>
+    <div class="halo halo-b"></div>
+    <div class="moon"></div>
+
+    <svg class="botanical-lines" viewBox="0 0 1600 1000" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="traceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f4e8c8" stop-opacity="0.03"></stop>
+          <stop offset="45%" stop-color="#f4e8c8" stop-opacity="0.32"></stop>
+          <stop offset="100%" stop-color="#7cc4a2" stop-opacity="0.02"></stop>
+        </linearGradient>
+        <linearGradient id="traceGradientSoft" x1="10%" y1="10%" x2="90%" y2="90%">
+          <stop offset="0%" stop-color="#f7f1e6" stop-opacity="0.02"></stop>
+          <stop offset="60%" stop-color="#eed4b3" stop-opacity="0.2"></stop>
+          <stop offset="100%" stop-color="#a6ddbc" stop-opacity="0.03"></stop>
+        </linearGradient>
+      </defs>
+      <path
+        class="trace trace-a"
+        d="M-50 720C220 660 326 386 552 284C780 182 1064 252 1278 212C1400 190 1512 136 1650 166"
+      ></path>
+      <path
+        class="trace trace-b"
+        d="M206 1024C170 744 274 568 420 486C566 404 720 444 838 378C954 312 1010 186 1190 154C1368 122 1502 208 1660 108"
+      ></path>
+      <path
+        class="trace trace-c"
+        d="M42 106C154 180 264 236 408 246C568 258 654 176 818 164C1048 146 1146 302 1324 334C1450 356 1576 318 1664 236"
+      ></path>
+      <circle class="trace-orb" cx="1280" cy="238" r="94"></circle>
+      <circle class="trace-orb trace-orb-soft" cx="454" cy="218" r="58"></circle>
+    </svg>
+
+    <div class="constellation" id="constellation"></div>
+    <div class="floating-seeds" id="floating-seeds"></div>
+    <div class="ornate-label ornate-label-a">MOONLIT GREENHOUSE</div>
+    <div class="ornate-label ornate-label-b">NO. 01 · SILENT BLOOM</div>
+    <div class="ornate-label ornate-label-c">SCENT · LIGHT · PATIENCE</div>
+    <div class="cursor-orb" id="cursor-orb">
+      <span class="cursor-ring"></span>
+      <span class="cursor-core"></span>
+    </div>
+    <div class="click-blooms" id="click-blooms"></div>
+  </div>
+
+  <main class="page" id="page">
+    <header class="hero">
+      <p class="hero-kicker">Night Bloom Essay · Epiphyllum oxypetalum</p>
+      <h1 class="hero-title">
+        <span>昙花把最盛大的时刻，</span>
+        <span>交给最安静的夜色</span>
+      </h1>
+      <p class="hero-intro">
+        这一次不再是零散摘句，而是一篇真正连续流动的植物散文。页面也被改造成更适合长文阅读的
+        海报式阅读场景，让文字、花体、光影与交互一起慢慢展开。
+      </p>
+      <div class="hero-meta">
+        <span>一篇关于等待、香气与短暂盛放的夜间手记</span>
+        <span>hover paragraph / click to scatter pollen</span>
+      </div>
+    </header>
+
+    <section class="essay-layout">
+      <aside class="rail" aria-hidden="true">
+        <div class="rail-track">
+          <span class="rail-progress"></span>
+          <span class="rail-seed"></span>
+        </div>
+        <div class="rail-copy">READING CURRENT</div>
+      </aside>
+
+      <article class="essay" id="essay" aria-label="关于昙花的连续散文">
+        <div class="essay-watermark" aria-hidden="true">昙</div>
+
+        <p
+          class="essay-paragraph essay-lead observe"
+          data-note="将晚"
+          data-status="夜色刚刚落下，叶片仍在安静蓄光"
+        >
+          若在白天看见昙花，它并不夺目。扁长的叶片沿着盆沿垂下来，颜色沉静，轮廓简素，像把一整晚的消息都折进了绿色的缄默里。只有真正愿意在它身边多站一会儿的人，才会留意到那枚花苞并不是静止的，它在日光渐弱的缝隙里悄悄积攒力气，仿佛把一场只属于夜色的盛大，提前藏进了薄薄的外壳。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="湿意"
+          data-status="空气开始转凉，花苞比傍晚时更近一步"
+        >
+          它真正开始发生变化，总在傍晚以后。窗外的热气一点点退去，风从树梢和墙角带来细微的凉意，连房间里最轻的声音都好像被夜色收住了边缘。就是在这样的时刻，昙花慢慢醒来。那种醒并不突然，不是戏剧性的翻转，而像一封写了很久的信，在最后一页终于落下句点之前，先轻轻地停顿一下，让你知道接下来的每一秒都值得等待。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="白光"
+          data-status="花苞开始松开，月色像从植物内部亮起"
+        >
+          我喜欢看它将开未开的样子。花苞比平时更饱满，边缘有一种柔软的胀感，像月亮在云层背后试探着抬头。那时它还没有真正张开，却已经改变了周围空间的气质。桌上的书页、玻璃杯里的水、窗边那一块不太起眼的阴影，都因为它的存在而变得格外清醒，仿佛房间知道今晚会有一件很轻、却极其郑重的事发生。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="耐心"
+          data-status="等待本身开始发光，盛放并不只属于结果"
+        >
+          最动人的其实不只是花开那一刻，而是此前漫长的等待。人很少愿意为缓慢的变化停下来，因为多数时候我们更相信迅速、明确、可被立刻看见的东西。可昙花不是这样。它把美放在后面，把耐心放在前面，让你在一段看似什么都没有发生的时间里，一点点学会安静，学会把注意力交给极细微的征兆，学会相信那些尚未显形的事物也在真实地生长。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="松开"
+          data-status="花瓣层层外展，整株植物正在把秘密说出口"
+        >
+          等到花瓣终于松开，夜就像被它轻轻推亮了一寸。外层的瓣片先舒展，随后更白、更柔软的内部一点点显露出来。那不是白天花朵常有的热烈颜色，而是一种带着凉意的光，像丝绸，也像月色落在瓷器上的反照。你会很难说清它究竟像什么，只会感到眼前的东西并非单纯的植物，而是一种被时间养出来的洁净，一种只在最安静的时候才肯现身的丰盛。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="香气"
+          data-status="香气开始浮动，空气里多了一层看不见的回声"
+        >
+          香气也是轻的，不会莽撞地扑过来。它像一阵极薄的雾，先停在花附近，再慢慢移向窗前、桌边、人的衣袖和发梢。等你意识到它的时候，它已经把整间屋子悄悄缝在一起了。于是人忽然明白，有些美并不是为了占据视线，而是为了改变呼吸；有些存在也不靠喧哗证明自己，它只需轻轻经过，就足以把记忆的颜色全部改写。
+        </p>
+
+        <blockquote
+          class="essay-quote observe"
+          data-note="一现"
+          data-status="珍贵并不依赖久留，而依赖是否真实照亮过一刻"
+        >
+          珍贵不是因为它久留，而是因为它曾在最安静的时候，把全部光亮都交出来。
+        </blockquote>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="短暂"
+          data-status="盛放抵达最高处，也在缓慢靠近将明时分"
+        >
+          人们总爱用“昙花一现”来形容短暂，好像短暂天然带着一点遗憾。可我每次想到它，感到的却不是惋惜，而是一种近乎宽慰的清醒。原来世上真的有些事，不靠久留也能成立，不靠反复出现也能被牢牢记住。它们只在极短的一段时间里全力以赴，却因为足够真切，反而比很多漫长而模糊的事物更难被忘掉。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="将明"
+          data-status="花开始慢慢回拢，夜的尾声留下温柔余温"
+        >
+          天快亮的时候，花会一点点回拢。那种收束并不仓促，倒像一位讲完故事的人，轻轻把灯调暗，把房间还给清晨之前最后一段灰蓝色的宁静。花瓣上的白还在，香气也还在，只是它们都开始退回自身。你会在那一刻突然明白，原来盛放和消隐并不是对立的，它们只是同一种温柔的两个方向，一个向世界打开，一个向时间归还。
+        </p>
+
+        <p
+          class="essay-paragraph observe"
+          data-note="回声"
+          data-status="花已不再张扬，可那一夜仍在心里发亮"
+        >
+          所以后来每次再看见昙花平静的叶片，我都不觉得它沉默。相反，我总觉得它体内有一整个夜晚的回声：有将晚时尚未说出的预告，有花开时洁白而克制的光，有香气越过窗台时留下的细小颤动，也有天色将明之际那种安静收拢的体面。它提醒我，真正珍贵的事并不一定轰然降临。很多时候，它只是耐心地活着，直到某个合适的夜里，把全部答案一次交给你看。
+        </p>
+
+        <p class="essay-signoff">写于一盏灯下，窗外风很轻，夜色正好。</p>
+      </article>
+
+      <aside class="showcase">
+        <div class="showcase-sticky">
+          <div class="showcase-stage">
+            <div class="stage-caption stage-caption-a">MOON-SCENTED BLOOM</div>
+            <div class="stage-caption stage-caption-b">hover a paragraph to wake the margin</div>
+            <div class="fragrance-rings" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+
+            <div class="botanical-model" aria-hidden="true">
+              <div class="mist mist-a"></div>
+              <div class="mist mist-b"></div>
+              <div class="stem"></div>
+              <div class="stem stem-secondary"></div>
+              <div class="stem-glow"></div>
+
+              <div class="leaf leaf-a"></div>
+              <div class="leaf leaf-b"></div>
+              <div class="leaf leaf-c"></div>
+              <div class="leaf leaf-d"></div>
+              <div class="leaf leaf-e"></div>
+              <div class="leaf leaf-f"></div>
+
+              <div class="bud"></div>
+
+              <div class="flower">
+                <div class="petal-ring petal-ring-outer">
+                  <span class="petal" style="--angle:-82deg; --length:1.02; --width:0.92;"></span>
+                  <span class="petal" style="--angle:-56deg; --length:1.08; --width:0.88;"></span>
+                  <span class="petal" style="--angle:-28deg; --length:1.16; --width:0.96;"></span>
+                  <span class="petal" style="--angle:0deg; --length:1.18; --width:1.00;"></span>
+                  <span class="petal" style="--angle:28deg; --length:1.16; --width:0.96;"></span>
+                  <span class="petal" style="--angle:56deg; --length:1.08; --width:0.88;"></span>
+                  <span class="petal" style="--angle:82deg; --length:1.02; --width:0.92;"></span>
+                </div>
+
+                <div class="petal-ring petal-ring-inner">
+                  <span class="petal petal-inner" style="--angle:-65deg; --length:0.78; --width:0.72;"></span>
+                  <span class="petal petal-inner" style="--angle:-34deg; --length:0.84; --width:0.76;"></span>
+                  <span class="petal petal-inner" style="--angle:0deg; --length:0.90; --width:0.82;"></span>
+                  <span class="petal petal-inner" style="--angle:34deg; --length:0.84; --width:0.76;"></span>
+                  <span class="petal petal-inner" style="--angle:65deg; --length:0.78; --width:0.72;"></span>
+                </div>
+
+                <div class="filaments">
+                  <span class="thread" style="--angle:-54deg;"></span>
+                  <span class="thread" style="--angle:-32deg;"></span>
+                  <span class="thread" style="--angle:-12deg;"></span>
+                  <span class="thread" style="--angle:12deg;"></span>
+                  <span class="thread" style="--angle:32deg;"></span>
+                  <span class="thread" style="--angle:54deg;"></span>
+                </div>
+
+                <div class="flower-core"></div>
+                <div class="flower-sheen"></div>
+              </div>
+
+              <span class="dew dew-a"></span>
+              <span class="dew dew-b"></span>
+              <span class="dew dew-c"></span>
+              <span class="dew dew-d"></span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="./script.js"></script>
+</body>
+</html>

@@ -233,4 +233,87 @@ describe("mountBasecardView", () => {
     expect(viewport.style.height).toBe("12800px");
     cleanup();
   });
+
+  it("keeps a stable protocol viewport height when free mode expands the outer layout", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const originalInnerHeight = window.innerHeight;
+    const originalAvailHeight = window.screen.availHeight;
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 900,
+    });
+    Object.defineProperty(window.screen, "availHeight", {
+      configurable: true,
+      value: 900,
+    });
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        source_type: "url",
+        source_url: "https://example.com/page",
+        display_mode: "free",
+      }),
+    });
+
+    await flushAsyncWork();
+
+    const viewport = container.querySelector(".chips-webpage-card__viewport") as HTMLElement | null;
+    const frame = container.querySelector("iframe") as HTMLIFrameElement | null;
+    if (!viewport || !frame) {
+      throw new Error("未找到网页预览 iframe");
+    }
+
+    const postMessage = vi.fn();
+    Object.defineProperty(frame, "contentWindow", {
+      configurable: true,
+      value: {
+        postMessage,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+    });
+    Object.defineProperty(frame, "contentDocument", {
+      configurable: true,
+      value: {
+        URL: "https://example.com/page",
+        documentElement: {
+          scrollHeight: 960,
+          offsetHeight: 960,
+          clientHeight: 960,
+        },
+        body: {
+          scrollHeight: 960,
+          offsetHeight: 960,
+          clientHeight: 960,
+          textContent: "page",
+          childElementCount: 1,
+        },
+      },
+    });
+
+    frame.dispatchEvent(new Event("load"));
+    await flushAsyncWork();
+
+    const lastMessage = postMessage.mock.calls.at(-1)?.[0] as
+      | { type?: string; payload?: { height?: number; baseHeight?: number; displayMode?: string } }
+      | undefined;
+
+    expect(viewport.style.height).toBe("960px");
+    expect(lastMessage?.type).toBe("chips:webpage-card:viewport");
+    expect(lastMessage?.payload?.displayMode).toBe("free");
+    expect(lastMessage?.payload?.height).toBe(900);
+    expect(lastMessage?.payload?.baseHeight).toBe(160);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window.screen, "availHeight", {
+      configurable: true,
+      value: originalAvailHeight,
+    });
+    cleanup();
+  });
 });

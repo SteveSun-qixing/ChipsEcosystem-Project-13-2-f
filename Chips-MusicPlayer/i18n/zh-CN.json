@@ -1,0 +1,69 @@
+{
+  "music-player": {
+    "app": {
+      "title": "音乐播放器"
+    },
+    "actions": {
+      "open": "打开文件",
+      "play": "播放",
+      "pause": "暂停",
+      "showPlayerPage": "切换到播放器页面",
+      "showLyricsPage": "切换到歌词页面",
+      "rewind10": "后退 10 秒",
+      "forward10": "前进 10 秒",
+      "save": "保存副本",
+      "mute": "静音",
+      "unmute": "取消静音",
+      "loopOne": "单曲循环",
+      "loopOff": "关闭循环"
+    },
+    "dialogs": {
+      "openFileTitle": "选择音频、歌词或封面",
+      "saveFileTitle": "保存音频副本"
+    },
+    "labels": {
+      "local": "本地",
+      "remote": "链接",
+      "unknown": "未知",
+      "lyricsTimed": "滚动歌词",
+      "artworkEmbedded": "嵌入封面",
+      "artworkCompanion": "伴生封面",
+      "artworkDefault": "默认封面",
+      "volume": "音量"
+    },
+    "status": {
+      "samePath": "目标路径与当前音频相同，未执行保存。",
+      "saveSuccess": "已保存到 {path}",
+      "downloadFallback": "当前来源会按下载方式保存。"
+    },
+    "errors": {
+      "missingPath": "没有可打开的音频资源。",
+      "unsupportedFile": "当前仅支持这些音频格式：{extensions}",
+      "openFailed": "打开音频失败。",
+      "saveFailed": "保存音频失败。",
+      "loadFailed": "音频资源加载失败。",
+      "missingAudioInSelection": "请至少选择一个音频文件，歌词和封面会作为补充资源处理。",
+      "mediaAborted": "播放已中止。",
+      "mediaNetwork": "网络异常，音频暂时无法继续播放。",
+      "mediaDecode": "当前运行时无法解码这段音频。",
+      "mediaSource": "当前来源不可播放。"
+    },
+    "viewer": {
+      "emptyPrompt": "点击封面或拖入音频、歌词、封面",
+      "emptyHint": "支持同时选择一首音频和它的 .lrc / 封面文件",
+      "loading": "正在准备音频资源…",
+      "metadataFallback": "未找到更多元数据",
+      "lyricsEmpty": "没有找到可显示的歌词",
+      "lyricsPlainHint": "当前是非时间轴歌词，会静态显示。",
+      "selectBundleHint": "会自动发现同目录的 cover / folder / front 封面与同名或 lyrics.lrc。",
+      "dragPrompt": "松开即可载入这组文件",
+      "buffering": "正在缓冲…"
+    },
+    "section": {
+      "mobilePages": "移动端页面切换",
+      "lyrics": "歌词",
+      "details": "播放进度",
+      "controls": "播放控制"
+    }
+  }
+}

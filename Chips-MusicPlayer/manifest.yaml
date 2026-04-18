@@ -1,0 +1,82 @@
+id: com.chips.music-player
+name: 音乐播放器
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态音乐播放器应用插件，用于播放本地音频或被 Host 资源路由唤起的音频资源。
+
+author:
+  name: MusicPlayer
+  email: dev@chips.local
+
+keywords:
+  - chips
+  - music
+  - audio
+  - player
+  - lyrics
+
+capabilities:
+  - resource-handler:view:audio/*
+  - file-handler:.mp3
+  - file-handler:.flac
+  - file-handler:.wav
+  - file-handler:.ogg
+  - file-handler:.oga
+  - file-handler:.m4a
+  - file-handler:.aac
+  - file-handler:.opus
+  - file-handler:.webm
+
+permissions:
+  - resource.read
+  - file.read
+  - file.write
+  - platform.read
+  - theme.read
+  - i18n.read
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: true
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: download
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 音乐播放器
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      titleBarStyle: default

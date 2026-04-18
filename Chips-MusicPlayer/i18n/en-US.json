@@ -1,0 +1,69 @@
+{
+  "music-player": {
+    "app": {
+      "title": "Music Player"
+    },
+    "actions": {
+      "open": "Open Files",
+      "play": "Play",
+      "pause": "Pause",
+      "showPlayerPage": "Switch to the player page",
+      "showLyricsPage": "Switch to the lyrics page",
+      "rewind10": "Back 10 Seconds",
+      "forward10": "Forward 10 Seconds",
+      "save": "Save Copy",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "loopOne": "Repeat Track",
+      "loopOff": "Repeat Off"
+    },
+    "dialogs": {
+      "openFileTitle": "Choose audio, lyrics, or cover art",
+      "saveFileTitle": "Save Audio Copy"
+    },
+    "labels": {
+      "local": "Local",
+      "remote": "Link",
+      "unknown": "Unknown",
+      "lyricsTimed": "Timed lyrics",
+      "artworkEmbedded": "Embedded artwork",
+      "artworkCompanion": "Companion artwork",
+      "artworkDefault": "Default artwork",
+      "volume": "Volume"
+    },
+    "status": {
+      "samePath": "The destination matches the current source, so nothing was written.",
+      "saveSuccess": "Saved to {path}",
+      "downloadFallback": "This source will be saved through a download fallback."
+    },
+    "errors": {
+      "missingPath": "There is no playable audio resource.",
+      "unsupportedFile": "Only these audio formats are supported right now: {extensions}",
+      "openFailed": "Unable to open the audio resource.",
+      "saveFailed": "Unable to save the audio file.",
+      "loadFailed": "Unable to load the audio resource.",
+      "missingAudioInSelection": "Select at least one audio file. Lyrics and cover art are treated as supplemental files.",
+      "mediaAborted": "Playback was aborted.",
+      "mediaNetwork": "A network issue interrupted playback.",
+      "mediaDecode": "This runtime could not decode the current track.",
+      "mediaSource": "This source cannot be played here."
+    },
+    "viewer": {
+      "emptyPrompt": "Click the cover or drop audio, lyrics, and cover art here",
+      "emptyHint": "You can choose one audio file together with its .lrc / cover files.",
+      "loading": "Preparing the audio resource…",
+      "metadataFallback": "No extra metadata was found",
+      "lyricsEmpty": "No displayable lyrics were found",
+      "lyricsPlainHint": "These lyrics are not timed, so they stay static.",
+      "selectBundleHint": "The app auto-discovers cover / folder / front artwork and matching or lyrics.lrc files beside the track.",
+      "dragPrompt": "Drop to load this bundle",
+      "buffering": "Buffering…"
+    },
+    "section": {
+      "mobilePages": "Mobile page switcher",
+      "lyrics": "Lyrics",
+      "details": "Playback Progress",
+      "controls": "Playback Controls"
+    }
+  }
+}

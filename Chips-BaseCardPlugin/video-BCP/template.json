@@ -1,0 +1,10 @@
+{
+  "id": "card-video-basic",
+  "name": "视频基础卡片插件模板",
+  "description": "面向视频资源的基础卡片插件模板，包含首帧封面回退、统一资源打开链路、查看态与编辑态测试基线。",
+  "version": "1.0.0",
+  "supports": {
+    "sdk": true,
+    "componentLibrary": false
+  }
+}

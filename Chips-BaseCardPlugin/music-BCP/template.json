@@ -1,0 +1,10 @@
+{
+  "id": "card-music-basic",
+  "name": "音乐基础卡片插件模板",
+  "description": "面向音频资源的基础卡片插件模板，包含元数据自动补全、封面与歌词资源管理、查看态与编辑态测试基线。",
+  "version": "1.0.0",
+  "supports": {
+    "sdk": true,
+    "componentLibrary": false
+  }
+}

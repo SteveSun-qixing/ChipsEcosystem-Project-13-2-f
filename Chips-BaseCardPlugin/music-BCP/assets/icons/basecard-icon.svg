@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="music-card-gradient" x1="12" y1="10" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0ea5e9" />
+      <stop offset="1" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="48" height="48" rx="16" fill="url(#music-card-gradient)" />
+  <circle cx="25" cy="42" r="6" fill="#ffffff" fill-opacity="0.95" />
+  <circle cx="41" cy="38" r="6" fill="#ffffff" fill-opacity="0.95" />
+  <path d="M31 18v22.5a2 2 0 0 0 4 0V27.5l10-2.4V36a2 2 0 0 0 4 0V17.5a2 2 0 0 0-2.47-1.94l-13 3.12A2 2 0 0 0 31 18Z" fill="#ffffff" />
+</svg>

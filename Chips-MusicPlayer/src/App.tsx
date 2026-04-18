@@ -3,12 +3,14 @@ import { ChipsThemeProvider } from "@chips/component-library";
 import type { ThemeState } from "chips-sdk";
 import { MusicPlayerStage } from "./components/MusicPlayerStage";
 import { parseEmbeddedAudioMetadata } from "./utils/audio-metadata";
+import { resolveEmbeddedArtworkUrl } from "./utils/artwork-runtime";
+import { persistEmbeddedArtworkPngToWorkspace } from "./utils/embedded-artwork-cache";
 import { normalizeBinaryContent } from "./utils/binary";
 import { createEmptyLyricsDocument, decodeTextWithFallback, parseLyricsText, type LyricsDocument } from "./utils/lyrics";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsBridge } from "./hooks/useChipsBridge";
 import { useChipsClient } from "./hooks/useChipsClient";
-import { resolveLaunchAudioTarget } from "./utils/launch-resource";
+import { resolveLaunchAudioTarget, resolveLaunchWorkspacePath } from "./utils/launch-resource";
 import {
   inferAudioMimeType,
   isDirectPlayableUri,
@@ -69,6 +71,10 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+function isRevocableArtworkUrl(value: string | undefined): boolean {
+  return typeof value === "string" && value.startsWith("blob:");
+}
+
 function resolveLanguagePayload(payload: unknown): string | null {
   if (typeof payload === "string") {
     return payload;
@@ -121,6 +127,19 @@ function resolveLocalAudioPath(target: LaunchAudioTarget): string | undefined {
   return isLikelyLocalPath(sourceId) && !isDirectPlayableUri(sourceId) ? sourceId : undefined;
 }
 
+function resolveMetadataReadTarget(target: LaunchAudioTarget, localAudioPath: string | undefined): string | undefined {
+  if (localAudioPath) {
+    return localAudioPath;
+  }
+
+  const sourceId = target.sourceId.trim();
+  if (!sourceId || isDirectPlayableUri(sourceId)) {
+    return undefined;
+  }
+
+  return sourceId;
+}
+
 export function App(): React.ReactElement {
   const bridge = useChipsBridge();
   const { client, traceId } = useChipsClient();
@@ -146,11 +165,12 @@ export function App(): React.ReactElement {
   }
 
   function swapRevocableArtwork(nextUrl?: string): void {
-    if (revocableArtworkUrlRef.current && revocableArtworkUrlRef.current !== nextUrl) {
+    if (revocableArtworkUrlRef.current && revocableArtworkUrlRef.current !== nextUrl && isRevocableArtworkUrl(revocableArtworkUrlRef.current)) {
       URL.revokeObjectURL(revocableArtworkUrlRef.current);
     }
 
-    revocableArtworkUrlRef.current = nextUrl ?? null;
+    const normalizedNextUrl = typeof nextUrl === "string" && nextUrl.startsWith("blob:") ? nextUrl : null;
+    revocableArtworkUrlRef.current = normalizedNextUrl;
   }
 
   async function resolvePlayableUri(target: LaunchAudioTarget): Promise<string> {
@@ -266,8 +286,11 @@ export function App(): React.ReactElement {
     setFeedback(null);
 
     try {
+      const launchContext = client.platform.getLaunchContext();
+      const workspacePath = resolveLaunchWorkspacePath(launchContext);
       const resourceUri = await resolvePlayableUri(target);
       const localAudioPath = resolveLocalAudioPath(target);
+      const metadataReadTarget = resolveMetadataReadTarget(target, localAudioPath);
       const normalizedFileName = target.fileName?.trim() || resolveFileName(localAudioPath ?? target.sourceId);
       let resolvedTitle = resolveTrackTitle(target);
       let artist = "";
@@ -277,10 +300,10 @@ export function App(): React.ReactElement {
       let artworkKind: TrackPresentation["artworkKind"] = "default";
       let nextRevocableArtworkUrl: string | undefined;
 
-      if (localAudioPath) {
+      if (metadataReadTarget) {
         const [binaryResult, companionResult] = await Promise.allSettled([
-          client.resource.readBinary(localAudioPath),
-          discoverCompanionFiles(localAudioPath, explicitSelection),
+          client.resource.readBinary(metadataReadTarget),
+          localAudioPath ? discoverCompanionFiles(localAudioPath, explicitSelection) : Promise.resolve(explicitSelection),
         ]);
 
         const embeddedMetadata =
@@ -291,6 +314,13 @@ export function App(): React.ReactElement {
                 mimeType: target.mimeType ?? inferAudioMimeType(normalizedFileName),
               })
             : {};
+
+        if (binaryResult.status === "rejected") {
+          logger.warn("读取嵌入音频元数据失败，继续使用外部伴生资源与文件名回退", {
+            metadataReadTarget,
+            error: binaryResult.reason,
+          });
+        }
 
         const companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
 
@@ -323,12 +353,29 @@ export function App(): React.ReactElement {
         }
 
         if (embeddedMetadata.artwork) {
-          nextRevocableArtworkUrl = URL.createObjectURL(
-            new Blob([embeddedMetadata.artwork.bytes], {
-              type: embeddedMetadata.artwork.mimeType || "image/jpeg",
-            }),
-          );
-          artworkUri = nextRevocableArtworkUrl;
+          const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
+            client,
+            workspacePath,
+            sourceId: target.sourceId.trim(),
+            fileName: normalizedFileName,
+            artwork: embeddedMetadata.artwork,
+            logger,
+          });
+
+          if (persistedArtwork) {
+            artworkUri = persistedArtwork.uri;
+            logger.info("嵌入封面已写入 Host 工作区临时 PNG", {
+              sourceId: target.sourceId.trim(),
+              filePath: persistedArtwork.filePath,
+            });
+          } else {
+            nextRevocableArtworkUrl = await resolveEmbeddedArtworkUrl(embeddedMetadata.artwork);
+            artworkUri = nextRevocableArtworkUrl;
+            logger.warn("嵌入封面未能落盘到 Host 工作区，回退为运行时对象 URL", {
+              sourceId: target.sourceId.trim(),
+              mimeType: embeddedMetadata.artwork.mimeType,
+            });
+          }
           artworkKind = "embedded";
         }
       }
@@ -447,16 +494,25 @@ export function App(): React.ReactElement {
     }
 
     try {
+      const sourceFilePath = track.source.filePath;
+      if (!sourceFilePath) {
+        setFeedback({
+          tone: "error",
+          message: t("music-player.errors.saveFailed"),
+        });
+        return;
+      }
+
       const destinationPath = await client.platform.saveFile({
         title: t("music-player.dialogs.saveFileTitle"),
-        defaultPath: track.source.filePath,
+        defaultPath: sourceFilePath,
       });
 
       if (!destinationPath) {
         return;
       }
 
-      if (destinationPath === track.source.filePath) {
+      if (destinationPath === sourceFilePath) {
         setFeedback({
           tone: "info",
           message: t("music-player.status.samePath"),
@@ -465,9 +521,9 @@ export function App(): React.ReactElement {
       }
 
       setIsSaving(true);
-      await client.file.copy(track.source.filePath, destinationPath);
+      await client.file.copy(sourceFilePath, destinationPath);
       logger.info("音频副本已保存", {
-        sourcePath: track.source.filePath,
+        sourcePath: sourceFilePath,
         destinationPath,
       });
       setFeedback({

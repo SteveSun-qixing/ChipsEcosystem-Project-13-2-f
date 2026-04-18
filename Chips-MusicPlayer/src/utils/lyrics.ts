@@ -201,13 +201,13 @@ export function resolveActiveLyricProgress(lines: LyricsLine[], currentTimeMs: n
   }
 
   const activeLineTime = lines[activeIndex]?.timeMs;
-  if (!Number.isFinite(activeLineTime)) {
+  if (typeof activeLineTime !== "number" || !Number.isFinite(activeLineTime)) {
     return 0;
   }
 
   for (let index = activeIndex + 1; index < lines.length; index += 1) {
     const nextLineTime = lines[index]?.timeMs;
-    if (!Number.isFinite(nextLineTime)) {
+    if (typeof nextLineTime !== "number" || !Number.isFinite(nextLineTime)) {
       continue;
     }
 

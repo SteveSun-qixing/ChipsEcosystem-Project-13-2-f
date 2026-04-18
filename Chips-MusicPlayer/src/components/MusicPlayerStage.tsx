@@ -30,6 +30,11 @@ interface MusicPlayerStageProps {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
+type LyricLineStyle = React.CSSProperties & {
+  "--lyric-fill-progress": string;
+  "--lyric-line-opacity": string;
+};
+
 const DEFAULT_ARTWORK_URI = new URL("../../assets/artwork/default-cover.svg", import.meta.url).href;
 const FALLBACK_ATMOSPHERE_COLORS: readonly RGBColor[] = [
   [232, 232, 232],
@@ -39,8 +44,8 @@ const FALLBACK_ATMOSPHERE_COLORS: readonly RGBColor[] = [
 ];
 
 const ICONS = {
-  play: { name: "play_arrow", fill: true, decorative: true } satisfies IconDescriptor,
-  pause: { name: "pause", fill: true, decorative: true } satisfies IconDescriptor,
+  play: { name: "play_arrow", fill: 1, decorative: true } satisfies IconDescriptor,
+  pause: { name: "pause", fill: 1, decorative: true } satisfies IconDescriptor,
   rewind: { name: "replay_10", decorative: true } satisfies IconDescriptor,
   forward: { name: "forward_10", decorative: true } satisfies IconDescriptor,
   save: { name: "download", decorative: true } satisfies IconDescriptor,
@@ -820,12 +825,14 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
                   <div
                     key={line.id}
                     className="item"
-                    style={{
-                      transform: `translateY(${initialLyricsOffset + index * 72}px)`,
-                      filter: `blur(${Math.abs(index - fallbackLyricIndex)}px)`,
-                      ["--lyric-fill-progress" as "--lyric-fill-progress"]: index < activeLyricIndex ? "1" : "0",
-                      ["--lyric-line-opacity" as "--lyric-line-opacity"]: index < activeLyricIndex ? "0.74" : "0.22",
-                    }}
+                    style={
+                      {
+                        transform: `translateY(${initialLyricsOffset + index * 72}px)`,
+                        filter: `blur(${Math.abs(index - fallbackLyricIndex)}px)`,
+                        "--lyric-fill-progress": index < activeLyricIndex ? "1" : "0",
+                        "--lyric-line-opacity": index < activeLyricIndex ? "0.74" : "0.22",
+                      } as LyricLineStyle
+                    }
                     ref={(element) => {
                       lyricLineRefs.current[index] = element;
                     }}

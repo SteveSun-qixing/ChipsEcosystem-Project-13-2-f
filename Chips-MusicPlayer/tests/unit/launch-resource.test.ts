@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveLaunchAudioTarget } from "../../src/utils/launch-resource";
+import { resolveLaunchAudioTarget, resolveLaunchWorkspacePath } from "../../src/utils/launch-resource";
 
 describe("resolveLaunchAudioTarget", () => {
   it("优先使用 resourceOpen.filePath 恢复本地音频", () => {
@@ -70,5 +70,15 @@ describe("resolveLaunchAudioTarget", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("从启动上下文中提取 Host 工作区路径", () => {
+    expect(
+      resolveLaunchWorkspacePath({
+        launchParams: {
+          workspacePath: " /tmp/chips-host-workspace ",
+        },
+      }),
+    ).toBe("/tmp/chips-host-workspace");
   });
 });

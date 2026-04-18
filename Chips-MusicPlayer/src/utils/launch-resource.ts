@@ -31,3 +31,8 @@ export function resolveLaunchAudioTarget(launchContext: PlatformLaunchContext): 
     title: readNonEmptyString(resourceOpen?.title),
   };
 }
+
+export function resolveLaunchWorkspacePath(launchContext: PlatformLaunchContext): string | undefined {
+  const launchParams = readRecord(launchContext.launchParams) ?? {};
+  return readNonEmptyString(launchParams.workspacePath);
+}

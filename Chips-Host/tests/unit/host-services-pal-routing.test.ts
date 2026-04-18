@@ -21,6 +21,7 @@ interface PalState {
   clipboardText: string;
   clipboardImageBase64: string | null;
   clipboardFiles: string[];
+  imageConversions: Array<{ sourceFile: string; outputFile: string; overwrite?: boolean }>;
   windowCreateArgs: unknown[];
   dialogOpenArgs: unknown[];
   dialogSaveArgs: unknown[];
@@ -35,6 +36,26 @@ interface PalState {
   preventSleep: boolean;
   ipcChannels: Map<string, { name: string; transport: 'named-pipe' | 'unix-socket' | 'shared-memory'; queue: Buffer[] }>;
 }
+
+const createPalState = (): PalState => ({
+  clipboardText: '',
+  clipboardImageBase64: null,
+  clipboardFiles: [],
+  imageConversions: [],
+  windowCreateArgs: [],
+  dialogOpenArgs: [],
+  dialogSaveArgs: [],
+  dialogMessageArgs: [],
+  dialogConfirmArgs: [],
+  shellOpenPath: [],
+  shellOpenExternal: [],
+  shellShowInFolder: [],
+  notifications: [],
+  trayActive: false,
+  shortcuts: [],
+  preventSleep: false,
+  ipcChannels: new Map()
+});
 
 const createContextFactory = () => {
   let sequence = 0;
@@ -480,6 +501,22 @@ const createPal = (state: PalState): PALAdapter => {
     }
   };
 
+  const image: PALAdapter['image'] = {
+    async convertTiffToPng(input) {
+      state.imageConversions.push({
+        sourceFile: input.sourceFile,
+        outputFile: input.outputFile,
+        overwrite: input.overwrite
+      });
+      return {
+        outputFile: input.outputFile,
+        width: 64,
+        height: 64,
+        format: 'png'
+      };
+    }
+  };
+
   const ipc: PALAdapter['ipc'] = {
       async createChannel(options) {
         ipcSequence += 1;
@@ -574,6 +611,7 @@ const createPal = (state: PalState): PALAdapter => {
     systemUi,
     background,
     offscreenRender,
+    image,
     launcher,
     window: windowManager,
     fs: storage,
@@ -617,24 +655,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('forwards dialog routes to PAL dialog implementation', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -685,24 +706,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('keeps interactive dialog routes open beyond the generic 2 second timeout window', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -753,24 +757,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('forwards clipboard and shell routes to PAL clipboard/shell implementation', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -867,25 +854,60 @@ describe('Host services PAL routing', () => {
     expect(listed.channels.map((item) => item.channelId)).toContain(createdChannel.channel.channelId);
   });
 
+  it('routes resource.convertTiffToPng through the PAL image conversion capability', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const sourceFile = path.join(workspace, 'cover.tiff');
+    const outputFile = path.join(workspace, 'cover.png');
+    await fs.writeFile(sourceFile, Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]));
+
+    const context = createContextFactory();
+    const result = await kernel.invoke<
+      { resourceId: string; outputFile: string; overwrite?: boolean },
+      { outputFile: string; mimeType: 'image/png'; sourceMimeType: 'image/tiff'; width?: number; height?: number }
+    >(
+      'resource.convertTiffToPng',
+      {
+        resourceId: sourceFile,
+        outputFile,
+        overwrite: true
+      },
+      context(['resource.read', 'file.read', 'file.write'])
+    );
+
+    expect(result).toEqual({
+      outputFile,
+      mimeType: 'image/png',
+      sourceMimeType: 'image/tiff',
+      width: 64,
+      height: 64
+    });
+    expect(state.imageConversions).toEqual([
+      {
+        sourceFile,
+        outputFile,
+        overwrite: true
+      }
+    ]);
+  });
+
   it('injects the current Host workspace into app launch params when opening a plugin window', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -954,24 +976,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('opens app plugins through surface.open with a managed plugin session', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -1101,24 +1106,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('requires plugin.manage when surface.open targets a plugin surface', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();
@@ -1180,24 +1168,7 @@ describe('Host services PAL routing', () => {
   });
 
   it('returns a readable shortcut permission error when macOS launchpad directory is not writable', async () => {
-    const state: PalState = {
-      clipboardText: '',
-      clipboardImageBase64: null,
-      clipboardFiles: [],
-      windowCreateArgs: [],
-      dialogOpenArgs: [],
-      dialogSaveArgs: [],
-      dialogMessageArgs: [],
-      dialogConfirmArgs: [],
-      shellOpenPath: [],
-      shellOpenExternal: [],
-      shellShowInFolder: [],
-      notifications: [],
-      trayActive: false,
-      shortcuts: [],
-      preventSleep: false,
-      ipcChannels: new Map()
-    };
+    const state = createPalState();
     const kernel = new Kernel();
     const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
     await runtime.load();

@@ -16,6 +16,8 @@ import type {
   ClipboardFormat,
   ClipboardImagePayload,
   ClipboardPayload,
+  ConvertTiffToPngRequest,
+  ConvertTiffToPngResult,
   DialogFileOptions,
   DialogMessageOptions,
   DialogSaveOptions,
@@ -32,6 +34,7 @@ import type {
   PALDialog,
   PALEnvironment,
   PALFileSystem,
+  PALImage,
   PALIPC,
   PALLauncher,
   PALNotification,
@@ -190,6 +193,25 @@ const commandExists = async (command: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+const parsePngDimensions = (buffer: Buffer): { width?: number; height?: number } => {
+  if (buffer.length < 24) {
+    return {};
+  }
+
+  if (!buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return {};
+  }
+
+  if (buffer.subarray(12, 16).toString('ascii') !== 'IHDR') {
+    return {};
+  }
+
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20)
+  };
 };
 
 const statSafe = async (inputPath: string): Promise<{ isFile: boolean; isDirectory: boolean } | null> => {
@@ -2179,6 +2201,98 @@ class NodeOffscreenRender implements PALOffscreenRender {
   }
 }
 
+class NodeImage implements PALImage {
+  public async convertTiffToPng(input: ConvertTiffToPngRequest): Promise<ConvertTiffToPngResult> {
+    const sourceFile = path.resolve(input.sourceFile);
+    const outputFile = path.resolve(input.outputFile);
+
+    if (path.extname(outputFile).toLowerCase() !== '.png') {
+      throw createError('PAL_IMAGE_INVALID_OUTPUT', 'TIFF to PNG conversion requires a .png output path', {
+        outputFile
+      });
+    }
+
+    if (sourceFile === outputFile) {
+      throw createError('PAL_IMAGE_INVALID_OUTPUT', 'TIFF source and PNG output must be different files', {
+        sourceFile,
+        outputFile
+      });
+    }
+
+    const sourceStats = await statSafe(sourceFile);
+    if (!sourceStats?.isFile) {
+      throw createError('PAL_IMAGE_SOURCE_NOT_FOUND', `Image source does not exist: ${sourceFile}`, {
+        sourceFile
+      });
+    }
+
+    const outputStats = await statSafe(outputFile);
+    if (outputStats?.isDirectory) {
+      throw createError('PAL_IMAGE_INVALID_OUTPUT', 'TIFF to PNG output path points to a directory', {
+        outputFile
+      });
+    }
+    if (outputStats?.isFile && input.overwrite !== true) {
+      throw createError('PAL_IMAGE_OUTPUT_EXISTS', `Image output already exists: ${outputFile}`, {
+        outputFile
+      });
+    }
+
+    await fs.mkdir(path.dirname(outputFile), { recursive: true });
+    if (outputStats?.isFile && input.overwrite === true) {
+      await fs.rm(outputFile, { force: true });
+    }
+
+    if (process.platform === 'darwin') {
+      await runCommand('sips', ['-s', 'format', 'png', sourceFile, '--out', outputFile]);
+      return this.readPngResult(outputFile);
+    }
+
+    if (process.platform === 'win32') {
+      const script = [
+        'Add-Type -AssemblyName System.Drawing;',
+        `$source = "${quotePowerShell(sourceFile)}";`,
+        `$output = "${quotePowerShell(outputFile)}";`,
+        '$image = [System.Drawing.Image]::FromFile($source);',
+        'try {',
+        '  $image.Save($output, [System.Drawing.Imaging.ImageFormat]::Png);',
+        '} finally {',
+        '  $image.Dispose();',
+        '}'
+      ].join(' ');
+      await runCommand('powershell', ['-NoProfile', '-Command', script]);
+      return this.readPngResult(outputFile);
+    }
+
+    if (await commandExists('magick')) {
+      await runCommand('magick', [sourceFile, outputFile]);
+      return this.readPngResult(outputFile);
+    }
+
+    if (await commandExists('convert')) {
+      await runCommand('convert', [sourceFile, outputFile]);
+      return this.readPngResult(outputFile);
+    }
+
+    throw createError('PAL_IMAGE_UNSUPPORTED', 'Current PAL runtime does not provide TIFF to PNG conversion support', {
+      sourceFile,
+      outputFile,
+      platform: process.platform
+    });
+  }
+
+  private async readPngResult(outputFile: string): Promise<ConvertTiffToPngResult> {
+    const buffer = await fs.readFile(outputFile);
+    const { width, height } = parsePngDimensions(buffer);
+    return {
+      outputFile,
+      width,
+      height,
+      format: 'png'
+    };
+  }
+}
+
 interface PendingIpcReceiver {
   resolve: (message: PALIpcMessage) => void;
   reject: (error: unknown) => void;
@@ -2572,6 +2686,7 @@ export class DesktopPalAdapter implements PALAdapter {
   public readonly systemUi: PALSystemUi;
   public readonly background: PALBackground;
   public readonly offscreenRender: PALOffscreenRender;
+  public readonly image: PALImage;
 
   public readonly window: PALWindow;
   public readonly fs: PALFileSystem;
@@ -2612,6 +2727,7 @@ export class DesktopPalAdapter implements PALAdapter {
     this.background = new NodeBackground(this.power);
     this.ipc = new NodeIPC();
     this.offscreenRender = new NodeOffscreenRender();
+    this.image = new NodeImage();
   }
 }
 
@@ -2626,6 +2742,7 @@ export class HeadlessPalAdapter implements PALAdapter {
   public readonly systemUi: PALSystemUi;
   public readonly background: PALBackground;
   public readonly offscreenRender: PALOffscreenRender;
+  public readonly image: PALImage;
 
   public readonly window: PALWindow;
   public readonly fs: PALFileSystem;
@@ -2667,6 +2784,7 @@ export class HeadlessPalAdapter implements PALAdapter {
     this.background = new NodeBackground(this.power);
     this.ipc = new NodeIPC();
     this.offscreenRender = new HeadlessOffscreenRender();
+    this.image = new NodeImage();
   }
 }
 

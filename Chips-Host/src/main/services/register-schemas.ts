@@ -129,6 +129,25 @@ const validateResourceOpenRequest: SchemaValidator = (input: unknown) => {
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+const validateResourceConvertTiffToPngRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.resourceId !== 'string' || input.resourceId.trim().length === 0) {
+    errors.push('resourceId must be a non-empty string');
+  }
+  if (typeof input.outputFile !== 'string' || input.outputFile.trim().length === 0) {
+    errors.push('outputFile must be a non-empty string');
+  }
+  if (typeof input.overwrite !== 'undefined' && typeof input.overwrite !== 'boolean') {
+    errors.push('overwrite must be a boolean when provided');
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 const validateOptionalString = (value: unknown, field: string, errors: string[]): void => {
   if (typeof value !== 'undefined' && (typeof value !== 'string' || value.trim().length === 0)) {
     errors.push(`${field} must be a non-empty string when provided`);
@@ -312,6 +331,8 @@ export const registerHostSchemas = (): void => {
   schemaRegistry.register('schemas/resource.open.response.json', objectWithKeys(['result']));
   registerPair('resource.readMetadata', ['resourceId']);
   registerPair('resource.readBinary', ['resourceId']);
+  schemaRegistry.register('schemas/resource.convertTiffToPng.request.json', validateResourceConvertTiffToPngRequest);
+  schemaRegistry.register('schemas/resource.convertTiffToPng.response.json', objectWithKeys(['outputFile', 'mimeType', 'sourceMimeType']));
 
   registerPair('config.get', ['key']);
   registerPair('config.set', ['key', 'value']);

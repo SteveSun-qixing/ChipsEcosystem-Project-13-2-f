@@ -38,11 +38,26 @@ export interface ResourceMeta {
   [key: string]: unknown;
 }
 
+export interface ResourceConvertTiffToPngRequest {
+  resourceId: string;
+  outputFile: string;
+  overwrite?: boolean;
+}
+
+export interface ResourceConvertTiffToPngResult {
+  outputFile: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+
 export interface ResourceApi {
   resolve(resourceId: string): Promise<ResourceUri>;
   open(request: ResourceOpenRequest): Promise<ResourceOpenResult>;
   readMetadata(resourceId: string): Promise<ResourceMeta>;
   readBinary(resourceId: string): Promise<ArrayBuffer>;
+  convertTiffToPng(request: ResourceConvertTiffToPngRequest): Promise<ResourceConvertTiffToPngResult>;
 }
 
 function normalizeOptionalString(value: unknown): string | undefined {
@@ -52,6 +67,51 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function toOwnedArrayBuffer(value: ArrayBuffer | ArrayBufferView): ArrayBuffer {
+  if (value instanceof ArrayBuffer) {
+    return value.slice(0);
+  }
+
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+  return copy.buffer;
+}
+
+function isBufferJsonPayload(value: unknown): value is { type: "Buffer"; data: number[] } {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "type" in value &&
+    (value as { type?: unknown }).type === "Buffer" &&
+    "data" in value &&
+    Array.isArray((value as { data?: unknown }).data)
+  );
+}
+
+function normalizeBinaryPayload(value: unknown): ArrayBuffer {
+  if (value instanceof ArrayBuffer) {
+    return toOwnedArrayBuffer(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return toOwnedArrayBuffer(value);
+  }
+
+  if (isBufferJsonPayload(value)) {
+    return Uint8Array.from(value.data).buffer;
+  }
+
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return Uint8Array.from(value).buffer;
+  }
+
+  if (value && typeof value === "object" && "data" in value) {
+    return normalizeBinaryPayload((value as { data?: unknown }).data);
+  }
+
+  throw createError("INVALID_RESPONSE", "resource.readBinary: response is not binary content.");
 }
 
 export function createResourceApi(client: CoreClient): ResourceApi {
@@ -98,7 +158,30 @@ export function createResourceApi(client: CoreClient): ResourceApi {
       if (!resourceId) {
         throw createError("INVALID_ARGUMENT", "resource.readBinary: resourceId is required.");
       }
-      return client.invoke("resource.readBinary", { resourceId });
+      const result = await client.invoke("resource.readBinary", { resourceId });
+      return normalizeBinaryPayload(result);
+    },
+    async convertTiffToPng(request) {
+      const resourceId = normalizeOptionalString(request?.resourceId);
+      if (!resourceId) {
+        throw createError("INVALID_ARGUMENT", "resource.convertTiffToPng: resourceId is required.");
+      }
+
+      const outputFile = normalizeOptionalString(request?.outputFile);
+      if (!outputFile) {
+        throw createError("INVALID_ARGUMENT", "resource.convertTiffToPng: outputFile is required.");
+      }
+
+      if (typeof request?.overwrite !== "undefined" && typeof request.overwrite !== "boolean") {
+        throw createError("INVALID_ARGUMENT", "resource.convertTiffToPng: overwrite must be a boolean when provided.");
+      }
+
+      const payload: ResourceConvertTiffToPngRequest = {
+        resourceId,
+        outputFile,
+        ...(typeof request?.overwrite === "boolean" ? { overwrite: request.overwrite } : undefined),
+      };
+      return client.invoke("resource.convertTiffToPng", payload);
     },
   };
 }

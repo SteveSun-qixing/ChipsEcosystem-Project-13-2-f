@@ -341,6 +341,17 @@ const createPal = (): PALAdapter => {
     }
   };
 
+  const image: PALAdapter['image'] = {
+    async convertTiffToPng(input) {
+      return {
+        outputFile: input.outputFile,
+        width: 1,
+        height: 1,
+        format: 'png'
+      };
+    }
+  };
+
   const ipc: PALAdapter['ipc'] = {
     async createChannel(options: { name: string; transport: 'named-pipe' | 'unix-socket' | 'shared-memory' }) {
       return {
@@ -412,6 +423,7 @@ const createPal = (): PALAdapter => {
     systemUi,
     background,
     offscreenRender,
+    image,
     launcher,
     window: windowManager,
     fs: storage,

@@ -15,6 +15,9 @@ let app: HostApplication;
 let runtime: RuntimeClient;
 
 const ELECTRON_MOCK_KEY = '__chipsElectronMock';
+const TIFF_SAMPLE_BASE64 =
+  'SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwADAAAAhgAAAAMBAwABAAAAAQAAAAYBAwABAAAAAgAAABEBBAABAAAAjAAAABUBAwABAAAAAwAAABYBBAABAAAAAgAAABcBBAABAAAADAAAABwBAwABAAAAAQAAAAAAAAAIAAgACAD/AAD/AAD/AAD/AAA=';
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-host-it-'));
@@ -194,6 +197,36 @@ describe('Host services integration', () => {
     expect(resolved.uri.startsWith('file://')).toBe(true);
     expect(resolved.uri).toContain('%20');
     expect(fileURLToPath(resolved.uri)).toBe(imageFile);
+  });
+
+  it.runIf(process.platform === 'darwin')('converts TIFF resources to PNG files through the resource service', async () => {
+    const imageDir = path.join(workspace, 'resource-image');
+    const tiffFile = path.join(imageDir, 'cover.tiff');
+    const pngFile = path.join(imageDir, 'cover.png');
+    await fs.mkdir(imageDir, { recursive: true });
+    await fs.writeFile(tiffFile, Buffer.from(TIFF_SAMPLE_BASE64, 'base64'));
+
+    const converted = await runtime.invoke<{
+      outputFile: string;
+      mimeType: 'image/png';
+      sourceMimeType: 'image/tiff';
+      width?: number;
+      height?: number;
+    }>('resource.convertTiffToPng', {
+      resourceId: tiffFile,
+      outputFile: pngFile,
+      overwrite: true
+    });
+
+    const outputBuffer = await fs.readFile(pngFile);
+    expect(converted).toEqual({
+      outputFile: pngFile,
+      mimeType: 'image/png',
+      sourceMimeType: 'image/tiff',
+      width: 2,
+      height: 2
+    });
+    expect(outputBuffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)).toBe(true);
   });
 
   it('renders card through unified rendering target options', async () => {

@@ -327,6 +327,9 @@
     "resource.readBinary": {
       "action": "resource.readBinary"
     },
+    "resource.convertTiffToPng": {
+      "action": "resource.convertTiffToPng"
+    },
     "resource.open": {
       "action": "resource.open"
     },

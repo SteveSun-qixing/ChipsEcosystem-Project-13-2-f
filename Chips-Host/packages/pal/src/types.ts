@@ -237,6 +237,19 @@ export interface RenderHtmlToImageResult {
   format: 'png' | 'jpeg' | 'webp';
 }
 
+export interface ConvertTiffToPngRequest {
+  sourceFile: string;
+  outputFile: string;
+  overwrite?: boolean;
+}
+
+export interface ConvertTiffToPngResult {
+  outputFile: string;
+  width?: number;
+  height?: number;
+  format: 'png';
+}
+
 export interface PalCapabilitySnapshot {
   hostKind: HostKind;
   platform: PalPlatformId;
@@ -370,6 +383,10 @@ export interface PALOffscreenRender {
   renderHtmlToImage(input: RenderHtmlToImageRequest): Promise<RenderHtmlToImageResult>;
 }
 
+export interface PALImage {
+  convertTiffToPng(input: ConvertTiffToPngRequest): Promise<ConvertTiffToPngResult>;
+}
+
 export interface PALWindow {
   create(options: WindowOptions): Promise<WindowState>;
   focus(id: string): Promise<void>;
@@ -496,6 +513,7 @@ export interface PALAdapter {
   background: PALBackground;
   ipc: PALIPC;
   offscreenRender: PALOffscreenRender;
+  image: PALImage;
   launcher: PALLauncher;
 
   // Legacy aliases retained for existing desktop chains and current tests.

@@ -22,6 +22,7 @@ import { CardService } from '../../../packages/card-service/src';
 import { CardInfoService } from '../../../packages/card-info-service/src';
 import { CardOpenService } from '../../../packages/card-open-service/src';
 import { ResourceOpenService } from '../../../packages/resource-open-service/src';
+import { ResourceImageService } from '../../../packages/resource-image-service/src';
 import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import {
@@ -1273,6 +1274,13 @@ const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState)
     openExternalUrl: async (url) => {
       await ctx.pal.transfer.openExternal(url);
     },
+  });
+};
+
+const createResourceImageService = (ctx: HostServiceContext): ResourceImageService => {
+  return new ResourceImageService({
+    fs: ctx.pal.fs,
+    image: ctx.pal.image
   });
 };
 
@@ -2562,6 +2570,31 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               return { data: Buffer.from(data, 'utf-8') };
             }
             return { data };
+          })
+        )
+      },
+      convertTiffToPng: {
+        descriptor: descriptor<
+          {
+            resourceId: string;
+            outputFile: string;
+            overwrite?: boolean;
+          },
+          {
+            outputFile: string;
+            mimeType: 'image/png';
+            sourceMimeType: 'image/tiff';
+            width?: number;
+            height?: number;
+          }
+        >(
+          'resource.convertTiffToPng',
+          ['resource.read', 'file.read', 'file.write'],
+          15_000,
+          false,
+          0,
+          withMetrics(state, 'resource.convertTiffToPng', async (input) => {
+            return createResourceImageService(ctx).convertTiffToPng(input);
           })
         )
       }

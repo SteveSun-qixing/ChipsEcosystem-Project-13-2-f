@@ -166,11 +166,19 @@ html, body {
 
 .chips-music-editor__row,
 .chips-music-editor__field-row {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.chips-music-editor__row {
+  display: grid;
+  gap: 10px;
+}
+
+.chips-music-editor__field-row {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .chips-music-editor__team-item {
@@ -195,7 +203,6 @@ html, body {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 8px;
 }
 
 .chips-music-editor__field-label {
@@ -535,13 +542,11 @@ html, body {
     padding-inline: 12px;
   }
 
-  .chips-music-editor__row,
   .chips-music-editor__field-row {
     grid-template-columns: 1fr;
     gap: 6px;
   }
 
-  .chips-music-editor__row-label,
   .chips-music-editor__field-label {
     padding-top: 0;
   }

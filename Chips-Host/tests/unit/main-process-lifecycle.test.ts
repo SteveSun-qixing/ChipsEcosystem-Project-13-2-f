@@ -168,6 +168,47 @@ describe('HostMainProcess lifecycle', () => {
 
     await main.stop();
     expect(stop).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(0);
+    expect(main.isRunning()).toBe(false);
+  });
+
+  it('can optionally quit electron when stopping short-lived runners', async () => {
+    const processRef = new ProcessStub();
+    const stop = vi.fn(async () => {});
+    const quit = vi.fn(() => {});
+
+    const fakeHost = {
+      logger: {
+        write: vi.fn()
+      },
+      start: vi.fn(async () => {}),
+      stop,
+      isRunning: vi.fn(() => true)
+    } as unknown as HostApplication;
+
+    const appEvents = new EventEmitter();
+    const electronApp = {
+      whenReady: vi.fn(async () => {}),
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.on(event, listener);
+      },
+      off: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.off(event, listener);
+      },
+      quit
+    };
+
+    const main = new HostMainProcess({
+      hostApplication: fakeHost,
+      processRef,
+      electronApp: electronApp as any
+    });
+
+    await main.start();
+    await main.stop({ quitElectronApp: true });
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(1);
     expect(main.isRunning()).toBe(false);
   });
 

@@ -102,7 +102,7 @@ const run = async (): Promise<void> => {
           output: invocation.output
         }) + '\n'
       );
-      await mainProcess.stop();
+      await mainProcess.stop({ quitElectronApp: true });
       return;
     }
 
@@ -124,9 +124,9 @@ const run = async (): Promise<void> => {
       throw new Error(`模块任务未成功完成：${JSON.stringify(job.error ?? payload, null, 2)}`);
     }
 
-    await mainProcess.stop();
+    await mainProcess.stop({ quitElectronApp: true });
   } catch (error) {
-    await mainProcess.stop().catch(() => undefined);
+    await mainProcess.stop({ quitElectronApp: true }).catch(() => undefined);
     throw error;
   }
 };

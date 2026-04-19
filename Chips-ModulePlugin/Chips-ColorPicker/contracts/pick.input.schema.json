@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ColorPickInput",
+  "type": "object",
+  "required": ["imagePath"],
+  "properties": {
+    "imagePath": {
+      "type": "string"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sampleSize": {
+          "type": "integer",
+          "minimum": 48,
+          "maximum": 160
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

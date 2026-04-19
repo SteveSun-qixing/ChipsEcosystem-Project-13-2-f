@@ -1,0 +1,12 @@
+{
+  "id": "module-standard",
+  "name": "颜色选取模块",
+  "description": "从本地图片中提取背景色与个性色的模块插件。",
+  "version": "1.0.0",
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

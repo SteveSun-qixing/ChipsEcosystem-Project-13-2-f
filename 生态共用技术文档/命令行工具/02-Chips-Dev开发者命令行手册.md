@@ -77,6 +77,8 @@ npm install
 
 补充约束：
 
+- `chipsdev build` 会优先执行工程 `package.json` 中的正式 `build` 脚本；
+- 若工程未声明 `build` 脚本，或该脚本本身会再次回调 `chipsdev build`，则回退到 SDK 内置构建链路；
 - `chipsdev package` 除 `dist/` 构建产物外，还会一并打包 manifest 显式引用的正式静态资源；
 - 当前正式收集范围至少包括：
   - `preview`
@@ -142,6 +144,8 @@ chipsdev module invoke \
 
 补充边界：
 
+- 第 3 步中的“正式构建”与 `chipsdev build` 保持同一语义：优先执行工程自己的正式 `build` 脚本，再按需要回退到 SDK 内置构建链路；
+- 模块调用完成后，联调用 Electron Host 会在输出结果后主动退出，不继续常驻；
 - `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
 - 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
 - 因此，依赖 `platform.renderHtmlToImage`、`platform.renderHtmlToPdf` 之类 Electron 渲染导出能力的模块，必须使用 `chipsdev module invoke` 验证。

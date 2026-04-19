@@ -18,6 +18,10 @@ export interface HostMainProcessOptions {
   electronApp?: ElectronAppLike | null;
 }
 
+export interface HostMainProcessStopOptions {
+  quitElectronApp?: boolean;
+}
+
 export class HostMainProcess {
   private readonly hostApplication: HostApplication;
   private readonly processRef: ProcessLike;
@@ -92,8 +96,11 @@ export class HostMainProcess {
     this.started = true;
   }
 
-  public async stop(): Promise<void> {
+  public async stop(options?: HostMainProcessStopOptions): Promise<void> {
     if (!this.started) {
+      if (options?.quitElectronApp && this.electronApp) {
+        this.electronApp.quit();
+      }
       return;
     }
 
@@ -107,6 +114,10 @@ export class HostMainProcess {
     await this.hostApplication.stop();
     this.unbindGlobalHandlers();
     this.started = false;
+
+    if (options?.quitElectronApp && this.electronApp) {
+      this.electronApp.quit();
+    }
   }
 
   public isRunning(): boolean {

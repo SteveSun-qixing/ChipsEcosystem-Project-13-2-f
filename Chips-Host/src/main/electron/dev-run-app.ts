@@ -79,7 +79,7 @@ const run = async (): Promise<void> => {
       ) + '\n'
     );
   } catch (error) {
-    await mainProcess.stop().catch(() => undefined);
+    await mainProcess.stop({ quitElectronApp: true }).catch(() => undefined);
     throw error;
   }
 };

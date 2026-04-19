@@ -201,6 +201,158 @@ const createModuleProject = async (targetDir) => {
   );
 };
 
+const createCustomBuildModuleProject = async (targetDir) => {
+  await fs.mkdir(path.join(targetDir, 'contracts'), { recursive: true });
+  await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
+
+  await fs.writeFile(
+    path.join(targetDir, 'chips.config.mjs'),
+    [
+      'const config = {',
+      '  type: "module",',
+      '  entry: "./src/index.ts",',
+      '  outDir: "./dist",',
+      '  testsDir: "./tests"',
+      '};',
+      '',
+      'export default config;'
+    ].join('\n'),
+    'utf-8'
+  );
+
+  await fs.writeFile(
+    path.join(targetDir, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'chips.module.dev.invoke.custom-build-test',
+        version: '0.1.0',
+        private: true,
+        type: 'commonjs',
+        scripts: {
+          build: 'node ./scripts/build.mjs',
+          validate: 'chipsdev validate'
+        },
+        devDependencies: {
+          'chips-sdk': '^0.1.0',
+          typescript: '^5.8.2',
+          '@types/node': '^22.13.10'
+        },
+        volta: {
+          extends: '../../package.json'
+        }
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+
+  await fs.writeFile(
+    path.join(targetDir, 'manifest.yaml'),
+    [
+      'id: chips.module.dev.invoke.custom-build-test',
+      'name: Chips Module Dev Invoke Custom Build Test',
+      'version: 0.1.0',
+      'type: module',
+      'entry: dist/index.mjs',
+      'permissions:',
+      '  - file.read',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: true',
+      'module:',
+      '  apiVersion: 1',
+      '  runtime: worker',
+      '  activation: onDemand',
+      '  provides:',
+      '    - capability: module.dev.invoke.custom-build-test',
+      '      version: "1.0.0"',
+      '      methods:',
+      '        - name: run',
+      '          mode: sync',
+      '          inputSchema: contracts/run.input.schema.json',
+      '          outputSchema: contracts/run.output.schema.json'
+    ].join('\n'),
+    'utf-8'
+  );
+
+  await fs.writeFile(
+    path.join(targetDir, 'contracts', 'run.input.schema.json'),
+    JSON.stringify(
+      {
+        type: 'object',
+        required: ['value'],
+        properties: {
+          value: { type: 'string' }
+        },
+        additionalProperties: false
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+
+  await fs.writeFile(
+    path.join(targetDir, 'contracts', 'run.output.schema.json'),
+    JSON.stringify(
+      {
+        type: 'object',
+        required: ['echo', 'builtBy'],
+        properties: {
+          echo: { type: 'string' },
+          builtBy: { type: 'string' }
+        },
+        additionalProperties: false
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+
+  await fs.writeFile(
+    path.join(targetDir, 'scripts', 'build.mjs'),
+    [
+      'import fs from "node:fs/promises";',
+      'import path from "node:path";',
+      '',
+      'const projectRoot = process.cwd();',
+      'const outDir = path.join(projectRoot, "dist");',
+      'await fs.mkdir(outDir, { recursive: true });',
+      'await fs.writeFile(',
+      '  path.join(outDir, "index.mjs"),',
+      '  [',
+      '    "const builtBy = \\"custom-build-script\\";",',
+      '    "",',
+      '    "export default {",',
+      '    "  providers: [",',
+      '    "    {",',
+      '    "      capability: \\"module.dev.invoke.custom-build-test\\",",',
+      '    "      methods: {",',
+      '    "        async run(_ctx, input) {",',
+      '    "          return { echo: input.value, builtBy };",',
+      '    "        },",',
+      '    "      },",',
+      '    "    },",',
+      '    "  ],",',
+      '    "};",',
+      '    "",',
+      '  ].join("\\n"),',
+      '  "utf-8"',
+      ');'
+    ].join('\n'),
+    'utf-8'
+  );
+};
+
 const writeMockElectronFiles = async (sandboxRoot) => {
   const fakeElectronExecutable = path.join(sandboxRoot, 'fake-electron.cjs');
   const fakeElectronLoader = path.join(sandboxRoot, 'mock-electron-loader.cjs');
@@ -259,10 +411,12 @@ const main = async () => {
 
   const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'chipsdev-module-invoke-'));
   const moduleProject = path.join(sandboxRoot, 'module-project');
+  const customBuildProject = path.join(sandboxRoot, 'custom-build-module-project');
   const workspace = path.join(sandboxRoot, '.chips-host-dev');
 
   try {
     await createModuleProject(moduleProject);
+    await createCustomBuildModuleProject(customBuildProject);
     const { fakeElectronExecutable, fakeElectronLoader } = await writeMockElectronFiles(sandboxRoot);
 
     await new Promise((resolve, reject) => {
@@ -324,6 +478,19 @@ const main = async () => {
       runtimeRecords.some((record) => record.manifest?.id === 'chips.module.dev.invoke.test' && record.enabled === true),
       true
     );
+
+    const customBuild = await runCapture(
+      ['module', 'invoke', '--capability', 'module.dev.invoke.custom-build-test', '--method', 'run', '--input', '{"value":"custom"}'],
+      customBuildProject,
+      env
+    );
+    const customBuildResult = parseLastJsonLine(customBuild.stdout);
+    assert.equal(customBuildResult.mode, 'sync');
+    assert.equal(customBuildResult.installedPluginId, 'chips.module.dev.invoke.custom-build-test');
+    assert.deepEqual(customBuildResult.output, {
+      echo: 'custom',
+      builtBy: 'custom-build-script'
+    });
 
     console.log('chipsdev module invoke integration tests completed.');
   } finally {

@@ -1,0 +1,40 @@
+id: chips.module.chips.colorpicker
+name: Chips ColorPicker
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: 接收本地图片并提取背景色与个性色的颜色选取模块。
+author:
+  name: sevenstars
+  email: chips-colorpicker@example.invalid
+permissions:
+  - file.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: image.color.pick
+      version: "1.0.0"
+      methods:
+        - name: pick
+          mode: sync
+          inputSchema: contracts/pick.input.schema.json
+          outputSchema: contracts/pick.output.schema.json
+  consumes: []

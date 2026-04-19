@@ -122,7 +122,7 @@ const printHelp = () => {
       '  module      在真实 Electron Host 中调试模块插件能力调用',
       '  server      启动 Vite 开发服务器',
       '  debug       以调试模式启动目标项目（与 server 行为一致，可扩展调试预设）',
-      '  build       使用 Vite 构建插件工程',
+      '  build       执行正式构建（优先使用工程 build 脚本）',
       '  test        使用 Vitest 运行单元测试',
       '  lint        使用 ESLint 执行代码规范检查',
       '  e2e         运行端到端测试（工程自行提供 e2e 脚本时调用）',
@@ -666,7 +666,37 @@ const handleServer = async (mode = 'server') => {
   server.printUrls();
 };
 
+const BUILD_SCRIPT_RECURSION_PATTERNS = [
+  /\bchipsdev\s+build\b/i,
+  /\bnpm\s+run\s+build\b/i,
+  /\bnpm\s+build\b/i,
+  /\bpnpm\s+run\s+build\b/i,
+  /\bpnpm\s+build\b/i,
+  /\byarn\s+build\b/i,
+  /\bbun\s+run\s+build\b/i
+];
+
+const shouldDelegateToPackageBuildScript = async (projectRoot) => {
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  const pkg = await loadJsonFile(packageJsonPath, null);
+  if (!pkg || typeof pkg !== 'object') {
+    return false;
+  }
+
+  const buildScript = typeof pkg.scripts?.build === 'string' ? pkg.scripts.build.trim() : '';
+  if (!buildScript) {
+    return false;
+  }
+
+  return !BUILD_SCRIPT_RECURSION_PATTERNS.some((pattern) => pattern.test(buildScript));
+};
+
 const buildProject = async (projectRoot, config) => {
+  if (await shouldDelegateToPackageBuildScript(projectRoot)) {
+    await runCliTool(projectRoot, 'npm', ['run', 'build']);
+    return;
+  }
+
   const vite = await import('vite');
   const isApp = config.type === 'app';
   const entryPath = path.resolve(projectRoot, config.entry);

@@ -63,6 +63,7 @@ export function mountBasecardEditor(ctx: BasecardEditorContext): () => void {
     releaseResourceUrl: ctx.releaseResourceUrl,
     importResource: ctx.importResource,
     deleteResource: ctx.deleteResource,
+    convertTiffToPng: ctx.convertTiffToPng,
   }) as HTMLElement & {
     __chipsDispose?: () => void;
   };

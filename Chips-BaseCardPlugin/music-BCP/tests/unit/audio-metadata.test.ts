@@ -64,6 +64,29 @@ function createTaggedM4aBytes(): Uint8Array {
   return concatBytes(ftyp, moov);
 }
 
+function encodeId3Frame(frameId: string, payload: Uint8Array): Uint8Array {
+  const header = new Uint8Array(10);
+  header.set(Array.from(frameId).map((char) => char.charCodeAt(0)), 0);
+  writeUInt32BE(header, 4, payload.length);
+  return concatBytes(header, payload);
+}
+
+function createTaggedMp3Bytes(...frames: Uint8Array[]): Uint8Array {
+  const bodyLength = frames.reduce((sum, frame) => sum + frame.length, 0);
+  const header = new Uint8Array([
+    0x49, 0x44, 0x33,
+    0x03,
+    0x00,
+    0x00,
+    (bodyLength >>> 21) & 0x7f,
+    (bodyLength >>> 14) & 0x7f,
+    (bodyLength >>> 7) & 0x7f,
+    bodyLength & 0x7f,
+  ]);
+
+  return concatBytes(header, ...frames);
+}
+
 describe("parseEmbeddedAudioMetadata", () => {
   it("parses embedded text, lyrics and cover artwork from m4a metadata", () => {
     const metadata = parseEmbeddedAudioMetadata({
@@ -103,7 +126,25 @@ describe("parseEmbeddedAudioMetadata", () => {
       artist: "宇多田ヒカル",
       album: "Mine or Yours",
     });
-    expect(metadata.artwork?.mimeType).toBe("image/jpeg");
+    expect(metadata.artwork?.mimeType).toBe("image/tiff");
+    expect(Array.from(metadata.artwork?.bytes.slice(0, 4) ?? [])).toEqual([0x4d, 0x4d, 0x00, 0x2a]);
     expect(metadata.artwork?.bytes.length ?? 0).toBeGreaterThan(200_000);
+  });
+
+  it("prefers detected artwork bytes over a mismatched apic mime type", () => {
+    const tiffBytes = Uint8Array.from([0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08]);
+    const metadata = parseEmbeddedAudioMetadata({
+      bytes: createTaggedMp3Bytes(
+        encodeId3Frame(
+          "APIC",
+          Uint8Array.from([0x00, ...new TextEncoder().encode("image/jpeg"), 0x00, 0x03, 0x00, ...tiffBytes]),
+        ),
+      ),
+      fileName: "mismatched-cover.mp3",
+      mimeType: "audio/mpeg",
+    });
+
+    expect(metadata.artwork?.mimeType).toBe("image/tiff");
+    expect(Array.from(metadata.artwork?.bytes ?? [])).toEqual(Array.from(tiffBytes));
   });
 });

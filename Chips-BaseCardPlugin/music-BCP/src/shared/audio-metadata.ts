@@ -143,6 +143,73 @@ function mergePreferredText(current: string | undefined, next: string | undefine
   return current?.trim() || next?.trim() || undefined;
 }
 
+function normalizeMimeType(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized === "image/jpg") {
+    return "image/jpeg";
+  }
+
+  return normalized;
+}
+
+function detectImageMimeType(bytes: Uint8Array): string | undefined {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+
+  if (
+    bytes.length >= 8
+    && bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4e
+    && bytes[3] === 0x47
+    && bytes[4] === 0x0d
+    && bytes[5] === 0x0a
+    && bytes[6] === 0x1a
+    && bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+
+  if (
+    bytes.length >= 12
+    && decodeIso88591(bytes.slice(0, 4)) === "RIFF"
+    && decodeIso88591(bytes.slice(8, 12)) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+
+  if (
+    bytes.length >= 6
+    && (decodeIso88591(bytes.slice(0, 6)) === "GIF87a" || decodeIso88591(bytes.slice(0, 6)) === "GIF89a")
+  ) {
+    return "image/gif";
+  }
+
+  if (
+    bytes.length >= 4
+    && ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00)
+      || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && (bytes[3] === 0x2a || bytes[3] === 0x2b))
+      || (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2b && bytes[3] === 0x00))
+  ) {
+    return "image/tiff";
+  }
+
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+    return "image/bmp";
+  }
+
+  return undefined;
+}
+
+function resolveArtworkMimeType(bytes: Uint8Array, declaredMimeType?: string): string {
+  return detectImageMimeType(bytes) ?? normalizeMimeType(declaredMimeType) ?? "image/jpeg";
+}
+
 function formatLrcTimestamp(timeMs: number): string {
   const safe = Math.max(0, timeMs);
   const minutes = Math.floor(safe / 60_000);
@@ -249,7 +316,7 @@ function parseId3v2(bytes: Uint8Array): EmbeddedAudioMetadata {
         const imageBytes = payload.slice(description.nextOffset);
         if (imageBytes.length > 0) {
           metadata.artwork = {
-            mimeType: mime.text || "image/jpeg",
+            mimeType: resolveArtworkMimeType(imageBytes, mime.text),
             bytes: imageBytes,
             description: description.text,
           };
@@ -338,7 +405,7 @@ function parseFlacPicture(bytes: Uint8Array): EmbeddedArtwork | undefined {
   }
 
   return {
-    mimeType: mimeType || "image/jpeg",
+    mimeType: resolveArtworkMimeType(bytes.slice(offset, offset + dataLength), mimeType),
     bytes: bytes.slice(offset, offset + dataLength),
     description,
   };
@@ -483,6 +550,15 @@ function inferImageMimeTypeFromBytes(bytes: Uint8Array): string | undefined {
     && bytes[3] === 0x46
   ) {
     return "image/webp";
+  }
+
+  if (
+    bytes.length >= 4
+    && ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00)
+      || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && (bytes[3] === 0x2a || bytes[3] === 0x2b))
+      || (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2b && bytes[3] === 0x00))
+  ) {
+    return "image/tiff";
   }
 
   return undefined;

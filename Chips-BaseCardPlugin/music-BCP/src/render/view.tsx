@@ -179,7 +179,6 @@ function MetaItem(props: { children: React.ReactNode }) {
 function useResolvedResourceUrl(
   resourcePath: string,
   resolveResourceUrl?: (resourcePath: string) => Promise<string>,
-  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void,
 ): string {
   const [resolvedUrl, setResolvedUrl] = useState("");
 
@@ -191,6 +190,8 @@ function useResolvedResourceUrl(
       setResolvedUrl(normalizedPath ?? "");
       return undefined;
     }
+
+    setResolvedUrl("");
 
     void resolveResourceUrlWithRetry(resolveResourceUrl, normalizedPath)
       .then((nextUrl) => {
@@ -206,9 +207,8 @@ function useResolvedResourceUrl(
 
     return () => {
       cancelled = true;
-      void Promise.resolve(releaseResourceUrl?.(normalizedPath)).catch(() => undefined);
     };
-  }, [releaseResourceUrl, resolveResourceUrl, resourcePath]);
+  }, [resolveResourceUrl, resourcePath]);
 
   return resolvedUrl;
 }
@@ -216,13 +216,12 @@ function useResolvedResourceUrl(
 export function MusicBasecardView({
   config,
   resolveResourceUrl,
-  releaseResourceUrl,
   openResource,
 }: MusicBasecardViewProps) {
   const locale = typeof navigator !== "undefined" ? navigator.language : "zh-CN";
   const t = createTranslator(locale);
-  const audioUrl = useResolvedResourceUrl(config.audio_file, resolveResourceUrl, releaseResourceUrl);
-  const coverUrl = useResolvedResourceUrl(config.album_cover, resolveResourceUrl, releaseResourceUrl);
+  const audioUrl = useResolvedResourceUrl(config.audio_file, resolveResourceUrl);
+  const coverUrl = useResolvedResourceUrl(config.album_cover, resolveResourceUrl);
   const displayCoverUrl = coverUrl || DEFAULT_MUSIC_COVER_URL;
   const displayTitle = deriveDisplayTitle(config) || t("music.view.untitled");
   const artistLabel = derivePrimaryArtist(config) || t("music.view.artistFallback");

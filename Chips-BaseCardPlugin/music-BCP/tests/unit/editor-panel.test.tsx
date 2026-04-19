@@ -28,8 +28,8 @@ function encodeLyricsFrame(text: string): Uint8Array {
   return new Uint8Array([...header, ...payload]);
 }
 
-function encodeArtworkFrame(bytes: Uint8Array): Uint8Array {
-  const mime = new TextEncoder().encode("image/jpeg");
+function encodeArtworkFrame(bytes: Uint8Array, mimeType = "image/jpeg"): Uint8Array {
+  const mime = new TextEncoder().encode(mimeType);
   const payload = new Uint8Array([0, ...mime, 0, 3, 0, ...bytes]);
   const header = new Uint8Array(10);
   header.set(Array.from("APIC").map((char) => char.charCodeAt(0)), 0);
@@ -39,6 +39,36 @@ function encodeArtworkFrame(bytes: Uint8Array): Uint8Array {
   header[7] = payload.length & 0xff;
 
   return new Uint8Array([...header, ...payload]);
+}
+
+function createTaggedMp3FileWithTiffCover(): File {
+  const tiffBytes = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
+  const frames = [
+    encodeTextFrame("TIT2", "Tiff Echo"),
+    encodeTextFrame("TPE1", "Alice"),
+    encodeTextFrame("TALB", "Northern Lights"),
+    encodeArtworkFrame(tiffBytes, "image/tiff"),
+  ];
+  const bodyLength = frames.reduce((sum, frame) => sum + frame.length, 0);
+  const header = new Uint8Array([
+    0x49, 0x44, 0x33,
+    0x03,
+    0x00,
+    0x00,
+    ...toSyncSafe(bodyLength),
+  ]);
+  const bytes = new Uint8Array(header.length + bodyLength);
+  bytes.set(header, 0);
+
+  let offset = header.length;
+  for (const frame of frames) {
+    bytes.set(frame, offset);
+    offset += frame.length;
+  }
+
+  return new File([bytes], "tiff-echo.mp3", {
+    type: "audio/mpeg",
+  });
 }
 
 function toSyncSafe(size: number): Uint8Array {
@@ -190,6 +220,22 @@ describe("createBasecardEditorRoot", () => {
     const importResource = vi.fn(async (input: { preferredPath?: string; file: File }) => ({
       path: input.preferredPath ?? input.file.name,
     }));
+    const convertTiffToPng = vi.fn(async (
+      {
+        outputPath,
+      }: {
+        resourcePath: string;
+        outputPath: string;
+        overwrite?: boolean;
+      },
+    ) => ({
+      path: outputPath,
+      mimeType: "image/png" as const,
+      sourceMimeType: "image/tiff" as const,
+      width: 1200,
+      height: 1200,
+    }));
+    const deleteResource = vi.fn(async () => undefined);
 
     const root = createBasecardEditorRoot({
       initialConfig,
@@ -197,6 +243,8 @@ describe("createBasecardEditorRoot", () => {
         lastConfig = next;
       },
       importResource,
+      convertTiffToPng,
+      deleteResource,
     });
 
     const audioInput = root.querySelector('[data-role="audio-input"]') as HTMLInputElement | null;
@@ -215,16 +263,92 @@ describe("createBasecardEditorRoot", () => {
 
     await flushAsyncWork();
 
-    expect(importResource).toHaveBeenCalled();
+    expect(importResource).toHaveBeenCalledWith(expect.objectContaining({
+      preferredPath: "测试音频.mp3",
+    }));
+    expect(importResource).toHaveBeenCalledWith(expect.objectContaining({
+      preferredPath: "测试音频-cover-source.tiff",
+    }));
+    expect(convertTiffToPng).toHaveBeenCalledWith({
+      resourcePath: "测试音频-cover-source.tiff",
+      outputPath: "测试音频-cover.png",
+      overwrite: true,
+    });
+    expect(deleteResource).toHaveBeenCalledWith("测试音频-cover-source.tiff");
     expect(lastConfig).toMatchObject({
       audio_file: "测试音频.mp3",
       music_name: "Mine or Yours",
       album_name: "Mine or Yours",
-      album_cover: "测试音频-cover.jpg",
+      album_cover: "测试音频-cover.png",
     });
     expect(lastConfig?.production_team[0]).toMatchObject({
       role: "歌手",
       people: ["宇多田ヒカル"],
+    });
+  });
+
+  it("converts embedded TIFF artwork into a PNG cover resource before saving the music card config", async () => {
+    let lastConfig: BasecardConfig | undefined;
+    const importResource = vi.fn(async (input: { preferredPath?: string; file: File }) => ({
+      path: input.preferredPath ?? input.file.name,
+    }));
+    const convertTiffToPng = vi.fn(async (
+      {
+        outputPath,
+      }: {
+        resourcePath: string;
+        outputPath: string;
+        overwrite?: boolean;
+      },
+    ) => ({
+      path: outputPath,
+      mimeType: "image/png" as const,
+      sourceMimeType: "image/tiff" as const,
+      width: 512,
+      height: 512,
+    }));
+    const deleteResource = vi.fn(async () => undefined);
+
+    const root = createBasecardEditorRoot({
+      initialConfig,
+      onChange: (next) => {
+        lastConfig = next;
+      },
+      importResource,
+      deleteResource,
+      convertTiffToPng,
+    });
+
+    const audioInput = root.querySelector('[data-role="audio-input"]') as HTMLInputElement | null;
+    if (!audioInput) {
+      throw new Error("找不到音频上传输入框");
+    }
+
+    Object.defineProperty(audioInput, "files", {
+      value: [createTaggedMp3FileWithTiffCover()],
+      configurable: true,
+    });
+    audioInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await flushAsyncWork();
+
+    expect(importResource).toHaveBeenCalledWith(expect.objectContaining({
+      preferredPath: "tiff-echo.mp3",
+    }));
+    expect(importResource).toHaveBeenCalledWith(expect.objectContaining({
+      preferredPath: "tiff-echo-cover-source.tiff",
+    }));
+    expect(convertTiffToPng).toHaveBeenCalledWith({
+      resourcePath: "tiff-echo-cover-source.tiff",
+      outputPath: "tiff-echo-cover.png",
+      overwrite: true,
+    });
+    expect(deleteResource).toHaveBeenCalledWith("tiff-echo-cover-source.tiff");
+    expect(lastConfig).toMatchObject({
+      audio_file: "tiff-echo.mp3",
+      music_name: "Tiff Echo",
+      album_name: "Northern Lights",
+      album_cover: "tiff-echo-cover.png",
     });
   });
 

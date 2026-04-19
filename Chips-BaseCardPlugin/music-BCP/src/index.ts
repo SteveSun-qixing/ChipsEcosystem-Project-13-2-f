@@ -18,6 +18,20 @@ export interface BasecardResourceImportResult {
   path: string;
 }
 
+export interface BasecardTiffToPngRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+}
+
+export interface BasecardTiffToPngResult {
+  path: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+
 export interface BasecardRenderContext {
   container: HTMLElement;
   config: BasecardConfig;
@@ -40,6 +54,7 @@ export interface BasecardEditorContext {
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
 }
 
 export function renderBasecardView(ctx: BasecardRenderContext): () => void {
@@ -109,6 +124,7 @@ export const basecardDefinition = {
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
     importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
     deleteResource?: (resourcePath: string) => Promise<void>;
+    convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
   }) {
     return renderBasecardEditor({
       container: ctx.container,
@@ -120,6 +136,7 @@ export const basecardDefinition = {
       releaseResourceUrl: ctx.releaseResourceUrl,
       importResource: ctx.importResource,
       deleteResource: ctx.deleteResource,
+      convertTiffToPng: ctx.convertTiffToPng,
     });
   },
 } as const;

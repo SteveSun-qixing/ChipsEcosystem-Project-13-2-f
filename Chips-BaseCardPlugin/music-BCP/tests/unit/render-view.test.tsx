@@ -177,4 +177,38 @@ describe("mountBasecardView", () => {
 
     dispose();
   });
+
+  it("does not proactively release bridge-backed blob resource urls while the host runtime still owns them", async () => {
+    const container = document.createElement("div");
+    const releaseResourceUrl = vi.fn();
+
+    const dispose = mountBasecardView({
+      container,
+      config: {
+        card_type: "MusicCard",
+        theme: "",
+        audio_file: "tracks/demo.mp3",
+        music_name: "Blob Preview",
+        album_cover: "cover.png",
+        lyrics_file: "",
+        production_team: [],
+        release_date: "",
+        album_name: "",
+        language: "",
+        genre: "",
+      },
+      resolveResourceUrl: async (resourcePath) => `blob:file:///${resourcePath}`,
+      releaseResourceUrl,
+    });
+
+    await flushViewEffects();
+
+    const coverImage = container.querySelector(".chips-music-card__cover-image") as HTMLImageElement | null;
+    expect(coverImage?.getAttribute("src")).toBe("blob:file:///cover.png");
+    expect(releaseResourceUrl).not.toHaveBeenCalled();
+
+    dispose();
+
+    expect(releaseResourceUrl).not.toHaveBeenCalled();
+  });
 });

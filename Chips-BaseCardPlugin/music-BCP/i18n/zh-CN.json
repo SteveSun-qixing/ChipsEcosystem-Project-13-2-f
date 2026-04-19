@@ -65,6 +65,7 @@
   "music.editor.team.people_hint": "例如一行一个名字，保存后会整理为正式列表。",
   "music.editor.team.empty": "还没有录入制作团队，可以先添加一个身份。",
   "music.editor.errors.import_unavailable": "当前宿主没有提供正式资源导入能力。",
+  "music.editor.errors.tiff_conversion_unavailable": "当前宿主没有提供 TIFF 转 PNG 能力，无法保存该封面。",
   "music.editor.errors.delete_failed": "资源删除请求提交失败，请稍后重试。",
   "music.editor.errors.audio_import_failed": "音频导入或元数据解析失败。",
   "music.editor.errors.cover_import_failed": "封面导入失败。",

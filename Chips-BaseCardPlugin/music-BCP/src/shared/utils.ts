@@ -149,9 +149,17 @@ export function inferImageExtensionFromMimeType(mimeType: string | undefined): s
       return "svg";
     case "image/avif":
       return "avif";
+    case "image/tiff":
+    case "image/tif":
+      return "tiff";
     default:
       return undefined;
   }
+}
+
+export function isTiffMimeType(mimeType: string | undefined): boolean {
+  const normalized = mimeType?.trim().toLowerCase() ?? "";
+  return normalized === "image/tiff" || normalized === "image/tif";
 }
 
 export async function resolveResourceUrlWithRetry(

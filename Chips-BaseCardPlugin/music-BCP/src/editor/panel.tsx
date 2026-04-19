@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import type {
   BasecardResourceImportRequest,
   BasecardResourceImportResult,
+  BasecardTiffToPngRequest,
+  BasecardTiffToPngResult,
 } from "../index";
 import {
   normalizeBasecardConfig,
@@ -19,6 +21,7 @@ import {
   deriveDisplayTitle,
   generateStableId,
   inferImageExtensionFromMimeType,
+  isTiffMimeType,
   normalizeRelativeCardResourcePath,
   resolveFileExtension,
   resolveResourceUrlWithRetry,
@@ -39,6 +42,9 @@ export interface BasecardEditorProps {
     input: BasecardResourceImportRequest,
   ) => Promise<BasecardResourceImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (
+    input: BasecardTiffToPngRequest,
+  ) => Promise<BasecardTiffToPngResult>;
 }
 
 type EditorRoot = HTMLElement & {
@@ -104,11 +110,11 @@ html, body {
 }
 
 .chips-music-editor__group {
-  padding-top: 14px;
+  padding-top: 4px;
 }
 
 .chips-music-editor__group + .chips-music-editor__group {
-  margin-top: 18px;
+  margin-top: 14px;
   border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -118,16 +124,15 @@ html, body {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 12px;
+  margin-bottom: 2px;
 }
 
 .chips-music-editor__group-title {
   margin: 0;
-  color: var(--chips-sys-color-on-surface-variant, #64748b);
-  font-size: 11px;
+  color: var(--chips-sys-color-on-surface, #0f172a);
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .chips-music-editor__status {
@@ -162,9 +167,9 @@ html, body {
 .chips-music-editor__row,
 .chips-music-editor__field-row {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px 0;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 
@@ -219,8 +224,8 @@ html, body {
 .chips-music-editor__dropzone {
   position: relative;
   display: grid;
-  min-height: 84px;
-  padding: 14px;
+  min-height: 72px;
+  padding: 12px 14px;
   border: 1.5px dashed rgba(15, 23, 42, 0.12);
   border-radius: 12px;
   background: transparent;
@@ -314,21 +319,21 @@ html, body {
 
 .chips-music-editor__resource-tile {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .chips-music-editor__resource-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
   min-width: 0;
 }
 
 .chips-music-editor__resource-cover {
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   overflow: hidden;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.92);
@@ -344,7 +349,7 @@ html, body {
 
 .chips-music-editor__resource-summary {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -367,8 +372,8 @@ html, body {
 
 .chips-music-editor__resource-preview--cover {
   display: block;
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   border-radius: 14px;
   object-fit: cover;
   background: rgba(226, 232, 240, 0.76);
@@ -382,7 +387,7 @@ html, body {
 
 .chips-music-editor__resource-meta {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -404,7 +409,7 @@ html, body {
 .chips-music-editor__resource-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -428,8 +433,8 @@ html, body {
   align-items: center;
   justify-content: center;
   width: auto;
-  min-height: 36px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 13px;
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
@@ -452,7 +457,7 @@ html, body {
 
 .chips-music-editor__textarea {
   width: 100%;
-  min-height: 88px;
+  min-height: 78px;
   padding: 10px 12px;
   resize: vertical;
 }
@@ -533,21 +538,12 @@ html, body {
   .chips-music-editor__row,
   .chips-music-editor__field-row {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 
   .chips-music-editor__row-label,
   .chips-music-editor__field-label {
     padding-top: 0;
-  }
-
-  .chips-music-editor__resource-head {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .chips-music-editor__resource-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
   }
 
   .chips-music-editor__dropzone-content {
@@ -564,10 +560,6 @@ html, body {
 }
 
 @media (max-width: 420px) {
-  .chips-music-editor__resource-head {
-    grid-template-columns: 1fr;
-  }
-
   .chips-music-editor__resource-cover,
   .chips-music-editor__resource-preview--cover {
     width: 64px;
@@ -576,6 +568,7 @@ html, body {
 
   .chips-music-editor__dropzone-content {
     flex-direction: column;
+    gap: 10px;
   }
 }
 `;
@@ -610,7 +603,6 @@ function getImmediateResourceUrl(
 function useResolvedEditorResourceUrl(
   resourcePath: string,
   resolveResourceUrl?: (resourcePath: string) => Promise<string>,
-  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void,
 ): string {
   const [resolvedUrl, setResolvedUrl] = useState(() => getImmediateResourceUrl(resourcePath, resolveResourceUrl));
 
@@ -628,6 +620,8 @@ function useResolvedEditorResourceUrl(
       return undefined;
     }
 
+    setResolvedUrl("");
+
     void resolveResourceUrlWithRetry(resolveResourceUrl, normalizedPath)
       .then((nextUrl) => {
         if (!cancelled) {
@@ -642,9 +636,8 @@ function useResolvedEditorResourceUrl(
 
     return () => {
       cancelled = true;
-      void Promise.resolve(releaseResourceUrl?.(normalizedPath)).catch(() => undefined);
     };
-  }, [releaseResourceUrl, resolveResourceUrl, resourcePath]);
+  }, [resolveResourceUrl, resourcePath]);
 
   return resolvedUrl;
 }
@@ -684,8 +677,8 @@ function BasecardEditor(props: BasecardEditorProps) {
   const [busyField, setBusyField] = useState<BusyField>(null);
   const [dragField, setDragField] = useState<ResourceField | null>(null);
   const configRef = useRef(config);
-  const audioPreviewUrl = useResolvedEditorResourceUrl(config.audio_file, props.resolveResourceUrl, props.releaseResourceUrl);
-  const coverPreviewUrl = useResolvedEditorResourceUrl(config.album_cover, props.resolveResourceUrl, props.releaseResourceUrl);
+  const audioPreviewUrl = useResolvedEditorResourceUrl(config.audio_file, props.resolveResourceUrl);
+  const coverPreviewUrl = useResolvedEditorResourceUrl(config.album_cover, props.resolveResourceUrl);
   const hasAudioFile = Boolean(normalizeRelativeCardResourcePath(config.audio_file));
   const displayCoverUrl = coverPreviewUrl || DEFAULT_MUSIC_COVER_URL;
   const displayTitle = deriveDisplayTitle(config) || t("music.view.untitled");
@@ -731,6 +724,65 @@ function BasecardEditor(props: BasecardEditorProps) {
       file,
       preferredPath,
     });
+  }
+
+  function isTiffFile(file: File): boolean {
+    const extension = resolveFileExtension(file.name);
+    return isTiffMimeType(file.type) || extension === "tiff" || extension === "tif";
+  }
+
+  async function convertImportedTiffCoverToPng(
+    sourcePath: string,
+    outputPath: string,
+  ): Promise<BasecardTiffToPngResult> {
+    if (!props.convertTiffToPng) {
+      throw new Error(t("music.editor.errors.tiff_conversion_unavailable"));
+    }
+
+    return props.convertTiffToPng({
+      resourcePath: sourcePath,
+      outputPath,
+      overwrite: true,
+    });
+  }
+
+  async function importCoverResource(
+    file: File,
+    baseName: string,
+  ): Promise<{ path: string; cleanupPaths: string[] }> {
+    if (!isTiffFile(file)) {
+      const coverExtension = resolveFileExtension(file.name)
+        || inferImageExtensionFromMimeType(file.type)
+        || "jpg";
+      const preferredCoverPath = buildDerivedResourcePath(baseName, "cover", coverExtension);
+      const importedCover = await importRequiredResource(file, preferredCoverPath);
+
+      return {
+        path: importedCover.path,
+        cleanupPaths: [],
+      };
+    }
+
+    const tiffExtension = resolveFileExtension(file.name)
+      || inferImageExtensionFromMimeType(file.type)
+      || "tiff";
+    const sourceCoverPath = buildDerivedResourcePath(baseName, "cover-source", tiffExtension);
+    const importedSourceCover = await importRequiredResource(file, sourceCoverPath);
+
+    try {
+      const convertedCover = await convertImportedTiffCoverToPng(
+        importedSourceCover.path,
+        buildDerivedResourcePath(baseName, "cover", "png"),
+      );
+
+      return {
+        path: convertedCover.path,
+        cleanupPaths: importedSourceCover.path === convertedCover.path ? [] : [importedSourceCover.path],
+      };
+    } catch (error) {
+      await deleteResourceQuietly(importedSourceCover.path);
+      throw error;
+    }
   }
 
   async function deleteResourceQuietly(resourcePath: string): Promise<void> {
@@ -791,15 +843,16 @@ function BasecardEditor(props: BasecardEditorProps) {
 
         if (embeddedMetadata.artwork) {
           const artworkExtension = inferImageExtensionFromMimeType(embeddedMetadata.artwork.mimeType) ?? "jpg";
-          const coverFileName = buildDerivedResourcePath(nextStem, "cover", artworkExtension);
-          const importedCover = await importRequiredResource(
+          const embeddedCoverFileName = buildDerivedResourcePath(nextStem, "embedded-cover", artworkExtension);
+          const importedCover = await importCoverResource(
             createArtworkFile(
-              coverFileName,
+              embeddedCoverFileName,
               embeddedMetadata.artwork.bytes,
               embeddedMetadata.artwork.mimeType,
             ),
-            coverFileName,
+            nextStem,
           );
+          deletions.push(...importedCover.cleanupPaths);
 
           if (currentConfig.album_cover && currentConfig.album_cover !== importedCover.path) {
             deletions.push(currentConfig.album_cover);
@@ -848,16 +901,14 @@ function BasecardEditor(props: BasecardEditorProps) {
       try {
         const currentConfig = configRef.current;
         const baseName = resolveFileName(currentConfig.audio_file) || resolveFileName(file.name) || "cover";
-        const coverExtension = resolveFileExtension(file.name)
-          || inferImageExtensionFromMimeType(file.type)
-          || "jpg";
-        const preferredCoverPath = buildDerivedResourcePath(baseName, "cover", coverExtension);
-        const importedCover = await importRequiredResource(file, preferredCoverPath);
+        const importedCover = await importCoverResource(file, baseName);
 
         commitConfig({
           ...currentConfig,
           album_cover: importedCover.path,
         });
+
+        await Promise.all(importedCover.cleanupPaths.map((resourcePath) => deleteResourceQuietly(resourcePath)));
 
         if (currentConfig.album_cover && currentConfig.album_cover !== importedCover.path) {
           await deleteResourceQuietly(currentConfig.album_cover);
@@ -1133,9 +1184,6 @@ function BasecardEditor(props: BasecardEditorProps) {
                         src={audioPreviewUrl}
                       />
                     ) : null}
-                    <span className="chips-music-editor__resource-tile-subtitle">
-                      {t("music.editor.audio.autofill")}
-                    </span>
                   </div>
                 </div>
               ) : renderUploadSurface({
@@ -1161,7 +1209,6 @@ function BasecardEditor(props: BasecardEditorProps) {
                     />
                     <div className="chips-music-editor__resource-meta">
                       <span className="chips-music-editor__resource-tile-name">{resolveFileName(config.album_cover)}</span>
-                      <span className="chips-music-editor__resource-tile-subtitle">{t("music.editor.cover.selected")}</span>
                     </div>
                     <div className="chips-music-editor__resource-actions">
                       <label className="chips-music-editor__button chips-music-editor__button--file">
@@ -1410,7 +1457,6 @@ function BasecardEditor(props: BasecardEditorProps) {
                             });
                           }}
                         />
-                        <span className="chips-music-editor__hint">{t("music.editor.team.people_hint")}</span>
                       </div>
                     </label>
                   </div>

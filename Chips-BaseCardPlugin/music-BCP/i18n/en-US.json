@@ -65,6 +65,7 @@
   "music.editor.team.people_hint": "Each line becomes one formal person entry when saved.",
   "music.editor.team.empty": "No production team has been entered yet. Add a role to begin.",
   "music.editor.errors.import_unavailable": "The current host did not provide the formal resource import capability.",
+  "music.editor.errors.tiff_conversion_unavailable": "The current host did not provide TIFF-to-PNG conversion for editor cover extraction.",
   "music.editor.errors.delete_failed": "Submitting the resource deletion request failed. Please try again.",
   "music.editor.errors.audio_import_failed": "Audio import or embedded metadata parsing failed.",
   "music.editor.errors.cover_import_failed": "Cover import failed.",

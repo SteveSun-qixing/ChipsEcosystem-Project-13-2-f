@@ -529,6 +529,7 @@ describe('CardService rendering', () => {
     expect(view.body).toContain("requestResource('import'");
     expect(view.body).toContain("requestResource('importArchiveBundle'");
     expect(view.body).toContain("requestResource('delete'");
+    expect(view.body).toContain("requestResource('convertTiffToPng'");
     expect(view.body).toContain("img-src file: http: https: data: blob:");
     expect(view.body).toContain("connect-src file: http: https: data: blob:");
     expect(view.body).toContain("child-src about: file: http: https: blob:");
@@ -1012,6 +1013,112 @@ describe('CardService rendering', () => {
         clientX: 64,
         clientY: 144,
         pointerCount: 1,
+      });
+    } finally {
+      dom.window.close();
+    }
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
+
+  it('forwards structured resource-open payloads from basecard frames to the composite shell', async () => {
+    const cardDir = await createCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
+    await runtime.enable(install.manifest.id);
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.render(cardDir, {
+      target: 'card-iframe',
+      mode: 'preview',
+      interactionPolicy: 'delegate',
+      ...themeContext,
+    });
+
+    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
+    const dom = new JSDOM(view.body, {
+      runScripts: 'dangerously',
+      beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
+        Object.defineProperty(window, 'parent', {
+          configurable: true,
+          value: {
+            postMessage(message: { type?: string; payload?: unknown }) {
+              postedMessages.push(message);
+            },
+          },
+        });
+      },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      postedMessages.length = 0;
+
+      const introFrame = dom.window.document?.querySelector?.(
+        '.chips-composite__frame[data-node-id="intro"]',
+      ) as FrameElementLike | null;
+      expect(introFrame).toBeTruthy();
+
+      if (!introFrame) {
+        throw new Error('Expected intro frame to exist.');
+      }
+
+      const frameWindow = introFrame.contentWindow ?? {};
+      if (!introFrame.contentWindow) {
+        Object.defineProperty(introFrame, 'contentWindow', {
+          configurable: true,
+          value: frameWindow,
+        });
+      }
+
+      const dispatchMessage = dom.window.dispatchEvent;
+      if (!dispatchMessage) {
+        throw new Error('JSDOM window does not expose dispatchEvent.');
+      }
+
+      dispatchMessage.call(
+        dom.window,
+        new dom.window.MessageEvent('message', {
+          data: {
+            type: 'chips.basecard:resource-open',
+            payload: {
+              nodeId: 'intro',
+              intent: 'view',
+              resourceId: 'chips-render://card-root/session-1/tracks/demo.mp3',
+              mimeType: 'audio/mpeg',
+              title: 'Evergreen',
+              fileName: 'demo.mp3',
+              payload: {
+                kind: 'chips.music-card',
+                version: '1.0.0',
+              },
+            },
+          },
+          origin: 'null',
+          source: frameWindow as never,
+        }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const resourceOpenMessage = postedMessages.find((message) => message.type === 'chips.composite:resource-open');
+      expect(resourceOpenMessage?.payload).toMatchObject({
+        nodeId: 'intro',
+        cardType: 'RichTextCard',
+        intent: 'view',
+        resourceId: 'chips-render://card-root/session-1/tracks/demo.mp3',
+        mimeType: 'audio/mpeg',
+        title: 'Evergreen',
+        fileName: 'demo.mp3',
+        payload: {
+          kind: 'chips.music-card',
+          version: '1.0.0',
+        },
       });
     } finally {
       dom.window.close();

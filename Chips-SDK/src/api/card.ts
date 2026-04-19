@@ -1,5 +1,6 @@
 import type { CoreClient } from "../types/client";
 import { createError } from "../types/errors";
+import type { ResourceOpenPayload } from "./resource";
 
 export interface CardDocument {
   // 这里使用宽松类型，具体结构由 Host 侧 schema 控制
@@ -246,6 +247,7 @@ export interface CompositeResourceOpenPayload {
   mimeType?: string;
   title?: string;
   fileName?: string;
+  payload?: ResourceOpenPayload;
 }
 
 export type CompositeResizeReason =

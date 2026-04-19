@@ -43,6 +43,30 @@ export interface PersistedEmbeddedArtwork {
 
 const EMBEDDED_ARTWORK_CACHE_DIR = ".music-player-artwork-cache";
 
+function isAlreadyExistsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: {
+      code?: unknown;
+      details?: {
+        code?: unknown;
+      };
+    };
+  };
+
+  return (
+    record.code === "EEXIST" ||
+    record.details?.code === "EEXIST" ||
+    record.details?.details?.code === "EEXIST" ||
+    (typeof record.message === "string" && record.message.includes("EEXIST"))
+  );
+}
+
 function normalizeMimeType(value: string | undefined): string {
   const normalized = value?.trim().toLowerCase();
   return normalized && normalized.length > 0 ? normalized : "application/octet-stream";
@@ -92,7 +116,19 @@ async function ensureCacheDirectory(client: EmbeddedArtworkCacheClient, workspac
     // ignore and create below
   }
 
-  await client.file.mkdir(cacheDir);
+  try {
+    await client.file.mkdir(cacheDir);
+  } catch (error) {
+    if (!isAlreadyExistsError(error)) {
+      throw error;
+    }
+
+    const stat = await client.file.stat(cacheDir).catch(() => null);
+    if (!stat?.isDirectory) {
+      throw error;
+    }
+  }
+
   return cacheDir;
 }
 

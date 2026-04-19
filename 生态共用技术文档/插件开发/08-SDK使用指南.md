@@ -142,6 +142,28 @@ Uint8Array
 
 SDK 提供统一资源 API，直接映射 Host `resource.*` 服务动作。
 
+### `client.resource.resolve(...)`
+
+推荐用法：
+
+```typescript
+const coverUri = await client.resource.resolve("chips-render://card-root/session-1/assets/cover.png");
+```
+
+返回结构：
+
+```typescript
+{
+  uri: string;
+}
+```
+
+使用语义：
+
+- `client.resource.resolve(...)` 支持本地文件路径、`file://` 本地资源，以及 Host 托管文档 URL，例如卡片/箱子查看链路中的 `chips-render://...`；
+- 当输入最终可落到本地文件时，Host 返回正式 `file://` 编码结果；
+- 若输入本身就是外部 URL 或其他无需落盘改写的正式资源标识，Host 保持原 URI 语义，不得把它错误改写成伪本地路径。
+
 ### `client.resource.readBinary(...)`
 
 推荐用法：
@@ -158,6 +180,7 @@ ArrayBuffer
 
 使用语义：
 
+- `client.resource.readBinary(...)` 支持本地文件路径、`file://` 本地资源，以及 Host 托管文档 URL，例如 `chips-render://...`；
 - `client.resource.readBinary(...)` 对调用方的正式语义始终是“返回裸二进制字节”；
 - 若 Host / Bridge 运行时内部经过 `Buffer` 包装，或在桥接序列化后退化为 `{ data: { type: "Buffer", data: number[] } }`，SDK 会在内部统一解包，再向业务层返回 `ArrayBuffer`；
 - 调用方不得把 `.data` 包装对象当作公共契约，也不应在业务层自行兼容多种返回形状；
@@ -175,6 +198,10 @@ const result = await client.resource.open({
     mimeType: "image/png",
     title: "封面图",
     fileName: "cover.png",
+    payload: {
+      kind: "chips.music-card",
+      version: "1.0.0",
+    },
   },
 });
 ```
@@ -203,6 +230,7 @@ const result = await client.resource.open({
 - SDK 调用方不需要也不应该自行查找图片查看器、PDF 查看器等目标应用；
 - Host 会优先匹配 `resource-handler:<intent>:<mime>`，再匹配 `file-handler:<ext>`；
 - 若没有命中应用处理器，Host 可能回退到系统路径打开或系统外链打开；
+- 若需要让目标应用恢复结构化业务上下文，应通过 `resource.payload` 透传；目标应用从 `launchParams.resourceOpen.payload` 读取；
 - 该接口要求插件声明 `resource.read` 权限。
 
 ### `client.resource.convertTiffToPng(...)`

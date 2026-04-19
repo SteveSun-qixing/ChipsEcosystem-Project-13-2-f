@@ -1,6 +1,6 @@
 import React, { startTransition, useEffect, useRef, useState } from "react";
 import { ChipsThemeProvider } from "@chips/component-library";
-import type { ThemeState } from "chips-sdk";
+import type { MusicCardOpenPayload, ThemeState } from "chips-sdk";
 import { MusicPlayerStage } from "./components/MusicPlayerStage";
 import { parseEmbeddedAudioMetadata } from "./utils/audio-metadata";
 import { resolveEmbeddedArtworkUrl } from "./utils/artwork-runtime";
@@ -140,6 +140,18 @@ function resolveMetadataReadTarget(target: LaunchAudioTarget, localAudioPath: st
   return sourceId;
 }
 
+function resolveMusicCardTitle(payload: MusicCardOpenPayload | undefined): string {
+  return payload?.display.title?.trim() || payload?.config.music_name?.trim() || "";
+}
+
+function resolveMusicCardArtist(payload: MusicCardOpenPayload | undefined): string {
+  return payload?.display.artist?.trim() || "";
+}
+
+function resolveMusicCardAlbum(payload: MusicCardOpenPayload | undefined): string {
+  return payload?.config.album_name?.trim() || "";
+}
+
 export function App(): React.ReactElement {
   const bridge = useChipsBridge();
   const { client, traceId } = useChipsClient();
@@ -247,15 +259,26 @@ export function App(): React.ReactElement {
     return createEmptyLyricsDocument();
   }
 
-  async function resolveCompanionArtworkUri(coverPath: string | undefined): Promise<{ uri: string; kind: TrackPresentation["artworkKind"] }> {
-    if (!coverPath) {
+  async function loadLyricsDocumentFromResourceId(resourceId: string | undefined): Promise<LyricsDocument> {
+    const normalizedResourceId = resourceId?.trim();
+    if (!normalizedResourceId) {
+      return createEmptyLyricsDocument();
+    }
+
+    const bytes = await client.resource.readBinary(normalizedResourceId);
+    return parseLyricsText(decodeTextWithFallback(normalizeBinaryContent(bytes)), "companion");
+  }
+
+  async function resolveArtworkUriFromResource(resourceId: string | undefined): Promise<{ uri: string; kind: TrackPresentation["artworkKind"] }> {
+    const normalizedResourceId = resourceId?.trim();
+    if (!normalizedResourceId) {
       return {
         uri: DEFAULT_ARTWORK_URI,
         kind: "default",
       };
     }
 
-    const resolved = await client.resource.resolve(coverPath);
+    const resolved = await client.resource.resolve(normalizedResourceId);
     return {
       uri: resolved.uri,
       kind: "companion",
@@ -292,9 +315,13 @@ export function App(): React.ReactElement {
       const localAudioPath = resolveLocalAudioPath(target);
       const metadataReadTarget = resolveMetadataReadTarget(target, localAudioPath);
       const normalizedFileName = target.fileName?.trim() || resolveFileName(localAudioPath ?? target.sourceId);
-      let resolvedTitle = resolveTrackTitle(target);
-      let artist = "";
-      let album = "";
+      const musicCard = target.musicCard;
+      const musicCardTitle = resolveMusicCardTitle(musicCard);
+      const musicCardArtist = resolveMusicCardArtist(musicCard);
+      const musicCardAlbum = resolveMusicCardAlbum(musicCard);
+      let resolvedTitle = target.title?.trim() || musicCardTitle || resolveTrackTitle(target);
+      let artist = musicCardArtist;
+      let album = musicCardAlbum;
       let lyrics = createEmptyLyricsDocument();
       let artworkUri = DEFAULT_ARTWORK_URI;
       let artworkKind: TrackPresentation["artworkKind"] = "default";
@@ -303,7 +330,7 @@ export function App(): React.ReactElement {
       if (metadataReadTarget) {
         const [binaryResult, companionResult] = await Promise.allSettled([
           client.resource.readBinary(metadataReadTarget),
-          localAudioPath ? discoverCompanionFiles(localAudioPath, explicitSelection) : Promise.resolve(explicitSelection),
+          !musicCard && localAudioPath ? discoverCompanionFiles(localAudioPath, explicitSelection) : Promise.resolve(explicitSelection),
         ]);
 
         const embeddedMetadata =
@@ -324,35 +351,45 @@ export function App(): React.ReactElement {
 
         const companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
 
-        resolvedTitle = target.title?.trim() || embeddedMetadata.title?.trim() || resolvedTitle;
-        artist = embeddedMetadata.artist?.trim() || "";
-        album = embeddedMetadata.album?.trim() || "";
+        resolvedTitle = target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || resolvedTitle;
+        artist = musicCardArtist || embeddedMetadata.artist?.trim() || artist;
+        album = musicCardAlbum || embeddedMetadata.album?.trim() || album;
 
         try {
-          lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
-          resolvedTitle = target.title?.trim() || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
-          artist = embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
-          album = embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
+          lyrics = musicCard?.resources.lyrics
+            ? await loadLyricsDocumentFromResourceId(musicCard.resources.lyrics.resourceId)
+            : await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
         } catch (error) {
-          logger.warn("读取歌词失败，继续使用空歌词视图", {
+          logger.warn("读取歌词失败，继续回退到嵌入歌词与空歌词视图", {
             localAudioPath,
+            resourceId: musicCard?.resources.lyrics?.resourceId,
             error,
           });
-          lyrics = createEmptyLyricsDocument();
+          lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata).catch(() => createEmptyLyricsDocument());
         }
 
+        resolvedTitle =
+          target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
+        artist = musicCardArtist || embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
+        album = musicCardAlbum || embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
+
+        let hasPreferredArtwork = false;
         try {
-          const companionArtwork = await resolveCompanionArtworkUri(companionSelection.coverPath);
+          const companionArtwork = musicCard?.resources.cover
+            ? await resolveArtworkUriFromResource(musicCard.resources.cover.resourceId)
+            : await resolveArtworkUriFromResource(companionSelection.coverPath);
           artworkUri = companionArtwork.uri;
           artworkKind = companionArtwork.kind;
+          hasPreferredArtwork = companionArtwork.kind === "companion";
         } catch (error) {
-          logger.warn("读取伴生封面失败，继续回退默认封面", {
+          logger.warn("读取卡片封面或伴生封面失败，继续回退默认封面与嵌入封面", {
             localAudioPath,
+            resourceId: musicCard?.resources.cover?.resourceId ?? companionSelection.coverPath,
             error,
           });
         }
 
-        if (embeddedMetadata.artwork) {
+        if (!hasPreferredArtwork && embeddedMetadata.artwork) {
           const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
             client,
             workspacePath,

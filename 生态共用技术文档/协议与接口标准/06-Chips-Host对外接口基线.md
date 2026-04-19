@@ -150,8 +150,9 @@
 
 关键语义：
 
+- `resource.resolve/readMetadata/readBinary` 必须同时支持本地文件路径、`file://` 本地资源，以及 Host 托管文档 URL，例如 `chips-render://...`；
+- `resource.resolve` 对最终可落到本地文件的资源必须返回正式 `file://` 编码结果；若输入本身就是外部 URL，则保持原 URI；
 - `resource.readBinary` 对 SDK 与应用层的正式语义始终是“返回裸字节”；若 Host / Bridge 内部为了传输经过 `Buffer` 包装或序列化，必须由 SDK 在调用侧统一解包，不得把包装对象暴露为公共契约；
-- 输入资源必须是本地文件路径或 `file://` 本地资源；
 - Host 负责校验输入是否为 TIFF，并把结果落盘为 PNG 文件；
 - 调用方不直接感知底层平台实现，正式输入输出以共享契约文档为准。
 

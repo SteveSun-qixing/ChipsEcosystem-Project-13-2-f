@@ -141,6 +141,7 @@ export function CardWindow({
                   mimeType: payload.mimeType,
                   title: payload.title,
                   fileName: payload.fileName,
+                  payload: payload.payload,
                 },
               })
               .catch((resourceError) => {

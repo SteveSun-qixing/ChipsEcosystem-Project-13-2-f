@@ -126,6 +126,7 @@ export function HostedDocumentWindow({
             mimeType: typeof payload.payload.mimeType === "string" ? payload.payload.mimeType : undefined,
             title: typeof payload.payload.title === "string" ? payload.payload.title : undefined,
             fileName: typeof payload.payload.fileName === "string" ? payload.payload.fileName : undefined,
+            payload: isRecord(payload.payload.payload) ? payload.payload.payload : undefined,
           },
         })
         .catch((resourceError) => {

@@ -124,6 +124,9 @@ const validateResourceOpenRequest: SchemaValidator = (input: unknown) => {
     validateOptionalString(input.resource.mimeType, 'resource.mimeType', errors);
     validateOptionalString(input.resource.title, 'resource.title', errors);
     validateOptionalString(input.resource.fileName, 'resource.fileName', errors);
+    if (typeof input.resource.payload !== 'undefined' && !isRecord(input.resource.payload)) {
+      errors.push('resource.payload must be an object when provided');
+    }
   }
 
   return errors.length > 0 ? { valid: false, errors } : { valid: true };

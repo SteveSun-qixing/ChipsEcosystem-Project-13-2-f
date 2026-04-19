@@ -24,6 +24,10 @@ describe('ResourceOpenService', () => {
         resource: {
           resourceId: 'chips-render://card-root/test-token/assets/demo.png',
           mimeType: 'image/png',
+          payload: {
+            kind: 'chips.music-card',
+            version: '1.0.0',
+          },
         },
       }),
     ).resolves.toEqual({
@@ -50,6 +54,10 @@ describe('ResourceOpenService', () => {
           filePath: '/tmp/demo.png',
           mimeType: 'image/png',
           matchedCapability: 'resource-handler:view:image/*',
+          payload: {
+            kind: 'chips.music-card',
+            version: '1.0.0',
+          },
         }),
       }),
     );

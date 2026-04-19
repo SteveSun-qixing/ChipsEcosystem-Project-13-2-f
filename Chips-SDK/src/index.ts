@@ -144,8 +144,12 @@ export type {
 } from "./api/box";
 export type {
   ResourceApi,
+  ResourceOpenPayload,
   ResourceUri,
   ResourceMeta,
+  MusicCardOpenPayload,
+  MusicCardOpenResource,
+  MusicCardOpenTeamRole,
   ResourceOpenRequest,
   ResourceOpenResolvedResource,
   ResourceOpenResult,

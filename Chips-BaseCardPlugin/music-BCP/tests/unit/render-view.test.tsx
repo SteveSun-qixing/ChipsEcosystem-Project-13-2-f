@@ -65,6 +65,30 @@ describe("mountBasecardView", () => {
       mimeType: "audio/mpeg",
       title: "Evergreen",
       fileName: "demo.mp3",
+      payload: {
+        kind: "chips.music-card",
+        version: "1.0.0",
+        cardType: "base.music",
+        config: expect.objectContaining({
+          audio_file: "tracks/demo.mp3",
+          album_cover: "covers/demo.jpg",
+          album_name: "Aurora",
+        }),
+        resources: expect.objectContaining({
+          audio: expect.objectContaining({
+            resourceId: "file:///tmp/tracks/demo.mp3",
+            relativePath: "tracks/demo.mp3",
+          }),
+          cover: expect.objectContaining({
+            resourceId: "file:///tmp/covers/demo.jpg",
+            relativePath: "covers/demo.jpg",
+          }),
+        }),
+        display: {
+          title: "Evergreen",
+          artist: "Alice",
+        },
+      },
     });
 
     dispose();
@@ -173,6 +197,15 @@ describe("mountBasecardView", () => {
       mimeType: "audio/mpeg",
       title: "Retry Song",
       fileName: "retry.mp3",
+      payload: expect.objectContaining({
+        kind: "chips.music-card",
+        resources: expect.objectContaining({
+          audio: expect.objectContaining({
+            resourceId: "file:///tmp/tracks/retry.mp3",
+            relativePath: "tracks/retry.mp3",
+          }),
+        }),
+      }),
     });
 
     dispose();

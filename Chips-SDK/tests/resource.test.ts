@@ -41,6 +41,10 @@ describe("ResourceApi", () => {
           resourceId: "/tmp/demo.png",
           mimeType: "image/png",
           title: "Demo",
+          payload: {
+            kind: "chips.music-card",
+            version: "1.0.0",
+          },
         },
       }),
     ).resolves.toEqual({
@@ -61,6 +65,10 @@ describe("ResourceApi", () => {
           resourceId: "/tmp/demo.png",
           mimeType: "image/png",
           title: "Demo",
+          payload: {
+            kind: "chips.music-card",
+            version: "1.0.0",
+          },
         },
       },
     });

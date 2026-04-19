@@ -18,6 +18,7 @@ export interface ResourceOpenRequest {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: Record<string, unknown>;
   };
 }
 
@@ -108,6 +109,10 @@ export class ResourceOpenService {
     const mimeType = normalizeMimeType(request.resource.mimeType) ?? inferMimeType(extension);
     const fileName = request.resource.fileName?.trim() || (filePath ? path.basename(filePath) : undefined);
     const title = request.resource.title?.trim() || fileName;
+    const payload =
+      request.resource.payload && typeof request.resource.payload === 'object' && !Array.isArray(request.resource.payload)
+        ? request.resource.payload
+        : undefined;
     const matchedPlugin = await this.resolveHandlerPlugin(intent, mimeType, extension);
 
     const resolved: ResourceOpenResolvedResource = {
@@ -131,6 +136,7 @@ export class ResourceOpenService {
           fileName,
           title,
           matchedCapability: matchedPlugin.capability,
+          ...(payload ? { payload } : undefined),
         },
       });
       return {

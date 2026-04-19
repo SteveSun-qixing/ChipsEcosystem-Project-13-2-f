@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createError } from '../../shared/errors';
 import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
@@ -1267,7 +1267,7 @@ const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState)
         windowId: launched.window.id,
       };
     },
-    resolveResourceFilePath: (resourceId) => ctx.getCardService().resolveDocumentFilePath(resourceId),
+    resolveResourceFilePath: (resourceId) => resolveHostManagedResourceFilePath(ctx, resourceId),
     openPath: async (filePath) => {
       await ctx.pal.transfer.openPath(filePath);
     },
@@ -1275,6 +1275,47 @@ const createResourceOpenService = (ctx: HostServiceContext, state: RuntimeState)
       await ctx.pal.transfer.openExternal(url);
     },
   });
+};
+
+const resolveHostManagedResourceFilePath = (ctx: HostServiceContext, resourceId: string): string | null => {
+  const normalized = resourceId.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    ctx.getCardService().resolveDocumentFilePath(normalized)
+    ?? ctx.getBoxService().resolveManagedDocumentFilePath(normalized)
+  );
+};
+
+const resolveReadableResourceFilePath = (ctx: HostServiceContext, resourceId: string): string | null => {
+  const normalized = resourceId.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const managedPath = resolveHostManagedResourceFilePath(ctx, normalized);
+  if (managedPath) {
+    return managedPath;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol === 'file:') {
+      return fileURLToPath(parsed);
+    }
+
+    return null;
+  } catch {
+    return path.resolve(normalized);
+  }
+};
+
+const resolveResourceUri = (ctx: HostServiceContext, resourceId: string): string => {
+  const normalized = resourceId.trim();
+  const readablePath = resolveReadableResourceFilePath(ctx, normalized);
+  return readablePath ? pathToFileURL(readablePath).href : normalized;
 };
 
 const createResourceImageService = (ctx: HostServiceContext): ResourceImageService => {
@@ -2513,7 +2554,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'resource.resolve', async (input) => {
-            const uri = input.resourceId.startsWith('file://') ? input.resourceId : pathToFileURL(input.resourceId).href;
+            const uri = resolveResourceUri(ctx, input.resourceId);
             return { uri };
           })
         )
@@ -2550,7 +2591,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'resource.readMetadata', async (input) => {
-            const normalized = input.resourceId.replace(/^file:\/\//, '');
+            const normalized = resolveReadableResourceFilePath(ctx, input.resourceId) ?? input.resourceId.replace(/^file:\/\//, '');
             const meta = await ctx.pal.fs.stat(normalized);
             return { metadata: meta };
           })
@@ -2564,7 +2605,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           true,
           0,
           withMetrics(state, 'resource.readBinary', async (input) => {
-            const normalized = input.resourceId.replace(/^file:\/\//, '');
+            const normalized = resolveReadableResourceFilePath(ctx, input.resourceId) ?? input.resourceId.replace(/^file:\/\//, '');
             const data = await ctx.pal.fs.readFile(normalized);
             if (!Buffer.isBuffer(data)) {
               return { data: Buffer.from(data, 'utf-8') };

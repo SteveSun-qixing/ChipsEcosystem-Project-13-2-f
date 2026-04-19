@@ -5,6 +5,49 @@ export interface ResourceUri {
   uri: string;
 }
 
+export type ResourceOpenPayload = Record<string, unknown>;
+
+export interface MusicCardOpenTeamRole {
+  id: string;
+  role: string;
+  people: string[];
+}
+
+export interface MusicCardOpenResource {
+  resourceId: string;
+  relativePath: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
+export interface MusicCardOpenPayload {
+  kind: "chips.music-card";
+  version: "1.0.0";
+  cardType: "base.music";
+  config: {
+    card_type: "MusicCard";
+    theme?: string;
+    audio_file: string;
+    music_name: string;
+    album_cover: string;
+    lyrics_file: string;
+    production_team: MusicCardOpenTeamRole[];
+    release_date: string;
+    album_name: string;
+    language: string;
+    genre: string;
+  };
+  resources: {
+    audio: MusicCardOpenResource;
+    cover?: MusicCardOpenResource;
+    lyrics?: MusicCardOpenResource;
+  };
+  display: {
+    title: string;
+    artist: string;
+  };
+}
+
 export interface ResourceOpenRequest {
   intent?: string;
   resource: {
@@ -12,6 +55,7 @@ export interface ResourceOpenRequest {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: ResourceOpenPayload;
   };
 }
 
@@ -67,6 +111,14 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeOptionalRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value as Record<string, unknown>;
 }
 
 function toOwnedArrayBuffer(value: ArrayBuffer | ArrayBufferView): ArrayBuffer {
@@ -142,6 +194,9 @@ export function createResourceApi(client: CoreClient): ResourceApi {
             : undefined),
           ...(normalizeOptionalString(request.resource.fileName)
             ? { fileName: normalizeOptionalString(request.resource.fileName) }
+            : undefined),
+          ...(normalizeOptionalRecord(request.resource.payload)
+            ? { payload: normalizeOptionalRecord(request.resource.payload) }
             : undefined),
         },
       };

@@ -44,6 +44,116 @@ describe("resolveLaunchAudioTarget", () => {
     });
   });
 
+  it("在正式 payload 存在时恢复音乐基础卡片播放上下文", () => {
+    expect(
+      resolveLaunchAudioTarget({
+        launchParams: {
+          resourceOpen: {
+            resourceId: "chips-render://card-root/session-1/tracks/demo.mp3",
+            payload: {
+              kind: "chips.music-card",
+              version: "1.0.0",
+              cardType: "base.music",
+              config: {
+                card_type: "MusicCard",
+                theme: "",
+                audio_file: "tracks/demo.mp3",
+                music_name: "Evergreen",
+                album_cover: "covers/demo.jpg",
+                lyrics_file: "lyrics/demo.lrc",
+                production_team: [
+                  {
+                    id: "role-1",
+                    role: "歌手",
+                    people: ["Alice"],
+                  },
+                ],
+                release_date: "2026-04-19",
+                album_name: "Aurora",
+                language: "日语",
+                genre: "流行",
+              },
+              resources: {
+                audio: {
+                  resourceId: "chips-render://card-root/session-1/tracks/demo.mp3",
+                  relativePath: "tracks/demo.mp3",
+                  fileName: "demo.mp3",
+                  mimeType: "audio/mpeg",
+                },
+                cover: {
+                  resourceId: "chips-render://card-root/session-1/covers/demo.jpg",
+                  relativePath: "covers/demo.jpg",
+                  fileName: "demo.jpg",
+                },
+                lyrics: {
+                  resourceId: "chips-render://card-root/session-1/lyrics/demo.lrc",
+                  relativePath: "lyrics/demo.lrc",
+                  fileName: "demo.lrc",
+                },
+              },
+              display: {
+                title: "Evergreen",
+                artist: "Alice",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: "chips-render://card-root/session-1/tracks/demo.mp3",
+      filePath: undefined,
+      fileName: "demo.mp3",
+      mimeType: "audio/mpeg",
+      title: "Evergreen",
+      musicCard: {
+        kind: "chips.music-card",
+        version: "1.0.0",
+        cardType: "base.music",
+        config: {
+          card_type: "MusicCard",
+          theme: "",
+          audio_file: "tracks/demo.mp3",
+          music_name: "Evergreen",
+          album_cover: "covers/demo.jpg",
+          lyrics_file: "lyrics/demo.lrc",
+          production_team: [
+            {
+              id: "role-1",
+              role: "歌手",
+              people: ["Alice"],
+            },
+          ],
+          release_date: "2026-04-19",
+          album_name: "Aurora",
+          language: "日语",
+          genre: "流行",
+        },
+        resources: {
+          audio: {
+            resourceId: "chips-render://card-root/session-1/tracks/demo.mp3",
+            relativePath: "tracks/demo.mp3",
+            fileName: "demo.mp3",
+            mimeType: "audio/mpeg",
+          },
+          cover: {
+            resourceId: "chips-render://card-root/session-1/covers/demo.jpg",
+            relativePath: "covers/demo.jpg",
+            fileName: "demo.jpg",
+          },
+          lyrics: {
+            resourceId: "chips-render://card-root/session-1/lyrics/demo.lrc",
+            relativePath: "lyrics/demo.lrc",
+            fileName: "demo.lrc",
+          },
+        },
+        display: {
+          title: "Evergreen",
+          artist: "Alice",
+        },
+      },
+    });
+  });
+
   it("在只有 targetPath 时恢复普通文件关联打开", () => {
     expect(
       resolveLaunchAudioTarget({

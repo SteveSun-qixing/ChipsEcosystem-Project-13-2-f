@@ -1,4 +1,4 @@
-import type { IconDescriptor } from "chips-sdk";
+import type { IconDescriptor, MusicCardOpenPayload } from "chips-sdk";
 import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
@@ -43,6 +43,7 @@ export interface BasecardRenderContext {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: MusicCardOpenPayload;
   }) => void;
 }
 
@@ -105,6 +106,7 @@ export const basecardDefinition = {
       mimeType?: string;
       title?: string;
       fileName?: string;
+      payload?: MusicCardOpenPayload;
     }) => void;
   }) {
     return renderBasecardView({

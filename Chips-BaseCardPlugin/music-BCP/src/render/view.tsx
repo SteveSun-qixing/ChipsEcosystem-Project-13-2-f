@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import type { MusicCardOpenPayload, MusicCardOpenResource } from "chips-sdk";
 import type { BasecardConfig } from "../schema/card-config";
 import { DEFAULT_MUSIC_COVER_URL } from "../shared/default-cover";
 import { createTranslator } from "../shared/i18n";
@@ -165,7 +166,84 @@ interface MusicBasecardViewProps {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: MusicCardOpenPayload;
   }) => void;
+}
+
+function cloneProductionTeam(config: BasecardConfig): MusicCardOpenPayload["config"]["production_team"] {
+  return config.production_team.map((role) => ({
+    id: role.id,
+    role: role.role,
+    people: [...role.people],
+  }));
+}
+
+function buildOpenResourceDescriptor(
+  resourceId: string,
+  resourcePath: string,
+  mimeType?: string,
+): MusicCardOpenResource | null {
+  const normalizedResourceId = resourceId.trim();
+  const normalizedRelativePath = normalizeRelativeCardResourcePath(resourcePath);
+  if (!normalizedResourceId || !normalizedRelativePath) {
+    return null;
+  }
+
+  return {
+    resourceId: normalizedResourceId,
+    relativePath: normalizedRelativePath,
+    fileName: resolveFileName(normalizedRelativePath) || undefined,
+    mimeType,
+  };
+}
+
+function buildMusicCardOpenPayload(input: {
+  config: BasecardConfig;
+  audioUrl: string;
+  coverUrl: string;
+  lyricsUrl: string;
+  displayTitle: string;
+  artistLabel: string;
+}): MusicCardOpenPayload | null {
+  const audio = buildOpenResourceDescriptor(
+    input.audioUrl,
+    input.config.audio_file,
+    inferAudioMimeType(input.config.audio_file),
+  );
+  if (!audio) {
+    return null;
+  }
+
+  const cover = buildOpenResourceDescriptor(input.coverUrl, input.config.album_cover);
+  const lyrics = buildOpenResourceDescriptor(input.lyricsUrl, input.config.lyrics_file);
+
+  return {
+    kind: "chips.music-card",
+    version: "1.0.0",
+    cardType: "base.music",
+    config: {
+      card_type: "MusicCard",
+      theme: input.config.theme || "",
+      audio_file: input.config.audio_file,
+      music_name: input.config.music_name,
+      album_cover: input.config.album_cover,
+      lyrics_file: input.config.lyrics_file,
+      production_team: cloneProductionTeam(input.config),
+      release_date: input.config.release_date,
+      album_name: input.config.album_name,
+      language: input.config.language,
+      genre: input.config.genre,
+    },
+    resources: {
+      audio,
+      ...(cover ? { cover } : undefined),
+      ...(lyrics ? { lyrics } : undefined),
+    },
+    display: {
+      title: input.displayTitle,
+      artist: input.artistLabel,
+    },
+  };
 }
 
 function MetaItem(props: { children: React.ReactNode }) {
@@ -222,10 +300,19 @@ export function MusicBasecardView({
   const t = createTranslator(locale);
   const audioUrl = useResolvedResourceUrl(config.audio_file, resolveResourceUrl);
   const coverUrl = useResolvedResourceUrl(config.album_cover, resolveResourceUrl);
+  const lyricsUrl = useResolvedResourceUrl(config.lyrics_file, resolveResourceUrl);
   const displayCoverUrl = coverUrl || DEFAULT_MUSIC_COVER_URL;
   const displayTitle = deriveDisplayTitle(config) || t("music.view.untitled");
   const artistLabel = derivePrimaryArtist(config) || t("music.view.artistFallback");
   const canOpen = Boolean(openResource && audioUrl);
+  const openPayload = buildMusicCardOpenPayload({
+    config,
+    audioUrl,
+    coverUrl,
+    lyricsUrl,
+    displayTitle,
+    artistLabel,
+  });
 
   const metaItems = [
     config.album_name ? t("music.view.meta.album", { value: config.album_name }) : "",
@@ -281,6 +368,7 @@ export function MusicBasecardView({
               mimeType: inferAudioMimeType(config.audio_file),
               title: displayTitle,
               fileName: resolveFileName(config.audio_file),
+              ...(openPayload ? { payload: openPayload } : undefined),
             });
           }}
           aria-label={t("music.view.open", { title: displayTitle })}

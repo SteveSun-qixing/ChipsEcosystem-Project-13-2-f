@@ -100,6 +100,49 @@ describe("embedded artwork workspace cache", () => {
     expect(result?.uri).toBe(`file://${writes[0]?.path}`);
   });
 
+  it("treats an EEXIST mkdir race as success when the cache directory already exists", async () => {
+    const stat = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("missing"))
+      .mockResolvedValueOnce({ isDirectory: true });
+    const mkdir = vi.fn(async () => {
+      throw {
+        code: "INTERNAL_ERROR",
+        details: {
+          code: "EEXIST",
+        },
+      };
+    });
+    const write = vi.fn(async () => {});
+    const resolve = vi.fn(async (resourceId: string) => ({ uri: `file://${resourceId}` }));
+
+    const result = await persistEmbeddedArtworkPngToWorkspace({
+      workspacePath: "/tmp/chips-host",
+      sourceId: "/tmp/demo.mp3",
+      fileName: "cover.png",
+      artwork: {
+        mimeType: "image/png",
+        bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]),
+      },
+      client: {
+        file: {
+          stat,
+          mkdir,
+          write,
+          delete: vi.fn(async () => {}),
+        },
+        resource: {
+          convertTiffToPng: vi.fn(async () => ({})),
+          resolve,
+        },
+      },
+    });
+
+    expect(mkdir).toHaveBeenCalledWith("/tmp/chips-host/.music-player-artwork-cache");
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(result?.uri).toBe(`file://${write.mock.calls[0]?.[0]}`);
+  });
+
   it("returns null when no Host workspace path is available", async () => {
     const result = await persistEmbeddedArtworkPngToWorkspace({
       workspacePath: "   ",

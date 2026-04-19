@@ -1,3 +1,4 @@
+import type { MusicCardOpenPayload } from "chips-sdk";
 import type { LyricsDocument } from "./lyrics";
 
 export interface LaunchAudioTarget {
@@ -6,6 +7,7 @@ export interface LaunchAudioTarget {
   fileName?: string;
   mimeType?: string;
   title?: string;
+  musicCard?: MusicCardOpenPayload;
 }
 
 export interface AudioSource {

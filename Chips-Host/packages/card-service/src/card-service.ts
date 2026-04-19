@@ -154,6 +154,7 @@ interface BaseCardPluginModule {
       mimeType?: string;
       title?: string;
       fileName?: string;
+      payload?: Record<string, unknown>;
     }) => void;
   }) => unknown;
   renderBasecardEditor?: (ctx: {
@@ -169,6 +170,17 @@ interface BaseCardPluginModule {
       entryFile?: string;
     }) => Promise<{ rootDir: string; entryFile: string; resourcePaths: string[] }>;
     deleteResource?: (resourcePath: string) => Promise<void>;
+    convertTiffToPng?: (input: {
+      resourcePath: string;
+      outputPath: string;
+      overwrite?: boolean;
+    }) => Promise<{
+      path: string;
+      mimeType: 'image/png';
+      sourceMimeType: 'image/tiff';
+      width?: number;
+      height?: number;
+    }>;
   }) => unknown;
 }
 
@@ -978,12 +990,16 @@ const createBasecardFrameDocument = (options: {
     '        if (typeof input.resourceId !== "string" || input.resourceId.trim().length === 0) {',
     '          return;',
     '        }',
+    '        const structuredPayload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)',
+    '          ? input.payload',
+    '          : undefined;',
     "        emit('chips.basecard:resource-open', {",
     '          nodeId,',
     '          resourceId: input.resourceId.trim(),',
     '          mimeType: typeof input.mimeType === "string" ? input.mimeType : undefined,',
     '          title: typeof input.title === "string" ? input.title : undefined,',
     '          fileName: typeof input.fileName === "string" ? input.fileName : undefined,',
+    '          payload: structuredPayload,',
     "          intent: 'view',",
     '        });',
     '      };',
@@ -1204,6 +1220,9 @@ const createEditorFrameDocument = (options: {
     '          },',
     '          deleteResource(resourcePath) {',
     "            return requestResource('delete', { resourcePath });",
+    '          },',
+    '          convertTiffToPng(input) {',
+    "            return requestResource('convertTiffToPng', { resourcePath: input?.resourcePath, outputPath: input?.outputPath, overwrite: input?.overwrite });",
     '          },',
     '        });',
     "        emit('chips.card-editor:ready', { baseCardId, cardType, pluginId });",
@@ -1567,6 +1586,9 @@ const createCompositeDocument = (
     '            return;',
     '          }',
     '          const node = nodeById.get(nodeId);',
+    '          const structuredPayload = payload.payload && typeof payload.payload === "object" && !Array.isArray(payload.payload)',
+    '            ? payload.payload',
+    '            : undefined;',
     '          emit("chips.composite:resource-open", {',
     '            nodeId,',
     '            cardType: node?.dataset?.cardType ?? "",',
@@ -1576,6 +1598,7 @@ const createCompositeDocument = (
     '            mimeType: typeof payload.mimeType === "string" ? payload.mimeType : undefined,',
     '            title: typeof payload.title === "string" ? payload.title : undefined,',
     '            fileName: typeof payload.fileName === "string" ? payload.fileName : undefined,',
+    '            payload: structuredPayload,',
     '          });',
     '        }',
     '      });',

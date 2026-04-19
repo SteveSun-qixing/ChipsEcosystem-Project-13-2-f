@@ -336,6 +336,40 @@ describe("createClient", () => {
     });
   });
 
+  it("unwraps wrapped utf-8 content returned by the official file.read route", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async (action) => {
+        if (action === "file.read") {
+          return {
+            content: "hello",
+          };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.file.read("/test.txt", { encoding: "utf-8" })).resolves.toBe("hello");
+  });
+
+  it("normalizes latin1 byte-string payloads returned by file.read(binary)", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async (action) => {
+        if (action === "file.read") {
+          return {
+            content: String.fromCharCode(0x89, 0x50, 0x4e, 0x47),
+          };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    const result = await client.file.read("/test.png", { encoding: "binary" });
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result as Uint8Array)).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
   it("passes recursive list and delete options into file routes", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 

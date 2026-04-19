@@ -40,13 +40,126 @@ export interface FileApi {
   copy(sourcePath: string, destPath: string): Promise<void>;
 }
 
+function unwrapFileReadContent(value: unknown): unknown {
+  if (value && typeof value === "object" && "content" in value) {
+    return (value as { content?: unknown }).content;
+  }
+
+  return value;
+}
+
+function toOwnedBytes(value: ArrayBuffer | ArrayBufferView): Uint8Array {
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value.slice(0));
+  }
+
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+  return copy;
+}
+
+function isBufferJsonPayload(value: unknown): value is { type: "Buffer"; data: number[] } {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "type" in value &&
+    (value as { type?: unknown }).type === "Buffer" &&
+    "data" in value &&
+    Array.isArray((value as { data?: unknown }).data)
+  );
+}
+
+function decodeBase64ToBytes(input: string): Uint8Array {
+  const bufferCtor = (globalThis as typeof globalThis & {
+    Buffer?: {
+      from(data: string, encoding: string): Uint8Array;
+    };
+  }).Buffer;
+
+  if (bufferCtor) {
+    const buffer = bufferCtor.from(input, "base64");
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  const normalized = input.replace(/\s+/g, "");
+  const decoded = atob(normalized);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function decodeByteString(input: string): Uint8Array {
+  const bytes = new Uint8Array(input.length);
+  for (let index = 0; index < input.length; index += 1) {
+    bytes[index] = input.charCodeAt(index) & 0xff;
+  }
+  return bytes;
+}
+
+function shouldDecodeStringAsBase64(input: string): boolean {
+  const normalized = input.replace(/\s+/g, "");
+  if (normalized.length === 0 || normalized.length % 4 !== 0) {
+    return false;
+  }
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return false;
+  }
+
+  return normalized.includes("=") || normalized.includes("+") || normalized.includes("/") || /\s/.test(input);
+}
+
+function normalizeBinaryPayload(value: unknown): Uint8Array {
+  if (value instanceof ArrayBuffer) {
+    return toOwnedBytes(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return toOwnedBytes(value);
+  }
+
+  if (typeof value === "string") {
+    return shouldDecodeStringAsBase64(value) ? decodeBase64ToBytes(value) : decodeByteString(value);
+  }
+
+  if (isBufferJsonPayload(value)) {
+    return Uint8Array.from(value.data);
+  }
+
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return Uint8Array.from(value);
+  }
+
+  if (value && typeof value === "object" && "data" in value) {
+    return normalizeBinaryPayload((value as { data?: unknown }).data);
+  }
+
+  throw createError("INVALID_RESPONSE", "file.read: response is not binary content.");
+}
+
 export function createFileApi(client: CoreClient): FileApi {
   return {
     async read(path, options) {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.read: path is required.");
       }
-      return client.invoke("file.read", { path, options });
+      const result = await client.invoke("file.read", { path, options });
+      const content = unwrapFileReadContent(result);
+
+      if (options?.encoding === "utf-8") {
+        if (typeof content !== "string") {
+          throw createError("INVALID_RESPONSE", "file.read: response is not text content.");
+        }
+        return content;
+      }
+
+      if (options?.encoding === "binary") {
+        return normalizeBinaryPayload(content);
+      }
+
+      return content as FileContent;
     },
     async write(path, content, options) {
       if (!path) {

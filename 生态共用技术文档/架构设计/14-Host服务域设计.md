@@ -22,7 +22,7 @@
 | 序号 | 服务域 | 说明 |
 |---|---|---|
 | 1 | `file` | 文件读写、枚举、拷贝、移动 |
-| 2 | `resource` | 资源解析、读取、统一打开 |
+| 2 | `resource` | 资源解析、读取、统一打开、受控资源格式转换 |
 | 3 | `config` | 配置治理 |
 | 4 | `theme` | 主题管理 |
 | 5 | `i18n` | 多语言管理 |
@@ -147,6 +147,23 @@
 - `module.job.cancel`
 
 模块插件继续通过 capability + method 暴露能力，不得直接互相 `import`。
+
+### 5.3 `resource`
+
+当前 `resource` 命名空间正式收口以下动作：
+
+- `resource.resolve`
+- `resource.open`
+- `resource.readMetadata`
+- `resource.readBinary`
+- `resource.convertTiffToPng`
+
+其中：
+
+- `resource.convertTiffToPng` 用于把本地 TIFF 资源归一化为 PNG 文件；
+- 该动作仍属于 Host 资源服务，不新增新的服务域；
+- 实际平台差异继续收敛到 PAL，服务层只负责输入校验、资源语义和错误归一；
+- 对调用方公开的正式细节以下沉文档 `生态共用技术文档/协议与契约/11-资源图像转换契约.md` 为准。
 
 ## 6. 重要事件语义
 

@@ -1,7 +1,7 @@
 # Chips Host 对外接口基线
 
 > 文档状态：vNext 已落地基线  
-> 更新时间：2026-04-08
+> 更新时间：2026-04-18
 
 ## 1. 适用范围
 
@@ -142,7 +142,20 @@
 - `association.openPath`
 - `association.openUrl`
 
-### 6.5 `platform.*`
+### 6.5 `resource.*`
+
+当前 `resource` 命名空间除 `resolve/open/readMetadata/readBinary` 外，新增正式动作：
+
+- `resource.convertTiffToPng`
+
+关键语义：
+
+- `resource.readBinary` 对 SDK 与应用层的正式语义始终是“返回裸字节”；若 Host / Bridge 内部为了传输经过 `Buffer` 包装或序列化，必须由 SDK 在调用侧统一解包，不得把包装对象暴露为公共契约；
+- 输入资源必须是本地文件路径或 `file://` 本地资源；
+- Host 负责校验输入是否为 TIFF，并把结果落盘为 PNG 文件；
+- 调用方不直接感知底层平台实现，正式输入输出以共享契约文档为准。
+
+### 6.6 `platform.*`
 
 当前 `platform` 收口到平台原语与离屏导出：
 
@@ -165,7 +178,7 @@
 - `platform.shortcut*`
 - `platform.ipc*`
 
-### 6.6 `box.*` 统一文档链路补充
+### 6.7 `box.*` 统一文档链路补充
 
 当前 `box` 命名空间已经正式公开以下统一文档链路动作：
 

@@ -117,9 +117,51 @@ client.card.render(cardFile: string, options?: RenderOptions): Promise<CardView>
 
 > 注意：旧版 `cards.read`、`cards.create`、`cards.update`、`cards.delete` 方法已归档，请使用 `card.pack/unpack/readMetadata/parse/render/validate` 接口。
 
+### `client.file.read(path, { encoding: "binary" })`
+
+推荐用法：
+
+```typescript
+const bytes = await client.file.read("/tmp/demo-cover.png", { encoding: "binary" });
+```
+
+返回结构：
+
+```typescript
+Uint8Array
+```
+
+使用语义：
+
+- `client.file.read(..., { encoding: "binary" })` 对调用方的正式语义始终是“返回裸二进制字节”；
+- 若 Host / Bridge 因传输序列化返回 `latin1` 字节串、Base64 字符串、`Buffer` JSON、`ArrayBuffer` 或其他 TypedArray，SDK 会在内部统一归一为 `Uint8Array`；
+- 调用方不应在业务层自行兼容 `.content.data`、`{ type: "Buffer" }` 等中间包装形状；
+- 该接口适用于编辑器链路中的资源转码结果读取、图片头判断、音频元数据解析等需要稳定字节数组的场景。
+
 ## 资源打开路由
 
 SDK 提供统一资源 API，直接映射 Host `resource.*` 服务动作。
+
+### `client.resource.readBinary(...)`
+
+推荐用法：
+
+```typescript
+const bytes = await client.resource.readBinary("/tmp/demo.mp3");
+```
+
+返回结构：
+
+```typescript
+ArrayBuffer
+```
+
+使用语义：
+
+- `client.resource.readBinary(...)` 对调用方的正式语义始终是“返回裸二进制字节”；
+- 若 Host / Bridge 运行时内部经过 `Buffer` 包装，或在桥接序列化后退化为 `{ data: { type: "Buffer", data: number[] } }`，SDK 会在内部统一解包，再向业务层返回 `ArrayBuffer`；
+- 调用方不得把 `.data` 包装对象当作公共契约，也不应在业务层自行兼容多种返回形状；
+- 该接口适用于音频元数据解析、图片字节读取、自定义资源解析等需要原始字节的场景。
 
 ### `client.resource.open(...)`
 
@@ -162,6 +204,37 @@ const result = await client.resource.open({
 - Host 会优先匹配 `resource-handler:<intent>:<mime>`，再匹配 `file-handler:<ext>`；
 - 若没有命中应用处理器，Host 可能回退到系统路径打开或系统外链打开；
 - 该接口要求插件声明 `resource.read` 权限。
+
+### `client.resource.convertTiffToPng(...)`
+
+当调用方拿到的是本地 TIFF 资源，但后续链路只接受 PNG 文件时，应调用正式资源转换接口：
+
+```typescript
+const result = await client.resource.convertTiffToPng({
+  resourceId: "/tmp/album-cover.tiff",
+  outputFile: "/tmp/album-cover.png",
+  overwrite: true,
+});
+```
+
+返回结构：
+
+```typescript
+{
+  outputFile: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+```
+
+使用语义：
+
+- 输入只支持本地文件路径或 `file://` 本地资源；
+- Host 会校验源文件确实是 TIFF，再交由正式宿主能力完成 PNG 落盘；
+- 该接口适用于专辑封面提取、图片查看链路归一化、资源入库前预处理等场景；
+- 该接口要求调用方具备 `resource.read`、`file.read`、`file.write` 权限。
 
 ### 资源处理器应用的启动恢复
 
@@ -303,7 +376,26 @@ client.card.editorPanel.render({
     resolveResourceUrl?(resourcePath: string): Promise<string> | string,
     releaseResourceUrl?(resourcePath: string): Promise<void> | void,
     importResource?(input: { file: File, preferredPath?: string }): Promise<{ path: string }> | { path: string },
-    deleteResource?(resourcePath: string): Promise<void> | void
+    importArchiveBundle?(
+      input: { file: File, preferredRootDir?: string, entryFile?: string }
+    ): Promise<{ rootDir: string, entryFile: string, resourcePaths: string[] }>
+      | { rootDir: string, entryFile: string, resourcePaths: string[] },
+    deleteResource?(resourcePath: string): Promise<void> | void,
+    convertTiffToPng?(
+      input: { resourcePath: string, outputPath: string, overwrite?: boolean }
+    ): Promise<{
+      path: string,
+      mimeType: "image/png",
+      sourceMimeType: "image/tiff",
+      width?: number,
+      height?: number,
+    }> | {
+      path: string,
+      mimeType: "image/png",
+      sourceMimeType: "image/tiff",
+      width?: number,
+      height?: number,
+    }
   }
 }): Promise<IframeWindow>
 ```
@@ -569,6 +661,9 @@ const result = await client.card.editorPanel.render({
     async deleteResource(resourcePath) {
       await removeFromCardRoot(resourcePath);
     },
+    async convertTiffToPng({ resourcePath, outputPath, overwrite }) {
+      return convertCardAssetTiffToPng(resourcePath, outputPath, overwrite);
+    },
     releaseResourceUrl(resourcePath) {
       releaseBlobUrl(resourcePath);
     },
@@ -585,6 +680,8 @@ const result = await client.card.editorPanel.render({
 - `importArchiveBundle(...)` 的宿主职责是：验证入口文件、解压 ZIP、把最终网页目录写到卡片根目录，并返回正式相对路径；
 - 若宿主通过 `client.zip.list(...)` / `client.zip.extract(...)` 实现 `importArchiveBundle(...)`，对应应用插件必须在 `manifest.permissions` 中声明 `zip.manage`；
 - 当宿主无法通过 `client.platform.getPathForFile(file)` 拿到所选 ZIP 的真实磁盘路径时，可以先通过正式文件服务把该 `File` 内容写入会话暂存路径，再继续调用 `client.zip.list(...)` / `client.zip.extract(...)`；
+- `convertTiffToPng(...)` 适用于音乐基础卡片这类“先提取内嵌封面，再把 TIFF 归一为 PNG”的场景；返回值中的 `path` 必须是卡片根目录相对路径；
+- 若 `resources.convertTiffToPng` 未显式提供，但 `resources.rootPath` 与 SDK client 可用，SDK 会自动把 `resourcePath/outputPath` 解析到卡片根目录，再转调正式 Host `resource.convertTiffToPng`；
 - 若宿主按官方资源链路保存内部文件，应把文件直接写入卡片根目录，而不是写入 `content/`；
 - `resources` 只在当前应用进程内生效，不进入 Host 正式 `card.renderEditor` 路由契约。
 

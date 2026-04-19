@@ -8,6 +8,7 @@ import { globalEventEmitter } from '../core/event-emitter';
 import { useTranslation } from '../hooks/useTranslation';
 import { fileService } from '../services/file-service';
 import { platformService } from '../services/platform-service';
+import { resourceService } from '../services/resource-service';
 import { zipService } from '../services/zip-service';
 import type { BasecardPendingResourceImport, BasecardResourceOperations } from '../basecard-runtime/contracts';
 import { importArchiveBundleIntoCardRoot } from './archive-import';
@@ -63,6 +64,13 @@ function createObjectUrl(resource: BasecardPendingResourceImport): string {
   const buffer = new ArrayBuffer(resource.data.byteLength);
   new Uint8Array(buffer).set(resource.data);
   return URL.createObjectURL(new Blob([buffer], { type }));
+}
+
+function createStagedConversionFilePath(cardPath: string, baseCardId: string, extension: string): string {
+  const normalizedExtension = extension.replace(/^\./, '').toLowerCase() || 'bin';
+  const normalizedBaseCardId = baseCardId.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/-+/g, '-') || 'basecard';
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return joinPath(cardPath, '.card', `.__editor-${normalizedBaseCardId}-${token}.${normalizedExtension}`);
 }
 
 export interface EditorHostProps {
@@ -312,6 +320,69 @@ export function EditorHost({
     store.queueResourceDeletion(sessionKey, normalizedResourcePath);
   }, [releaseResolvedResourceUrl, sessionKey, store]);
 
+  const convertTiffToPng = useCallback(async (input: {
+    resourcePath: string;
+    outputPath: string;
+    overwrite?: boolean;
+  }) => {
+    const normalizedResourcePath = normalizeResourcePath(input.resourcePath);
+    if (!normalizedResourcePath) {
+      throw new Error(`资源路径无效: ${input.resourcePath}`);
+    }
+
+    const normalizedOutputPath = normalizeResourcePath(input.outputPath);
+    if (!normalizedOutputPath) {
+      throw new Error(`输出路径无效: ${input.outputPath}`);
+    }
+
+    const pendingSourceImport = store.getPendingResourceImport(sessionKey, normalizedResourcePath);
+    const absoluteSourcePath = joinPath(cardPath, normalizedResourcePath);
+    const stagedSourcePath = pendingSourceImport
+      ? createStagedConversionFilePath(cardPath, baseCardId, 'tiff')
+      : null;
+    const stagedOutputPath = createStagedConversionFilePath(cardPath, baseCardId, 'png');
+    let convertedOutputPath = stagedOutputPath;
+
+    try {
+      if (pendingSourceImport) {
+        await fileService.writeBinary(stagedSourcePath!, pendingSourceImport.data);
+      } else {
+        const sourceExists = await fileService.exists(absoluteSourcePath);
+        if (!sourceExists) {
+          throw new Error(`TIFF 资源不存在: ${normalizedResourcePath}`);
+        }
+      }
+
+      const converted = await resourceService.convertTiffToPng({
+        resourceId: stagedSourcePath ?? absoluteSourcePath,
+        outputFile: stagedOutputPath,
+        ...(typeof input.overwrite === 'boolean' ? { overwrite: input.overwrite } : undefined),
+      });
+
+      convertedOutputPath = converted.outputFile || stagedOutputPath;
+      const convertedBytes = await fileService.readBinary(convertedOutputPath);
+      releaseResolvedResourceUrl(normalizedOutputPath);
+      store.queueResourceImport(sessionKey, {
+        path: normalizedOutputPath,
+        data: convertedBytes,
+        mimeType: converted.mimeType,
+      });
+
+      return {
+        path: normalizedOutputPath,
+        mimeType: converted.mimeType,
+        sourceMimeType: converted.sourceMimeType,
+        width: converted.width,
+        height: converted.height,
+      };
+    } finally {
+      if (stagedSourcePath) {
+        await fileService.delete(stagedSourcePath).catch(() => undefined);
+      }
+      await fileService.delete(convertedOutputPath).catch(() => undefined);
+    }
+  }, [baseCardId, cardPath, releaseResolvedResourceUrl, sessionKey, store]);
+
   const importArchiveBundle = useCallback(async (input: {
     file: File;
     preferredRootDir?: string;
@@ -476,6 +547,7 @@ export function EditorHost({
         importResource,
         importArchiveBundle,
         deleteResource,
+        convertTiffToPng,
       });
 
       setIsLoading(false);
@@ -512,6 +584,7 @@ export function EditorHost({
     importResource,
     importArchiveBundle,
     deleteResource,
+    convertTiffToPng,
     releaseResolvedResourceUrl,
     sessionKey,
     mountRevision,

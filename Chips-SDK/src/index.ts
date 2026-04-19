@@ -25,6 +25,8 @@ export type {
   CardEditorRenderOptions,
   CardEditorRenderResult,
   CardEditorResourceBridge,
+  CardEditorTiffToPngRequest,
+  CardEditorTiffToPngResult,
   CardEditorResourceImportRequest,
   CardEditorResourceImportResult,
   CardEditorView,

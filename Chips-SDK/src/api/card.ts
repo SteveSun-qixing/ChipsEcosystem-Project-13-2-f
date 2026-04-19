@@ -179,6 +179,20 @@ export interface CardEditorArchiveImportResult {
   resourcePaths: string[];
 }
 
+export interface CardEditorTiffToPngRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+}
+
+export interface CardEditorTiffToPngResult {
+  path: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+
 export interface CardEditorResourceBridge {
   rootPath?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string> | string;
@@ -190,6 +204,9 @@ export interface CardEditorResourceBridge {
     input: CardEditorArchiveImportRequest,
   ) => Promise<CardEditorArchiveImportResult> | CardEditorArchiveImportResult;
   deleteResource?: (resourcePath: string) => Promise<void> | void;
+  convertTiffToPng?: (
+    input: CardEditorTiffToPngRequest,
+  ) => Promise<CardEditorTiffToPngResult> | CardEditorTiffToPngResult;
 }
 
 export interface FrameRenderResult {
@@ -578,7 +595,7 @@ export function createCardApi(client: CoreClient): CardApi {
               : undefined,
           },
         );
-        const cleanupBridge = attachCardEditorResourceBridge(frameResult.frame, resources);
+        const cleanupBridge = attachCardEditorResourceBridge(frameResult.frame, resources, client);
         const originalDispose = frameResult.dispose;
         frameResult.dispose = async () => {
           cleanupBridge();
@@ -599,21 +616,24 @@ export function createCardApi(client: CoreClient): CardApi {
   };
 }
 
-type CardEditorResourceAction = "resolve" | "import" | "importArchiveBundle" | "delete";
+type CardEditorResourceAction = "resolve" | "import" | "importArchiveBundle" | "delete" | "convertTiffToPng";
 
 type CardEditorResourceRequestPayload = {
   requestId: string;
   action: CardEditorResourceAction;
   resourcePath?: string;
+  outputPath?: string;
   preferredPath?: string;
   preferredRootDir?: string;
   entryFile?: string;
   file?: File;
+  overwrite?: boolean;
 };
 
 function attachCardEditorResourceBridge(
   frame: HTMLIFrameElement,
   resources?: CardEditorResourceBridge,
+  client?: CoreClient,
 ): () => void {
   if (typeof window === "undefined" || !resources) {
     return () => undefined;
@@ -654,7 +674,7 @@ function attachCardEditorResourceBridge(
       return;
     }
 
-    void handleCardEditorResourceRequest(resources, payload)
+    void handleCardEditorResourceRequest(resources, payload, client)
       .then((result) => {
         source.postMessage(
           {
@@ -690,6 +710,7 @@ function attachCardEditorResourceBridge(
 async function handleCardEditorResourceRequest(
   resources: CardEditorResourceBridge,
   payload: CardEditorResourceRequestPayload,
+  client?: CoreClient,
 ): Promise<unknown> {
   switch (payload.action) {
     case "resolve": {
@@ -758,6 +779,62 @@ async function handleCardEditorResourceRequest(
       }
       await resources.deleteResource(resourcePath);
       return null;
+    }
+    case "convertTiffToPng": {
+      const resourcePath = normalizeRelativeResourcePath(payload.resourcePath);
+      if (!resourcePath) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.convertTiffToPng: resourcePath is required.",
+        );
+      }
+
+      const outputPath = normalizeRelativeResourcePath(payload.outputPath);
+      if (!outputPath) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.convertTiffToPng: outputPath is required.",
+        );
+      }
+
+      if (typeof payload.overwrite !== "undefined" && typeof payload.overwrite !== "boolean") {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.convertTiffToPng: overwrite must be a boolean when provided.",
+        );
+      }
+
+      if (resources.convertTiffToPng) {
+        return resources.convertTiffToPng({
+          resourcePath,
+          outputPath,
+          ...(typeof payload.overwrite === "boolean" ? { overwrite: payload.overwrite } : undefined),
+        });
+      }
+
+      if (!resources.rootPath || !client) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "card.editorPanel.resource.convertTiffToPng requires resources.convertTiffToPng or resources.rootPath.",
+        );
+      }
+
+      const result = await client.invoke<
+        { resourceId: string; outputFile: string; overwrite?: boolean },
+        { outputFile: string; mimeType: "image/png"; sourceMimeType: "image/tiff"; width?: number; height?: number }
+      >("resource.convertTiffToPng", {
+        resourceId: joinPath(resources.rootPath, resourcePath),
+        outputFile: joinPath(resources.rootPath, outputPath),
+        ...(typeof payload.overwrite === "boolean" ? { overwrite: payload.overwrite } : undefined),
+      });
+
+      return {
+        path: outputPath,
+        mimeType: result.mimeType,
+        sourceMimeType: result.sourceMimeType,
+        width: result.width,
+        height: result.height,
+      };
     }
     default:
       throw createError("INVALID_ARGUMENT", `Unsupported editor resource action: ${String(payload.action)}`);

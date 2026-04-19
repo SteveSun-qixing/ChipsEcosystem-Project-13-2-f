@@ -28,6 +28,20 @@ export interface BasecardArchiveImportResult {
   resourcePaths: string[];
 }
 
+export interface BasecardTiffToPngRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+}
+
+export interface BasecardTiffToPngResult {
+  path: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+
 export interface BasecardPendingResourceImport {
   path: string;
   data: Uint8Array;
@@ -56,6 +70,7 @@ export interface BasecardEditorContext {
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
   importArchiveBundle?: (input: BasecardArchiveImportRequest) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
 }
 
 export interface BasecardDescriptor {

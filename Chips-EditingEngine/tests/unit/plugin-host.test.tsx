@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorRuntimeProvider } from '../../src/editor-runtime/context';
 import { PluginHost } from '../../src/components/EditPanel/PluginHost';
 import { fileService } from '../../src/services/file-service';
+import { resourceService } from '../../src/services/resource-service';
 
 const mockRenderEditor = vi.fn();
 let editorChangeHandler: ((nextConfig: Record<string, unknown>) => void) | null = null;
@@ -14,6 +15,15 @@ let editorImportResource:
   | null = null;
 let editorResolveResourceUrl:
   | ((resourcePath: string) => Promise<string>)
+  | null = null;
+let editorConvertTiffToPng:
+  | ((input: { resourcePath: string; outputPath: string; overwrite?: boolean }) => Promise<{
+      path: string;
+      mimeType: 'image/png';
+      sourceMimeType: 'image/tiff';
+      width?: number;
+      height?: number;
+    }>)
   | null = null;
 
 vi.mock('../../src/basecard-runtime/registry', () => ({
@@ -65,7 +75,27 @@ vi.mock('../../src/services/file-service', () => ({
   fileService: {
     readText: vi.fn(async (path: string) => `text:${path}`),
     readBinary: vi.fn(async () => new Uint8Array([1, 2, 3])),
+    writeBinary: vi.fn(async () => undefined),
     exists: vi.fn(async () => false),
+    delete: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('../../src/services/resource-service', () => ({
+  resourceService: {
+    convertTiffToPng: vi.fn(async ({
+      outputFile,
+    }: {
+      resourceId: string;
+      outputFile: string;
+      overwrite?: boolean;
+    }) => ({
+      outputFile,
+      mimeType: 'image/png' as const,
+      sourceMimeType: 'image/tiff' as const,
+      width: 320,
+      height: 320,
+    })),
   },
 }));
 
@@ -94,14 +124,23 @@ describe('PluginHost', () => {
     editorChangeHandler = null;
     editorImportResource = null;
     editorResolveResourceUrl = null;
+    editorConvertTiffToPng = null;
     mockRenderEditor.mockReset();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
     vi.mocked(fileService.exists).mockResolvedValue(false);
-    mockRenderEditor.mockImplementation(({ onChange, importResource, resolveResourceUrl }) => {
+    vi.mocked(resourceService.convertTiffToPng).mockResolvedValue({
+      outputFile: '/workspace/card-1.card/.card/.__editor-base-1-temp.png',
+      mimeType: 'image/png',
+      sourceMimeType: 'image/tiff',
+      width: 320,
+      height: 320,
+    });
+    mockRenderEditor.mockImplementation(({ onChange, importResource, resolveResourceUrl, convertTiffToPng }) => {
       editorChangeHandler = onChange;
       editorImportResource = importResource;
       editorResolveResourceUrl = resolveResourceUrl ?? null;
+      editorConvertTiffToPng = convertTiffToPng ?? null;
       return () => undefined;
     });
   });
@@ -603,6 +642,70 @@ describe('PluginHost', () => {
     const resolvedUrl = await editorResolveResourceUrl?.('photo.png');
     expect(resolvedUrl?.startsWith('blob:')).toBe(true);
     expect(createObjectURL).toHaveBeenCalled();
+  });
+
+  it('stages TIFF conversion results back into the editor session for music cover extraction', async () => {
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="MusicCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', card_type: 'MusicCard', audio_file: 'tracks/demo.mp3' }}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(editorConvertTiffToPng).not.toBeNull();
+
+    await act(async () => {
+      await editorImportResource?.({
+        file: new File(['tiff'], 'source.tiff', { type: 'image/tiff' }),
+        preferredPath: 'source.tiff',
+      });
+      await Promise.resolve();
+    });
+
+    let converted:
+      | {
+          path: string;
+          mimeType: 'image/png';
+          sourceMimeType: 'image/tiff';
+          width?: number;
+          height?: number;
+        }
+      | undefined;
+
+    await act(async () => {
+      converted = await editorConvertTiffToPng?.({
+        resourcePath: 'source.tiff',
+        outputPath: 'cover.png',
+        overwrite: true,
+      });
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(resourceService.convertTiffToPng)).toHaveBeenCalledWith({
+      resourceId: expect.stringMatching(/^\/workspace\/card-1\.card\/\.card\/\.__editor-base-1-.*\.tiff$/),
+      outputFile: expect.stringMatching(/^\/workspace\/card-1\.card\/\.card\/\.__editor-base-1-.*\.png$/),
+      overwrite: true,
+    });
+    expect(converted).toEqual({
+      path: 'cover.png',
+      mimeType: 'image/png',
+      sourceMimeType: 'image/tiff',
+      width: 320,
+      height: 320,
+    });
+
+    const resolvedUrl = await editorResolveResourceUrl?.('cover.png');
+    expect(resolvedUrl?.startsWith('blob:')).toBe(true);
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(vi.mocked(fileService.delete)).toHaveBeenCalled();
   });
 
   it('keeps the mounted editor stable when its own committed config is reflected back through props', async () => {

@@ -594,6 +594,23 @@ describe("CardApi", () => {
         resourcePaths: [`${preferredRootDir ?? file.name}/${entryFile ?? "index.html"}`],
       }));
       const deleteResource = vi.fn(async () => undefined);
+      const convertTiffToPng = vi.fn(async (
+        {
+          resourcePath,
+          outputPath,
+          overwrite,
+        }: {
+          resourcePath: string;
+          outputPath: string;
+          overwrite?: boolean;
+        },
+      ) => ({
+        path: outputPath,
+        mimeType: "image/png" as const,
+        sourceMimeType: "image/tiff" as const,
+        width: overwrite ? 512 : undefined,
+        height: overwrite ? 512 : undefined,
+      }));
       const releaseResourceUrl = vi.fn();
 
       const result = await api.editorPanel.render({
@@ -604,6 +621,7 @@ describe("CardApi", () => {
           importResource,
           importArchiveBundle,
           deleteResource,
+          convertTiffToPng,
           releaseResourceUrl,
         },
       });
@@ -722,6 +740,39 @@ describe("CardApi", () => {
       );
 
       await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "convert-tiff-1",
+          action: "convertTiffToPng",
+          resourcePath: "./images/cover-source.tiff",
+          outputPath: "./images/cover.png",
+          overwrite: true,
+        },
+      });
+      expect(convertTiffToPng).toHaveBeenCalledWith({
+        resourcePath: "images/cover-source.tiff",
+        outputPath: "images/cover.png",
+        overwrite: true,
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "convert-tiff-1",
+            ok: true,
+            result: {
+              path: "images/cover.png",
+              mimeType: "image/png",
+              sourceMimeType: "image/tiff",
+              width: 512,
+              height: 512,
+            },
+          },
+        },
+        "*",
+      );
+
+      await dispatch({
         type: "chips.card-editor:resource-release",
         payload: {
           resourcePath: "./images/cover.png",
@@ -735,18 +786,36 @@ describe("CardApi", () => {
     }
   });
 
-  it("uses rootPath as the fallback editor resource resolver", async () => {
+  it("uses rootPath as the fallback editor resource resolver and TIFF conversion target", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
     const api = createCardApi(
-      createStubClient(async () => ({
-        view: {
-          title: "ImageCard Editor",
-          documentUrl: "file:///workspace/editor/root-path.html",
-          sessionId: "editor-session-4",
-          cardType: "ImageCard",
-          pluginId: "chips.basecard.image",
-          baseCardId: "image-1",
-        },
-      }) as any),
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "card.renderEditor") {
+          return {
+            view: {
+              title: "ImageCard Editor",
+              documentUrl: "file:///workspace/editor/root-path.html",
+              sessionId: "editor-session-4",
+              cardType: "ImageCard",
+              pluginId: "chips.basecard.image",
+              baseCardId: "image-1",
+            },
+          } as any;
+        }
+
+        if (action === "resource.convertTiffToPng") {
+          return {
+            outputFile: "/workspace/card-root/images/cover.png",
+            mimeType: "image/png",
+            sourceMimeType: "image/tiff",
+            width: 256,
+            height: 256,
+          } as any;
+        }
+
+        throw new Error(`unexpected action: ${action}`);
+      }),
     );
 
     const previousWindow = (globalThis as any).window;
@@ -809,6 +878,50 @@ describe("CardApi", () => {
             requestId: "resolve-root",
             ok: true,
             result: "file:///workspace/card-root/images/cover%20photo.png",
+          },
+        },
+        "*",
+      );
+
+      listeners[0]?.({
+        source: createdFrame?.contentWindow,
+        origin: "null",
+        data: {
+          type: "chips.card-editor:resource-request",
+          payload: {
+            requestId: "convert-root",
+            action: "convertTiffToPng",
+            resourcePath: "images/cover-source.tiff",
+            outputPath: "images/cover.png",
+            overwrite: true,
+          },
+        },
+      } as MessageEvent);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(calls).toContainEqual({
+        action: "resource.convertTiffToPng",
+        payload: {
+          resourceId: "/workspace/card-root/images/cover-source.tiff",
+          outputFile: "/workspace/card-root/images/cover.png",
+          overwrite: true,
+        },
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "convert-root",
+            ok: true,
+            result: {
+              path: "images/cover.png",
+              mimeType: "image/png",
+              sourceMimeType: "image/tiff",
+              width: 256,
+              height: 256,
+            },
           },
         },
         "*",

@@ -4,6 +4,7 @@
  * @description 统一封装资源管理能力
  */
 
+import { getChipsClient } from './bridge-client';
 import { fileService } from './file-service';
 import { globalEventEmitter } from '../core/event-emitter';
 
@@ -14,6 +15,20 @@ export interface FileMetadata {
     isFile: boolean;
     size?: number;
     modified?: string;
+}
+
+export interface ResourceConvertTiffToPngRequest {
+    resourceId: string;
+    outputFile: string;
+    overwrite?: boolean;
+}
+
+export interface ResourceConvertTiffToPngResult {
+    outputFile: string;
+    mimeType: 'image/png';
+    sourceMimeType: 'image/tiff';
+    width?: number;
+    height?: number;
 }
 
 let resourceServiceInstance: ResourceService | null = null;
@@ -138,6 +153,10 @@ export class ResourceService {
         await fileService.ensureDir(absolutePath);
     }
 
+    async convertTiffToPng(request: ResourceConvertTiffToPngRequest): Promise<ResourceConvertTiffToPngResult> {
+        return getChipsClient().resource.convertTiffToPng(request);
+    }
+
     reset(): void {
         this.initialized = false;
         this.workspaceRoot = '';
@@ -216,5 +235,10 @@ export const resourceService = {
     },
     async move(sourcePath: string, destPath: string): Promise<void> {
         return getResourceService().move(sourcePath, destPath);
+    },
+    async convertTiffToPng(
+        request: ResourceConvertTiffToPngRequest,
+    ): Promise<ResourceConvertTiffToPngResult> {
+        return getResourceService().convertTiffToPng(request);
     },
 };

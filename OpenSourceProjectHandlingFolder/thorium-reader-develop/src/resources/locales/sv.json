@@ -1,0 +1,1265 @@
+{
+    "accessibility": {
+        "bookMenu": "Meny",
+        "closeDialog": "Stäng",
+        "importFile": "Importera bok",
+        "leftSlideButton": "Dra åt vänster",
+        "mainContent": "huvudinnehåll",
+        "rightSlideButton": "Dra åt höger",
+        "skipLink": "Hoppa till innehåll",
+        "toolbar": "vektygsfält"
+    },
+    "apiapp": {
+        "documentation": "Thorium-dokumentation",
+        "howItWorks": "Hur fungerar det?",
+        "informations": "I Frankrike erbjuder många offentliga bibliotek en maskinläsbar katalog (liknande OPDS men inte identisk), som låter låntagare ladda ner digitala publikationer från deras personliga bokhylla. Med denna teknik integrerad i Thorium Reader kan du ladda ner en e-bok eller ljudbok direkt till Thorium Reader för omedelbar läsning.\nHur ansluter du ditt konto från ett franskt offentligt bibliotek till Thorium Reader? Det är enkelt. Ange en fransk stad eller en del av bibliotekets namn i sökfältet och tryck på sökknappen. En lista med offentliga bibliotek som motsvarar din sökning visas. Välj ett bibliotek och tryck på Lägg till. I den uppdaterade listan med kataloger, välj detta bibliotek: ett inloggningsformulär visas. Ange ditt användarnamn/e-postadress och lösenord, och tryck på Logga in. Du kan nu se innehållet i din personliga bokhylla, från vilken du kan ladda ner och läsa de e-böcker och ljudböcker du tidigare lånat.",
+        "noLibraryFound": "Inget bibliotek hittades ({{- name}})"
+    },
+    "app": {
+        "edit": {
+            "copy": "Kopiera",
+            "cut": "Klipp ut",
+            "paste": "Klistra in",
+            "print": "Skriv ut",
+            "redo": "Gör om",
+            "selectAll": "Markera allt",
+            "title": "Redigera",
+            "undo": "Ångra"
+        },
+        "hide": "Dölj {{- appName}}",
+        "quit": "Avsluta {{- appName}}",
+        "session": {
+            "exit": {
+                "askBox": {
+                    "button": {
+                        "no": "Nej",
+                        "yes": "Ja"
+                    },
+                    "help": "Välj detta om du vill att läsfönster som är öppna när du stänger programmet ska öppnas automatiskt vid nästa start.",
+                    "message": "Spara och återställ sessionen",
+                    "title": "Spara session?"
+                }
+            }
+        },
+        "update": {
+            "message": "Ny version tillgänglig, klicka för mer information.",
+            "title": "{{- appName}}-programuppdatering."
+        },
+        "window": {
+            "showLibrary": "Visa bibliotek/bokhylla"
+        }
+    },
+    "catalog": {
+        "AddToFavorites": "Lägg till favoriter",
+        "about": {
+            "title": "Om {{- appName}}"
+        },
+        "addBookToLib": "Importera",
+        "addTags": "Lägg till tagg",
+        "addTagsButton": "Lägg till",
+        "allBooks": "Alla böcker",
+        "bookInfo": "Om boken",
+        "column": {
+            "ascending": "stigande",
+            "descending": "fallande",
+            "unsorted": "osorterat"
+        },
+        "customization": {
+            "fallback": {
+                "description": "Profilen saknar beskrivning",
+                "publications": "Profilpublikationer",
+                "screen": "Ingen titel",
+                "title": "Profilnamn"
+            }
+        },
+        "delete": "Ta bort",
+        "deleteBook": "Ta bort",
+        "deleteTag": "Ta bort taggen",
+        "description": "Beskrivning",
+        "emptyTagList": "Du har inga böcker med taggar.",
+        "entry": {
+            "continueReading": "Fortsätt läsa",
+            "lastAdditions": "Nyligen tillagt"
+        },
+        "export": "Spara som",
+        "exportAnnotation": "Exportera anteckningar",
+        "format": "Format",
+        "importAnnotation": "Importera anteckningar",
+        "lang": "Språk",
+        "lastRead": "Senast läst",
+        "login": "Logga in",
+        "logout": "Logga ut",
+        "missing": "",
+        "moreInfo": "Information om publikationen",
+        "myBooks": "Mina böcker",
+        "noPublicationHelpL1": "Släpp en publikation här",
+        "noPublicationHelpL2": "eller använd \"{{- importTitle }}\"-knappen ovanför.",
+        "noPublicationHelpL3": "LCP-skyddade filer stöds.",
+        "noPublicationHelpL4": "Filtyper som stöds:",
+        "numberOfPages": "Antal sidor",
+        "opds": {
+            "auth": {
+                "cancel": "Avbryt",
+                "external": "Loginsidan kommer att öppnas i din webbläsare. Följ instruktionerna. Efter att du har loggat in så kommer du att komma tillbaka till det här programmet.",
+                "fallback": "Obs!: Vid inloggningsproblem med standardwebbläsarmetoden, försök igen med den alternativa inbyggda metoden i appen.",
+                "login": "Logga in",
+                "password": "Lösenord",
+                "register": "Registrera dig",
+                "retry": "Försök igen",
+                "username": "Användarnamn/e-postadress"
+            },
+            "info": {
+                "availableSince": "Sedan",
+                "availableState": {
+                    "available": "Tillgänglig",
+                    "ready": "Redo",
+                    "reserved": "Reserverad",
+                    "unavailable": "Otillgänglig",
+                    "unknown": "Okänt"
+                },
+                "availableUntil": "Till",
+                "copyAvalaible": "Antal tillgängliga",
+                "copyTotal": "Antal exemplar",
+                "holdPosition": "Din plats i reservationskön",
+                "holdTotal": "Reserverade",
+                "numberOfItems": "Antal exemplar",
+                "priveValue": "Pris",
+                "state": "Status"
+            }
+        },
+        "publisher": "Utgivare",
+        "readBook": "Läs",
+        "released": "Publicerad den",
+        "removeFromFavorites": "Ta bort från favoriter",
+        "selectTableHeaders": "",
+        "sort": "Sortera efter",
+        "tag": "Tagg",
+        "tags": "Taggar",
+        "update": "Redigera"
+    },
+    "dialog": {
+        "annotations": {
+            "descAuthor": "av {{- author}}",
+            "descCreator": "skapad(e) av",
+            "descList_one": "{{- count}} anteckning {{- creator}} kommer att importeras till {{- title}} {{- author}}",
+            "descList_other": "{{- count}} anteckningar {{- creator}} kommer att importeras till {{- title}} {{- author}}",
+            "descNewer_one": "Konflikter: {{- count}} nyare anteckning",
+            "descNewer_other": "Konflikter: {{- count}} nyare anteckningar",
+            "descOlder_one": "Konflikter: {{- count}} äldre anteckning",
+            "descOlder_other": "Konflikter: {{- count}} äldre anteckningar",
+            "descTitle": "Anteckningarnas titel: ",
+            "importAll": "Importera alla anteckningar",
+            "importWithoutConflict": "Importera anteckningar utan konflikter",
+            "origin": "Källa: {{- title}} {{- author}}",
+            "title": "Vill du importera de här anteckningarna?"
+        },
+        "cancel": "Avbryt",
+        "customization": {
+            "splashscreen": {
+                "fallbackWelcomeScreen": "Det finns ingen välkomstskärm",
+                "state": "Status: {{- state}}",
+                "title": "Tillhandahålla och aktivera anpassningsprofil"
+            }
+        },
+        "deleteAnnotations": "Radera anteckningar?",
+        "deleteAnnotationsText_one": "Vill du radera {{- count}} anteckning?",
+        "deleteAnnotationsText_other": "Vill du radera {{- count}} anteckningar?",
+        "deleteBookmarks": "Radera bokmärken?",
+        "deleteBookmarksText_one": "Vill du radera {{- count}} bokmärke?",
+        "deleteBookmarksText_other": "Vill du radera {{- count}} bokmärken?",
+        "deleteFeed": "Vill du ta bort den här katalogen?",
+        "deletePublication": "Vill du ta bort den här publikationen?",
+        "deletePublicationWithNotes": "Varning: Det finns anteckningar och/eller bokmärken som också kommer att raderas! (Om du vill behålla dem så måste du exportera anteckningar och bokmärken innan du tar bort boken)",
+        "import": "Vill du importera följande filer:",
+        "importError": "Det uppstod ett fel, kontrollera filtypen ({{acceptedExtension}})",
+        "renew": "Vill du förnya lånet?",
+        "return": "Vill du lämna tillbaka den här publikationen?",
+        "yes": "Ja"
+    },
+    "error": {
+        "errorBox": {
+            "error": "Felmeddelande:",
+            "message": "Ett fel uppstod i {{- filename}}",
+            "title": "Internt {{- appName}}-fel"
+        }
+    },
+    "header": {
+        "allBooks": "Alla böcker",
+        "catalogs": "Kataloger",
+        "downloads": "Nedladdningar",
+        "fitlerTagTitle": "Filtrera efter tagg",
+        "gridTitle": "Gallerivy",
+        "home": "Huvudmeny",
+        "homeTitle": "Hem",
+        "importTitle": "Importera en bok",
+        "listTitle": "Tabellvy",
+        "myCatalogs": "Mina kataloger",
+        "refreshTitle": "Uppdatera",
+        "searchPlaceholder": "Sök",
+        "searchTitle": "Sök",
+        "settings": "Inställningar",
+        "viewMode": "Visningsläge"
+    },
+    "library": {
+        "filter": {
+            "addFilters": "Lägg till filter",
+            "filterBy": "Filtrera efter",
+            "selectOption": "Välj ett objekt"
+        },
+        "lcp": {
+            "hidePassphrase": "Dölj lösenordsfras",
+            "hint": "Tips:",
+            "open": "Öppna",
+            "password": "Lösenord",
+            "sentence": "Den här publikationen behöver ett LCP-lösenord för att kunna öppnas",
+            "showPassphrase": "Visa lösenordsfras",
+            "urlHint": "Har du glömt ditt lösenord? Här kan du få hjälp.",
+            "whatIsLcp?": "Vad är LCP?",
+            "whatIsLcpInfoDetails": "LCP står för \"Licensed Content Protection\".",
+            "whatIsLcpInfoDetailsLink": "För mer information, klicka på denna länk till EDRLabs webbplats."
+        },
+        "sorting": {
+            "addSorting": "Lägg till sortering",
+            "author": "Författare",
+            "language": "Språk",
+            "readingState": "Läsläge",
+            "sortBy": "Sortera efter: ",
+            "title": "Titel"
+        }
+    },
+    "message": {
+        "annotations": {
+            "alreadyImported": "Alla anteckningar har redan importerats.",
+            "emptyFile": "Inga anteckningar tillgängliga i filen.",
+            "errorParsing": "Fel vid inläsning av filformat: ",
+            "noBelongTo": "Det går inte att importera anteckningarna, minst en anteckning tillhör inte publikationen.",
+            "nothing": "Det finns inga anteckningar tillgängliga för import, avbryter importen",
+            "success": "Importen slutförd."
+        },
+        "download": {
+            "error": "Nedladdningen av {{- title}} misslyckades: [{{- err}}]"
+        },
+        "import": {
+            "alreadyImport": "{{- title}} var redan importerad.",
+            "fail": "Importen av {{- path}} misslyckades. {{- err}}",
+            "success": "Importen av {{- title}} är slutförd."
+        },
+        "open": {
+            "error": "Publikationen kan inte öppnas: {{- err}}"
+        },
+        "wipeData": "Inloggningsdata rensades (åtkomstnycklar och kakor)"
+    },
+    "opds": {
+        "addForm": {
+            "addButton": "Lägg till",
+            "name": "Namn:",
+            "namePlaceholder": "Namn",
+            "url": "Länk:",
+            "urlPlaceholder": "Länk"
+        },
+        "addFormApiapp": {
+            "title": "Lägg till bibliotekskonto"
+        },
+        "addMenu": "Lägg till ett OPDS-flöde",
+        "breadcrumbRoot": "Kataloger",
+        "documentation": "OPDS officiella webbplats",
+        "empty": "Ingen bok hittades",
+        "firstPage": "Första",
+        "informations": "Föreställ dig en värld där du kan utforska och ladda ner digitala publikationer från offentliga bibliotek och digitala bokhandlar med bara några få klick. Det är precis vad katalogformatet Open Publication Distribution System (OPDS) erbjuder. Med OPDS kan du navigera genom kataloger från olika e-boksleverantörer, registrera dig, låna, köpa en publikation eller besöka din personliga bokhylla. Du kan till och med ladda ner en e-bok eller ljudbok direkt till Thorium Reader för omedelbar läsning.\nSå, hur hittar du en OPDS-katalog? Det är enkelt. Leta efter en länk (URL) som leder till katalogen. Kopiera denna URL till länkfältet ovan. Tänk på att det inte finns någon central plats för alla aktiva OPDS-kataloger. Du måste kontakta ditt föredragna bibliotek eller bokhandlare och be om deras OPDS-katalog-URL. Om du är osäker på var du ska börja, har Wikipedia några register över OPDS-kataloger på olika språk som kan vara till hjälp.\nI namnfältet kan du ange ett valfritt namn för att enkelt identifiera flödet i Thorium Reader.",
+        "lastPage": "Sista",
+        "menu": {
+            "aboutBook": "Om boken",
+            "addExtract": "Importera utdraget",
+            "goBuyBook": "Köp den här boken",
+            "goLoanBook": "Låna den här boken",
+            "goRevokeLoanBook": "Återkalla lånet",
+            "goSubBook": "Prenumerera"
+        },
+        "network": {
+            "error": "Fel åtkomst till feed",
+            "noInternet": "Inget internet",
+            "noInternetMessage": "Prova detta: kolla nätverkssladden, modemet, routern eller det trådlösa nätverket",
+            "reject": "Ett oväntat fel uppstod!",
+            "timeout": "Nätverksanslutningen gav inget svar, försök igen senare"
+        },
+        "next": "Nästa",
+        "previous": "Föregående",
+        "resumeBrowsing": "Fortsätt surfa",
+        "shelf": "Hylla",
+        "updateForm": {
+            "name": "Namn:",
+            "title": "Redigera OPDS-flödet",
+            "updateButton": "Redigera",
+            "url": "Länk:"
+        },
+        "whatIsOpds": "Vad är OPDS?"
+    },
+    "publ-a11y-display-guide": {
+        "accessibility-summary": {
+            "accessibility-summary-title": "Kompletterande information om tillgänglighet"
+        },
+        "additional-accessibility-information": {
+            "additional-accessibility-information-aria": {
+                "compact": "Innehåller ARIA-roller",
+                "descriptive": "Innehållet har försetts med ARIA-roller för att tydliggöra strukturen och underlätta navigering"
+            },
+            "additional-accessibility-information-audio-descriptions": {
+                "compact": "Syntolkning",
+                "descriptive": "Syntolkning"
+            },
+            "additional-accessibility-information-braille": {
+                "compact": "Punktskrift",
+                "descriptive": "Punktskrift"
+            },
+            "additional-accessibility-information-full-ruby-annotations": {
+                "compact": "Fullständig ruby-annotering",
+                "descriptive": "Fullständig ruby-annotering"
+            },
+            "additional-accessibility-information-high-contrast-between-foreground-and-background-audio": {
+                "compact": "Hög kontrast mellan förgrundsljud och bakgrundsljud",
+                "descriptive": "Hög kontrast mellan förgrundsljud och bakgrundsljud"
+            },
+            "additional-accessibility-information-high-contrast-between-text-and-background": {
+                "compact": "Hög kontrast mellan text och bakgrund",
+                "descriptive": "Hög kontrast mellan text och bakgrund"
+            },
+            "additional-accessibility-information-large-print": {
+                "compact": "Storstil",
+                "descriptive": "Storstil"
+            },
+            "additional-accessibility-information-page-breaks": {
+                "compact": "Innehåller sidnummer",
+                "descriptive": "Innehåller sidnummer från tryckt förlaga"
+            },
+            "additional-accessibility-information-ruby-annotations": {
+                "compact": "Viss ruby-annotering",
+                "descriptive": "Viss ruby-annotering"
+            },
+            "additional-accessibility-information-sign-language": {
+                "compact": "Teckenspråk",
+                "descriptive": "Teckenspråk"
+            },
+            "additional-accessibility-information-tactile-graphics": {
+                "compact": "Innehåller taktila bilder",
+                "descriptive": "Taktila bilder har lagts till för att tillgängliggöra visuella element för personer med synnedsättning"
+            },
+            "additional-accessibility-information-tactile-objects": {
+                "compact": "Taktila 3D-objekt",
+                "descriptive": "Taktila 3D-objekt"
+            },
+            "additional-accessibility-information-text-to-speech-hinting": {
+                "compact": "Innehåller uttalsinstruktioner för talsyntes",
+                "descriptive": "Innehåller uttalsinstruktioner för talsyntes"
+            },
+            "additional-accessibility-information-title": "Ytterligare tillgänglighetsinformation"
+        },
+        "conformance": {
+            "conformance-a": {
+                "compact": "Publikationen uppfyller tillgänglighetskrav på en grundläggande nivå",
+                "descriptive": "Publikationen anger att den uppfyller standarderna EPUB Accessibility och WCAG 2 nivå A"
+            },
+            "conformance-aa": {
+                "compact": "Publikationen uppfyller tillgänglighetskrav på en vedertagen nivå",
+                "descriptive": "Publikationen anger att den uppfyller standarderna EPUB Accessibility och WCAG 2 nivå AA"
+            },
+            "conformance-aaa": {
+                "compact": "Publikationen uppfyller tillgänglighetskrav utöver en vedertagen nivå",
+                "descriptive": "Publikationen anger att den uppfyller standarderna EPUB Accessibility och WCAG 2 nivå AAA"
+            },
+            "conformance-certifier": {
+                "compact": "Publikationen är certifierad av "
+            },
+            "conformance-certifier-credentials": {
+                "compact": "Certifierarens märkning är "
+            },
+            "conformance-details-certifier-report": {
+                "compact": "Se certifieringsrapporten för mer information"
+            },
+            "conformance-details-claim": {
+                "compact": "Publikationen anger att den uppfyller kraven enligt",
+                "descriptive": "Publikationen anger att den uppfyller kraven enligt"
+            },
+            "conformance-details-epub-accessibility-1-0": {
+                "compact": "EPUB Accessibility 1.0",
+                "descriptive": "EPUB Accessibility 1.0"
+            },
+            "conformance-details-epub-accessibility-1-1": {
+                "compact": "EPUB Accessibility 1.1",
+                "descriptive": "EPUB Accessibility 1.1"
+            },
+            "conformance-details-level-a": {
+                "compact": "nivå A",
+                "descriptive": "nivå A"
+            },
+            "conformance-details-level-aa": {
+                "compact": "nivå AA",
+                "descriptive": "nivå AA"
+            },
+            "conformance-details-level-aaa": {
+                "compact": "nivå AAA",
+                "descriptive": "nivå AAA"
+            },
+            "conformance-details-wcag-2-0": {
+                "compact": "WCAG 2.0"
+            },
+            "conformance-details-wcag-2-1": {
+                "compact": "WCAG 2.1",
+                "descriptive": "Web Content Accessibility Guidelines (WCAG) 2.1"
+            },
+            "conformance-details-wcag-2-2": {
+                "compact": "WCAG 2.2",
+                "descriptive": "Web Content Accessibility Guidelines (WCAG) 2.2"
+            },
+            "conformance-no": {
+                "compact": "Information saknas",
+                "descriptive": "Information saknas"
+            },
+            "conformance-title": "Tillgänglighetskrav",
+            "conformance-unknown-standard": {
+                "compact": "Det går inte att avgöra om publikationen uppfyller vedertagna tillgänglighetskrav",
+                "descriptive": "Det går inte att avgöra om publikationen uppfyller vedertagna tillgänglighetskrav"
+            }
+        },
+        "hazards": {
+            "hazards-flashing": {
+                "compact": "Blinkande innehåll",
+                "descriptive": "Publikationen har blinkande innehåll som kan vara skadligt för ljuskänsliga personer"
+            },
+            "hazards-flashing-none": {
+                "compact": "Inget blinkande innehåll",
+                "descriptive": "Publikationen har inget blinkande innehåll"
+            },
+            "hazards-flashing-unknown": {
+                "compact": "Förekomst av blinkande innehåll är okänd",
+                "descriptive": "Förekomst av blinkande innehåll är okänd"
+            },
+            "hazards-motion": {
+                "compact": "Rörelsesimulering",
+                "descriptive": "Publikationen innehåller rörelsesimulering som skulle kunna orsaka illamående"
+            },
+            "hazards-motion-none": {
+                "compact": "Ingen rörelsesimulering",
+                "descriptive": "Publikationen innehåller ingen rörelsesimulering"
+            },
+            "hazards-motion-unknown": {
+                "compact": "Förekomst av rörelsesimulering är okänd",
+                "descriptive": "Förekomst av rörelsesimulering är okänd"
+            },
+            "hazards-no-metadata": {
+                "compact": "Information saknas",
+                "descriptive": "Information saknas"
+            },
+            "hazards-none": {
+                "compact": "Inga risker",
+                "descriptive": "Publikationen innehåller inga risker"
+            },
+            "hazards-sound": {
+                "compact": "Ljud",
+                "descriptive": "Publikationen innehåller ljud som kan orsaka obehag"
+            },
+            "hazards-sound-none": {
+                "compact": "Inget ljud som kan orsaka obehag",
+                "descriptive": "Publikationen innehåller inget ljud som kan orsaka obehag"
+            },
+            "hazards-sound-unknown": {
+                "compact": "Förekomst av ljud som kan orsaka obehag är okänd",
+                "descriptive": "Förekomst av ljud som kan orsaka obehag är okänd"
+            },
+            "hazards-title": "Risker",
+            "hazards-unknown": {
+                "compact": "Förekomst av risker är okänd",
+                "descriptive": "Förekomst av risker är okänd"
+            }
+        },
+        "navigation": {
+            "navigation-index": {
+                "compact": "Register",
+                "descriptive": "Register med länkar till innehållet"
+            },
+            "navigation-no-metadata": {
+                "compact": "Information saknas",
+                "descriptive": "Information saknas"
+            },
+            "navigation-page-navigation": {
+                "compact": "Gå till sida",
+                "descriptive": "Sidindelning för navigering enligt sidnummer i tryckt förlaga"
+            },
+            "navigation-structural": {
+                "compact": "Rubriker",
+                "descriptive": "Navigerbara element såsom rubriker eller tabeller"
+            },
+            "navigation-title": "Navigering",
+            "navigation-toc": {
+                "compact": "Innehållsförteckning",
+                "descriptive": "Innehållsförteckning med länkar till alla kapitel"
+            }
+        },
+        "rich-content": {
+            "rich-content-accessible-chemistry-as-latex": {
+                "compact": "Kemiska formler i LaTeX",
+                "descriptive": "Kemiska formler i tillgängligt format (LaTeX)"
+            },
+            "rich-content-accessible-chemistry-as-mathml": {
+                "compact": "Kemiska formler i MathML",
+                "descriptive": "Kemiska formler i tillgängligt format (MathML)"
+            },
+            "rich-content-accessible-math-as-latex": {
+                "compact": "Matematik som LaTeX",
+                "descriptive": "Matematiska formler i tillgängligt format (LaTeX)"
+            },
+            "rich-content-accessible-math-as-mathml": {
+                "compact": "Matematik som MathML",
+                "descriptive": "Matematiska formler i tillgängligt format (MathML)"
+            },
+            "rich-content-accessible-math-described": {
+                "compact": "Innehåller textbeskrivningar av matematik",
+                "descriptive": "Innehåller textbeskrivningar av matematik"
+            },
+            "rich-content-closed-captions": {
+                "compact": "Videoklipp har undertext som kan sättas på/stängas av",
+                "descriptive": "Videoklipp som ingår i publikationen har undertext som kan sättas på och stängas av (stängda undertexter)"
+            },
+            "rich-content-extended": {
+                "compact": "Informationsrika bilder har utökade bildbeskrivningar",
+                "descriptive": "Informationsrika bilder har utökade bildbeskrivningar"
+            },
+            "rich-content-open-captions": {
+                "compact": "Videoklipp har undertext som inte kan stängas av",
+                "descriptive": "Videoklipp som ingår i publikationen har undertext som inte kan stängas av (öppna undertexter)"
+            },
+            "rich-content-title": "Berikat innehåll",
+            "rich-content-transcript": {
+                "compact": "Innehåller transkriptioner",
+                "descriptive": "Innehåller transkriptioner"
+            },
+            "rich-content-unknown": {
+                "compact": "Information saknas",
+                "descriptive": "Information saknas"
+            }
+        },
+        "ways-of-reading": {
+            "ways-of-reading-nonvisual-reading-alt-text": {
+                "compact": "Har textalternativ (alt-texter)",
+                "descriptive": "Har textalternativ (alt-texter) till bilder"
+            },
+            "ways-of-reading-nonvisual-reading-no-metadata": {
+                "compact": "Information om icke-visuell läsbarhet saknas",
+                "descriptive": "Information om icke-visuell läsbarhet saknas"
+            },
+            "ways-of-reading-nonvisual-reading-none": {
+                "compact": "Kan inte läsas med uppläsningsfunktion eller punktskriftsskärm",
+                "descriptive": "Innehållet går inte att läsa med uppläsningsfunktion eller punktskriftsskärm"
+            },
+            "ways-of-reading-nonvisual-reading-not-fully": {
+                "compact": "Inte läsbart i sin helhet med uppläsningsfunktion eller punktskriftsskärm",
+                "descriptive": "Allt innehåll går inte att läsa med uppläsningsfunktion eller punktskriftsskärm"
+            },
+            "ways-of-reading-nonvisual-reading-readable": {
+                "compact": "Kan läsas med uppläsningsfunktion eller punktskriftsskärm",
+                "descriptive": "Hela innehållet går att läsa med uppläsningsfunktion eller punktskriftsskärm"
+            },
+            "ways-of-reading-prerecorded-audio-complementary": {
+                "compact": "Förinspelade ljudklipp",
+                "descriptive": "Innehåller förinspelade ljudklipp"
+            },
+            "ways-of-reading-prerecorded-audio-no-metadata": {
+                "compact": "Information om förinspelat ljud saknas",
+                "descriptive": "Information om förinspelat ljud saknas"
+            },
+            "ways-of-reading-prerecorded-audio-only": {
+                "compact": "Endast förinspelat ljud",
+                "descriptive": "Bok med ljud utan textalternativ"
+            },
+            "ways-of-reading-prerecorded-audio-synchronized": {
+                "compact": "Förinspelat ljud synkroniserat med texten",
+                "descriptive": "Hela innehållet finns tillgängligt som förinspelat ljud synkroniserat med texten"
+            },
+            "ways-of-reading-title": "Olika sätt att läsa",
+            "ways-of-reading-visual-adjustments-modifiable": {
+                "compact": "Utseendet kan justeras",
+                "descriptive": "Det går att justera text och layout i den utsträckning som läsprogrammet tillåter, till exempel typsnitt, storlek på text, avstånd mellan rader och stycken samt färg på text och bakgrund"
+            },
+            "ways-of-reading-visual-adjustments-unknown": {
+                "compact": "Information om möjlighet att justera utseende saknas",
+                "descriptive": "Information om möjlighet att justera utseende saknas"
+            }
+        }
+    },
+    "publication": {
+        "accessibility": {
+            "accessModeSufficient": {
+                "textual": "Talsyntes- och skärmläsarvänlig"
+            },
+            "accessibilityFeature": {
+                "alternativeText": "Innehåller alternativtext",
+                "displayTransformability": "Möjlighet att justera text och layout",
+                "longDescription": "Fullständiga bildbeskrivningar",
+                "printPageNumbers": "Sidnumrering från tryckt upplaga",
+                "readingOrder": "Läsordning definierad",
+                "synchronizedAudioText": "Synkroniserat text och ljud",
+                "tableOfContents": "Innehåller innehållsförteckning"
+            },
+            "accessibilityHazard": {
+                "flashing": "Blinkande",
+                "motionSimulation": "Rörelsesimulering",
+                "name": "Risk:",
+                "noFlashing": "Inget blinkande",
+                "noMotionSimulation": "Ingen rörelsesimulering",
+                "noSound": "Inget ljud",
+                "none": "Inga",
+                "sound": "Ljud",
+                "unknown": "Okänt"
+            },
+            "certifierReport": "Rapport från certifierande instans:",
+            "conformsTo": "Följer:",
+            "moreInformation": "Mer information",
+            "name": "Tillgänglighet",
+            "noA11y": "Det finns ingen information om tillgänglighet"
+        },
+        "actions": "Åtgärder",
+        "audio": {
+            "tracks": "Spår"
+        },
+        "author": "Författare",
+        "cancelledLcp": "Den här bokens LCP-licens är annullerad.",
+        "certificateRevoked": "Certifikatet är återkallat.",
+        "certificateSignatureInvalid": "Certifikatets signatur är ogiltig.",
+        "cover": {
+            "img": "omslagsbild"
+        },
+        "day": "dag",
+        "days": "dagar",
+        "duration": {
+            "title": "Längd"
+        },
+        "encryptedNoLicense": "Publikationen är krypterad men saknar LCP-licens!",
+        "expired": "Lånet har gått ut",
+        "expiredLcp": "Den här boken går inte att läsa eftersom LCP-licensen har löpt ut.",
+        "incorrectPassphrase": "Inget sparat lösenord passar för publikationen, eller det angivna lösenordet är fel.",
+        "lcpEnd": "Slut",
+        "lcpRightsCopy": "Kopiera tecken",
+        "lcpRightsPrint": "Kopiera utskrift",
+        "lcpStart": "Start",
+        "licenceLCP": "Licens (LCP)",
+        "licenseCertificateDateInvalid": "Licensens signeringsdatum är ogiltigt. ({{- dateTime}})",
+        "licenseOutOfDate": "Licensen har löpt ut.",
+        "licenseSignatureInvalid": "Licensens signatur är ogiltig.",
+        "licensed": "Licensierad",
+        "markAsRead": "Markera som läst",
+        "notStarted": "Ej påbörjad",
+        "onGoing": "Pågående",
+        "progression": {
+            "title": "Läsförlopp"
+        },
+        "read": "Färdigläst",
+        "remainingTime": "Lån (tid kvar)",
+        "renewButton": "Låna om",
+        "returnButton": "Lämna tillbaka",
+        "returnedLcp": "Den här LCP-skyddade publikationen är återlämnad.",
+        "revokedLcp": "Den här publikationens LCP-licens har återkallats.",
+        "seeLess": "Visa mindre",
+        "seeMore": "Visa mer",
+        "timeLeft": "Tid kvar",
+        "title": "Titel",
+        "userKeyCheckInvalid": "Lösenordet är felaktigt."
+    },
+    "reader": {
+        "annotations": {
+            "Color": "Färg",
+            "addNote": "Anteckna",
+            "advancedMode": "Omedelbart-läge (skapa automatiskt efter markering)",
+            "annotationsExport": {
+                "description": "Namnge anteckningarna:",
+                "title": "Titel"
+            },
+            "annotationsOptions": "Alternativ",
+            "date": "Redigeringsdatum",
+            "export": "Spara anteckningar som...",
+            "filter": {
+                "all": "Alla",
+                "filterByColor": "Filtrera efter färg",
+                "filterByCreator": "Filtrera efter skapare",
+                "filterByDrawtype": "Filtrera efter markeringstyp",
+                "filterByTag": "Filtrera efter tagg",
+                "filterOptions": "Filteralternativ",
+                "none": "Ingen"
+            },
+            "hide": "Visa inte",
+            "highlight": "Markera",
+            "noSelectionToast": "Ingen markering",
+            "note": "{{- color}} anteckning",
+            "quickAnnotations": "Snabbskapa (hoppa över redigeraren)",
+            "saveNote": "Spara",
+            "sorting": {
+                "lastcreated": "Senast skapad",
+                "lastmodified": "Senast ändrad",
+                "progression": "Ordning i boken",
+                "sortingOptions": "Sorteringsalternativ"
+            },
+            "toggleMarginMarks": "Visa i marginalen",
+            "type": {
+                "outline": "Kontur",
+                "solid": "Färgöverstrykning",
+                "strikethrough": "Genomstrykning",
+                "underline": "Understrykning"
+            }
+        },
+        "bookmarks": {
+            "index": "Bokmärke {{- index}}"
+        },
+        "divina": {
+            "mute": "stäng av ljud",
+            "unmute": "slå på ljud"
+        },
+        "dock": {
+            "dockDefault": "Visa panel som dialogruta",
+            "dockLeft": "Docka panelen till vänster",
+            "dockRight": "Docka panelen till höger"
+        },
+        "fxl": {
+            "fit": "Anpassa"
+        },
+        "goToContent": "Gå till innehållet",
+        "imgViewer": {
+            "title": "Bildvisare (zoom)",
+            "zoomIn": "Zooma in",
+            "zoomOut": "Zooma ut",
+            "zoomReset": "Återställ zoom"
+        },
+        "marks": {
+            "annotations": "Anteckningar",
+            "bookmarks": "Bokmärken",
+            "delete": "Ta bort",
+            "edit": "Redigera",
+            "goTo": "Gå till sida",
+            "landmarks": "Landmärken",
+            "saveMark": "Spara",
+            "search": "Sök",
+            "searchResult": "Sök [{{- searchText}}]",
+            "toc": "Innehållsförteckning"
+        },
+        "media-overlays": {
+            "activate": "Aktivera uppläsning",
+            "captions": "Textremsa/Enkel vy",
+            "captionsDescription": "Förenklad textvy med minimal formatering.",
+            "disableContinuousPlay": "Inaktivera kontinuerlig uppläsning",
+            "disableContinuousPlayDescription": "Läs inte automatiskt upp nästa objekt. Pausa efter att det aktuella objektet har lästs upp.",
+            "ignoreAndUseTTS": "Ignorera förinspelat ljud, använd text-till-tal",
+            "ignoreAndUseTTSDescription": "Använd inte Epub Media Overlays, läs med text-till-tal istället",
+            "next": "Nästa",
+            "pause": "Pausa",
+            "play": "Läs upp",
+            "previous": "Föregående högläsning",
+            "skip": "Överhoppning",
+            "skipDescription": "Hoppa över sekundärt innehåll såsom sidbrytningar, fotnoter och slutnoter.",
+            "speed": "Uppläsningshastighet",
+            "stop": "Stoppa uppläsning",
+            "title": "Uppläsning",
+            "useTTSHighlightsForMO": "",
+            "useTTSHighlightsForMODescription": ""
+        },
+        "navigation": {
+            "ZenModeExit": "Lämna zenläge",
+            "ZenModeTitle": "Zenläge",
+            "annotationTitle": "Anteckning",
+            "backHomeTitle": "Tillbaka till bokhyllan",
+            "bookmarkTitle": "Bokmärke",
+            "currentPage": "Aktuell sida: {{- current}}",
+            "currentPageTotal": "Aktuell sida: {{- current}}/{{- total}}",
+            "detachWindowTitle": "Visa biblioteks-/bokhyllefönstret",
+            "goTo": "Gå till",
+            "goToError": "Sidnumret finns inte",
+            "goToPlaceHolder": "Ange ett sidnummer",
+            "goToTitle": "Gå till sida",
+            "history": "Navigeringshistorik",
+            "historyNext": "Hoppa framåt i navigeringshistoriken",
+            "historyPrevious": "Hoppa bakåt i navigeringshistoriken",
+            "infoTitle": "Information",
+            "magnifyingGlassButton": "Sök i boken",
+            "openTableOfContentsTitle": "Navigering",
+            "page": "Sida",
+            "pdfscalemode": "Anpassa till hel sida eller sidbredd",
+            "print": "Skriv ut",
+            "printDisabled": "Utskrift förbjuden",
+            "screenNext": "Nästa sida",
+            "screenPrevious": "Föregående sida",
+            "settingsTitle": "Inställningar"
+        },
+        "notes": {
+            "colors": {
+                "cyan": "Cyan",
+                "green": "Grön",
+                "orange": "Orange",
+                "purple": "Lila",
+                "red": "Röd",
+                "yellow": "Gul"
+            }
+        },
+        "picker": {
+            "search": {
+                "founds_one": "{{- count}} träff",
+                "founds_other": "{{- count}} träffar",
+                "input": "text att söka på",
+                "next": "Nästa",
+                "notFound": "inga träffar",
+                "previous": "Föregående",
+                "results": "Resultat",
+                "submit": "Sök"
+            },
+            "searchTitle": "Sök:"
+        },
+        "print": {
+            "descriptionLcpCount": "Gräns för återstående sidor: {{- count}}",
+            "descriptionLcpPrintable": "Tidigare utskrivna sidor: {{- printable}} ({{- count}})",
+            "howTo": "Så här väljer du ett sidintervall att skriva ut",
+            "lcpInfo": "Du kan skriva ut maximalt {{- count}} sidor. Välj sidorna du vill skriva ut här.",
+            "noPagesLcpLimitReached": "Du har nått gränsen för LCP",
+            "noPrintablePages": "Inga utskrivbara sidor",
+            "pageHelpInfo": "Format för sidval:",
+            "pageHelpInfo1": "ange ett sidnummer för att välja en enskild sida (t.ex. \"6\")",
+            "pageHelpInfo2": "ange två sidnummer med bindestreck för att välja ett sammanhängande sidintervall (t.ex. \"6-13\")",
+            "pageHelpInfo3": "använd semikolon för att separera flera sidor eller sidintervall (t.ex. \"5;14-20;37\")",
+            "pageHelpInfo4": "utelämna första eller sista sidan i intervallet för att ange början eller slutet av boken (t.ex. \"-16\" = \"1-16\", \"34-\" = \"34-100\" om boken har 100 sidor)",
+            "pages": "Sidor",
+            "preview": "Förhandsvisning",
+            "print": "Skriv ut",
+            "printablePages": "Antal sidor som kan skrivas ut (totalt)",
+            "title": "Välj sidor att skriva ut"
+        },
+        "settings": {
+            "column": {
+                "auto": "Standard",
+                "one": "1 kolumn",
+                "title": "Kolumner",
+                "two": "2 kolumner"
+            },
+            "customFontSelected": "Du har valt ett eget typsnitt",
+            "customizeReader": "Anpassa textformatering",
+            "disabled": "inaktiverad",
+            "display": "Visning",
+            "disposition": {
+                "title": "Layout"
+            },
+            "font": "Typsnitt",
+            "fontSize": "Textstorlek",
+            "increaseFontSize": "",
+            "infoCustomFont": "Välj ett typsnitt från operativsystemet genom att skriva dess namn",
+            "justification": "Justering",
+            "justify": "Justerad",
+            "letterSpacing": "Teckenavstånd",
+            "lineSpacing": "Radavstånd",
+            "margin": "Marginaler",
+            "mathjax": "Aktivera MathJax",
+            "noFootnotes": "Inaktivera popup-fotnoter",
+            "noRTLFlip": "Inaktivera vänster-till-höger-gränssnitt",
+            "noRuby": "Dölj japanska ruby-tecken",
+            "noTemporaryNavTargetOutline": "Inaktivera visuella hjälpmedel för navigering",
+            "paginated": "Sidindelad",
+            "paraSpacing": "Styckesavstånd",
+            "pdfZoom": {
+                "name": {
+                    "100pct": "100 %",
+                    "150pct": "150 %",
+                    "200pct": "200 %",
+                    "300pct": "300 %",
+                    "500pct": "500 %",
+                    "50pct": "50 %",
+                    "fit": "sidstorlek",
+                    "width": "sidbredd"
+                },
+                "title": "Zooma"
+            },
+            "preset": {
+                "apply": "Tillämpa egna läsinställningar",
+                "applyDetails": "Tillämpa dina sparade läsinställningar på den aktuella boken.",
+                "detail": "Spara/tillämpa/återställ dina läsinställningar.",
+                "reset": "Återställ läsinställningar",
+                "resetDetails": "Återställ dina läsinställningar till standard och tillämpa inställningarna på den aktuella boken.",
+                "save": "Spara egna läsinställningar",
+                "saveDetails": "Spara de anpassade inställningarna för visning och textformatering. Du kan tillämpa dem på andra böcker genom att klicka på knappen nedan.",
+                "title": "Förinställning"
+            },
+            "preview": "Förhandsvisning",
+            "reduceFontSize": "",
+            "reduceMotion": "Minska rörelser",
+            "scrolled": "Rullningsbar",
+            "spacing": "Avstånd",
+            "spreadModeEven": "Siduppslag \"jämna\" (standard är \"udda\")",
+            "text": "Text",
+            "theme": {
+                "name": {
+                    "Contrast1": "Kontrast 1",
+                    "Contrast2": "Kontrast 2",
+                    "Contrast3": "Kontrast 3",
+                    "Contrast4": "Kontrast 4",
+                    "Neutral": "Neutral",
+                    "Night": "Natt",
+                    "Paper": "Papper",
+                    "Sepia": "Sepia"
+                },
+                "title": "Tema"
+            },
+            "wordSpacing": "Ordavstånd"
+        },
+        "svg": {
+            "left": "Vänster",
+            "right": "Höger"
+        },
+        "toc": {
+            "publicationNoToc": "Den här publikationen saknar innehållsförteckning"
+        },
+        "tts": {
+            "activate": "Aktivera text-till-tal",
+            "language": "Språk för text-till-tal",
+            "next": "Nästa",
+            "options": "Alternativ för text-till-tal",
+            "pause": "Pausa",
+            "play": "Läs upp",
+            "previous": "Föregående text-till-tal",
+            "sentenceDetect": "Markera text-till-tal på meningsnivå",
+            "sentenceDetectDescription": "Dela upp långa stycken i meningar.",
+            "speed": "Uppläsningshastighet",
+            "stop": "Stoppa text-till-tal",
+            "voice": "Röst för text-till-tal"
+        }
+    },
+    "settings": {
+        "annotationCreator": {
+            "creator": "Anteckningsförfattare (valfritt)",
+            "help": "Namnet du anger här kommer att inkluderas i metadata för exporterade anteckningar.",
+            "name": "Namn",
+            "organization": "Organisation",
+            "person": "Person",
+            "type": "Typ:"
+        },
+        "auth": {
+            "help": "Denna åtgärd raderar alla OPDS-inloggningsuppgifter.",
+            "title": "Hantera åtkomst till kataloger",
+            "wipeData": "Rensa inloggningsuppgifter"
+        },
+        "keyboard": {
+            "advancedMenu": "Meny",
+            "cancel": "Avbryt",
+            "disclaimer": "Kortkommandona baserar sig på QWERTY-tangentbordslayouten",
+            "editUserJson": "Redigera användarfil ...",
+            "exportToHTML": "Export till HTML",
+            "keyboardShortcuts": "Kortkommandon",
+            "list": {
+                "AddBookmarkWithLabel": {
+                    "description": "Öppna dialogrutan för att skapa bokmärke och redigera namn (anteckning), färg och tagg",
+                    "name": "Skapa bokmärke med tagg"
+                },
+                "AnnotationsCreate": {
+                    "description": "Öppna dialogrutan för att skapa anteckning för den markerade texten och redigera textanteckning, markeringsfärg, markeringstyp och tagg",
+                    "name": "Skapa anteckning"
+                },
+                "AnnotationsCreateQuick": {
+                    "description": "Skapa en snabbanteckning för den markerade texten med senast använda markeringsfärg och -typ (anteckning och tagg lämnas tomma)",
+                    "name": "Skapa snabbanteckning"
+                },
+                "AnnotationsToggleMargin": {
+                    "description": "Växla mellan de visuella indikatorerna för anteckningar och bokmärken, antingen i dokumentmarginalen eller i texten",
+                    "name": "Slå på/av anteckningsmarginal"
+                },
+                "AudioNext": {
+                    "description": "Gå framåt till nästa ljudavsnitt (e-bok med text och uppläsning, text-till-tal eller ljudbok)",
+                    "name": "Nästa ljudavsnitt"
+                },
+                "AudioNextAlt": {
+                    "description": "Gå framåt till nästa ljudavsnitt (e-bok med text och uppläsning, text-till-tal eller ljudbok). Hoppar över alla strukturer som kan hoppas över.",
+                    "name": "Nästa ljudavsnitt (hoppa över)"
+                },
+                "AudioPlayPause": {
+                    "description": "Starta eller pausa uppläsning (e-bok med text och uppläsning, text-till-tal eller ljudbok)",
+                    "name": "Spela/pausa ljud"
+                },
+                "AudioPrevious": {
+                    "description": "Gå tillbaka till föregående ljudavsnitt (e-bok med text och uppläsning, text-till-tal eller ljudbok)",
+                    "name": "Föregående ljudavsnitt"
+                },
+                "AudioPreviousAlt": {
+                    "description": "Gå tillbaka till föregående ljudavsnitt (e-bok med text och uppläsning, text-till-tal eller ljudbok). Hoppar över alla strukturer som kan hoppas över.",
+                    "name": "Föregående ljudavsnitt (hoppa över)"
+                },
+                "AudioStop": {
+                    "description": "Stoppa uppspelningen (e-bok med text och uppläsning, text-till-tal eller ljudbok)",
+                    "name": "Stoppa uppspelning av ljud"
+                },
+                "CloseReader": {
+                    "description": "Stäng läsfönstret och återgå till biblioteket",
+                    "name": "Stäng läsfönster"
+                },
+                "FXLZoomIn": {
+                    "description": "Zooma in på en enskild sida eller ett uppslag med fast layout.",
+                    "name": "Zooma in (fast layout)"
+                },
+                "FXLZoomOut": {
+                    "description": "Zooma ut från en sida eller ett uppslag med fast layout.",
+                    "name": "Zooma ut (fast layout)"
+                },
+                "FXLZoomReset": {
+                    "description": "Återställ zoom för en sida eller ett uppslag med fast layout.",
+                    "name": "Återställ zoom (fast layout)"
+                },
+                "FocusMain": {
+                    "description": "Flytta tangentbordsfokus till huvudlandmärket i det grafiska gränssnittet. I läsfönstret flyttas fokus då till bokens innehåll.",
+                    "name": "Gå till huvudinnehållet"
+                },
+                "FocusMainDeep": {
+                    "description": "I läsfönstret flyttas tangentbordsfokus till bokens senaste lästa innehåll med en mer tillförlitlig teknik för skärmläsare",
+                    "name": "Djupt fokus på huvudinnehåll"
+                },
+                "FocusReaderGotoPage": {
+                    "description": "Flytta tangentbordsfokus till avsnittet \"Gå till sida\" i läsfönstrets navigeringspanel",
+                    "name": "Gå till \"Gå till sida\""
+                },
+                "FocusReaderNavigation": {
+                    "description": "Flytta tangentbordsfokus till läsfönstrets navigeringspanel",
+                    "name": "Gå till navigeringspanelen"
+                },
+                "FocusReaderNavigationAnnotations": {
+                    "description": "Flytta tangentbordsfokus till avsnittet \"Anteckningar\" i läsfönstrets navigeringspanel",
+                    "name": "Gå till \"Anteckningar\""
+                },
+                "FocusReaderNavigationBookmarks": {
+                    "description": "Flytta tangentbordsfokus till avsnittet \"Bokmärken\" i läsfönstrets navigeringspanel",
+                    "name": "Gå till \"Bokmärken\""
+                },
+                "FocusReaderNavigationSearch": {
+                    "description": "Flytta tangentbordsfokus till avsnittet \"Sök\" i läsfönstrets navigeringspanel",
+                    "name": "Gå till \"Sök\""
+                },
+                "FocusReaderNavigationTOC": {
+                    "description": "Flytta tangentbordsfokus till avsnittet \"Innehållsförteckning\" i läsfönstrets navigeringspanel",
+                    "name": "Gå till \"Innehållsförteckning\""
+                },
+                "FocusReaderSettings": {
+                    "description": "Flytta tangentbordsfokus till inställningsmenyn (visningsalternativ m.m.)",
+                    "name": "Gå till läsarinställningar"
+                },
+                "FocusSearch": {
+                    "description": "Flytta tangentbordsfokus till sökrutan i läsfönstret. I biblioteksfönstret påbörjas en sökning i bokhyllan eller i den aktiva katalogen.",
+                    "name": "Sökkommando"
+                },
+                "FocusToolbar": {
+                    "description": "Flytta tangentbordsfokus till landmärket precis innan hoppa-över-länken (som flyttar fokus till huvudinnehållet i biblioteks- eller läsvyn)",
+                    "name": "Gå till verktygsfältet"
+                },
+                "NavigateNextChapter": {
+                    "description": "Gå till nästa dokument i bokens läsordning (t.ex. kapitel) i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till nästa kapitel"
+                },
+                "NavigateNextChapterAlt": {
+                    "description": "Gå till nästa dokument i bokens läsordning (t.ex. kapitel) i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till nästa kapitel (alternativt kortkommando)"
+                },
+                "NavigateNextHistory": {
+                    "description": "Hoppa ett steg framåt i navigeringshistoriken i läsfönstret",
+                    "name": "Gå framåt i navigeringshistoriken"
+                },
+                "NavigateNextLibraryPage": {
+                    "description": "Gå till nästa sida i listan över böcker i biblioteksvyn. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till nästa sida i biblioteket"
+                },
+                "NavigateNextLibraryPageAlt": {
+                    "description": "Gå till nästa sida i listan över böcker i biblioteksvyn. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till nästa sida i biblioteket (alternativt kortkommando)"
+                },
+                "NavigateNextOPDSPage": {
+                    "description": "Gå till nästa sida i kataloger/OPDS-flödesvyn. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till nästa OPDS-sida"
+                },
+                "NavigateNextOPDSPageAlt": {
+                    "description": "Gå till nästa sida i kataloger/OPDS-flödesvyn. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till nästa OPDS-sida (alternativt kortkommando)"
+                },
+                "NavigateNextPage": {
+                    "description": "Bläddra till nästa sida i boken i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till nästa sida"
+                },
+                "NavigateNextPageAlt": {
+                    "description": "Bläddra till nästa sida i boken i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till nästa sida (alternativt kortkommando)"
+                },
+                "NavigatePreviousChapter": {
+                    "description": "Gå till föregående dokument i bokens läsordning (t.ex. kapitel) i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till föregående kapitel"
+                },
+                "NavigatePreviousChapterAlt": {
+                    "description": "Gå till föregående dokument i bokens läsordning (t.ex. kapitel) i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till föregående kapitel (alternativt kortkommando)"
+                },
+                "NavigatePreviousHistory": {
+                    "description": "Hoppa ett steg bakåt i navigeringshistoriken i läsfönstret",
+                    "name": "Gå bakåt i navigeringshistoriken"
+                },
+                "NavigatePreviousLibraryPage": {
+                    "description": "Gå till föregående sida i listan över böcker i biblioteksvyn. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till föregående sida i biblioteket"
+                },
+                "NavigatePreviousLibraryPageAlt": {
+                    "description": "Gå till föregående sida i listan över böcker i biblioteksvyn. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till föregående sida i biblioteket (alternativt kortkommando)"
+                },
+                "NavigatePreviousOPDSPage": {
+                    "description": "Gå till föregående sida i kataloger/OPDS-flödesvyn. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till föregående OPDS-sida"
+                },
+                "NavigatePreviousOPDSPageAlt": {
+                    "description": "Gå till föregående sida i kataloger/OPDS-flödesvyn. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till föregående OPDS-sida (alternativt kortkommando)"
+                },
+                "NavigatePreviousPage": {
+                    "description": "Bläddra till föregående sida i boken i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Gå till föregående sida"
+                },
+                "NavigatePreviousPageAlt": {
+                    "description": "Bläddra till föregående sida i boken i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Gå till föregående sida (alternativt kortkommando)"
+                },
+                "NavigateToBegin": {
+                    "description": "Gå till början av boken i läsfönstret",
+                    "name": "Gå till början av boken"
+                },
+                "NavigateToEnd": {
+                    "description": "Gå till slutet av boken i läsfönstret",
+                    "name": "Gå till slutet av boken"
+                },
+                "OpenReaderInfo": {
+                    "description": "Öppna \"Om boken\" från läsfönstret",
+                    "name": "Visa information om boken"
+                },
+                "OpenReaderInfoWhereAmI": {
+                    "description": "Öppna dialogrutan som visar information om boken och fokusera på avsnittet om aktuell läsposition",
+                    "name": "Visa information om boken, visa läsposition"
+                },
+                "Print": {
+                    "description": "Öppna utskriftsdialogen från läsfönstret",
+                    "name": "Skriv ut"
+                },
+                "SearchNext": {
+                    "description": "Gå till nästa sökresultat i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Nästa sökresultat"
+                },
+                "SearchNextAlt": {
+                    "description": "Gå till nästa sökresultat i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Nästa sökresultat (alternativt kortkommando)"
+                },
+                "SearchPrevious": {
+                    "description": "Gå till föregående sökresultat i läsfönstret. Det finns ett alternativt kortkommando för detta.",
+                    "name": "Föregående sökresultat"
+                },
+                "SearchPreviousAlt": {
+                    "description": "Gå till föregående sökresultat i läsfönstret. Detta är ett alternativt kortkommando.",
+                    "name": "Föregående sökresultat (alternativt kortkommando)"
+                },
+                "SpeakReaderInfoWhereAmI": {
+                    "description": "Beskriv aktuell läsposition i läsfönstret med text anpassad för skärmläsare",
+                    "name": "Beskriv läsposition (med tal)"
+                },
+                "ToggleBookmark": {
+                    "description": "Lägg till ett bokmärke eller ta bort det nuvarande om det är markerat",
+                    "name": "Lägg till eller ta bort bokmärke"
+                },
+                "ToggleReaderFullscreen": {
+                    "description": "Starta eller avsluta helskärmsläge i läsfönstret. Detta är inte samma sak som \"zenläge\" som förenklar gränssnittet.",
+                    "name": "Starta eller avsluta helskärmsläge"
+                }
+            },
+            "loadUserJson": "Läs in från användarfil",
+            "noShortcutFound": "Inget kortkommando hittades",
+            "resetDefaults": "Återställ (läs in standard)",
+            "save": "Spara",
+            "searchPlaceholder": "Sök efter kortkommando"
+        },
+        "language": {
+            "languageChoice": "Språk"
+        },
+        "library": {
+            "enableAPIAPP": "Aktivera åtkomst till Dilicom PNB API",
+            "title": "Lägg till ett bibliotekskonto"
+        },
+        "note": {
+            "export": {
+                "applyDefaultTemplate": "Använd standardmallen",
+                "enableCheckbox": "Anpassa HTML-mallen",
+                "overrideHTMLTemplate": "Export av anteckningar och bokmärken"
+            }
+        },
+        "profiles": {
+            "info": "Byt profiler för att anpassa appen med en leverantörpartners varumärke och färger. Varje profil erbjuder en skräddarsydd upplevelse.",
+            "thorium": {
+                "description": "Thorium Vanilla-profilen är originalet, designad av EDRLab.",
+                "title": "Thorium vanilla"
+            },
+            "version": "Version: {{- version}}"
+        },
+        "screenReaderActivate": {
+            "help": "När programmet upptäcker hjälpmedelsteknik så anpassas gränssnittet för att fungera bättre med skärmläsare",
+            "message": "Förbättrat stöd för skärmläsare",
+            "title": "Förbättra skärmläsarupplevelsen"
+        },
+        "session": {
+            "title": "Spara session"
+        },
+        "tabs": {
+            "appearance": "Utseende",
+            "general": "Allmänt",
+            "keyboardShortcuts": "Kortkommandon",
+            "profiles": "Profiler"
+        },
+        "theme": {
+            "auto": "Automatiskt",
+            "dark": "Mörkt",
+            "description": "Applikationens tema matchar operativsystemet.",
+            "light": "Ljust",
+            "title": "Applikationens tema"
+        }
+    },
+    "tts": {
+        "highlight": {
+            "mainColor": "Bakgrundsfärg",
+            "maskBlockWordOutline": "Maskering med ram, ram runt ord",
+            "maskBlockWordSolidBackground": "Maskering med ram, bakgrundsfärg för ord",
+            "maskBlockWordUnderline": "Maskering med ram, understruket ord",
+            "maskWordOutline": "Maskering, ram runt ord",
+            "maskWordSolidBackground": "Maskering, bakgrundsfärg för ord",
+            "maskWordUnderline": "Maskering, understruket ord",
+            "outlineWordOutline": "Ram, ram runt ord",
+            "outlineWordSolidBackground": "Ram, bakgrundsfärg för ord",
+            "outlineWordUnderline": "Ram, understruket ord",
+            "preview": "Förhandsvisning av markering",
+            "solidBackgroundWordOutline": "Bakgrundsfärg, ram runt ord",
+            "solidBackgroundWordSolidBackground": "Bakgrundsfärg, bakgrundsfärg för ord",
+            "solidBackgroundWordUnderline": "Bakgrundsfärg, understruket ord",
+            "style": "Stil för markering av text-till-tal",
+            "underlineWordOutline": "Understrykning, ram runt ord",
+            "underlineWordSolidBackground": "Understrykning, bakgrundsfärg för ord",
+            "underlineWordUnderline": "Understrykning, understruket ord",
+            "wordColor": "Ordfärg"
+        }
+    },
+    "wizard": {
+        "buttons": {
+            "discover": "Upptäck Thorium Desktop",
+            "goToBooks": "Gå till mina böcker"
+        },
+        "description": {
+            "home": "Thorium 3.4 ger en rad förbättringar av användarupplevelsen och fixar en rad problem. Om du senare bestämmer dig för att flytta tillbaka till en äldre version av programmet, rekommenderas det starkt att du säkerhetskopierar dina e-bokanteckningar och bokmärken genom att exportera dem till en extern fil. Du importerar dem sedan tillbaka till den äldre versionen efter att den är installerad. Detta beror på att programmet lagrar anteckningar och bokmärken i ett lite annorlunda internt format i version 3.4. Detta löser ett prestationsproblem, men bryter bakåtkompatibilitet för anteckningar.",
+            "resources": "Få kontakt med oss och lär dig mer om Thorium:"
+        },
+        "dontShow": "Visa inte igen",
+        "resources": {
+            "discord": "Discord: https://discord.gg/2GnubQbE",
+            "website": "Webbsida: https://www.thoriumreader.com"
+        },
+        "tab": {
+            "home": "Hem",
+            "resources": "Resurser"
+        },
+        "title": {
+            "resources": "Resurser och gemenskap",
+            "welcome": "Välkommen till Thorium 3.4"
+        }
+    }
+}

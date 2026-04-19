@@ -1,0 +1,759 @@
+// ==LICENSE-BEGIN==
+// Copyright 2017 European Digital Reading Lab. All rights reserved.
+// Licensed to the Readium Foundation under one or more contributor license agreements.
+// Use of this source code is governed by a BSD-style license
+// that can be found in the LICENSE file exposed on Github (readium) in the project repository.
+// ==LICENSE-END==
+
+import * as stylesModals from "readium-desktop/renderer/assets/styles/components/modals.scss";
+import * as stylesButtons from "readium-desktop/renderer/assets/styles/components/buttons.scss";
+import * as stylesSettings from "readium-desktop/renderer/assets/styles/components/settings.scss";
+import * as stylesGlobal from "readium-desktop/renderer/assets/styles/global.scss";
+import * as stylesAnnotations from "readium-desktop/renderer/assets/styles/components/annotations.scss";
+import * as stylesInput from "readium-desktop/renderer/assets/styles/components/inputs.scss";
+import * as stylesDropDown from "readium-desktop/renderer/assets/styles/components/dropdown.scss";
+import * as stylesPopoverDialog from "readium-desktop/renderer/assets/styles/components/popoverDialog.scss";
+
+// import { DirectionProvider } from "@radix-ui/react-direction";
+// import {I18nProvider} from 'react-aria';
+
+import * as React from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as Tabs from "@radix-ui/react-tabs";
+import * as QuitIcon from "readium-desktop/renderer/assets/icons/close-icon.svg";
+import * as CogIcon from "readium-desktop/renderer/assets/icons/cog-icon.svg";
+import * as PaletteIcon from "readium-desktop/renderer/assets/icons/palette-icon.svg";
+import * as KeyReturnIcon from "readium-desktop/renderer/assets/icons/keyreturn-icon.svg";
+import * as AvatarIcon from "readium-desktop/renderer/assets/icons/avatar-icon.svg";
+import * as DeleteIcon from "readium-desktop/renderer/assets/icons/trash-icon.svg";
+import SVG, { ISVGProps } from "readium-desktop/renderer/common/components/SVG";
+import classNames from "classnames";
+import { useTranslator } from "readium-desktop/renderer/common/hooks/useTranslator";
+import { useSelector } from "readium-desktop/renderer/common/hooks/useSelector";
+import { availableLanguages } from "readium-desktop/common/services/translator";
+// import * as LanguageIcon from "readium-desktop/renderer/assets/icons/language.svg";
+// import * as ChevronDown from "readium-desktop/renderer/assets/icons/chevron-down.svg";
+import { ComboBox, ComboBoxItem } from "readium-desktop/renderer/common/components/ComboBox";
+import { useDispatch } from "readium-desktop/renderer/common/hooks/useDispatch";
+import { authActions, creatorActions, customizationActions, i18nActions, noteExport, screenReaderActions, settingsActions, themeActions } from "readium-desktop/common/redux/actions";
+import * as BinIcon from "readium-desktop/renderer/assets/icons/trash-icon.svg";
+import { ICommonRootState } from "readium-desktop/common/redux/states/commonRootState";
+import { TTheme } from "readium-desktop/common/redux/states/theme";
+import * as InfoIcon from "readium-desktop/renderer/assets/icons/info-icon.svg";
+import * as ThoriumIcon from "readium-desktop/renderer/assets/icons/thorium.svg";
+import * as LanguageIcon from "readium-desktop/renderer/assets/icons/language.svg";
+import * as BrushIcon from "readium-desktop/renderer/assets/icons/paintbrush-icon.svg";
+import KeyboardSettings, { AdvancedTrigger } from "readium-desktop/renderer/library/components/settings/KeyboardSettings";
+import * as GearIcon from "readium-desktop/renderer/assets/icons/gear-icon.svg";
+import * as CheckIcon from "readium-desktop/renderer/assets/icons/singlecheck-icon.svg";
+import debounce from "debounce";
+import { INoteCreator } from "readium-desktop/common/redux/states/creator";
+import { ILibraryRootState } from "readium-desktop/common/redux/states/renderer/libraryRootState";
+import { ApiappHowDoesItWorkInfoBox } from "../dialog/ApiappAddForm";
+import * as RadioGroup from "@radix-ui/react-radio-group";
+import { TextArea } from "react-aria-components";
+import { noteExportHtmlMustacheTemplate } from "readium-desktop/common/readium/annotation/htmlTemplate";
+import * as Popover from "@radix-ui/react-popover";
+import { convertMultiLangStringToString } from "readium-desktop/common/language-string";
+
+// import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import moment from "moment";
+
+// import { TagGroup, TagList, Tag, Label } from "react-aria-components";
+
+interface ISettingsProps {};
+
+const TabTitle = (props: React.PropsWithChildren<{title: string}>) => {
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    return (
+        <div dir={isRTL ? "rtl" : "ltr"} className={stylesSettings.settings_tab_title}>
+            <h2 dir={isRTL ? "rtl" : "ltr"}>{props.title}</h2>
+            {props.children}
+        </div>
+    );
+};
+
+const LanguageSettings: React.FC<{}> = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    // const isRTL = locale === "ar";
+
+    const currentLanguageISO = locale as keyof typeof availableLanguages;
+    const currentLanguageString = availableLanguages[currentLanguageISO];
+    const dispatch = useDispatch();
+    const [options] = React.useState(() => (Object.entries(availableLanguages) as Array<[keyof typeof availableLanguages, string]>)
+        .sort()
+        .map<{ id: number, name: string, iso: keyof typeof availableLanguages }>(
+            ([k, v], i) => ({ id: i, name: v, iso: k }),
+        ));
+    const setLang = (localeSelected: React.Key) => {
+
+        if (typeof localeSelected !== "number") return;
+        const obj = options.find(({id}) => id === localeSelected);
+        dispatch(i18nActions.setLocale.build(obj.iso));
+    };
+    const selectedKey = options.find(({name}) => name === currentLanguageString);
+    return (
+        <ComboBox label={__("settings.language.languageChoice")} defaultItems={options} defaultSelectedKey={selectedKey?.id} onSelectionChange={setLang} svg={LanguageIcon} style={{borderBottom: "2px solid var(--color-gray-50"}}>
+            {item => <ComboBoxItem>{item.name}</ComboBoxItem>}
+        </ComboBox>
+    );
+};
+
+export const Auth = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+
+    return (
+        <button
+            className={stylesSettings.btn_primary}
+            onClick={() => dispatch(authActions.wipeData.build())}>
+            <SVG ariaHidden svg={BinIcon} />
+            <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.auth.wipeData")}</p>
+        </button>
+    );
+};
+
+const ConnectionSettings: React.FC<{}> = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    return (
+        <section className={stylesSettings.section} style={{ position: "relative" }}>
+            <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.auth.title")}</h4>
+            <div className={stylesSettings.session_text}>
+                <SVG ariaHidden svg={InfoIcon} />
+                <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.auth.help")}</p>
+            </div>
+            <Auth />
+        </section>
+    );
+};
+
+// const SaveSessionSettings: React.FC<{}> = () => {
+//     const [__] = useTranslator();
+//     // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+//     const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+//     const isRTL = locale === "ar";
+//     const dispatch = useDispatch();
+//     const sessionSaveState = useSelector((state: ICommonRootState) => state.session.save);
+//     const onChange = () => {
+//         dispatch(sessionActions.save.build(!sessionSaveState));
+//     };
+//     return (
+//         <section className={stylesSettings.section} style={{ position: "relative" }}>
+//             <h4 dir={isRTL ? "rtl" : "ltr"}>{__("app.session.exit.askBox.message")}</h4>
+//             <div className={stylesSettings.session_text} style={{ margin: "0" }}>
+//                 <SVG ariaHidden svg={InfoIcon} />
+//                 <p dir={isRTL ? "rtl" : "ltr"}>{__("app.session.exit.askBox.help")}</p>
+//             </div>
+//             <div dir={isRTL ? "rtl" : "ltr"} className={stylesAnnotations.annotations_checkbox}>
+//                 <input type="checkbox" id="saveSessionSettings" className={stylesGlobal.checkbox_custom_input} name="saveSessionSettings" checked={sessionSaveState} onChange={onChange} />
+//                 <label htmlFor="saveSessionSettings" className={stylesGlobal.checkbox_custom_label}>
+//                     <div
+//                         tabIndex={0}
+//                         role="checkbox"
+//                         aria-checked={sessionSaveState}
+//                         aria-label={__("settings.session.title")}
+//                         onKeyDown={(e) => {
+//                             // if (e.code === "Space") {
+//                             if (e.key === " ") {
+//                                 e.preventDefault(); // prevent scroll
+//                             }
+//                         }}
+//                         onKeyUp={(e) => {
+//                             // if (e.code === "Space") {
+//                             if (e.key === " ") {
+//                                 e.preventDefault();
+//                                 onChange();
+//                             }
+//                         }}
+//                         className={stylesGlobal.checkbox_custom}
+//                         style={{ border: sessionSaveState ? "2px solid transparent" : "2px solid var(--color-text-primary)", backgroundColor: sessionSaveState ? "var(--color-brand-primary)" : "transparent" }}>
+//                         {sessionSaveState ?
+//                             <SVG ariaHidden svg={CheckIcon} />
+//                             :
+//                             <></>
+//                         }
+//                     </div>
+//                     <div aria-hidden>
+//                         <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.session.title")}</h4>
+//                     </div>
+//                 </label>
+//             </div>
+//         </section>
+//     );
+// };
+
+const ScreenReaderSettings: React.FC<{}> = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+    const screenReaderActivate = useSelector((state: ICommonRootState) => state.screenReader.activate);
+    const onChange = () => {
+        dispatch(screenReaderActions.save.build(!screenReaderActivate));
+    };
+    return (
+        <section className={stylesSettings.section} style={{ position: "relative" }}>
+            <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.screenReaderActivate.message")}</h4>
+            <div className={stylesSettings.session_text} style={{ margin: "0" }}>
+                <SVG ariaHidden svg={InfoIcon} />
+                <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.screenReaderActivate.help")}</p>
+            </div>
+            <div dir={isRTL ? "rtl" : "ltr"} className={stylesAnnotations.annotations_checkbox}>
+                <input type="checkbox" id="screenReaderSettings" className={stylesGlobal.checkbox_custom_input} name="screenReaderSettings" checked={screenReaderActivate} onChange={onChange} />
+                <label htmlFor="screenReaderSettings" className={stylesGlobal.checkbox_custom_label}>
+                    <div
+                        tabIndex={0}
+                        role="checkbox"
+                        aria-checked={screenReaderActivate}
+                        aria-label={__("settings.screenReaderActivate.title")}
+                        onKeyDown={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault(); // prevent scroll
+                            }
+                        }}
+                        onKeyUp={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault();
+                                onChange();
+                            }
+                        }}
+                        className={stylesGlobal.checkbox_custom}
+                        style={{ border: screenReaderActivate ? "2px solid transparent" : "2px solid var(--color-text-primary)", backgroundColor: screenReaderActivate ? "var(--color-brand-primary)" : "transparent" }}>
+                        {screenReaderActivate ?
+                            <SVG ariaHidden svg={CheckIcon} />
+                            :
+                            <></>
+                        }
+                    </div>
+                    <div aria-hidden>
+                        <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.screenReaderActivate.title")}</h4>
+                    </div>
+                </label>
+            </div>
+        </section>
+    );
+};
+
+interface IRadioGroupItemProps {
+    value: string;
+    svg?: ISVGProps;
+    description: string;
+    disabled?: boolean;
+    className?: string;
+    style?: any;
+};
+
+const RadioGroupItem = (props: IRadioGroupItemProps) => {
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    return (
+        <RadioGroup.Item
+            dir={isRTL ? "rtl" : "ltr"}
+            data-input-type="radio"
+            value={props.value} id={props.value} className={props.className} disabled={props.disabled} style={props.style}>
+            {props.description}
+        </RadioGroup.Item>
+    );
+};
+
+
+const SaveCreatorSettings: React.FC<{}> = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+    const creator = useSelector((state: ICommonRootState) => state.creator);
+
+    const [name, setName] = React.useState(creator.name);
+    const [type, setType] = React.useState(creator.type);
+
+    const onChangeDebounced = React.useMemo(() =>
+        debounce(
+            (name: string, type: INoteCreator["type"]) => dispatch(creatorActions.set.build(name, type))
+            , 1000)
+        , [dispatch]);
+    React.useEffect(() => {
+        if (name !== creator.name || type !== creator.type) {
+            onChangeDebounced(name, type);
+        }
+    }, [name, type, creator, onChangeDebounced]);
+
+    return (
+        <section className={stylesSettings.section} style={{ position: "relative" }}>
+            <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.annotationCreator.creator")}</h4>
+            <div className={stylesSettings.session_text} style={{ margin: "0" }}>
+                <SVG ariaHidden svg={InfoIcon} />
+                <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.annotationCreator.help")}</p>
+            </div>
+            <div className={stylesInput.form_group} style={{ marginTop: "20px", width: "360px"}}>
+                <input dir={isRTL ? "rtl" : "ltr"} type="text" id='creator-name' aria-label={__("settings.annotationCreator.name")} name="creator-name" style={{ width: "100%", marginLeft: "10px" }} className="R2_CSS_CLASS__FORCE_NO_FOCUS_OUTLINE" title={name} value={name} onChange={(e) => {
+                    const v = e.target.value;
+                    setName(v);
+                }} />
+                <label dir={isRTL ? "rtl" : "ltr"} htmlFor="creator-name">{__("settings.annotationCreator.name")}</label>
+            </div>
+            <RadioGroup.Root dir={isRTL ? "rtl" : "ltr"} orientation="horizontal" style={{ display: "flex", gap: "10px", marginTop: "20px", flexWrap: "wrap" }}
+                value={type}
+                onValueChange={(option: "Organization" | "Person") => setType(option)}
+            >
+                 <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.annotationCreator.type")}</p>
+                <RadioGroupItem value="Organization" description={`${__("settings.annotationCreator.organization")}`} className={stylesAnnotations.annotations_filter_tag} />
+                <RadioGroupItem value="Person" description={`${__("settings.annotationCreator.person")}`} className={stylesAnnotations.annotations_filter_tag} />
+            </RadioGroup.Root>
+        </section>
+    );
+};
+
+const OverloadNoteExportToHtml: React.FC<{}> = () => {
+
+    const MAX_LEN = 100 * 1024;
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+    const enableCheckbox = useSelector((state: ILibraryRootState) => state.noteExport.overrideHTMLTemplate);
+    const htmlContent = useSelector((state: ILibraryRootState) => state.noteExport.htmlContent);
+    const textAreaRef = React.useRef<HTMLTextAreaElement>();
+    const toggleEnableCheckbox = () => {
+        dispatch(noteExport.overrideHTMLTemplate.build(!enableCheckbox, htmlContent));
+    };
+    const updateHtmlContent = React.useCallback((str: string) => {
+        const slicedStr = str.slice(0, MAX_LEN);
+        dispatch(noteExport.overrideHTMLTemplate.build(true, slicedStr));
+    }, [dispatch, MAX_LEN]);
+    const updateHtmlContentDebounced = React.useMemo(() =>
+        debounce(
+            updateHtmlContent
+            , 500)
+        , [updateHtmlContent]);
+    const resetHtmlContent = () => {
+        dispatch(noteExport.overrideHTMLTemplate.build(enableCheckbox, noteExportHtmlMustacheTemplate));
+        textAreaRef.current.value = noteExportHtmlMustacheTemplate;
+    };
+
+    return (<>
+
+        <section className={stylesSettings.section} style={{ position: "relative" }}>
+
+            <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.note.export.overrideHTMLTemplate")}</h4>
+            <input type="checkbox" className={stylesGlobal.checkbox_custom_input} name="enableCheckbox" />
+            <div dir={isRTL ? "rtl" : "ltr"} className={stylesAnnotations.annotations_checkbox}>
+                <input type="checkbox" id="enableCheckbox" className={stylesGlobal.checkbox_custom_input} name="enableCheckbox" checked={enableCheckbox} onChange={toggleEnableCheckbox} />
+                <label htmlFor="enableCheckbox" className={stylesGlobal.checkbox_custom_label}>
+                    <div
+                        tabIndex={0}
+                        role="checkbox"
+                        aria-checked={enableCheckbox}
+                        aria-label={__("settings.note.export.enableCheckbox")}
+                        onKeyDown={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault(); // prevent scroll
+                            }
+                        }}
+                        onKeyUp={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault();
+                                toggleEnableCheckbox();
+                            }
+                        }}
+                        className={stylesGlobal.checkbox_custom}
+                        style={{ border: enableCheckbox ? "2px solid transparent" : "2px solid var(--color-text-primary)", backgroundColor: enableCheckbox ? "var(--color-brand-primary)" : "transparent" }}>
+                        {enableCheckbox ?
+                            <SVG ariaHidden svg={CheckIcon} />
+                            :
+                            <></>
+                        }
+                    </div>
+                    <div aria-hidden>
+                        <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.note.export.enableCheckbox")}</h4>
+                    </div>
+                </label>
+            </div>
+            {
+                enableCheckbox ? <>
+                    <TextArea style={{ minWidth: "-webkit-fill-available", maxWidth: "-webkit-fill-available" }} name="htmlContent" wrap="hard" ref={textAreaRef} defaultValue={htmlContent} maxLength={MAX_LEN} onChange={(a) => updateHtmlContentDebounced(a.currentTarget.value)}></TextArea>
+                    <button dir={isRTL ? "rtl" : "ltr"} className={stylesSettings.btn_primary} onClick={resetHtmlContent}>{__("settings.note.export.applyDefaultTemplate")}</button>
+                </>
+                    : <></>
+            }
+
+        </section>
+    </>);
+};
+
+const ManageAccessToCatalogSettings = () => {
+
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+    const enableAPIAPP = useSelector((state: ILibraryRootState) => state.settings.enableAPIAPP);
+
+    const toggleEnableAPIAPP = () => {
+        dispatch(settingsActions.enableAPIAPP.build(!enableAPIAPP));
+    };
+
+    return (
+        <section className={stylesSettings.section} style={{ gap: "10px" }}>
+            <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.library.title")}</h4>
+            <div dir={isRTL ? "rtl" : "ltr"} className={stylesAnnotations.annotations_checkbox}>
+                <input type="checkbox" id="enableAPIAPP" className={stylesGlobal.checkbox_custom_input} name="enableAPIAPP" checked={enableAPIAPP} onChange={toggleEnableAPIAPP} />
+                <label htmlFor="enableAPIAPP" className={stylesGlobal.checkbox_custom_label}>
+                    <div
+                        tabIndex={0}
+                        role="checkbox"
+                        aria-checked={enableAPIAPP}
+                        aria-label={__("settings.library.enableAPIAPP")}
+                        onKeyDown={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault(); // prevent scroll
+                            }
+                        }}
+                        onKeyUp={(e) => {
+                            // if (e.code === "Space") {
+                            if (e.key === " ") {
+                                e.preventDefault();
+                                toggleEnableAPIAPP();
+                            }
+                        }}
+                        className={stylesGlobal.checkbox_custom}
+                        style={{ border: enableAPIAPP ? "2px solid transparent" : "2px solid var(--color-text-primary)", backgroundColor: enableAPIAPP ? "var(--color-brand-primary)" : "transparent" }}>
+                        {enableAPIAPP ?
+                            <SVG ariaHidden svg={CheckIcon} />
+                            :
+                            <></>
+                        }
+                    </div>
+                    <div aria-hidden>
+                        <h4 dir={isRTL ? "rtl" : "ltr"}>{__("settings.library.enableAPIAPP")}</h4>
+                    </div>
+                </label>
+            </div>
+            <ApiappHowDoesItWorkInfoBox />
+        </section>
+    );
+};
+
+const Themes = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    const dispatch = useDispatch();
+    const theme = useSelector((s: ICommonRootState) => s.theme);
+    const options: Array<{id: number, value: TTheme, name: string}> = [
+        {id: 1, value: "dark", name: __("settings.theme.dark")},
+        {id: 2, value: "light", name: __("settings.theme.light")},
+        {id: 3, value: "system", name: __("settings.theme.auto")},
+    ];
+
+    const setTheme = (themeSelected: React.Key) => {
+
+        if (typeof themeSelected !== "number") return;
+        const { value: themeChosen } = options.find(({ id }) => id === themeSelected) || {};
+        document.body.setAttribute("data-theme", themeChosen);
+        dispatch(themeActions.setTheme.build(themeChosen));
+    };
+    const selectedKey = options.find(({ value }) => value === theme.name);
+
+    return (
+        <div>
+            <ComboBox label={__("settings.theme.title")} items={options} selectedKey={selectedKey?.id} onSelectionChange={setTheme} svg={BrushIcon}>
+                {item => <ComboBoxItem>{item.name}</ComboBoxItem>}
+            </ComboBox>
+            {theme.name === "system" ? (
+                <div className={stylesSettings.session_text}>
+                    <SVG ariaHidden svg={InfoIcon} />
+                    <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.theme.description")}</p>
+                </div>
+            ) : (
+                <></>
+            )}
+        </div>
+    );
+};
+
+const Profiles = () => {
+
+    const { provision: packageProfileProvisioned, activate: { id: profileActivatedId } } = useSelector((s: ICommonRootState) => s.customization);
+    const selectedProfile = packageProfileProvisioned.find(({id}) => id && id === profileActivatedId);
+    const dispatch = useDispatch();
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+
+    return (
+        <>
+            <div className={stylesSettings.session_text}>
+                <SVG ariaHidden svg={InfoIcon} />
+                <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.profiles.info")}</p>
+            </div>
+            <div
+                className={stylesSettings.profile_selection_form}
+                role="radiogroup"
+            >
+                {
+                    packageProfileProvisioned.map((profile, index) => {
+                        const profileTitle = convertMultiLangStringToString(profile.title, locale) || __("catalog.customization.fallback.title");
+                        const profileDescription = convertMultiLangStringToString(profile.description, locale) || __("catalog.customization.fallback.description");
+
+                        return (
+                            <div
+                                key={`customization-thorium-${index}`}
+                                className={classNames(stylesSettings.profile_selection_input, selectedProfile?.id === profile.id ? stylesSettings.profile_selection_input_checked : "")}
+                            >
+                                <input
+                                    type="radio"
+                                    id={profile.id}
+                                    value={profile.fileName}
+                                    name={profileTitle}
+                                    checked={selectedProfile?.id === profile.id}
+                                    onChange={(e) => {
+                                        console.log("PROFILE Input change", e);
+                                        dispatch(customizationActions.activating.build(profile.id));
+                                    }}
+                                    aria-label={profile.id}
+                                />
+                                <label htmlFor={profile.id} className={stylesSettings.profile_selection_label}>
+                                    { profile.logoUrl ? <img src={profile.logoUrl} alt="" /> : <></> }
+                                    <div
+                                        className={stylesSettings.profile_selection_description}
+                                        role="radio"
+                                        onKeyDown={(e) => {
+                                            if (e.key === " ") {
+                                                console.log("PROFILE Input change", e);
+                                                dispatch(customizationActions.activating.build(profile.id));
+                                            }
+                                        }}
+                                        onKeyUp={(e) => {
+                                            if (e.key === " ") {
+                                                e.preventDefault();
+                                                console.log("PROFILE Input change", e);
+                                                dispatch(customizationActions.activating.build(profile.id));
+                                            }
+                                        }}
+                                    >
+                                        <div>
+                                            <h5>{profileTitle}</h5>
+                                            <p>{profileDescription}</p>
+                                            <div style={{ fontSize: "12px" }}>
+                                                {/* <span>Filename: {profile.fileName}</span><br/>
+                                            <span>Identifier: {profile.id}</span><br/> */}
+                                                <span>{__("settings.profiles.version", { version: moment(profile.version).toISOString() })}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </label>
+                                <div className={stylesSettings.delete_profile_button} style={{ display: "flex", flexDirection: "row-reverse", width: "100%", margin: "-5px", zIndex: "10" }}>
+                                    <Popover.Root>
+                                        <Popover.Trigger asChild>
+                                            <button
+                                                style={{ width: "16px", height: "16px" }}
+                                                title={__("catalog.delete")}
+                                            >
+                                                <SVG ariaHidden={true} svg={DeleteIcon} />
+                                            </button>
+                                        </Popover.Trigger>
+                                        <Popover.Portal>
+                                            <Popover.Content collisionPadding={{ top: 180, bottom: 100 }} avoidCollisions alignOffset={-10} /* hideWhenDetached */ sideOffset={5} className={stylesPopoverDialog.delete_item}>
+                                                <Popover.Close dir={isRTL ? "rtl" : "ltr"}
+                                                    onClick={() => {
+                                                        dispatch(customizationActions.deleteProfile.build(profile.fileName));
+                                                    }}
+                                                    title={__("catalog.delete")}
+                                                >
+                                                    <SVG ariaHidden={true} svg={DeleteIcon} />
+                                                    {__("reader.marks.delete")}
+                                                </Popover.Close>
+                                                <Popover.Arrow className={stylesDropDown.PopoverArrow} aria-hidden />
+                                            </Popover.Content>
+                                        </Popover.Portal>
+                                    </Popover.Root>
+                                </div>
+                            </div>
+                        );
+                    })
+                }
+
+                <div
+                    key={"customization-thorium_vanilla"}
+                    className={classNames(stylesSettings.profile_selection_input,  selectedProfile?.id ? "" : stylesSettings.profile_selection_input_checked)}
+                >
+                    <input
+                        type="radio"
+                        id="customization-thorium-vanilla"
+                        value={__("settings.profiles.thorium.title")}
+                        name={__("settings.profiles.thorium.title")}
+                        checked={!selectedProfile}
+                        onChange={(e) => {
+                            console.log("PROFILE Input change", e);
+                            dispatch(customizationActions.activating.build(""));
+                        }}
+                        aria-label={__("settings.profiles.thorium.title")}
+                    />
+                    <label htmlFor="customization-thorium-vanilla" className={stylesSettings.profile_selection_label}>
+                        <SVG ariaHidden svg={ThoriumIcon} />
+                        <div
+                            className={stylesSettings.profile_selection_description}
+                            role="radio"
+                            onKeyDown={(e) => {
+                                if (e.key === " ") {
+                                    console.log("PROFILE Input change", e);
+                                    dispatch(customizationActions.activating.build(""));
+                                }
+                            }}
+                            onKeyUp={(e) => {
+                                if (e.key === " ") {
+                                    e.preventDefault();
+                                    console.log("PROFILE Input change", e);
+                                    dispatch(customizationActions.activating.build(""));
+                                }
+                            }}
+                        >
+                            <div>
+                                <h5 dir={isRTL ? "rtl" : "ltr"}>{__("settings.profiles.thorium.title")}</h5>
+                                <p dir={isRTL ? "rtl" : "ltr"}>{__("settings.profiles.thorium.description")}</p>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </>
+    );
+};
+
+const TabHeader = (props: React.PropsWithChildren<{title: string, advancedTrigger: boolean}>) => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+    return (
+        <div key="modal-header" className={stylesSettings.close_button_div} style={{justifyContent: isRTL ? "end" : undefined}}>
+            <TabTitle title={props.title}>
+            {props.children}
+            {
+                props.advancedTrigger ? 
+                <AdvancedTrigger/>
+                : <></>
+            }
+            </TabTitle>
+            <Dialog.Close asChild>
+                <button dir={isRTL ? "rtl" : "ltr"} data-css-override="" className={stylesButtons.button_transparency_icon} aria-label={__("accessibility.closeDialog")}>
+                    <SVG ariaHidden={true} svg={QuitIcon} />
+                </button>
+            </Dialog.Close>
+        </div>
+    );
+};
+
+
+export const Settings: React.FC<ISettingsProps> = () => {
+    const [__] = useTranslator();
+    // const locale = useSelector((state: IRendererCommonRootState) => state.i18n.locale);
+    const locale = useSelector((state: ICommonRootState) => state.i18n.locale);
+    const isRTL = locale === "ar";
+
+    const [tabTitle, setTabTitle] = React.useState(__("settings.tabs.general"));
+
+    // https://github.com/edrlab/thorium-reader/discussions/3177#discussioncomment-14752676
+    // <DirectionProvider dir={isRTL ? "rtl" : "ltr"}> ... </DirectionProvider>
+    return <Dialog.Root>
+        <Dialog.Trigger asChild>
+            <button title={__("header.settings")} className="R2_CSS_CLASS__FORCE_NO_FOCUS_OUTLINE">
+                <SVG ariaHidden svg={GearIcon} />
+                <h3 dir={isRTL ? "rtl" : "ltr"}>{__("header.settings")}</h3>
+            </button>
+        </Dialog.Trigger>
+        <Dialog.Portal>
+            <div className={stylesModals.modal_dialog_overlay}></div>
+            <Dialog.Content style={{ overflowY: "hidden" }} className={classNames(stylesModals.modal_dialog)} aria-describedby={undefined}>
+                {
+                    // FALSE this to test sourcemaps:
+                    true &&
+                    <VisuallyHidden.Root>
+                        <Dialog.Title>{__("header.settings")}</Dialog.Title>
+                    </VisuallyHidden.Root>
+                }
+                <Tabs.Root defaultValue="tab1" data-orientation="vertical" orientation="vertical" className={stylesSettings.settings_container}>
+                    <TabHeader title={tabTitle} advancedTrigger={tabTitle === __("settings.tabs.keyboardShortcuts") ? true : false} />
+                    <Tabs.List className={stylesSettings.settings_tabslist} data-orientation="vertical" aria-orientation="vertical">
+                        <Tabs.Trigger value="tab1" onFocus={() => setTabTitle(__("settings.tabs.general"))}>
+                            <SVG ariaHidden svg={CogIcon} />
+                            <h3 dir={isRTL ? "rtl" : "ltr"}>{__("settings.tabs.general")}</h3>
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="tab2" onFocus={() => setTabTitle(__("settings.tabs.appearance"))}>
+                            <SVG ariaHidden svg={PaletteIcon} />
+                            <h3 dir={isRTL ? "rtl" : "ltr"}>{__("settings.tabs.appearance")}</h3>
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="tab4" onFocus={() => setTabTitle(__("settings.tabs.keyboardShortcuts"))}>
+                            <SVG ariaHidden svg={KeyReturnIcon} />
+                            <h3 dir={isRTL ? "rtl" : "ltr"}>{__("settings.tabs.keyboardShortcuts")}</h3>
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="tab5" onFocus={() => setTabTitle(__("settings.tabs.profiles"))}>
+                            <SVG ariaHidden svg={AvatarIcon} />
+                            <h3 dir={isRTL ? "rtl" : "ltr"}>{__("settings.tabs.profiles")}</h3>
+                        </Tabs.Trigger>
+                    </Tabs.List>
+                    <div className={stylesSettings.settings_content} style={{ marginTop: "70px" }}>
+                        <Tabs.Content value="tab1" tabIndex={-1}>
+                            <div className={stylesSettings.settings_tab}>
+                                <LanguageSettings />
+                                <ScreenReaderSettings />
+                                <ConnectionSettings />
+                                {/* <SaveSessionSettings /> */}
+                                <ManageAccessToCatalogSettings />
+                                <SaveCreatorSettings />
+                                <OverloadNoteExportToHtml />
+                            </div>
+                        </Tabs.Content>
+                        <Tabs.Content value="tab2" tabIndex={-1}>
+                            <div className={stylesSettings.settings_tab}>
+                                <Themes />
+                            </div>
+                        </Tabs.Content>
+                        <Tabs.Content value="tab4" tabIndex={-1}>
+                            <div className={stylesSettings.settings_tab}>
+                                <KeyboardSettings />
+                            </div>
+                        </Tabs.Content>
+                        <Tabs.Content value="tab5" tabIndex={-1}>
+                            <div className={stylesSettings.settings_tab}>
+                                <Profiles />
+                            </div>
+                        </Tabs.Content>
+                    </div>
+                </Tabs.Root>
+
+                {/* <div className={stylesSettings.close_button_div}>
+                    <Dialog.Close asChild>
+                        <button data-css-override="" className={stylesButtons.button_transparency_icon} aria-label={__("accessibility.closeDialog")}>
+                            <SVG ariaHidden={true} svg={QuitIcon} />
+                        </button>
+                    </Dialog.Close>
+                </div> */}
+            </Dialog.Content>
+        </Dialog.Portal>
+    </Dialog.Root>;
+};

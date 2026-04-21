@@ -1,0 +1,59 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 12%, transparent) 0%, transparent 28%),
+    radial-gradient(circle at 82% 20%, color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 6%, transparent) 0%, transparent 22%),
+    linear-gradient(180deg, color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 92%, white 8%) 0%, var(--chips-sys-color-surface, #f5f2ea) 100%);
+  color: var(--chips-sys-color-on-surface, #1f1d19);
+  font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  isolation: isolate;
+}
+
+.book-reader-visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

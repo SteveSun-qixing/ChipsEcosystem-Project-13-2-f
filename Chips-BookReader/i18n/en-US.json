@@ -1,0 +1,99 @@
+{
+  "book-reader": {
+    "labels": {
+      "appName": "Book Reader",
+      "contents": "Contents",
+      "preferences": "Reading Preferences",
+      "progress": "Reading Progress",
+      "bookmarks": "Bookmarks",
+      "search": "Search",
+      "importBook": "Import Ebook",
+      "readingMode": "Reading Mode",
+      "backgroundTone": "Background",
+      "paginated": "Pages",
+      "scroll": "Scroll",
+      "backgroundTheme": "Theme",
+      "backgroundWarm": "Warm",
+      "backgroundMist": "Mist",
+      "backgroundNight": "Night",
+      "fontScale": "Font Size",
+      "contentWidth": "Page Width",
+      "fontFamily": "Type Style",
+      "serif": "Serif",
+      "sans": "Sans",
+      "supportedFormat": "Supported Format"
+    },
+    "actions": {
+      "openFile": "Open Book",
+      "openUrl": "Open URL",
+      "openLibrary": "Import Book",
+      "openPreferences": "Open Preferences",
+      "openBookmarks": "Open Bookmarks",
+      "closePanel": "Close Panel",
+      "toggleToc": "Toggle Contents",
+      "toggleSearch": "Search",
+      "search": "Search Book",
+      "clearSearch": "Clear Search",
+      "previousPage": "Previous Page",
+      "nextPage": "Next Page",
+      "previousSection": "Previous Section",
+      "nextSection": "Next Section",
+      "decreaseFont": "Smaller Text",
+      "increaseFont": "Larger Text",
+      "narrowContent": "Narrow Page",
+      "widenContent": "Widen Page",
+      "addBookmark": "Add Bookmark",
+      "removeBookmark": "Remove Bookmark",
+      "toggleBookmark": "Toggle Bookmark"
+    },
+    "dialogs": {
+      "openFileTitle": "Choose an EPUB Book"
+    },
+    "empty": {
+      "badge": "EPUB Reader",
+      "prompt": "Drop in an ebook or click to import",
+      "title": "Drop in a book and start reading right away",
+      "description": "Supports local `.epub` files, books launched by Host resource routing, and direct remote EPUB links.",
+      "dropHint": "You can also drag and drop an ebook into this window",
+      "supportedFormat": "The formal first version supports EPUB / EPUB3 files."
+    },
+    "errors": {
+      "missingTarget": "No ebook target is available to open.",
+      "unsupportedFile": "This reader currently supports: {extensions}",
+      "openFailed": "Failed to open the ebook. Check whether the file is valid or the link is reachable.",
+      "renderFailed": "Failed to render the current section. Try switching sections and reopening the book.",
+      "invalidUrl": "Enter a reachable EPUB URL."
+    },
+    "status": {
+      "loading": "Preparing reading content..."
+    },
+    "placeholders": {
+      "remoteUrl": "Paste an EPUB URL, for example https://example.com/book.epub",
+      "search": "Search book content..."
+    },
+    "reader": {
+      "sectionPosition": "Section {current} / {total}",
+      "pagePosition": "Page {current} / {total}",
+      "bookProgress": "{percentage}% complete",
+      "unknownCreator": "Unknown Author",
+      "localSource": "Local File",
+      "remoteSource": "Remote Link"
+    },
+    "search": {
+      "results": "{count} result(s) found",
+      "noResults": "No matches found",
+      "searching": "Searching section {current} / {total}...",
+      "matchesInSection": "{count} match(es)"
+    },
+    "bookmarks": {
+      "empty": "No bookmarks yet",
+      "count": "{count} bookmark(s)",
+      "pageLabel": "Page {page}",
+      "scrollLabel": "At {percentage}%"
+    },
+    "feedback": {
+      "bookmarkAdded": "Bookmark added",
+      "bookmarkRemoved": "Bookmark removed"
+    }
+  }
+}

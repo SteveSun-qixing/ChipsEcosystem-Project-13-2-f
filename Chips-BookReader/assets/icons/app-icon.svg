@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="chips-app-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffcc33"/>
+      <stop offset="100%" stop-color="#ff3366"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#chips-app-gradient)"/>
+  <path
+    d="M20 32c0-6.627 5.373-12 12-12 3.314 0 6 2.686 6 6s-2.686 6-6 6h-4"
+    stroke="#1b1b1f"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <circle cx="24" cy="36" r="3" fill="#1b1b1f"/>
+</svg>

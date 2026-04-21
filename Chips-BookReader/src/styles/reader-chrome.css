@@ -1,0 +1,186 @@
+.book-reader-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+}
+
+.book-reader-chrome__header {
+  position: absolute;
+  inset: 24px 24px auto;
+  display: flex;
+  justify-content: center;
+}
+
+.book-reader-metaCard {
+  width: min(920px, calc(100vw - 48px));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-radius: 28px;
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 8%, transparent);
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 78%, white 22%);
+  box-shadow: 0 20px 56px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 10%, transparent);
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+
+.book-reader-metaCard__copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.book-reader-metaCard__eyebrow,
+.book-reader-panel__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 56%, transparent);
+}
+
+.book-reader-metaCard__title,
+.book-reader-panel__header h2 {
+  margin: 0;
+  font-family: "Iowan Old Style", "Source Han Serif SC", serif;
+}
+
+.book-reader-metaCard__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(22px, 3vw, 32px);
+  line-height: 1.08;
+}
+
+.book-reader-metaCard__meta {
+  margin: 0;
+  color: color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 70%, transparent);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.book-reader-metaCard__badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 10%, var(--chips-sys-color-surface, #f5f2ea));
+  color: var(--chips-sys-color-primary, #2158d2);
+  font-size: 12px;
+}
+
+.book-reader-chrome__navigation {
+  position: absolute;
+  inset: 50% 24px auto;
+  display: flex;
+  justify-content: space-between;
+  transform: translateY(-50%);
+}
+
+.book-reader-chrome__dock {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 8%, transparent);
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 80%, white 20%);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 12%, transparent);
+  backdrop-filter: blur(18px);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.book-reader-controlButton {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 80%, white 20%);
+  color: var(--chips-sys-color-on-surface, #1f1d19);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 8%, transparent);
+  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.book-reader-controlButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 12%, var(--chips-sys-color-surface, #f5f2ea));
+  color: var(--chips-sys-color-primary, #2158d2);
+}
+
+.book-reader-controlButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.book-reader-controlButton--active {
+  background: var(--chips-sys-color-primary, #2158d2);
+  color: white;
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 24%, transparent);
+}
+
+.book-reader-controlButton--nav {
+  width: 58px;
+  height: 58px;
+  box-shadow: 0 20px 48px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 14%, transparent);
+  pointer-events: auto;
+}
+
+.book-reader-controlButton--close {
+  width: 40px;
+  height: 40px;
+}
+
+@media (max-width: 960px) {
+  .book-reader-chrome__header {
+    inset: 16px 16px auto;
+  }
+
+  .book-reader-metaCard {
+    width: calc(100vw - 32px);
+    border-radius: 24px;
+  }
+
+  .book-reader-chrome__navigation {
+    inset: auto 16px 104px;
+    justify-content: flex-end;
+    gap: 10px;
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .book-reader-metaCard {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .book-reader-metaCard__title {
+    white-space: normal;
+  }
+
+  .book-reader-chrome__dock {
+    width: calc(100vw - 24px);
+    justify-content: space-between;
+    gap: 6px;
+    bottom: 16px;
+  }
+
+  .book-reader-controlButton {
+    width: 42px;
+    height: 42px;
+  }
+}

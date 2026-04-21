@@ -1,0 +1,169 @@
+.book-reader-shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.book-reader-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.book-reader-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 8%, transparent) 0%, transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 88%, white 12%) 0%, var(--chips-sys-color-surface, #f5f2ea) 100%);
+}
+
+.book-reader-shell--dragActive .book-reader-stage::after {
+  content: "";
+  position: absolute;
+  inset: 20px;
+  z-index: 8;
+  border: 1.5px dashed color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 48%, transparent);
+  border-radius: 34px;
+  pointer-events: none;
+}
+
+.book-reader-empty,
+.book-reader-viewer {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.book-reader-empty {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.book-reader-empty__card {
+  width: min(720px, calc(100vw - 48px));
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  padding: clamp(28px, 5vw, 56px);
+  border-radius: 36px;
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 8%, transparent);
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 78%, white 22%);
+  box-shadow: 0 28px 80px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 12%, transparent);
+  backdrop-filter: blur(22px);
+  text-align: center;
+}
+
+.book-reader-empty__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 10%, var(--chips-sys-color-surface, #f5f2ea));
+  color: var(--chips-sys-color-primary, #2158d2);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.book-reader-empty__title {
+  margin: 0;
+  font-family: "Iowan Old Style", "Source Han Serif SC", serif;
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1.06;
+}
+
+.book-reader-empty__description,
+.book-reader-empty__hint,
+.book-reader-empty__supported {
+  margin: 0;
+  max-width: 44rem;
+  color: color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 72%, transparent);
+  line-height: 1.65;
+}
+
+.book-reader-empty__prompt,
+.book-reader-primaryButton,
+.book-reader-secondaryButton {
+  min-height: 48px;
+  border-radius: 999px;
+  padding: 0 22px;
+  border: 0;
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.book-reader-empty__prompt,
+.book-reader-primaryButton {
+  background: var(--chips-sys-color-primary, #2158d2);
+  color: white;
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--chips-sys-color-primary, #2158d2) 30%, transparent);
+}
+
+.book-reader-secondaryButton {
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 82%, white 18%);
+  color: var(--chips-sys-color-on-surface, #1f1d19);
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 12%, transparent);
+}
+
+.book-reader-empty__prompt:hover,
+.book-reader-primaryButton:hover,
+.book-reader-secondaryButton:hover {
+  transform: translateY(-1px);
+}
+
+.book-reader-viewer {
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 92%, white 8%);
+}
+
+.book-reader-frameHost {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.book-reader-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 94%, white 6%);
+}
+
+.book-reader-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 72%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.book-reader-overlay__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #f5f2ea) 84%, white 16%);
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 10%, transparent);
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--chips-sys-color-on-surface, #1f1d19) 10%, transparent);
+}
+
+@media (max-width: 720px) {
+  .book-reader-empty {
+    padding: 16px;
+  }
+
+  .book-reader-empty__card {
+    width: calc(100vw - 32px);
+    border-radius: 28px;
+  }
+
+  .book-reader-empty__title {
+    font-size: 30px;
+  }
+}

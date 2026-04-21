@@ -1,0 +1,75 @@
+id: com.chips.book-reader
+name: 书籍阅读器
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片生态电子书阅读器应用插件，用于打开本地 EPUB 电子书或由 Host 资源路由唤起的电子书资源。
+
+author:
+  name: BookReader
+  email: dev@chips.local
+
+keywords:
+  - chips
+  - book
+  - epub
+  - reader
+
+capabilities:
+  - resource-handler:view:application/epub+zip
+  - file-handler:.epub
+  - file-handler:.epub3
+
+permissions:
+  - resource.read
+  - file.read
+  - platform.read
+  - platform.external
+  - config.read
+  - config.write
+  - theme.read
+  - i18n.read
+  - network.request
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: true
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1280
+  launcher:
+    displayName: 书籍阅读器
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      titleBarStyle: default

@@ -100,6 +100,20 @@ describe('StoreZipService', () => {
 
     const entries = await zip.list(outputZip);
     expect(entries.map((entry) => entry.path)).toEqual(['a.txt', 'nested/b.txt']);
+    expect(entries).toEqual([
+      expect.objectContaining({
+        path: 'a.txt',
+        isDirectory: false,
+        compressionMethod: 0,
+        modifiedTime: expect.any(Number),
+      }),
+      expect.objectContaining({
+        path: 'nested/b.txt',
+        isDirectory: false,
+        compressionMethod: 0,
+        modifiedTime: expect.any(Number),
+      }),
+    ]);
     await expect(zip.readEntry(outputZip, 'nested/b.txt')).resolves.toEqual(Buffer.from('beta'));
 
     await zip.extract(outputZip, outputDir);
@@ -136,8 +150,10 @@ describe('StoreZipService', () => {
 
     const zip = new StoreZipService();
     const entries = await zip.list(outputZip);
-    expect(entries.some((entry) => entry.path === '.box/')).toBe(true);
-    expect(entries.some((entry) => entry.path === 'assets/previews/')).toBe(true);
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '.box/', isDirectory: true }),
+      expect.objectContaining({ path: 'assets/previews/', isDirectory: true }),
+    ]));
 
     await zip.extract(outputZip, outputDir);
 
@@ -159,6 +175,13 @@ describe('StoreZipService', () => {
     const zip = new StoreZipService();
 
     await expect(zip.readEntry(outputZip, 'site/index.html')).resolves.toEqual(Buffer.from('<h1>hello</h1>'));
+    await expect(zip.list(outputZip)).resolves.toEqual([
+      expect.objectContaining({
+        path: 'site/index.html',
+        isDirectory: false,
+        compressionMethod: 8,
+      }),
+    ]);
     await zip.extract(outputZip, outputDir);
     await expect(fs.readFile(path.join(outputDir, 'site', 'index.html'), 'utf-8')).resolves.toBe('<h1>hello</h1>');
 

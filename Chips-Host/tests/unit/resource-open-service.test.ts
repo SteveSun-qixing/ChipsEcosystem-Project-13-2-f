@@ -93,6 +93,39 @@ describe('ResourceOpenService', () => {
     });
   });
 
+  it('infers ebook MIME types from file extensions before resolving resource handlers', async () => {
+    const launchPlugin = vi.fn().mockResolvedValue({ windowId: 'window-book' });
+    const service = new ResourceOpenService({
+      queryHandlerPlugins: vi.fn().mockResolvedValue([
+        {
+          id: 'chips.book.reader',
+          enabled: true,
+          type: 'app',
+          capabilities: ['resource-handler:view:application/pdf'],
+        },
+      ]),
+      launchPlugin,
+      resolveResourceFilePath: () => null,
+      openPath: vi.fn(),
+      openExternalUrl: vi.fn(),
+    });
+
+    await expect(
+      service.openResource({
+        resource: {
+          resourceId: '/tmp/manual.pdf',
+        },
+      }),
+    ).resolves.toMatchObject({
+      mode: 'plugin',
+      pluginId: 'chips.book.reader',
+      matchedCapability: 'resource-handler:view:application/pdf',
+      resolved: {
+        mimeType: 'application/pdf',
+      },
+    });
+  });
+
   it('falls back to shell path opening when no handler plugin exists for a local file', async () => {
     const openPath = vi.fn().mockResolvedValue(undefined);
     const service = new ResourceOpenService({

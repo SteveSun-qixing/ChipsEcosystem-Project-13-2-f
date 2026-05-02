@@ -11,6 +11,7 @@ const EOCD_SIGNATURE = 0x06054b50;
 const DOS_TIME = 0;
 const DOS_DATE = 0;
 const DEFLATE_COMPRESSION_METHOD = 8;
+const STORE_COMPRESSION_METHOD = 0;
 
 const writeUInt16LE = (value: number): Buffer => {
   const buffer = Buffer.alloc(2);
@@ -22,6 +23,48 @@ const writeUInt32LE = (value: number): Buffer => {
   const buffer = Buffer.alloc(4);
   buffer.writeUInt32LE(value >>> 0);
   return buffer;
+};
+
+const dateToDosDateTime = (timestamp: number | undefined): { date: number; time: number; modifiedTime?: number } => {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+    return {
+      date: DOS_DATE,
+      time: DOS_TIME
+    };
+  }
+
+  const source = new Date(timestamp);
+  const year = Math.min(2107, Math.max(1980, source.getFullYear()));
+  const month = Math.min(12, Math.max(1, source.getMonth() + 1));
+  const day = Math.min(31, Math.max(1, source.getDate()));
+  const hours = Math.min(23, Math.max(0, source.getHours()));
+  const minutes = Math.min(59, Math.max(0, source.getMinutes()));
+  const seconds = Math.min(58, Math.max(0, source.getSeconds()));
+
+  return {
+    date: ((year - 1980) << 9) | (month << 5) | day,
+    time: (hours << 11) | (minutes << 5) | Math.floor(seconds / 2),
+    modifiedTime: source.getTime()
+  };
+};
+
+const dosDateTimeToTimestamp = (date: number, time: number): number | undefined => {
+  if (date === 0) {
+    return undefined;
+  }
+
+  const day = date & 0x1f;
+  const month = (date >>> 5) & 0x0f;
+  const year = ((date >>> 9) & 0x7f) + 1980;
+  const seconds = (time & 0x1f) * 2;
+  const minutes = (time >>> 5) & 0x3f;
+  const hours = (time >>> 11) & 0x1f;
+
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59 || seconds > 59) {
+    return undefined;
+  }
+
+  return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
 };
 
 const normalizeZipEntryPath = (entryPath: string, options?: { allowDirectory?: boolean }): string => {
@@ -68,9 +111,11 @@ const collectFiles = async (inputDir: string): Promise<ZipEntryInput[]> => {
       if (entry.isDirectory()) {
         stack.push(fullPath);
       } else if (entry.isFile()) {
+        const stat = await fs.stat(fullPath);
         files.push({
           path: path.relative(inputDir, fullPath).split(path.sep).join('/'),
-          data: await fs.readFile(fullPath)
+          data: await fs.readFile(fullPath),
+          modifiedTime: stat.mtime.getTime()
         });
       }
     }
@@ -91,14 +136,15 @@ export class StoreZipService {
     for (const file of files) {
       const fileName = Buffer.from(file.path, 'utf-8');
       const checksum = crc32(file.data);
+      const dosDateTime = dateToDosDateTime(file.modifiedTime);
 
       const localHeader = Buffer.concat([
         writeUInt32LE(LFH_SIGNATURE),
         writeUInt16LE(20),
         writeUInt16LE(0),
-        writeUInt16LE(0),
-        writeUInt16LE(DOS_TIME),
-        writeUInt16LE(DOS_DATE),
+        writeUInt16LE(STORE_COMPRESSION_METHOD),
+        writeUInt16LE(dosDateTime.time),
+        writeUInt16LE(dosDateTime.date),
         writeUInt32LE(checksum),
         writeUInt32LE(file.data.length),
         writeUInt32LE(file.data.length),
@@ -114,7 +160,10 @@ export class StoreZipService {
         size: file.data.length,
         compressedSize: file.data.length,
         crc32: checksum,
-        offset
+        offset,
+        isDirectory: false,
+        compressionMethod: STORE_COMPRESSION_METHOD,
+        modifiedTime: dosDateTime.modifiedTime
       });
 
       offset += localHeader.length + file.data.length;
@@ -124,14 +173,15 @@ export class StoreZipService {
 
     for (const entry of metadata) {
       const fileName = Buffer.from(entry.path, 'utf-8');
+      const dosDateTime = dateToDosDateTime(entry.modifiedTime);
       const directoryRecord = Buffer.concat([
         writeUInt32LE(CD_SIGNATURE),
         writeUInt16LE(20),
         writeUInt16LE(20),
         writeUInt16LE(0),
-        writeUInt16LE(0),
-        writeUInt16LE(DOS_TIME),
-        writeUInt16LE(DOS_DATE),
+        writeUInt16LE(entry.compressionMethod),
+        writeUInt16LE(dosDateTime.time),
+        writeUInt16LE(dosDateTime.date),
         writeUInt32LE(entry.crc32),
         writeUInt32LE(entry.compressedSize),
         writeUInt32LE(entry.size),
@@ -183,6 +233,9 @@ export class StoreZipService {
 
       const compressedSize = buffer.readUInt32LE(cursor + 20);
       const size = buffer.readUInt32LE(cursor + 24);
+      const compressionMethod = buffer.readUInt16LE(cursor + 10);
+      const modifiedTimeRaw = buffer.readUInt16LE(cursor + 12);
+      const modifiedDateRaw = buffer.readUInt16LE(cursor + 14);
       const fileNameLength = buffer.readUInt16LE(cursor + 28);
       const extraLength = buffer.readUInt16LE(cursor + 30);
       const commentLength = buffer.readUInt16LE(cursor + 32);
@@ -192,14 +245,18 @@ export class StoreZipService {
         .subarray(cursor + 46, cursor + 46 + fileNameLength)
         .toString('utf-8');
 
+      const isDirectory = fileName.endsWith('/');
       entries.push({
-        path: fileName.endsWith('/')
+        path: isDirectory
           ? normalizeZipEntryPath(fileName, { allowDirectory: true })
           : normalizeZipEntryPath(fileName),
         size,
         compressedSize,
         crc32: crc,
-        offset: localOffset
+        offset: localOffset,
+        isDirectory,
+        compressionMethod,
+        modifiedTime: dosDateTimeToTimestamp(modifiedDateRaw, modifiedTimeRaw)
       });
 
       cursor += 46 + fileNameLength + extraLength + commentLength;

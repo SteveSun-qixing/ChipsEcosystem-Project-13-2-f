@@ -1009,9 +1009,12 @@ describe("createClient", () => {
                 path: "index.html",
                 size: 128,
                 compressedSize: 64,
-                crc32: 1234,
-                offset: 0,
-              },
+              crc32: 1234,
+              offset: 0,
+              isDirectory: false,
+              compressionMethod: 0,
+              modifiedTime: 1767225600000,
+            },
             ],
           };
         }
@@ -1028,6 +1031,9 @@ describe("createClient", () => {
         compressedSize: 64,
         crc32: 1234,
         offset: 0,
+        isDirectory: false,
+        compressionMethod: 0,
+        modifiedTime: 1767225600000,
       },
     ]);
 

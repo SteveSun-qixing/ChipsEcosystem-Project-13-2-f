@@ -7,6 +7,9 @@ export interface ZipEntryMeta {
   compressedSize: number;
   crc32: number;
   offset: number;
+  isDirectory: boolean;
+  compressionMethod: number;
+  modifiedTime?: number;
 }
 
 export interface ZipApi {

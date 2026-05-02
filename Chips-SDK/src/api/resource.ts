@@ -48,6 +48,28 @@ export interface MusicCardOpenPayload {
   };
 }
 
+export interface BookCardOpenResource {
+  resourceId: string;
+  relativePath: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
+export interface BookCardOpenPayload {
+  kind: "chips.book-card";
+  version: "1.0.0";
+  cardType: "base.book";
+  mode: "ebook" | "image-sequence";
+  resources: {
+    book?: BookCardOpenResource;
+    images?: BookCardOpenResource[];
+  };
+  display: {
+    title: string;
+    author?: string;
+  };
+}
+
 export interface ResourceOpenRequest {
   intent?: string;
   resource: {

@@ -592,6 +592,8 @@ describe("CardApi", () => {
         rootDir: preferredRootDir ?? file.name,
         entryFile: entryFile ?? "index.html",
         resourcePaths: [`${preferredRootDir ?? file.name}/${entryFile ?? "index.html"}`],
+        entries: [],
+        discardedEntries: [],
       }));
       const deleteResource = vi.fn(async () => undefined);
       const convertTiffToPng = vi.fn(async (
@@ -694,6 +696,12 @@ describe("CardApi", () => {
           action: "importArchiveBundle",
           preferredRootDir: "webpage-bundle",
           entryFile: "index.html",
+          include: {
+            mimeTypes: ["text/html"],
+            extensions: [".html"],
+          },
+          stripSingleRootDir: true,
+          excludeSystemArtifacts: true,
           file: archiveFile,
         },
       });
@@ -701,6 +709,12 @@ describe("CardApi", () => {
         file: archiveFile,
         preferredRootDir: "webpage-bundle",
         entryFile: "index.html",
+        include: {
+          mimeTypes: ["text/html"],
+          extensions: [".html"],
+        },
+        stripSingleRootDir: true,
+        excludeSystemArtifacts: true,
       });
       expect(postMessage).toHaveBeenCalledWith(
         {
@@ -712,6 +726,8 @@ describe("CardApi", () => {
               rootDir: "webpage-bundle",
               entryFile: "index.html",
               resourcePaths: ["webpage-bundle/index.html"],
+              entries: [],
+              discardedEntries: [],
             },
           },
         },

@@ -168,16 +168,47 @@ export interface CardEditorResourceImportResult {
   path: string;
 }
 
+export interface CardEditorArchiveImportFilter {
+  mimeTypes?: string[];
+  extensions?: string[];
+}
+
 export interface CardEditorArchiveImportRequest {
   file: File;
   preferredRootDir?: string;
   entryFile?: string;
+  include?: CardEditorArchiveImportFilter;
+  stripSingleRootDir?: boolean;
+  excludeSystemArtifacts?: boolean;
+}
+
+export interface CardEditorArchiveImportedEntry {
+  sourcePath: string;
+  resourcePath: string;
+  fileName: string;
+  mimeType?: string;
+  size: number;
+  compressedSize: number;
+  crc32: number;
+  offset: number;
+  isDirectory: boolean;
+  compressionMethod: number;
+  modifiedTime?: number;
+}
+
+export interface CardEditorArchiveDiscardedEntry {
+  sourcePath: string;
+  reason: "directory" | "system-artifact" | "filter-mismatch" | "unsafe-path";
+  fileName?: string;
+  mimeType?: string;
 }
 
 export interface CardEditorArchiveImportResult {
   rootDir: string;
-  entryFile: string;
+  entryFile?: string;
   resourcePaths: string[];
+  entries: CardEditorArchiveImportedEntry[];
+  discardedEntries: CardEditorArchiveDiscardedEntry[];
 }
 
 export interface CardEditorTiffToPngRequest {
@@ -628,6 +659,9 @@ type CardEditorResourceRequestPayload = {
   preferredPath?: string;
   preferredRootDir?: string;
   entryFile?: string;
+  include?: CardEditorArchiveImportFilter;
+  stripSingleRootDir?: boolean;
+  excludeSystemArtifacts?: boolean;
   file?: File;
   overwrite?: boolean;
 };
@@ -766,6 +800,11 @@ async function handleCardEditorResourceRequest(
         preferredRootDir:
           typeof payload.preferredRootDir === "string" ? payload.preferredRootDir : undefined,
         entryFile: typeof payload.entryFile === "string" ? payload.entryFile : undefined,
+        include: normalizeArchiveImportFilter(payload.include),
+        stripSingleRootDir: typeof payload.stripSingleRootDir === "boolean" ? payload.stripSingleRootDir : undefined,
+        excludeSystemArtifacts: typeof payload.excludeSystemArtifacts === "boolean"
+          ? payload.excludeSystemArtifacts
+          : undefined,
       });
     }
     case "delete": {
@@ -841,6 +880,29 @@ async function handleCardEditorResourceRequest(
     default:
       throw createError("INVALID_ARGUMENT", `Unsupported editor resource action: ${String(payload.action)}`);
   }
+}
+
+function normalizeArchiveImportFilter(input: unknown): CardEditorArchiveImportFilter | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return undefined;
+  }
+
+  const record = input as Record<string, unknown>;
+  const mimeTypes = Array.isArray(record.mimeTypes)
+    ? record.mimeTypes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : undefined;
+  const extensions = Array.isArray(record.extensions)
+    ? record.extensions.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : undefined;
+
+  if ((!mimeTypes || mimeTypes.length === 0) && (!extensions || extensions.length === 0)) {
+    return undefined;
+  }
+
+  return {
+    ...(mimeTypes && mimeTypes.length > 0 ? { mimeTypes } : undefined),
+    ...(extensions && extensions.length > 0 ? { extensions } : undefined),
+  };
 }
 
 function normalizeRelativeResourcePath(resourcePath: unknown): string | null {

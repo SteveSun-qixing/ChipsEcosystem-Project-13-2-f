@@ -26,8 +26,10 @@ export interface BasecardArchiveImportRequest {
 
 export interface BasecardArchiveImportResult {
   rootDir: string;
-  entryFile: string;
+  entryFile?: string;
   resourcePaths: string[];
+  entries: Array<Record<string, unknown>>;
+  discardedEntries: Array<Record<string, unknown>>;
 }
 
 export interface BasecardRenderContext {

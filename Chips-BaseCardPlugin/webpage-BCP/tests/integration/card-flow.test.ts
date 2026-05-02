@@ -87,6 +87,8 @@ describe("webpage basecard integration flow", () => {
           "webpage-bundle-abc123/index.html",
           "webpage-bundle-abc123/assets/app.js",
         ],
+        entries: [],
+        discardedEntries: [],
       }),
       deleteResource: async () => undefined,
     }) as DisposableRoot;

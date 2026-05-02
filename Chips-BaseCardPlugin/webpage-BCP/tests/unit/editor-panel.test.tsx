@@ -166,6 +166,8 @@ describe("createBasecardEditorRoot", () => {
         "webpage-bundle-abc123/index.html",
         "webpage-bundle-abc123/assets/app.js",
       ],
+      entries: [],
+      discardedEntries: [],
     }));
     const deleteResource = vi.fn(async () => undefined);
 

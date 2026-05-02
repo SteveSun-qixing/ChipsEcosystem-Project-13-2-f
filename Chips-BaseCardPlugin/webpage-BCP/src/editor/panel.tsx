@@ -457,7 +457,7 @@ function WebpageCardEditor(props: BasecardEditorProps) {
         source_type: "bundle",
         source_url: "",
         bundle_root: result.rootDir,
-        entry_file: result.entryFile,
+        entry_file: result.entryFile ?? "index.html",
         resource_paths: result.resourcePaths,
       });
       emitChange(nextConfig);

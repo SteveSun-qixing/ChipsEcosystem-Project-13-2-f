@@ -31,6 +31,19 @@ async function waitForLoad(dom: JSDOM): Promise<void> {
   });
 }
 
+async function waitForVisualFrame(dom: JSDOM): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (typeof dom.window.requestAnimationFrame === "function") {
+      dom.window.requestAnimationFrame(() => {
+        dom.window.setTimeout(() => resolve(), 0);
+      });
+      return;
+    }
+
+    dom.window.setTimeout(() => resolve(), 0);
+  });
+}
+
 describe("createSrcDocDocument", () => {
   it("stabilizes bundled viewport units and innerHeight reads for free mode pages", async () => {
     const html = `
@@ -73,6 +86,7 @@ describe("createSrcDocDocument", () => {
     expect(styleRule?.style.height).toContain("--chips-webpage-card-virtual-vh");
     expect(dom.window.document.documentElement.style.getPropertyValue("--chips-webpage-card-virtual-vh")).toBe("7.2px");
     expect((dom.window as typeof dom.window & { __CHIPS_TEST_INNER_HEIGHT__?: number }).__CHIPS_TEST_INNER_HEIGHT__).toBe(720);
+    await waitForVisualFrame(dom);
     dom.window.close();
   });
 });

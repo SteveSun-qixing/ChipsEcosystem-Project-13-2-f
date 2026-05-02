@@ -1,0 +1,11 @@
+card_type: "BookCard"
+theme: ""
+source_type: "ebook"
+book_file: ""
+book_format: ""
+book_name: ""
+book_author: ""
+cover_image: ""
+image_sequence: []
+image_sort_basis: "filename"
+resource_paths: []

@@ -1,0 +1,105 @@
+# 超链接基础卡片插件
+
+> 通过 `chips-scaffold-basecard` 初始化，并按正式基础卡片契约实现的超链接基础卡片插件工程。
+
+## 简介
+
+本插件工程实现了一个基础卡片插件（`type: card`），用于在复合卡片中插入一个可点击的新页面跳转链接。
+
+查看态会把链接渲染为一个全宽长条形按钮，文本靠左，按钮只使用简单描边轮廓和主题 token。点击有效链接时，插件优先通过基础卡片 `openResource` 链路交给卡片查看器调用 Host `resource.open`，最终由系统默认浏览器打开。编辑态提供两个输入框：
+
+- `anchor_text`：锚文本；
+- `url`：链接，必须是有效的 `http` 或 `https` 地址。
+
+## 项目结构
+
+```text
+hyperlink-BCP/
+├─ .eslintrc.cjs          # 工程级 ESLint 配置（供 chipsdev lint 调用）
+├─ manifest.yaml          # 插件清单（type: card）
+├─ package.json           # NPM 配置
+├─ tsconfig.json          # TypeScript 配置
+├─ chips.config.mjs       # chips dev 构建配置
+├─ src/
+│  ├─ index.ts            # 插件入口（注册渲染与编辑模块）
+│  │                      # 同时导出 basecardDefinition 正式契约
+│  ├─ render/
+│  │  ├─ view.tsx         # 渲染模块：基础卡片视图
+│  │  └─ runtime.ts       # 渲染运行时挂载逻辑
+│  ├─ editor/
+│  │  ├─ panel.tsx        # 编辑模块：编辑面板视图
+│  │  └─ runtime.ts       # 编辑运行时挂载逻辑
+│  ├─ schema/
+│  │  └─ card-config.ts   # 配置 Schema 与类型定义
+│  └─ shared/
+│     ├─ i18n.ts          # 多语言取词工具
+│     └─ utils.ts         # 渲染与编辑共享工具函数
+├─ config/
+│  └─ logging.ts          # 日志封装
+├─ i18n/
+│  ├─ zh-CN.json          # 中文文案
+│  └─ en-US.json          # 英文文案
+├─ templates/
+│  ├─ default-card-config.yaml  # 默认基础卡片配置模板
+│  └─ parameters.md       # 参数表与填写说明
+├─ docs/
+│  └─ 超链接基础卡片插件说明.md
+├─ tests/
+│  ├─ unit/
+│  │  ├─ render-view.test.tsx
+│  │  └─ editor-panel.test.tsx
+│  └─ integration/
+│     └─ card-flow.test.ts
+└─ assets/
+   └─ icons/
+      ├─ basecard-icon.svg
+      └─ SOURCE.md
+```
+
+## 快速开始
+
+```bash
+cd <生态根工作区>
+npm install
+cd hyperlink-BCP
+npm run dev
+```
+
+基础卡片工程中的 `chips-sdk` 与 `chipsdev` 统一依赖生态根工作区解析；请通过 `chipsdev create` 将工程接入工作区，不再单独在项目目录执行首次依赖安装。
+
+在开发模式下，使用 `chips dev server` 启动本地开发环境，根据 `chips dev` 工具文档在 Host 工作区中加载插件进行调试。
+
+## 配置结构
+
+基础卡片配置类型在 `src/schema/card-config.ts` 中定义，对应 YAML 文件示例位于 `templates/default-card-config.yaml`。
+
+参数表与填写说明见 `templates/parameters.md`。
+
+当前插件默认内置：
+
+- React 渲染与编辑运行时
+- `normalizeBasecardConfig()` / `validateBasecardConfig()` 统一归一与校验基线
+- `renderBasecardView()` / `renderBasecardEditor()` / `basecardDefinition` 正式入口
+- `card_type/theme/locale/anchor_text/url` 正式配置模型
+
+## 正式入口契约
+
+本工程在 `src/index.ts` 中导出：
+
+- `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
+- `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；
+- `basecardDefinition`：供编辑引擎运行时注册表消费插件元信息、归一/校验逻辑与渲染能力。
+
+生成后请至少确认以下字段与清单保持一致：
+
+- `basecardDefinition.pluginId === manifest.id`
+- `basecardDefinition.cardType === manifest.capabilities.cardTypes[0]`
+- `basecardDefinition.aliases` 显式声明 `HyperlinkCard` 内容类型别名；
+- `basecardDefinition.previewPointerEvents === "shielded"`，编辑引擎预览态点击优先选中基础卡片，查看态仍按正常链接打开新页面；
+- `basecardDefinition.icon` 是运行时正式图标描述符；
+- `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
+
+## 主题接入约束
+
+- Host 会在渲染阶段向基础卡片插件注入 `themeCssText`，运行时会把该样式挂载到渲染容器中；
+- 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包。

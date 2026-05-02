@@ -1,0 +1,11 @@
+{
+  "hyperlink.anchorText": "Anchor text",
+  "hyperlink.url": "Link",
+  "hyperlink.placeholder.anchorText": "Enter anchor text",
+  "hyperlink.placeholder.url": "https://example.com",
+  "hyperlink.validation.cardType": "card_type must be HyperlinkCard.",
+  "hyperlink.validation.anchorRequired": "Anchor text is required.",
+  "hyperlink.validation.urlRequired": "Link is required.",
+  "hyperlink.validation.urlInvalid": "Link must be a valid http or https address.",
+  "hyperlink.view.emptyAnchorText": "Link not set"
+}

@@ -1,0 +1,11 @@
+{
+  "hyperlink.anchorText": "锚文本",
+  "hyperlink.url": "链接",
+  "hyperlink.placeholder.anchorText": "输入锚文本",
+  "hyperlink.placeholder.url": "https://example.com",
+  "hyperlink.validation.cardType": "card_type 必须为 HyperlinkCard。",
+  "hyperlink.validation.anchorRequired": "锚文本不能为空。",
+  "hyperlink.validation.urlRequired": "链接不能为空。",
+  "hyperlink.validation.urlInvalid": "链接必须是有效的 http 或 https 地址。",
+  "hyperlink.view.emptyAnchorText": "未设置链接"
+}

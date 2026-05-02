@@ -446,6 +446,14 @@ export async function renderSectionDocument(
   const normalizedPath = normalizeEpubPath(sectionPath);
   const link = resolveSectionLink(book, normalizedPath);
   const source = await book.archive.readText(normalizedPath);
+  if (book.source.format === "pdf") {
+    return {
+      title: link.title ?? book.metadata.title,
+      sectionPath: normalizedPath,
+      html: source,
+    };
+  }
+
   const html = await SECTION_HTML_TRANSFORMER.transform(
     {
       book,

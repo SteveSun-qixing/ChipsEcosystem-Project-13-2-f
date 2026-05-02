@@ -2,8 +2,8 @@ import React, { startTransition, useEffect, useRef, useState } from "react";
 import { ChipsThemeProvider } from "@chips/component-library";
 import type { ThemeState } from "chips-sdk";
 import { ReaderShell } from "./components/ReaderShell";
+import { loadReadableBook } from "./domain/book/virtual-book";
 import { renderSectionDocument } from "./domain/epub/markup";
-import { loadEpubBook } from "./domain/epub/package";
 import type { EpubThemePalette, EpubBook, RenderedSectionDocument } from "./domain/epub/types";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsBridge } from "./hooks/useChipsBridge";
@@ -229,7 +229,7 @@ export function App(): React.ReactElement {
     if (isProbablyRemoteBookSource(target.sourceId)) {
       const response = await fetch(target.sourceId, {
         headers: {
-          Accept: "application/epub+zip, application/octet-stream;q=0.9, */*;q=0.8",
+          Accept: "application/epub+zip, application/pdf, text/plain, text/markdown, application/x-fictionbook+xml, application/rtf, application/octet-stream;q=0.9, */*;q=0.8",
         },
       });
 
@@ -251,6 +251,18 @@ export function App(): React.ReactElement {
     };
   }
 
+  async function resolveBookResourceUri(target: LaunchBookTarget): Promise<string | undefined> {
+    if (isProbablyRemoteBookSource(target.sourceId)) {
+      return target.sourceId;
+    }
+
+    try {
+      return (await client.resource.resolve(target.filePath ?? target.sourceId)).uri;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function openBookTarget(target: LaunchBookTarget): Promise<void> {
     const sourceId = target.sourceId.trim();
     if (!sourceId) {
@@ -266,6 +278,7 @@ export function App(): React.ReactElement {
 
     try {
       const payload = await readBookBytes(target);
+      const resourceUri = await resolveBookResourceUri(target);
       const normalizedTarget: LaunchBookTarget = {
         ...target,
         filePath: resolveLocalBookPath(target),
@@ -283,9 +296,12 @@ export function App(): React.ReactElement {
         return;
       }
 
-      const nextBook = await loadEpubBook({
+      const nextBook = await loadReadableBook({
         bytes: payload.bytes,
-        source: createBookSourceDescriptor(normalizedTarget),
+        source: {
+          ...createBookSourceDescriptor(normalizedTarget),
+          resourceUri,
+        },
       });
 
       startTransition(() => {

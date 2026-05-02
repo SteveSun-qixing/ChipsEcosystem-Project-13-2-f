@@ -1,5 +1,20 @@
 import type { BookSourceDescriptor } from "../../utils/book-reader";
-import type { EpubArchive } from "./archive";
+
+export interface ReadableBookArchiveEntry {
+  path: string;
+  size: number;
+  compressedSize: number;
+  crc32: number;
+  offset: number;
+  isDirectory: boolean;
+}
+
+export interface ReadableBookArchive {
+  listEntries(): ReadableBookArchiveEntry[];
+  hasEntry(path: string): boolean;
+  readBinary(entryPath: string): Promise<Uint8Array>;
+  readText(entryPath: string): Promise<string>;
+}
 
 export interface EpubMetadata {
   title: string;
@@ -60,7 +75,7 @@ export interface EpubPublication {
 export interface EpubBook {
   source: BookSourceDescriptor;
   metadata: EpubMetadata;
-  archive: EpubArchive;
+  archive: ReadableBookArchive;
   publication: EpubPublication;
   packagePath: string;
   manifest: Map<string, EpubManifestItem>;

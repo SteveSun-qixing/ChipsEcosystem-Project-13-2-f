@@ -47,28 +47,28 @@
       "toggleBookmark": "切换书签"
     },
     "dialogs": {
-      "openFileTitle": "选择 EPUB 电子书"
+      "openFileTitle": "选择电子书"
     },
     "empty": {
-      "badge": "EPUB Reader",
+      "badge": "Book Reader",
       "prompt": "拖入电子书，或点击导入",
       "title": "把一本书放进来，就能立刻开始阅读",
-      "description": "支持本地 `.epub` 文件、Host 资源路由唤起的电子书，以及直接输入远程 EPUB 链接。",
+      "description": "支持本地电子书文件、Host 资源路由唤起的电子书，以及直接输入远程电子书链接。",
       "dropHint": "也可以把电子书拖到窗口中打开",
-      "supportedFormat": "当前正式支持 EPUB / EPUB3 文件。"
+      "supportedFormat": "当前正式接入 EPUB / EPUB3 / PDF / TXT / Markdown / FB2 / RTF，并能明确识别 MOBI / AZW / AZW3 / DJVU / DOC / DOCX 的打开目标。"
     },
     "errors": {
       "missingTarget": "没有可打开的电子书目标。",
-      "unsupportedFile": "当前只支持以下电子书格式：{extensions}",
+      "unsupportedFile": "当前可识别以下电子书格式：{extensions}",
       "openFailed": "打开电子书失败，请检查文件是否完整或链接是否可访问。",
       "renderFailed": "章节渲染失败，请尝试切换到其他章节后重新打开。",
-      "invalidUrl": "请输入可访问的 EPUB 电子书链接。"
+      "invalidUrl": "请输入可访问的电子书链接。"
     },
     "status": {
       "loading": "正在准备阅读内容..."
     },
     "placeholders": {
-      "remoteUrl": "粘贴 EPUB 链接，例如 https://example.com/book.epub",
+      "remoteUrl": "粘贴电子书链接，例如 https://example.com/book.epub",
       "search": "搜索电子书内容..."
     },
     "reader": {

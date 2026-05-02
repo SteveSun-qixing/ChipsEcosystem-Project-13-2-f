@@ -4,7 +4,7 @@ version: 0.1.0
 type: app
 entry: dist/index.html
 
-description: 薯片生态电子书阅读器应用插件，用于打开本地 EPUB 电子书或由 Host 资源路由唤起的电子书资源。
+description: 薯片生态电子书阅读器应用插件，用于打开本地电子书或由 Host 资源路由唤起的电子书资源。
 
 author:
   name: BookReader
@@ -18,8 +18,34 @@ keywords:
 
 capabilities:
   - resource-handler:view:application/epub+zip
+  - resource-handler:view:application/pdf
+  - resource-handler:view:text/plain
+  - resource-handler:view:text/markdown
+  - resource-handler:view:text/x-markdown
+  - resource-handler:view:application/markdown
+  - resource-handler:view:application/x-fictionbook+xml
+  - resource-handler:view:application/rtf
+  - resource-handler:view:text/rtf
+  - resource-handler:view:application/x-mobipocket-ebook
+  - resource-handler:view:application/vnd.amazon.ebook
+  - resource-handler:view:image/vnd.djvu
+  - resource-handler:view:application/msword
+  - resource-handler:view:application/vnd.openxmlformats-officedocument.wordprocessingml.document
   - file-handler:.epub
   - file-handler:.epub3
+  - file-handler:.pdf
+  - file-handler:.txt
+  - file-handler:.md
+  - file-handler:.markdown
+  - file-handler:.fb2
+  - file-handler:.rtf
+  - file-handler:.mobi
+  - file-handler:.azw
+  - file-handler:.azw3
+  - file-handler:.djvu
+  - file-handler:.djv
+  - file-handler:.doc
+  - file-handler:.docx
 
 permissions:
   - resource.read

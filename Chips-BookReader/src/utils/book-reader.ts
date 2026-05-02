@@ -4,6 +4,8 @@ export interface LaunchBookTarget {
   fileName?: string;
   mimeType?: string;
   title?: string;
+  author?: string;
+  relativePath?: string;
 }
 
 export interface BookSourceDescriptor {
@@ -11,7 +13,10 @@ export interface BookSourceDescriptor {
   filePath?: string;
   fileName: string;
   title: string;
+  author?: string;
   mimeType?: string;
+  format?: string;
+  resourceUri?: string;
   isRemote: boolean;
 }
 
@@ -32,11 +37,62 @@ export interface ReaderPreferences {
   backgroundTone: ReaderBackgroundTone;
 }
 
-export const SUPPORTED_BOOK_EXTENSIONS = [".epub", ".epub3"];
+export const SUPPORTED_BOOK_EXTENSIONS = [
+  ".epub",
+  ".epub3",
+  ".pdf",
+  ".txt",
+  ".md",
+  ".markdown",
+  ".fb2",
+  ".rtf",
+  ".mobi",
+  ".azw",
+  ".azw3",
+  ".djvu",
+  ".djv",
+  ".doc",
+  ".docx",
+];
 export const SUPPORTED_BOOK_EXTENSION_LABEL = SUPPORTED_BOOK_EXTENSIONS.join(" ");
-export const SUPPORTED_BOOK_MIME_TYPES = ["application/epub+zip", "application/oebps-package+xml"];
+export const SUPPORTED_BOOK_MIME_TYPES = [
+  "application/epub+zip",
+  "application/oebps-package+xml",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
+  "application/markdown",
+  "application/x-fictionbook+xml",
+  "application/rtf",
+  "text/rtf",
+  "application/x-mobipocket-ebook",
+  "application/vnd.amazon.ebook",
+  "image/vnd.djvu",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+export const READER_RENDERABLE_FORMATS = ["epub", "epub3", "pdf", "txt", "md", "markdown", "fb2", "rtf"] as const;
 export const READER_READING_MODES = ["paginated", "scroll"] as const satisfies readonly ReaderReadingMode[];
 export const READER_BACKGROUND_TONES = ["theme", "warm", "mist", "night"] as const satisfies readonly ReaderBackgroundTone[];
+
+const FORMAT_BY_MIME_TYPE: Record<string, string> = {
+  "application/epub+zip": "epub",
+  "application/oebps-package+xml": "epub",
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "text/x-markdown": "md",
+  "application/markdown": "md",
+  "application/x-fictionbook+xml": "fb2",
+  "application/rtf": "rtf",
+  "text/rtf": "rtf",
+  "application/x-mobipocket-ebook": "mobi",
+  "application/vnd.amazon.ebook": "azw",
+  "image/vnd.djvu": "djvu",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+};
 
 export function resolveWheelNavigationThreshold(input: {
   readingMode: ReaderReadingMode;
@@ -73,6 +129,25 @@ export function resolveExtension(value: string): string {
     }
     return lowered.slice(dotIndex);
   }
+}
+
+export function normalizeBookFormat(value: string | undefined): string {
+  const normalized = value?.trim().toLowerCase().replace(/^\./, "") ?? "";
+  return normalized === "markdown" ? "md" : normalized;
+}
+
+export function resolveBookFormat(target: LaunchBookTarget): string {
+  const mimeType = target.mimeType?.trim().toLowerCase();
+  if (mimeType && FORMAT_BY_MIME_TYPE[mimeType]) {
+    return FORMAT_BY_MIME_TYPE[mimeType];
+  }
+
+  const extension = resolveExtension(target.fileName ?? target.filePath ?? target.sourceId);
+  return normalizeBookFormat(extension);
+}
+
+export function isRenderableBookFormat(format: string): boolean {
+  return READER_RENDERABLE_FORMATS.includes(normalizeBookFormat(format) as (typeof READER_RENDERABLE_FORMATS)[number]);
 }
 
 export function resolveFileName(value: string): string {
@@ -136,14 +211,16 @@ export function isSupportedBookResource(target: LaunchBookTarget): boolean {
 export function createBookSourceDescriptor(target: LaunchBookTarget): BookSourceDescriptor {
   const filePath = target.filePath?.trim() || undefined;
   const sourceId = target.sourceId.trim();
-  const fileName = target.fileName?.trim() || resolveFileName(filePath ?? sourceId) || "book.epub";
+  const fileName = target.fileName?.trim() || resolveFileName(filePath ?? sourceId) || "book";
 
   return {
     sourceId,
     filePath,
     fileName,
     title: resolveBookTitle(target),
+    author: target.author?.trim() || undefined,
     mimeType: target.mimeType?.trim() || undefined,
+    format: resolveBookFormat(target),
     isRemote: !filePath && isProbablyRemoteBookSource(sourceId),
   };
 }

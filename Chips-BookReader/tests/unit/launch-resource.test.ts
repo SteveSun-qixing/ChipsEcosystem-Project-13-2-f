@@ -71,4 +71,47 @@ describe("resolveLaunchBookTarget", () => {
       }),
     ).toBeNull();
   });
+
+  it("优先消费电子书基础卡片 payload 中的书籍资源", () => {
+    expect(
+      resolveLaunchBookTarget({
+        launchParams: {
+          targetPath: "/tmp/fallback.pdf",
+          resourceOpen: {
+            resourceId: "chips-render://card-root/demo/book.pdf",
+            filePath: "/tmp/card/book.pdf",
+            fileName: "book.pdf",
+            mimeType: "application/pdf",
+            title: "Fallback Title",
+            payload: {
+              kind: "chips.book-card",
+              version: "1.0.0",
+              cardType: "base.book",
+              mode: "ebook",
+              resources: {
+                book: {
+                  resourceId: "chips-render://card-root/demo/book.pdf",
+                  relativePath: "books/book.pdf",
+                  fileName: "book.pdf",
+                  mimeType: "application/pdf",
+                },
+              },
+              display: {
+                title: "Book Card Title",
+                author: "Book Author",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: "chips-render://card-root/demo/book.pdf",
+      filePath: "/tmp/card/book.pdf",
+      fileName: "book.pdf",
+      mimeType: "application/pdf",
+      title: "Book Card Title",
+      author: "Book Author",
+      relativePath: "books/book.pdf",
+    });
+  });
 });

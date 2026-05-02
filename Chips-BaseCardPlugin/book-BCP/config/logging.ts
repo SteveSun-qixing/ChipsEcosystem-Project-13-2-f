@@ -3,7 +3,6 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 export interface LoggerOptions {
   prefix?: string;
 }
-
 export interface Logger {
   debug: (...args: unknown[]) => void;
   info: (...args: unknown[]) => void;
@@ -39,4 +38,3 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     error: (...args: unknown[]) => log("error", ...args),
   };
 }
-

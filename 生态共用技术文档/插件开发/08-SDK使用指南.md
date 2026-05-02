@@ -405,9 +405,61 @@ client.card.editorPanel.render({
     releaseResourceUrl?(resourcePath: string): Promise<void> | void,
     importResource?(input: { file: File, preferredPath?: string }): Promise<{ path: string }> | { path: string },
     importArchiveBundle?(
-      input: { file: File, preferredRootDir?: string, entryFile?: string }
-    ): Promise<{ rootDir: string, entryFile: string, resourcePaths: string[] }>
-      | { rootDir: string, entryFile: string, resourcePaths: string[] },
+      input: {
+        file: File,
+        preferredRootDir?: string,
+        entryFile?: string,
+        include?: { mimeTypes?: string[], extensions?: string[] },
+        stripSingleRootDir?: boolean,
+        excludeSystemArtifacts?: boolean,
+      }
+    ): Promise<{
+      rootDir: string,
+      entryFile?: string,
+      resourcePaths: string[],
+      entries: Array<{
+        sourcePath: string,
+        resourcePath: string,
+        fileName: string,
+        mimeType?: string,
+        size: number,
+        compressedSize: number,
+        crc32: number,
+        offset: number,
+        isDirectory: boolean,
+        compressionMethod: number,
+        modifiedTime?: number,
+      }>,
+      discardedEntries: Array<{
+        sourcePath: string,
+        reason: 'directory' | 'system-artifact' | 'filter-mismatch' | 'unsafe-path',
+        fileName?: string,
+        mimeType?: string,
+      }>,
+    }> | {
+      rootDir: string,
+      entryFile?: string,
+      resourcePaths: string[],
+      entries: Array<{
+        sourcePath: string,
+        resourcePath: string,
+        fileName: string,
+        mimeType?: string,
+        size: number,
+        compressedSize: number,
+        crc32: number,
+        offset: number,
+        isDirectory: boolean,
+        compressionMethod: number,
+        modifiedTime?: number,
+      }>,
+      discardedEntries: Array<{
+        sourcePath: string,
+        reason: 'directory' | 'system-artifact' | 'filter-mismatch' | 'unsafe-path',
+        fileName?: string,
+        mimeType?: string,
+      }>,
+    },
     deleteResource?(resourcePath: string): Promise<void> | void,
     convertTiffToPng?(
       input: { resourcePath: string, outputPath: string, overwrite?: boolean }
@@ -683,8 +735,8 @@ const result = await client.card.editorPanel.render({
     async importResource({ file, preferredPath }) {
       return saveIntoCardRoot(file, preferredPath);
     },
-    async importArchiveBundle({ file, preferredRootDir, entryFile }) {
-      return importWebBundleIntoCardRoot(file, preferredRootDir, entryFile);
+    async importArchiveBundle(input) {
+      return importArchiveBundleIntoCardRoot(input);
     },
     async deleteResource(resourcePath) {
       await removeFromCardRoot(resourcePath);
@@ -704,8 +756,12 @@ const result = await client.card.editorPanel.render({
 - Host 托管编辑器 iframe 通过 `chips.card-editor:resource-request/resource-response/resource-release` 协议请求资源操作；
 - SDK 负责把这些请求桥接到 `editorPanel.resources`；
 - `importResource(...)` 返回的 `path` 必须是卡片根目录相对路径，例如 `cover.png`；
-- `importArchiveBundle(...)` 返回 `{ rootDir, entryFile, resourcePaths }`，用于网页基础卡片这类“整目录导入”的正式场景；
-- `importArchiveBundle(...)` 的宿主职责是：验证入口文件、解压 ZIP、把最终网页目录写到卡片根目录，并返回正式相对路径；
+- `importArchiveBundle(...)` 返回 `{ rootDir, entryFile?, resourcePaths, entries, discardedEntries }`，用于网页基础卡片、电子书图片包和未来资源包卡片这类“整目录导入”的正式场景；
+- `importArchiveBundle(...)` 是通用目录解包契约，不包含“网页/图片/电子书”等场景开关；业务需求只能通过 `entryFile`、`include`、`stripSingleRootDir`、`excludeSystemArtifacts` 等通用规则字段表达；
+- `entryFile` 表示必须存在的入口文件；网页基础卡片传 `index.html`，宿主据此识别单顶层目录并返回最终入口文件；
+- `include.mimeTypes/extensions` 用于条目保留过滤；不匹配的文件进入 `discardedEntries`，不写入最终资源清单；
+- `entries` 必须包含每个导入条目的原始 ZIP 路径、最终资源路径、MIME、大小、CRC、压缩方式、目录标记和 `modifiedTime`，供图片包排序与资源审计使用；
+- `discardedEntries.reason` 只使用 `directory/system-artifact/filter-mismatch/unsafe-path`；
 - 若宿主通过 `client.zip.list(...)` / `client.zip.extract(...)` 实现 `importArchiveBundle(...)`，对应应用插件必须在 `manifest.permissions` 中声明 `zip.manage`；
 - 当宿主无法通过 `client.platform.getPathForFile(file)` 拿到所选 ZIP 的真实磁盘路径时，可以先通过正式文件服务把该 `File` 内容写入会话暂存路径，再继续调用 `client.zip.list(...)` / `client.zip.extract(...)`；
 - `convertTiffToPng(...)` 适用于音乐基础卡片这类“先提取内嵌封面，再把 TIFF 归一为 PNG”的场景；返回值中的 `path` 必须是卡片根目录相对路径；
@@ -726,7 +782,8 @@ const entries = await client.zip.list('/tmp/site.zip');
 使用语义：
 
 - `client.zip.compress(...)` 适用于正式 ZIP Store 打包场景；
-- `client.zip.extract(...)` 与 `client.zip.list(...)` 可用于网页 ZIP 包导入前的验证与解压；
+- `client.zip.extract(...)` 与 `client.zip.list(...)` 可用于基础卡片通用目录导入前的验证与解压；
+- `client.zip.list(...)` 返回的每个条目必须包含 `path/size/compressedSize/crc32/offset/isDirectory/compressionMethod`，若 ZIP 中存在有效 DOS 时间则补充 `modifiedTime`；
 - 使用 `client.zip.*` 的调用方必须具备 `zip.manage` 权限；
 - ZIP 条目路径仍需由调用方按正式文件规则校验，不能把压缩包中的绝对路径或路径穿越条目直接落盘。
 

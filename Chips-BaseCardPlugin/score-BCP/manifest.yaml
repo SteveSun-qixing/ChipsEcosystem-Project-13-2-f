@@ -1,0 +1,29 @@
+id: chips.basecard.score
+name: 评分基础卡片插件
+version: 0.1.0
+type: card
+entry: dist/index.mjs
+description: 评分基础卡片插件，支持星星、爱心、数字分数和进度条四种展示样式。
+author:
+  name: sevenstars
+  email: dev@chips.local
+capabilities:
+  cardTypes:
+    - base.score
+permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux

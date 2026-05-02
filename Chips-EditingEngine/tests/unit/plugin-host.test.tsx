@@ -297,7 +297,6 @@ describe('PluginHost', () => {
       );
       await Promise.resolve();
     });
-
     const file = new File(['image'], 'photo.png', { type: 'image/png' });
 
     await act(async () => {
@@ -312,86 +311,6 @@ describe('PluginHost', () => {
             id: 'image-1',
             source: 'file',
             file_path: imported?.path ?? 'photo.png',
-          },
-        ],
-      });
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(0);
-      await Promise.resolve();
-    });
-
-    expect(onConfigChange).toHaveBeenCalledTimes(1);
-    expect(onConfigChange).toHaveBeenCalledWith(
-      {
-        id: 'base-1',
-        images: [
-          {
-            id: 'image-1',
-            source: 'file',
-            file_path: 'photo.png',
-          },
-        ],
-      },
-      {
-        imports: [
-          expect.objectContaining({
-            path: 'photo.png',
-            mimeType: 'image/png',
-          }),
-        ],
-        deletions: [],
-      },
-    );
-  });
-
-  it('does not commit resource imports before the draft config starts referencing them', async () => {
-    vi.useFakeTimers();
-    const onConfigChange = vi.fn();
-
-    await act(async () => {
-      root.render(
-        <EditorRuntimeProvider>
-          <PluginHost
-            cardId="card-1"
-            cardPath="/workspace/card-1.card"
-            cardType="ImageCard"
-            baseCardId="base-1"
-            config={{ id: 'base-1', images: [] }}
-            onConfigChange={onConfigChange}
-          />
-        </EditorRuntimeProvider>,
-      );
-      await Promise.resolve();
-    });
-
-    const file = new File(['image'], 'photo.png', { type: 'image/png' });
-
-    await act(async () => {
-      await editorImportResource?.({
-        file,
-        preferredPath: 'photo.png',
-      });
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      vi.advanceTimersByTime(400);
-      await Promise.resolve();
-    });
-
-    expect(onConfigChange).not.toHaveBeenCalled();
-
-    await act(async () => {
-      editorChangeHandler?.({
-        id: 'base-1',
-        images: [
-          {
-            id: 'image-1',
-            source: 'file',
-            file_path: 'photo.png',
           },
         ],
       });
@@ -451,9 +370,13 @@ describe('PluginHost', () => {
       await Promise.resolve();
     });
 
-    const imported = await editorImportResource?.({
-      file: new File(['# updated'], 'article.md', { type: 'text/markdown' }),
-      preferredPath: 'notes/article.md',
+    let imported: { path: string } | undefined;
+    await act(async () => {
+      imported = await editorImportResource?.({
+        file: new File(['# updated'], 'article.md', { type: 'text/markdown' }),
+        preferredPath: 'notes/article.md',
+      });
+      await Promise.resolve();
     });
 
     expect(imported).toEqual({ path: 'notes/article.md' });

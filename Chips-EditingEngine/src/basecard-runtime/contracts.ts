@@ -16,16 +16,47 @@ export interface BasecardResourceImportResult {
   path: string;
 }
 
+export interface BasecardArchiveImportFilter {
+  mimeTypes?: string[];
+  extensions?: string[];
+}
+
 export interface BasecardArchiveImportRequest {
   file: File;
   preferredRootDir?: string;
   entryFile?: string;
+  include?: BasecardArchiveImportFilter;
+  stripSingleRootDir?: boolean;
+  excludeSystemArtifacts?: boolean;
+}
+
+export interface BasecardArchiveImportedEntry {
+  sourcePath: string;
+  resourcePath: string;
+  fileName: string;
+  mimeType?: string;
+  size: number;
+  compressedSize: number;
+  crc32: number;
+  offset: number;
+  isDirectory: boolean;
+  compressionMethod: number;
+  modifiedTime?: number;
+}
+
+export interface BasecardArchiveDiscardedEntry {
+  sourcePath: string;
+  reason: 'directory' | 'system-artifact' | 'filter-mismatch' | 'unsafe-path';
+  fileName?: string;
+  mimeType?: string;
 }
 
 export interface BasecardArchiveImportResult {
   rootDir: string;
-  entryFile: string;
+  entryFile?: string;
   resourcePaths: string[];
+  entries: BasecardArchiveImportedEntry[];
+  discardedEntries: BasecardArchiveDiscardedEntry[];
 }
 
 export interface BasecardTiffToPngRequest {

@@ -277,6 +277,21 @@ export class EditorSessionStore {
     return this.getSnapshot(key)!;
   }
 
+  canCommit(key: string, descriptor: BasecardDescriptor): boolean {
+    const session = this.sessions.get(key);
+    if (!session || !session.dirty || !session.validation.valid) {
+      return false;
+    }
+
+    const committedConfig = descriptor.normalizeConfig(session.draftConfig, session.baseCardId);
+    const committedSignature = toSignature(committedConfig);
+    if (committedSignature !== session.sourceSignature) {
+      return true;
+    }
+
+    return canCommitResourceOnlyMutations(session, descriptor, committedConfig);
+  }
+
   async commit(
     key: string,
     descriptor: BasecardDescriptor,

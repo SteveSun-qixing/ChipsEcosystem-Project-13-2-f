@@ -1,5 +1,8 @@
 import type { FileEntry, ZipEntryMeta } from 'chips-sdk';
 import type {
+    BasecardArchiveDiscardedEntry,
+    BasecardArchiveImportedEntry,
+    BasecardArchiveImportFilter,
     BasecardArchiveImportRequest,
     BasecardArchiveImportResult,
 } from '../basecard-runtime/contracts';
@@ -10,11 +13,25 @@ interface ArchiveImportServices {
     listZipEntries(zipPath: string): Promise<ZipEntryMeta[]>;
     extractZip(zipPath: string, outputDir: string): Promise<string>;
     listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]>;
+    readBinary(path: string): Promise<Uint8Array>;
     writeBinary(path: string, content: Uint8Array): Promise<void>;
     move(sourcePath: string, destPath: string): Promise<void>;
     delete(path: string, options?: { recursive?: boolean }): Promise<void>;
     exists(path: string): Promise<boolean>;
 }
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+    avif: 'image/avif',
+    bmp: 'image/bmp',
+    gif: 'image/gif',
+    jpeg: 'image/jpeg',
+    jpg: 'image/jpeg',
+    png: 'image/png',
+    svg: 'image/svg+xml',
+    tif: 'image/tiff',
+    tiff: 'image/tiff',
+    webp: 'image/webp',
+};
 
 function joinPath(...parts: string[]): string {
     return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
@@ -37,8 +54,25 @@ function normalizeRelativePath(value: string): string | null {
     return segments.join('/');
 }
 
+function stripPayloadRoot(entryPath: string, payloadRoot: string): string | null {
+    const normalizedEntry = normalizeRelativePath(entryPath);
+    if (!normalizedEntry) {
+        return null;
+    }
+
+    if (!payloadRoot) {
+        return normalizedEntry;
+    }
+
+    return normalizedEntry === payloadRoot
+        ? ''
+        : normalizedEntry.startsWith(`${payloadRoot}/`)
+            ? normalizedEntry.slice(payloadRoot.length + 1)
+            : null;
+}
+
 function sanitizeRootDirName(value: string): string {
-    const withoutExtension = value.replace(/\.zip$/i, '').trim();
+    const withoutExtension = value.replace(/\.(zip|cbz)$/i, '').trim();
     const normalized = withoutExtension
         .normalize('NFKD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -50,6 +84,16 @@ function sanitizeRootDirName(value: string): string {
         .toLowerCase();
 
     return normalized.length > 0 ? normalized : 'archive-bundle';
+}
+
+function fileNameFromPath(resourcePath: string): string {
+    return resourcePath.split('/').filter(Boolean).pop() ?? resourcePath;
+}
+
+function getExtension(filePath: string): string {
+    const fileName = fileNameFromPath(filePath).toLowerCase();
+    const dotIndex = fileName.lastIndexOf('.');
+    return dotIndex >= 0 && dotIndex < fileName.length - 1 ? fileName.slice(dotIndex + 1) : '';
 }
 
 async function readBinaryFromFileLike(file: unknown): Promise<Uint8Array | null> {
@@ -85,21 +129,56 @@ function isIgnoredArchiveArtifact(relativePath: string): boolean {
     }
 
     const segments = normalized.split('/');
-    return segments.includes('__MACOSX') || segments[segments.length - 1] === '.DS_Store';
+    const fileName = segments[segments.length - 1] ?? '';
+    return segments.includes('__MACOSX') || fileName === '.DS_Store' || fileName.startsWith('._');
+}
+
+function zipEntryToImportedEntry(input: {
+    entry: ZipEntryMeta;
+    sourcePath: string;
+    resourcePath: string;
+    mimeType?: string;
+}): BasecardArchiveImportedEntry {
+    return {
+        sourcePath: input.sourcePath,
+        resourcePath: input.resourcePath,
+        fileName: fileNameFromPath(input.sourcePath),
+        mimeType: input.mimeType,
+        size: input.entry.size,
+        compressedSize: input.entry.compressedSize,
+        crc32: input.entry.crc32,
+        offset: input.entry.offset,
+        isDirectory: input.entry.isDirectory,
+        compressionMethod: input.entry.compressionMethod,
+        modifiedTime: input.entry.modifiedTime,
+    };
+}
+
+function createDiscardedEntry(
+    sourcePath: string,
+    reason: BasecardArchiveDiscardedEntry['reason'],
+    mimeType?: string,
+): BasecardArchiveDiscardedEntry {
+    return {
+        sourcePath,
+        reason,
+        fileName: fileNameFromPath(sourcePath),
+        mimeType,
+    };
 }
 
 export function resolveArchivePayloadRoot(
-    entries: readonly Pick<ZipEntryMeta, 'path'>[],
+    entries: readonly (Pick<ZipEntryMeta, 'path'> & Partial<Pick<ZipEntryMeta, 'isDirectory'>>)[],
     entryFileInput?: string,
 ): { payloadRoot: string; entryFile: string } {
     const entryFile = normalizeRelativePath(entryFileInput ?? 'index.html');
     if (!entryFile) {
-        throw new Error('网页压缩包入口文件无效。');
+        throw new Error('压缩包入口文件路径无效。');
     }
 
     const filePaths = entries
+        .filter((entry) => !entry.isDirectory && !entry.path.endsWith('/'))
         .map((entry) => entry.path)
-        .filter((entryPath) => !entryPath.endsWith('/'))
         .filter((entryPath) => !isIgnoredArchiveArtifact(entryPath));
 
     if (filePaths.includes(entryFile)) {
@@ -127,7 +206,24 @@ export function resolveArchivePayloadRoot(
         }
     }
 
-    throw new Error('网页压缩包根目录必须包含入口文件 index.html，或仅包含一个顶层目录且其下存在 index.html。');
+    throw new Error(`压缩包根目录必须包含入口文件 ${entryFile}，或仅包含一个顶层目录且其下存在该入口文件。`);
+}
+
+function resolveGenericPayloadRoot(entries: readonly ZipEntryMeta[], excludeSystemArtifacts: boolean): string {
+    const filePaths = entries
+        .filter((entry) => !entry.isDirectory && !entry.path.endsWith('/'))
+        .map((entry) => entry.path)
+        .filter((entryPath) => !excludeSystemArtifacts || !isIgnoredArchiveArtifact(entryPath));
+
+    const topLevelDirs = Array.from(
+        new Set(
+            filePaths
+                .map((entryPath) => entryPath.split('/')[0] ?? '')
+                .filter((segment) => segment.length > 0),
+        ),
+    );
+
+    return topLevelDirs.length === 1 ? topLevelDirs[0] ?? '' : '';
 }
 
 async function cleanupIgnoredArchiveArtifacts(
@@ -158,18 +254,22 @@ async function cleanupIgnoredArchiveArtifacts(
     }
 }
 
-async function collectImportedResourcePaths(
-    cardRootDir: string,
-    bundleRootDir: string,
-    services: Pick<ArchiveImportServices, 'listFiles'>,
-): Promise<string[]> {
-    const bundleAbsoluteDir = joinPath(cardRootDir, bundleRootDir);
-    const entries = await services.listFiles(bundleAbsoluteDir, { recursive: true });
-    return entries
-        .filter((entry) => entry.isFile)
-        .map((entry) => toRelativeChildPath(cardRootDir, entry.path))
-        .filter((entryPath): entryPath is string => typeof entryPath === 'string' && entryPath.length > 0)
-        .sort((left, right) => left.localeCompare(right));
+async function cleanupEmptyDirectories(
+    rootDir: string,
+    services: Pick<ArchiveImportServices, 'listFiles' | 'delete'>,
+): Promise<void> {
+    const entries = await services.listFiles(rootDir, { recursive: true });
+    const directories = entries
+        .filter((entry) => entry.isDirectory)
+        .map((entry) => entry.path)
+        .sort((left, right) => right.length - left.length);
+
+    for (const directoryPath of directories) {
+        const children = await services.listFiles(directoryPath);
+        if (children.length === 0) {
+            await services.delete(directoryPath, { recursive: true });
+        }
+    }
 }
 
 async function chooseBundleRootDir(
@@ -185,6 +285,126 @@ async function chooseBundleRootDir(
             return candidate;
         }
     }
+}
+
+function detectImageMimeType(bytes: Uint8Array, fileName: string): string | undefined {
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+        return 'image/jpeg';
+    }
+
+    if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47 &&
+        bytes[4] === 0x0d &&
+        bytes[5] === 0x0a &&
+        bytes[6] === 0x1a &&
+        bytes[7] === 0x0a
+    ) {
+        return 'image/png';
+    }
+
+    if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+        return 'image/gif';
+    }
+
+    if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 &&
+        bytes[1] === 0x49 &&
+        bytes[2] === 0x46 &&
+        bytes[3] === 0x46 &&
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x45 &&
+        bytes[10] === 0x42 &&
+        bytes[11] === 0x50
+    ) {
+        return 'image/webp';
+    }
+
+    if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
+        return 'image/bmp';
+    }
+
+    if (
+        bytes.length >= 12 &&
+        bytes[4] === 0x66 &&
+        bytes[5] === 0x74 &&
+        bytes[6] === 0x79 &&
+        bytes[7] === 0x70 &&
+        bytes[8] === 0x61 &&
+        bytes[9] === 0x76 &&
+        bytes[10] === 0x69 &&
+        bytes[11] === 0x66
+    ) {
+        return 'image/avif';
+    }
+
+    if (
+        bytes.length >= 4 &&
+        ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00) ||
+            (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a))
+    ) {
+        return 'image/tiff';
+    }
+
+    const extensionMime = IMAGE_MIME_BY_EXTENSION[getExtension(fileName)];
+    if (extensionMime === 'image/svg+xml') {
+        const snippet = new TextDecoder().decode(bytes.slice(0, Math.min(bytes.length, 512))).toLowerCase();
+        return snippet.includes('<svg') ? 'image/svg+xml' : undefined;
+    }
+
+    return extensionMime;
+}
+
+function shouldReadBytesForFilter(filePath: string, filter: BasecardArchiveImportFilter | undefined): boolean {
+    return Boolean(filter?.mimeTypes?.length) || IMAGE_MIME_BY_EXTENSION[getExtension(filePath)] === 'image/svg+xml';
+}
+
+async function resolveImportedMimeType(
+    sourcePath: string,
+    sourceAbsolutePath: string,
+    filter: BasecardArchiveImportFilter | undefined,
+    services: Pick<ArchiveImportServices, 'readBinary'>,
+): Promise<string | undefined> {
+    if (!shouldReadBytesForFilter(sourcePath, filter)) {
+        return IMAGE_MIME_BY_EXTENSION[getExtension(sourcePath)];
+    }
+
+    const bytes = await services.readBinary(sourceAbsolutePath);
+    return detectImageMimeType(bytes, sourcePath);
+}
+
+function matchesMimePattern(mimeType: string | undefined, patterns: readonly string[] | undefined): boolean {
+    if (!patterns || patterns.length === 0) {
+        return true;
+    }
+    if (!mimeType) {
+        return false;
+    }
+
+    return patterns.some((pattern) => {
+        const normalizedPattern = pattern.trim().toLowerCase();
+        if (normalizedPattern.endsWith('/*')) {
+            return mimeType.toLowerCase().startsWith(normalizedPattern.slice(0, -1));
+        }
+        return mimeType.toLowerCase() === normalizedPattern;
+    });
+}
+
+function matchesExtension(filePath: string, extensions: readonly string[] | undefined): boolean {
+    if (!extensions || extensions.length === 0) {
+        return true;
+    }
+
+    const extension = getExtension(filePath);
+    return extensions.some((item) => item.trim().toLowerCase().replace(/^\./, '') === extension);
+}
+
+function matchesArchiveFilter(filePath: string, mimeType: string | undefined, filter: BasecardArchiveImportFilter | undefined): boolean {
+    return matchesMimePattern(mimeType, filter?.mimeTypes) && matchesExtension(filePath, filter?.extensions);
 }
 
 export async function importArchiveBundleIntoCardRoot(input: {
@@ -206,38 +426,100 @@ export async function importArchiveBundleIntoCardRoot(input: {
         zipPath = stageZipPath;
     }
 
-    let shouldCleanupFinalDir = true;
     let finalBundleDir = '';
+    let shouldCleanupFinalDir = true;
 
     try {
-        const { payloadRoot, entryFile } = resolveArchivePayloadRoot(
-            await services.listZipEntries(zipPath),
-            request.entryFile,
-        );
+        const zipEntries = await services.listZipEntries(zipPath);
+        const requestedEntryFile = normalizeRelativePath(request.entryFile ?? '');
+        const excludeSystemArtifacts = request.excludeSystemArtifacts !== false;
+
+        const requiredEntry = requestedEntryFile
+            ? resolveArchivePayloadRoot(zipEntries, requestedEntryFile)
+            : null;
+        const payloadRoot = requiredEntry
+            ? requiredEntry.payloadRoot
+            : request.stripSingleRootDir === false
+                ? ''
+                : resolveGenericPayloadRoot(zipEntries, excludeSystemArtifacts);
+        const entryFile = requiredEntry?.entryFile;
+        const payloadSourceDir = payloadRoot ? joinPath(stageExtractDir, payloadRoot) : stageExtractDir;
         const bundleRootDir = await chooseBundleRootDir(cardRootDir, request.preferredRootDir ?? request.file.name, services);
         finalBundleDir = joinPath(cardRootDir, bundleRootDir);
+        const keepRelativePaths = new Set<string>();
+        const importedEntries: BasecardArchiveImportedEntry[] = [];
+        const discardedEntries: BasecardArchiveDiscardedEntry[] = [];
+
         await services.extractZip(zipPath, stageExtractDir);
-        await cleanupIgnoredArchiveArtifacts(stageExtractDir, services);
-
-        const payloadSourceDir = payloadRoot
-            ? joinPath(stageExtractDir, payloadRoot)
-            : stageExtractDir;
-        const entryAbsolutePath = joinPath(payloadSourceDir, entryFile);
-        if (!(await services.exists(entryAbsolutePath))) {
-            throw new Error('网页压缩包中缺少入口文件 index.html。');
+        if (excludeSystemArtifacts) {
+            await cleanupIgnoredArchiveArtifacts(stageExtractDir, services);
         }
 
+        if (entryFile && !(await services.exists(joinPath(payloadSourceDir, entryFile)))) {
+            throw new Error(`压缩包中缺少入口文件 ${entryFile}。`);
+        }
+
+        for (const entry of zipEntries) {
+            const sourcePath = entry.path;
+            const relativePath = stripPayloadRoot(sourcePath, payloadRoot);
+            if (!relativePath) {
+                discardedEntries.push(createDiscardedEntry(sourcePath, entry.isDirectory ? 'directory' : 'unsafe-path'));
+                continue;
+            }
+
+            if (entry.isDirectory || sourcePath.endsWith('/')) {
+                discardedEntries.push(createDiscardedEntry(sourcePath, 'directory'));
+                continue;
+            }
+
+            if (excludeSystemArtifacts && isIgnoredArchiveArtifact(sourcePath)) {
+                discardedEntries.push(createDiscardedEntry(sourcePath, 'system-artifact'));
+                continue;
+            }
+
+            const sourceAbsolutePath = joinPath(stageExtractDir, sourcePath);
+            if (!(await services.exists(sourceAbsolutePath))) {
+                discardedEntries.push(createDiscardedEntry(sourcePath, 'unsafe-path'));
+                continue;
+            }
+
+            const mimeType = await resolveImportedMimeType(sourcePath, sourceAbsolutePath, request.include, services);
+            if (!matchesArchiveFilter(relativePath, mimeType, request.include)) {
+                discardedEntries.push(createDiscardedEntry(sourcePath, 'filter-mismatch', mimeType));
+                continue;
+            }
+
+            keepRelativePaths.add(relativePath);
+            importedEntries.push(zipEntryToImportedEntry({
+                entry,
+                sourcePath,
+                resourcePath: joinPath(bundleRootDir, relativePath),
+                mimeType,
+            }));
+        }
+
+        if (importedEntries.length === 0) {
+            throw new Error('压缩包中没有符合导入规则的资源。');
+        }
+
+        const stageFiles = await services.listFiles(payloadSourceDir, { recursive: true });
+        for (const file of stageFiles.filter((entry) => entry.isFile)) {
+            const relativePath = toRelativeChildPath(payloadSourceDir, file.path);
+            if (!relativePath || !keepRelativePaths.has(relativePath)) {
+                await services.delete(file.path);
+            }
+        }
+        await cleanupEmptyDirectories(payloadSourceDir, services);
         await services.move(payloadSourceDir, finalBundleDir);
-        const resourcePaths = await collectImportedResourcePaths(cardRootDir, bundleRootDir, services);
-        if (resourcePaths.length === 0) {
-            throw new Error('网页压缩包中没有可导入的网页文件。');
-        }
 
         shouldCleanupFinalDir = false;
+        const sortedEntries = importedEntries.sort((left, right) => left.resourcePath.localeCompare(right.resourcePath));
         return {
             rootDir: bundleRootDir,
             entryFile,
-            resourcePaths,
+            resourcePaths: sortedEntries.map((entry) => entry.resourcePath),
+            entries: sortedEntries,
+            discardedEntries,
         };
     } catch (error) {
         if (shouldCleanupFinalDir && finalBundleDir && (await services.exists(finalBundleDir))) {

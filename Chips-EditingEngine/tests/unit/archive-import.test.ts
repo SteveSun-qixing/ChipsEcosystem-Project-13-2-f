@@ -59,6 +59,9 @@ function createServices(input: {
     async listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]> {
       return collectEntries(dir, Boolean(options?.recursive));
     },
+    async readBinary(targetPath: string): Promise<Uint8Array> {
+      return new Uint8Array(await fs.readFile(targetPath));
+    },
     async writeBinary(targetPath: string, content: Uint8Array): Promise<void> {
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.writeFile(targetPath, Buffer.from(content));
@@ -81,6 +84,19 @@ function createServices(input: {
   };
 }
 
+function zipEntry(entryPath: string, overrides?: Partial<ZipEntryMeta>): ZipEntryMeta {
+  return {
+    path: entryPath,
+    size: 10,
+    compressedSize: 10,
+    crc32: 1,
+    offset: 0,
+    isDirectory: entryPath.endsWith('/'),
+    compressionMethod: 0,
+    ...overrides,
+  };
+}
+
 afterEach(async () => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
@@ -93,16 +109,16 @@ afterEach(async () => {
 describe('archive-import', () => {
   it('detects payload roots for root-level and single-folder webpage archives', () => {
     expect(resolveArchivePayloadRoot([
-      { path: 'index.html' },
-      { path: 'assets/app.js' },
+      zipEntry('index.html'),
+      zipEntry('assets/app.js'),
     ])).toEqual({
       payloadRoot: '',
       entryFile: 'index.html',
     });
 
     expect(resolveArchivePayloadRoot([
-      { path: 'site/index.html' },
-      { path: 'site/assets/app.js' },
+      zipEntry('site/index.html'),
+      zipEntry('site/assets/app.js'),
     ])).toEqual({
       payloadRoot: 'site',
       entryFile: 'index.html',
@@ -117,9 +133,9 @@ describe('archive-import', () => {
     const services = createServices({
       zipPath,
       entries: [
-        { path: 'site/index.html', size: 10, compressedSize: 10, crc32: 1, offset: 0 },
-        { path: 'site/assets/app.js', size: 12, compressedSize: 12, crc32: 2, offset: 10 },
-        { path: '__MACOSX/._index.html', size: 1, compressedSize: 1, crc32: 3, offset: 20 },
+        zipEntry('site/index.html', { size: 10, compressedSize: 10, crc32: 1, offset: 0 }),
+        zipEntry('site/assets/app.js', { size: 12, compressedSize: 12, crc32: 2, offset: 10 }),
+        zipEntry('__MACOSX/._index.html', { size: 1, compressedSize: 1, crc32: 3, offset: 20 }),
       ],
       async extractImpl(outputDir) {
         await fs.mkdir(path.join(outputDir, 'site', 'assets'), { recursive: true });
@@ -184,8 +200,8 @@ describe('archive-import', () => {
           stagedZipPath = targetZipPath;
           await expect(fs.readFile(targetZipPath)).resolves.toEqual(zipBuffer);
           return [
-            { path: 'site/index.html', size: 10, compressedSize: 10, crc32: 1, offset: 0 },
-            { path: 'site/assets/app.js', size: 12, compressedSize: 12, crc32: 2, offset: 10 },
+            zipEntry('site/index.html', { size: 10, compressedSize: 10, crc32: 1, offset: 0 }),
+            zipEntry('site/assets/app.js', { size: 12, compressedSize: 12, crc32: 2, offset: 10 }),
           ];
         },
         async extractZip(targetZipPath: string, outputDir: string): Promise<string> {
@@ -197,6 +213,9 @@ describe('archive-import', () => {
         },
         async listFiles(dir: string, options?: { recursive?: boolean }): Promise<FileEntry[]> {
           return collectEntries(dir, Boolean(options?.recursive));
+        },
+        async readBinary(targetPath: string): Promise<Uint8Array> {
+          return new Uint8Array(await fs.readFile(targetPath));
         },
         async writeBinary(targetPath: string, content: Uint8Array): Promise<void> {
           await fs.mkdir(path.dirname(targetPath), { recursive: true });
@@ -238,7 +257,7 @@ describe('archive-import', () => {
     const services = createServices({
       zipPath,
       entries: [
-        { path: 'broken/app.js', size: 12, compressedSize: 12, crc32: 2, offset: 0 },
+        zipEntry('broken/app.js', { size: 12, compressedSize: 12, crc32: 2, offset: 0 }),
       ],
       async extractImpl(outputDir) {
         await fs.mkdir(path.join(outputDir, 'broken'), { recursive: true });
@@ -258,5 +277,72 @@ describe('archive-import', () => {
 
     await expect(fs.readdir(cardRootDir)).resolves.not.toContain('.card');
     await expect(fs.readdir(cardRootDir)).resolves.not.toContain('broken-bundle');
+  });
+
+  it('imports filtered image directory archives and preserves ZIP entry metadata', async () => {
+    const cardRootDir = await createTempDir('chips-card-root-images-');
+    const zipPath = path.join(cardRootDir, 'comic.zip');
+    await fs.writeFile(zipPath, 'zip');
+    const firstModifiedTime = new Date(2025, 0, 1, 8, 0, 0).getTime();
+    const secondModifiedTime = new Date(2025, 0, 1, 9, 0, 0).getTime();
+
+    const services = createServices({
+      zipPath,
+      entries: [
+        zipEntry('comic/', { isDirectory: true }),
+        zipEntry('comic/page-01.png', { size: 8, compressedSize: 8, crc32: 10, offset: 20, modifiedTime: firstModifiedTime }),
+        zipEntry('comic/page-02.jpg', { size: 8, compressedSize: 8, crc32: 11, offset: 30, modifiedTime: secondModifiedTime, compressionMethod: 8 }),
+        zipEntry('comic/readme.txt', { size: 6, compressedSize: 6, crc32: 12, offset: 40 }),
+      ],
+      async extractImpl(outputDir) {
+        await fs.mkdir(path.join(outputDir, 'comic'), { recursive: true });
+        await fs.writeFile(path.join(outputDir, 'comic', 'page-01.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+        await fs.writeFile(path.join(outputDir, 'comic', 'page-02.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x08]));
+        await fs.writeFile(path.join(outputDir, 'comic', 'readme.txt'), 'notes\n', 'utf-8');
+      },
+    });
+
+    const result = await importArchiveBundleIntoCardRoot({
+      cardRootDir: toPosixPath(cardRootDir),
+      request: {
+        file: { name: 'comic.zip' } as File,
+        preferredRootDir: 'Comic Bundle',
+        include: {
+          mimeTypes: ['image/*'],
+          extensions: ['.png', '.jpg'],
+        },
+        stripSingleRootDir: true,
+        excludeSystemArtifacts: true,
+      },
+      services,
+    });
+
+    expect(result.rootDir).toMatch(/^comic-bundle-[0-9a-z]{6}$/);
+    expect(result.entryFile).toBeUndefined();
+    expect(result.resourcePaths).toEqual([
+      `${result.rootDir}/page-01.png`,
+      `${result.rootDir}/page-02.jpg`,
+    ]);
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        sourcePath: 'comic/page-01.png',
+        resourcePath: `${result.rootDir}/page-01.png`,
+        mimeType: 'image/png',
+        modifiedTime: firstModifiedTime,
+        compressionMethod: 0,
+      }),
+      expect.objectContaining({
+        sourcePath: 'comic/page-02.jpg',
+        resourcePath: `${result.rootDir}/page-02.jpg`,
+        mimeType: 'image/jpeg',
+        modifiedTime: secondModifiedTime,
+        compressionMethod: 8,
+      }),
+    ]);
+    expect(result.discardedEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcePath: 'comic/', reason: 'directory' }),
+      expect.objectContaining({ sourcePath: 'comic/readme.txt', reason: 'filter-mismatch' }),
+    ]));
+    await expect(fs.readdir(path.join(cardRootDir, result.rootDir))).resolves.toEqual(['page-01.png', 'page-02.jpg']);
   });
 });

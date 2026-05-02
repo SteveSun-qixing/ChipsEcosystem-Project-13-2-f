@@ -48,15 +48,26 @@ function normalizeResourcePath(resourcePath: string): string | null {
   return segments.join('/');
 }
 
-function sanitizeImportedFileName(fileName: string): string {
-  const normalizedPath = normalizeResourcePath(fileName);
-  const candidate = normalizedPath?.split('/').pop() ?? fileName.trim();
-  const sanitized = candidate
+function sanitizeImportedPathSegment(segment: string, fallback: string): string {
+  const sanitized = segment
     .replace(/[\u0000-\u001f]/g, '')
     .replace(/[<>:"/\\|?*]/g, '')
     .trim();
 
-  return sanitized.length > 0 ? sanitized : 'resource';
+  return sanitized.length > 0 && sanitized !== '.' && sanitized !== '..' ? sanitized : fallback;
+}
+
+function sanitizeImportedResourcePath(fileName: string): string {
+  const normalizedPath = normalizeResourcePath(fileName);
+  if (!normalizedPath) {
+    return sanitizeImportedPathSegment(fileName, 'resource');
+  }
+
+  const segments = normalizedPath.split('/');
+  return segments
+    .map((segment, index) => sanitizeImportedPathSegment(segment, index === segments.length - 1 ? 'resource' : 'assets'))
+    .filter((segment) => segment.length > 0)
+    .join('/') || 'resource';
 }
 
 function createObjectUrl(resource: BasecardPendingResourceImport): string {
@@ -266,7 +277,7 @@ export function EditorHost({
   }, [cardPath, pendingResourceImports, releaseResolvedResourceUrl, sessionKey, store]);
 
   const pickAvailableResourcePath = useCallback(async (fileName: string) => {
-    const sanitizedName = sanitizeImportedFileName(fileName);
+    const sanitizedName = sanitizeImportedResourcePath(fileName);
     const activeConfig = latestDraftConfigRef.current;
     const referencedPaths = new Set(
       descriptor?.collectResourcePaths?.(activeConfig) ?? [],
@@ -387,6 +398,12 @@ export function EditorHost({
     file: File;
     preferredRootDir?: string;
     entryFile?: string;
+    include?: {
+      mimeTypes?: string[];
+      extensions?: string[];
+    };
+    stripSingleRootDir?: boolean;
+    excludeSystemArtifacts?: boolean;
   }) => {
     const result = await importArchiveBundleIntoCardRoot({
       cardRootDir: cardPath,
@@ -403,6 +420,9 @@ export function EditorHost({
         },
         async listFiles(dir, options) {
           return fileService.list(dir, options);
+        },
+        async readBinary(path) {
+          return fileService.readBinary(path);
         },
         async writeBinary(path, content) {
           await fileService.writeBinary(path, content);
@@ -426,7 +446,12 @@ export function EditorHost({
   }, [cardPath, releaseResolvedResourceUrl]);
 
   useEffect(() => {
-    if (!descriptor || !snapshot?.dirty || !snapshot.validation.valid) {
+    if (
+      !descriptor
+      || !snapshot?.dirty
+      || !snapshot.validation.valid
+      || !store.canCommit(sessionKey, descriptor)
+    ) {
       return;
     }
 

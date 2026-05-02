@@ -7,6 +7,8 @@
     "actions": {
       "open": "Open Image",
       "save": "Save Image",
+      "previous": "Previous",
+      "next": "Next",
       "zoomIn": "Zoom In",
       "zoomOut": "Zoom Out",
       "fit": "Fit Window",
@@ -25,7 +27,8 @@
       "pathLabel": "Current Path",
       "fileSizeLabel": "File Size",
       "fitMode": "Fit Window",
-      "manualMode": "Manual Zoom"
+      "manualMode": "Manual Zoom",
+      "sequencePosition": "{current} / {total}"
     },
     "status": {
       "ready": "Ready",

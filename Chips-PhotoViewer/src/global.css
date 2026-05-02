@@ -233,6 +233,19 @@ button {
   border-color: rgba(17, 17, 17, 0.18);
 }
 
+.photo-viewer-sequence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 56px;
+  padding: 0 8px;
+  color: rgba(17, 17, 17, 0.66);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 @media (max-width: 860px) {
   .photo-viewer-toolbar {
     bottom: 14px;

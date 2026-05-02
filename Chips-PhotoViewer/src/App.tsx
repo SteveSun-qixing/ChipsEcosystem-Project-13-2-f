@@ -6,7 +6,7 @@ import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsBridge } from "./hooks/useChipsBridge";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { isSupportedImagePath, SUPPORTED_IMAGE_EXTENSION_LABEL, type ImageDimensions } from "./utils/image-viewer";
-import { resolveLaunchImagePath } from "./utils/launch-resource";
+import { resolveLaunchImageTarget, type LaunchImageResource, type LaunchImageTarget } from "./utils/launch-resource";
 import { createLogger } from "../config/logging";
 
 interface ThemeSnapshot {
@@ -15,7 +15,8 @@ interface ThemeSnapshot {
 }
 
 interface ImageSource {
-  filePath: string;
+  sourceId: string;
+  filePath?: string;
   fileName: string;
   resourceUri: string;
   revision: number;
@@ -84,6 +85,37 @@ function resolveFileName(filePath: string): string {
   return segments[segments.length - 1] ?? normalized;
 }
 
+function resolveImageCandidateName(resource: LaunchImageResource): string {
+  return (
+    resource.fileName?.trim() ||
+    (resource.relativePath ? resolveFileName(resource.relativePath) : "") ||
+    (resource.filePath ? resolveFileName(resource.filePath) : "") ||
+    resolveFileName(resource.sourceId) ||
+    "image"
+  );
+}
+
+function isSupportedImageResource(resource: LaunchImageResource): boolean {
+  return [
+    resource.fileName,
+    resource.relativePath,
+    resource.filePath,
+    resource.sourceId,
+  ].some((value) => typeof value === "string" && isSupportedImagePath(value));
+}
+
+function clampImageIndex(target: LaunchImageTarget, index: number): number {
+  if (target.images.length === 0) {
+    return 0;
+  }
+
+  if (!Number.isFinite(index)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(target.images.length - 1, Math.trunc(index)));
+}
+
 export function App(): React.ReactElement {
   const bridge = useChipsBridge();
   const { client, traceId } = useChipsClient();
@@ -97,6 +129,8 @@ export function App(): React.ReactElement {
   const [locale, setLocale] = useState(() =>
     resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined),
   );
+  const [imageTarget, setImageTarget] = useState<LaunchImageTarget | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageSource, setImageSource] = useState<ImageSource | null>(null);
   const [imageDimensions, setImageDimensions] = useState<ImageDimensions | null>(null);
   const [feedback, setFeedback] = useState<ViewerFeedback | null>(null);
@@ -107,6 +141,35 @@ export function App(): React.ReactElement {
 
   function t(key: string, params?: Record<string, string | number>): string {
     return formatMessage(locale, key, params);
+  }
+
+  function openImageTarget(target: LaunchImageTarget): void {
+    if (target.images.length === 0) {
+      setFeedback({
+        tone: "error",
+        message: t("photo-viewer.errors.missingPath"),
+      });
+      return;
+    }
+
+    const unsupported = target.images.find((image) => !isSupportedImageResource(image));
+    if (unsupported) {
+      setFeedback({
+        tone: "error",
+        message: t("photo-viewer.errors.unsupportedFile", {
+          extensions: SUPPORTED_IMAGE_EXTENSION_LABEL,
+        }),
+      });
+      logger.warn("用户尝试打开不受支持的图片格式", {
+        sourceId: unsupported.sourceId,
+        fileName: unsupported.fileName,
+        relativePath: unsupported.relativePath,
+      });
+      return;
+    }
+
+    setImageTarget(target);
+    setCurrentImageIndex(clampImageIndex(target, target.initialIndex));
   }
 
   async function openImageFile(filePath: string): Promise<void> {
@@ -132,32 +195,16 @@ export function App(): React.ReactElement {
       return;
     }
 
-    setIsResolving(true);
-    setIsImageLoaded(false);
-    setImageDimensions(null);
-    setFeedback(null);
-
-    try {
-      const resolved = await client.resource.resolve(normalizedPath);
-
-      setImageSource({
-        filePath: normalizedPath,
-        fileName: resolveFileName(normalizedPath),
-        resourceUri: resolved.uri,
-        revision: Date.now(),
-      });
-      logger.info("图片资源已准备完成", {
-        filePath: normalizedPath,
-        resourceUri: resolved.uri,
-      });
-    } catch (error) {
-      logger.error("打开图片失败", error);
-      setIsResolving(false);
-      setFeedback({
-        tone: "error",
-        message: resolveErrorMessage(error, t("photo-viewer.errors.openFailed")),
-      });
-    }
+    openImageTarget({
+      images: [
+        {
+          sourceId: normalizedPath,
+          filePath: normalizedPath,
+          fileName: resolveFileName(normalizedPath),
+        },
+      ],
+      initialIndex: 0,
+    });
   }
 
   async function handleOpenFile(): Promise<void> {
@@ -210,14 +257,14 @@ export function App(): React.ReactElement {
     try {
       const destinationPath = await client.platform.saveFile({
         title: t("photo-viewer.dialogs.saveFileTitle"),
-        defaultPath: imageSource.filePath,
+        defaultPath: imageSource.filePath ?? imageSource.fileName,
       });
 
       if (!destinationPath) {
         return;
       }
 
-      if (destinationPath === imageSource.filePath) {
+      if (imageSource.filePath && destinationPath === imageSource.filePath) {
         setFeedback({
           tone: "info",
           message: t("photo-viewer.status.samePath"),
@@ -226,9 +273,14 @@ export function App(): React.ReactElement {
       }
 
       setIsSaving(true);
-      await client.file.copy(imageSource.filePath, destinationPath);
+      if (imageSource.filePath) {
+        await client.file.copy(imageSource.filePath, destinationPath);
+      } else {
+        const bytes = new Uint8Array(await client.resource.readBinary(imageSource.sourceId));
+        await client.file.write(destinationPath, bytes, { encoding: "binary" });
+      }
       logger.info("图片副本已保存", {
-        sourcePath: imageSource.filePath,
+        sourcePath: imageSource.filePath ?? imageSource.sourceId,
         destinationPath,
       });
       setFeedback({
@@ -274,6 +326,89 @@ export function App(): React.ReactElement {
     await openImageFile(filePath);
   }
 
+  function handlePreviousImage(): void {
+    if (!imageTarget || imageTarget.images.length <= 1) {
+      return;
+    }
+
+    setCurrentImageIndex((current) => Math.max(0, current - 1));
+  }
+
+  function handleNextImage(): void {
+    if (!imageTarget || imageTarget.images.length <= 1) {
+      return;
+    }
+
+    setCurrentImageIndex((current) => Math.min(imageTarget.images.length - 1, current + 1));
+  }
+
+  useEffect(() => {
+    if (!imageTarget) {
+      setImageSource(null);
+      setImageDimensions(null);
+      setIsImageLoaded(false);
+      setIsResolving(false);
+      return;
+    }
+
+    const boundedIndex = clampImageIndex(imageTarget, currentImageIndex);
+    if (boundedIndex !== currentImageIndex) {
+      setCurrentImageIndex(boundedIndex);
+      return;
+    }
+
+    const resource = imageTarget.images[boundedIndex];
+    if (!resource) {
+      return;
+    }
+
+    let cancelled = false;
+    const sourceId = resource.sourceId.trim();
+    setIsResolving(true);
+    setIsImageLoaded(false);
+    setImageDimensions(null);
+    setFeedback(null);
+
+    void client.resource.resolve(sourceId)
+      .then((resolved) => {
+        if (cancelled) {
+          return;
+        }
+
+        setImageSource({
+          sourceId,
+          filePath: resource.filePath,
+          fileName: resolveImageCandidateName(resource),
+          resourceUri: resolved.uri,
+          revision: Date.now(),
+        });
+        logger.info("图片资源已准备完成", {
+          sourceId,
+          filePath: resource.filePath,
+          resourceUri: resolved.uri,
+          index: boundedIndex,
+          total: imageTarget.images.length,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        logger.error("打开图片失败", error);
+        setImageSource(null);
+        setIsResolving(false);
+        setFeedback({
+          tone: "error",
+          message: resolveErrorMessage(error, t("photo-viewer.errors.openFailed")),
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, currentImageIndex, imageTarget, logger]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -302,17 +437,18 @@ export function App(): React.ReactElement {
 
   useEffect(() => {
     const launchContext = client.platform.getLaunchContext();
-    const targetPath = resolveLaunchImagePath(launchContext) ?? "";
+    const target = resolveLaunchImageTarget(launchContext);
 
-    if (!targetPath) {
+    if (!target) {
       return;
     }
 
     logger.info("检测到启动参数里的图片路径", {
-      targetPath,
+      targetCount: target.images.length,
+      initialIndex: target.initialIndex,
       trigger: launchContext.launchParams.trigger,
     });
-    void openImageFile(targetPath);
+    openImageTarget(target);
   }, [client, logger]);
 
   useEffect(() => {
@@ -333,6 +469,31 @@ export function App(): React.ReactElement {
       }
     };
   }, [bridge]);
+
+  useEffect(() => {
+    if (!imageTarget || imageTarget.images.length <= 1) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        handlePreviousImage();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        handleNextImage();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [imageTarget]);
 
   useEffect(() => {
     if (!feedback || feedback.tone === "error") {
@@ -364,6 +525,8 @@ export function App(): React.ReactElement {
         feedback={feedback}
         onOpenFile={handleOpenFile}
         onSaveImage={handleSaveImage}
+        onPreviousImage={handlePreviousImage}
+        onNextImage={handleNextImage}
         onDropFile={handleDropFile}
         onImageLoad={(dimensions) => {
           setImageDimensions(dimensions);
@@ -378,6 +541,8 @@ export function App(): React.ReactElement {
             message: t("photo-viewer.errors.loadFailed"),
           });
         }}
+        sequenceCount={imageTarget?.images.length ?? 0}
+        currentImageIndex={currentImageIndex}
         t={t}
       />
     </ChipsThemeProvider>

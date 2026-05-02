@@ -3,7 +3,8 @@ import { usePhotoViewerCamera } from "../hooks/usePhotoViewerCamera";
 import type { ImageDimensions } from "../utils/image-viewer";
 
 interface ImageSource {
-  filePath: string;
+  sourceId: string;
+  filePath?: string;
   fileName: string;
   resourceUri: string;
   revision: number;
@@ -22,10 +23,14 @@ interface PhotoViewerStageProps {
   feedback: ViewerFeedback | null;
   onOpenFile: () => void | Promise<void>;
   onSaveImage: () => void | Promise<void>;
+  onPreviousImage: () => void;
+  onNextImage: () => void;
   onDropFile: (file: File | null) => void | Promise<void>;
   onImageLoad: (dimensions: ImageDimensions) => void;
   onImageError: () => void;
   imageDimensions: ImageDimensions | null;
+  sequenceCount: number;
+  currentImageIndex: number;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -34,19 +39,58 @@ function PhotoViewerDock(props: {
   isSaving: boolean;
   zoomMode: "fit" | "manual";
   manualScale: number;
+  sequenceCount: number;
+  currentImageIndex: number;
   onOpenFile: () => void | Promise<void>;
   onSaveImage: () => void | Promise<void>;
+  onPreviousImage: () => void;
+  onNextImage: () => void;
   onZoom: (direction: "in" | "out") => void;
   onFit: () => void;
   onActualSize: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
-  const { isImageReady, isSaving, zoomMode, manualScale, onOpenFile, onSaveImage, onZoom, onFit, onActualSize, t } = props;
+  const {
+    isImageReady,
+    isSaving,
+    zoomMode,
+    manualScale,
+    sequenceCount,
+    currentImageIndex,
+    onOpenFile,
+    onSaveImage,
+    onPreviousImage,
+    onNextImage,
+    onZoom,
+    onFit,
+    onActualSize,
+    t,
+  } = props;
+  const hasSequence = sequenceCount > 1;
 
   return (
     <div className="photo-viewer-toolbar" role="toolbar" aria-label={t("photo-viewer.app.title")}>
       <button className="photo-viewer-button" type="button" onClick={() => void onOpenFile()}>
         {t("photo-viewer.actions.open")}
+      </button>
+      <button className="photo-viewer-button" type="button" onClick={onPreviousImage} disabled={!hasSequence || currentImageIndex <= 0}>
+        {t("photo-viewer.actions.previous")}
+      </button>
+      {hasSequence ? (
+        <span className="photo-viewer-sequence" aria-live="polite">
+          {t("photo-viewer.viewer.sequencePosition", {
+            current: currentImageIndex + 1,
+            total: sequenceCount,
+          })}
+        </span>
+      ) : null}
+      <button
+        className="photo-viewer-button"
+        type="button"
+        onClick={onNextImage}
+        disabled={!hasSequence || currentImageIndex >= sequenceCount - 1}
+      >
+        {t("photo-viewer.actions.next")}
       </button>
       <button className="photo-viewer-button" type="button" onClick={() => onZoom("out")} disabled={!isImageReady}>
         {t("photo-viewer.actions.zoomOut")}
@@ -78,14 +122,30 @@ function PhotoViewerDock(props: {
 }
 
 export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactElement {
-  const { imageSource, isImageLoaded, isResolving, isSaving, feedback, onOpenFile, onSaveImage, onDropFile, onImageLoad, onImageError, imageDimensions, t } =
-    props;
+  const {
+    imageSource,
+    isImageLoaded,
+    isResolving,
+    isSaving,
+    feedback,
+    onOpenFile,
+    onSaveImage,
+    onPreviousImage,
+    onNextImage,
+    onDropFile,
+    onImageLoad,
+    onImageError,
+    imageDimensions,
+    sequenceCount,
+    currentImageIndex,
+    t,
+  } = props;
   const [isDragActive, setIsDragActive] = useState(false);
   const dragDepthRef = useRef(0);
   const camera = usePhotoViewerCamera({
     imageDimensions,
     isImageLoaded,
-    sessionKey: imageSource ? `${imageSource.filePath}:${imageSource.revision}` : null,
+    sessionKey: imageSource ? `${imageSource.sourceId}:${imageSource.revision}` : null,
   });
 
   return (
@@ -183,8 +243,12 @@ export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactEleme
             isSaving={isSaving}
             zoomMode={camera.zoomMode}
             manualScale={camera.manualScale}
+            sequenceCount={sequenceCount}
+            currentImageIndex={currentImageIndex}
             onOpenFile={onOpenFile}
             onSaveImage={onSaveImage}
+            onPreviousImage={onPreviousImage}
+            onNextImage={onNextImage}
             onZoom={camera.handleZoom}
             onFit={camera.setFitMode}
             onActualSize={camera.setActualSize}

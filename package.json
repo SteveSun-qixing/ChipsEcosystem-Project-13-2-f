@@ -12,6 +12,7 @@
   "workspaces": [
     "Chips-*",
     "Chips-BaseCardPlugin/*",
+    "Chips-BoxLayoutPlugin/*",
     "Chips-ModulePlugin/*",
     "Chips-ComponentLibrary/packages/*",
     "Chips-ComponentLibrary/packages/adapters/*",

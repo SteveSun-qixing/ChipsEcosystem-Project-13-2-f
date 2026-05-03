@@ -2355,7 +2355,7 @@ export class BoxService {
 
   private async findWorkspaceSourceEntry(pluginId: string): Promise<string | undefined> {
     const candidates = [
-      path.join(this.workspaceRoot, 'Chips-BoxLayoutPlugin'),
+      path.join(this.workspaceRoot, 'Chips-BoxLayoutPlugin/grid-BLP'),
       path.join(this.workspaceRoot, 'Chips-Scaffold', 'chips-scaffold-boxlayout', 'templates', 'boxlayout-standard'),
     ];
 

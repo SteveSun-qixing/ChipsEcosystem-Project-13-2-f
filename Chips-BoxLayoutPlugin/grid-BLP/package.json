@@ -26,6 +26,6 @@
     "chips-sdk": "^0.1.0"
   },
   "volta": {
-    "extends": "../package.json"
+    "extends": "../../package.json"
   }
 }

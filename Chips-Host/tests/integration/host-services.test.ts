@@ -120,7 +120,7 @@ describe('Host services integration', () => {
 
   it('lists enabled box layout plugins through the box service chain', async () => {
     const install = await runtime.invoke<{ pluginId: string }>('plugin.install', {
-      manifestPath: path.resolve(process.cwd(), '../Chips-BoxLayoutPlugin/manifest.yaml')
+      manifestPath: path.resolve(process.cwd(), '../Chips-BoxLayoutPlugin/grid-BLP/manifest.yaml')
     });
     await runtime.invoke('plugin.enable', { pluginId: install.pluginId });
 

@@ -580,7 +580,7 @@ export class HostIntegrationService {
       path.join(root, 'Chips-BaseCardPlugin/webpage-BCP'),
     ];
     const defaultLayoutPlugins = [
-      path.join(root, 'Chips-BoxLayoutPlugin'),
+      path.join(root, 'Chips-BoxLayoutPlugin/grid-BLP'),
     ];
     const defaultThemePlugins = [
       path.join(root, 'ThemePack/Chips-default'),

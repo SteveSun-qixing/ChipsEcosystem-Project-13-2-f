@@ -163,6 +163,7 @@ describe("layoutDefinition", () => {
 
   it("renders editor without exposing numeric column controls", async () => {
     const container = document.createElement("div");
+    container.style.overflow = "visible";
     document.body.appendChild(container);
     const onChange = vi.fn();
 
@@ -180,10 +181,19 @@ describe("layoutDefinition", () => {
     expect(container.querySelector('select')).toBeTruthy();
     expect(container.querySelector('input[type="number"]')).toBeNull();
     expect(container.textContent).toContain("移动端固定为两列");
+    expect(container.style.display).toBe("flex");
+    expect(container.style.overflow).toBe("hidden");
+    expect(container.querySelector('[data-chips-grid-layout-editor-root="true"]')).toBeTruthy();
+    const editorShell = container.querySelector('[data-scope="chips-grid-layout-editor"]') as HTMLElement | null;
+    const editorBody = container.querySelector('[data-part="body"]') as HTMLElement | null;
+    expect(editorShell?.style.height).toBe("100%");
+    expect(editorShell?.style.overflow).toBe("hidden");
+    expect(editorBody?.style.overflowY).toBe("auto");
 
     await act(async () => {
       cleanup?.();
     });
+    expect(container.style.overflow).toBe("visible");
   });
 
   it("keeps the layout shell visible when the box has no entries", async () => {

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -204,6 +206,16 @@ describe('BoxEditorPanel', () => {
     expect(frame).not.toBeNull();
     expect(frame?.style.width).toBe('100%');
     expect(frame?.style.height).toBe('100%');
+  });
+
+  it('keeps inactive tab panels from creating a blank overlay', async () => {
+    const css = await readFile(
+      resolve(process.cwd(), 'src/components/EditPanel/BoxEditorPanel.css'),
+      'utf-8',
+    );
+
+    expect(css).toContain('.box-editor-panel [data-scope="tabs"][data-part="panel"][hidden]');
+    expect(css).toContain('display: none');
   });
 
   it('shows entry titles only in the content list', async () => {

@@ -186,5 +186,5 @@
 
 补充约束：
 
-1. `HeadlessHostShell` 启动前，默认纳入安装的 `Chips-BoxLayoutPlugin` 必须先完成构建，使其 `dist/` 入口存在；
+1. `HeadlessHostShell` 启动前，默认纳入安装的 `Chips-BoxLayoutPlugin/grid-BLP` 必须先完成构建，使其 `dist/` 入口存在；
 2. 若默认 layout 插件尚未构建，服务端会在 Host 插件安装阶段报 `PLUGIN_ENTRY_NOT_FOUND: dist`，而不是进入业务接口阶段。

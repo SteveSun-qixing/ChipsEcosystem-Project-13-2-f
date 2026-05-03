@@ -865,6 +865,8 @@ const createBoxLayoutEditorDocument = (options: {
 export class BoxService {
   private readonly sessions = new Map<string, BoxSessionRecord>();
   private readonly extractedCoverRoots = new Map<string, string>();
+  private readonly boxCoverRootTokenByRootDir = new Map<string, string>();
+  private readonly boxCoverRootDirByToken = new Map<string, string>();
   private readonly runtime?: Pick<PluginRuntime, 'query'>;
   private readonly workspaceRoot: string;
   private readonly managedDocumentScheme?: string;
@@ -944,7 +946,7 @@ export class BoxService {
     const extractedRoot = await this.getOrCreateExtractedCoverRoot(boxFile);
     return {
       title: loaded.metadata.name,
-      coverUrl: pathToFileURL(path.join(extractedRoot, '.box/cover.html')).href,
+      coverUrl: this.createBoxCoverRootFileUrl(extractedRoot, '.box/cover.html'),
       mimeType: 'text/html',
       ratio: loaded.metadata.coverRatio
     };
@@ -1437,7 +1439,7 @@ export class BoxService {
     }
 
     return {
-      resourceUrl: pathToFileURL(absolutePath).href,
+      resourceUrl: this.createBoxSessionFileUrl(session, absolutePath),
       mimeType: this.mimeTypeForPath(normalizedAssetPath),
       cacheKey: `box-asset:${normalizedAssetPath}`
     };
@@ -2169,17 +2171,41 @@ export class BoxService {
 
     const identifier = pathSegments[0];
     const relativePath = normalizeManagedRelativePath(pathSegments.slice(1).join('/'));
-    if (!identifier || !relativePath || parsed.hostname !== 'session') {
+    if (!identifier || !relativePath) {
       return null;
     }
 
-    const session = this.renderSessionCache.get(identifier);
-    if (!session) {
-      return null;
+    if (parsed.hostname === 'session') {
+      const session = this.renderSessionCache.get(identifier);
+      if (!session) {
+        return null;
+      }
+
+      const absolutePath = path.resolve(session.rootDir, relativePath);
+      return isPathWithinRoot(session.rootDir, absolutePath) ? absolutePath : null;
     }
 
-    const absolutePath = path.resolve(session.rootDir, relativePath);
-    return isPathWithinRoot(session.rootDir, absolutePath) ? absolutePath : null;
+    if (parsed.hostname === 'box-session') {
+      const session = this.sessions.get(identifier);
+      if (!session) {
+        return null;
+      }
+
+      const absolutePath = path.resolve(session.extractedDir, relativePath);
+      return isPathWithinRoot(session.extractedDir, absolutePath) ? absolutePath : null;
+    }
+
+    if (parsed.hostname === 'box-cover') {
+      const rootDir = this.boxCoverRootDirByToken.get(identifier);
+      if (!rootDir) {
+        return null;
+      }
+
+      const absolutePath = path.resolve(rootDir, relativePath);
+      return isPathWithinRoot(rootDir, absolutePath) ? absolutePath : null;
+    }
+
+    return null;
   }
 
   private queryLayoutPlugins(): RenderableLayoutPluginRecord[] {
@@ -2463,6 +2489,49 @@ export class BoxService {
     }
 
     return `${this.managedDocumentScheme}://session/${encodeURIComponent(sessionId)}/${encodeManagedUrlPath(relativePath)}`;
+  }
+
+  private createBoxSessionFileUrl(session: BoxSessionRecord, absolutePath: string): string {
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    const relativePath = normalizeManagedRelativePath(
+      path.relative(session.extractedDir, absolutePath).split(path.sep).join('/'),
+    );
+    if (!relativePath) {
+      return pathToFileURL(absolutePath).href;
+    }
+
+    return `${this.managedDocumentScheme}://box-session/${encodeURIComponent(session.sessionId)}/${encodeManagedUrlPath(relativePath)}`;
+  }
+
+  private createBoxCoverRootFileUrl(rootDir: string, relativePath: string): string {
+    const normalizedRootDir = path.resolve(rootDir);
+    const normalizedRelativePath = normalizeManagedRelativePath(relativePath);
+    if (!normalizedRelativePath) {
+      return pathToFileURL(path.resolve(normalizedRootDir, relativePath)).href;
+    }
+
+    if (!this.managedDocumentScheme) {
+      return pathToFileURL(path.resolve(normalizedRootDir, normalizedRelativePath)).href;
+    }
+
+    const token = this.getOrCreateBoxCoverRootToken(normalizedRootDir);
+    return `${this.managedDocumentScheme}://box-cover/${encodeURIComponent(token)}/${encodeManagedUrlPath(normalizedRelativePath)}`;
+  }
+
+  private getOrCreateBoxCoverRootToken(rootDir: string): string {
+    const normalizedRootDir = path.resolve(rootDir);
+    const cachedToken = this.boxCoverRootTokenByRootDir.get(normalizedRootDir);
+    if (cachedToken) {
+      return cachedToken;
+    }
+
+    const token = createId();
+    this.boxCoverRootTokenByRootDir.set(normalizedRootDir, token);
+    this.boxCoverRootDirByToken.set(token, normalizedRootDir);
+    return token;
   }
 
   private async pathExists(targetPath: string): Promise<boolean> {

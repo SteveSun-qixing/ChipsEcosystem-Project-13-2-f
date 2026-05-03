@@ -46,6 +46,48 @@ const createRenderCardArchive = async (): Promise<string> => {
   return cardFile;
 };
 
+const createRenderBoxArchive = async (): Promise<string> => {
+  const source = path.join(workspace, 'render-protocol-box-source');
+  await fs.mkdir(path.join(source, '.box'), { recursive: true });
+  await fs.mkdir(path.join(source, 'assets/layouts/grid'), { recursive: true });
+  await fs.writeFile(
+    path.join(source, '.box/metadata.yaml'),
+    [
+      'chip_standards_version: "1.0.0"',
+      'box_id: "BxPrtcl001"',
+      'name: "Host Protocol Box"',
+      'created_at: "2026-05-03T10:00:00.000Z"',
+      'modified_at: "2026-05-03T10:00:00.000Z"',
+      'active_layout_type: "chips.layout.grid"',
+      'cover_ratio: "3:4"',
+      '',
+    ].join('\n'),
+    'utf-8',
+  );
+  await fs.writeFile(path.join(source, '.box/structure.yaml'), 'entries: []\n', 'utf-8');
+  await fs.writeFile(
+    path.join(source, '.box/content.yaml'),
+    [
+      'active_layout_type: "chips.layout.grid"',
+      'layout_configs:',
+      '  chips.layout.grid:',
+      '    schema_version: "1.0.0"',
+      '    props:',
+      '      sort_mode: "manual"',
+      '    asset_refs: []',
+      '',
+    ].join('\n'),
+    'utf-8',
+  );
+  await fs.writeFile(path.join(source, '.box/cover.html'), '<!doctype html><html><body>Box cover</body></html>', 'utf-8');
+  await fs.writeFile(path.join(source, 'assets/layouts/grid/background.webp'), 'box-background', 'utf-8');
+
+  const boxFile = path.join(workspace, 'render-protocol-demo.box');
+  const zip = new StoreZipService();
+  await zip.compress(source, boxFile);
+  return boxFile;
+};
+
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-host-render-protocol-'));
 });
@@ -169,6 +211,94 @@ describe('HostApplication managed render protocol', () => {
         isFile: true,
       });
       expect(unwrapBinaryRoutePayload(binary.data)).toEqual(MANAGED_RESOURCE_CONTENT);
+    } finally {
+      await bootstrapApp.stop();
+    }
+  }, 30_000);
+
+  it('serves box layout render documents through the managed protocol handler', async () => {
+    let protocolHandler:
+      | ((request: { url: string }) => Promise<Response> | Response)
+      | undefined;
+    const fetchMock = vi.fn(async (url: string) => new Response(url));
+
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      protocol: {
+        handle: vi.fn((scheme: string, handler: (request: { url: string }) => Promise<Response> | Response) => {
+          expect(scheme).toBe(CHIPS_RENDER_DOCUMENT_SCHEME);
+          protocolHandler = handler;
+        }),
+      },
+      net: {
+        fetch: fetchMock,
+      },
+    };
+
+    const bootstrapApp = new HostApplication({ workspacePath: workspace });
+    await bootstrapApp.start();
+    const bootstrapRuntime = new RuntimeClient(bootstrapApp.createBridge());
+
+    try {
+      const defaultTheme = await bootstrapRuntime.invoke<{ pluginId: string }>('plugin.install', {
+        manifestPath: path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml'),
+      });
+      await bootstrapRuntime.invoke('plugin.enable', { pluginId: defaultTheme.pluginId });
+      const gridLayout = await bootstrapRuntime.invoke<{ pluginId: string }>('plugin.install', {
+        manifestPath: path.resolve(process.cwd(), '../Chips-BoxLayoutPlugin/grid-BLP/manifest.yaml'),
+      });
+      await bootstrapRuntime.invoke('plugin.enable', { pluginId: gridLayout.pluginId });
+
+      const boxFile = await createRenderBoxArchive();
+      const opened = await bootstrapRuntime.invoke<{
+        sessionId: string;
+        box: unknown;
+        initialView: unknown;
+      }>('box.openView', {
+        boxFile,
+      });
+      const rendered = await bootstrapRuntime.invoke<{
+        view: {
+          documentUrl: string;
+          sessionId: string;
+        };
+      }>('box.renderLayoutFrame', {
+        layoutType: 'chips.layout.grid',
+        sessionId: opened.sessionId,
+        box: opened.box,
+        initialView: opened.initialView,
+        config: {},
+      });
+
+      expect(protocolHandler).toBeTypeOf('function');
+      expect(rendered.view.documentUrl.startsWith('chips-render://session/')).toBe(true);
+      expect(rendered.view.sessionId).toMatch(/^box-layout-/);
+
+      const response = await protocolHandler?.({ url: rendered.view.documentUrl });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const resolvedFileUrl = response ? await response.text() : '';
+      expect(resolvedFileUrl.startsWith('file://')).toBe(true);
+      expect(resolvedFileUrl.endsWith('/index.html')).toBe(true);
+
+      const asset = await bootstrapRuntime.invoke<{
+        resource: {
+          resourceUrl: string;
+        };
+      }>('box.readBoxAsset', {
+        sessionId: opened.sessionId,
+        assetPath: 'assets/layouts/grid/background.webp',
+      });
+      expect(asset.resource.resourceUrl.startsWith('chips-render://box-session/')).toBe(true);
+
+      const assetResponse = await protocolHandler?.({ url: asset.resource.resourceUrl });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      const resolvedAssetUrl = assetResponse ? await assetResponse.text() : '';
+      expect(resolvedAssetUrl.startsWith('file://')).toBe(true);
+      expect(resolvedAssetUrl.endsWith('/assets/layouts/grid/background.webp')).toBe(true);
+
+      await bootstrapRuntime.invoke('box.releaseRenderSession', { sessionId: rendered.view.sessionId });
+      await bootstrapRuntime.invoke('box.closeView', { sessionId: opened.sessionId });
     } finally {
       await bootstrapApp.stop();
     }

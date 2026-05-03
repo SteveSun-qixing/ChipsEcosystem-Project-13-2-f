@@ -151,6 +151,62 @@ describe('BoxService', () => {
     });
   });
 
+  it('serves box cover documents through managed render urls when configured', async () => {
+    const workspace = await createWorkspace();
+    const sourceDir = path.join(workspace, 'source-box');
+    const boxFile = path.join(workspace, 'travel.box');
+    const cardFile = path.join(workspace, 'cards/day-01.card');
+    await writeText(cardFile, 'demo card');
+    await createValidBoxDirectory(sourceDir, cardFile);
+
+    const service = new BoxService(undefined, { managedDocumentScheme: 'chips-render' });
+    await service.pack(sourceDir, boxFile);
+
+    const cover = await service.renderCover(boxFile);
+    expect(cover.coverUrl.startsWith('chips-render://box-cover/')).toBe(true);
+
+    const coverPath = service.resolveManagedDocumentFilePath(cover.coverUrl);
+    expect(coverPath?.endsWith(path.join('.box', 'cover.html'))).toBe(true);
+    await expect(fs.readFile(coverPath ?? '', 'utf-8')).resolves.toContain('旅行箱封面');
+  });
+
+  it('serves box session assets through managed render urls when configured', async () => {
+    const workspace = await createWorkspace();
+    const sourceDir = path.join(workspace, 'source-box');
+    const boxFile = path.join(workspace, 'travel.box');
+    const cardFile = path.join(workspace, 'cards/day-01.card');
+    await writeText(cardFile, 'demo card');
+    await createValidBoxDirectory(sourceDir, cardFile);
+
+    const service = new BoxService(undefined, { managedDocumentScheme: 'chips-render' });
+    await service.pack(sourceDir, boxFile);
+    const opened = await service.openView(boxFile, {
+      ownerKey: 'app:test-viewer',
+    });
+
+    try {
+      const asset = await service.readBoxAsset(opened.sessionId, 'assets/layouts/grid/background.webp', 'app:test-viewer');
+      expect(asset.mimeType).toBe('image/webp');
+      expect(asset.resourceUrl.startsWith('chips-render://box-session/')).toBe(true);
+
+      const assetPath = service.resolveManagedDocumentFilePath(asset.resourceUrl);
+      expect(assetPath?.endsWith(path.join('assets', 'layouts', 'grid', 'background.webp'))).toBe(true);
+      await expect(fs.readFile(assetPath ?? '', 'utf-8')).resolves.toBe('layout-background');
+
+      const coverResource = await service.resolveEntryResource(
+        opened.sessionId,
+        ENTRY_ID,
+        { kind: 'cover' },
+        {
+          ownerKey: 'app:test-viewer',
+        }
+      );
+      expect(coverResource.resourceUrl.startsWith('chips-render://box-session/')).toBe(true);
+    } finally {
+      await service.closeView(opened.sessionId, 'app:test-viewer');
+    }
+  });
+
   it('opens box view sessions and serves entry detail plus box assets', async () => {
     const workspace = await createWorkspace();
     const sourceDir = path.join(workspace, 'source-box');
@@ -445,6 +501,96 @@ describe('BoxService', () => {
     const body = await fs.readFile(documentPath, 'utf-8');
     expect(body).toContain('html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }');
     expect(body).toContain('#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }');
+
+    await service.releaseRenderSession(rendered.sessionId);
+  });
+
+  it('renders box layout view documents through managed render urls with managed frame CSP', async () => {
+    const workspace = await createWorkspace();
+    const pluginDir = path.join(workspace, 'plugins/chips-layout-grid');
+    await writeText(
+      path.join(pluginDir, 'index.mjs'),
+      [
+        'export const layoutDefinition = {',
+        '  pluginId: "chips.layout.grid.plugin",',
+        '  layoutType: "chips.layout.grid",',
+        '  displayName: "Grid Layout",',
+        '  createDefaultConfig() { return {}; },',
+        '  normalizeConfig(input = {}) { return input; },',
+        '  validateConfig() { return { valid: true, errors: {} }; },',
+        '  renderView() {},',
+        '  renderEditor() {},',
+        '};',
+        '',
+      ].join('\n'),
+    );
+
+    const runtime: Pick<PluginRuntime, 'query'> = {
+      query(filter) {
+        if (filter?.type !== 'layout') {
+          return [];
+        }
+        return [
+          {
+            enabled: true,
+            installPath: pluginDir,
+            manifestPath: path.join(pluginDir, 'manifest.yaml'),
+            installedAt: Date.now(),
+            manifest: {
+              id: 'chips.layout.grid.plugin',
+              version: '1.0.0',
+              type: 'layout',
+              name: 'Grid Layout',
+              permissions: [],
+              entry: 'index.mjs',
+              layout: {
+                layoutType: 'chips.layout.grid',
+                displayName: 'Grid Layout',
+              },
+            },
+          },
+        ];
+      },
+    };
+
+    const service = new BoxService(undefined, { runtime, managedDocumentScheme: 'chips-render' });
+
+    const rendered = await service.renderLayoutFrame({
+      layoutType: 'chips.layout.grid',
+      sessionId: 'box-view-session',
+      box: {
+        boxId: BOX_ID,
+        boxFile: path.join(workspace, 'travel.box'),
+        name: '旅行箱',
+        activeLayoutType: 'chips.layout.grid',
+        availableLayouts: ['chips.layout.grid'],
+        capabilities: {
+          listEntries: true,
+          readEntryDetail: true,
+          renderEntryCover: true,
+          resolveEntryResource: true,
+          readBoxAsset: true,
+          prefetchEntries: true,
+          openEntry: true,
+        },
+      },
+      initialView: {
+        items: [],
+        total: 0,
+      },
+      config: {},
+      theme: {
+        id: 'theme.test',
+        tokens: {},
+      },
+    });
+
+    expect(rendered.documentUrl.startsWith('chips-render://session/')).toBe(true);
+    const documentPath = service.resolveManagedDocumentFilePath(rendered.documentUrl);
+    expect(documentPath?.endsWith('index.html')).toBe(true);
+
+    const body = await fs.readFile(documentPath ?? '', 'utf-8');
+    expect(body).toContain('frame-src about: file: http: https: blob: chips-render:');
 
     await service.releaseRenderSession(rendered.sessionId);
   });

@@ -160,19 +160,26 @@ export class HostCore {
   }
 
   public resolveManagedDocumentFilePath(requestUrl: string): string | null {
-    return this.getCardService().resolveManagedDocumentFilePath(requestUrl) ?? null;
+    return (
+      this.getCardService().resolveManagedDocumentFilePath(requestUrl)
+      ?? this.getBoxService().resolveManagedDocumentFilePath(requestUrl)
+      ?? null
+    );
+  }
+
+  private resolveManagedDocumentScheme(): string | undefined {
+    const electron = loadElectronModule();
+    return electron?.protocol && typeof electron.protocol.handle === 'function' && electron?.net?.fetch
+      ? CHIPS_RENDER_DOCUMENT_SCHEME
+      : undefined;
   }
 
   private getCardService(): CardService {
     if (!this.cardService) {
-      const electron = loadElectronModule();
       this.cardService = new CardService({
         runtime: this.runtime,
         workspaceRoot: process.cwd(),
-        managedDocumentScheme:
-          electron?.protocol && typeof electron.protocol.handle === 'function' && electron?.net?.fetch
-            ? CHIPS_RENDER_DOCUMENT_SCHEME
-            : undefined,
+        managedDocumentScheme: this.resolveManagedDocumentScheme(),
       });
     }
 
@@ -196,6 +203,7 @@ export class HostCore {
       this.boxService = new BoxService(undefined, {
         runtime: this.runtime,
         workspaceRoot: process.cwd(),
+        managedDocumentScheme: this.resolveManagedDocumentScheme(),
       });
     }
 

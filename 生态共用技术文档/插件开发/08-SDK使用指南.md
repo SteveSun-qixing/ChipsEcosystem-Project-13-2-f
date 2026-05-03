@@ -482,6 +482,10 @@ client.card.editorPanel.render({
 
 说明：
 
+- `resources.readBoxAsset` 和布局查看运行时中的 `readBoxAsset` 一样，返回的是 Host 托管的资源入口；Electron 桌面端可使用 `chips-render://...` 等受控协议地址，插件应直接消费返回的 `resourceUrl`，不得把它转换为 `file://` 或写入布局配置。
+
+说明：
+
 - `coverFrame` 返回卡片封面 iframe，并同时返回 `title/ratio` 元信息；标题、副文案、角标和操作按钮由应用层自行布局。
 - `compositeWindow` 返回复合卡片 iframe 窗口。
 - `compositeWindow.mode` 只允许 `view | preview`。
@@ -542,6 +546,7 @@ client.box.documentWindow.render({
 
 - SDK 内部会依次调用 Host `box.inspect -> box.readLayoutDescriptor -> box.normalizeLayoutConfig -> box.getLayoutInitialQuery -> box.openView -> box.renderLayoutFrame`；
 - Host 负责装载布局插件、创建查看会话和生成正式布局文档；
+- `documentWindow` 返回的 iframe URL 是 Host 托管的正式文档入口，Electron 桌面端可使用 `chips-render://...` 等受控协议地址；应用层不得假定它一定是 `file://`，也不得绕过 Host 自行读取临时布局文档；
 - SDK 负责挂载 iframe，并桥接 `chips.box-layout:*` 运行时消息；
 - 销毁返回的 iframe 时，正式链路需要同时关闭 `box.openView` 创建的查看会话并释放 `box.renderLayoutFrame` 创建的 render session；SDK 返回的 `dispose()` 已封装该流程。
 

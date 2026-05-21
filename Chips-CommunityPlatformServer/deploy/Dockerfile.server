@@ -6,9 +6,12 @@ COPY package.json ./
 COPY package-lock.json ./
 COPY Chips-SDK /app/Chips-SDK
 COPY Chips-Host /app/Chips-Host
+COPY Chips-CardViewer /app/Chips-CardViewer
+COPY Chips-PhotoViewer /app/Chips-PhotoViewer
 COPY Chips-CommunityPlatformServer /app/Chips-CommunityPlatformServer
 COPY Chips-ComponentLibrary /app/Chips-ComponentLibrary
 COPY Chips-BaseCardPlugin /app/Chips-BaseCardPlugin
+COPY Chips-BoxLayoutPlugin/grid-BLP /app/Chips-BoxLayoutPlugin/grid-BLP
 COPY Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
 COPY Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
 COPY Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin
@@ -18,8 +21,12 @@ COPY ThemePack/Chips-default /app/ThemePack/Chips-default
 RUN npm ci --no-audit --no-fund
 
 RUN npm run build --workspace chips-host \
+ && npm run build --workspace chips-card-viewer \
+ && npm run build --workspace Chips-PhotoViewer \
  && npm run build --workspace chips.basecard.image \
  && npm run build --workspace chips.basecard.richtext \
+ && npm run build --workspace chips.basecard.webpage \
+ && npm run build --workspace chips.layout.grid \
  && npm run build --workspace chips.module.chips.htmltoimage.plugin \
  && npm run build --workspace chips.module.chips.cardtohtml.plugin \
  && npm run build --workspace chips.module.chips.fileconversion.plugin \
@@ -41,8 +48,12 @@ COPY Chips-CommunityPlatformServer/packages/server/package.json ./packages/serve
 COPY Chips-CommunityPlatformServer/scripts ./scripts
 
 COPY --from=ecosystem-artifacts /app/Chips-Host /app/Chips-Host
+COPY --from=ecosystem-artifacts /app/Chips-CardViewer /app/Chips-CardViewer
+COPY --from=ecosystem-artifacts /app/Chips-PhotoViewer /app/Chips-PhotoViewer
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/webpage-BCP /app/Chips-BaseCardPlugin/webpage-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BoxLayoutPlugin/grid-BLP /app/Chips-BoxLayoutPlugin/grid-BLP
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
 COPY --from=ecosystem-artifacts /app/ThemePack/Chips-default /app/ThemePack/Chips-default
 
@@ -71,8 +82,12 @@ COPY Chips-CommunityPlatformServer/packages/admin/package.json ./packages/admin/
 COPY Chips-CommunityPlatformServer/packages/server/package.json ./packages/server/
 
 COPY --from=ecosystem-artifacts /app/Chips-Host /app/Chips-Host
+COPY --from=ecosystem-artifacts /app/Chips-CardViewer /app/Chips-CardViewer
+COPY --from=ecosystem-artifacts /app/Chips-PhotoViewer /app/Chips-PhotoViewer
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/webpage-BCP /app/Chips-BaseCardPlugin/webpage-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BoxLayoutPlugin/grid-BLP /app/Chips-BoxLayoutPlugin/grid-BLP
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-FileConversion-Plugin /app/Chips-ModulePlugin/Chips-FileConversion-Plugin

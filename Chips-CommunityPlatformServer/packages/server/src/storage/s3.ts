@@ -17,6 +17,17 @@ function trimTrailingSlash(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 }
 
+function toStorageTarget(bucket: string, key: string): { bucket: string; key: string } {
+  if (!env.S3_BUCKET_NAME) {
+    return { bucket, key };
+  }
+
+  return {
+    bucket: env.S3_BUCKET_NAME,
+    key: `${bucket}/${key}`,
+  };
+}
+
 export function getPublicBucketBaseUrl(bucket: string): string {
   if (env.S3_PUBLIC_URL) {
     return `${trimTrailingSlash(env.S3_PUBLIC_URL)}/${bucket}`;
@@ -40,6 +51,10 @@ export function getS3Client(): S3Client {
         secretAccessKey: env.S3_SECRET_KEY,
       },
       forcePathStyle: env.S3_FORCE_PATH_STYLE,
+      // 七牛云 S3 兼容接口会把 AWS SDK 默认流式校验的 aws-chunked
+      // 编码头持久化为对象元数据，浏览器直连公开域名时会误按该编码解码。
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
   }
   return s3Instance;
@@ -57,6 +72,7 @@ export async function uploadFile(params: {
 }): Promise<string> {
   const { bucket, key, filePath, contentType } = params;
   const s3 = getS3Client();
+  const target = toStorageTarget(bucket, key);
 
   const fileStream = fs.createReadStream(filePath);
   const stat = fs.statSync(filePath);
@@ -65,8 +81,8 @@ export async function uploadFile(params: {
 
   await s3.send(
     new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
+      Bucket: target.bucket,
+      Key: target.key,
       Body: fileStream,
       ContentLength: stat.size,
       ContentType: detectedContentType,
@@ -88,13 +104,14 @@ export async function uploadBuffer(params: {
 }): Promise<string> {
   const { bucket, key, body, contentType } = params;
   const s3 = getS3Client();
+  const target = toStorageTarget(bucket, key);
 
   const buffer = typeof body === 'string' ? Buffer.from(body, 'utf-8') : body;
 
   await s3.send(
     new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
+      Bucket: target.bucket,
+      Key: target.key,
       Body: buffer,
       ContentLength: buffer.byteLength,
       ContentType: contentType,
@@ -109,7 +126,8 @@ export async function uploadBuffer(params: {
  */
 export async function deleteObject(bucket: string, key: string): Promise<void> {
   const s3 = getS3Client();
-  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  const target = toStorageTarget(bucket, key);
+  await s3.send(new DeleteObjectCommand({ Bucket: target.bucket, Key: target.key }));
 }
 
 /**
@@ -117,14 +135,15 @@ export async function deleteObject(bucket: string, key: string): Promise<void> {
  */
 export async function deleteObjectsByPrefix(bucket: string, prefix: string): Promise<void> {
   const s3 = getS3Client();
+  const target = toStorageTarget(bucket, prefix);
 
   let continuationToken: string | undefined;
 
   do {
     const list = await s3.send(
       new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: prefix,
+        Bucket: target.bucket,
+        Prefix: target.key,
         ContinuationToken: continuationToken,
       }),
     );
@@ -133,7 +152,7 @@ export async function deleteObjectsByPrefix(bucket: string, prefix: string): Pro
     if (objects.length > 0) {
       await s3.send(
         new DeleteObjectsCommand({
-          Bucket: bucket,
+          Bucket: target.bucket,
           Delete: {
             Objects: objects.map((o) => ({ Key: o.Key! })),
             Quiet: true,
@@ -151,8 +170,9 @@ export async function deleteObjectsByPrefix(bucket: string, prefix: string): Pro
  */
 export async function objectExists(bucket: string, key: string): Promise<boolean> {
   const s3 = getS3Client();
+  const target = toStorageTarget(bucket, key);
   try {
-    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    await s3.send(new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }));
     return true;
   } catch (err: unknown) {
     if ((err as { name?: string }).name === 'NotFound') return false;
@@ -162,7 +182,7 @@ export async function objectExists(bucket: string, key: string): Promise<boolean
 
 /**
  * 构造对象公开访问 URL
- * Nginx 将 /cdn/* 路由到 MinIO
+ * 生产环境优先使用对象存储自定义 HTTPS 域名。
  */
 export function buildObjectUrl(bucket: string, key: string): string {
   return `${getPublicBucketBaseUrl(bucket)}/${key}`;
@@ -219,15 +239,15 @@ function detectContentType(filePath: string): string {
     '.flac': 'audio/flac',
     '.aac': 'audio/aac',
     '.pdf': 'application/pdf',
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.json': 'application/json',
-    '.yaml': 'application/yaml',
-    '.yml': 'application/yaml',
-    '.txt': 'text/plain',
-    '.vtt': 'text/vtt',
-    '.srt': 'application/x-subrip',
+    '.html': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.yaml': 'application/yaml; charset=utf-8',
+    '.yml': 'application/yaml; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8',
+    '.vtt': 'text/vtt; charset=utf-8',
+    '.srt': 'application/x-subrip; charset=utf-8',
   };
   return map[ext] ?? 'application/octet-stream';
 }

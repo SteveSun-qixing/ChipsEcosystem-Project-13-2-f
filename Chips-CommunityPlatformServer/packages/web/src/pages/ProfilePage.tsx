@@ -345,7 +345,7 @@ function toPublicProfile(user: {
 export default function ProfilePage() {
   const { username: rawUsername } = useParams<{ username: string }>();
   const { t } = useAppPreferences();
-  const { user: authUser, isLoading: isAuthLoading, refreshUser } = useAuth();
+  const { user: authUser, isLoading: isAuthLoading, logout, refreshUser } = useAuth();
   const [reloadKey, setReloadKey] = useState(0);
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
   const [manageMode, setManageMode] = useState(false);
@@ -566,6 +566,14 @@ export default function ProfilePage() {
     setIsProfileSettingsOpen(false);
   };
 
+  const handleLogout = () => {
+    setIsProfileSettingsOpen(false);
+    setManageMode(false);
+    setSelectedWorkKeys([]);
+    setManageError('');
+    void logout();
+  };
+
   let pageBody: ReactNode;
 
   if (state.loading) {
@@ -613,6 +621,7 @@ export default function ProfilePage() {
           user={state.user}
           isOwner={isOwner}
           onOpenSettings={() => setIsProfileSettingsOpen(true)}
+          onLogout={handleLogout}
         />
         <WorkGrid
           items={state.items}

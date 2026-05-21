@@ -6,6 +6,7 @@ export type IconName =
   | 'arrow-up-right'
   | 'upload'
   | 'settings'
+  | 'logout'
   | 'card'
   | 'box'
   | 'clock'
@@ -61,6 +62,14 @@ function getIconPath(name: IconName) {
           <path d="M18.6 12h1.6" />
           <path d="m5.6 18.4 1.15-1.15" />
           <path d="m17.25 6.75 1.15-1.15" />
+        </>
+      );
+    case 'logout':
+      return (
+        <>
+          <path d="M9 21H5.8A2.8 2.8 0 0 1 3 18.2V5.8A2.8 2.8 0 0 1 5.8 3H9" />
+          <path d="M16 17l5-5-5-5" />
+          <path d="M21 12H9" />
         </>
       );
     case 'card':

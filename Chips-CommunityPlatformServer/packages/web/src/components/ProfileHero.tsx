@@ -7,9 +7,10 @@ interface ProfileHeroProps {
   user: PublicUserProfile;
   isOwner: boolean;
   onOpenSettings: () => void;
+  onLogout: () => void;
 }
 
-export function ProfileHero({ user, isOwner, onOpenSettings }: ProfileHeroProps) {
+export function ProfileHero({ user, isOwner, onOpenSettings, onLogout }: ProfileHeroProps) {
   const { t } = useAppPreferences();
   const displayName = user.displayName || user.username;
 
@@ -37,6 +38,15 @@ export function ProfileHero({ user, isOwner, onOpenSettings }: ProfileHeroProps)
               >
                 <Icon name="settings" />
                 <span>{t('profile.settingsOpen')}</span>
+              </button>
+              <button
+                type="button"
+                className="button button--ghost profile-hero__logout"
+                onClick={onLogout}
+                aria-label={t('common.logout')}
+              >
+                <Icon name="logout" />
+                <span>{t('common.logout')}</span>
               </button>
             </div>
           ) : null}

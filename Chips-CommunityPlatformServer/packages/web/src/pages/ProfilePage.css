@@ -195,7 +195,8 @@
   min-height: 248px;
 }
 
-.profile-hero__settings {
+.profile-hero__settings,
+.profile-hero__logout {
   z-index: 2;
   min-height: 46px;
   padding: 0 16px;
@@ -205,7 +206,13 @@
   box-shadow: 0 20px 44px rgba(18, 24, 43, 0.14);
 }
 
-.profile-hero__settings span {
+.profile-hero__logout {
+  color: var(--ccps-sys-text-muted);
+  box-shadow: 0 14px 30px rgba(18, 24, 43, 0.1);
+}
+
+.profile-hero__settings span,
+.profile-hero__logout span {
   white-space: nowrap;
 }
 
@@ -270,8 +277,10 @@
 
 .profile-hero__toolbar {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   justify-content: flex-end;
-  align-items: flex-start;
+  align-items: flex-end;
   grid-area: toolbar;
 }
 
@@ -802,7 +811,12 @@
       'bio';
   }
 
-  .profile-hero__settings {
+  .profile-hero__toolbar {
+    align-items: stretch;
+  }
+
+  .profile-hero__settings,
+  .profile-hero__logout {
     min-height: 42px;
     padding: 0 14px;
   }

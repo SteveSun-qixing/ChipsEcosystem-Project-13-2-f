@@ -54,6 +54,13 @@ async function tryRefreshToken(): Promise<string | null> {
       credentials: 'include',
     });
 
+    if (res.status === 204) {
+      accessToken = null;
+      refreshQueue.forEach((cb) => cb(null));
+      refreshQueue = [];
+      return null;
+    }
+
     if (!res.ok) {
       accessToken = null;
       refreshQueue.forEach((cb) => cb(null));

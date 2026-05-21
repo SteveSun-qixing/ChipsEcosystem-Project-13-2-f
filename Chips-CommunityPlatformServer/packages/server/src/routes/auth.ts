@@ -101,24 +101,28 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       body['refreshToken'];
 
     if (!refreshToken) {
-      throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'Refresh token not provided');
+      reply.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/v1/auth' });
+      return reply.status(204).send();
     }
 
     let payload: import('../services/auth.service').JwtPayload;
     try {
       payload = AuthService.verifyRefreshToken(fastify, refreshToken);
     } catch {
-      throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'Invalid or expired refresh token');
+      reply.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/v1/auth' });
+      return reply.status(204).send();
     }
 
     if (!payload.jti) {
-      throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'Invalid refresh token structure');
+      reply.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/v1/auth' });
+      return reply.status(204).send();
     }
 
     // 检查黑名单
     const revoked = await AuthService.isTokenRevoked(payload.jti);
     if (revoked) {
-      throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'Refresh token has been revoked');
+      reply.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/v1/auth' });
+      return reply.status(204).send();
     }
 
     // 吊销旧 refresh token（rotation）
@@ -127,7 +131,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await UserService.findById(payload.userId);
     if (!user || !user.isActive) {
-      throw AppError.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, 'User account not available');
+      reply.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/api/v1/auth' });
+      return reply.status(204).send();
     }
 
     const tokens = AuthService.generateTokenPair(fastify, user);

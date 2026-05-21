@@ -28,6 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({}),
         });
 
+        if (res.status === 204) {
+          setUser(null);
+          return;
+        }
+
         if (res.ok) {
           const data = await res.json();
           const token = data.data?.accessToken as string;

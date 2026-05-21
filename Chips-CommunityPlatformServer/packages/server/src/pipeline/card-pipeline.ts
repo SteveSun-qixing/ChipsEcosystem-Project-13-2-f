@@ -8,10 +8,12 @@ import { cards } from '../db/schema/cards.js';
 import { unpackCard } from './card-unpack.js';
 import { uploadResourcesToCdn } from './cdn-upload.js';
 import { replaceContentUrls, replaceCoverHtmlUrls } from './url-replace.js';
-import { Bucket } from '../storage/buckets.js';
+import { Bucket, type BucketName } from '../storage/buckets.js';
 import { buildObjectUrl, uploadFile } from '../storage/s3.js';
 import { hostIntegration } from '../services/host-integration.js';
 import { inlineFileBackedRichTextContent } from './richtext-inline.js';
+import { env } from '../config/env.js';
+import { mapWithConcurrency } from '../utils/async.js';
 
 function writeYamlFile(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, yaml.dump(value, { noRefs: true }), 'utf-8');
@@ -176,6 +178,31 @@ function writeHtmlFile(filePath: string, html: string): void {
   fs.writeFileSync(filePath, html, 'utf-8');
 }
 
+async function uploadDirectoryFiles(params: {
+  rootDir: string;
+  relativePaths: string[];
+  bucket: BucketName;
+  keyPrefix: string;
+}): Promise<Map<string, string>> {
+  const uploadedUrls = new Map<string, string>();
+
+  await mapWithConcurrency(
+    params.relativePaths,
+    env.CARD_PIPELINE_HTML_UPLOAD_CONCURRENCY,
+    async (relativePath) => {
+      const absolutePath = path.join(params.rootDir, relativePath);
+      const url = await uploadFile({
+        bucket: params.bucket,
+        key: `${params.keyPrefix}/${relativePath}`,
+        filePath: absolutePath,
+      });
+      uploadedUrls.set(relativePath, url);
+    },
+  );
+
+  return uploadedUrls;
+}
+
 /**
  * 卡片上传处理流水线编排器
  *
@@ -303,34 +330,23 @@ export async function runCardPipeline(params: {
     );
 
     console.log(`[Pipeline] Step 9: Uploading converted HTML directory to CDN...`);
-    let indexHtmlUrl = '';
-    for (const relativePath of htmlFiles) {
-      const absolutePath = path.join(htmlRootDir, relativePath);
-      const url = await uploadFile({
-        bucket: Bucket.CARD_HTML,
-        key: `${userId}/${cardDbId}/${relativePath}`,
-        filePath: absolutePath,
-      });
-      if (relativePath === 'index.html') {
-        indexHtmlUrl = url;
-      }
-    }
+    const htmlUrls = await uploadDirectoryFiles({
+      rootDir: htmlRootDir,
+      relativePaths: htmlFiles,
+      bucket: Bucket.CARD_HTML,
+      keyPrefix: `${userId}/${cardDbId}`,
+    });
+    const indexHtmlUrl = htmlUrls.get('index.html') ?? '';
 
     console.log(`[Pipeline] Step 9: Uploading standalone cover HTML output...`);
     const coverFiles = listFilesRecursive(coverOutputDir);
-    let coverUrl: string | null = null;
-    for (const relativePath of coverFiles) {
-      const absolutePath = path.join(coverOutputDir, relativePath);
-      const url = await uploadFile({
-        bucket: Bucket.COVERS,
-        key: `cards/${userId}/${cardDbId}/${relativePath}`,
-        filePath: absolutePath,
-      });
-
-      if (relativePath === 'index.html') {
-        coverUrl = url;
-      }
-    }
+    const coverUrls = await uploadDirectoryFiles({
+      rootDir: coverOutputDir,
+      relativePaths: coverFiles,
+      bucket: Bucket.COVERS,
+      keyPrefix: `cards/${userId}/${cardDbId}`,
+    });
+    const coverUrl = coverUrls.get('index.html') ?? null;
 
     const repackedMetadata = readYamlFile<Record<string, unknown>>(path.join(tempDir, '.card', 'metadata.yaml'));
     const repackedStructure = readYamlFile<Record<string, unknown>>(path.join(tempDir, '.card', 'structure.yaml'));

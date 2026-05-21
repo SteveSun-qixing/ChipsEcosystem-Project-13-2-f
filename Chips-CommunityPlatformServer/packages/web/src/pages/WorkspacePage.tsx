@@ -12,11 +12,13 @@ import './WorkspacePage.css';
 
 type QueuePatch = Partial<UploadQueueItem> | ((item: UploadQueueItem) => Partial<UploadQueueItem>);
 
+const WORKSPACE_UPLOAD_CONCURRENCY = 3;
+
 export default function WorkspacePage() {
   const { t } = useAppPreferences();
   const { user } = useAuth();
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
-  const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
+  const [activeUploadIds, setActiveUploadIds] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
 
   const profileHref = useMemo(() => (user ? `/@${user.username}` : '/login'), [user]);
@@ -131,29 +133,36 @@ export default function WorkspacePage() {
   );
 
   useEffect(() => {
-    if (activeUploadId) {
+    const activeIds = new Set(activeUploadIds);
+    const availableSlots = WORKSPACE_UPLOAD_CONCURRENCY - activeIds.size;
+
+    if (availableSlots <= 0) {
       return;
     }
 
-    const nextItem = queue.find((item) => item.status === 'queued');
+    const nextItems = queue
+      .filter((item) => item.status === 'queued' && !activeIds.has(item.localId))
+      .slice(0, availableSlots);
 
-    if (!nextItem) {
+    if (nextItems.length === 0) {
       return;
     }
 
-    setActiveUploadId(nextItem.localId);
+    setActiveUploadIds((current) => [...current, ...nextItems.map((item) => item.localId)]);
 
-    void processQueueItem(nextItem)
-      .catch((error) => {
-        updateQueueItem(nextItem.localId, {
-          status: 'error',
-          errorMessage: getErrorMessage(error, t('common.error')),
+    nextItems.forEach((nextItem) => {
+      void processQueueItem(nextItem)
+        .catch((error) => {
+          updateQueueItem(nextItem.localId, {
+            status: 'error',
+            errorMessage: getErrorMessage(error, t('common.error')),
+          });
+        })
+        .finally(() => {
+          setActiveUploadIds((current) => current.filter((localId) => localId !== nextItem.localId));
         });
-      })
-      .finally(() => {
-        setActiveUploadId((current) => (current === nextItem.localId ? null : current));
-      });
-  }, [activeUploadId, processQueueItem, queue, t, updateQueueItem]);
+    });
+  }, [activeUploadIds, processQueueItem, queue, t, updateQueueItem]);
 
   const handleFiles = useCallback(
     (files: File[]) => {

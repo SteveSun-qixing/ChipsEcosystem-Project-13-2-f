@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "列表布局插件 layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": ["sortMode", "background", "topRegion"],
+      "additionalProperties": false,
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "image"
+              }
+            },
+            "required": ["mode"]
+          },
+          "then": {
+            "required": ["assetPath"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "html"
+              }
+            },
+            "required": ["mode"]
+          },
+          "then": {
+            "required": ["html"]
+          }
+        }
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string"
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

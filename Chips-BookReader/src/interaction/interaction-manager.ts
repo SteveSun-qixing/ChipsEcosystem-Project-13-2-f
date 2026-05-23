@@ -66,6 +66,7 @@ export class InteractionManager {
   public attachToFrame(target: Document): void {
     this.frameCleanup?.();
     const cleanups = [
+      this.keyboardHandler.attach(target),
       this.clickHandler.attach(target),
       this.wheelHandler.attach(target),
       this.touchHandler.attach(target),

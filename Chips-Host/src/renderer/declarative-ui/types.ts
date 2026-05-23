@@ -129,6 +129,36 @@ export interface NodeModifiers {
   testId?: string;
 }
 
+export type DeclarativeUIDiagnosticSeverity = 'error' | 'warning' | 'info';
+export type DeclarativeUIDiagnosticStage =
+  | 'node-normalize'
+  | 'slot-validate'
+  | 'event-bind'
+  | 'effect-dispatch';
+
+export interface DeclarativeUIDiagnostic {
+  nodeId: string;
+  type: UINodeType;
+  path: string;
+  stage: DeclarativeUIDiagnosticStage;
+  severity: DeclarativeUIDiagnosticSeverity;
+  code: string;
+  message: string;
+  suggestion?: string;
+  details?: unknown;
+}
+
+export interface SlotSchemaEntry {
+  type?: UINodeType | ReadonlyArray<UINodeType>;
+  required?: boolean;
+  multiple?: boolean;
+  part?: string;
+  role?: string;
+  description?: string;
+}
+
+export type SlotSchema = Record<string, SlotSchemaEntry>;
+
 export interface UINode {
   id: string;
   type: UINodeType;

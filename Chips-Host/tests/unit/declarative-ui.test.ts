@@ -8,11 +8,13 @@ import {
   Navigation,
   ScrollView,
   Section,
+  StandardCompoundSlotSchemas,
   Stack,
   Table,
   Text,
   Toolbar,
   View,
+  Command,
   bindNodeEvent,
   createCompoundComponent,
   createRuntimeEffect,
@@ -20,6 +22,7 @@ import {
   createUINode,
   createUIEffect,
   guardAgainstBooleanModeProps,
+  validateNodeEventBindings,
   withNodeModifiers
 } from '../../src/renderer/declarative-ui';
 
@@ -242,8 +245,148 @@ describe('Declarative UI', () => {
     expect(tree.modifiers?.layout).toMatchObject({ direction: 'vertical', gap: 'sm' });
   });
 
+  it('returns structured slot diagnostics for missing, repeated, undeclared, and mismatched slots', () => {
+    const Dialog = createCompoundComponent({
+      name: 'Dialog',
+      rootType: 'Section',
+      slots: StandardCompoundSlotSchemas.Dialog
+    });
+
+    const diagnostics = Dialog.validate({
+      root: {
+        id: 'confirm-dialog'
+      },
+      slots: {
+        body: Text({ id: 'dialog-body' }),
+        actions: [Toolbar({ id: 'dialog-actions' }), Toolbar({ id: 'dialog-actions-extra' })],
+        ghost: View({ id: 'dialog-ghost' })
+      }
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'DECLARATIVE_UI_SLOT_REQUIRED',
+          path: 'slots.content',
+          severity: 'error',
+          stage: 'slot-validate',
+          suggestion: expect.any(String)
+        }),
+        expect.objectContaining({
+          code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH',
+          nodeId: 'dialog-body',
+          path: 'slots.body',
+          details: expect.objectContaining({
+            expectedType: ['View', 'Stack', 'Section'],
+            actualType: 'Text'
+          })
+        }),
+        expect.objectContaining({
+          code: 'DECLARATIVE_UI_SLOT_MULTIPLE_FORBIDDEN',
+          path: 'slots.actions'
+        }),
+        expect.objectContaining({
+          code: 'DECLARATIVE_UI_SLOT_UNDEFINED',
+          path: 'slots.ghost'
+        })
+      ])
+    );
+  });
+
+  it('validates standard compound slot schemas for Tabs, Menu, Form, and DataGrid', () => {
+    const Tabs = createCompoundComponent({
+      name: 'Tabs',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.Tabs
+    });
+    const Menu = createCompoundComponent({
+      name: 'Menu',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.Menu
+    });
+    const CompoundForm = createCompoundComponent({
+      name: 'Form',
+      rootType: 'Form',
+      slots: StandardCompoundSlotSchemas.Form
+    });
+    const DataGrid = createCompoundComponent({
+      name: 'DataGrid',
+      rootType: 'Table',
+      slots: StandardCompoundSlotSchemas.DataGrid
+    });
+
+    expect(
+      Tabs.validate({
+        root: { id: 'tabs-root' },
+        slots: {
+          list: Toolbar({ id: 'tabs-list' }),
+          trigger: [View({ id: 'bad-trigger' })],
+          panel: [Section({ id: 'tabs-panel' })]
+        }
+      })
+    ).toEqual([expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.trigger' })]);
+    expect(
+      Menu.validate({
+        root: { id: 'menu-root' },
+        slots: {
+          content: Section({ id: 'menu-content' }),
+          item: [Command({ id: 'menu-open' })]
+        }
+      })
+    ).toEqual([]);
+    expect(
+      CompoundForm.validate({
+        root: { id: 'compound-form-root' },
+        slots: {
+          field: [Form({ id: 'form-field' })],
+          control: [Command({ id: 'form-submit' })]
+        }
+      })
+    ).toEqual([]);
+    expect(
+      DataGrid.validate({
+        root: { id: 'grid-root' },
+        slots: {
+          header: Table({ id: 'grid-header' }),
+          row: [Table({ id: 'grid-row' })],
+          cell: [Table({ id: 'grid-cell' })]
+        }
+      })
+    ).toEqual([]);
+  });
+
   it('blocks boolean mode props in compound components', () => {
     expect(() => guardAgainstBooleanModeProps({ isCompact: true }, 'DemoPanel')).toThrow();
+  });
+
+  it('diagnoses invalid event bindings without executing handlers', () => {
+    const node = {
+      id: 'event-root',
+      type: 'View',
+      events: {
+        onOpen: 'open.handler'
+      },
+      children: [
+        {
+          id: 'event-child',
+          type: 'Command',
+          events: {
+            onPress: '' as string
+          }
+        }
+      ]
+    } as Parameters<typeof validateNodeEventBindings>[0];
+
+    expect(validateNodeEventBindings(node)).toEqual([
+      expect.objectContaining({
+        nodeId: 'event-child',
+        type: 'Command',
+        path: 'events.onPress',
+        stage: 'event-bind',
+        code: 'DECLARATIVE_UI_EVENT_HANDLER_INVALID',
+        suggestion: expect.any(String)
+      })
+    ]);
   });
 
   it('dispatches ui-effect and telemetry-effect through effect executors', async () => {

@@ -29,7 +29,8 @@ export {
 } from './node-model';
 export {
   createCompoundComponent,
-  guardAgainstBooleanModeProps
+  guardAgainstBooleanModeProps,
+  StandardCompoundSlotSchemas
 } from './composition';
 export {
   EffectDispatcher,
@@ -38,7 +39,10 @@ export {
   createRuntimeEffect,
   createTelemetryEffect
 } from './effects';
-export { EventBindingRegistry } from './events';
+export {
+  EventBindingRegistry,
+  validateNodeEventBindings
+} from './events';
 export type {
   SemanticPrimitiveType,
   UIModifierKey,
@@ -58,6 +62,11 @@ export type {
   PresentationModifier,
   MotionModifier,
   NodeModifiers,
+  DeclarativeUIDiagnosticSeverity,
+  DeclarativeUIDiagnosticStage,
+  DeclarativeUIDiagnostic,
+  SlotSchemaEntry,
+  SlotSchema,
   EffectType,
   EffectDispatchPhase,
   EffectDescriptor,

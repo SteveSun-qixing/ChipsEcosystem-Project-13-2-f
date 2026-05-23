@@ -2,6 +2,7 @@ import { createError } from '../../shared/errors';
 import { cloneUINode } from './node-model';
 import { EffectDispatcher } from './effects';
 import type {
+  DeclarativeUIDiagnostic,
   EffectDescriptor,
   EffectDispatchPhase,
   EventHandler,
@@ -19,6 +20,60 @@ const normalizeEffects = (result?: EventHandlerResult | void): ReadonlyArray<Eff
   return result.effects;
 };
 
+const createEventDiagnostic = (
+  node: UINode,
+  eventName: string,
+  code: string,
+  message: string,
+  suggestion: string,
+  details?: unknown
+): DeclarativeUIDiagnostic => ({
+  nodeId: node.id,
+  type: node.type,
+  path: `events.${eventName}`,
+  stage: 'event-bind',
+  severity: 'error',
+  code,
+  message,
+  suggestion,
+  details
+});
+
+export const validateNodeEventBindings = (node: UINode): DeclarativeUIDiagnostic[] => {
+  const diagnostics: DeclarativeUIDiagnostic[] = [];
+  for (const [eventName, handlerId] of Object.entries(node.events ?? {})) {
+    if (eventName.trim().length === 0) {
+      diagnostics.push(
+        createEventDiagnostic(
+          node,
+          eventName,
+          'DECLARATIVE_UI_EVENT_BINDING_INVALID',
+          'Event name cannot be empty',
+          'Use a semantic event name such as onSubmit or onOpenFile.'
+        )
+      );
+    }
+    if (typeof handlerId !== 'string' || handlerId.trim().length === 0) {
+      diagnostics.push(
+        createEventDiagnostic(
+          node,
+          eventName,
+          'DECLARATIVE_UI_EVENT_HANDLER_INVALID',
+          `Event "${eventName}" must reference a non-empty handler id`,
+          'Register executable logic in EventBindingRegistry and reference its handler id from the node.',
+          { handlerIdType: typeof handlerId }
+        )
+      );
+    }
+  }
+
+  for (const child of node.children ?? []) {
+    diagnostics.push(...validateNodeEventBindings(child));
+  }
+
+  return diagnostics;
+};
+
 export interface EventDispatchResult {
   handled: boolean;
   effects: ReadonlyArray<EffectDescriptor>;
@@ -31,7 +86,7 @@ export class EventBindingRegistry {
   public constructor(private readonly dispatcher: EffectDispatcher = new EffectDispatcher()) {}
 
   public registerHandler(handlerId: string, handler: EventHandler): void {
-    if (handlerId.trim().length === 0) {
+    if (typeof handlerId !== 'string' || handlerId.trim().length === 0) {
       throw createError('DECLARATIVE_UI_EVENT_HANDLER_INVALID', 'handlerId cannot be empty');
     }
     this.handlers.set(handlerId, handler);
@@ -42,7 +97,12 @@ export class EventBindingRegistry {
   }
 
   public bind(node: UINode, eventName: string, handlerId: string): UINode {
-    if (eventName.trim().length === 0 || handlerId.trim().length === 0) {
+    if (
+      typeof eventName !== 'string' ||
+      typeof handlerId !== 'string' ||
+      eventName.trim().length === 0 ||
+      handlerId.trim().length === 0
+    ) {
       throw createError('DECLARATIVE_UI_EVENT_BINDING_INVALID', 'eventName and handlerId are required', {
         eventName,
         handlerId

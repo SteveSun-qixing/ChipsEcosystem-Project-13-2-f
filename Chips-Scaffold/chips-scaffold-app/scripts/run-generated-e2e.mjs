@@ -36,6 +36,10 @@ async function createWorkspaceSandbox(sandboxRoot) {
           "Chips-Scaffold/*",
           "ThemePack/*",
         ],
+        overrides: {
+          "tldts": "7.0.30",
+          "tldts-core": "7.0.30",
+        },
       },
       null,
       2,
@@ -108,6 +112,59 @@ async function main() {
     }
     if (generatedPackage.volta?.extends !== "../../package.json") {
       throw new Error("E2E: chipsdev create 应为新工程写入根工作区 volta.extends");
+    }
+
+    const manifestText = await readFile(path.join(projectDir, "manifest.yaml"), "utf8");
+    for (const permission of ["command.read", "command.write", "command.invoke"]) {
+      if (!manifestText.includes(`  - ${permission}`)) {
+        throw new Error(`E2E: 应用模板 manifest 缺少 ${permission}`);
+      }
+    }
+    if (/^commands\s*:/m.test(manifestText)) {
+      throw new Error("E2E: 应用模板不应生成未冻结的 manifest.commands 字段");
+    }
+
+    const commandSource = await readFile(
+      path.join(projectDir, "src", "commands", "app-commands.ts"),
+      "utf8",
+    );
+    const commandRuntimeSource = await readFile(
+      path.join(projectDir, "src", "commands", "useAppCommands.ts"),
+      "utf8",
+    );
+    for (const requiredText of [
+      "titleKey",
+      "descriptionKey",
+      "ariaLabelKey",
+      "handlerId",
+      "menuPlacement",
+      "toolbarPlacement",
+      "paletteKeywords",
+    ]) {
+      if (!commandSource.includes(requiredText)) {
+        throw new Error(`E2E: command schema 缺少 ${requiredText}`);
+      }
+    }
+    for (const requiredText of [
+      "client.command.register",
+      "client.command.invoke",
+      "client.command.onInvoked",
+      "createCommandAdapter",
+    ]) {
+      if (!commandRuntimeSource.includes(requiredText)) {
+        throw new Error(`E2E: command runtime 缺少 ${requiredText}`);
+      }
+    }
+    if (/window\.chips\.invoke\(["']command\./.test(commandRuntimeSource)) {
+      throw new Error("E2E: command runtime 不得绕过 SDK 直连 Bridge action");
+    }
+
+    const zhCnText = await readFile(path.join(projectDir, "i18n", "zh-CN.json"), "utf8");
+    const enUsText = await readFile(path.join(projectDir, "i18n", "en-US.json"), "utf8");
+    for (const key of ["showWelcome", "refreshTheme", "lastInvoked", "palette"]) {
+      if (!zhCnText.includes(key) || !enUsText.includes(key)) {
+        throw new Error(`E2E: i18n 文件缺少 command key：${key}`);
+      }
     }
   } finally {
     await rm(sandboxRoot, { recursive: true, force: true });

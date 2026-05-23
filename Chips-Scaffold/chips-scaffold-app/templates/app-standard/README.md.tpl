@@ -44,8 +44,11 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 ├─ src/
 │  ├─ main.tsx          # React 入口（挂载到 index.html）
 │  ├─ App.tsx           # 根组件
+│  ├─ commands/         # 命令 schema、handlerId 与注册/事件接线
 │  ├─ components/       # 示例组件
 │  ├─ hooks/            # 示例 hooks（如 useChipsBridge）
+│  ├─ i18n/             # 本地 i18n adapter
+│  ├─ runtime/          # SDK client 等运行时入口
 ├─ config/
 │  ├─ app-config.ts     # 应用级配置（Feature Flag 等）
 │  └─ logging.ts        # 日志封装（预留接入 Host 日志服务）
@@ -65,9 +68,20 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 - UI 能力：`@chips/component-library`（组件库对外使用总览）
 - 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本
 - 主题系统：通过组件库 `ChipsThemeProvider` 接入主题运行时，并监听 `theme.changed` 事件，不在业务代码中硬编码颜色/圆角/阴影
-- 系统能力调用：仅通过 `window.chips.*`（Bridge API），不越层直接访问 Host 内部模块
+- 系统能力调用：优先通过 `chips-sdk`，必要时才使用 `window.chips.*`（Bridge API），不越层直接访问 Host 内部模块
 
-## 5. 下一步开发建议
+## 5. Command 基线
+
+模板默认声明 `command.read / command.write / command.invoke` 权限，并在 `src/commands/app-commands.ts` 集中维护 command metadata：
+
+- command 只写 `titleKey / descriptionKey / ariaLabelKey`，不写原始文案；
+- `handlerId` 是插件侧处理器标识，Host 不接收函数；
+- `menuPlacement / toolbarPlacement / paletteKeywords` 是菜单、工具栏和命令面板的同一事实来源；
+- `src/commands/useAppCommands.ts` 负责通过 `client.command.register()` 注册命令，并监听 `command.invoked` 后按 `handlerId` 执行本地处理。
+
+根组件通过 `ChipsCommandProvider` 注入 `createCommandAdapter(client)`，`ChipsMenuBar / ChipsToolbar / ChipsCommandPalette` 会从 `client.command.list()` 消费命令并统一触发 `client.command.invoke()`。不要在菜单、工具栏或命令面板中直接绑定业务函数。
+
+## 6. 下一步开发建议
 
 1. 根据业务需要在 `src/features/` 或 `src/components/` 中扩展页面与组件；
 2. 通过组件库与主题系统接入真实 UI 并补充交互测试；

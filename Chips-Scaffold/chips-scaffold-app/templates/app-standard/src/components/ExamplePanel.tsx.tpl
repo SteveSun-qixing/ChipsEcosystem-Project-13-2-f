@@ -1,8 +1,21 @@
 import React from "react";
-import { ChipsButton } from "@chips/component-library";
+import { ChipsButton, resolveI18nText } from "@chips/component-library";
+import { translateLocalKey } from "../i18n/locales";
 
 interface ExamplePanelProps {
   title: string;
+}
+
+function t(key: string, params?: Record<string, string | number>): string {
+  return translateLocalKey(key, "zh-CN", params);
+}
+
+function text(key: string, fallback = key): string {
+  return resolveI18nText({
+    i18n: t,
+    key,
+    fallback,
+  });
 }
 
 export function ExamplePanel({ title }: ExamplePanelProps) {
@@ -12,15 +25,14 @@ export function ExamplePanel({ title }: ExamplePanelProps) {
       style={{
         padding: 16,
         borderRadius: 8,
-        border: "1px solid var(--chips-border-subtle, rgba(17,17,17,0.08))",
+        border: "1px solid var(--chips-border-subtle)",
       }}
     >
       <h2 style={{ fontSize: 14, marginBottom: 8 }}>{title}</h2>
       <p style={{ fontSize: 12, marginBottom: 12 }}>
-        这是由脚手架生成的示例面板组件，你可以在此基础上扩展业务 UI。
+        {text("app-standard.examplePanel.body")}
       </p>
-      <ChipsButton variant="secondary">了解更多</ChipsButton>
+      <ChipsButton variant="secondary">{text("app-standard.actions.learnMore")}</ChipsButton>
     </section>
   );
 }
-

@@ -49,14 +49,28 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const pkgPath = path.join(targetDir, "package.json");
     const indexHtmlPath = path.join(targetDir, "index.html");
     const eslintConfigPath = path.join(targetDir, ".eslintrc.cjs");
+    const appCommandsPath = path.join(targetDir, "src/commands/app-commands.ts");
+    const useAppCommandsPath = path.join(targetDir, "src/commands/useAppCommands.ts");
+    const localesPath = path.join(targetDir, "src/i18n/locales.ts");
+    const runtimeClientPath = path.join(targetDir, "src/runtime/chips-client.ts");
+    const commandTestPath = path.join(targetDir, "tests/unit/commands.test.ts");
 
     await stat(manifestPath);
     await stat(pkgPath);
     await stat(indexHtmlPath);
     await stat(eslintConfigPath);
+    await stat(appCommandsPath);
+    await stat(useAppCommandsPath);
+    await stat(localesPath);
+    await stat(runtimeClientPath);
+    await stat(commandTestPath);
 
     const manifestContent = await readFile(manifestPath, "utf8");
     const packageContent = JSON.parse(await readFile(pkgPath, "utf8"));
+    const appCommandsContent = await readFile(appCommandsPath, "utf8");
+    const useAppCommandsContent = await readFile(useAppCommandsPath, "utf8");
+    const zhCnContent = await readFile(path.join(targetDir, "i18n/zh-CN.json"), "utf8");
+    const enUsContent = await readFile(path.join(targetDir, "i18n/en-US.json"), "utf8");
     assert.ok(
       manifestContent.includes("type: app"),
       "manifest.yaml 应声明 type: app",
@@ -76,6 +90,16 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     assert.ok(
       manifestContent.includes("surface:\n    defaultKind: window"),
       "manifest.yaml 应包含 ui.surface 默认容器配置",
+    );
+    for (const permission of ["command.read", "command.write", "command.invoke"]) {
+      assert.ok(
+        manifestContent.includes(`  - ${permission}`),
+        `manifest.yaml 应声明 ${permission}`,
+      );
+    }
+    assert.ok(
+      !/^commands\s*:/m.test(manifestContent),
+      "manifest.yaml 不应声明未冻结的 commands 字段",
     );
     assert.equal(
       packageContent.dependencies["@chips/component-library"],
@@ -97,6 +121,41 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "^0.1.0",
       "模板必须保持 SDK 正式 semver 依赖，由生态根工作区解析本地包",
     );
+    assert.ok(
+      appCommandsContent.includes("titleKey") &&
+        appCommandsContent.includes("descriptionKey") &&
+        appCommandsContent.includes("ariaLabelKey") &&
+        appCommandsContent.includes("handlerId"),
+      "命令模板应集中声明 i18n key 与 handlerId",
+    );
+    for (const field of ["title", "description", "ariaLabel", "label"]) {
+      assert.ok(
+        !new RegExp(`(^|[,{]\\s*)${field}\\s*:`, "m").test(appCommandsContent),
+        `命令模板不应包含原始文案字段 ${field}`,
+      );
+    }
+    assert.ok(
+      useAppCommandsContent.includes("client.command.register") &&
+        useAppCommandsContent.includes("client.command.invoke") &&
+        useAppCommandsContent.includes("client.command.onInvoked"),
+      "命令运行时应通过 SDK command API 注册、调用并监听 handlerId",
+    );
+    assert.ok(
+      !useAppCommandsContent.includes('window.chips.invoke("command.') &&
+        !useAppCommandsContent.includes("BrowserWindow") &&
+        !useAppCommandsContent.includes("ipcRenderer"),
+      "命令运行时不得绕过 SDK 直连 Host/Electron",
+    );
+    for (const key of [
+      "showWelcome",
+      "refreshTheme",
+      "toolbar",
+      "palette",
+      "lastInvoked",
+    ]) {
+      assert.ok(zhCnContent.includes(key), `中文 i18n 应包含 command key：${key}`);
+      assert.ok(enUsContent.includes(key), `英文 i18n 应包含 command key：${key}`);
+    }
 
     for (const dirName of FORBIDDEN_PROJECT_DIRS) {
       await assert.rejects(

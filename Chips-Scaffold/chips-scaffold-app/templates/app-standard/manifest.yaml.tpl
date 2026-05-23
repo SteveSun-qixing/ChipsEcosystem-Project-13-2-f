@@ -18,6 +18,9 @@ keywords:
 permissions:
   - theme.read
   - i18n.read
+  - command.read
+  - command.write
+  - command.invoke
 
 runtime:
   targets:

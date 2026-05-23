@@ -36,7 +36,12 @@ async function main() {
     "config/logging.ts.tpl",
     "i18n/zh-CN.json.tpl",
     "i18n/en-US.json.tpl",
+    "src/i18n/locales.ts.tpl",
+    "src/runtime/chips-client.ts.tpl",
+    "src/commands/app-commands.ts.tpl",
+    "src/commands/useAppCommands.ts.tpl",
     "tests/unit/app.test.tsx.tpl",
+    "tests/unit/commands.test.ts.tpl",
     "tests/e2e/basic-flow.test.ts.tpl"
   ];
 
@@ -78,6 +83,88 @@ async function main() {
         );
         hasError = true;
       }
+    }
+
+    try {
+      const manifestText = await readFile(path.join(base, "manifest.yaml.tpl"), "utf8");
+      for (const permission of ["command.read", "command.write", "command.invoke"]) {
+        if (!manifestText.includes(`  - ${permission}`)) {
+          console.error(
+            `[check-templates] 模板 ${dir} manifest.yaml.tpl 缺少权限：${permission}`,
+          );
+          hasError = true;
+        }
+      }
+      if (/^commands\s*:/m.test(manifestText)) {
+        console.error(
+          `[check-templates] 模板 ${dir} 不应声明未冻结的 manifest.commands 字段`,
+        );
+        hasError = true;
+      }
+
+      const commandText = await readFile(
+        path.join(base, "src/commands/app-commands.ts.tpl"),
+        "utf8",
+      );
+      for (const field of ["title", "description", "ariaLabel", "label"]) {
+        const rawFieldPattern = new RegExp(`(^|[,{]\\s*)${field}\\s*:`, "m");
+        if (rawFieldPattern.test(commandText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} command definition 不应包含原始文案字段：${field}`,
+          );
+          hasError = true;
+        }
+      }
+      for (const requiredText of [
+        "titleKey",
+        "descriptionKey",
+        "ariaLabelKey",
+        "handlerId",
+        "menuPlacement",
+        "toolbarPlacement",
+        "paletteKeywords",
+      ]) {
+        if (!commandText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} command definition 缺少字段：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const sourceFiles = [
+        "src/App.tsx.tpl",
+        "src/components/ExamplePanel.tsx.tpl",
+        "src/commands/app-commands.ts.tpl",
+        "src/commands/useAppCommands.ts.tpl",
+        "src/runtime/chips-client.ts.tpl",
+        "src/i18n/locales.ts.tpl",
+      ];
+      const sourceText = (
+        await Promise.all(
+          sourceFiles.map((rel) => readFile(path.join(base, rel), "utf8")),
+        )
+      ).join("\n");
+      for (const forbiddenPattern of [
+        /window\.chips\.invoke\(["']command\./,
+        /\bBrowserWindow\b/,
+        /\bipcRenderer\b/,
+        /\bfrom\s+["'](?:node:)?fs["']/,
+        /\brequire\(["'](?:node:)?fs["']\)/,
+      ]) {
+        if (forbiddenPattern.test(sourceText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} 源码包含禁止的 Host/Node 直连模式：${forbiddenPattern}`,
+          );
+          hasError = true;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[check-templates] 模板 ${dir} command 契约扫描失败`,
+        error,
+      );
+      hasError = true;
     }
   }
 

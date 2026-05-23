@@ -130,6 +130,246 @@ describe('UnifiedRenderingEngine', () => {
     expect(second?.layout.y).toBe(50);
   });
 
+  it('returns layout constraints, responsive state, and performance metrics for L9 layout primitives', async () => {
+    const engine = new UnifiedRenderingEngine();
+    const declaration: DeclarativeNode = {
+      id: 'root',
+      type: 'Section',
+      props: {
+        gapCpx: 20
+      },
+      children: [
+        {
+          id: 'stack',
+          type: 'Stack',
+          props: {
+            direction: 'horizontal',
+            gapPx: 6
+          },
+          children: [
+            {
+              id: 'stack-a',
+              type: 'View',
+              props: {
+                widthPx: 120,
+                heightPx: 40
+              }
+            },
+            {
+              id: 'stack-b',
+              type: 'View',
+              props: {
+                widthPx: 80,
+                heightPx: 60
+              }
+            }
+          ]
+        },
+        {
+          id: 'grid',
+          type: 'Grid',
+          props: {
+            columns: 3,
+            itemCount: 8,
+            rowHeightPx: 30,
+            gapPx: 4
+          },
+          children: Array.from({ length: 8 }).map((_, index) => ({
+            id: `grid-${index}`,
+            type: 'View',
+            props: {
+              heightPx: 30
+            }
+          }))
+        },
+        {
+          id: 'form',
+          type: 'Form',
+          children: [
+            {
+              id: 'field',
+              type: 'Text',
+              props: {
+                text: 'field'
+              }
+            }
+          ]
+        },
+        {
+          id: 'scroll',
+          type: 'ScrollView',
+          props: {
+            scrollAxis: 'both',
+            heightPx: 90
+          },
+          children: [
+            {
+              id: 'scroll-content',
+              type: 'Text',
+              props: {
+                text: 'scroll content'
+              }
+            }
+          ]
+        },
+        {
+          id: 'table',
+          type: 'Table',
+          props: {
+            itemCount: 12,
+            rowHeightPx: 22,
+            gapPx: 1,
+            overscan: 1
+          },
+          children: Array.from({ length: 12 }).map((_, index) => ({
+            id: `row-${index}`,
+            type: 'Text',
+            props: {
+              text: `row-${index}`
+            }
+          }))
+        },
+        {
+          id: 'navigation',
+          type: 'Navigation',
+          children: [
+            {
+              id: 'command',
+              type: 'Command',
+              props: {
+                label: 'Open'
+              },
+              events: {
+                onPress: 'command.open'
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = await engine.render(declaration, 'app-root', createContext(), {
+      skipEffects: true
+    });
+    const byId = new Map(result.root.children.map((child) => [child.id, child]));
+
+    expect(result.root.layoutConstraints).toMatchObject({
+      axis: 'vertical',
+      gapPx: 20,
+      widthPx: 1024,
+      scrollAxis: 'none'
+    });
+    expect(result.root.responsive).toMatchObject({
+      breakpoint: 'expanded',
+      scale: 1,
+      viewportWidthPx: 1024,
+      viewportHeightPx: 480
+    });
+    expect(byId.get('stack')?.layoutConstraints).toMatchObject({
+      axis: 'horizontal',
+      gapPx: 6
+    });
+    expect(byId.get('stack')?.layout.height).toBe(60);
+    expect(byId.get('stack')?.children[1]?.layout.x).toBe(126);
+    expect(byId.get('grid')?.layoutConstraints).toMatchObject({
+      axis: 'grid',
+      columns: 3,
+      rows: 3,
+      itemCount: 8,
+      itemExtentPx: 30,
+      columnWidthPx: 338.667
+    });
+    expect(byId.get('grid')?.children[1]?.layout.x).toBe(342.667);
+    expect(byId.get('form')?.layoutConstraints).toMatchObject({
+      axis: 'form',
+      gapPx: 16
+    });
+    expect(byId.get('scroll')?.layoutConstraints).toMatchObject({
+      axis: 'vertical',
+      overflow: 'scroll',
+      scrollAxis: 'both'
+    });
+    expect(byId.get('table')?.layoutConstraints).toMatchObject({
+      axis: 'table',
+      itemCount: 12,
+      itemExtentPx: 22
+    });
+    expect(byId.get('table')?.visibleRange).toEqual({
+      start: 0,
+      end: 12,
+      total: 12
+    });
+    expect(byId.get('navigation')?.layoutConstraints).toMatchObject({
+      axis: 'navigation',
+      gapPx: 8
+    });
+    expect(result.performanceMetrics).toMatchObject({
+      nodeCount: 32,
+      layoutNodeCount: 32,
+      commitNodeCount: 32,
+      pipelineDurations: result.pipelineDurations
+    });
+    expect(() => JSON.stringify(result.performanceMetrics)).not.toThrow();
+  });
+
+  it('uses container cpx constraints and responsive breakpoints during layout compute', async () => {
+    const engine = new UnifiedRenderingEngine();
+    const declaration: DeclarativeNode = {
+      id: 'root',
+      type: 'Section',
+      props: {
+        widthCpx: 512,
+        minWidthCpx: 400,
+        maxWidthCpx: 600,
+        minHeightCpx: 64,
+        maxHeightPx: 80,
+        gapCpx: 10
+      },
+      children: [
+        {
+          id: 'text',
+          type: 'Text',
+          props: {
+            text: 'compact'
+          }
+        }
+      ]
+    };
+
+    const result = await engine.render(
+      declaration,
+      'app-root',
+      {
+        ...createContext(),
+        viewport: {
+          width: 512,
+          height: 360,
+          scrollTop: 0,
+          scrollLeft: 0
+        }
+      },
+      {
+        skipEffects: true
+      }
+    );
+
+    expect(result.root.layout.width).toBe(256);
+    expect(result.root.layout.height).toBe(32);
+    expect(result.root.layoutConstraints).toMatchObject({
+      containerWidthPx: 512,
+      widthPx: 256,
+      minWidthPx: 200,
+      maxWidthPx: 300,
+      minHeightPx: 32,
+      maxHeightPx: 80,
+      gapPx: 5
+    });
+    expect(result.root.responsive).toMatchObject({
+      breakpoint: 'compact',
+      scale: 0.5
+    });
+  });
+
   it('enforces semantic consistency across all adapters', async () => {
     const engine = new UnifiedRenderingEngine();
     const declaration: DeclarativeNode = {

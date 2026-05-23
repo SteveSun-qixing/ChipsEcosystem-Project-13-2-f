@@ -13,7 +13,7 @@ export {
   isQualityGateBlockingDiagnostic,
   isRenderNodeDiagnostic
 } from './diagnostics';
-export { computeNodeLayout, computeChildOrigin } from './layout-compute';
+export { computeNodeLayout, computeNodeLayoutWidth, computeChildAvailableWidth, computeChildOrigin } from './layout-compute';
 export {
   appRootAdapter,
   cardIframeAdapter,
@@ -32,7 +32,12 @@ export type {
   EffectDispatchSummary,
   IncrementalPlan,
   IncrementalScheduleResult,
+  LayoutAxis,
+  LayoutBreakpoint,
+  LayoutConstraints,
   LayoutFrame,
+  LayoutOverflow,
+  LayoutScrollAxis,
   NormalizedNode,
   PreparedRenderNode,
   RenderCommitInput,
@@ -45,6 +50,7 @@ export type {
   RenderEffectKind,
   RenderExecutionOptions,
   RenderNodeDiagnostic,
+  RenderPerformanceMetrics,
   RenderPipelineStage,
   RenderQualityGateResult,
   RenderQueueBatch,
@@ -52,6 +58,7 @@ export type {
   RenderTarget,
   RenderTargetAdapter,
   RenderViewport,
+  ResponsiveLayoutState,
   ThemeSnapshot,
   VisibleRange
 } from './types';

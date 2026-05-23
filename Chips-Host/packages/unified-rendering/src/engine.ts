@@ -4,8 +4,8 @@ import { appRootAdapter, cardIframeAdapter, createDefaultAdapters } from './adap
 import { collectSingleNodeContractDiagnostics } from './contract-validator';
 import { createRenderDiagnosticForNode, evaluateRenderQualityGate, isRenderNodeDiagnostic } from './diagnostics';
 import { dispatchRenderEffects } from './effect-dispatch';
-import { hashSemanticTree, toNumber } from './helpers';
-import { computeChildOrigin, computeNodeLayout } from './layout-compute';
+import { hashSemanticTree, toNumber, toRounded } from './helpers';
+import { computeChildAvailableWidth, computeChildOrigin, computeNodeLayout, computeNodeLayoutWidth } from './layout-compute';
 import { normalizeDeclarationTree } from './node-normalizer';
 import { createIncrementalPlan, RenderQueueScheduler } from './render-queue';
 import { collectThemeDiagnosticsForNode, resolveNodeProps } from './theme-resolver';
@@ -97,9 +97,14 @@ const toSemanticSnapshot = (node: PreparedRenderNode): Record<string, unknown> =
     events: node.events,
     themeScope: node.themeScope,
     boundaryLevel: node.boundaryLevel,
+    layoutConstraints: node.layoutConstraints,
+    responsive: node.responsive,
     children: node.children.map((child) => toSemanticSnapshot(child))
   };
 };
+
+const countPreparedNodes = (node: PreparedRenderNode): number =>
+  1 + node.children.reduce((sum, child) => sum + countPreparedNodes(child), 0);
 
 export class UnifiedRenderingEngine {
   private readonly adapterByTarget: Map<RenderTarget, RenderTargetAdapter>;
@@ -283,8 +288,10 @@ export class UnifiedRenderingEngine {
       const nextRegionFallback = ownBoundary === 'region' ? node.errorBoundary?.fallback : regionFallback;
 
       try {
+        const width = computeNodeLayoutWidth(node.props, availableWidth);
+        const childAvailableWidth = computeChildAvailableWidth(node, width, node.children.length);
         const children = node.children.map((child) =>
-          buildPreparedNode(child, 0, 0, availableWidth, nextRegionBoundary, nextRegionFallback)
+          buildPreparedNode(child, 0, 0, childAvailableWidth, nextRegionBoundary, nextRegionFallback)
         );
 
         const layout = computeNodeLayout({
@@ -317,6 +324,8 @@ export class UnifiedRenderingEngine {
           themeScope: node.themeScope,
           effects: [...node.effects],
           layout: layout.frame,
+          layoutConstraints: layout.constraints,
+          responsive: layout.responsive,
           visibleRange: layout.visibleRange,
           children: positionedChildren,
           boundaryLevel: ownBoundary,
@@ -367,6 +376,21 @@ export class UnifiedRenderingEngine {
             width,
             height
           },
+          layoutConstraints: {
+            unit: 'px',
+            axis: 'none',
+            overflow: 'visible',
+            scrollAxis: 'none',
+            containerWidthPx: toRounded(availableWidth),
+            widthPx: width,
+            heightPx: height
+          },
+          responsive: {
+            breakpoint: context.viewport.width < 640 ? 'compact' : context.viewport.width < 1024 ? 'regular' : 'expanded',
+            scale: toRounded(context.viewport.width / 1024, 4),
+            viewportWidthPx: context.viewport.width,
+            viewportHeightPx: context.viewport.height
+          },
           children: [],
           boundaryLevel: ownBoundary,
           diagnostics: [diagnostic]
@@ -410,6 +434,12 @@ export class UnifiedRenderingEngine {
       diagnostics,
       qualityGate: evaluateRenderQualityGate(diagnostics),
       effects,
+      performanceMetrics: {
+        nodeCount: countPreparedNodes(prepared),
+        layoutNodeCount: countPreparedNodes(prepared),
+        commitNodeCount: countPreparedNodes(prepared),
+        pipelineDurations: durations
+      },
       pipelineDurations: durations,
       incremental
     };

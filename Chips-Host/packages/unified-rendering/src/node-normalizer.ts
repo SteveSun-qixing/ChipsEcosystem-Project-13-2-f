@@ -15,17 +15,35 @@ const DEFAULT_PROPS_BY_TYPE: Record<string, Record<string, unknown>> = {
     gapCpx: 12
   },
   Form: {
-    submitMode: 'manual'
+    submitMode: 'manual',
+    gapCpx: 16
   },
   List: {
     incremental: true,
     itemHeightPx: 40,
-    overscan: 2
+    overscan: 2,
+    gapCpx: 0
   },
   Table: {
     incremental: true,
     rowHeightPx: 40,
-    overscan: 4
+    overscan: 4,
+    gapCpx: 0
+  },
+  Section: {
+    widthCpx: 1024,
+    gapCpx: 16
+  },
+  ScrollView: {
+    widthCpx: 1024,
+    scrollAxis: 'vertical',
+    overflow: 'scroll',
+    gapCpx: 0
+  },
+  Navigation: {
+    widthCpx: 1024,
+    variant: 'stack',
+    gapCpx: 8
   }
 };
 

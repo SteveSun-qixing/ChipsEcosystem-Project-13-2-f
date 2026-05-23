@@ -7,6 +7,9 @@ interface BenchmarkSample {
   commitMs: number;
   layoutMs: number;
   normalizeMs: number;
+  nodeCount: number;
+  layoutNodeCount: number;
+  commitNodeCount: number;
 }
 
 interface BenchmarkStats {
@@ -16,6 +19,11 @@ interface BenchmarkStats {
   min: number;
   max: number;
 }
+
+const RENDER_COMMIT_P95_THRESHOLD_MS = 32;
+const LAYOUT_COMPUTE_P95_THRESHOLD_MS = 40;
+const TOTAL_RENDER_P95_THRESHOLD_MS = 120;
+const LONG_TASK_RATIO_THRESHOLD = 0.05;
 
 const toMs = (start: bigint, end: bigint): number => Number(end - start) / 1_000_000;
 
@@ -40,9 +48,13 @@ const summarize = (values: number[]): BenchmarkStats => {
 };
 
 const createTree = (count: number): DeclarativeNode => {
+  const gridCount = Math.max(12, Math.floor(count * 0.25));
+  const tableCount = Math.max(12, Math.floor(count * 0.2));
+  const listCount = Math.max(12, count - gridCount - tableCount - 8);
+
   return {
     id: 'root',
-    type: 'View',
+    type: 'Section',
     props: {
       gapPx: 8,
       widthCpx: 1024
@@ -50,7 +62,7 @@ const createTree = (count: number): DeclarativeNode => {
     children: [
       {
         id: 'header',
-        type: 'View',
+        type: 'Navigation',
         children: [
           {
             id: 'title',
@@ -62,16 +74,62 @@ const createTree = (count: number): DeclarativeNode => {
         ]
       },
       {
+        id: 'form',
+        type: 'Form',
+        props: {
+          gapCpx: 10
+        },
+        children: [
+          {
+            id: 'filter-label',
+            type: 'Text',
+            props: {
+              text: 'Filter'
+            }
+          },
+          {
+            id: 'filter-command',
+            type: 'Command',
+            props: {
+              label: 'Apply filter'
+            },
+            events: {
+              onPress: 'benchmark.filter.apply'
+            }
+          }
+        ]
+      },
+      {
+        id: 'grid',
+        type: 'Grid',
+        props: {
+          incremental: true,
+          columns: 4,
+          itemCount: gridCount,
+          rowHeightPx: 36,
+          overscan: 1,
+          gapPx: 4
+        },
+        children: Array.from({ length: gridCount }).map((_, index) => ({
+          id: `grid-item-${index}`,
+          type: 'View',
+          props: {
+            heightPx: 36,
+            role: 'grid-item'
+          }
+        }))
+      },
+      {
         id: 'list',
         type: 'List',
         props: {
           incremental: true,
-          itemCount: count,
+          itemCount: listCount,
           itemHeightPx: 30,
           overscan: 2,
           gapPx: 2
         },
-        children: Array.from({ length: count }).map((_, index) => ({
+        children: Array.from({ length: listCount }).map((_, index) => ({
           id: `item-${index}`,
           type: 'View',
           props: {
@@ -89,6 +147,34 @@ const createTree = (count: number): DeclarativeNode => {
             }
           ]
         }))
+      },
+      {
+        id: 'scroll',
+        type: 'ScrollView',
+        props: {
+          heightPx: 320,
+          scrollAxis: 'vertical'
+        },
+        children: [
+          {
+            id: 'table',
+            type: 'Table',
+            props: {
+              incremental: true,
+              itemCount: tableCount,
+              rowHeightPx: 28,
+              overscan: 2,
+              gapPx: 1
+            },
+            children: Array.from({ length: tableCount }).map((_, index) => ({
+              id: `table-row-${index}`,
+              type: 'Text',
+              props: {
+                text: `row-${index}`
+              }
+            }))
+          }
+        ]
       }
     ]
   };
@@ -115,6 +201,15 @@ const runBenchmark = async (runs: number, nodeCount: number): Promise<{
   commit: BenchmarkStats;
   layout: BenchmarkStats;
   normalize: BenchmarkStats;
+  nodes: {
+    min: number;
+    max: number;
+    avg: number;
+    layoutMin: number;
+    layoutMax: number;
+    commitMin: number;
+    commitMax: number;
+  };
 }> => {
   const engine = new UnifiedRenderingEngine();
   const declaration = createTree(nodeCount);
@@ -133,16 +228,32 @@ const runBenchmark = async (runs: number, nodeCount: number): Promise<{
       durationMs: toMs(started, ended),
       commitMs: result.pipelineDurations['render-commit'],
       layoutMs: result.pipelineDurations['layout-compute'],
-      normalizeMs: result.pipelineDurations['node-normalize']
+      normalizeMs: result.pipelineDurations['node-normalize'],
+      nodeCount: result.performanceMetrics.nodeCount,
+      layoutNodeCount: result.performanceMetrics.layoutNodeCount,
+      commitNodeCount: result.performanceMetrics.commitNodeCount
     });
   }
+
+  const nodeCounts = samples.map((item) => item.nodeCount);
+  const layoutNodeCounts = samples.map((item) => item.layoutNodeCount);
+  const commitNodeCounts = samples.map((item) => item.commitNodeCount);
 
   return {
     samples,
     total: summarize(samples.map((item) => item.durationMs)),
     commit: summarize(samples.map((item) => item.commitMs)),
     layout: summarize(samples.map((item) => item.layoutMs)),
-    normalize: summarize(samples.map((item) => item.normalizeMs))
+    normalize: summarize(samples.map((item) => item.normalizeMs)),
+    nodes: {
+      min: Math.min(...nodeCounts),
+      max: Math.max(...nodeCounts),
+      avg: nodeCounts.reduce((sum, value) => sum + value, 0) / Math.max(1, nodeCounts.length),
+      layoutMin: Math.min(...layoutNodeCounts),
+      layoutMax: Math.max(...layoutNodeCounts),
+      commitMin: Math.min(...commitNodeCounts),
+      commitMax: Math.max(...commitNodeCounts)
+    }
   };
 };
 
@@ -172,13 +283,16 @@ const main = async (): Promise<void> => {
     runs,
     nodeCount,
     thresholds: {
-      renderCommitP95Ms: 32,
-      longTaskRatioMax: 0.05
+      renderCommitP95Ms: RENDER_COMMIT_P95_THRESHOLD_MS,
+      layoutComputeP95Ms: LAYOUT_COMPUTE_P95_THRESHOLD_MS,
+      totalRenderP95Ms: TOTAL_RENDER_P95_THRESHOLD_MS,
+      longTaskRatioMax: LONG_TASK_RATIO_THRESHOLD
     },
     total: benchmark.total,
     commit: benchmark.commit,
     layout: benchmark.layout,
-    normalize: benchmark.normalize
+    normalize: benchmark.normalize,
+    nodes: benchmark.nodes
   };
 
   const reportDir = path.resolve(process.cwd(), 'reports/perf');
@@ -189,9 +303,31 @@ const main = async (): Promise<void> => {
   console.log(JSON.stringify(output, null, 2));
   console.log(`report: ${reportPath}`);
 
-  if (strict && benchmark.commit.p95 > 32) {
-    console.error(`render-commit p95 exceeded threshold: ${benchmark.commit.p95.toFixed(3)}ms > 32ms`);
-    process.exitCode = 1;
+  if (strict) {
+    const failures: string[] = [];
+    if (benchmark.commit.p95 > RENDER_COMMIT_P95_THRESHOLD_MS) {
+      failures.push(`render-commit p95 exceeded threshold: ${benchmark.commit.p95.toFixed(3)}ms > ${RENDER_COMMIT_P95_THRESHOLD_MS}ms`);
+    }
+    if (benchmark.layout.p95 > LAYOUT_COMPUTE_P95_THRESHOLD_MS) {
+      failures.push(`layout-compute p95 exceeded threshold: ${benchmark.layout.p95.toFixed(3)}ms > ${LAYOUT_COMPUTE_P95_THRESHOLD_MS}ms`);
+    }
+    if (benchmark.total.p95 > TOTAL_RENDER_P95_THRESHOLD_MS) {
+      failures.push(`total render p95 exceeded threshold: ${benchmark.total.p95.toFixed(3)}ms > ${TOTAL_RENDER_P95_THRESHOLD_MS}ms`);
+    }
+    if (benchmark.nodes.min !== benchmark.nodes.max) {
+      failures.push(`render node count drifted across runs: min=${benchmark.nodes.min}, max=${benchmark.nodes.max}`);
+    }
+    if (benchmark.nodes.layoutMin !== benchmark.nodes.layoutMax || benchmark.nodes.commitMin !== benchmark.nodes.commitMax) {
+      failures.push(
+        `layout/commit node count drifted across runs: layout=${benchmark.nodes.layoutMin}-${benchmark.nodes.layoutMax}, commit=${benchmark.nodes.commitMin}-${benchmark.nodes.commitMax}`
+      );
+    }
+    if (failures.length > 0) {
+      for (const failure of failures) {
+        console.error(failure);
+      }
+      process.exitCode = 1;
+    }
   }
 };
 

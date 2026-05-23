@@ -1,37 +1,48 @@
 {
-  "generatedAt": "2026-05-23T11:04:23.847Z",
+  "generatedAt": "2026-05-23T11:26:55.006Z",
   "runs": 30,
   "nodeCount": 600,
   "thresholds": {
     "renderCommitP95Ms": 32,
+    "layoutComputeP95Ms": 40,
+    "totalRenderP95Ms": 120,
     "longTaskRatioMax": 0.05
   },
   "total": {
-    "p50": 21.202792,
-    "p95": 54.242667,
-    "avg": 25.869932066666664,
-    "min": 10.763542,
-    "max": 56.951125
+    "p50": 24.944583,
+    "p95": 75.606334,
+    "avg": 38.159179200000004,
+    "min": 17.073833,
+    "max": 297.320417
   },
   "commit": {
-    "p50": 5,
-    "p95": 9,
-    "avg": 5.5,
-    "min": 2,
-    "max": 11
+    "p50": 3,
+    "p95": 11,
+    "avg": 4.3,
+    "min": 1,
+    "max": 14
   },
   "layout": {
     "p50": 6,
-    "p95": 27,
-    "avg": 9.266666666666667,
-    "min": 2,
-    "max": 39
+    "p95": 13,
+    "avg": 6.9,
+    "min": 3,
+    "max": 15
   },
   "normalize": {
-    "p50": 1,
-    "p95": 2,
-    "avg": 0.6666666666666666,
+    "p50": 0,
+    "p95": 1,
+    "avg": 0.6,
     "min": 0,
-    "max": 3
+    "max": 4
+  },
+  "nodes": {
+    "min": 924,
+    "max": 924,
+    "avg": 924,
+    "layoutMin": 924,
+    "layoutMax": 924,
+    "commitMin": 924,
+    "commitMax": 924
   }
 }

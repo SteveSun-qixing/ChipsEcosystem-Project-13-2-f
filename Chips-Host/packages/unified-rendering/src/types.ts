@@ -1,4 +1,20 @@
-export type DeclarativeNodeType = 'View' | 'Stack' | 'Grid' | 'Form' | 'List' | 'Table' | 'Text' | string;
+export type DeclarativeNodeType =
+  | 'View'
+  | 'Stack'
+  | 'Grid'
+  | 'Form'
+  | 'List'
+  | 'Section'
+  | 'ScrollView'
+  | 'Text'
+  | 'Image'
+  | 'Media'
+  | 'Table'
+  | 'Navigation'
+  | 'Toolbar'
+  | 'Command'
+  | 'Slot'
+  | string;
 
 export type RenderEffectKind = 'ui-effect' | 'runtime-effect' | 'telemetry-effect';
 
@@ -82,6 +98,38 @@ export interface LayoutFrame {
   height: number;
 }
 
+export type LayoutAxis = 'none' | 'vertical' | 'horizontal' | 'grid' | 'table' | 'form' | 'navigation';
+export type LayoutOverflow = 'visible' | 'scroll' | 'clip';
+export type LayoutScrollAxis = 'none' | 'vertical' | 'horizontal' | 'both';
+export type LayoutBreakpoint = 'compact' | 'regular' | 'expanded';
+
+export interface LayoutConstraints {
+  unit: 'px';
+  axis: LayoutAxis;
+  overflow: LayoutOverflow;
+  scrollAxis: LayoutScrollAxis;
+  containerWidthPx: number;
+  widthPx: number;
+  heightPx: number;
+  minWidthPx?: number;
+  minHeightPx?: number;
+  maxWidthPx?: number;
+  maxHeightPx?: number;
+  gapPx?: number;
+  columns?: number;
+  rows?: number;
+  columnWidthPx?: number;
+  itemCount?: number;
+  itemExtentPx?: number;
+}
+
+export interface ResponsiveLayoutState {
+  breakpoint: LayoutBreakpoint;
+  scale: number;
+  viewportWidthPx: number;
+  viewportHeightPx: number;
+}
+
 export interface VisibleRange {
   start: number;
   end: number;
@@ -113,6 +161,8 @@ export interface PreparedRenderNode {
   themeScope?: string;
   effects: RenderEffect[];
   layout: LayoutFrame;
+  layoutConstraints: LayoutConstraints;
+  responsive: ResponsiveLayoutState;
   visibleRange?: VisibleRange;
   children: PreparedRenderNode[];
   boundaryLevel?: 'node' | 'region';
@@ -182,8 +232,16 @@ export interface RenderResult {
   diagnostics: RenderNodeDiagnostic[];
   qualityGate: RenderQualityGateResult;
   effects: EffectDispatchSummary;
+  performanceMetrics: RenderPerformanceMetrics;
   pipelineDurations: Record<RenderPipelineStage, number>;
   incremental: IncrementalScheduleResult;
+}
+
+export interface RenderPerformanceMetrics {
+  nodeCount: number;
+  layoutNodeCount: number;
+  commitNodeCount: number;
+  pipelineDurations: Record<RenderPipelineStage, number>;
 }
 
 export interface RenderQualityGateResult {

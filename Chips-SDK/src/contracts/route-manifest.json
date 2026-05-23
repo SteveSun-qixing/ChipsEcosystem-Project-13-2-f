@@ -1,481 +1,1759 @@
 {
   "routes": {
-    "box.inspect": {
-      "action": "box.inspect"
-    },
-    "box.pack": {
-      "action": "box.pack"
-    },
-    "box.validate": {
-      "action": "box.validate"
-    },
-    "box.readMetadata": {
-      "action": "box.readMetadata"
-    },
-    "box.renderCover": {
-      "action": "box.renderCover"
-    },
-    "box.listLayoutDescriptors": {
-      "action": "box.listLayoutDescriptors"
-    },
-    "box.readLayoutDescriptor": {
-      "action": "box.readLayoutDescriptor"
-    },
-    "box.normalizeLayoutConfig": {
-      "action": "box.normalizeLayoutConfig"
-    },
-    "box.validateLayoutConfig": {
-      "action": "box.validateLayoutConfig"
-    },
-    "box.getLayoutInitialQuery": {
-      "action": "box.getLayoutInitialQuery"
-    },
-    "box.renderLayoutFrame": {
-      "action": "box.renderLayoutFrame"
-    },
-    "box.renderLayoutEditor": {
-      "action": "box.renderLayoutEditor"
-    },
-    "box.releaseRenderSession": {
-      "action": "box.releaseRenderSession"
-    },
-    "box.openView": {
-      "action": "box.openView"
-    },
-    "box.listEntries": {
-      "action": "box.listEntries"
-    },
-    "box.readEntryDetail": {
-      "action": "box.readEntryDetail"
-    },
-    "box.renderEntryCover": {
-      "action": "box.renderEntryCover"
-    },
-    "box.openEntry": {
-      "action": "box.openEntry"
-    },
-    "box.resolveEntryResource": {
-      "action": "box.resolveEntryResource"
-    },
-    "box.readBoxAsset": {
-      "action": "box.readBoxAsset"
-    },
-    "box.prefetchEntries": {
-      "action": "box.prefetchEntries"
-    },
-    "box.closeView": {
-      "action": "box.closeView"
-    },
-    "box.unpack": {
-      "action": "box.unpack"
-    },
-    "card.pack": {
-      "action": "card.pack"
-    },
-    "card.parse": {
-      "action": "card.parse"
-    },
-    "card.readMetadata": {
-      "action": "card.readMetadata"
-    },
-    "card.readInfo": {
-      "action": "card.readInfo"
-    },
-    "card.render": {
-      "action": "card.render"
-    },
-    "card.renderCover": {
-      "action": "card.renderCover"
-    },
-    "card.renderEditor": {
-      "action": "card.renderEditor"
-    },
-    "card.releaseRenderSession": {
-      "action": "card.releaseRenderSession"
-    },
-    "card.resolveDocumentPath": {
-      "action": "card.resolveDocumentPath"
-    },
-    "card.unpack": {
-      "action": "card.unpack"
-    },
-    "card.validate": {
-      "action": "card.validate"
-    },
-    "card.open": {
-      "action": "card.open"
-    },
-    "command.register": {
-      "action": "command.register"
-    },
-    "command.unregister": {
-      "action": "command.unregister"
-    },
-    "command.get": {
-      "action": "command.get"
-    },
-    "command.list": {
-      "action": "command.list"
-    },
-    "command.invoke": {
-      "action": "command.invoke"
-    },
-    "command.setState": {
-      "action": "command.setState"
-    },
-    "config.batchSet": {
-      "action": "config.batchSet"
-    },
-    "config.get": {
-      "action": "config.get"
-    },
-    "config.reset": {
-      "action": "config.reset"
-    },
-    "config.set": {
-      "action": "config.set"
-    },
-    "control-plane.check": {
-      "action": "control-plane.check"
-    },
-    "control-plane.diagnose": {
-      "action": "control-plane.diagnose"
-    },
-    "control-plane.health": {
-      "action": "control-plane.health"
-    },
-    "control-plane.metrics": {
-      "action": "control-plane.metrics"
-    },
-    "credential.delete": {
-      "action": "credential.delete"
-    },
-    "credential.get": {
-      "action": "credential.get"
-    },
-    "credential.rotate": {
-      "action": "credential.rotate"
-    },
-    "credential.set": {
-      "action": "credential.set"
-    },
-    "file.list": {
-      "action": "file.list"
-    },
-    "file.mkdir": {
-      "action": "file.mkdir"
-    },
-    "file.read": {
-      "action": "file.read"
-    },
-    "file.delete": {
-      "action": "file.delete"
-    },
-    "file.move": {
-      "action": "file.move"
-    },
-    "file.copy": {
-      "action": "file.copy"
-    },
-    "file.stat": {
-      "action": "file.stat"
-    },
-    "file.watch": {
-      "action": "file.watch"
-    },
-    "file.write": {
-      "action": "file.write"
-    },
-    "i18n.getCurrent": {
-      "action": "i18n.getCurrent"
-    },
-    "i18n.listLocales": {
-      "action": "i18n.listLocales"
-    },
-    "i18n.setCurrent": {
-      "action": "i18n.setCurrent"
-    },
-    "i18n.translate": {
-      "action": "i18n.translate"
-    },
-    "log.export": {
-      "action": "log.export"
-    },
-    "log.query": {
-      "action": "log.query"
-    },
-    "log.write": {
-      "action": "log.write"
-    },
-    "module.job.cancel": {
-      "action": "module.job.cancel"
-    },
-    "module.job.get": {
-      "action": "module.job.get"
-    },
-    "module.invoke": {
-      "action": "module.invoke"
-    },
-    "module.listProviders": {
-      "action": "module.listProviders"
-    },
-    "module.resolve": {
-      "action": "module.resolve"
-    },
-    "platform.clipboardRead": {
-      "action": "platform.clipboardRead"
-    },
-    "platform.clipboardWrite": {
-      "action": "platform.clipboardWrite"
-    },
-    "platform.dialogOpenFile": {
-      "action": "platform.dialogOpenFile"
-    },
-    "platform.dialogSaveFile": {
-      "action": "platform.dialogSaveFile"
-    },
-    "platform.dialogShowConfirm": {
-      "action": "platform.dialogShowConfirm"
-    },
-    "platform.dialogShowMessage": {
-      "action": "platform.dialogShowMessage"
-    },
-    "platform.getCapabilities": {
-      "action": "platform.getCapabilities"
-    },
-    "platform.getInfo": {
-      "action": "platform.getInfo"
-    },
-    "platform.getScreenInfo": {
-      "action": "platform.getScreenInfo"
-    },
-    "platform.ipcCloseChannel": {
-      "action": "platform.ipcCloseChannel"
-    },
-    "platform.ipcCreateChannel": {
-      "action": "platform.ipcCreateChannel"
-    },
-    "platform.ipcListChannels": {
-      "action": "platform.ipcListChannels"
-    },
-    "platform.ipcReceive": {
-      "action": "platform.ipcReceive"
-    },
-    "platform.ipcSend": {
-      "action": "platform.ipcSend"
-    },
-    "platform.listScreens": {
-      "action": "platform.listScreens"
-    },
-    "platform.notificationShow": {
-      "action": "platform.notificationShow"
-    },
-    "platform.openExternal": {
-      "action": "platform.openExternal"
-    },
-    "platform.renderHtmlToImage": {
-      "action": "platform.renderHtmlToImage"
-    },
-    "platform.renderHtmlToPdf": {
-      "action": "platform.renderHtmlToPdf"
-    },
-    "platform.powerGetState": {
-      "action": "platform.powerGetState"
-    },
-    "platform.powerSetPreventSleep": {
-      "action": "platform.powerSetPreventSleep"
-    },
-    "platform.shellOpenExternal": {
-      "action": "platform.shellOpenExternal"
-    },
-    "platform.shellOpenPath": {
-      "action": "platform.shellOpenPath"
-    },
-    "platform.shellShowItemInFolder": {
-      "action": "platform.shellShowItemInFolder"
-    },
-    "platform.shortcutClear": {
-      "action": "platform.shortcutClear"
-    },
-    "platform.shortcutIsRegistered": {
-      "action": "platform.shortcutIsRegistered"
-    },
-    "platform.shortcutList": {
-      "action": "platform.shortcutList"
-    },
-    "platform.shortcutRegister": {
-      "action": "platform.shortcutRegister"
-    },
-    "platform.shortcutUnregister": {
-      "action": "platform.shortcutUnregister"
-    },
-    "platform.trayClear": {
-      "action": "platform.trayClear"
-    },
-    "platform.trayGetState": {
-      "action": "platform.trayGetState"
-    },
-    "platform.traySet": {
-      "action": "platform.traySet"
-    },
-    "plugin.createShortcut": {
-      "action": "plugin.createShortcut"
-    },
-    "plugin.disable": {
-      "action": "plugin.disable"
-    },
-    "plugin.enable": {
-      "action": "plugin.enable"
-    },
-    "plugin.get": {
-      "action": "plugin.get"
-    },
-    "plugin.getCardPlugin": {
-      "action": "plugin.getCardPlugin"
-    },
-    "plugin.getLayoutPlugin": {
-      "action": "plugin.getLayoutPlugin"
-    },
-    "plugin.getSelf": {
-      "action": "plugin.getSelf"
-    },
-    "plugin.getShortcut": {
-      "action": "plugin.getShortcut"
-    },
-    "plugin.handshake.complete": {
-      "action": "plugin.handshake.complete"
-    },
-    "plugin.init": {
-      "action": "plugin.init"
-    },
-    "plugin.install": {
-      "action": "plugin.install"
-    },
-    "plugin.launch": {
-      "action": "plugin.launch"
-    },
-    "plugin.list": {
-      "action": "plugin.list"
-    },
-    "plugin.query": {
-      "action": "plugin.query"
-    },
-    "plugin.removeShortcut": {
-      "action": "plugin.removeShortcut"
-    },
-    "plugin.uninstall": {
-      "action": "plugin.uninstall"
-    },
-    "resource.readBinary": {
-      "action": "resource.readBinary"
-    },
-    "resource.convertTiffToPng": {
-      "action": "resource.convertTiffToPng"
-    },
-    "resource.open": {
-      "action": "resource.open"
-    },
-    "resource.readMetadata": {
-      "action": "resource.readMetadata"
-    },
-    "resource.resolve": {
-      "action": "resource.resolve"
-    },
-    "surface.open": {
-      "action": "surface.open"
-    },
-    "surface.focus": {
-      "action": "surface.focus"
-    },
-    "surface.resize": {
-      "action": "surface.resize"
-    },
-    "surface.setState": {
-      "action": "surface.setState"
-    },
-    "surface.getState": {
-      "action": "surface.getState"
-    },
-    "surface.close": {
-      "action": "surface.close"
-    },
-    "surface.list": {
-      "action": "surface.list"
-    },
-    "serializer.decode": {
-      "action": "serializer.decode"
-    },
-    "serializer.encode": {
-      "action": "serializer.encode"
-    },
-    "serializer.validate": {
-      "action": "serializer.validate"
-    },
-    "theme.apply": {
-      "action": "theme.apply"
-    },
-    "theme.contract.get": {
-      "action": "theme.contract.get"
-    },
-    "theme.getAllCss": {
-      "action": "theme.getAllCss"
-    },
-    "theme.getCurrent": {
-      "action": "theme.getCurrent"
-    },
-    "theme.list": {
-      "action": "theme.list"
-    },
-    "theme.resolve": {
-      "action": "theme.resolve"
-    },
-    "transfer.openPath": {
-      "action": "transfer.openPath"
-    },
-    "transfer.openExternal": {
-      "action": "transfer.openExternal"
-    },
-    "transfer.revealInShell": {
-      "action": "transfer.revealInShell"
-    },
-    "transfer.share": {
-      "action": "transfer.share"
-    },
     "association.getCapabilities": {
-      "action": "association.getCapabilities"
+      "action": "association.getCapabilities",
+      "schemaIn": "schemas/association.getCapabilities.request.json",
+      "schemaOut": "schemas/association.getCapabilities.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
     },
     "association.openPath": {
-      "action": "association.openPath"
+      "action": "association.openPath",
+      "schemaIn": "schemas/association.openPath.request.json",
+      "schemaOut": "schemas/association.openPath.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
     },
     "association.openUrl": {
-      "action": "association.openUrl"
+      "action": "association.openUrl",
+      "schemaIn": "schemas/association.openUrl.request.json",
+      "schemaOut": "schemas/association.openUrl.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.closeView": {
+      "action": "box.closeView",
+      "schemaIn": "schemas/box.closeView.request.json",
+      "schemaOut": "schemas/box.closeView.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.getLayoutInitialQuery": {
+      "action": "box.getLayoutInitialQuery",
+      "schemaIn": "schemas/box.getLayoutInitialQuery.request.json",
+      "schemaOut": "schemas/box.getLayoutInitialQuery.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.inspect": {
+      "action": "box.inspect",
+      "schemaIn": "schemas/box.inspect.request.json",
+      "schemaOut": "schemas/box.inspect.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.listEntries": {
+      "action": "box.listEntries",
+      "schemaIn": "schemas/box.listEntries.request.json",
+      "schemaOut": "schemas/box.listEntries.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.listLayoutDescriptors": {
+      "action": "box.listLayoutDescriptors",
+      "schemaIn": "schemas/box.listLayoutDescriptors.request.json",
+      "schemaOut": "schemas/box.listLayoutDescriptors.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.normalizeLayoutConfig": {
+      "action": "box.normalizeLayoutConfig",
+      "schemaIn": "schemas/box.normalizeLayoutConfig.request.json",
+      "schemaOut": "schemas/box.normalizeLayoutConfig.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.openEntry": {
+      "action": "box.openEntry",
+      "schemaIn": "schemas/box.openEntry.request.json",
+      "schemaOut": "schemas/box.openEntry.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.openView": {
+      "action": "box.openView",
+      "schemaIn": "schemas/box.openView.request.json",
+      "schemaOut": "schemas/box.openView.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.pack": {
+      "action": "box.pack",
+      "schemaIn": "schemas/box.pack.request.json",
+      "schemaOut": "schemas/box.pack.response.json",
+      "permission": [
+        "box.write"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.prefetchEntries": {
+      "action": "box.prefetchEntries",
+      "schemaIn": "schemas/box.prefetchEntries.request.json",
+      "schemaOut": "schemas/box.prefetchEntries.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.readBoxAsset": {
+      "action": "box.readBoxAsset",
+      "schemaIn": "schemas/box.readBoxAsset.request.json",
+      "schemaOut": "schemas/box.readBoxAsset.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.readEntryDetail": {
+      "action": "box.readEntryDetail",
+      "schemaIn": "schemas/box.readEntryDetail.request.json",
+      "schemaOut": "schemas/box.readEntryDetail.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.readLayoutDescriptor": {
+      "action": "box.readLayoutDescriptor",
+      "schemaIn": "schemas/box.readLayoutDescriptor.request.json",
+      "schemaOut": "schemas/box.readLayoutDescriptor.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.readMetadata": {
+      "action": "box.readMetadata",
+      "schemaIn": "schemas/box.readMetadata.request.json",
+      "schemaOut": "schemas/box.readMetadata.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.releaseRenderSession": {
+      "action": "box.releaseRenderSession",
+      "schemaIn": "schemas/box.releaseRenderSession.request.json",
+      "schemaOut": "schemas/box.releaseRenderSession.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.renderCover": {
+      "action": "box.renderCover",
+      "schemaIn": "schemas/box.renderCover.request.json",
+      "schemaOut": "schemas/box.renderCover.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.renderEntryCover": {
+      "action": "box.renderEntryCover",
+      "schemaIn": "schemas/box.renderEntryCover.request.json",
+      "schemaOut": "schemas/box.renderEntryCover.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.renderLayoutEditor": {
+      "action": "box.renderLayoutEditor",
+      "schemaIn": "schemas/box.renderLayoutEditor.request.json",
+      "schemaOut": "schemas/box.renderLayoutEditor.response.json",
+      "permission": [
+        "box.write"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.renderLayoutFrame": {
+      "action": "box.renderLayoutFrame",
+      "schemaIn": "schemas/box.renderLayoutFrame.request.json",
+      "schemaOut": "schemas/box.renderLayoutFrame.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.resolveEntryResource": {
+      "action": "box.resolveEntryResource",
+      "schemaIn": "schemas/box.resolveEntryResource.request.json",
+      "schemaOut": "schemas/box.resolveEntryResource.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.unpack": {
+      "action": "box.unpack",
+      "schemaIn": "schemas/box.unpack.request.json",
+      "schemaOut": "schemas/box.unpack.response.json",
+      "permission": [
+        "box.write"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "box.validate": {
+      "action": "box.validate",
+      "schemaIn": "schemas/box.validate.request.json",
+      "schemaOut": "schemas/box.validate.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "box.validateLayoutConfig": {
+      "action": "box.validateLayoutConfig",
+      "schemaIn": "schemas/box.validateLayoutConfig.request.json",
+      "schemaOut": "schemas/box.validateLayoutConfig.response.json",
+      "permission": [
+        "box.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "card.open": {
+      "action": "card.open",
+      "schemaIn": "schemas/card.open.request.json",
+      "schemaOut": "schemas/card.open.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.pack": {
+      "action": "card.pack",
+      "schemaIn": "schemas/card.pack.request.json",
+      "schemaOut": "schemas/card.pack.response.json",
+      "permission": [
+        "card.write"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.parse": {
+      "action": "card.parse",
+      "schemaIn": "schemas/card.parse.request.json",
+      "schemaOut": "schemas/card.parse.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "card.readInfo": {
+      "action": "card.readInfo",
+      "schemaIn": "schemas/card.readInfo.request.json",
+      "schemaOut": "schemas/card.readInfo.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "card.readMetadata": {
+      "action": "card.readMetadata",
+      "schemaIn": "schemas/card.readMetadata.request.json",
+      "schemaOut": "schemas/card.readMetadata.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "card.releaseRenderSession": {
+      "action": "card.releaseRenderSession",
+      "schemaIn": "schemas/card.releaseRenderSession.request.json",
+      "schemaOut": "schemas/card.releaseRenderSession.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.render": {
+      "action": "card.render",
+      "schemaIn": "schemas/card.render.request.json",
+      "schemaOut": "schemas/card.render.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.renderCover": {
+      "action": "card.renderCover",
+      "schemaIn": "schemas/card.renderCover.request.json",
+      "schemaOut": "schemas/card.renderCover.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.renderEditor": {
+      "action": "card.renderEditor",
+      "schemaIn": "schemas/card.renderEditor.request.json",
+      "schemaOut": "schemas/card.renderEditor.response.json",
+      "permission": [
+        "card.write"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.resolveDocumentPath": {
+      "action": "card.resolveDocumentPath",
+      "schemaIn": "schemas/card.resolveDocumentPath.request.json",
+      "schemaOut": "schemas/card.resolveDocumentPath.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.unpack": {
+      "action": "card.unpack",
+      "schemaIn": "schemas/card.unpack.request.json",
+      "schemaOut": "schemas/card.unpack.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "card.validate": {
+      "action": "card.validate",
+      "schemaIn": "schemas/card.validate.request.json",
+      "schemaOut": "schemas/card.validate.response.json",
+      "permission": [
+        "card.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "command.get": {
+      "action": "command.get",
+      "schemaIn": "schemas/command.get.request.json",
+      "schemaOut": "schemas/command.get.response.json",
+      "permission": [
+        "command.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "command.invoke": {
+      "action": "command.invoke",
+      "schemaIn": "schemas/command.invoke.request.json",
+      "schemaOut": "schemas/command.invoke.response.json",
+      "permission": [
+        "command.invoke"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "command.list": {
+      "action": "command.list",
+      "schemaIn": "schemas/command.list.request.json",
+      "schemaOut": "schemas/command.list.response.json",
+      "permission": [
+        "command.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "command.register": {
+      "action": "command.register",
+      "schemaIn": "schemas/command.register.request.json",
+      "schemaOut": "schemas/command.register.response.json",
+      "permission": [
+        "command.write"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "command.setState": {
+      "action": "command.setState",
+      "schemaIn": "schemas/command.setState.request.json",
+      "schemaOut": "schemas/command.setState.response.json",
+      "permission": [
+        "command.write"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "command.unregister": {
+      "action": "command.unregister",
+      "schemaIn": "schemas/command.unregister.request.json",
+      "schemaOut": "schemas/command.unregister.response.json",
+      "permission": [
+        "command.write"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "config.batchSet": {
+      "action": "config.batchSet",
+      "schemaIn": "schemas/config.batchSet.request.json",
+      "schemaOut": "schemas/config.batchSet.response.json",
+      "permission": [
+        "config.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "config.get": {
+      "action": "config.get",
+      "schemaIn": "schemas/config.get.request.json",
+      "schemaOut": "schemas/config.get.response.json",
+      "permission": [
+        "config.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "config.reset": {
+      "action": "config.reset",
+      "schemaIn": "schemas/config.reset.request.json",
+      "schemaOut": "schemas/config.reset.response.json",
+      "permission": [
+        "config.write"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "config.set": {
+      "action": "config.set",
+      "schemaIn": "schemas/config.set.request.json",
+      "schemaOut": "schemas/config.set.response.json",
+      "permission": [
+        "config.write"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "control-plane.check": {
+      "action": "control-plane.check",
+      "schemaIn": "schemas/control-plane.check.request.json",
+      "schemaOut": "schemas/control-plane.check.response.json",
+      "permission": [
+        "control.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "control-plane.diagnose": {
+      "action": "control-plane.diagnose",
+      "schemaIn": "schemas/control-plane.diagnose.request.json",
+      "schemaOut": "schemas/control-plane.diagnose.response.json",
+      "permission": [
+        "control.write"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "control-plane.health": {
+      "action": "control-plane.health",
+      "schemaIn": "schemas/control-plane.health.request.json",
+      "schemaOut": "schemas/control-plane.health.response.json",
+      "permission": [
+        "control.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "control-plane.metrics": {
+      "action": "control-plane.metrics",
+      "schemaIn": "schemas/control-plane.metrics.request.json",
+      "schemaOut": "schemas/control-plane.metrics.response.json",
+      "permission": [
+        "control.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "credential.delete": {
+      "action": "credential.delete",
+      "schemaIn": "schemas/credential.delete.request.json",
+      "schemaOut": "schemas/credential.delete.response.json",
+      "permission": [
+        "credential.manage"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "credential.get": {
+      "action": "credential.get",
+      "schemaIn": "schemas/credential.get.request.json",
+      "schemaOut": "schemas/credential.get.response.json",
+      "permission": [
+        "credential.manage"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "credential.rotate": {
+      "action": "credential.rotate",
+      "schemaIn": "schemas/credential.rotate.request.json",
+      "schemaOut": "schemas/credential.rotate.response.json",
+      "permission": [
+        "credential.manage"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "credential.set": {
+      "action": "credential.set",
+      "schemaIn": "schemas/credential.set.request.json",
+      "schemaOut": "schemas/credential.set.response.json",
+      "permission": [
+        "credential.manage"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "file.copy": {
+      "action": "file.copy",
+      "schemaIn": "schemas/file.copy.request.json",
+      "schemaOut": "schemas/file.copy.response.json",
+      "permission": [
+        "file.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "file.delete": {
+      "action": "file.delete",
+      "schemaIn": "schemas/file.delete.request.json",
+      "schemaOut": "schemas/file.delete.response.json",
+      "permission": [
+        "file.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "file.list": {
+      "action": "file.list",
+      "schemaIn": "schemas/file.list.request.json",
+      "schemaOut": "schemas/file.list.response.json",
+      "permission": [
+        "file.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "file.mkdir": {
+      "action": "file.mkdir",
+      "schemaIn": "schemas/file.mkdir.request.json",
+      "schemaOut": "schemas/file.mkdir.response.json",
+      "permission": [
+        "file.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "file.move": {
+      "action": "file.move",
+      "schemaIn": "schemas/file.move.request.json",
+      "schemaOut": "schemas/file.move.response.json",
+      "permission": [
+        "file.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "file.read": {
+      "action": "file.read",
+      "schemaIn": "schemas/file.read.request.json",
+      "schemaOut": "schemas/file.read.response.json",
+      "permission": [
+        "file.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "file.stat": {
+      "action": "file.stat",
+      "schemaIn": "schemas/file.stat.request.json",
+      "schemaOut": "schemas/file.stat.response.json",
+      "permission": [
+        "file.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "file.watch": {
+      "action": "file.watch",
+      "schemaIn": "schemas/file.watch.request.json",
+      "schemaOut": "schemas/file.watch.response.json",
+      "permission": [
+        "file.read"
+      ],
+      "timeoutMs": 30000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "file.write": {
+      "action": "file.write",
+      "schemaIn": "schemas/file.write.request.json",
+      "schemaOut": "schemas/file.write.response.json",
+      "permission": [
+        "file.write"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "i18n.getCurrent": {
+      "action": "i18n.getCurrent",
+      "schemaIn": "schemas/i18n.getCurrent.request.json",
+      "schemaOut": "schemas/i18n.getCurrent.response.json",
+      "permission": [
+        "i18n.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "i18n.listLocales": {
+      "action": "i18n.listLocales",
+      "schemaIn": "schemas/i18n.listLocales.request.json",
+      "schemaOut": "schemas/i18n.listLocales.response.json",
+      "permission": [
+        "i18n.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "i18n.setCurrent": {
+      "action": "i18n.setCurrent",
+      "schemaIn": "schemas/i18n.setCurrent.request.json",
+      "schemaOut": "schemas/i18n.setCurrent.response.json",
+      "permission": [
+        "i18n.write"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "i18n.translate": {
+      "action": "i18n.translate",
+      "schemaIn": "schemas/i18n.translate.request.json",
+      "schemaOut": "schemas/i18n.translate.response.json",
+      "permission": [
+        "i18n.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "log.export": {
+      "action": "log.export",
+      "schemaIn": "schemas/log.export.request.json",
+      "schemaOut": "schemas/log.export.response.json",
+      "permission": [
+        "log.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "log.query": {
+      "action": "log.query",
+      "schemaIn": "schemas/log.query.request.json",
+      "schemaOut": "schemas/log.query.response.json",
+      "permission": [
+        "log.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "log.write": {
+      "action": "log.write",
+      "schemaIn": "schemas/log.write.request.json",
+      "schemaOut": "schemas/log.write.response.json",
+      "permission": [
+        "log.write"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "module.invoke": {
+      "action": "module.invoke",
+      "schemaIn": "schemas/module.invoke.request.json",
+      "schemaOut": "schemas/module.invoke.response.json",
+      "permission": [
+        "module.invoke"
+      ],
+      "timeoutMs": 30000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "module.job.cancel": {
+      "action": "module.job.cancel",
+      "schemaIn": "schemas/module.job.cancel.request.json",
+      "schemaOut": "schemas/module.job.cancel.response.json",
+      "permission": [
+        "module.invoke"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "module.job.get": {
+      "action": "module.job.get",
+      "schemaIn": "schemas/module.job.get.request.json",
+      "schemaOut": "schemas/module.job.get.response.json",
+      "permission": [
+        "module.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "module.listProviders": {
+      "action": "module.listProviders",
+      "schemaIn": "schemas/module.listProviders.request.json",
+      "schemaOut": "schemas/module.listProviders.response.json",
+      "permission": [
+        "module.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "module.resolve": {
+      "action": "module.resolve",
+      "schemaIn": "schemas/module.resolve.request.json",
+      "schemaOut": "schemas/module.resolve.response.json",
+      "permission": [
+        "module.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.clipboardRead": {
+      "action": "platform.clipboardRead",
+      "schemaIn": "schemas/platform.clipboardRead.request.json",
+      "schemaOut": "schemas/platform.clipboardRead.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.clipboardWrite": {
+      "action": "platform.clipboardWrite",
+      "schemaIn": "schemas/platform.clipboardWrite.request.json",
+      "schemaOut": "schemas/platform.clipboardWrite.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.dialogOpenFile": {
+      "action": "platform.dialogOpenFile",
+      "schemaIn": "schemas/platform.dialogOpenFile.request.json",
+      "schemaOut": "schemas/platform.dialogOpenFile.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 1800000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.dialogSaveFile": {
+      "action": "platform.dialogSaveFile",
+      "schemaIn": "schemas/platform.dialogSaveFile.request.json",
+      "schemaOut": "schemas/platform.dialogSaveFile.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 1800000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.dialogShowConfirm": {
+      "action": "platform.dialogShowConfirm",
+      "schemaIn": "schemas/platform.dialogShowConfirm.request.json",
+      "schemaOut": "schemas/platform.dialogShowConfirm.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 1800000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.dialogShowMessage": {
+      "action": "platform.dialogShowMessage",
+      "schemaIn": "schemas/platform.dialogShowMessage.request.json",
+      "schemaOut": "schemas/platform.dialogShowMessage.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 1800000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.getCapabilities": {
+      "action": "platform.getCapabilities",
+      "schemaIn": "schemas/platform.getCapabilities.request.json",
+      "schemaOut": "schemas/platform.getCapabilities.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.getInfo": {
+      "action": "platform.getInfo",
+      "schemaIn": "schemas/platform.getInfo.request.json",
+      "schemaOut": "schemas/platform.getInfo.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.getScreenInfo": {
+      "action": "platform.getScreenInfo",
+      "schemaIn": "schemas/platform.getScreenInfo.request.json",
+      "schemaOut": "schemas/platform.getScreenInfo.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.ipcCloseChannel": {
+      "action": "platform.ipcCloseChannel",
+      "schemaIn": "schemas/platform.ipcCloseChannel.request.json",
+      "schemaOut": "schemas/platform.ipcCloseChannel.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 4000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.ipcCreateChannel": {
+      "action": "platform.ipcCreateChannel",
+      "schemaIn": "schemas/platform.ipcCreateChannel.request.json",
+      "schemaOut": "schemas/platform.ipcCreateChannel.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 4000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.ipcListChannels": {
+      "action": "platform.ipcListChannels",
+      "schemaIn": "schemas/platform.ipcListChannels.request.json",
+      "schemaOut": "schemas/platform.ipcListChannels.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.ipcReceive": {
+      "action": "platform.ipcReceive",
+      "schemaIn": "schemas/platform.ipcReceive.request.json",
+      "schemaOut": "schemas/platform.ipcReceive.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 35000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.ipcSend": {
+      "action": "platform.ipcSend",
+      "schemaIn": "schemas/platform.ipcSend.request.json",
+      "schemaOut": "schemas/platform.ipcSend.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 4000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.listScreens": {
+      "action": "platform.listScreens",
+      "schemaIn": "schemas/platform.listScreens.request.json",
+      "schemaOut": "schemas/platform.listScreens.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.notificationShow": {
+      "action": "platform.notificationShow",
+      "schemaIn": "schemas/platform.notificationShow.request.json",
+      "schemaOut": "schemas/platform.notificationShow.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.openExternal": {
+      "action": "platform.openExternal",
+      "schemaIn": "schemas/platform.openExternal.request.json",
+      "schemaOut": "schemas/platform.openExternal.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.powerGetState": {
+      "action": "platform.powerGetState",
+      "schemaIn": "schemas/platform.powerGetState.request.json",
+      "schemaOut": "schemas/platform.powerGetState.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.powerSetPreventSleep": {
+      "action": "platform.powerSetPreventSleep",
+      "schemaIn": "schemas/platform.powerSetPreventSleep.request.json",
+      "schemaOut": "schemas/platform.powerSetPreventSleep.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.renderHtmlToImage": {
+      "action": "platform.renderHtmlToImage",
+      "schemaIn": "schemas/platform.renderHtmlToImage.request.json",
+      "schemaOut": "schemas/platform.renderHtmlToImage.response.json",
+      "permission": [
+        "platform.read",
+        "file.read",
+        "file.write"
+      ],
+      "timeoutMs": 60000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.renderHtmlToPdf": {
+      "action": "platform.renderHtmlToPdf",
+      "schemaIn": "schemas/platform.renderHtmlToPdf.request.json",
+      "schemaOut": "schemas/platform.renderHtmlToPdf.response.json",
+      "permission": [
+        "platform.read",
+        "file.read",
+        "file.write"
+      ],
+      "timeoutMs": 60000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.shellOpenExternal": {
+      "action": "platform.shellOpenExternal",
+      "schemaIn": "schemas/platform.shellOpenExternal.request.json",
+      "schemaOut": "schemas/platform.shellOpenExternal.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.shellOpenPath": {
+      "action": "platform.shellOpenPath",
+      "schemaIn": "schemas/platform.shellOpenPath.request.json",
+      "schemaOut": "schemas/platform.shellOpenPath.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.shellShowItemInFolder": {
+      "action": "platform.shellShowItemInFolder",
+      "schemaIn": "schemas/platform.shellShowItemInFolder.request.json",
+      "schemaOut": "schemas/platform.shellShowItemInFolder.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.shortcutClear": {
+      "action": "platform.shortcutClear",
+      "schemaIn": "schemas/platform.shortcutClear.request.json",
+      "schemaOut": "schemas/platform.shortcutClear.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.shortcutIsRegistered": {
+      "action": "platform.shortcutIsRegistered",
+      "schemaIn": "schemas/platform.shortcutIsRegistered.request.json",
+      "schemaOut": "schemas/platform.shortcutIsRegistered.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.shortcutList": {
+      "action": "platform.shortcutList",
+      "schemaIn": "schemas/platform.shortcutList.request.json",
+      "schemaOut": "schemas/platform.shortcutList.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.shortcutRegister": {
+      "action": "platform.shortcutRegister",
+      "schemaIn": "schemas/platform.shortcutRegister.request.json",
+      "schemaOut": "schemas/platform.shortcutRegister.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.shortcutUnregister": {
+      "action": "platform.shortcutUnregister",
+      "schemaIn": "schemas/platform.shortcutUnregister.request.json",
+      "schemaOut": "schemas/platform.shortcutUnregister.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.trayClear": {
+      "action": "platform.trayClear",
+      "schemaIn": "schemas/platform.trayClear.request.json",
+      "schemaOut": "schemas/platform.trayClear.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "platform.trayGetState": {
+      "action": "platform.trayGetState",
+      "schemaIn": "schemas/platform.trayGetState.request.json",
+      "schemaOut": "schemas/platform.trayGetState.response.json",
+      "permission": [
+        "platform.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "platform.traySet": {
+      "action": "platform.traySet",
+      "schemaIn": "schemas/platform.traySet.request.json",
+      "schemaOut": "schemas/platform.traySet.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.createShortcut": {
+      "action": "plugin.createShortcut",
+      "schemaIn": "schemas/plugin.createShortcut.request.json",
+      "schemaOut": "schemas/plugin.createShortcut.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.disable": {
+      "action": "plugin.disable",
+      "schemaIn": "schemas/plugin.disable.request.json",
+      "schemaOut": "schemas/plugin.disable.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.enable": {
+      "action": "plugin.enable",
+      "schemaIn": "schemas/plugin.enable.request.json",
+      "schemaOut": "schemas/plugin.enable.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.get": {
+      "action": "plugin.get",
+      "schemaIn": "schemas/plugin.get.request.json",
+      "schemaOut": "schemas/plugin.get.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.getCardPlugin": {
+      "action": "plugin.getCardPlugin",
+      "schemaIn": "schemas/plugin.getCardPlugin.request.json",
+      "schemaOut": "schemas/plugin.getCardPlugin.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.getLayoutPlugin": {
+      "action": "plugin.getLayoutPlugin",
+      "schemaIn": "schemas/plugin.getLayoutPlugin.request.json",
+      "schemaOut": "schemas/plugin.getLayoutPlugin.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.getSelf": {
+      "action": "plugin.getSelf",
+      "schemaIn": "schemas/plugin.getSelf.request.json",
+      "schemaOut": "schemas/plugin.getSelf.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.getShortcut": {
+      "action": "plugin.getShortcut",
+      "schemaIn": "schemas/plugin.getShortcut.request.json",
+      "schemaOut": "schemas/plugin.getShortcut.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.handshake.complete": {
+      "action": "plugin.handshake.complete",
+      "schemaIn": "schemas/plugin.handshake.complete.request.json",
+      "schemaOut": "schemas/plugin.handshake.complete.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.init": {
+      "action": "plugin.init",
+      "schemaIn": "schemas/plugin.init.request.json",
+      "schemaOut": "schemas/plugin.init.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.install": {
+      "action": "plugin.install",
+      "schemaIn": "schemas/plugin.install.request.json",
+      "schemaOut": "schemas/plugin.install.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.launch": {
+      "action": "plugin.launch",
+      "schemaIn": "schemas/plugin.launch.request.json",
+      "schemaOut": "schemas/plugin.launch.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 6000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.list": {
+      "action": "plugin.list",
+      "schemaIn": "schemas/plugin.list.request.json",
+      "schemaOut": "schemas/plugin.list.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.query": {
+      "action": "plugin.query",
+      "schemaIn": "schemas/plugin.query.request.json",
+      "schemaOut": "schemas/plugin.query.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "plugin.removeShortcut": {
+      "action": "plugin.removeShortcut",
+      "schemaIn": "schemas/plugin.removeShortcut.request.json",
+      "schemaOut": "schemas/plugin.removeShortcut.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "plugin.uninstall": {
+      "action": "plugin.uninstall",
+      "schemaIn": "schemas/plugin.uninstall.request.json",
+      "schemaOut": "schemas/plugin.uninstall.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "resource.convertTiffToPng": {
+      "action": "resource.convertTiffToPng",
+      "schemaIn": "schemas/resource.convertTiffToPng.request.json",
+      "schemaOut": "schemas/resource.convertTiffToPng.response.json",
+      "permission": [
+        "resource.read",
+        "file.read",
+        "file.write"
+      ],
+      "timeoutMs": 15000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "resource.open": {
+      "action": "resource.open",
+      "schemaIn": "schemas/resource.open.request.json",
+      "schemaOut": "schemas/resource.open.response.json",
+      "permission": [
+        "resource.read"
+      ],
+      "timeoutMs": 10000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "resource.readBinary": {
+      "action": "resource.readBinary",
+      "schemaIn": "schemas/resource.readBinary.request.json",
+      "schemaOut": "schemas/resource.readBinary.response.json",
+      "permission": [
+        "resource.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "resource.readMetadata": {
+      "action": "resource.readMetadata",
+      "schemaIn": "schemas/resource.readMetadata.request.json",
+      "schemaOut": "schemas/resource.readMetadata.response.json",
+      "permission": [
+        "resource.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "resource.resolve": {
+      "action": "resource.resolve",
+      "schemaIn": "schemas/resource.resolve.request.json",
+      "schemaOut": "schemas/resource.resolve.response.json",
+      "permission": [
+        "resource.read"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "serializer.decode": {
+      "action": "serializer.decode",
+      "schemaIn": "schemas/serializer.decode.request.json",
+      "schemaOut": "schemas/serializer.decode.response.json",
+      "permission": [
+        "serializer.use"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "serializer.encode": {
+      "action": "serializer.encode",
+      "schemaIn": "schemas/serializer.encode.request.json",
+      "schemaOut": "schemas/serializer.encode.response.json",
+      "permission": [
+        "serializer.use"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "serializer.validate": {
+      "action": "serializer.validate",
+      "schemaIn": "schemas/serializer.validate.request.json",
+      "schemaOut": "schemas/serializer.validate.response.json",
+      "permission": [
+        "serializer.use"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "surface.close": {
+      "action": "surface.close",
+      "schemaIn": "schemas/surface.close.request.json",
+      "schemaOut": "schemas/surface.close.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "surface.focus": {
+      "action": "surface.focus",
+      "schemaIn": "schemas/surface.focus.request.json",
+      "schemaOut": "schemas/surface.focus.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "surface.getState": {
+      "action": "surface.getState",
+      "schemaIn": "schemas/surface.getState.request.json",
+      "schemaOut": "schemas/surface.getState.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "surface.list": {
+      "action": "surface.list",
+      "schemaIn": "schemas/surface.list.request.json",
+      "schemaOut": "schemas/surface.list.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "surface.open": {
+      "action": "surface.open",
+      "schemaIn": "schemas/surface.open.request.json",
+      "schemaOut": "schemas/surface.open.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "surface.resize": {
+      "action": "surface.resize",
+      "schemaIn": "schemas/surface.resize.request.json",
+      "schemaOut": "schemas/surface.resize.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "surface.setState": {
+      "action": "surface.setState",
+      "schemaIn": "schemas/surface.setState.request.json",
+      "schemaOut": "schemas/surface.setState.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "theme.apply": {
+      "action": "theme.apply",
+      "schemaIn": "schemas/theme.apply.request.json",
+      "schemaOut": "schemas/theme.apply.response.json",
+      "permission": [
+        "theme.write"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "theme.contract.get": {
+      "action": "theme.contract.get",
+      "schemaIn": "schemas/theme.contract.get.request.json",
+      "schemaOut": "schemas/theme.contract.get.response.json",
+      "permission": [
+        "theme.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "theme.getAllCss": {
+      "action": "theme.getAllCss",
+      "schemaIn": "schemas/theme.getAllCss.request.json",
+      "schemaOut": "schemas/theme.getAllCss.response.json",
+      "permission": [
+        "theme.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "theme.getCurrent": {
+      "action": "theme.getCurrent",
+      "schemaIn": "schemas/theme.getCurrent.request.json",
+      "schemaOut": "schemas/theme.getCurrent.response.json",
+      "permission": [
+        "theme.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "theme.list": {
+      "action": "theme.list",
+      "schemaIn": "schemas/theme.list.request.json",
+      "schemaOut": "schemas/theme.list.response.json",
+      "permission": [
+        "theme.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "theme.resolve": {
+      "action": "theme.resolve",
+      "schemaIn": "schemas/theme.resolve.request.json",
+      "schemaOut": "schemas/theme.resolve.response.json",
+      "permission": [
+        "theme.read"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "transfer.openExternal": {
+      "action": "transfer.openExternal",
+      "schemaIn": "schemas/transfer.openExternal.request.json",
+      "schemaOut": "schemas/transfer.openExternal.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "transfer.openPath": {
+      "action": "transfer.openPath",
+      "schemaIn": "schemas/transfer.openPath.request.json",
+      "schemaOut": "schemas/transfer.openPath.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "transfer.revealInShell": {
+      "action": "transfer.revealInShell",
+      "schemaIn": "schemas/transfer.revealInShell.request.json",
+      "schemaOut": "schemas/transfer.revealInShell.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "transfer.share": {
+      "action": "transfer.share",
+      "schemaIn": "schemas/transfer.share.request.json",
+      "schemaOut": "schemas/transfer.share.response.json",
+      "permission": [
+        "platform.external"
+      ],
+      "timeoutMs": 8000,
+      "idempotent": false,
+      "retries": 0
     },
     "window.close": {
-      "action": "window.close"
+      "action": "window.close",
+      "schemaIn": "schemas/window.close.request.json",
+      "schemaOut": "schemas/window.close.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
     },
     "window.focus": {
-      "action": "window.focus"
+      "action": "window.focus",
+      "schemaIn": "schemas/window.focus.request.json",
+      "schemaOut": "schemas/window.focus.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
     },
     "window.getState": {
-      "action": "window.getState"
+      "action": "window.getState",
+      "schemaIn": "schemas/window.getState.request.json",
+      "schemaOut": "schemas/window.getState.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": true,
+      "retries": 0
     },
     "window.open": {
-      "action": "window.open"
+      "action": "window.open",
+      "schemaIn": "schemas/window.open.request.json",
+      "schemaOut": "schemas/window.open.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
     },
     "window.resize": {
-      "action": "window.resize"
+      "action": "window.resize",
+      "schemaIn": "schemas/window.resize.request.json",
+      "schemaOut": "schemas/window.resize.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
     },
     "window.setState": {
-      "action": "window.setState"
+      "action": "window.setState",
+      "schemaIn": "schemas/window.setState.request.json",
+      "schemaOut": "schemas/window.setState.response.json",
+      "permission": [
+        "window.control"
+      ],
+      "timeoutMs": 2000,
+      "idempotent": false,
+      "retries": 0
     },
     "zip.compress": {
-      "action": "zip.compress"
+      "action": "zip.compress",
+      "schemaIn": "schemas/zip.compress.request.json",
+      "schemaOut": "schemas/zip.compress.response.json",
+      "permission": [
+        "zip.manage"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
     },
     "zip.extract": {
-      "action": "zip.extract"
+      "action": "zip.extract",
+      "schemaIn": "schemas/zip.extract.request.json",
+      "schemaOut": "schemas/zip.extract.response.json",
+      "permission": [
+        "zip.manage"
+      ],
+      "timeoutMs": 12000,
+      "idempotent": false,
+      "retries": 0
     },
     "zip.list": {
-      "action": "zip.list"
+      "action": "zip.list",
+      "schemaIn": "schemas/zip.list.request.json",
+      "schemaOut": "schemas/zip.list.response.json",
+      "permission": [
+        "zip.manage"
+      ],
+      "timeoutMs": 5000,
+      "idempotent": true,
+      "retries": 0
     }
   }
 }

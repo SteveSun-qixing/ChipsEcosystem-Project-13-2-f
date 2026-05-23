@@ -159,14 +159,66 @@ describe('route manifest contract', () => {
     expect(manifest).toContain('control-plane.health');
   });
 
+  it('writes descriptor route manifest metadata in workspace', async () => {
+    const filePath = path.join(workspace, 'route-descriptor-manifest.json');
+    const content = await fs.readFile(filePath, 'utf-8');
+    const manifest = JSON.parse(content) as {
+      routes: Record<string, {
+        action: string;
+        schemaIn: string;
+        schemaOut: string;
+        permission: string[];
+        timeoutMs: number;
+        idempotent: boolean;
+        retries: number;
+      }>;
+    };
+
+    expect(Object.keys(manifest.routes).length).toBeGreaterThan(60);
+    expect(manifest.routes['control-plane.health']).toEqual({
+      action: 'control-plane.health',
+      schemaIn: 'schemas/control-plane.health.request.json',
+      schemaOut: 'schemas/control-plane.health.response.json',
+      permission: ['control.read'],
+      timeoutMs: 2000,
+      idempotent: true,
+      retries: 0
+    });
+  });
+
   it('matches the SDK public route manifest', async () => {
     const sdkManifestPath = path.resolve(__dirname, '../../../Chips-SDK/src/contracts/route-manifest.json');
     const sdkManifest = JSON.parse(await fs.readFile(sdkManifestPath, 'utf-8')) as {
-      routes: Record<string, unknown>;
+      routes: Record<string, {
+        action: string;
+        schemaIn: string;
+        schemaOut: string;
+        permission: string[];
+        timeoutMs: number;
+        idempotent: boolean;
+        retries: number;
+      }>;
     };
     const hostRoutes = app.kernel.getRouteManifest().slice().sort();
     const sdkRoutes = Object.keys(sdkManifest.routes).sort();
 
     expect(sdkRoutes).toEqual(hostRoutes);
+  });
+
+  it('matches the SDK public route descriptor metadata', async () => {
+    const sdkManifestPath = path.resolve(__dirname, '../../../Chips-SDK/src/contracts/route-manifest.json');
+    const sdkManifest = JSON.parse(await fs.readFile(sdkManifestPath, 'utf-8')) as {
+      routes: Record<string, {
+        action: string;
+        schemaIn: string;
+        schemaOut: string;
+        permission: string[];
+        timeoutMs: number;
+        idempotent: boolean;
+        retries: number;
+      }>;
+    };
+
+    expect(sdkManifest.routes).toEqual(app.kernel.getRouteDescriptorManifest());
   });
 });

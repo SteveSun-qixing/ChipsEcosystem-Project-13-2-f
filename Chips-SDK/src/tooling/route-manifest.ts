@@ -2,8 +2,10 @@ export interface RouteDescriptorMeta {
   action: string;
   schemaIn?: string;
   schemaOut?: string;
+  permission?: string[];
   idempotent?: boolean;
   timeoutMs?: number;
+  retries?: 0 | 1 | 2 | 3;
 }
 
 export interface RouteManifest {
@@ -25,4 +27,3 @@ export function listActionsByNamespace(namespace: string, manifest: RouteManifes
   const prefix = namespace.endsWith(".") ? namespace : `${namespace}.`;
   return Object.keys(manifest.routes).filter((key) => key.startsWith(prefix));
 }
-

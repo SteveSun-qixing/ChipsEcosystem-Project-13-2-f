@@ -245,6 +245,6 @@
 
 ## 8. 质量门禁
 
-1. 服务域新增动作时，必须同步更新 route manifest、Bridge、SDK 和共享文档。
+1. 服务域新增动作时，必须同步更新 route manifest、route descriptor manifest、Bridge、SDK 和共享文档。
 2. `window.*` 仅作为兼容入口存在，不再承担未来架构主语义。
 3. `platform.getCapabilities()` 必须返回结构化快照，不能回退为字符串数组。

@@ -36,6 +36,11 @@ export class KernelRouter {
     return [...this.descriptors.keys()].sort();
   }
 
+  public listRouteDescriptors(): RouteDescriptor<unknown, unknown>[] {
+    return [...this.descriptors.values()]
+      .sort((left, right) => left.key.localeCompare(right.key));
+  }
+
   public async invoke<TInput, TOutput>(
     key: string,
     input: TInput,

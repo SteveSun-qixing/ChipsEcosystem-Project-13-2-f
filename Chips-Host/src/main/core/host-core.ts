@@ -113,6 +113,11 @@ export class HostCore {
       JSON.stringify(this.kernel.getRouteManifest(), null, 2),
       'utf-8'
     );
+    await fs.writeFile(
+      path.join(this.workspacePath, 'route-descriptor-manifest.json'),
+      JSON.stringify({ routes: this.kernel.getRouteDescriptorManifest() }, null, 2),
+      'utf-8'
+    );
 
     this.started = true;
     this.logger.write({

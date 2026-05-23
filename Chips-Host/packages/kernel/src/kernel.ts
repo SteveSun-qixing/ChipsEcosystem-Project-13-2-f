@@ -54,6 +54,31 @@ export class Kernel {
     return this.router.listRoutes();
   }
 
+  public getRouteDescriptorManifest(): Record<string, {
+    action: string;
+    schemaIn: string;
+    schemaOut: string;
+    permission: string[];
+    timeoutMs: number;
+    idempotent: boolean;
+    retries: 0 | 1 | 2 | 3;
+  }> {
+    return Object.fromEntries(
+      this.router.listRouteDescriptors().map((descriptor) => {
+        const manifestEntry = {
+          action: descriptor.key,
+          schemaIn: descriptor.schemaIn,
+          schemaOut: descriptor.schemaOut,
+          permission: [...descriptor.permission],
+          timeoutMs: descriptor.timeoutMs,
+          idempotent: descriptor.idempotent,
+          retries: descriptor.retries
+        };
+        return [descriptor.key, manifestEntry];
+      })
+    );
+  }
+
   public getHealthReport(): {
     routes: number;
     services: number;

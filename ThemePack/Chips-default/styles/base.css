@@ -11,6 +11,10 @@
   --chips-base-space-2: var(--chips-ref-space-2, 8px);
   --chips-base-space-3: var(--chips-ref-space-3, 12px);
   --chips-base-space-4: var(--chips-ref-space-4, 16px);
+  --chips-base-layout-density: var(--chips-layout-density-comfortable, 40cpx);
+  --chips-base-layout-gap: var(--chips-layout-gap-md, 12cpx);
+  --chips-base-layout-focus-outline-width: var(--chips-layout-focus-outline-width, 1px);
+  --chips-base-layout-focus-outline-offset: var(--chips-layout-focus-outline-offset, 2px);
   --chips-base-icon-color: var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor));
   --chips-base-icon-size: var(--chips-sys-icon-size, 1em);
   --chips-base-icon-fill: var(--chips-sys-icon-fill, 0);

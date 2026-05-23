@@ -110,3 +110,22 @@ test("system token layer exists", () => {
   assert.ok(getPath(sys, "chips.sys.color.surface"));
   assert.ok(getPath(sys, "chips.sys.color.error"));
 });
+
+test("layout token layer covers primitive layout constants", () => {
+  const layout = readJson(path.join(root, "layout.json"));
+
+  assert.equal(getPath(layout, "chips.layout.density.compact"), "32cpx");
+  assert.equal(getPath(layout, "chips.layout.density.comfortable"), "40cpx");
+  assert.equal(getPath(layout, "chips.layout.density.spacious"), "48cpx");
+  assert.equal(getPath(layout, "chips.layout.gap.sm"), "8cpx");
+  assert.equal(getPath(layout, "chips.layout.gap.md"), "12cpx");
+  assert.equal(getPath(layout, "chips.layout.size.grid-min-item"), "160cpx");
+  assert.equal(getPath(layout, "chips.layout.size.split-primary-min"), "180cpx");
+  assert.equal(getPath(layout, "chips.layout.size.split-secondary-min"), "220cpx");
+  assert.equal(getPath(layout, "chips.layout.size.navigation-primary-min"), "160cpx");
+  assert.equal(getPath(layout, "chips.layout.divider.thickness"), "1px");
+  assert.equal(getPath(layout, "chips.layout.focus.outline-width"), "1px");
+  assert.equal(getPath(layout, "chips.layout.focus.outline-offset"), "2px");
+  assert.equal(getPath(layout, "chips.layout.breakpoint.regular"), "768cpx");
+  assert.equal(getPath(layout, "chips.layout.safe-area.block-start"), "env(safe-area-inset-top, 0px)");
+});

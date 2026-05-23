@@ -9,6 +9,10 @@
   --chips-base-space-2: var(--chips-ref-space-2, 8px);
   --chips-base-space-3: var(--chips-ref-space-3, 12px);
   --chips-base-space-4: var(--chips-ref-space-4, 16px);
+  --chips-base-layout-density: var(--chips-layout-density-comfortable, 40cpx);
+  --chips-base-layout-gap: var(--chips-layout-gap-md, 12cpx);
+  --chips-base-layout-focus-outline-width: var(--chips-layout-focus-outline-width, 1px);
+  --chips-base-layout-focus-outline-offset: var(--chips-layout-focus-outline-offset, 2px);
   --chips-base-border-subtle: var(--chips-sys-color-border-subtle, #2a3242);
   --chips-base-border-strong: var(--chips-sys-color-border-strong, #3a4356);
   --chips-base-shadow-color: var(--chips-sys-color-shadow, rgba(0, 0, 0, 0.46));

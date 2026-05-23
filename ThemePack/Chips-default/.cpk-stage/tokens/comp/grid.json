@@ -1,0 +1,18 @@
+{
+  "chips": {
+    "comp": {
+      "grid": {
+        "root": {
+          "gap": "{chips.layout.gap.md}",
+          "surface": "transparent"
+        },
+        "item": {
+          "surface": "transparent"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.primary}"
+        }
+      }
+    }
+  }
+}

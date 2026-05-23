@@ -79,6 +79,26 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 布局原语只通过 token、CSS 变量和 `data-scope/data-part/data-state` 接收视觉实现；主题包不得通过选择业务页面结构或组件私有 DOM 层级来覆盖它们。
 
+### 3.1 布局 token 基线
+
+`chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。
+
+当前正式布局 token 基线：
+
+- `chips.layout.density.compact | comfortable | spacious`：常用控件密度高度，默认分别为 `32cpx / 40cpx / 48cpx`。
+- `chips.layout.gap.xs | sm | md | lg | xl`：通用间距级别，默认分别为 `4cpx / 8cpx / 12cpx / 16cpx / 24cpx`。
+- `chips.layout.size.grid-min-item`：响应式网格自动列的默认最小条目宽度，默认 `160cpx`。
+- `chips.layout.size.split-primary-min`：两栏或主从布局主栏最小宽度，默认 `180cpx`。
+- `chips.layout.size.split-secondary-min`：三栏布局中间栏最小宽度，默认 `220cpx`。
+- `chips.layout.size.navigation-primary-min`：导航主栏最小宽度，默认 `160cpx`。
+- `chips.layout.divider.thickness`：布局分割线厚度，默认 `1px`。
+- `chips.layout.focus.outline-width` / `chips.layout.focus.outline-offset`：布局原语焦点环线宽与偏移，默认 `1px / 2px`。
+- `chips.layout.breakpoint.compact | regular | expanded | wide`：页面自治断点，默认 `480cpx / 768cpx / 1024cpx / 1280cpx`。
+- `chips.layout.z-index.base | sticky | overlay`：布局层级基线，默认 `0 / 10 / 1000`。
+- `chips.layout.safe-area.inline-start | inline-end | block-start | block-end`：安全区 inset，默认映射浏览器 `env(safe-area-inset-*, 0px)`。
+
+组件 token 可以引用 `chips.layout.*`。例如 `chips.comp.stack.root.gap`、`chips.comp.inline.root.gap`、`chips.comp.grid.root.gap`、`chips.comp.spacer.root.size` 默认引用 `chips.layout.gap.md`；`chips.comp.divider.root.thickness` 默认引用 `chips.layout.divider.thickness`。
+
 ## 4. 主题包约束
 
 - 必须完整实现所声明组件的 token 覆盖

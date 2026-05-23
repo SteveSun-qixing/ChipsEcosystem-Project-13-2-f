@@ -4,7 +4,7 @@
       "divider": {
         "root": {
           "color": "{chips.sys.color.on-surface}",
-          "thickness": "1px"
+          "thickness": "{chips.layout.divider.thickness}"
         },
         "label": {
           "color": "{chips.sys.color.on-surface}"

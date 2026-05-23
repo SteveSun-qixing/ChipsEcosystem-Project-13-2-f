@@ -1,0 +1,31 @@
+{
+  "component": "icon-button",
+  "scope": "icon-button",
+  "parts": [
+    "root",
+    "icon",
+    "spinner",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.icon-button.root.size",
+    "chips.comp.icon-button.root.radius",
+    "chips.comp.icon-button.root.surface.idle",
+    "chips.comp.icon-button.root.surface.hover",
+    "chips.comp.icon-button.root.surface.active",
+    "chips.comp.icon-button.root.surface.disabled",
+    "chips.comp.icon-button.icon.color.idle",
+    "chips.comp.icon-button.icon.color.disabled",
+    "chips.comp.icon-button.focus.outline",
+    "chips.comp.icon-button.status.color.error"
+  ]
+}

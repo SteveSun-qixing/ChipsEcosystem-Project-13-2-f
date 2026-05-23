@@ -20,6 +20,13 @@
   - `chips.comp.text.*`
   - `chips.comp.label.*`
   - `chips.comp.icon.*`
+  - `chips.comp.icon-button.*`
+  - `chips.comp.toggle-button.*`
+  - `chips.comp.badge.*`
+  - `chips.comp.tag.*`
+  - `chips.comp.avatar.*`
+  - `chips.comp.spinner.*`
+  - `chips.comp.progress.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -89,6 +96,18 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.icon.*`
 
 `chips.comp.icon.root.*` 是运行时 UI 图标的组件层 token，组件内部和主题 CSS 的解析顺序为 `chips.comp.icon.* -> chips.sys.icon.* -> currentColor / 默认轴值`。`chips.sys.icon.*` 仍是主题系统图标语义基线，`chips.comp.icon.*` 负责组件级覆盖。
+
+任务015第二批基础控件 token 是按钮派生、轻量展示和反馈控件的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.icon-button.*`
+- `chips.comp.toggle-button.*`
+- `chips.comp.badge.*`
+- `chips.comp.tag.*`
+- `chips.comp.avatar.*`
+- `chips.comp.spinner.*`
+- `chips.comp.progress.*`
+
+`chips.comp.icon-button.root.size` 与 `chips.comp.avatar.root.size` 允许引用或定义结构尺寸；`chips.comp.spinner.motion.duration` 必须引用 `chips.motion.duration.*`，不得在组件库运行时硬编码动画时长。`ChipsProgress` 的动态宽度只由运行时 CSS 变量 `--chips-progress-ratio` 表达，主题包只负责 `track/range/label/value/status/focus` token。
 
 ### 3.1 布局 token 基线
 

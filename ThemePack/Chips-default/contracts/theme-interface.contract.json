@@ -3,6 +3,64 @@
   "contractVersion": "1.0.0",
   "components": [
     {
+      "component": "avatar",
+      "scope": "avatar",
+      "parts": [
+        "root",
+        "image",
+        "fallback",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.avatar.root.size",
+        "chips.comp.avatar.root.radius",
+        "chips.comp.avatar.root.surface",
+        "chips.comp.avatar.root.border.color",
+        "chips.comp.avatar.fallback.color",
+        "chips.comp.avatar.status.color.error"
+      ]
+    },
+    {
+      "component": "badge",
+      "scope": "badge",
+      "parts": [
+        "root",
+        "icon",
+        "label",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.badge.root.radius",
+        "chips.comp.badge.root.surface.neutral",
+        "chips.comp.badge.root.surface.accent",
+        "chips.comp.badge.root.surface.success",
+        "chips.comp.badge.root.surface.warning",
+        "chips.comp.badge.root.surface.error",
+        "chips.comp.badge.label.color.neutral",
+        "chips.comp.badge.label.color.accent",
+        "chips.comp.badge.label.color.success",
+        "chips.comp.badge.label.color.warning",
+        "chips.comp.badge.label.color.error",
+        "chips.comp.badge.icon.color.neutral",
+        "chips.comp.badge.icon.color.accent",
+        "chips.comp.badge.icon.color.success",
+        "chips.comp.badge.icon.color.warning",
+        "chips.comp.badge.icon.color.error",
+        "chips.comp.badge.status.color.error"
+      ]
+    },
+    {
       "component": "box",
       "scope": "box",
       "parts": [
@@ -72,19 +130,19 @@
         "disabled",
         "empty"
       ],
-      "requiredTokens": [
-        "chips.comp.card-cover-frame.border.radius",
-        "chips.comp.card-cover-frame.name.color",
-        "chips.comp.card-cover-frame.status.color.normal",
-        "chips.comp.card-cover-frame.status.color.error"
-      ],
       "iframe": {
         "requiredSandbox": true,
         "lifecycleEvents": [
           "ready",
           "error"
         ]
-      }
+      },
+      "requiredTokens": [
+        "chips.comp.card-cover-frame.border.radius",
+        "chips.comp.card-cover-frame.name.color",
+        "chips.comp.card-cover-frame.status.color.normal",
+        "chips.comp.card-cover-frame.status.color.error"
+      ]
     },
     {
       "component": "card-shell",
@@ -192,19 +250,19 @@
         "error",
         "disabled"
       ],
-      "requiredTokens": [
-        "chips.comp.composite-card-window.overlay.surface",
-        "chips.comp.composite-card-window.overlay.text",
-        "chips.comp.composite-card-window.status.color.normal",
-        "chips.comp.composite-card-window.status.color.error"
-      ],
       "iframe": {
         "requiredSandbox": true,
         "lifecycleEvents": [
           "ready",
           "error"
         ]
-      }
+      },
+      "requiredTokens": [
+        "chips.comp.composite-card-window.overlay.surface",
+        "chips.comp.composite-card-window.overlay.text",
+        "chips.comp.composite-card-window.status.color.normal",
+        "chips.comp.composite-card-window.status.color.error"
+      ]
     },
     {
       "component": "context-menu",
@@ -530,6 +588,37 @@
       ]
     },
     {
+      "component": "icon-button",
+      "scope": "icon-button",
+      "parts": [
+        "root",
+        "icon",
+        "spinner",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.icon-button.root.size",
+        "chips.comp.icon-button.root.radius",
+        "chips.comp.icon-button.root.surface.idle",
+        "chips.comp.icon-button.root.surface.hover",
+        "chips.comp.icon-button.root.surface.active",
+        "chips.comp.icon-button.root.surface.disabled",
+        "chips.comp.icon-button.icon.color.idle",
+        "chips.comp.icon-button.icon.color.disabled",
+        "chips.comp.icon-button.focus.outline",
+        "chips.comp.icon-button.status.color.error"
+      ]
+    },
+    {
       "component": "inline",
       "scope": "inline",
       "parts": [
@@ -808,6 +897,35 @@
       ]
     },
     {
+      "component": "progress",
+      "scope": "progress",
+      "parts": [
+        "root",
+        "track",
+        "range",
+        "label",
+        "value",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.progress.track.height",
+        "chips.comp.progress.track.radius",
+        "chips.comp.progress.track.surface",
+        "chips.comp.progress.range.surface.determinate",
+        "chips.comp.progress.range.surface.indeterminate",
+        "chips.comp.progress.label.color",
+        "chips.comp.progress.value.color",
+        "chips.comp.progress.status.color.error",
+        "chips.comp.progress.focus.outline"
+      ]
+    },
+    {
       "component": "radio",
       "scope": "radio",
       "parts": [
@@ -982,6 +1100,31 @@
       ]
     },
     {
+      "component": "spinner",
+      "scope": "spinner",
+      "parts": [
+        "root",
+        "track",
+        "indicator",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.spinner.root.size",
+        "chips.comp.spinner.track.color",
+        "chips.comp.spinner.indicator.color",
+        "chips.comp.spinner.indicator.thickness",
+        "chips.comp.spinner.motion.duration",
+        "chips.comp.spinner.status.color.info",
+        "chips.comp.spinner.status.color.error"
+      ]
+    },
+    {
       "component": "split-pane",
       "scope": "split-pane",
       "parts": [
@@ -1118,6 +1261,44 @@
       ]
     },
     {
+      "component": "tag",
+      "scope": "tag",
+      "parts": [
+        "root",
+        "icon",
+        "label",
+        "close",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.tag.root.radius",
+        "chips.comp.tag.root.surface.idle",
+        "chips.comp.tag.root.surface.hover",
+        "chips.comp.tag.root.surface.active",
+        "chips.comp.tag.root.surface.disabled",
+        "chips.comp.tag.root.surface.error",
+        "chips.comp.tag.label.color.idle",
+        "chips.comp.tag.label.color.disabled",
+        "chips.comp.tag.label.color.error",
+        "chips.comp.tag.icon.color.idle",
+        "chips.comp.tag.icon.color.disabled",
+        "chips.comp.tag.close.color.idle",
+        "chips.comp.tag.close.color.hover",
+        "chips.comp.tag.close.color.disabled",
+        "chips.comp.tag.focus.outline",
+        "chips.comp.tag.status.color.error"
+      ]
+    },
+    {
       "component": "text",
       "scope": "text",
       "parts": [
@@ -1168,6 +1349,42 @@
         "chips.comp.toast.action.surface.active",
         "chips.comp.toast.close.color",
         "chips.comp.toast.focus.outline"
+      ]
+    },
+    {
+      "component": "toggle-button",
+      "scope": "toggle-button",
+      "parts": [
+        "root",
+        "icon",
+        "label",
+        "spinner",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.toggle-button.root.radius",
+        "chips.comp.toggle-button.root.surface.idle",
+        "chips.comp.toggle-button.root.surface.hover",
+        "chips.comp.toggle-button.root.surface.active",
+        "chips.comp.toggle-button.root.surface.pressed",
+        "chips.comp.toggle-button.root.surface.disabled",
+        "chips.comp.toggle-button.label.color.idle",
+        "chips.comp.toggle-button.label.color.pressed",
+        "chips.comp.toggle-button.label.color.disabled",
+        "chips.comp.toggle-button.icon.color.idle",
+        "chips.comp.toggle-button.icon.color.pressed",
+        "chips.comp.toggle-button.icon.color.disabled",
+        "chips.comp.toggle-button.focus.outline",
+        "chips.comp.toggle-button.status.color.error"
       ]
     },
     {

@@ -109,6 +109,9 @@ function getDefaultIconDescriptor(type) {
 const TEXT_ELEMENT_TAGS = new Set(["span", "p", "strong", "em", "small", "code", "div"]);
 const TEXT_TONES = new Set(["default", "muted", "accent", "error"]);
 const TEXT_EMPHASIS = new Set(["regular", "strong", "code"]);
+const CONTROL_TONES = new Set(["neutral", "accent", "success", "warning", "error"]);
+const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
+const TASK015_BASE_CONTROL_STATES = ["idle", "disabled", "loading", "error"];
 
 function normalizeTextElementTag(tag, fallback = "span") {
   return TEXT_ELEMENT_TAGS.has(tag) ? tag : fallback;
@@ -120,6 +123,41 @@ function normalizeTextTone(tone) {
 
 function normalizeTextEmphasis(emphasis) {
   return TEXT_EMPHASIS.has(emphasis) ? emphasis : "regular";
+}
+
+function normalizeControlTone(tone) {
+  return CONTROL_TONES.has(tone) ? tone : "neutral";
+}
+
+function normalizeAvatarShape(shape) {
+  return AVATAR_SHAPES.has(shape) ? shape : "circle";
+}
+
+function resolveAccessibleText(params = {}) {
+  const {
+    value,
+    key,
+    params: textParams,
+    fallback = "",
+    i18n,
+    onDiagnostic
+  } = params;
+
+  if (isNonEmptyString(key)) {
+    return resolveI18nText({
+      i18n,
+      key,
+      params: textParams,
+      fallback: isNonEmptyString(fallback) ? fallback : value,
+      onDiagnostic
+    });
+  }
+
+  if (isNonEmptyString(value)) {
+    return value.trim();
+  }
+
+  return isNonEmptyString(fallback) ? fallback.trim() : "";
 }
 
 function resolveDisplayContent(params = {}) {
@@ -154,6 +192,72 @@ function resolveDisplayContent(params = {}) {
   }
 
   return value !== undefined ? value : fallbackText;
+}
+
+function formatBadgeValue(count, max) {
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    return undefined;
+  }
+
+  const limit = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 99;
+  return count > limit ? `${limit}+` : String(count);
+}
+
+function resolveAvatarInitials(params = {}) {
+  const { initials, name, fallback = "?" } = params;
+
+  if (isNonEmptyString(initials)) {
+    return initials.trim().slice(0, 3).toUpperCase();
+  }
+
+  if (isNonEmptyString(name)) {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    const source = words.length > 1
+      ? `${words[0][0] ?? ""}${words[words.length - 1][0] ?? ""}`
+      : name.trim().slice(0, 2);
+    return source.toUpperCase();
+  }
+
+  return fallback;
+}
+
+function toFiniteNumber(value, fallback) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function resolveProgressMetrics(params = {}) {
+  const rawMin = toFiniteNumber(params.min, 0);
+  const rawMax = toFiniteNumber(params.max, 100);
+  const min = rawMax > rawMin ? rawMin : 0;
+  const max = rawMax > rawMin ? rawMax : 100;
+  const hasValue = params.value !== undefined && params.value !== null && Number.isFinite(Number(params.value));
+  const indeterminate = params.indeterminate === true || !hasValue;
+
+  if (indeterminate) {
+    return {
+      indeterminate: true,
+      min,
+      max,
+      value: undefined,
+      ratio: 0
+    };
+  }
+
+  const value = clampNumber(Number(params.value), min, max);
+  const ratio = (value - min) / (max - min);
+
+  return {
+    indeterminate: false,
+    min,
+    max,
+    value,
+    ratio
+  };
 }
 
 export const ChipsText = React.forwardRef((props, ref) => {
@@ -401,6 +505,99 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.icon.root.wght",
     "chips.comp.icon.root.grad",
     "chips.comp.icon.root.opsz"
+  ],
+  "icon-button": [
+    "chips.comp.icon-button.root.size",
+    "chips.comp.icon-button.root.radius",
+    "chips.comp.icon-button.root.surface.idle",
+    "chips.comp.icon-button.root.surface.hover",
+    "chips.comp.icon-button.root.surface.active",
+    "chips.comp.icon-button.root.surface.disabled",
+    "chips.comp.icon-button.icon.color.idle",
+    "chips.comp.icon-button.icon.color.disabled",
+    "chips.comp.icon-button.focus.outline",
+    "chips.comp.icon-button.status.color.error"
+  ],
+  "toggle-button": [
+    "chips.comp.toggle-button.root.radius",
+    "chips.comp.toggle-button.root.surface.idle",
+    "chips.comp.toggle-button.root.surface.hover",
+    "chips.comp.toggle-button.root.surface.active",
+    "chips.comp.toggle-button.root.surface.pressed",
+    "chips.comp.toggle-button.root.surface.disabled",
+    "chips.comp.toggle-button.label.color.idle",
+    "chips.comp.toggle-button.label.color.pressed",
+    "chips.comp.toggle-button.label.color.disabled",
+    "chips.comp.toggle-button.icon.color.idle",
+    "chips.comp.toggle-button.icon.color.pressed",
+    "chips.comp.toggle-button.icon.color.disabled",
+    "chips.comp.toggle-button.focus.outline",
+    "chips.comp.toggle-button.status.color.error"
+  ],
+  badge: [
+    "chips.comp.badge.root.radius",
+    "chips.comp.badge.root.surface.neutral",
+    "chips.comp.badge.root.surface.accent",
+    "chips.comp.badge.root.surface.success",
+    "chips.comp.badge.root.surface.warning",
+    "chips.comp.badge.root.surface.error",
+    "chips.comp.badge.label.color.neutral",
+    "chips.comp.badge.label.color.accent",
+    "chips.comp.badge.label.color.success",
+    "chips.comp.badge.label.color.warning",
+    "chips.comp.badge.label.color.error",
+    "chips.comp.badge.icon.color.neutral",
+    "chips.comp.badge.icon.color.accent",
+    "chips.comp.badge.icon.color.success",
+    "chips.comp.badge.icon.color.warning",
+    "chips.comp.badge.icon.color.error",
+    "chips.comp.badge.status.color.error"
+  ],
+  tag: [
+    "chips.comp.tag.root.radius",
+    "chips.comp.tag.root.surface.idle",
+    "chips.comp.tag.root.surface.hover",
+    "chips.comp.tag.root.surface.active",
+    "chips.comp.tag.root.surface.disabled",
+    "chips.comp.tag.root.surface.error",
+    "chips.comp.tag.label.color.idle",
+    "chips.comp.tag.label.color.disabled",
+    "chips.comp.tag.label.color.error",
+    "chips.comp.tag.icon.color.idle",
+    "chips.comp.tag.icon.color.disabled",
+    "chips.comp.tag.close.color.idle",
+    "chips.comp.tag.close.color.hover",
+    "chips.comp.tag.close.color.disabled",
+    "chips.comp.tag.focus.outline",
+    "chips.comp.tag.status.color.error"
+  ],
+  avatar: [
+    "chips.comp.avatar.root.size",
+    "chips.comp.avatar.root.radius",
+    "chips.comp.avatar.root.surface",
+    "chips.comp.avatar.root.border.color",
+    "chips.comp.avatar.fallback.color",
+    "chips.comp.avatar.status.color.error"
+  ],
+  spinner: [
+    "chips.comp.spinner.root.size",
+    "chips.comp.spinner.track.color",
+    "chips.comp.spinner.indicator.color",
+    "chips.comp.spinner.indicator.thickness",
+    "chips.comp.spinner.motion.duration",
+    "chips.comp.spinner.status.color.info",
+    "chips.comp.spinner.status.color.error"
+  ],
+  progress: [
+    "chips.comp.progress.track.height",
+    "chips.comp.progress.track.radius",
+    "chips.comp.progress.track.surface",
+    "chips.comp.progress.range.surface.determinate",
+    "chips.comp.progress.range.surface.indeterminate",
+    "chips.comp.progress.label.color",
+    "chips.comp.progress.value.color",
+    "chips.comp.progress.status.color.error",
+    "chips.comp.progress.focus.outline"
   ],
   button: [
     "chips.comp.button.root.radius",
@@ -743,6 +940,48 @@ export function buildComponentContract(component) {
       scope: "icon",
       parts: ["root"],
       states: ["idle"]
+    },
+    "icon-button": {
+      component: "icon-button",
+      scope: "icon-button",
+      parts: ["root", "icon", "spinner", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "toggle-button": {
+      component: "toggle-button",
+      scope: "toggle-button",
+      parts: ["root", "icon", "label", "spinner", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    badge: {
+      component: "badge",
+      scope: "badge",
+      parts: ["root", "icon", "label", "status"],
+      states: ["idle", "disabled", "error"]
+    },
+    tag: {
+      component: "tag",
+      scope: "tag",
+      parts: ["root", "icon", "label", "close", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    avatar: {
+      component: "avatar",
+      scope: "avatar",
+      parts: ["root", "image", "fallback", "status"],
+      states: TASK015_BASE_CONTROL_STATES
+    },
+    spinner: {
+      component: "spinner",
+      scope: "spinner",
+      parts: ["root", "track", "indicator", "status"],
+      states: TASK015_BASE_CONTROL_STATES
+    },
+    progress: {
+      component: "progress",
+      scope: "progress",
+      parts: ["root", "track", "range", "label", "value", "status"],
+      states: TASK015_BASE_CONTROL_STATES
     },
     button: {
       component: "button",
@@ -2088,6 +2327,742 @@ export const ChipsButton = React.forwardRef((props, ref) => {
 });
 
 ChipsButton.displayName = "ChipsButton";
+
+export const ChipsIconButton = React.forwardRef((props, ref) => {
+  const {
+    icon,
+    descriptor,
+    type = "button",
+    disabled = false,
+    loading = false,
+    error = null,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    i18n,
+    onPress,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const resolvedAriaLabel = resolveAccessibleText({
+    value: ariaLabel || rest["aria-label"],
+    key: ariaLabelKey,
+    params: ariaLabelParams,
+    fallback: fallbackAriaLabel,
+    i18n,
+    onDiagnostic
+  });
+  const ariaLabelledBy = isNonEmptyString(rest["aria-labelledby"])
+    ? rest["aria-labelledby"].trim()
+    : undefined;
+
+  if (!resolvedAriaLabel && !ariaLabelledBy) {
+    throw new Error("ICON_BUTTON_A11Y_LABEL_REQUIRED");
+  }
+
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const handleClick = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+
+    if (typeof onPress === "function") {
+      onPress(event);
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (!disabledByState && isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      handleClick(event);
+    }
+  };
+
+  const iconContent = icon !== undefined
+    ? icon
+    : descriptor
+      ? React.createElement(ChipsIcon, {
+          descriptor: {
+            ...descriptor,
+            decorative: true
+          }
+        })
+      : null;
+
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("icon-button", "root", state),
+      ...handlers,
+      type,
+      ref,
+      disabled: disabledByState,
+      "aria-label": resolvedAriaLabel || undefined,
+      "aria-labelledby": ariaLabelledBy,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-busy": loading ? "true" : undefined,
+      onClick: mergeHandlers(rest.onClick, handleClick),
+      onKeyDown: mergeHandlers(rest.onKeyDown, handleKeyDown)
+    },
+    React.createElement(
+      "span",
+      {
+        ...createScopeAttributes("icon-button", "icon", state),
+        "aria-hidden": "true"
+      },
+      iconContent
+    ),
+    loading
+      ? React.createElement("span", {
+          ...createScopeAttributes("icon-button", "spinner", state),
+          "aria-hidden": "true"
+        })
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("icon-button", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsIconButton.displayName = "ChipsIconButton";
+
+export const ChipsToggleButton = React.forwardRef((props, ref) => {
+  const {
+    children,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    icon,
+    iconPosition = "start",
+    type = "button",
+    disabled = false,
+    loading = false,
+    error = null,
+    pressed,
+    defaultPressed = false,
+    i18n,
+    onPress,
+    onPressedChange,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const [internalPressed, setInternalPressed] = React.useState(defaultPressed === true);
+  const isPressed = pressed !== undefined ? pressed === true : internalPressed;
+  const content = resolveDisplayContent({
+    children,
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction: {
+      ...interaction,
+      active: interaction.active || isPressed
+    }
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const handleToggle = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+
+    const nextPressed = !isPressed;
+    if (pressed === undefined) {
+      setInternalPressed(nextPressed);
+    }
+    if (typeof onPressedChange === "function") {
+      onPressedChange(nextPressed);
+    }
+    if (typeof onPress === "function") {
+      onPress(event);
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (!disabledByState && isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      handleToggle(event);
+    }
+  };
+
+  const iconNode = icon !== undefined
+    ? React.createElement(
+        "span",
+        {
+          ...createScopeAttributes("toggle-button", "icon", state),
+          "aria-hidden": "true"
+        },
+        icon
+      )
+    : null;
+
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("toggle-button", "root", state),
+      ...handlers,
+      type,
+      ref,
+      disabled: disabledByState,
+      "aria-pressed": String(isPressed),
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-busy": loading ? "true" : undefined,
+      "data-pressed": String(isPressed),
+      onClick: mergeHandlers(rest.onClick, handleToggle),
+      onKeyDown: mergeHandlers(rest.onKeyDown, handleKeyDown)
+    },
+    iconPosition === "start" ? iconNode : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("toggle-button", "label", state),
+      content
+    ),
+    iconPosition === "end" ? iconNode : null,
+    loading
+      ? React.createElement("span", {
+          ...createScopeAttributes("toggle-button", "spinner", state),
+          "aria-hidden": "true"
+        })
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("toggle-button", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsToggleButton.displayName = "ChipsToggleButton";
+
+export const ChipsBadge = React.forwardRef((props, ref) => {
+  const {
+    children,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    count,
+    max,
+    tone,
+    icon,
+    decorative = false,
+    disabled = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const state = resolveInteractiveState({
+    disabled,
+    error: normalizedError
+  });
+  const resolvedTone = normalizedError ? "error" : normalizeControlTone(tone);
+  const countText = formatBadgeValue(count, max);
+  const content = resolveDisplayContent({
+    children,
+    value: countText ?? label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const ariaLabel = resolveAccessibleText({
+    value: rest["aria-label"],
+    fallback: typeof content === "string" ? content : "",
+    i18n,
+    onDiagnostic
+  });
+
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      ...createScopeAttributes("badge", "root", state),
+      ref,
+      "data-tone": resolvedTone,
+      "data-count": countText,
+      "aria-hidden": decorative ? "true" : undefined,
+      "aria-label": decorative ? undefined : ariaLabel || undefined,
+      "aria-disabled": disabled ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined
+    },
+    icon
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("badge", "icon", state),
+            "aria-hidden": "true"
+          },
+          icon
+        )
+      : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("badge", "label", state),
+      content
+    ),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("badge", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsBadge.displayName = "ChipsBadge";
+
+export const ChipsTag = React.forwardRef((props, ref) => {
+  const {
+    children,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    icon,
+    disabled = false,
+    loading = false,
+    error = null,
+    removable = false,
+    closeLabel,
+    closeLabelKey,
+    fallbackCloseLabel = "Remove tag",
+    i18n,
+    onRemove,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const content = resolveDisplayContent({
+    children,
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedCloseLabel = resolveAccessibleText({
+    value: closeLabel,
+    key: closeLabelKey,
+    fallback: fallbackCloseLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const handleRemove = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+
+    if (typeof onRemove === "function") {
+      onRemove(event);
+    }
+  };
+
+  const handleRemoveKeyDown = (event) => {
+    if (!disabledByState && isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      handleRemove(event);
+    }
+  };
+
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      ...createScopeAttributes("tag", "root", state),
+      ...handlers,
+      ref,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-busy": loading ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-removable": String(removable === true)
+    },
+    icon
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("tag", "icon", state),
+            "aria-hidden": "true"
+          },
+          icon
+        )
+      : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("tag", "label", state),
+      content
+    ),
+    removable
+      ? React.createElement(
+          "button",
+          {
+            ...createScopeAttributes("tag", "close", state),
+            type: "button",
+            disabled: disabledByState,
+            "aria-label": resolvedCloseLabel,
+            onClick: handleRemove,
+            onKeyDown: handleRemoveKeyDown
+          },
+          resolveIconContent(undefined, "close")
+        )
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("tag", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsTag.displayName = "ChipsTag";
+
+export const ChipsAvatar = React.forwardRef((props, ref) => {
+  const {
+    name,
+    nameKey,
+    nameParams,
+    fallbackName,
+    src,
+    alt,
+    initials,
+    shape,
+    decorative = false,
+    loading = false,
+    disabled = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const displayName = resolveAccessibleText({
+    value: name,
+    key: nameKey,
+    params: nameParams,
+    fallback: fallbackName || alt,
+    i18n,
+    onDiagnostic
+  });
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError
+  });
+  const resolvedInitials = resolveAvatarInitials({
+    initials,
+    name: displayName,
+    fallback: "?"
+  });
+  const imageAlt = decorative ? "" : alt || displayName;
+
+  if (!decorative && !displayName && !imageAlt) {
+    throw new Error("AVATAR_A11Y_LABEL_REQUIRED");
+  }
+
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      ...createScopeAttributes("avatar", "root", state),
+      ref,
+      role: decorative ? undefined : "img",
+      "aria-label": decorative ? undefined : displayName || imageAlt,
+      "aria-hidden": decorative ? "true" : undefined,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "data-shape": normalizeAvatarShape(shape)
+    },
+    src && !normalizedError
+      ? React.createElement("img", {
+          ...createScopeAttributes("avatar", "image", state),
+          src,
+          alt: imageAlt,
+          "aria-hidden": decorative ? "true" : undefined
+        })
+      : React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("avatar", "fallback", state),
+            "aria-hidden": "true"
+          },
+          resolvedInitials
+        ),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("avatar", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsAvatar.displayName = "ChipsAvatar";
+
+export const ChipsSpinner = React.forwardRef((props, ref) => {
+  const {
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel = "Loading",
+    decorative = false,
+    loading = true,
+    disabled = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const state = resolveInteractiveState({
+    disabled,
+    loading,
+    error: normalizedError
+  });
+  const resolvedLabel = resolveAccessibleText({
+    value: label || rest["aria-label"],
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  if (!decorative && !resolvedLabel) {
+    throw new Error("SPINNER_A11Y_LABEL_REQUIRED");
+  }
+
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      ...createScopeAttributes("spinner", "root", state),
+      ref,
+      role: decorative ? undefined : "status",
+      "aria-label": decorative ? undefined : resolvedLabel,
+      "aria-hidden": decorative ? "true" : undefined,
+      "aria-busy": decorative ? undefined : String(loading === true),
+      "aria-disabled": disabled ? "true" : undefined
+    },
+    React.createElement("span", {
+      ...createScopeAttributes("spinner", "track", state),
+      "aria-hidden": "true"
+    }),
+    React.createElement("span", {
+      ...createScopeAttributes("spinner", "indicator", state),
+      "aria-hidden": "true"
+    }),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("spinner", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsSpinner.displayName = "ChipsSpinner";
+
+export const ChipsProgress = React.forwardRef((props, ref) => {
+  const {
+    value,
+    min = 0,
+    max = 100,
+    indeterminate = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    showValue = false,
+    valueText,
+    disabled = false,
+    loading = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const metrics = resolveProgressMetrics({ value, min, max, indeterminate });
+  const state = resolveInteractiveState({
+    disabled,
+    loading: loading || metrics.indeterminate,
+    error: normalizedError
+  });
+  const resolvedLabel = resolveAccessibleText({
+    value: label || rest["aria-label"],
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  if (!resolvedLabel && !isNonEmptyString(rest["aria-labelledby"])) {
+    throw new Error("PROGRESS_A11Y_LABEL_REQUIRED");
+  }
+
+  const resolvedValueText = isNonEmptyString(valueText)
+    ? valueText.trim()
+    : metrics.indeterminate
+      ? undefined
+      : `${Math.round(metrics.ratio * 100)}%`;
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("progress", "root", state),
+      ref,
+      role: "progressbar",
+      "aria-label": resolvedLabel || undefined,
+      "aria-labelledby": rest["aria-labelledby"],
+      "aria-valuemin": metrics.indeterminate ? undefined : metrics.min,
+      "aria-valuemax": metrics.indeterminate ? undefined : metrics.max,
+      "aria-valuenow": metrics.indeterminate ? undefined : metrics.value,
+      "aria-valuetext": resolvedValueText,
+      "aria-disabled": disabled ? "true" : undefined,
+      "data-mode": metrics.indeterminate ? "indeterminate" : "determinate",
+      "data-value": metrics.value === undefined ? undefined : String(metrics.value),
+      style: {
+        "--chips-progress-ratio": metrics.ratio,
+        ...rest.style
+      }
+    },
+    resolvedLabel
+      ? React.createElement(
+          "span",
+          createScopeAttributes("progress", "label", state),
+          resolvedLabel
+        )
+      : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("progress", "track", state),
+      React.createElement("span", {
+        ...createScopeAttributes("progress", "range", state),
+        "aria-hidden": "true"
+      })
+    ),
+    showValue && resolvedValueText
+      ? React.createElement(
+          "span",
+          createScopeAttributes("progress", "value", state),
+          resolvedValueText
+        )
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("progress", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsProgress.displayName = "ChipsProgress";
 
 export const ChipsInput = React.forwardRef((props, ref) => {
   const {
@@ -7149,6 +8124,72 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "icon-button") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "toggle-button") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    if (props["aria-pressed"] !== "true" && props["aria-pressed"] !== "false") {
+      const error = new Error("Toggle button must expose aria-pressed.");
+      error.code = "A11Y_TOGGLE_BUTTON_PRESSED_MISSING";
+      throw error;
+    }
+    return true;
+  }
+
+  if (component === "badge") {
+    if (props["aria-hidden"] === "true") {
+      return true;
+    }
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "tag") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "avatar") {
+    if (props["aria-hidden"] === "true") {
+      return true;
+    }
+    assertAriaProps(props, {
+      role: "img",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "spinner") {
+    if (props["aria-hidden"] === "true") {
+      return true;
+    }
+    assertAriaProps(props, {
+      role: "status",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "progress") {
+    assertAriaProps(props, {
+      role: "progressbar",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "button") {
     assertAriaProps(props, {
       role: "button",
@@ -7442,6 +8483,51 @@ export const P0_DISPLAY_COMPONENTS = [
     scope: "icon",
     parts: ["root"],
     states: ["idle"]
+  })
+];
+
+export const TASK015_BASE_CONTROL_COMPONENTS = [
+  createComponentMeta({
+    name: "ChipsIconButton",
+    scope: "icon-button",
+    parts: ["root", "icon", "spinner", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsToggleButton",
+    scope: "toggle-button",
+    parts: ["root", "icon", "label", "spinner", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsBadge",
+    scope: "badge",
+    parts: ["root", "icon", "label", "status"],
+    states: ["idle", "disabled", "error"]
+  }),
+  createComponentMeta({
+    name: "ChipsTag",
+    scope: "tag",
+    parts: ["root", "icon", "label", "close", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsAvatar",
+    scope: "avatar",
+    parts: ["root", "image", "fallback", "status"],
+    states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsSpinner",
+    scope: "spinner",
+    parts: ["root", "track", "indicator", "status"],
+    states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsProgress",
+    scope: "progress",
+    parts: ["root", "track", "range", "label", "value", "status"],
+    states: TASK015_BASE_CONTROL_STATES
   })
 ];
 

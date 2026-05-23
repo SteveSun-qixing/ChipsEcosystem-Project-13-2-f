@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -20,8 +20,8 @@
 | 文本与图像 | Image | 无 | 待补齐 | `image` | 需要 alt、加载、错误和尺寸契约 |
 | 文本与图像 | Media | 无 | 待补齐 | `media` | 需要音视频/通用媒体边界与模块能力协作口径 |
 | 按钮与命令 | Button | `ChipsButton` | 已落地 | `button` | 维持基础动作按钮闭环 |
-| 按钮与命令 | IconButton | 无 | 待补齐 | `icon-button` | 必须强制可访问名称和 44px 热区 |
-| 按钮与命令 | ToggleButton | `ChipsButton` 相邻能力 | 待补齐 | `toggle-button` | 建议补独立导出与 contract，避免按钮模式口径含混 |
+| 按钮与命令 | IconButton | `ChipsIconButton` | 已落地 | `icon-button` | 必须强制可访问名称和 44px 热区 |
+| 按钮与命令 | ToggleButton | `ChipsToggleButton` | 已落地 | `toggle-button` | 独立导出与 contract，切换态使用 `aria-pressed` |
 | 输入控件 | TextField | `ChipsInput` 相邻能力 | 待补齐 | `text-field` | 需要独立单行文本输入 scope 或明确等价标准 |
 | 输入控件 | TextArea | 无 | 待补齐 | `text-area` | 需要多行输入、描述、错误、键盘行为 |
 | 输入控件 | SearchField | 无 | 待补齐 | `search-field` | 需要搜索/清空槽位与 Enter 搜索语义 |
@@ -37,12 +37,12 @@
 | 数值控件 | NumberInput | 无 | 待补齐 | `number-input` | 需要解析、夹取、错误和 stepper 协作 |
 | 日期时间 | DatePicker | `ChipsDateTime` 相邻能力 | 待补齐 | `date-picker` | 需要独立日期输入或选择器契约 |
 | 日期时间 | TimePicker | `ChipsDateTime` 相邻能力 | 待补齐 | `time-picker` | 需要独立时间输入或选择器契约 |
-| 展示控件 | Badge | 无 | 待补齐 | `badge` | 需要状态色、计数/文本和装饰语义 |
-| 展示控件 | Tag | 无 | 待补齐 | `tag` | 需要标签文本、可关闭变体和列表语义 |
-| 展示控件 | Avatar | 无 | 待补齐 | `avatar` | 需要图像、缩写、fallback 与 alt 语义 |
+| 展示控件 | Badge | `ChipsBadge` | 已落地 | `badge` | 需要状态色、计数/文本和装饰语义 |
+| 展示控件 | Tag | `ChipsTag` | 已落地 | `tag` | 需要标签文本、可关闭变体和列表语义 |
+| 展示控件 | Avatar | `ChipsAvatar` | 已落地 | `avatar` | 需要图像、缩写、fallback 与 alt 语义 |
 | 展示控件 | Tooltip | `ChipsTooltip` | 已落地 | `tooltip` | 维持说明气泡闭环 |
-| 反馈控件 | Progress | 无 | 待补齐 | `progress` | 需要 determinate/indeterminate 与 progressbar 语义 |
-| 反馈控件 | Spinner | 无 | 待补齐 | `spinner` | 需要 status 语义与 motion token |
+| 反馈控件 | Progress | `ChipsProgress` | 已落地 | `progress` | 需要 determinate/indeterminate 与 progressbar 语义 |
+| 反馈控件 | Spinner | `ChipsSpinner` | 已落地 | `spinner` | 需要 status 语义与 motion token |
 | 反馈控件 | Skeleton | `ChipsSkeleton` | 已落地 | `skeleton` | 维持加载占位闭环 |
 | 反馈控件 | EmptyState | `ChipsEmptyState` | 已落地 | `empty-state` | 维持空态展示闭环 |
 | 反馈控件 | ErrorState | `ChipsErrorBoundary` 相邻能力 | 待补齐 | `error-state` | 需要静态错误展示，不能等同错误边界 |
@@ -72,9 +72,60 @@
 - 输入必须是 `IconDescriptor`；装饰图标默认 `aria-hidden="true"`，功能图标必须提供可访问标签。
 - 默认与暗色主题必须通过 Material Symbols variable font 链路承载 `outlined / rounded / sharp`。
 
-## 4. 后续批次建议
+## 4. 第二批已冻结控件
 
-- 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`。
+### `ChipsIconButton`
+
+- `data-scope="icon-button"`，公开 part：`root / icon / spinner / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.icon-button.root.*`、`icon.color.*`、`focus.outline`、`status.color.error`。
+- 必须提供可访问名称；默认主题热区 token 为 `44cpx`，图标内容必须通过 `ChipsIcon` 或外部槽位提供。
+
+### `ChipsToggleButton`
+
+- `data-scope="toggle-button"`，公开 part：`root / icon / label / spinner / status`。
+- 状态：标准交互状态集合；切换态使用 `aria-pressed` 与 `data-pressed`。
+- 主题 token：`chips.comp.toggle-button.root.surface.*`、`label.color.*`、`icon.color.*`、`focus.outline`、`status.color.error`。
+- 用于“按下/未按下”的命令按钮，不等同 `Switch` 或 `Checkbox`。
+
+### `ChipsBadge`
+
+- `data-scope="badge"`，公开 part：`root / icon / label / status`。
+- 状态：`idle / disabled / error`。
+- 主题 token：`chips.comp.badge.root.surface.*`、`label.color.*`、`icon.color.*`、`status.color.error`。
+- 支持 `neutral / accent / success / warning / error` tone；可装饰隐藏，也可通过可访问名称表达计数或状态。
+
+### `ChipsTag`
+
+- `data-scope="tag"`，公开 part：`root / icon / label / close / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.tag.root.surface.*`、`label.color.*`、`icon.color.*`、`close.color.*`、`focus.outline`、`status.color.error`。
+- 可关闭标签必须让 `close` part 作为真实按钮，并提供可访问名称。
+
+### `ChipsAvatar`
+
+- `data-scope="avatar"`，公开 part：`root / image / fallback / status`。
+- 状态：`idle / disabled / loading / error`。
+- 主题 token：`chips.comp.avatar.root.*`、`fallback.color`、`status.color.error`。
+- 非装饰头像必须提供姓名、alt 或等价可访问标签；图片失败或错误态使用 fallback 缩写。
+
+### `ChipsSpinner`
+
+- `data-scope="spinner"`，公开 part：`root / track / indicator / status`。
+- 状态：`idle / disabled / loading / error`。
+- 主题 token：`chips.comp.spinner.root.size`、`track.color`、`indicator.*`、`motion.duration`、`status.color.*`。
+- 独立使用时必须 `role="status"` 并有可访问名称；装饰性嵌入必须 `aria-hidden="true"`。
+
+### `ChipsProgress`
+
+- `data-scope="progress"`，公开 part：`root / track / range / label / value / status`。
+- 状态：`idle / disabled / loading / error`；模式通过 `data-mode="determinate|indeterminate"` 表达。
+- 主题 token：`chips.comp.progress.track.*`、`range.surface.*`、`label.color`、`value.color`、`status.color.error`、`focus.outline`。
+- 确定进度必须输出 `aria-valuemin / aria-valuemax / aria-valuenow`；不确定进度不得输出 `aria-valuenow`。
+
+## 5. 后续批次建议
+
+- 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`。
 - 批次 D：`SegmentedControl / ComboBox`。
 - 批次 E：`NumberInput / Stepper / Slider`。

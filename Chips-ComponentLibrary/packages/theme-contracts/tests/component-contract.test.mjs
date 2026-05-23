@@ -62,6 +62,33 @@ test("display primitive contracts contain text label and icon tokens", () => {
   assert.ok(icon.tokens.includes("chips.comp.icon.root.opsz"));
 });
 
+test("task015 second batch contracts expose button display and feedback scopes", () => {
+  const iconButton = readContract("icon-button.contract.json");
+  const toggleButton = readContract("toggle-button.contract.json");
+  const badge = readContract("badge.contract.json");
+  const tag = readContract("tag.contract.json");
+  const avatar = readContract("avatar.contract.json");
+  const spinner = readContract("spinner.contract.json");
+  const progress = readContract("progress.contract.json");
+
+  for (const contract of [iconButton, toggleButton, badge, tag, avatar, spinner, progress]) {
+    assertCommonShape(contract);
+  }
+  assert.ok(iconButton.parts.includes("icon"));
+  assert.ok(iconButton.tokens.includes("chips.comp.icon-button.root.size"));
+  assert.ok(toggleButton.parts.includes("label"));
+  assert.ok(toggleButton.tokens.includes("chips.comp.toggle-button.root.surface.pressed"));
+  assert.ok(badge.tokens.includes("chips.comp.badge.root.surface.warning"));
+  assert.ok(tag.parts.includes("close"));
+  assert.ok(tag.tokens.includes("chips.comp.tag.close.color.hover"));
+  assert.ok(avatar.parts.includes("fallback"));
+  assert.ok(avatar.tokens.includes("chips.comp.avatar.root.size"));
+  assert.ok(spinner.parts.includes("indicator"));
+  assert.ok(spinner.tokens.includes("chips.comp.spinner.motion.duration"));
+  assert.ok(progress.parts.includes("range"));
+  assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
+});
+
 test("only advanced iframe components expose iframe contract extension", () => {
   for (const fileName of fs.readdirSync(base).filter((item) => item.endsWith(".contract.json"))) {
     const contract = readContract(fileName);

@@ -15,6 +15,7 @@ import {
   ChipsEmptyState,
   ChipsGrid,
   ChipsIcon,
+  ChipsIconButton,
   ChipsErrorBoundary,
   ChipsFormField,
   ChipsFormGroup,
@@ -28,7 +29,9 @@ import {
   ChipsNotification,
   ChipsPanelHeader,
   ChipsPopover,
+  ChipsProgress,
   ChipsRadioGroup,
+  ChipsSpinner,
   ChipsSkeleton,
   ChipsSplitPane,
   ChipsSelect,
@@ -40,6 +43,7 @@ import {
   ChipsStack,
   ChipsTabs,
   ChipsText,
+  ChipsToggleButton,
   ChipsToolbar,
   ChipsToolbarItem,
   ChipsContextMenu,
@@ -48,8 +52,11 @@ import {
   ChipsToolWindow,
   ChipsTree,
   ChipsTooltip,
+  ChipsAvatar,
+  ChipsBadge,
   ChipsView,
   ChipsVirtualList,
+  ChipsTag,
   ChipsCardShell,
   COMPONENT_TOKEN_MAP,
   clampSplitRatio,
@@ -68,6 +75,7 @@ import {
   normalizeSystemMessageItems,
   parsePositiveInteger,
   P0_DISPLAY_COMPONENTS,
+  TASK015_BASE_CONTROL_COMPONENTS,
   P0_BASE_INTERACTIVE_COMPONENTS,
   P0_DATA_FORM_COMPONENTS,
   resolveConfigValue,
@@ -178,6 +186,22 @@ test("buildComponentContract returns icon component contract", () => {
   assert.ok(contract.tokens.includes("chips.comp.icon.root.color"));
 });
 
+test("buildComponentContract returns task015 second batch component contracts", () => {
+  const iconButton = buildComponentContract("icon-button");
+  const toggleButton = buildComponentContract("toggle-button");
+  const progress = buildComponentContract("progress");
+
+  assert.equal(iconButton.scope, "icon-button");
+  assert.ok(iconButton.parts.includes("icon"));
+  assert.ok(iconButton.tokens.includes("chips.comp.icon-button.root.size"));
+  assert.equal(toggleButton.scope, "toggle-button");
+  assert.ok(toggleButton.parts.includes("label"));
+  assert.ok(toggleButton.tokens.includes("chips.comp.toggle-button.root.surface.pressed"));
+  assert.equal(progress.scope, "progress");
+  assert.ok(progress.parts.includes("range"));
+  assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
+});
+
 test("layout primitive contracts are available through common contract builder", () => {
   const view = buildComponentContract("view");
   const splitView = buildLayoutComponentContract("split-view");
@@ -202,6 +226,13 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.text));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.label));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.icon));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["icon-button"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["toggle-button"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.badge));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.tag));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.avatar));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.spinner));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.progress));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -289,6 +320,59 @@ test("validateComponentA11y validates known components and rejects missing rule"
   assert.equal(
     validateComponentA11y("icon", {
       "aria-hidden": "true"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("icon-button", {
+      "aria-label": "Refresh"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("toggle-button", {
+      "aria-label": "Pin",
+      "aria-pressed": "false"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("badge", {
+      "aria-label": "3 unread"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("tag", {
+      "aria-label": "Project tag"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("avatar", {
+      role: "img",
+      "aria-label": "Ada Lovelace"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("spinner", {
+      role: "status",
+      "aria-label": "Loading"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("progress", {
+      role: "progressbar",
+      "aria-label": "Upload progress"
     }),
     true
   );
@@ -662,6 +746,132 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
       ),
     /ICON_A11Y_LABEL_REQUIRED/
   );
+});
+
+test("task015 second batch metadata is complete", () => {
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 7);
+  assert.deepEqual(
+    TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
+    [
+      "icon-button",
+      "toggle-button",
+      "badge",
+      "tag",
+      "avatar",
+      "spinner",
+      "progress"
+    ]
+  );
+});
+
+test("task015 second batch component exports exist", () => {
+  for (const component of [
+    ChipsIconButton,
+    ChipsToggleButton,
+    ChipsBadge,
+    ChipsTag,
+    ChipsAvatar,
+    ChipsSpinner,
+    ChipsProgress
+  ]) {
+    assert.equal(typeof component, "object");
+    assert.equal(typeof component.render, "function");
+  }
+});
+
+test("ChipsIconButton requires accessible name", () => {
+  assert.throws(
+    () =>
+      ChipsIconButton.render(
+        {
+          descriptor: { name: "settings" }
+        },
+        null
+      ),
+    /ICON_BUTTON_A11Y_LABEL_REQUIRED/
+  );
+});
+
+test("ChipsBadge renders count and decorative semantics", () => {
+  const rendered = ChipsBadge.render(
+    {
+      count: 120,
+      max: 99,
+      tone: "warning",
+      decorative: true
+    },
+    null
+  );
+
+  assert.equal(rendered.props["data-scope"], "badge");
+  assert.equal(rendered.props["data-tone"], "warning");
+  assert.equal(rendered.props["data-count"], "99+");
+  assert.equal(rendered.props["aria-hidden"], "true");
+  assert.equal(rendered.props.children[1].props.children, "99+");
+});
+
+test("ChipsAvatar resolves fallback initials and requires labels", () => {
+  const rendered = ChipsAvatar.render(
+    {
+      name: "Ada Lovelace",
+      error: "Image failed"
+    },
+    null
+  );
+
+  assert.equal(rendered.props["data-scope"], "avatar");
+  assert.equal(rendered.props.role, "img");
+  assert.equal(rendered.props["aria-label"], "Ada Lovelace");
+  assert.equal(rendered.props.children[0].props["data-part"], "fallback");
+  assert.equal(rendered.props.children[0].props.children, "AL");
+  assert.throws(() => ChipsAvatar.render({}, null), /AVATAR_A11Y_LABEL_REQUIRED/);
+});
+
+test("ChipsSpinner exposes status semantics or decorative mode", () => {
+  const rendered = ChipsSpinner.render(
+    {
+      label: "Loading library"
+    },
+    null
+  );
+
+  assert.equal(rendered.props["data-scope"], "spinner");
+  assert.equal(rendered.props.role, "status");
+  assert.equal(rendered.props["aria-label"], "Loading library");
+  assert.equal(rendered.props.children[0].props["data-part"], "track");
+  assert.equal(rendered.props.children[1].props["data-part"], "indicator");
+
+  const decorative = ChipsSpinner.render({ decorative: true }, null);
+  assert.equal(decorative.props["aria-hidden"], "true");
+});
+
+test("ChipsProgress clamps determinate value and separates indeterminate aria", () => {
+  const determinate = ChipsProgress.render(
+    {
+      value: 150,
+      min: 0,
+      max: 100,
+      label: "Upload",
+      showValue: true
+    },
+    null
+  );
+  const indeterminate = ChipsProgress.render(
+    {
+      indeterminate: true,
+      label: "Sync"
+    },
+    null
+  );
+
+  assert.equal(determinate.props["data-scope"], "progress");
+  assert.equal(determinate.props["data-mode"], "determinate");
+  assert.equal(determinate.props["aria-valuenow"], 100);
+  assert.equal(determinate.props.style["--chips-progress-ratio"], 1);
+  assert.equal(determinate.props.children[2].props.children, "100%");
+  assert.equal(indeterminate.props["data-mode"], "indeterminate");
+  assert.equal(indeterminate.props["aria-valuenow"], undefined);
+  assert.throws(() => ChipsProgress.render({ value: 1 }, null), /PROGRESS_A11Y_LABEL_REQUIRED/);
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

@@ -28,5 +28,12 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.text?.root?.color?.default).toBeDefined();
     expect(parsed.comp.chips?.comp?.label?.["required-indicator"]?.color).toBeDefined();
     expect(parsed.comp.chips?.comp?.icon?.root?.opsz).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["icon-button"]?.root?.size).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["toggle-button"]?.root?.surface?.pressed).toBeDefined();
+    expect(parsed.comp.chips?.comp?.badge?.root?.surface?.warning).toBeDefined();
+    expect(parsed.comp.chips?.comp?.tag?.close?.color?.hover).toBeDefined();
+    expect(parsed.comp.chips?.comp?.avatar?.fallback?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.spinner?.motion?.duration).toBeDefined();
+    expect(parsed.comp.chips?.comp?.progress?.range?.surface?.indeterminate).toBeDefined();
   });
 });

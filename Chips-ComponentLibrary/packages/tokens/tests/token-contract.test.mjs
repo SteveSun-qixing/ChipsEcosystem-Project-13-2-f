@@ -60,6 +60,13 @@ test("card runtime component tokens exist", () => {
   const text = readJson(path.join(root, "comp/text.json"));
   const label = readJson(path.join(root, "comp/label.json"));
   const icon = readJson(path.join(root, "comp/icon.json"));
+  const iconButton = readJson(path.join(root, "comp/icon-button.json"));
+  const toggleButton = readJson(path.join(root, "comp/toggle-button.json"));
+  const badge = readJson(path.join(root, "comp/badge.json"));
+  const tag = readJson(path.join(root, "comp/tag.json"));
+  const avatar = readJson(path.join(root, "comp/avatar.json"));
+  const spinner = readJson(path.join(root, "comp/spinner.json"));
+  const progress = readJson(path.join(root, "comp/progress.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -108,6 +115,13 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(text, "chips.comp.text.root.color.default"));
   assert.ok(getPath(label, "chips.comp.label.required-indicator.color"));
   assert.ok(getPath(icon, "chips.comp.icon.root.opsz"));
+  assert.ok(getPath(iconButton, "chips.comp.icon-button.root.size"));
+  assert.ok(getPath(toggleButton, "chips.comp.toggle-button.root.surface.pressed"));
+  assert.ok(getPath(badge, "chips.comp.badge.root.surface.warning"));
+  assert.ok(getPath(tag, "chips.comp.tag.close.color.hover"));
+  assert.ok(getPath(avatar, "chips.comp.avatar.fallback.color"));
+  assert.ok(getPath(spinner, "chips.comp.spinner.motion.duration"));
+  assert.ok(getPath(progress, "chips.comp.progress.range.surface.indeterminate"));
 });
 
 test("system token layer exists", () => {

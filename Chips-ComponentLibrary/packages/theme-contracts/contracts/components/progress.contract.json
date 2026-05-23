@@ -1,0 +1,29 @@
+{
+  "component": "progress",
+  "scope": "progress",
+  "parts": [
+    "root",
+    "track",
+    "range",
+    "label",
+    "value",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.progress.track.height",
+    "chips.comp.progress.track.radius",
+    "chips.comp.progress.track.surface",
+    "chips.comp.progress.range.surface.determinate",
+    "chips.comp.progress.range.surface.indeterminate",
+    "chips.comp.progress.label.color",
+    "chips.comp.progress.value.color",
+    "chips.comp.progress.status.color.error",
+    "chips.comp.progress.focus.outline"
+  ]
+}

@@ -22,6 +22,9 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain("Material Symbols Outlined");
     expect(themeCss).toContain('data-scope="text"');
     expect(themeCss).toContain('data-scope="label"');
+    expect(themeCss).toContain('data-scope="icon-button"');
+    expect(themeCss).toContain('data-scope="badge"');
+    expect(themeCss).toContain('data-scope="progress"');
     expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');

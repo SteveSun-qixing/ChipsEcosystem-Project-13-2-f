@@ -268,6 +268,134 @@ export interface ButtonProps {
   [key: string]: unknown;
 }
 
+export interface IconButtonProps {
+  icon?: React.ReactNode;
+  descriptor?: ChipsIconDescriptor;
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  ariaLabel?: string;
+  ariaLabelKey?: string;
+  ariaLabelParams?: Record<string, string | number>;
+  fallbackAriaLabel?: string;
+  i18n?: ChipsDisplayTextProps["i18n"];
+  onPress?: (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onDiagnostic?: ChipsDisplayTextProps["onDiagnostic"];
+  [key: string]: unknown;
+}
+
+export interface ToggleButtonProps {
+  children?: React.ReactNode;
+  label?: React.ReactNode;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  icon?: React.ReactNode;
+  iconPosition?: "start" | "end";
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  pressed?: boolean;
+  defaultPressed?: boolean;
+  i18n?: ChipsDisplayTextProps["i18n"];
+  onPress?: (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
+  onPressedChange?: (pressed: boolean) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onDiagnostic?: ChipsDisplayTextProps["onDiagnostic"];
+  [key: string]: unknown;
+}
+
+export type ChipsControlTone = "neutral" | "accent" | "success" | "warning" | "error";
+
+export interface BadgeProps extends ChipsDisplayTextProps {
+  children?: React.ReactNode;
+  label?: React.ReactNode;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  count?: number;
+  max?: number;
+  tone?: ChipsControlTone;
+  icon?: React.ReactNode;
+  decorative?: boolean;
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface TagProps extends ChipsDisplayTextProps {
+  children?: React.ReactNode;
+  label?: React.ReactNode;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  removable?: boolean;
+  closeLabel?: string;
+  closeLabelKey?: string;
+  fallbackCloseLabel?: string;
+  onRemove?: (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export type AvatarShape = "circle" | "rounded" | "square";
+
+export interface AvatarProps extends ChipsDisplayTextProps {
+  name?: string;
+  nameKey?: string;
+  nameParams?: Record<string, string | number>;
+  fallbackName?: string;
+  src?: string;
+  alt?: string;
+  initials?: string;
+  shape?: AvatarShape;
+  decorative?: boolean;
+  loading?: boolean;
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface SpinnerProps extends ChipsDisplayTextProps {
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  decorative?: boolean;
+  loading?: boolean;
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface ProgressProps extends ChipsDisplayTextProps {
+  value?: number;
+  min?: number;
+  max?: number;
+  indeterminate?: boolean;
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  showValue?: boolean;
+  valueText?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
 export interface InputProps {
   value?: string;
   defaultValue?: string;
@@ -832,10 +960,13 @@ export interface EmptyStateProps {
 
 export interface SkeletonProps {
   lines?: number;
+  animated?: boolean;
+  shape?: "line" | "circle" | "rect";
   loading?: boolean;
   disabled?: boolean;
-  error?: StandardErrorLike | null;
-  ariaLabel: string;
+  error?: StandardErrorLike | string | null;
+  ariaLabel?: string;
+  ariaLabelKey?: string;
   i18n?: I18nTextSource;
   onStateChange?: (state: InteractiveState) => void;
   onDiagnostic?: (record: ObservationRecord) => void;
@@ -857,6 +988,13 @@ export const ChipsText: React.ForwardRefExoticComponent<ChipsTextProps & React.R
 export const ChipsLabel: React.ForwardRefExoticComponent<ChipsLabelProps & React.RefAttributes<HTMLLabelElement>>;
 export const ChipsIcon: React.ForwardRefExoticComponent<ChipsIconProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsButton: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<HTMLButtonElement>>;
+export const ChipsIconButton: React.ForwardRefExoticComponent<IconButtonProps & React.RefAttributes<HTMLButtonElement>>;
+export const ChipsToggleButton: React.ForwardRefExoticComponent<ToggleButtonProps & React.RefAttributes<HTMLButtonElement>>;
+export const ChipsBadge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<HTMLSpanElement>>;
+export const ChipsTag: React.ForwardRefExoticComponent<TagProps & React.RefAttributes<HTMLSpanElement>>;
+export const ChipsAvatar: React.ForwardRefExoticComponent<AvatarProps & React.RefAttributes<HTMLSpanElement>>;
+export const ChipsSpinner: React.ForwardRefExoticComponent<SpinnerProps & React.RefAttributes<HTMLSpanElement>>;
+export const ChipsProgress: React.ForwardRefExoticComponent<ProgressProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsInput: React.ForwardRefExoticComponent<InputProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsCheckbox: React.ForwardRefExoticComponent<CheckboxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsRadioGroup: React.ForwardRefExoticComponent<RadioGroupProps & React.RefAttributes<HTMLDivElement>>;
@@ -912,6 +1050,7 @@ export function buildComponentContract(component: string): {
 };
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
+export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];
 export const P0_DATA_FORM_COMPONENTS: ComponentMeta[];
 export const STAGE7_DATA_ADVANCED_COMPONENTS: ComponentMeta[];

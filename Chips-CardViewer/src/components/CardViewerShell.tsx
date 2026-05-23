@@ -3,10 +3,10 @@ import "./CardViewerShell.css";
 
 interface CardViewerShellProps {
   surfaceMode: "immersive" | "document";
-  content: React.ReactNode;
+  children: React.ReactNode;
 }
 
-export function CardViewerShell({ surfaceMode, content }: CardViewerShellProps) {
+export function CardViewerShell({ surfaceMode, children }: CardViewerShellProps) {
   return (
     <div
       data-chips-app="card-viewer.shell"
@@ -25,7 +25,7 @@ export function CardViewerShell({ surfaceMode, content }: CardViewerShellProps) 
             : "card-viewer-shell__main--immersive",
         ].join(" ")}
       >
-        {content}
+        {children}
       </main>
     </div>
   );

@@ -37,6 +37,9 @@ export const boxes = pgTable('boxes', {
   /** 封面 URL */
   coverUrl: text('cover_url'),
 
+  /** 箱子发布态文档入口 URL */
+  documentUrl: text('document_url'),
+
   /** 完整 metadata.yaml 内容 */
   metadata: jsonb('metadata'),
 

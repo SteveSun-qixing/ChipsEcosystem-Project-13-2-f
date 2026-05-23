@@ -231,11 +231,98 @@ Bridge 事件命名统一采用点语义，例如：
 - `theme.changed`
 - `plugin.ready`
 - `surface.opened`
+- `plugin.surface.resize`
 
 禁止混用：
 
 - `theme:changed`
 - `theme-changed`
+
+### 8.1 文档型 Surface 高度事件
+
+当应用插件以文档流方式嵌入网页、路由页或其他可滚动宿主时，插件页面可以通过 `window.chips.emit("plugin.surface.resize", payload)` 向宿主发布文档级高度。该事件只描述当前插件文档希望宿主 surface 占用的块向高度，不替代 `surface.resize(surfaceId, width, height)` 这类 Host 容器尺寸动作。
+
+正式载荷为：
+
+```ts
+interface DocumentSurfaceResizePayload {
+  height: number;
+  contentHeight: number;
+  safeBlockStart?: number;
+  safeBlockEnd: number;
+  viewportHeight: number;
+  reason: "initial" | "content-resize" | "asset-load" | "font-load" | "viewport-resize";
+  stable: boolean;
+}
+```
+
+字段语义：
+
+- `height`：宿主应设置给文档 surface 的最终高度，必须已经包含阅读安全区。
+- `contentHeight`：插件文档自身真实内容高度，不包含额外阅读安全区。
+- `safeBlockStart`：发布方在块向起点保留的阅读安全区高度，用于避免宿主悬浮 chrome 遮挡内容。
+- `safeBlockEnd`：发布方加入到块向末尾的阅读安全区高度。
+- `viewportHeight`：插件发布事件时可见视口高度，用于宿主判断窗口缩放与响应式重排。
+- `reason`：高度变化原因；未知内部来源必须归一为 `content-resize` 后再对外发布。
+- `stable`：是否已经经过短暂稳定窗口确认。连续图片、字体或布局变化期间可先发布 `stable=false`，稳定后必须发布一次 `stable=true`。
+
+文档型 surface 的高度发布方必须是最外层文档承载组件，而不是直接把内部卡片、基础卡片或子 iframe 的高度原样转发。发布方需要测量自身真实文档流，包括内部 iframe、加载态、宿主壳层和主题 token 驱动的底部阅读安全区。
+
+滚动所有权约束：
+
+- 文档型 surface 默认由宿主页面承担主滚动；
+- 文档型插件壳层不得制造中间全窗滚动容器；
+- 只有网页基础卡片、阅读器正文等内容本身需要局部浏览的组件，才可以在自己的受控区域内保留局部滚动。
+
+调度要求：
+
+- 高度变化应通过 `requestAnimationFrame` 合并；
+- 图片、字体、异步资源和窗口缩放引发的连续变化应在约 120-180ms 安静窗口后发布 `stable=true`；
+- 内容变高可以即时发布并撑开宿主，内容变短不应在 `stable=false` 阶段强制宿主剧烈收缩，避免用户阅读到底部时页面跳动；
+- 宿主消费方应至少支持 `height` 字段，并在支持完整协议时按 `stable` 做收缩防跳处理。
+
+### 8.2 宿主悬浮 Chrome 事件
+
+当应用插件被嵌入 Web 文档型宿主，且固定定位 UI 需要脱离插件 iframe 绑定到宿主页面视口时，插件可以通过 `window.chips.emit("plugin.chrome.update", payload)` 发布通用悬浮 chrome 状态。宿主只渲染通用壳层控件，不理解卡片、箱子等业务语义。
+
+正式载荷为：
+
+```ts
+interface PluginChromeUpdatePayload {
+  title?: string;
+  metaLines?: string[];
+  back?: {
+    label: string;
+    enabled: boolean;
+    handledByPlugin?: boolean;
+  };
+  actions?: Array<{
+    id: string;
+    label: string;
+    icon?: string;
+    disabled?: boolean;
+  }>;
+  safeBlockStart?: number;
+}
+```
+
+字段语义：
+
+- `title`：宿主居中信息药丸主标题；
+- `metaLines`：标题下方的短元信息，通常为创建日期等插件已经本地化后的文本；
+- `back`：返回按钮状态；`handledByPlugin` 为 `true` 时宿主点击后只把动作回传插件，否则宿主可执行默认返回；
+- `actions`：预留给插件未来扩展的通用动作按钮；
+- `safeBlockStart`：插件希望宿主顶部悬浮 chrome 预留的块向安全空间。
+
+宿主触发悬浮控件动作时，通过 `plugin.chrome.action` 回传：
+
+```ts
+interface PluginChromeActionPayload {
+  actionId: string;
+}
+```
+
+`plugin.chrome.*` 是通用应用插件宿主 chrome 协议，不得在社区页面或其他宿主内写入卡片查看器专属业务判断。
 
 ## 9. 质量门禁
 

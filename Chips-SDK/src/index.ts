@@ -7,6 +7,7 @@ export type {
   DocumentWindowMode,
   DocumentWindowRenderOptions,
   DocumentWindowRenderResult,
+  DocumentWindowResizePayload,
 } from "./api/document";
 export type { IconDescriptor, IconStyle } from "./api/icon";
 export type {
@@ -161,3 +162,4 @@ export type {
 } from "./api/resource";
 export type { ZipApi, ZipEntryMeta } from "./api/zip";
 export type { StandardError } from "./types/errors";
+export type { CardViewerDocumentKind, CardViewerSource } from "./types/card-viewer";

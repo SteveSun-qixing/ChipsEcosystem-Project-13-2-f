@@ -284,6 +284,7 @@ export const BoxService = {
       roomId: box.roomId,
       title: box.title,
       coverUrl: box.coverUrl,
+      documentUrl: box.documentUrl,
       coverRatio: getCoverRatioFromMetadata(box.metadata),
       layoutPlugin: box.layoutPlugin,
       visibility: box.visibility,

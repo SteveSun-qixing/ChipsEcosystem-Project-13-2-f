@@ -1,7 +1,7 @@
 .card-viewer-window {
   --card-viewer-inline-padding: 0px;
   --card-viewer-block-padding: 0px;
-  --card-viewer-landscape-width: min(100%, clamp(640px, 78vw, 1024px));
+  --card-viewer-document-max-width: min(100%, clamp(640px, 78vw, 1024px));
 
   flex: 1;
   min-width: 0;
@@ -26,6 +26,15 @@
 .card-viewer-window__frame-host {
   width: 100%;
   height: 100%;
+}
+
+.card-viewer-window__frame-host > iframe {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  overflow: hidden;
+  background: #ffffff;
 }
 
 .card-viewer-window__iframe {
@@ -57,13 +66,6 @@
   color: var(--chips-sys-color-error, #d92d20);
 }
 
-@media (orientation: landscape) {
-  .card-viewer-window__viewport:not(.card-viewer-window__viewport--document-flow) {
-    flex: 0 1 var(--card-viewer-landscape-width);
-    width: var(--card-viewer-landscape-width);
-  }
-}
-
 @media (orientation: portrait) {
   .card-viewer-window {
     --card-viewer-inline-padding: 0px;
@@ -73,18 +75,22 @@
 
 .card-viewer-window--document-flow {
   --chips-document-safe-area-block-end-fallback: clamp(56px, 10vh, 112px);
+  --chips-document-safe-area-block-start-fallback: clamp(84px, 12vh, 108px);
 
   display: block;
   flex: none;
   width: 100%;
   min-height: 0;
   overflow: visible;
-  background: #ffffff;
+  padding: 0;
+  background: var(--chips-sys-color-surface, #ffffff);
 }
 
 .card-viewer-window__viewport--document-flow {
   display: block;
-  width: 100%;
+  width: var(--card-viewer-document-max-width);
+  max-width: calc(100% - clamp(0px, 4vw, 48px));
+  margin-inline: auto;
   min-height: 0;
   overflow: visible;
 }
@@ -94,16 +100,36 @@
   min-height: 0;
 }
 
+.card-viewer-window__top-safe-area {
+  width: 100%;
+  height: var(
+    --chips-document-safe-area-block-start,
+    var(
+      --chips-sys-document-safe-area-block-start,
+      var(--chips-document-safe-area-block-start-fallback)
+    )
+  );
+  min-height: var(--chips-base-space-6, 24px);
+  pointer-events: none;
+}
+
 .card-viewer-window__frame-host--document-flow {
   width: 100%;
   height: auto;
+  min-height: var(--card-viewer-document-frame-height, 320px);
   overflow: visible;
+}
+
+.card-viewer-window__frame-host--document-flow > iframe {
+  height: auto;
+  min-height: var(--card-viewer-document-frame-height, 320px);
 }
 
 .card-viewer-window__iframe--document-flow {
   width: 100%;
   height: auto;
   min-height: 0;
+  overflow: hidden;
   background: #ffffff;
 }
 
@@ -118,4 +144,14 @@
   );
   min-height: var(--chips-base-space-6, 24px);
   pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .card-viewer-window--document-flow {
+    --card-viewer-document-max-width: 100%;
+  }
+
+  .card-viewer-window__viewport--document-flow {
+    max-width: 100%;
+  }
 }

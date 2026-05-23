@@ -1,6 +1,7 @@
 {
   "card-viewer": {
     "actions": {
+      "back": "Go Back",
       "open": "Open File"
     },
     "dialogs": {
@@ -15,7 +16,9 @@
       "documentLoading": "Loading document…",
       "documentContainerError": "The document container is unavailable.",
       "documentFatalError": "A fatal error occurred while rendering the document.",
-      "documentRenderError": "Failed to render the document window."
+      "documentRenderError": "Failed to render the document window.",
+      "localMetadataError": "Unable to read document information. Check the Host card info chain.",
+      "remoteCardUnsupported": "Remote card files must be resolved by the host into an official document source first."
     },
     "errors": {
       "hostActionFailed": "The action failed. Check Host logs and the bridge chain.",

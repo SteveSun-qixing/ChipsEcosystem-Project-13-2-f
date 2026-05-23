@@ -19,11 +19,11 @@ import './styles/runtime.css';
 type AppRouteMode = 'default' | 'document' | 'immersive';
 
 function resolveAppRouteMode(pathname: string): AppRouteMode {
-  if (pathname.startsWith('/host/plugins/') || pathname.startsWith('/boxes/')) {
+  if (pathname.startsWith('/host/plugins/')) {
     return 'immersive';
   }
 
-  if (pathname.startsWith('/cards/')) {
+  if (pathname.startsWith('/cards/') || pathname.startsWith('/boxes/')) {
     return 'document';
   }
 

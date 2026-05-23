@@ -163,6 +163,7 @@ const zhCN = {
   'box.summaryTitle': '箱子摘要',
   'box.referenceTitle': '引用卡片',
   'box.empty': '这个箱子里还没有可展示的引用卡片。',
+  'box.notReady': '箱子查看文档正在准备中，请稍后刷新。',
   'box.communityCard': '打开社区卡片',
   'box.sourceLink': '打开原始链接',
   'box.identifierLabel': '箱子文件 ID',

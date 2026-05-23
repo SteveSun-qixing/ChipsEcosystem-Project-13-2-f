@@ -1,6 +1,7 @@
 {
   "card-viewer": {
     "actions": {
+      "back": "返回上一页",
       "open": "打开文件"
     },
     "dialogs": {
@@ -15,7 +16,9 @@
       "documentLoading": "正在加载文档…",
       "documentContainerError": "找不到文档窗口容器",
       "documentFatalError": "文档窗口发生严重错误",
-      "documentRenderError": "文档窗口渲染失败"
+      "documentRenderError": "文档窗口渲染失败",
+      "localMetadataError": "无法读取文档信息，请检查 Host 卡片信息链路。",
+      "remoteCardUnsupported": "远程卡片文件需要先由宿主解析为正式文档来源。"
     },
     "errors": {
       "hostActionFailed": "操作失败，请检查 Host 日志与桥接链路。",

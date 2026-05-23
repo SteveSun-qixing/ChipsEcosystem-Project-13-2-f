@@ -110,6 +110,7 @@
 - 节点加载完成后向复合窗口回传高度；
 - 节点高度回传必须覆盖容器宽度变化引发的重排，确保图片等按宽度缩放的基础卡片在显示区域收窄或放宽时同步更新高度；
 - 复合文档在初始装载、节点高度变化和整体布局变化后，必须向外层发送 `chips.composite:resize`，回传整张复合卡片当前总高度；
+- 当复合卡片窗口被应用插件作为文档型 surface 嵌入网页宿主时，应用侧最外层文档承载组件必须再把 `chips.composite:resize` 转换为正式 `plugin.surface.resize` 文档高度事件；转换时不得直接透传内部复合高度，必须测量应用壳层真实文档流，并加入主题 token 驱动的底部阅读安全区；
 - 全部节点就绪后发送 `chips.composite:ready`；
 - 当 `interactionPolicy = 'delegate'` 时，基础卡片 iframe 与复合壳层内部发生的滚轮、触摸滚动、捏合缩放等正式交互意图，必须通过 `chips.composite:interaction` 回传到应用壳层；
 - 复合卡片处于 `mode: 'preview'` 时，基础卡片节点被点击后必须发送 `chips.composite:node-select`；
@@ -123,6 +124,31 @@
 - `delegate`：由 Host 复合文档统一归一化基础卡片 iframe 与复合壳层的交互意图，再通过正式协议发送给应用壳层；
 - 查看器、普通局部滚动容器等默认应使用 `native`；
 - 需要把复合卡片内部滚动解释为外层桌面平移/缩放的通用应用场景，才使用 `delegate`。
+
+### 8.1 文档型宿主滚动与高度收口
+
+复合卡片在社区网页、插件路由页等文档型宿主中显示时，滚动所有权应收口到最外层宿主页面：
+
+1. `/cards/:cardId`、插件路由页或其他文档型宿主保持普通 document flow；
+2. `CompositeCardWindow` 或承载它的应用壳层不得再制造一个中间全高滚动小窗；
+3. 内部复合 iframe 只负责根据 `chips.composite:resize` 反映复合内容高度；
+4. 本地文件查看链路通过 SDK `client.document.window.onResize(...)` 消费卡片 `chips.composite:resize` 或箱子 `chips.box-layout:resize`，再由查看器文档 Surface 撑开 iframe；
+5. 应用壳层最外层文档承载组件负责测量真实文档高度，并通过 `plugin.surface.resize` 发布给宿主；
+6. 网页基础卡片等“内容本身需要内部浏览”的节点，可以在节点自己的受控区域内滚动，但这不改变卡片查看页的主滚动所有权。
+
+`plugin.surface.resize` 的公共载荷与调度规则以 `生态共用技术文档/协议与接口标准/02-Bridge-API规范.md` 为准。复合卡片窗口标准只规定它和 `chips.composite:resize` 的衔接关系。
+
+### 8.2 查看器壳层与社区宿主关系
+
+卡片查看器是卡片与箱子的统一查看壳层。社区网页、插件路由页等外部宿主不得再实现卡片/箱子专属查看 UI，只负责解析公开路由、创建查看器插件会话和承载插件 surface。
+
+正式关系：
+
+1. 本地 `.card` / `.box` 通过 `launchParams.cardSource.kind = "local-file"` 进入查看器；
+2. 社区 `/cards/:cardId` / `/boxes/:boxId` 保持公开语义路由，但只创建 `com.chips.card-viewer` 会话并传入 `community-card` / `community-box` 来源；
+3. 查看器负责标题、日期、返回按钮、加载态、错误态和未来动作槽的状态治理；
+4. Web 文档型宿主中，查看器通过 `plugin.chrome.update` 发布悬浮 chrome 状态，宿主在 iframe 外渲染固定定位按钮和信息药丸；
+5. 真实卡片内容仍由 Host 复合卡片窗口渲染，真实箱子内容仍应由 Host 箱子布局文档链路渲染或由社区发布态正式文档来源承载。
 
 ## 9. 质量要求
 

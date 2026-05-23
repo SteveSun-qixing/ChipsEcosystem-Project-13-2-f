@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS "boxes" (
 	"room_id" uuid,
 	"title" text NOT NULL,
 	"cover_url" text,
+	"document_url" text,
 	"metadata" jsonb,
 	"structure" jsonb,
 	"layout_plugin" text,
@@ -89,6 +90,8 @@ CREATE TABLE IF NOT EXISTS "boxes" (
 	"created_at" timestamp with time zone DEFAULT NOW() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT NOW() NOT NULL
 );
+--> statement-breakpoint
+ALTER TABLE "boxes" ADD COLUMN IF NOT EXISTS "document_url" text;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "rooms" ADD CONSTRAINT "rooms_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE cascade ON UPDATE no action;

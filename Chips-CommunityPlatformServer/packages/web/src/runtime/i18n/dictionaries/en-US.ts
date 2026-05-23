@@ -163,6 +163,7 @@ const enUS = {
   'box.summaryTitle': 'Box summary',
   'box.referenceTitle': 'Referenced cards',
   'box.empty': 'This box does not expose any visible references yet.',
+  'box.notReady': 'The box viewing document is still being prepared.',
   'box.communityCard': 'Open community card',
   'box.sourceLink': 'Open source link',
   'box.identifierLabel': 'Box file ID',

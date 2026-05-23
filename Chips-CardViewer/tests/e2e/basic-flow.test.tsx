@@ -25,6 +25,7 @@ const mockState = vi.hoisted(() => {
             handler();
             return () => undefined;
           }),
+          onResize: vi.fn(() => () => undefined),
           onError: vi.fn(() => () => undefined),
           onResourceOpen: vi.fn(() => () => undefined),
         },
@@ -112,5 +113,50 @@ describe('统一文档查看窗口基础流程', () => {
     });
 
     expect(mockState.dispose).toHaveBeenCalled();
+  });
+
+  it('会按统一文档高度事件撑开本地查看 iframe 并关闭中间 iframe 滚动', async () => {
+    let resizeHandler: ((payload: { documentType: 'card'; height: number; reason: string }) => void) | null = null;
+    mockState.client.document.window.render.mockResolvedValueOnce({
+      frame: document.createElement('iframe'),
+      origin: 'file://',
+      dispose: mockState.dispose,
+      documentType: 'card' as const,
+    });
+    mockState.client.document.window.onResize.mockImplementationOnce((_frame, handler) => {
+      resizeHandler = handler;
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <CardWindow
+          filePath="/tmp/demo.card"
+          traceId="trace-document-height"
+          locale="zh-CN"
+          loadingLabel="正在加载文档…"
+          containerErrorLabel="容器不可用"
+          fatalErrorFallback="严重错误"
+          renderErrorFallback="渲染失败"
+          resourceOpenErrorTitle="无法打开资源"
+          resourceOpenErrorFallback="资源打开失败"
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe');
+    const viewport = container.querySelector('.card-viewer-window__viewport--document-flow');
+    expect(viewport).not.toBeNull();
+    expect(frame?.getAttribute('scrolling')).toBe('no');
+    expect(frame?.style.height).toBe('960px');
+
+    await act(async () => {
+      resizeHandler?.({ documentType: 'card', height: 1840, reason: 'node-height' });
+      await Promise.resolve();
+    });
+
+    expect(frame?.style.height).toBe('1840px');
   });
 });

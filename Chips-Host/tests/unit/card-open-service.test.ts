@@ -3,6 +3,9 @@ import { CardOpenService } from '../../packages/card-open-service/src';
 
 describe('CardOpenService', () => {
   it('launches registered app handlers before falling back', async () => {
+    const launchPlugin = vi.fn().mockResolvedValue({
+      windowId: 'window-1'
+    });
     const service = new CardOpenService({
       ensureCardReady: vi.fn().mockResolvedValue(undefined),
       queryHandlerPlugins: vi.fn().mockResolvedValue([
@@ -12,9 +15,7 @@ describe('CardOpenService', () => {
           type: 'app'
         }
       ]),
-      launchPlugin: vi.fn().mockResolvedValue({
-        windowId: 'window-1'
-      }),
+      launchPlugin,
       openWindow: vi.fn().mockResolvedValue({
         windowId: 'window-2'
       })
@@ -24,6 +25,14 @@ describe('CardOpenService', () => {
       mode: 'card-window',
       windowId: 'window-1',
       pluginId: 'chips.viewer.card'
+    });
+    expect(launchPlugin).toHaveBeenCalledWith('chips.viewer.card', {
+      cardSource: {
+        kind: 'local-file',
+        documentKind: 'card',
+        filePath: '/tmp/demo.card',
+      },
+      trigger: 'card-open-service',
     });
   });
 

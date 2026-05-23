@@ -37,8 +37,11 @@ export class CardOpenService {
 
     if (plugin) {
       const launched = await this.options.launchPlugin(plugin.id, {
-        targetPath: cardFile,
-        fileOpenMode: 'card',
+        cardSource: {
+          kind: 'local-file',
+          documentKind: 'card',
+          filePath: cardFile,
+        },
         trigger: 'card-open-service'
       });
       return {

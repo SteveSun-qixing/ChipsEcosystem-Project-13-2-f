@@ -11,6 +11,7 @@ import {
   type WebPluginSessionView,
 } from '../lib/host-runtime';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
+import { Icon } from '../runtime/icons/Icon';
 import './HostedPluginSurface.css';
 
 interface HostedPluginSurfaceProps {
@@ -54,8 +55,28 @@ interface DocumentSurfaceResizePayload {
   stable: boolean;
 }
 
+interface PluginChromeAction {
+  id: string;
+  label: string;
+  icon?: string;
+  disabled?: boolean;
+}
+
+interface PluginChromeState {
+  title?: string;
+  metaLines: string[];
+  back: {
+    label: string;
+    enabled: boolean;
+    handledByPlugin?: boolean;
+  };
+  actions: PluginChromeAction[];
+  safeBlockStart: number;
+}
+
 const DOCUMENT_SURFACE_INITIAL_HEIGHT = 960;
 const DOCUMENT_SURFACE_MIN_HEIGHT = 320;
+const PLUGIN_CHROME_SAFE_BLOCK_START = 96;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -259,6 +280,45 @@ function normalizeDocumentSurfaceResizePayload(payload: unknown): DocumentSurfac
   };
 }
 
+function normalizePluginChromeState(payload: unknown): PluginChromeState | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const title = typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : undefined;
+  const metaLines = Array.isArray(payload.metaLines)
+    ? payload.metaLines.filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
+    : [];
+  const backRecord = isRecord(payload.back) ? payload.back : {};
+  const actions = Array.isArray(payload.actions)
+    ? payload.actions
+        .filter((action): action is Record<string, unknown> => isRecord(action))
+        .map((action) => ({
+          id: typeof action.id === 'string' ? action.id.trim() : '',
+          label: typeof action.label === 'string' ? action.label.trim() : '',
+          icon: typeof action.icon === 'string' ? action.icon.trim() : undefined,
+          disabled: action.disabled === true,
+        }))
+        .filter((action) => action.id && action.label)
+    : [];
+  const safeBlockStart = Number(payload.safeBlockStart);
+
+  return {
+    title,
+    metaLines,
+    back: {
+      label:
+        typeof backRecord.label === 'string' && backRecord.label.trim()
+          ? backRecord.label.trim()
+          : 'Back',
+      enabled: backRecord.enabled !== false,
+      handledByPlugin: backRecord.handledByPlugin === true,
+    },
+    actions,
+    safeBlockStart: Number.isFinite(safeBlockStart) ? Math.max(0, Math.ceil(safeBlockStart)) : PLUGIN_CHROME_SAFE_BLOCK_START,
+  };
+}
+
 export function HostedPluginSurface({
   sessionId,
   initialSession = null,
@@ -271,6 +331,7 @@ export function HostedPluginSurface({
   const [session, setSession] = useState<WebPluginSessionView | null>(initialSession);
   const [loading, setLoading] = useState(initialSession === null);
   const [error, setError] = useState('');
+  const [chromeState, setChromeState] = useState<PluginChromeState | null>(null);
   const [embeddedHeight, setEmbeddedHeight] = useState<number | null>(
     surfaceMode === 'document' ? DOCUMENT_SURFACE_INITIAL_HEIGHT : null,
   );
@@ -281,6 +342,7 @@ export function HostedPluginSurface({
     const nextHeight = surfaceMode === 'document' ? DOCUMENT_SURFACE_INITIAL_HEIGHT : null;
     embeddedHeightRef.current = nextHeight;
     setEmbeddedHeight(nextHeight);
+    setChromeState(null);
   }, [sessionId, surfaceMode]);
 
   useEffect(() => {
@@ -354,14 +416,19 @@ export function HostedPluginSurface({
 
       if (data.type === 'chips.web-shell:emit') {
         const emitMessage = data as unknown as HostBridgeEmitMessage;
+        if (emitMessage.event === 'plugin.chrome.update') {
+          const nextChromeState = normalizePluginChromeState(emitMessage.payload);
+          if (nextChromeState) {
+            setChromeState(nextChromeState);
+          }
+          return;
+        }
+
         if (surfaceMode === 'document' && emitMessage.event === 'plugin.surface.resize') {
           const resizePayload = normalizeDocumentSurfaceResizePayload(emitMessage.payload);
           if (resizePayload) {
-            const currentHeight = embeddedHeightRef.current ?? DOCUMENT_SURFACE_INITIAL_HEIGHT;
-            if (resizePayload.height >= currentHeight || resizePayload.stable) {
-              embeddedHeightRef.current = resizePayload.height;
-              setEmbeddedHeight(resizePayload.height);
-            }
+            embeddedHeightRef.current = resizePayload.height;
+            setEmbeddedHeight(resizePayload.height);
           }
         }
         return;
@@ -570,6 +637,39 @@ export function HostedPluginSurface({
     };
   }, [sessionId, surfaceMode, t]);
 
+  const dispatchChromeAction = (actionId: string) => {
+    const frameWindow = iframeRef.current?.contentWindow;
+    if (!frameWindow) {
+      return;
+    }
+
+    frameWindow.postMessage(
+      {
+        type: 'chips.web-shell:event',
+        sessionId,
+        event: 'plugin.chrome.action',
+        payload: {
+          actionId,
+        },
+      },
+      window.location.origin,
+    );
+  };
+
+  const handleBack = () => {
+    if (chromeState?.back.handledByPlugin) {
+      dispatchChromeAction('back');
+      return;
+    }
+
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    dispatchChromeAction('back');
+  };
+
   if (loading) {
     return (
       <div className="hosted-plugin-surface hosted-plugin-surface--state">
@@ -596,12 +696,61 @@ export function HostedPluginSurface({
       className={`hosted-plugin-surface${surfaceMode === 'document' ? ' hosted-plugin-surface--document' : ''}`}
       data-plugin-id={session.pluginId}
     >
+      {chromeState ? (
+        <div className="hosted-plugin-surface__chrome" style={{ ['--hosted-plugin-chrome-safe-block-start' as string]: `${chromeState.safeBlockStart}px` }}>
+          <div className="hosted-plugin-surface__chrome-layer">
+            {chromeState.back.enabled ? (
+              <button
+                type="button"
+                className="hosted-plugin-surface__chrome-button hosted-plugin-surface__chrome-back"
+                onClick={handleBack}
+                aria-label={chromeState.back.label}
+                title={chromeState.back.label}
+              >
+                <Icon name="arrow-left" size={20} />
+              </button>
+            ) : null}
+
+            {chromeState.title ? (
+              <aside className="hosted-plugin-surface__chrome-pill" aria-label={chromeState.title}>
+                <h1>{chromeState.title}</h1>
+                {chromeState.metaLines.length > 0 ? (
+                  <div className="hosted-plugin-surface__chrome-meta">
+                    {chromeState.metaLines.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </aside>
+            ) : null}
+
+            {chromeState.actions.length > 0 ? (
+              <div className="hosted-plugin-surface__chrome-actions">
+                {chromeState.actions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="hosted-plugin-surface__chrome-button"
+                    disabled={action.disabled}
+                    onClick={() => dispatchChromeAction(action.id)}
+                    aria-label={action.label}
+                    title={action.label}
+                  >
+                    <span aria-hidden="true">{action.icon ?? '·'}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <iframe
         ref={iframeRef}
         className={`hosted-plugin-surface__frame${surfaceMode === 'document' ? ' hosted-plugin-surface__frame--document' : ''}`}
         src={frameUrl}
         title={session.title}
         sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"
+        scrolling={surfaceMode === 'document' ? 'no' : undefined}
         style={
           surfaceMode === 'document'
             ? {

@@ -2,33 +2,28 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChipsThemeProvider } from "@chips/component-library";
 import { CardViewerShell } from "./components/CardViewerShell";
 import { DropZone } from "./components/DropZone";
-import { CardWindow } from "./components/CardWindow";
-import { HostedDocumentWindow } from "./components/HostedDocumentWindow";
+import { ViewerChrome, type ViewerChromeState } from "./components/ViewerChrome";
+import { ViewerSource } from "./components/ViewerSourceProvider";
+import { ViewerStage } from "./components/ViewerStage";
 import { formatMessage, resolveLocale } from "./i18n/messages";
 import { useChipsClient } from "./hooks/useChipsClient";
 import { useChipsBridge } from "./hooks/useChipsBridge";
 import { appConfig } from "../config/app-config";
 import { createLogger, createTraceId } from "../config/logging";
+import type { CardViewerSource } from "./types/viewer-source";
+import { resolveCardViewerSource } from "./types/viewer-source";
 
 interface AppThemeState {
   themeId: string;
   version: string;
 }
 
-type OpenedTarget =
-  | {
-      kind: "file";
-      filePath: string;
-    }
-  | {
-      kind: "document";
-      documentUrl: string;
-    };
-
 const DEFAULT_THEME_STATE: AppThemeState = {
   themeId: "chips-official.default-theme",
   version: "1.0.0",
 };
+
+const VIEWER_CHROME_SAFE_BLOCK_START = 96;
 
 function readDocumentThemeState(): AppThemeState {
   if (typeof document === "undefined") {
@@ -56,20 +51,67 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
-function resolveOpenedTarget(filePath: string): OpenedTarget | null {
+function detectDocumentKindFromPath(filePath: string): "card" | "box" | null {
   const normalized = filePath.trim();
   if (!normalized) {
     return null;
   }
+  const lowered = normalized.toLowerCase();
+  if (lowered.endsWith(".card")) {
+    return "card";
+  }
+  if (lowered.endsWith(".box")) {
+    return "box";
+  }
+  return null;
+}
+
+function resolveLocalFileSource(filePath: string): CardViewerSource | null {
+  const normalized = filePath.trim();
+  const documentKind = detectDocumentKindFromPath(normalized);
+  if (!documentKind) {
+    return null;
+  }
   return {
-    kind: "file",
+    kind: "local-file",
+    documentKind,
     filePath: normalized,
   };
 }
 
-function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string | null {
-  const documentUrl = typeof launchParams.webDocumentUrl === "string" ? launchParams.webDocumentUrl.trim() : "";
-  return documentUrl.length > 0 ? documentUrl : null;
+function formatDateLabel(value: string | undefined, locale: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function createChromeState(params: {
+  title?: string;
+  createdAt?: string;
+  locale: string;
+  backLabel: string;
+  hasSource: boolean;
+}): ViewerChromeState {
+  const metaLine = formatDateLabel(params.createdAt, params.locale);
+  return {
+    title: params.title,
+    metaLines: metaLine ? [metaLine] : [],
+    back: {
+      label: params.backLabel,
+      enabled: params.hasSource,
+    },
+    actions: [],
+    safeBlockStart: VIEWER_CHROME_SAFE_BLOCK_START,
+  };
 }
 
 export function App() {
@@ -85,7 +127,7 @@ export function App() {
     [traceId],
   );
   const client = useChipsClient(traceId);
-  const [openedTarget, setOpenedTarget] = useState<OpenedTarget | null>(null);
+  const [viewerSource, setViewerSource] = useState<CardViewerSource | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [themeState, setThemeState] = useState<AppThemeState>(() => readDocumentThemeState());
   const [locale, setLocale] = useState(() => resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined));
@@ -93,7 +135,8 @@ export function App() {
     (key: string, params?: Record<string, string | number>) => formatMessage(locale, key, params),
     [locale],
   );
-  const surfaceMode = openedTarget?.kind === "document" ? "document" : "immersive";
+  const surfaceMode = viewerSource ? "document" : "immersive";
+  const externalChrome = viewerSource?.kind === "community-card" || viewerSource?.kind === "community-box";
 
   useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -110,12 +153,15 @@ export function App() {
 
   useEffect(() => {
     logger.debug("当前查看目标状态已更新", {
-      hasOpenedTarget: openedTarget !== null,
-      targetKind: openedTarget?.kind ?? null,
-      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
-      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
+      hasViewerSource: viewerSource !== null,
+      sourceKind: viewerSource?.kind ?? null,
+      filePath: viewerSource?.kind === "local-file" ? viewerSource.filePath : null,
+      documentUrl:
+        viewerSource?.kind === "community-card" || viewerSource?.kind === "community-box"
+          ? viewerSource.documentUrl
+          : null,
     });
-  }, [logger, openedTarget]);
+  }, [logger, viewerSource]);
 
   useEffect(() => {
     if (!error) {
@@ -153,42 +199,18 @@ export function App() {
 
   useEffect(() => {
     const launchContext = client.platform.getLaunchContext();
-    const webDocumentUrl = resolveWebDocumentUrl(launchContext.launchParams);
-    if (webDocumentUrl) {
-      logger.info("从 Web 启动上下文恢复托管文档查看态", {
-        documentUrl: webDocumentUrl,
-        trigger: launchContext.launchParams.trigger,
-      });
-      setOpenedTarget({
-        kind: "document",
-        documentUrl: webDocumentUrl,
-      });
-      setError(null);
+    const source = resolveCardViewerSource(launchContext.launchParams);
+    if (!source) {
       return;
     }
 
-    const targetPath = typeof launchContext.launchParams.targetPath === "string"
-      ? launchContext.launchParams.targetPath
-      : "";
-
-    if (!targetPath) {
-      return;
-    }
-
-    const nextTarget = resolveOpenedTarget(targetPath);
-
-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
-      setError(t("card-viewer.errors.unsupportedFile"));
-      return;
-    }
-
-    logger.info("从启动上下文恢复目标文件", {
-      targetPath,
+    logger.info("从启动上下文恢复查看来源", {
+      sourceKind: source.kind,
       trigger: launchContext.launchParams.trigger,
     });
-    setOpenedTarget(nextTarget);
+    setViewerSource(source);
     setError(null);
-  }, [client, logger, t]);
+  }, [client.platform, logger]);
 
   useEffect(() => {
     const unsubscribe = bridge.on("language.changed", (payload: unknown) => {
@@ -222,8 +244,8 @@ export function App() {
   }, [surfaceMode]);
 
   const handleResolvedFilePath = useCallback((filePath: string) => {
-    const nextTarget = resolveOpenedTarget(filePath);
-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
+    const nextSource = resolveLocalFileSource(filePath);
+    if (!nextSource) {
       logger.warn("选择的文件类型当前不受支持", {
         filePath,
       });
@@ -232,10 +254,11 @@ export function App() {
     }
     logger.info("用户已选定查看目标", {
       filePath,
+      documentKind: nextSource.documentKind,
     });
     setError(null);
-    setOpenedTarget(nextTarget);
-  }, [client.document, logger, t]);
+    setViewerSource(nextSource);
+  }, [logger, t]);
 
   const handleOpenFile = useCallback(async () => {
     try {
@@ -262,40 +285,26 @@ export function App() {
     }
   }, [client, handleResolvedFilePath, logger, t]);
 
-  const content =
-    openedTarget === null ? (
-      <DropZone
-        error={error}
-        onOpenFile={handleOpenFile}
-        traceId={traceId}
-        ariaLabel={t("card-viewer.dropzone.ariaLabel")}
-        title={t("card-viewer.dropzone.title")}
-        description={t("card-viewer.dropzone.description")}
-        openLabel={t("card-viewer.actions.open")}
-        onFilePath={handleResolvedFilePath}
-      />
-    ) : openedTarget.kind === "document" ? (
-      <HostedDocumentWindow
-        documentUrl={openedTarget.documentUrl}
-        traceId={traceId}
-        loadingLabel={t("card-viewer.viewer.cardLoading")}
-        containerErrorLabel={t("card-viewer.viewer.cardContainerError")}
-        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
-        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
-      />
-    ) : (
-      <CardWindow
-        filePath={openedTarget.filePath}
-        traceId={traceId}
-        locale={locale}
-        loadingLabel={t("card-viewer.viewer.documentLoading")}
-        containerErrorLabel={t("card-viewer.viewer.documentContainerError")}
-        fatalErrorFallback={t("card-viewer.viewer.documentFatalError")}
-        renderErrorFallback={t("card-viewer.viewer.documentRenderError")}
-        resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
-        resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
-      />
-    );
+  const emptyContent = (
+    <DropZone
+      error={error}
+      onOpenFile={handleOpenFile}
+      traceId={traceId}
+      ariaLabel={t("card-viewer.dropzone.ariaLabel")}
+      title={t("card-viewer.dropzone.title")}
+      description={t("card-viewer.dropzone.description")}
+      openLabel={t("card-viewer.actions.open")}
+      onFilePath={handleResolvedFilePath}
+    />
+  );
+
+  const handleBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    setViewerSource(null);
+  }, []);
 
   return (
     <ChipsThemeProvider
@@ -304,10 +313,45 @@ export function App() {
       eventSource={themeEventSource}
       eventName="theme.changed"
     >
-      <CardViewerShell
-        surfaceMode={surfaceMode}
-        content={content}
-      />
+      <ViewerSource.Provider
+        client={client}
+        source={viewerSource}
+        metadataErrorFallback={t("card-viewer.viewer.localMetadataError")}
+      >
+        <ViewerSource.Outlet>
+          {({ source, error: sourceError }) => (
+            <ViewerChrome.Provider
+              externalChrome={externalChrome}
+              onBack={handleBack}
+              state={createChromeState({
+                title: source?.title,
+                createdAt: source?.createdAt,
+                locale,
+                backLabel: t("card-viewer.actions.back"),
+                hasSource: Boolean(source),
+              })}
+            >
+              <CardViewerShell surfaceMode={surfaceMode}>
+                <ViewerChrome.Layer />
+                <ViewerStage
+                  source={source}
+                  error={error ?? sourceError}
+                  empty={emptyContent}
+                  unsupportedRemoteLabel={t("card-viewer.viewer.remoteCardUnsupported")}
+                  traceId={traceId}
+                  locale={locale}
+                  loadingLabel={t("card-viewer.viewer.documentLoading")}
+                  containerErrorLabel={t("card-viewer.viewer.documentContainerError")}
+                  fatalErrorFallback={t("card-viewer.viewer.documentFatalError")}
+                  renderErrorFallback={t("card-viewer.viewer.documentRenderError")}
+                  resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
+                  resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
+                />
+              </CardViewerShell>
+            </ViewerChrome.Provider>
+          )}
+        </ViewerSource.Outlet>
+      </ViewerSource.Provider>
     </ChipsThemeProvider>
   );
 }

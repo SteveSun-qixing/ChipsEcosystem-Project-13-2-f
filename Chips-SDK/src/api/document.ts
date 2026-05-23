@@ -1,5 +1,6 @@
 import type {
   CompositeInteractionPolicy,
+  CompositeResizePayload,
   CompositeResourceOpenPayload,
   FrameRenderResult,
 } from "./card";
@@ -29,11 +30,22 @@ export interface DocumentWindowErrorPayload extends StandardError {
   documentType: DocumentType;
 }
 
+export interface DocumentWindowResizePayload {
+  documentType: DocumentType;
+  height: number;
+  reason: string;
+  nodeCount?: number;
+  layoutType?: string;
+  pluginId?: string;
+  sessionId?: string;
+}
+
 export interface DocumentApi {
   detectType(filePath: string): DocumentType | null;
   window: {
     render(options: DocumentWindowRenderOptions): Promise<DocumentWindowRenderResult>;
     onReady(frame: HTMLIFrameElement, handler: () => void): () => void;
+    onResize(frame: HTMLIFrameElement, handler: (payload: DocumentWindowResizePayload) => void): () => void;
     onError(frame: HTMLIFrameElement, handler: (payload: DocumentWindowErrorPayload) => void): () => void;
     onResourceOpen(
       frame: HTMLIFrameElement,
@@ -43,6 +55,8 @@ export interface DocumentApi {
 }
 
 const DOCUMENT_READY_EVENTS = ["chips.composite:ready", "chips.box-layout:ready"];
+const DOCUMENT_CARD_RESIZE_EVENT = "chips.composite:resize";
+const DOCUMENT_BOX_RESIZE_EVENT = "chips.box-layout:resize";
 const DOCUMENT_CARD_FATAL_ERROR_EVENT = "chips.composite:fatal-error";
 const DOCUMENT_BOX_ERROR_EVENT = "chips.box-layout:error";
 
@@ -70,6 +84,7 @@ export function createDocumentApi(client: CoreClient): DocumentApi {
             mode: options.mode === "preview" ? "preview" : "view",
             interactionPolicy: options.interactionPolicy,
           });
+          markDocumentFrame(result.frame, "card");
           return {
             ...result,
             documentType: "card" as const,
@@ -82,6 +97,7 @@ export function createDocumentApi(client: CoreClient): DocumentApi {
           locale: options.locale,
           themeId: options.themeId,
         });
+        markDocumentFrame(result.frame, "box");
         return {
           ...result,
           documentType: "box" as const,
@@ -89,6 +105,32 @@ export function createDocumentApi(client: CoreClient): DocumentApi {
       },
       onReady(frame, handler) {
         return subscribeToFrameReady(frame, DOCUMENT_READY_EVENTS, handler);
+      },
+      onResize(frame, handler) {
+        const cleanupCard = subscribeToFrameMessage<CompositeResizePayload>(
+          frame,
+          DOCUMENT_CARD_RESIZE_EVENT,
+          (payload) => {
+            const normalized = normalizeDocumentResizePayload("card", payload);
+            if (normalized) {
+              handler(normalized);
+            }
+          },
+        );
+        const cleanupBox = subscribeToFrameMessage<Record<string, unknown>>(
+          frame,
+          DOCUMENT_BOX_RESIZE_EVENT,
+          (payload) => {
+            const normalized = normalizeDocumentResizePayload("box", payload);
+            if (normalized) {
+              handler(normalized);
+            }
+          },
+        );
+        return () => {
+          cleanupCard();
+          cleanupBox();
+        };
       },
       onError(frame, handler) {
         const cleanupCard = subscribeToFrameMessage<unknown>(frame, DOCUMENT_CARD_FATAL_ERROR_EVENT, (payload) => {
@@ -118,6 +160,12 @@ export function createDocumentApi(client: CoreClient): DocumentApi {
   };
 }
 
+function markDocumentFrame(frame: HTMLIFrameElement, documentType: DocumentType): void {
+  if (frame.dataset) {
+    frame.dataset.chipsDocumentType = documentType;
+  }
+}
+
 function detectDocumentType(filePath: string): DocumentType | null {
   const normalized = filePath.trim().toLowerCase();
   if (!normalized) {
@@ -130,6 +178,32 @@ function detectDocumentType(filePath: string): DocumentType | null {
     return "box";
   }
   return null;
+}
+
+function normalizeDocumentResizePayload(
+  documentType: DocumentType,
+  payload: Record<string, unknown> | CompositeResizePayload,
+): DocumentWindowResizePayload | null {
+  const height = Number((payload as { height?: unknown }).height);
+  if (!Number.isFinite(height) || height <= 0) {
+    return null;
+  }
+
+  const reason = (payload as { reason?: unknown }).reason;
+  const nodeCount = Number((payload as { nodeCount?: unknown }).nodeCount);
+  const layoutType = (payload as { layoutType?: unknown }).layoutType;
+  const pluginId = (payload as { pluginId?: unknown }).pluginId;
+  const sessionId = (payload as { sessionId?: unknown }).sessionId;
+
+  return {
+    documentType,
+    height: Math.ceil(height),
+    reason: typeof reason === "string" && reason.length > 0 ? reason : "resize",
+    ...(Number.isFinite(nodeCount) ? { nodeCount } : {}),
+    ...(typeof layoutType === "string" && layoutType.length > 0 ? { layoutType } : {}),
+    ...(typeof pluginId === "string" && pluginId.length > 0 ? { pluginId } : {}),
+    ...(typeof sessionId === "string" && sessionId.length > 0 ? { sessionId } : {}),
+  };
 }
 
 function subscribeToFrameReady(

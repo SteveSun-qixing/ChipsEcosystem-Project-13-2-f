@@ -17,6 +17,7 @@ export interface BoxSummary {
   title: string;
   coverUrl: string | null;
   coverRatio: string | null;
+  documentUrl: string | null;
   layoutPlugin: string | null;
   visibility: 'public' | 'private';
   createdAt: string;
@@ -57,6 +58,7 @@ export interface BoxDetail {
   title: string;
   coverUrl: string | null;
   coverRatio: string | null;
+  documentUrl: string | null;
   layoutPlugin: string | null;
   visibility: 'public' | 'private';
   fileSizeBytes: number | null;

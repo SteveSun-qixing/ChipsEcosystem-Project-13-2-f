@@ -115,8 +115,9 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     });
 
     expect(latestResizePayload()).toMatchObject({
-      height: 1032,
-      contentHeight: 960,
+      height: 1128,
+      contentHeight: 1128,
+      safeBlockStart: 96,
       safeBlockEnd: 72,
       reason: "initial",
       stable: false,
@@ -128,8 +129,9 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     });
 
     expect(latestResizePayload()).toMatchObject({
-      height: 1032,
-      contentHeight: 960,
+      height: 1128,
+      contentHeight: 1128,
+      safeBlockStart: 96,
       safeBlockEnd: 72,
       reason: "initial",
       stable: true,
@@ -160,8 +162,8 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     });
 
     expect(latestResizePayload()).toMatchObject({
-      height: 1872,
-      contentHeight: 1800,
+      height: 1968,
+      contentHeight: 1968,
       reason: "content-resize",
       stable: false,
     });
@@ -178,8 +180,8 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
 
     expect(frame.style.height).toBe("1800px");
     expect(latestResizePayload()).toMatchObject({
-      height: 1872,
-      contentHeight: 1800,
+      height: 1968,
+      contentHeight: 1968,
       stable: false,
     });
 
@@ -189,8 +191,8 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
 
     expect(frame.style.height).toBe("700px");
     expect(latestResizePayload()).toMatchObject({
-      height: 772,
-      contentHeight: 700,
+      height: 868,
+      contentHeight: 868,
       reason: "content-resize",
       stable: true,
     });

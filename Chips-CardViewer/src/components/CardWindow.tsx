@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useThemeRuntime } from "@chips/component-library";
-import type { FrameRenderResult } from "chips-sdk";
+import type { DocumentWindowResizePayload, FrameRenderResult } from "chips-sdk";
 import { useChipsClient } from "../hooks/useChipsClient";
 import { createScopedLogger } from "../../config/logging";
+import type { ViewerDocumentKind } from "../types/viewer-source";
 import "./CardWindow.css";
 
 interface CardWindowProps {
   filePath: string;
+  documentType?: ViewerDocumentKind;
   traceId?: string;
   locale?: string;
   loadingLabel: string;
@@ -28,8 +30,20 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+const DOCUMENT_FLOW_MIN_CONTENT_HEIGHT = 320;
+const DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT = 960;
+
+function normalizeResizeHeight(payload: DocumentWindowResizePayload | undefined): number | null {
+  if (!payload || !Number.isFinite(payload.height) || payload.height <= 0) {
+    return null;
+  }
+
+  return Math.max(DOCUMENT_FLOW_MIN_CONTENT_HEIGHT, Math.ceil(payload.height));
+}
+
 export function CardWindow({
   filePath,
+  documentType,
   traceId,
   locale,
   loadingLabel,
@@ -53,14 +67,15 @@ export function CardWindow({
   const frameResultRef = useRef<FrameRenderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [documentHeight, setDocumentHeight] = useState(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
 
   useEffect(() => {
     let cancelled = false;
     const cleanupTasks: Array<() => void> = [];
-    const documentType = client.document.detectType(filePath);
+    const resolvedDocumentType = documentType ?? client.document.detectType(filePath);
     logger.info("准备渲染文档窗口", {
       filePath,
-      documentType,
+      documentType: resolvedDocumentType,
       themeCacheKey: themeRuntime.cacheKey,
     });
 
@@ -77,9 +92,11 @@ export function CardWindow({
 
     setIsLoading(true);
     setError(null);
+    setDocumentHeight(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
 
     client.document.window.render({
       filePath,
+      documentType: documentType ?? undefined,
       locale,
       mode: "view",
     })
@@ -92,8 +109,11 @@ export function CardWindow({
         const frame = result.frame;
         frameResultRef.current = result;
         frame.style.width = "100%";
-        frame.style.height = "100%";
+        frame.style.height = `${DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT}px`;
         frame.style.border = "none";
+        frame.style.display = "block";
+        frame.style.overflow = "hidden";
+        frame.setAttribute("scrolling", "no");
 
         const handleLoad = () => {
           if (!cancelled) {
@@ -119,6 +139,17 @@ export function CardWindow({
           client.document.window.onReady(frame, () => {
             if (!cancelled) {
               setIsLoading(false);
+            }
+          }),
+        );
+        cleanupTasks.push(
+          client.document.window.onResize(frame, (payload) => {
+            const nextHeight = normalizeResizeHeight(payload);
+            if (!cancelled && nextHeight) {
+              setDocumentHeight((currentHeight) =>
+                Math.abs(currentHeight - nextHeight) >= 1 ? nextHeight : currentHeight,
+              );
+              frame.style.height = `${nextHeight}px`;
             }
           }),
         );
@@ -185,6 +216,7 @@ export function CardWindow({
   }, [
     client,
     containerErrorLabel,
+    documentType,
     fatalErrorFallback,
     filePath,
     locale,
@@ -198,37 +230,42 @@ export function CardWindow({
   return (
     <div
       data-chips-app="card-viewer.window"
-      className="card-viewer-window"
+      className="card-viewer-window card-viewer-window--document-flow"
     >
-      <div
-        data-chips-app="card-viewer.viewport"
-        className="card-viewer-window__viewport"
-      >
+      <div className="card-viewer-window__content card-viewer-window__content--document-flow">
+        <div className="card-viewer-window__top-safe-area" aria-hidden="true" />
         <div
-          ref={containerRef}
-          className="card-viewer-window__frame-host"
-        />
-        {isLoading && (
+          data-chips-app="card-viewer.viewport"
+          className="card-viewer-window__viewport card-viewer-window__viewport--document-flow"
+        >
           <div
-            data-scope="document-window"
-            data-part="overlay"
-            data-state="loading"
-            className="card-viewer-window__overlay"
-          >
-            {loadingLabel}
-          </div>
-        )}
-        {error && (
-          <div
-            data-scope="document-window"
-            data-part="overlay"
-            data-state="error"
-            className="card-viewer-window__overlay card-viewer-window__overlay--error"
-          >
-            <span>{error}</span>
-          </div>
-        )}
+            ref={containerRef}
+            className="card-viewer-window__frame-host card-viewer-window__frame-host--document-flow"
+            style={{ minHeight: `${documentHeight}px` }}
+          />
+          {isLoading && (
+            <div
+              data-scope="document-window"
+              data-part="overlay"
+              data-state="loading"
+              className="card-viewer-window__overlay"
+            >
+              {loadingLabel}
+            </div>
+          )}
+          {error && (
+            <div
+              data-scope="document-window"
+              data-part="overlay"
+              data-state="error"
+              className="card-viewer-window__overlay card-viewer-window__overlay--error"
+            >
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
       </div>
+      <div className="card-viewer-window__safe-area" aria-hidden="true" />
     </div>
   );
 }

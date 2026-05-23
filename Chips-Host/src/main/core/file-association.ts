@@ -45,11 +45,16 @@ const openByPlugin = async (
   mode?: 'card' | 'box'
 ): Promise<{ pluginId: string; windowId: string }> => {
   const launchParams: Record<string, unknown> = {
-    targetPath,
     trigger: 'file-association'
   };
   if (mode) {
-    launchParams.fileOpenMode = mode;
+    launchParams.cardSource = {
+      kind: 'local-file',
+      documentKind: mode,
+      filePath: targetPath,
+    };
+  } else {
+    launchParams.targetPath = targetPath;
   }
 
   const launched = await runtime.invoke<{ pluginId: string; window: { id: string } }>('plugin.launch', {

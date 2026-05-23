@@ -28,6 +28,7 @@ interface DocumentSurfaceResizePayload {
   height: number;
   contentHeight: number;
   safeBlockEnd: number;
+  safeBlockStart?: number;
   viewportHeight: number;
   reason: DocumentSurfaceResizeReason;
   stable: boolean;
@@ -36,6 +37,7 @@ interface DocumentSurfaceResizePayload {
 const DOCUMENT_FLOW_MIN_CONTENT_HEIGHT = 320;
 const DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT = 960;
 const DOCUMENT_FLOW_SAFE_BLOCK_END_FALLBACK = 72;
+const DOCUMENT_FLOW_SAFE_BLOCK_START_FALLBACK = 96;
 const DOCUMENT_FLOW_STABLE_DELAY_MS = 160;
 const DOCUMENT_FLOW_HEIGHT_EPSILON = 1;
 
@@ -125,13 +127,14 @@ export function HostedDocumentWindow({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const topSafeAreaRef = useRef<HTMLDivElement | null>(null);
   const safeAreaRef = useRef<HTMLDivElement | null>(null);
   const lastPublishedPayloadRef = useRef<DocumentSurfaceResizePayload | null>(null);
   const pendingReasonRef = useRef<DocumentSurfaceResizeReason>("initial");
   const innerDocumentHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
-  const currentDocumentHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
-  const pendingDocumentHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
-  const renderedDocumentHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
+  const currentSurfaceHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
+  const pendingSurfaceHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
+  const renderedInnerDocumentHeightRef = useRef(DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT);
   const pendingMeasureModeRef = useRef<"layout" | "target">("layout");
   const scheduledHeightFrameRef = useRef<number | null>(null);
   const stableHeightTimerRef = useRef<number | null>(null);
@@ -139,6 +142,11 @@ export function HostedDocumentWindow({
   const [error, setError] = useState<string | null>(null);
   const [documentHeight, setDocumentHeight] = useState(() =>
     DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT,
+  );
+
+  const readSafeBlockStart = useCallback(
+    () => readElementBlockSize(topSafeAreaRef.current, DOCUMENT_FLOW_SAFE_BLOCK_START_FALLBACK),
+    [],
   );
 
   const readSafeBlockEnd = useCallback(
@@ -150,10 +158,13 @@ export function HostedDocumentWindow({
     const frame = iframeRef.current;
     const content = contentRef.current;
     const root = rootRef.current;
-    const contentTop = content?.getBoundingClientRect().top ?? root?.getBoundingClientRect().top ?? 0;
+    const rootTop = root?.getBoundingClientRect().top ?? 0;
+    const contentTop = content?.getBoundingClientRect().top ?? rootTop;
     const frameTop = frame
       ? Math.max(0, frame.getBoundingClientRect().top - contentTop)
       : 0;
+    const topSafeArea = readSafeBlockStart();
+    const bottomSafeArea = readSafeBlockEnd();
     const measuredContentHeight = mode === "layout" && content
       ? Math.max(
           content.scrollHeight,
@@ -165,9 +176,9 @@ export function HostedDocumentWindow({
     return Math.max(
       DOCUMENT_FLOW_MIN_CONTENT_HEIGHT,
       Math.ceil(measuredContentHeight),
-      Math.ceil(innerDocumentHeightRef.current + frameTop),
+      Math.ceil(innerDocumentHeightRef.current + Math.max(frameTop, topSafeArea) + bottomSafeArea),
     );
-  }, []);
+  }, [readSafeBlockEnd, readSafeBlockStart]);
 
   const publishDocumentHeight = useCallback((
     nextHeight: number,
@@ -175,10 +186,12 @@ export function HostedDocumentWindow({
     stable: boolean,
   ) => {
     const contentHeight = Math.max(DOCUMENT_FLOW_MIN_CONTENT_HEIGHT, Math.ceil(nextHeight));
+    const safeBlockStart = readSafeBlockStart();
     const safeBlockEnd = readSafeBlockEnd();
     const payload: DocumentSurfaceResizePayload = {
-      height: Math.ceil(contentHeight + safeBlockEnd),
+      height: contentHeight,
       contentHeight,
+      safeBlockStart,
       safeBlockEnd,
       viewportHeight: getViewportHeight(),
       reason,
@@ -189,12 +202,12 @@ export function HostedDocumentWindow({
       return;
     }
 
-    currentDocumentHeightRef.current = contentHeight;
+    currentSurfaceHeightRef.current = contentHeight;
     lastPublishedPayloadRef.current = payload;
     if (typeof bridge.emit === "function") {
       void bridge.emit("plugin.surface.resize", payload).catch(() => undefined);
     }
-  }, [bridge, readSafeBlockEnd]);
+  }, [bridge, readSafeBlockEnd, readSafeBlockStart]);
 
   const scheduleStableHeightPublish = useCallback((reason: DocumentSurfaceResizeReason) => {
     if (stableHeightTimerRef.current !== null) {
@@ -203,17 +216,21 @@ export function HostedDocumentWindow({
 
     stableHeightTimerRef.current = window.setTimeout(() => {
       stableHeightTimerRef.current = null;
-      const stableContentHeight = Math.max(
+      const stableSurfaceHeight = Math.max(
         DOCUMENT_FLOW_MIN_CONTENT_HEIGHT,
-        Math.ceil(pendingDocumentHeightRef.current),
+        Math.ceil(pendingSurfaceHeightRef.current),
       );
-      renderedDocumentHeightRef.current = stableContentHeight;
+      const stableInnerHeight = Math.max(
+        DOCUMENT_FLOW_MIN_CONTENT_HEIGHT,
+        Math.ceil(innerDocumentHeightRef.current),
+      );
+      renderedInnerDocumentHeightRef.current = stableInnerHeight;
       setDocumentHeight((currentHeight) =>
-        Math.abs(currentHeight - stableContentHeight) >= DOCUMENT_FLOW_HEIGHT_EPSILON
-          ? stableContentHeight
+        Math.abs(currentHeight - stableInnerHeight) >= DOCUMENT_FLOW_HEIGHT_EPSILON
+          ? stableInnerHeight
           : currentHeight,
       );
-      publishDocumentHeight(stableContentHeight, pendingReasonRef.current || reason, true);
+      publishDocumentHeight(stableSurfaceHeight, pendingReasonRef.current || reason, true);
     }, DOCUMENT_FLOW_STABLE_DELAY_MS);
   }, [publishDocumentHeight]);
 
@@ -230,8 +247,8 @@ export function HostedDocumentWindow({
       );
       innerDocumentHeightRef.current = normalizedHeight;
       pendingMeasureModeRef.current = "target";
-      if (reason === "initial" || normalizedHeight >= renderedDocumentHeightRef.current) {
-        renderedDocumentHeightRef.current = normalizedHeight;
+      if (reason === "initial" || normalizedHeight >= renderedInnerDocumentHeightRef.current) {
+        renderedInnerDocumentHeightRef.current = normalizedHeight;
         setDocumentHeight((currentHeight) =>
           Math.abs(currentHeight - normalizedHeight) >= DOCUMENT_FLOW_HEIGHT_EPSILON
             ? normalizedHeight
@@ -255,10 +272,10 @@ export function HostedDocumentWindow({
     scheduledHeightFrameRef.current = schedule(() => {
       scheduledHeightFrameRef.current = null;
       const measuredHeight = measureHostedDocumentHeight(scheduledMeasureMode);
-      pendingDocumentHeightRef.current = measuredHeight;
-      const previousContentHeight = lastPublishedPayloadRef.current?.contentHeight ?? currentDocumentHeightRef.current;
+      pendingSurfaceHeightRef.current = measuredHeight;
+      const previousContentHeight = lastPublishedPayloadRef.current?.contentHeight ?? currentSurfaceHeightRef.current;
       if (measuredHeight + DOCUMENT_FLOW_HEIGHT_EPSILON >= previousContentHeight) {
-        currentDocumentHeightRef.current = measuredHeight;
+        currentSurfaceHeightRef.current = measuredHeight;
         publishDocumentHeight(measuredHeight, pendingReasonRef.current, false);
       }
       scheduleStableHeightPublish(pendingReasonRef.current);
@@ -274,9 +291,9 @@ export function HostedDocumentWindow({
     setIsLoading(true);
     setError(null);
     innerDocumentHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
-    currentDocumentHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
-    pendingDocumentHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
-    renderedDocumentHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
+    currentSurfaceHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
+    pendingSurfaceHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
+    renderedInnerDocumentHeightRef.current = DOCUMENT_FLOW_INITIAL_CONTENT_HEIGHT;
     pendingMeasureModeRef.current = "target";
     lastPublishedPayloadRef.current = null;
     pendingReasonRef.current = "initial";
@@ -369,7 +386,7 @@ export function HostedDocumentWindow({
     };
 
     const handleViewportResize = () => {
-      scheduleDocumentHeightPublish("viewport-resize", innerDocumentHeightRef.current);
+      scheduleDocumentHeightPublish("viewport-resize");
     };
 
     window.addEventListener("message", handleMessage);
@@ -402,8 +419,9 @@ export function HostedDocumentWindow({
 
   useLayoutEffect(() => {
     const content = contentRef.current;
+    const topSafeArea = topSafeAreaRef.current;
     const safeArea = safeAreaRef.current;
-    if ((!content && !safeArea) || typeof ResizeObserver !== "function") {
+    if ((!content && !topSafeArea && !safeArea) || typeof ResizeObserver !== "function") {
       return;
     }
 
@@ -412,6 +430,9 @@ export function HostedDocumentWindow({
     });
     if (content) {
       observer.observe(content);
+    }
+    if (topSafeArea) {
+      observer.observe(topSafeArea);
     }
     if (safeArea) {
       observer.observe(safeArea);
@@ -445,6 +466,7 @@ export function HostedDocumentWindow({
       className="card-viewer-window card-viewer-window--document-flow"
     >
       <div ref={contentRef} className="card-viewer-window__content card-viewer-window__content--document-flow">
+        <div ref={topSafeAreaRef} className="card-viewer-window__top-safe-area" aria-hidden="true" />
         <div
           data-chips-app="card-viewer.viewport"
           className="card-viewer-window__viewport card-viewer-window__viewport--document-flow"
@@ -456,6 +478,7 @@ export function HostedDocumentWindow({
               title="Hosted Card Document"
               sandbox="allow-scripts allow-same-origin allow-popups"
               style={{ height: `${documentHeight}px` }}
+              scrolling="no"
             />
           </div>
           {isLoading && (

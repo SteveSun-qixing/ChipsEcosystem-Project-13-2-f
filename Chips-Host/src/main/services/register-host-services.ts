@@ -1238,8 +1238,11 @@ const openBoxDocument = async (
   }
 
   const launched = await openPluginWindow(ctx, state, plugin.manifest.id, {
-    targetPath: boxFile,
-    fileOpenMode: 'box',
+    cardSource: {
+      kind: 'local-file',
+      documentKind: 'box',
+      filePath: boxFile,
+    },
     trigger: 'box-open-service'
   });
 
@@ -1369,9 +1372,16 @@ const openAssociatedPathInternal = async (
 
   if (plugin) {
     const launched = await openPluginWindow(ctx, state, plugin.manifest.id, {
-      targetPath: resolvedPath,
       trigger: 'association-open',
-      ...(extension === '.box' ? { fileOpenMode: 'box' } : {})
+      ...(extension === '.box'
+        ? {
+            cardSource: {
+              kind: 'local-file',
+              documentKind: 'box',
+              filePath: resolvedPath,
+            },
+          }
+        : { targetPath: resolvedPath })
     });
     return {
       targetPath: resolvedPath,

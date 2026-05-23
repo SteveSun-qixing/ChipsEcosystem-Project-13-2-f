@@ -362,7 +362,8 @@ client.document.window.render({
 - 当识别为 `.card` 时，SDK 内部委托 `client.card.compositeWindow.render(...)`；
 - 当识别为 `.box` 时，SDK 内部委托 `client.box.documentWindow.render(...)`；
 - 上层应用不再自己区分箱子布局插件装载、布局配置归一、查看会话创建或 iframe 事件桥接；
-- `client.document.window.onReady/onError/onResourceOpen` 统一覆盖卡片与箱子文档窗口。
+- `client.document.window.onReady/onResize/onError/onResourceOpen` 统一覆盖卡片与箱子文档窗口；
+- 文档型查看壳层应通过 `onResize` 接收 Host 回传的真实文档高度，并由外层页面负责滚动所有权、顶部悬浮层安全区和底部阅读安全区。
 
 示例：
 
@@ -374,6 +375,10 @@ const result = await client.document.window.render({
 
 const disposeReady = client.document.window.onReady(result.frame, () => {
   console.log(result.documentType);
+});
+
+const disposeResize = client.document.window.onResize(result.frame, (payload) => {
+  console.log(payload.documentType, payload.height, payload.reason);
 });
 ```
 

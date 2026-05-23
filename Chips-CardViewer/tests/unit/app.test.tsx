@@ -133,6 +133,30 @@ describe("App（卡片查看器根组件）", () => {
     expect(html).toContain('data-ratio="3:4"');
     expect(html).toContain("viewer-cover-surface__hit-target");
     expect(html).toContain('aria-label="点击封面返回内容"');
+    expect(html).toContain("viewer-cover-surface__title");
+    expect(html).toContain("社区卡片");
+  });
+
+  it("封面查看层应当把任意合法比例转换为视口自适应尺寸变量", () => {
+    const html = renderToString(
+      <ViewerCoverSurface
+        cover={{
+          title: "超宽封面",
+          coverUrl: "https://example.test/wide-cover.html",
+          ratio: "2:1",
+        }}
+        title="横版卡片"
+        closeLabel="点击封面返回内容"
+        unavailableLabel="当前文档没有可用封面。"
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("--viewer-cover-ratio-width:2");
+    expect(html).toContain("--viewer-cover-ratio-height:1");
+    expect(html).toContain("--viewer-cover-ratio-scale:1.4142");
+    expect(html).toContain("--viewer-cover-aspect-ratio:2 / 1");
+    expect(html).toContain("横版卡片");
   });
 
   it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {

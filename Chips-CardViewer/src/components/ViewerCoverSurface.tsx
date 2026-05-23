@@ -16,8 +16,17 @@ function resolveAspectRatioStyle(ratio: string): React.CSSProperties | undefined
   if (!match) {
     return undefined;
   }
+  const ratioWidth = Number(match[1]);
+  const ratioHeight = Number(match[2]);
+  if (!Number.isFinite(ratioWidth) || !Number.isFinite(ratioHeight) || ratioWidth <= 0 || ratioHeight <= 0) {
+    return undefined;
+  }
+  const ratioScale = Number(Math.sqrt(ratioWidth / ratioHeight).toFixed(4));
   return {
-    "--viewer-cover-aspect-ratio": `${match[1]} / ${match[2]}`,
+    "--viewer-cover-ratio-width": String(ratioWidth),
+    "--viewer-cover-ratio-height": String(ratioHeight),
+    "--viewer-cover-ratio-scale": String(ratioScale),
+    "--viewer-cover-aspect-ratio": `${ratioWidth} / ${ratioHeight}`,
   } as React.CSSProperties;
 }
 
@@ -47,23 +56,26 @@ export function ViewerCoverSurface({
       data-chips-app="card-viewer.cover"
       aria-label={title}
     >
-      <div className="viewer-cover-surface__stage" style={aspectRatioStyle}>
-        <EmbeddedDocumentFrame
-          surfaceId="viewer-cover"
-          title={cover.title ?? title}
-          src={cover.coverUrl}
-          ratio={ratio}
-          scope="viewer-cover-frame"
-          onActivate={onClose}
-          sandbox="allow-scripts"
-        />
-        <button
-          type="button"
-          className="viewer-cover-surface__hit-target"
-          aria-label={closeLabel}
-          title={closeLabel}
-          onClick={onClose}
-        />
+      <div className="viewer-cover-surface__layout" style={aspectRatioStyle}>
+        <div className="viewer-cover-surface__stage">
+          <EmbeddedDocumentFrame
+            surfaceId="viewer-cover"
+            title={cover.title ?? title}
+            src={cover.coverUrl}
+            ratio={ratio}
+            scope="viewer-cover-frame"
+            onActivate={onClose}
+            sandbox="allow-scripts"
+          />
+          <button
+            type="button"
+            className="viewer-cover-surface__hit-target"
+            aria-label={closeLabel}
+            title={closeLabel}
+            onClick={onClose}
+          />
+        </div>
+        <h2 className="viewer-cover-surface__title">{title}</h2>
       </div>
     </section>
   );

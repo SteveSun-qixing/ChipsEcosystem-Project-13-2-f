@@ -62,7 +62,7 @@ export function ViewerStage({
       return (
         <ViewerCoverSurface
           cover={source.cover}
-          title={source.cover.title ?? source.title ?? coverCloseLabel}
+          title={source.title ?? source.cover.title ?? coverCloseLabel}
           closeLabel={coverCloseLabel}
           unavailableLabel={coverUnavailableLabel}
           onClose={onCloseCover}

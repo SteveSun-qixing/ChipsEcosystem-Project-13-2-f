@@ -97,16 +97,22 @@ client.card.unpack(cardFile: string, outputDir: string): Promise<void>
 client.card.readMetadata(cardFile: string): Promise<Record<string, unknown>>
 ```
 
-解析卡片使用 `client.card.parse()` 方法，传入卡片文件路径或卡片ID。返回卡片对象，包含元数据、内容列表等。方法签名：
+解析卡片使用 `client.card.parse()` 方法，传入卡片文件路径。SDK 会把 Host `card.parse` 的 `{ ast }` 响应解包为卡片对象。方法签名：
 
 ```typescript
-client.card.parse(cardPath: string): Promise<CardDocument>
+client.card.parse(cardFile: string): Promise<CardDocument>
 ```
 
 验证卡片使用 `client.card.validate()` 方法，传入卡片文件路径，验证卡片结构是否符合规范。方法签名：
 
 ```typescript
 client.card.validate(cardFile: string): Promise<ValidationResult>
+```
+
+当应用需要把 Host 托管渲染文档 URL 映射回实际文档路径时，使用 `client.card.resolveDocumentPath()`。该接口直接映射 `card.resolveDocumentPath`，SDK 会把 `{ path }` 响应解包为路径字符串：
+
+```typescript
+client.card.resolveDocumentPath(documentUrl: string): Promise<string>
 ```
 
 渲染卡片使用 `client.card.render()` 方法，传入卡片文件路径。返回渲染后的视图对象。方法签名：
@@ -148,6 +154,59 @@ client.file.list(dir: string, options?: FileListOptions): Promise<FileEntry[]>
 ```
 
 调用方只消费 `FileStat` 与 `FileEntry[]`，不得在业务层依赖 `{ meta }` 或 `{ entries }` 这类 Host 路由 envelope。
+
+### `client.file.watch(...)`
+
+SDK 提供一次性文件变化等待封装，直接映射 Host `file.watch`：
+
+```typescript
+client.file.watch(path: string, options?: { timeoutMs?: number }): Promise<FileWatchEvent | null>
+```
+
+使用语义：
+
+- 返回值为首个文件变化事件，或超时后的 `null`；
+- Host 返回 `{ event }`，SDK 对调用方解包为 `FileWatchEvent | null`；
+- 该接口用于开发工具、预览刷新、轻量监听等场景；长期订阅型监听仍应优先由 Host 事件或专用运行时能力承载。
+
+### `client.file.write(...)`
+
+`client.file.write(...)`、`mkdir/delete/move/copy` 等写操作对调用方保持 `Promise<void>`。Host `{ ack: true }` 只表示路由确认，业务代码不得依赖该 envelope。
+
+## 平台系统能力
+
+SDK 的 `client.platform` 对 Host `platform.*` 系统能力提供正式封装，应用插件不应在业务代码中散落 `client.invoke("platform.*")` 私有调用。
+
+当前封装包括：
+
+```typescript
+client.platform.clipboardRead(format?: "text" | "image" | "files"): Promise<PlatformClipboardPayload>
+client.platform.clipboardWrite(data: PlatformClipboardPayload, format?: "text" | "image" | "files"): Promise<void>
+client.platform.shellOpenPath(path: string): Promise<void>
+client.platform.shellOpenExternal(url: string): Promise<void>
+client.platform.shellShowItemInFolder(path: string): Promise<void>
+client.platform.notificationShow(options: PlatformNotificationOptions): Promise<void>
+client.platform.traySet(options?: PlatformTrayOptions): Promise<PlatformTrayState>
+client.platform.trayClear(): Promise<void>
+client.platform.trayGetState(): Promise<PlatformTrayState>
+client.platform.shortcutRegister(accelerator: string, options?: { eventName?: string }): Promise<boolean>
+client.platform.shortcutUnregister(accelerator: string): Promise<void>
+client.platform.shortcutIsRegistered(accelerator: string): Promise<boolean>
+client.platform.shortcutList(): Promise<string[]>
+client.platform.shortcutClear(): Promise<void>
+client.platform.ipcCreateChannel(options: PlatformIpcCreateOptions): Promise<PlatformIpcChannelInfo>
+client.platform.ipcSend(channelId: string, payload: string, options?: { encoding?: "utf8" | "base64" }): Promise<void>
+client.platform.ipcReceive(channelId: string, options?: { timeoutMs?: number }): Promise<PlatformIpcMessage>
+client.platform.ipcCloseChannel(channelId: string): Promise<void>
+client.platform.ipcListChannels(): Promise<PlatformIpcChannelInfo[]>
+```
+
+使用边界：
+
+- `notificationShow(options.icon)`、`traySet(options.icon)` 使用操作系统壳层图标路径或宿主原生可解析资源，不接收运行时 `IconDescriptor`；
+- `shortcutRegister` 默认触发 `platform.shortcut.triggered` 事件，也可以传入自定义 `eventName`；
+- IPC payload 使用字符串传输，`encoding` 只允许 `utf8 | base64`；
+- shell/openExternal 类能力应在业务层做好来源校验和用户确认。
 
 ## 资源打开路由
 

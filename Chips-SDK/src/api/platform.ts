@@ -116,6 +116,72 @@ export interface PlatformDialogMessageOptions {
   detail?: string;
 }
 
+export type PlatformClipboardFormat = "text" | "image" | "files";
+
+export interface PlatformClipboardImagePayload {
+  base64: string;
+  mimeType?: string;
+}
+
+export type PlatformClipboardPayload = string | PlatformClipboardImagePayload | string[];
+
+export interface PlatformNotificationOptions {
+  title: string;
+  body: string;
+  icon?: string;
+  silent?: boolean;
+}
+
+export interface PlatformTrayMenuItem {
+  id: string;
+  label: string;
+}
+
+export interface PlatformTrayOptions {
+  icon?: string;
+  tooltip?: string;
+  menu?: PlatformTrayMenuItem[];
+}
+
+export interface PlatformTrayState extends PlatformTrayOptions {
+  active: boolean;
+}
+
+export interface PlatformShortcutRegisterOptions {
+  eventName?: string;
+}
+
+export type PlatformIpcTransport = "named-pipe" | "unix-socket" | "shared-memory";
+
+export interface PlatformIpcCreateOptions {
+  name: string;
+  transport: PlatformIpcTransport;
+  maxBufferBytes?: number;
+}
+
+export interface PlatformIpcChannelInfo {
+  channelId: string;
+  name: string;
+  transport: PlatformIpcTransport;
+  endpoint?: string;
+}
+
+export interface PlatformIpcSendOptions {
+  encoding?: "utf8" | "base64";
+}
+
+export interface PlatformIpcReceiveOptions {
+  timeoutMs?: number;
+}
+
+export interface PlatformIpcMessage {
+  channelId: string;
+  transport: PlatformIpcTransport;
+  payload: string;
+  encoding: "base64";
+  receivedAt: number;
+}
+
 export interface PlatformRenderHtmlToPdfRequest {
   htmlDir: string;
   entryFile?: string;
@@ -168,6 +234,25 @@ export interface PlatformApi {
   openExternal(url: string): Promise<void>;
   renderHtmlToPdf(request: PlatformRenderHtmlToPdfRequest): Promise<PlatformRenderHtmlToPdfResult>;
   renderHtmlToImage(request: PlatformRenderHtmlToImageRequest): Promise<PlatformRenderHtmlToImageResult>;
+  clipboardRead(format?: PlatformClipboardFormat): Promise<PlatformClipboardPayload>;
+  clipboardWrite(data: PlatformClipboardPayload, format?: PlatformClipboardFormat): Promise<void>;
+  shellOpenPath(path: string): Promise<void>;
+  shellOpenExternal(url: string): Promise<void>;
+  shellShowItemInFolder(path: string): Promise<void>;
+  notificationShow(options: PlatformNotificationOptions): Promise<void>;
+  traySet(options?: PlatformTrayOptions): Promise<PlatformTrayState>;
+  trayClear(): Promise<void>;
+  trayGetState(): Promise<PlatformTrayState>;
+  shortcutRegister(accelerator: string, options?: PlatformShortcutRegisterOptions): Promise<boolean>;
+  shortcutUnregister(accelerator: string): Promise<void>;
+  shortcutIsRegistered(accelerator: string): Promise<boolean>;
+  shortcutList(): Promise<string[]>;
+  shortcutClear(): Promise<void>;
+  ipcCreateChannel(options: PlatformIpcCreateOptions): Promise<PlatformIpcChannelInfo>;
+  ipcSend(channelId: string, payload: string, options?: PlatformIpcSendOptions): Promise<void>;
+  ipcReceive(channelId: string, options?: PlatformIpcReceiveOptions): Promise<PlatformIpcMessage>;
+  ipcCloseChannel(channelId: string): Promise<void>;
+  ipcListChannels(): Promise<PlatformIpcChannelInfo[]>;
   openFile(options?: PlatformDialogFileOptions): Promise<string[] | null>;
   saveFile(options?: PlatformDialogSaveOptions): Promise<string | null>;
   showMessage(options: PlatformDialogMessageOptions): Promise<number>;
@@ -355,6 +440,154 @@ export function createPlatformApi(client: CoreClient): PlatformApi {
         throw createError("INVALID_ARGUMENT", "platform.renderHtmlToImage: htmlDir and outputFile are required.");
       }
       return client.invoke("platform.renderHtmlToImage", request);
+    },
+    async clipboardRead(format) {
+      const result = await client.invoke<
+        { format?: PlatformClipboardFormat },
+        { data: PlatformClipboardPayload }
+      >("platform.clipboardRead", { format });
+      return result.data;
+    },
+    async clipboardWrite(data, format) {
+      await client.invoke<{ data: PlatformClipboardPayload; format?: PlatformClipboardFormat }, { ack: true }>(
+        "platform.clipboardWrite",
+        { data, format },
+      );
+    },
+    async shellOpenPath(path) {
+      if (!path) {
+        throw createError("INVALID_ARGUMENT", "platform.shellOpenPath: path is required.");
+      }
+      await client.invoke("platform.shellOpenPath", { path });
+    },
+    async shellOpenExternal(url) {
+      if (!url) {
+        throw createError("INVALID_ARGUMENT", "platform.shellOpenExternal: url is required.");
+      }
+      await client.invoke("platform.shellOpenExternal", { url });
+    },
+    async shellShowItemInFolder(path) {
+      if (!path) {
+        throw createError("INVALID_ARGUMENT", "platform.shellShowItemInFolder: path is required.");
+      }
+      await client.invoke("platform.shellShowItemInFolder", { path });
+    },
+    async notificationShow(options) {
+      if (!options?.title || !options?.body) {
+        throw createError("INVALID_ARGUMENT", "platform.notificationShow: title and body are required.");
+      }
+      await client.invoke<{ options: PlatformNotificationOptions }, { ack: true }>(
+        "platform.notificationShow",
+        { options },
+      );
+    },
+    async traySet(options) {
+      const result = await client.invoke<
+        { options?: PlatformTrayOptions },
+        { tray: PlatformTrayState }
+      >("platform.traySet", { options: options ?? {} });
+      return result.tray;
+    },
+    async trayClear() {
+      await client.invoke("platform.trayClear", {});
+    },
+    async trayGetState() {
+      const result = await client.invoke<Record<string, never>, { tray: PlatformTrayState }>(
+        "platform.trayGetState",
+        {},
+      );
+      return result.tray;
+    },
+    async shortcutRegister(accelerator, options) {
+      if (!accelerator) {
+        throw createError("INVALID_ARGUMENT", "platform.shortcutRegister: accelerator is required.");
+      }
+      const result = await client.invoke<
+        { accelerator: string; eventName?: string },
+        { registered: boolean }
+      >("platform.shortcutRegister", {
+        accelerator,
+        eventName: options?.eventName,
+      });
+      return result.registered === true;
+    },
+    async shortcutUnregister(accelerator) {
+      if (!accelerator) {
+        throw createError("INVALID_ARGUMENT", "platform.shortcutUnregister: accelerator is required.");
+      }
+      await client.invoke("platform.shortcutUnregister", { accelerator });
+    },
+    async shortcutIsRegistered(accelerator) {
+      if (!accelerator) {
+        throw createError("INVALID_ARGUMENT", "platform.shortcutIsRegistered: accelerator is required.");
+      }
+      const result = await client.invoke<
+        { accelerator: string },
+        { registered: boolean }
+      >("platform.shortcutIsRegistered", { accelerator });
+      return result.registered === true;
+    },
+    async shortcutList() {
+      const result = await client.invoke<Record<string, never>, { accelerators: string[] }>(
+        "platform.shortcutList",
+        {},
+      );
+      return result.accelerators;
+    },
+    async shortcutClear() {
+      await client.invoke("platform.shortcutClear", {});
+    },
+    async ipcCreateChannel(options) {
+      if (!options?.name || !options?.transport) {
+        throw createError("INVALID_ARGUMENT", "platform.ipcCreateChannel: name and transport are required.");
+      }
+      const result = await client.invoke<
+        PlatformIpcCreateOptions,
+        { channel: PlatformIpcChannelInfo }
+      >("platform.ipcCreateChannel", options);
+      return result.channel;
+    },
+    async ipcSend(channelId, payload, options) {
+      if (!channelId) {
+        throw createError("INVALID_ARGUMENT", "platform.ipcSend: channelId is required.");
+      }
+      if (typeof payload !== "string") {
+        throw createError("INVALID_ARGUMENT", "platform.ipcSend: payload must be a string.");
+      }
+      await client.invoke<
+        { channelId: string; payload: string; encoding?: "utf8" | "base64" },
+        { ack: true }
+      >("platform.ipcSend", {
+        channelId,
+        payload,
+        encoding: options?.encoding,
+      });
+    },
+    async ipcReceive(channelId, options) {
+      if (!channelId) {
+        throw createError("INVALID_ARGUMENT", "platform.ipcReceive: channelId is required.");
+      }
+      const result = await client.invoke<
+        { channelId: string; timeoutMs?: number },
+        { message: PlatformIpcMessage }
+      >("platform.ipcReceive", {
+        channelId,
+        timeoutMs: options?.timeoutMs,
+      });
+      return result.message;
+    },
+    async ipcCloseChannel(channelId) {
+      if (!channelId) {
+        throw createError("INVALID_ARGUMENT", "platform.ipcCloseChannel: channelId is required.");
+      }
+      await client.invoke("platform.ipcCloseChannel", { channelId });
+    },
+    async ipcListChannels() {
+      const result = await client.invoke<Record<string, never>, { channels: PlatformIpcChannelInfo[] }>(
+        "platform.ipcListChannels",
+        {},
+      );
+      return result.channels;
     },
     async openFile(options) {
       const result = await client.invoke<

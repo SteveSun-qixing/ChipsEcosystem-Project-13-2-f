@@ -181,6 +181,31 @@ describe("CardApi", () => {
     ]);
   });
 
+  it("unwraps card.resolveDocumentPath results", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          path: "/tmp/chips-render/session-1/index.html",
+        } as any;
+      }),
+    );
+
+    await expect(api.resolveDocumentPath("chips-render://card/session-1/index.html")).resolves.toBe(
+      "/tmp/chips-render/session-1/index.html",
+    );
+    expect(calls).toEqual([
+      {
+        action: "card.resolveDocumentPath",
+        payload: {
+          documentUrl: "chips-render://card/session-1/index.html",
+        },
+      },
+    ]);
+  });
+
   it("passes card open requests into card.open and unwraps result", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 

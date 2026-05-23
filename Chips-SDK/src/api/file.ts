@@ -19,6 +19,10 @@ export interface FileListOptions {
   recursive?: boolean;
 }
 
+export interface FileWatchOptions {
+  timeoutMs?: number;
+}
+
 export interface FileDeleteOptions {
   recursive?: boolean;
 }
@@ -29,11 +33,18 @@ export interface FileEntry {
   isDirectory: boolean;
 }
 
+export interface FileWatchEvent {
+  type: "rename" | "change";
+  path: string;
+  timestamp: number;
+}
+
 export interface FileApi {
   read(path: string, options?: FileReadOptions): Promise<FileContent>;
   write(path: string, content: FileContent, options?: { encoding?: "utf-8" | "binary" }): Promise<void>;
   stat(path: string): Promise<FileStat>;
   list(dir: string, options?: FileListOptions): Promise<FileEntry[]>;
+  watch(path: string, options?: FileWatchOptions): Promise<FileWatchEvent | null>;
   mkdir(path: string): Promise<void>;
   delete(path: string, options?: FileDeleteOptions): Promise<void>;
   move(sourcePath: string, destPath: string): Promise<void>;
@@ -165,7 +176,7 @@ export function createFileApi(client: CoreClient): FileApi {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.write: path is required.");
       }
-      return client.invoke("file.write", { path, content, ...options });
+      await client.invoke("file.write", { path, content, ...options });
     },
     async stat(path) {
       if (!path) {
@@ -183,6 +194,19 @@ export function createFileApi(client: CoreClient): FileApi {
         { entries: FileEntry[] }
       >("file.list", { dir, options });
       return result.entries;
+    },
+    async watch(path, options) {
+      if (!path) {
+        throw createError("INVALID_ARGUMENT", "file.watch: path is required.");
+      }
+      const result = await client.invoke<
+        { path: string; timeoutMs?: number },
+        { event: FileWatchEvent | null }
+      >("file.watch", {
+        path,
+        timeoutMs: options?.timeoutMs,
+      });
+      return result.event;
     },
     async mkdir(path) {
       if (!path) {

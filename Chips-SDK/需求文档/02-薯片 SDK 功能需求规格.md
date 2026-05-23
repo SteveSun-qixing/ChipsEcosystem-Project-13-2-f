@@ -119,6 +119,7 @@
   client.file.write(path: string, content: FileContent, options?: FileWriteOptions): Promise<void>;
   client.file.list(dir: string, options?: FileListOptions): Promise<FileEntry[]>;
   client.file.stat(path: string): Promise<FileStat>;
+  client.file.watch(path: string, options?: { timeoutMs?: number }): Promise<FileWatchEvent | null>;
   ```
 
 - 调用必须映射到 Host `file.*` 服务动作，并遵守权限与错误码语义。
@@ -135,6 +136,7 @@
   ): Promise<CardReadInfoResult>;
   client.card.parse(cardFile: string): Promise<CardDocument>;
   client.card.validate(cardFile: string): Promise<ValidationResult>;
+  client.card.resolveDocumentPath(documentUrl: string): Promise<string>;
   client.card.open(cardFile: string): Promise<{
     mode: 'card-window';
     windowId?: string;

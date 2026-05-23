@@ -343,6 +343,7 @@ export interface CardApi {
   readInfo(cardFile: string, fields?: CardInfoField[]): Promise<CardReadInfoResult>;
   parse(cardFile: string): Promise<CardDocument>;
   validate(cardFile: string): Promise<ValidationResult>;
+  resolveDocumentPath(documentUrl: string): Promise<string>;
   open(cardFile: string): Promise<CardOpenResult>;
   render(cardFile: string, options?: CardRenderOptions): Promise<CardRenderResult>;
   releaseRenderSession(sessionId: string): Promise<void>;
@@ -436,6 +437,16 @@ export function createCardApi(client: CoreClient): CardApi {
         throw createError("INVALID_ARGUMENT", "card.validate: cardFile is required.");
       }
       return client.invoke<{ cardFile: string }, ValidationResult>("card.validate", { cardFile });
+    },
+    async resolveDocumentPath(documentUrl) {
+      if (!documentUrl) {
+        throw createError("INVALID_ARGUMENT", "card.resolveDocumentPath: documentUrl is required.");
+      }
+      const result = await client.invoke<{ documentUrl: string }, { path: string }>(
+        "card.resolveDocumentPath",
+        { documentUrl },
+      );
+      return result.path;
     },
     async open(cardFile) {
       if (!cardFile) {

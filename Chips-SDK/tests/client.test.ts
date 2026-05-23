@@ -425,6 +425,49 @@ describe("createClient", () => {
     ]);
   });
 
+  it("unwraps file.watch events and keeps file writes void", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const watchEvent = {
+      type: "change" as const,
+      path: "/workspace/card/metadata.yaml",
+      timestamp: 1_710_000_000_000,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "file.watch") {
+          return { event: watchEvent };
+        }
+        if (action === "file.write") {
+          return { ack: true };
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+
+    await expect(client.file.watch("/workspace/card", { timeoutMs: 250 })).resolves.toEqual(watchEvent);
+    await expect(client.file.write("/workspace/card/metadata.yaml", "name: Demo")).resolves.toBeUndefined();
+
+    expect(calls).toEqual([
+      {
+        action: "file.watch",
+        payload: {
+          path: "/workspace/card",
+          timeoutMs: 250,
+        },
+      },
+      {
+        action: "file.write",
+        payload: {
+          path: "/workspace/card/metadata.yaml",
+          content: "name: Demo",
+        },
+      },
+    ]);
+  });
+
   it("unwraps file.stat and config responses from Host route envelopes", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
     const stat = {
@@ -1697,6 +1740,195 @@ describe("createClient", () => {
           options: {
             format: "png",
           },
+        },
+      },
+    ]);
+  });
+
+  it("wraps formal platform system UI and IPC routes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const trayState = {
+      active: true,
+      icon: "/tmp/tray.png",
+      tooltip: "Chips",
+      menu: [
+        {
+          id: "open",
+          label: "Open",
+        },
+      ],
+    };
+    const channel = {
+      channelId: "ipc-1",
+      name: "preview",
+      transport: "unix-socket" as const,
+      endpoint: "/tmp/chips-preview.sock",
+    };
+    const ipcMessage = {
+      channelId: "ipc-1",
+      transport: "unix-socket" as const,
+      payload: "aGVsbG8=",
+      encoding: "base64" as const,
+      receivedAt: 1_710_000_000_000,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "platform.clipboardRead":
+            return { data: "hello" };
+          case "platform.clipboardWrite":
+          case "platform.shellOpenPath":
+          case "platform.shellOpenExternal":
+          case "platform.shellShowItemInFolder":
+          case "platform.notificationShow":
+          case "platform.trayClear":
+          case "platform.shortcutUnregister":
+          case "platform.shortcutClear":
+          case "platform.ipcSend":
+          case "platform.ipcCloseChannel":
+            return { ack: true };
+          case "platform.traySet":
+          case "platform.trayGetState":
+            return { tray: trayState };
+          case "platform.shortcutRegister":
+          case "platform.shortcutIsRegistered":
+            return { registered: true };
+          case "platform.shortcutList":
+            return { accelerators: ["CommandOrControl+Shift+P"] };
+          case "platform.ipcCreateChannel":
+            return { channel };
+          case "platform.ipcReceive":
+            return { message: ipcMessage };
+          case "platform.ipcListChannels":
+            return { channels: [channel] };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(client.platform.clipboardRead("text")).resolves.toBe("hello");
+    await expect(client.platform.clipboardWrite("world", "text")).resolves.toBeUndefined();
+    await expect(client.platform.shellOpenPath("/tmp/demo.card")).resolves.toBeUndefined();
+    await expect(client.platform.shellOpenExternal("https://chips.example")).resolves.toBeUndefined();
+    await expect(client.platform.shellShowItemInFolder("/tmp/demo.card")).resolves.toBeUndefined();
+    await expect(
+      client.platform.notificationShow({
+        title: "导出完成",
+        body: "卡片已导出。",
+        icon: "/tmp/icon.png",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      client.platform.traySet({
+        icon: "/tmp/tray.png",
+        tooltip: "Chips",
+        menu: [{ id: "open", label: "Open" }],
+      }),
+    ).resolves.toEqual(trayState);
+    await expect(client.platform.trayGetState()).resolves.toEqual(trayState);
+    await expect(client.platform.trayClear()).resolves.toBeUndefined();
+    await expect(
+      client.platform.shortcutRegister("CommandOrControl+Shift+P", {
+        eventName: "chips.preview.shortcut",
+      }),
+    ).resolves.toBe(true);
+    await expect(client.platform.shortcutIsRegistered("CommandOrControl+Shift+P")).resolves.toBe(true);
+    await expect(client.platform.shortcutList()).resolves.toEqual(["CommandOrControl+Shift+P"]);
+    await expect(client.platform.shortcutUnregister("CommandOrControl+Shift+P")).resolves.toBeUndefined();
+    await expect(client.platform.shortcutClear()).resolves.toBeUndefined();
+    await expect(
+      client.platform.ipcCreateChannel({
+        name: "preview",
+        transport: "unix-socket",
+        maxBufferBytes: 1024,
+      }),
+    ).resolves.toEqual(channel);
+    await expect(client.platform.ipcSend("ipc-1", "aGVsbG8=", { encoding: "base64" })).resolves.toBeUndefined();
+    await expect(client.platform.ipcReceive("ipc-1", { timeoutMs: 500 })).resolves.toEqual(ipcMessage);
+    await expect(client.platform.ipcListChannels()).resolves.toEqual([channel]);
+    await expect(client.platform.ipcCloseChannel("ipc-1")).resolves.toBeUndefined();
+
+    expect(calls).toEqual([
+      { action: "platform.clipboardRead", payload: { format: "text" } },
+      { action: "platform.clipboardWrite", payload: { data: "world", format: "text" } },
+      { action: "platform.shellOpenPath", payload: { path: "/tmp/demo.card" } },
+      { action: "platform.shellOpenExternal", payload: { url: "https://chips.example" } },
+      { action: "platform.shellShowItemInFolder", payload: { path: "/tmp/demo.card" } },
+      {
+        action: "platform.notificationShow",
+        payload: {
+          options: {
+            title: "导出完成",
+            body: "卡片已导出。",
+            icon: "/tmp/icon.png",
+          },
+        },
+      },
+      {
+        action: "platform.traySet",
+        payload: {
+          options: {
+            icon: "/tmp/tray.png",
+            tooltip: "Chips",
+            menu: [{ id: "open", label: "Open" }],
+          },
+        },
+      },
+      { action: "platform.trayGetState", payload: {} },
+      { action: "platform.trayClear", payload: {} },
+      {
+        action: "platform.shortcutRegister",
+        payload: {
+          accelerator: "CommandOrControl+Shift+P",
+          eventName: "chips.preview.shortcut",
+        },
+      },
+      {
+        action: "platform.shortcutIsRegistered",
+        payload: {
+          accelerator: "CommandOrControl+Shift+P",
+        },
+      },
+      { action: "platform.shortcutList", payload: {} },
+      {
+        action: "platform.shortcutUnregister",
+        payload: {
+          accelerator: "CommandOrControl+Shift+P",
+        },
+      },
+      { action: "platform.shortcutClear", payload: {} },
+      {
+        action: "platform.ipcCreateChannel",
+        payload: {
+          name: "preview",
+          transport: "unix-socket",
+          maxBufferBytes: 1024,
+        },
+      },
+      {
+        action: "platform.ipcSend",
+        payload: {
+          channelId: "ipc-1",
+          payload: "aGVsbG8=",
+          encoding: "base64",
+        },
+      },
+      {
+        action: "platform.ipcReceive",
+        payload: {
+          channelId: "ipc-1",
+          timeoutMs: 500,
+        },
+      },
+      { action: "platform.ipcListChannels", payload: {} },
+      {
+        action: "platform.ipcCloseChannel",
+        payload: {
+          channelId: "ipc-1",
         },
       },
     ]);

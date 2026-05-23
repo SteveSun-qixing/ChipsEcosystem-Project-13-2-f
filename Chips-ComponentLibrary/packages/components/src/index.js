@@ -106,6 +106,180 @@ function getDefaultIconDescriptor(type) {
   return DEFAULT_ICON_DESCRIPTOR_MAP[type] ?? null;
 }
 
+const TEXT_ELEMENT_TAGS = new Set(["span", "p", "strong", "em", "small", "code", "div"]);
+const TEXT_TONES = new Set(["default", "muted", "accent", "error"]);
+const TEXT_EMPHASIS = new Set(["regular", "strong", "code"]);
+
+function normalizeTextElementTag(tag, fallback = "span") {
+  return TEXT_ELEMENT_TAGS.has(tag) ? tag : fallback;
+}
+
+function normalizeTextTone(tone) {
+  return TEXT_TONES.has(tone) ? tone : "default";
+}
+
+function normalizeTextEmphasis(emphasis) {
+  return TEXT_EMPHASIS.has(emphasis) ? emphasis : "regular";
+}
+
+function resolveDisplayContent(params = {}) {
+  const {
+    children,
+    value,
+    key,
+    i18n,
+    params: textParams,
+    fallback = "",
+    onDiagnostic
+  } = params;
+
+  if (children !== undefined) {
+    return children;
+  }
+
+  const fallbackText = typeof fallback === "string"
+    ? fallback
+    : typeof value === "string"
+      ? value
+      : "";
+
+  if (isNonEmptyString(key)) {
+    return resolveI18nText({
+      i18n,
+      key,
+      params: textParams,
+      fallback: fallbackText,
+      onDiagnostic
+    });
+  }
+
+  return value !== undefined ? value : fallbackText;
+}
+
+export const ChipsText = React.forwardRef((props, ref) => {
+  const {
+    as = "span",
+    children,
+    text,
+    textKey,
+    textParams,
+    fallbackText,
+    tone,
+    emphasis,
+    truncate = false,
+    disabled = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const resolvedTone = normalizedError ? "error" : normalizeTextTone(tone);
+  const resolvedEmphasis = normalizeTextEmphasis(emphasis);
+  const state = resolveInteractiveState({
+    disabled,
+    error: normalizedError
+  });
+  const elementTag = normalizeTextElementTag(as);
+  const content = resolveDisplayContent({
+    children,
+    value: text,
+    key: textKey,
+    params: textParams,
+    fallback: fallbackText,
+    i18n,
+    onDiagnostic
+  });
+
+  return React.createElement(
+    elementTag,
+    {
+      ...rest,
+      ...createScopeAttributes("text", "root", state),
+      ref,
+      "aria-disabled": disabled ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-tone": resolvedTone,
+      "data-emphasis": resolvedEmphasis,
+      "data-truncate": truncate ? "true" : "false"
+    },
+    content
+  );
+});
+
+ChipsText.displayName = "ChipsText";
+
+export const ChipsLabel = React.forwardRef((props, ref) => {
+  const {
+    children,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    required = false,
+    requiredIndicator = "*",
+    disabled = false,
+    error = null,
+    i18n,
+    onStateChange: _onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const state = resolveInteractiveState({
+    disabled,
+    error: normalizedError
+  });
+  const content = resolveDisplayContent({
+    children,
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  return React.createElement(
+    "label",
+    {
+      ...rest,
+      ...createScopeAttributes("label", "root", state),
+      ref,
+      "aria-disabled": disabled ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "aria-required": required ? "true" : undefined,
+      "data-required": required ? "true" : "false"
+    },
+    content,
+    required
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("label", "required-indicator", state),
+            "aria-hidden": "true"
+          },
+          requiredIndicator
+        )
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("label", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsLabel.displayName = "ChipsLabel";
+
 export const ChipsIcon = React.forwardRef((props, ref) => {
   const {
     descriptor,
@@ -133,15 +307,15 @@ export const ChipsIcon = React.forwardRef((props, ref) => {
     justifyContent: "center",
     flexShrink: 0,
     lineHeight: 1,
-    fontSize: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
-    width: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
-    height: "var(--chips-icon-size, var(--chips-sys-icon-size, 1em))",
-    color: "var(--chips-icon-color, var(--chips-sys-icon-color, currentColor))",
+    fontSize: "var(--chips-icon-size, var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em)))",
+    width: "var(--chips-icon-size, var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em)))",
+    height: "var(--chips-icon-size, var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em)))",
+    color: "var(--chips-icon-color, var(--chips-comp-icon-root-color, var(--chips-sys-icon-color, currentColor)))",
     fontVariationSettings:
-      "\"FILL\" var(--chips-icon-fill, var(--chips-sys-icon-fill, 0)), "
-      + "\"wght\" var(--chips-icon-wght, var(--chips-sys-icon-wght, 400)), "
-      + "\"GRAD\" var(--chips-icon-grad, var(--chips-sys-icon-grad, 0)), "
-      + "\"opsz\" var(--chips-icon-opsz, var(--chips-sys-icon-opsz, 24))",
+      "\"FILL\" var(--chips-icon-fill, var(--chips-comp-icon-root-fill, var(--chips-sys-icon-fill, 0))), "
+      + "\"wght\" var(--chips-icon-wght, var(--chips-comp-icon-root-wght, var(--chips-sys-icon-wght, 400))), "
+      + "\"GRAD\" var(--chips-icon-grad, var(--chips-comp-icon-root-grad, var(--chips-sys-icon-grad, 0))), "
+      + "\"opsz\" var(--chips-icon-opsz, var(--chips-comp-icon-root-opsz, var(--chips-sys-icon-opsz, 24)))",
     fontFeatureSettings: "\"liga\"",
     ...style
   };
@@ -160,8 +334,8 @@ export const ChipsIcon = React.forwardRef((props, ref) => {
   return React.createElement(
     "span",
     {
-      ...createScopeAttributes("icon", "root", "idle"),
       ...rest,
+      ...createScopeAttributes("icon", "root", "idle"),
       ref,
       style: rootStyle,
       title: isNonEmptyString(title) ? title.trim() : title,
@@ -202,13 +376,31 @@ export const InteractiveEventType = {
 
 export const COMPONENT_TOKEN_MAP = {
   ...LAYOUT_COMPONENT_TOKEN_MAP,
+  text: [
+    "chips.comp.text.root.color.default",
+    "chips.comp.text.root.color.muted",
+    "chips.comp.text.root.color.accent",
+    "chips.comp.text.root.color.error",
+    "chips.comp.text.root.font-size",
+    "chips.comp.text.root.line-height",
+    "chips.comp.text.root.font-weight.regular",
+    "chips.comp.text.root.font-weight.strong"
+  ],
+  label: [
+    "chips.comp.label.root.color",
+    "chips.comp.label.root.font-size",
+    "chips.comp.label.root.line-height",
+    "chips.comp.label.root.font-weight",
+    "chips.comp.label.required-indicator.color",
+    "chips.comp.label.status.color.error"
+  ],
   icon: [
-    "chips.sys.icon.color",
-    "chips.sys.icon.size",
-    "chips.sys.icon.fill",
-    "chips.sys.icon.wght",
-    "chips.sys.icon.grad",
-    "chips.sys.icon.opsz"
+    "chips.comp.icon.root.color",
+    "chips.comp.icon.root.size",
+    "chips.comp.icon.root.fill",
+    "chips.comp.icon.root.wght",
+    "chips.comp.icon.root.grad",
+    "chips.comp.icon.root.opsz"
   ],
   button: [
     "chips.comp.button.root.radius",
@@ -534,6 +726,18 @@ export function buildComponentContract(component) {
   }
 
   const contractMap = {
+    text: {
+      component: "text",
+      scope: "text",
+      parts: ["root"],
+      states: ["idle", "disabled", "error"]
+    },
+    label: {
+      component: "label",
+      scope: "label",
+      parts: ["root", "required-indicator", "status"],
+      states: ["idle", "disabled", "error"]
+    },
     icon: {
       component: "icon",
       scope: "icon",
@@ -6915,6 +7119,23 @@ export function validateComponentA11y(component, props) {
     return validateLayoutComponentA11y(component, props);
   }
 
+  if (component === "text") {
+    return true;
+  }
+
+  if (component === "label") {
+    const hasFor = isNonEmptyString(props.htmlFor);
+    const hasLabel = isNonEmptyString(props["aria-label"]) || isNonEmptyString(props["aria-labelledby"]);
+
+    if (!hasFor && !hasLabel) {
+      const error = new Error("Label must be associated with a control or provide an accessible name.");
+      error.code = "A11Y_LABEL_ASSOCIATION_MISSING";
+      throw error;
+    }
+
+    return true;
+  }
+
   if (component === "icon") {
     const decorative = props["aria-hidden"] === "true";
     const hasLabel = isNonEmptyString(props["aria-label"]) || isNonEmptyString(props["aria-labelledby"]);
@@ -7202,6 +7423,27 @@ export function validateComponentA11y(component, props) {
 
   throw new Error(`COMPONENT_A11Y_RULE_MISSING:${component}`);
 }
+
+export const P0_DISPLAY_COMPONENTS = [
+  createComponentMeta({
+    name: "ChipsText",
+    scope: "text",
+    parts: ["root"],
+    states: ["idle", "disabled", "error"]
+  }),
+  createComponentMeta({
+    name: "ChipsLabel",
+    scope: "label",
+    parts: ["root", "required-indicator", "status"],
+    states: ["idle", "disabled", "error"]
+  }),
+  createComponentMeta({
+    name: "ChipsIcon",
+    scope: "icon",
+    parts: ["root"],
+    states: ["idle"]
+  })
+];
 
 export const P0_BASE_INTERACTIVE_COMPONENTS = [
   createComponentMeta({

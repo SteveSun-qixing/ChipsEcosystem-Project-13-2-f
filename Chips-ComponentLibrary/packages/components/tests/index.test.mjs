@@ -21,6 +21,7 @@ import {
   ChipsInline,
   ChipsInput,
   ChipsInspector,
+  ChipsLabel,
   ChipsLoadingBoundary,
   ChipsMenu,
   ChipsMenuBar,
@@ -38,6 +39,7 @@ import {
   ChipsSplitView,
   ChipsStack,
   ChipsTabs,
+  ChipsText,
   ChipsToolbar,
   ChipsToolbarItem,
   ChipsContextMenu,
@@ -65,6 +67,7 @@ import {
   interactiveStateReducer,
   normalizeSystemMessageItems,
   parsePositiveInteger,
+  P0_DISPLAY_COMPONENTS,
   P0_BASE_INTERACTIVE_COMPONENTS,
   P0_DATA_FORM_COMPONENTS,
   resolveConfigValue,
@@ -172,6 +175,7 @@ test("buildComponentContract returns icon component contract", () => {
   const contract = buildComponentContract("icon");
   assert.equal(contract.scope, "icon");
   assert.deepEqual(contract.parts, ["root"]);
+  assert.ok(contract.tokens.includes("chips.comp.icon.root.color"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -195,6 +199,9 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.spacer));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.divider));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["split-view"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.text));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.label));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.icon));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -267,6 +274,18 @@ test("layout primitives render standard data attributes", () => {
 });
 
 test("validateComponentA11y validates known components and rejects missing rule", () => {
+  assert.equal(
+    validateComponentA11y("text", {}),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("label", {
+      htmlFor: "name"
+    }),
+    true
+  );
+
   assert.equal(
     validateComponentA11y("icon", {
       "aria-hidden": "true"
@@ -528,6 +547,80 @@ test("validateComponentA11y validates known components and rejects missing rule"
   assert.throws(
     () => validateComponentA11y("calendar", {}),
     /COMPONENT_A11Y_RULE_MISSING/
+  );
+});
+
+test("ChipsText renders semantic text with state and i18n fallback", () => {
+  const states = [];
+  const diagnostics = [];
+  const rendered = ChipsText.render(
+    {
+      as: "p",
+      textKey: "profile.name",
+      fallbackText: "Name",
+      tone: "accent",
+      emphasis: "strong",
+      truncate: true,
+      i18n: (key, params, fallback) => `${key}:${fallback}`,
+      onStateChange: (state) => states.push(state),
+      onDiagnostic: (event) => diagnostics.push(event)
+    },
+    null
+  );
+
+  assert.equal(rendered.type, "p");
+  assert.equal(rendered.props["data-scope"], "text");
+  assert.equal(rendered.props["data-part"], "root");
+  assert.equal(rendered.props["data-tone"], "accent");
+  assert.equal(rendered.props["data-emphasis"], "strong");
+  assert.equal(rendered.props["data-truncate"], "true");
+  assert.equal(rendered.props.children, "profile.name:Name");
+  assert.deepEqual(states, []);
+  assert.deepEqual(diagnostics, []);
+});
+
+test("ChipsText restricts unsupported element tags and exposes error state", () => {
+  const rendered = ChipsText.render(
+    {
+      as: "h1",
+      text: "Invalid tag falls back",
+      error: "Text failed"
+    },
+    null
+  );
+
+  assert.equal(rendered.type, "span");
+  assert.equal(rendered.props["data-state"], "error");
+  assert.equal(rendered.props["data-tone"], "error");
+  assert.equal(rendered.props["aria-invalid"], "true");
+});
+
+test("ChipsLabel renders required indicator and status semantics", () => {
+  const rendered = ChipsLabel.render(
+    {
+      htmlFor: "card-name",
+      label: "Card name",
+      required: true,
+      error: { message: "Required" }
+    },
+    null
+  );
+
+  assert.equal(rendered.type, "label");
+  assert.equal(rendered.props["data-scope"], "label");
+  assert.equal(rendered.props["data-state"], "error");
+  assert.equal(rendered.props["aria-required"], "true");
+  assert.equal(rendered.props.children[0], "Card name");
+  assert.equal(rendered.props.children[1].props["data-part"], "required-indicator");
+  assert.equal(rendered.props.children[2].props.role, "status");
+  assert.equal(rendered.props.children[2].props.children, "Required");
+});
+
+test("display component metadata is complete", () => {
+  assert.equal(P0_DISPLAY_COMPONENTS.length, 3);
+  assert.deepEqual(
+    P0_DISPLAY_COMPONENTS.map((item) => item.scope),
+    ["text", "label", "icon"]
   );
 });
 

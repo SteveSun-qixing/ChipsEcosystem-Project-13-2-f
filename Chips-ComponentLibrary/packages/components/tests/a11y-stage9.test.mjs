@@ -4,6 +4,8 @@ import { validateComponentA11y } from "../src/index.js";
 
 test("stage9 a11y gate validates all component rules", () => {
   const assertions = [
+    validateComponentA11y("text", {}),
+    validateComponentA11y("label", { htmlFor: "field-id" }),
     validateComponentA11y("icon", { "aria-hidden": "true" }),
     validateComponentA11y("button", { role: "button", "aria-label": "button" }),
     validateComponentA11y("input", { "aria-label": "input" }),

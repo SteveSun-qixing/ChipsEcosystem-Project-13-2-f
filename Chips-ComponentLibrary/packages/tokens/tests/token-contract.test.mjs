@@ -57,6 +57,9 @@ test("card runtime component tokens exist", () => {
   const spacer = readJson(path.join(root, "comp/spacer.json"));
   const divider = readJson(path.join(root, "comp/divider.json"));
   const splitView = readJson(path.join(root, "comp/split-view.json"));
+  const text = readJson(path.join(root, "comp/text.json"));
+  const label = readJson(path.join(root, "comp/label.json"));
+  const icon = readJson(path.join(root, "comp/icon.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -102,6 +105,9 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(spacer, "chips.comp.spacer.root.size"));
   assert.ok(getPath(divider, "chips.comp.divider.root.thickness"));
   assert.ok(getPath(splitView, "chips.comp.split-view.detail.surface"));
+  assert.ok(getPath(text, "chips.comp.text.root.color.default"));
+  assert.ok(getPath(label, "chips.comp.label.required-indicator.color"));
+  assert.ok(getPath(icon, "chips.comp.icon.root.opsz"));
 });
 
 test("system token layer exists", () => {

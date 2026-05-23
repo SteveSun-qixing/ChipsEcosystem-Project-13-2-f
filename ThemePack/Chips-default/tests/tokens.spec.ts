@@ -25,6 +25,8 @@ describe("theme tokens", () => {
     expect(isRecord(parsed.comp)).toBe(true);
     expect(isRecord(parsed.motion)).toBe(true);
     expect(isRecord(parsed.layout)).toBe(true);
+    expect(parsed.comp.chips?.comp?.text?.root?.color?.default).toBeDefined();
+    expect(parsed.comp.chips?.comp?.label?.["required-indicator"]?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.icon?.root?.opsz).toBeDefined();
   });
 });
-

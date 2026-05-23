@@ -17,6 +17,9 @@
 ## 3. 组件 token 命名
 
 - 当前已交付组件：
+  - `chips.comp.text.*`
+  - `chips.comp.label.*`
+  - `chips.comp.icon.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -78,6 +81,14 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.split-view.*`
 
 布局原语只通过 token、CSS 变量和 `data-scope/data-part/data-state` 接收视觉实现；主题包不得通过选择业务页面结构或组件私有 DOM 层级来覆盖它们。
+
+基础展示控件 token 是任务015基础控件矩阵的第一批正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.text.*`
+- `chips.comp.label.*`
+- `chips.comp.icon.*`
+
+`chips.comp.icon.root.*` 是运行时 UI 图标的组件层 token，组件内部和主题 CSS 的解析顺序为 `chips.comp.icon.* -> chips.sys.icon.* -> currentColor / 默认轴值`。`chips.sys.icon.*` 仍是主题系统图标语义基线，`chips.comp.icon.*` 负责组件级覆盖。
 
 ### 3.1 布局 token 基线
 

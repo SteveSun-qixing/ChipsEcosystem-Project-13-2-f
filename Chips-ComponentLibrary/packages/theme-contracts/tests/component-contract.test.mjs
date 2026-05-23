@@ -45,6 +45,23 @@ test("button contract contains interactive states", () => {
   assert.ok(contract.tokens.includes("chips.comp.button.root.surface.idle"));
 });
 
+test("display primitive contracts contain text label and icon tokens", () => {
+  const text = readContract("text.contract.json");
+  const label = readContract("label.contract.json");
+  const icon = readContract("icon.contract.json");
+
+  assertCommonShape(text);
+  assertCommonShape(label);
+  assertCommonShape(icon);
+  assert.deepEqual(text.parts, ["root"]);
+  assert.ok(label.parts.includes("required-indicator"));
+  assert.ok(label.parts.includes("status"));
+  assert.ok(icon.parts.includes("root"));
+  assert.ok(text.tokens.includes("chips.comp.text.root.color.default"));
+  assert.ok(label.tokens.includes("chips.comp.label.required-indicator.color"));
+  assert.ok(icon.tokens.includes("chips.comp.icon.root.opsz"));
+});
+
 test("only advanced iframe components expose iframe contract extension", () => {
   for (const fileName of fs.readdirSync(base).filter((item) => item.endsWith(".contract.json"))) {
     const contract = readContract(fileName);

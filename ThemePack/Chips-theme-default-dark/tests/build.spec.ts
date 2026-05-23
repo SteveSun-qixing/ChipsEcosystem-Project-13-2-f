@@ -20,6 +20,9 @@ describe("theme build pipeline", () => {
     const themeCss = await fs.readFile(path.join(projectRoot, "dist", "theme.css"), "utf-8");
 
     expect(themeCss).toContain("Material Symbols Outlined");
+    expect(themeCss).toContain('data-scope="text"');
+    expect(themeCss).toContain('data-scope="label"');
+    expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');
     expect(themeCss).toContain("var(--chips-layout-size-grid-min-item");

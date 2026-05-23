@@ -1,0 +1,48 @@
+[data-scope="text"][data-part="root"] {
+  margin: 0;
+  color: var(--chips-comp-text-root-color-default);
+  font-size: var(--chips-comp-text-root-font-size);
+  line-height: var(--chips-comp-text-root-line-height);
+  font-weight: var(--chips-comp-text-root-font-weight-regular);
+}
+
+[data-scope="text"][data-part="root"][data-tone="muted"] {
+  color: var(--chips-comp-text-root-color-muted);
+}
+
+[data-scope="text"][data-part="root"][data-tone="accent"] {
+  color: var(--chips-comp-text-root-color-accent);
+}
+
+[data-scope="text"][data-part="root"][data-tone="error"] {
+  color: var(--chips-comp-text-root-color-error);
+}
+
+[data-scope="text"][data-part="root"][data-emphasis="strong"] {
+  font-weight: var(--chips-comp-text-root-font-weight-strong);
+}
+
+[data-scope="text"][data-part="root"][data-truncate="true"] {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-scope="label"][data-part="root"] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--chips-layout-gap-xs);
+  color: var(--chips-comp-label-root-color);
+  font-size: var(--chips-comp-label-root-font-size);
+  line-height: var(--chips-comp-label-root-line-height);
+  font-weight: var(--chips-comp-label-root-font-weight);
+}
+
+[data-scope="label"][data-part="required-indicator"] {
+  color: var(--chips-comp-label-required-indicator-color);
+}
+
+[data-scope="label"][data-part="status"] {
+  color: var(--chips-comp-label-status-color-error);
+}

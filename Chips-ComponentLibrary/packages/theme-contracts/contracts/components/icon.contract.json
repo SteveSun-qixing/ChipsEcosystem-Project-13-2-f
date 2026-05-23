@@ -1,0 +1,18 @@
+{
+  "component": "icon",
+  "scope": "icon",
+  "parts": [
+    "root"
+  ],
+  "states": [
+    "idle"
+  ],
+  "tokens": [
+    "chips.comp.icon.root.color",
+    "chips.comp.icon.root.size",
+    "chips.comp.icon.root.fill",
+    "chips.comp.icon.root.wght",
+    "chips.comp.icon.root.grad",
+    "chips.comp.icon.root.opsz"
+  ]
+}

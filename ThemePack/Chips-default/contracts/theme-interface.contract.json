@@ -512,6 +512,24 @@
       ]
     },
     {
+      "component": "icon",
+      "scope": "icon",
+      "parts": [
+        "root"
+      ],
+      "states": [
+        "idle"
+      ],
+      "requiredTokens": [
+        "chips.comp.icon.root.color",
+        "chips.comp.icon.root.size",
+        "chips.comp.icon.root.fill",
+        "chips.comp.icon.root.wght",
+        "chips.comp.icon.root.grad",
+        "chips.comp.icon.root.opsz"
+      ]
+    },
+    {
       "component": "inline",
       "scope": "inline",
       "parts": [
@@ -590,6 +608,28 @@
       ]
     },
     {
+      "component": "label",
+      "scope": "label",
+      "parts": [
+        "root",
+        "required-indicator",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.label.root.color",
+        "chips.comp.label.root.font-size",
+        "chips.comp.label.root.line-height",
+        "chips.comp.label.root.font-weight",
+        "chips.comp.label.required-indicator.color",
+        "chips.comp.label.status.color.error"
+      ]
+    },
+    {
       "component": "loading-boundary",
       "scope": "loading-boundary",
       "parts": [
@@ -614,6 +654,34 @@
         "chips.comp.loading-boundary.skeleton.surface.active",
         "chips.comp.loading-boundary.status.color.info",
         "chips.comp.loading-boundary.focus.outline"
+      ]
+    },
+    {
+      "component": "menu",
+      "scope": "menu",
+      "parts": [
+        "root",
+        "trigger",
+        "content",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.menu.content.radius",
+        "chips.comp.menu.content.surface",
+        "chips.comp.menu.item.surface.hover",
+        "chips.comp.menu.item.surface.active",
+        "chips.comp.menu.item.text.color",
+        "chips.comp.menu.focus.outline"
       ]
     },
     {
@@ -645,34 +713,6 @@
         "chips.comp.menu-bar.item.text.color",
         "chips.comp.menu-bar.shortcut.color",
         "chips.comp.menu-bar.focus.outline"
-      ]
-    },
-    {
-      "component": "menu",
-      "scope": "menu",
-      "parts": [
-        "root",
-        "trigger",
-        "content",
-        "item",
-        "status"
-      ],
-      "states": [
-        "idle",
-        "hover",
-        "focus",
-        "active",
-        "disabled",
-        "loading",
-        "error"
-      ],
-      "requiredTokens": [
-        "chips.comp.menu.content.radius",
-        "chips.comp.menu.content.surface",
-        "chips.comp.menu.item.surface.hover",
-        "chips.comp.menu.item.surface.active",
-        "chips.comp.menu.item.text.color",
-        "chips.comp.menu.focus.outline"
       ]
     },
     {
@@ -1075,6 +1115,28 @@
         "chips.comp.tabs.trigger.text.color",
         "chips.comp.tabs.panel.surface",
         "chips.comp.tabs.focus.outline"
+      ]
+    },
+    {
+      "component": "text",
+      "scope": "text",
+      "parts": [
+        "root"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.text.root.color.default",
+        "chips.comp.text.root.color.muted",
+        "chips.comp.text.root.color.accent",
+        "chips.comp.text.root.color.error",
+        "chips.comp.text.root.font-size",
+        "chips.comp.text.root.line-height",
+        "chips.comp.text.root.font-weight.regular",
+        "chips.comp.text.root.font-weight.strong"
       ]
     },
     {

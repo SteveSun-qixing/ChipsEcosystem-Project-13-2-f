@@ -18,6 +18,12 @@
   --chips-base-shadow-color: var(--chips-sys-color-shadow, rgba(0, 0, 0, 0.46));
   --chips-base-text-muted: var(--chips-sys-color-on-surface-muted, #b6bfd0);
   --chips-base-text-soft: var(--chips-sys-color-on-surface-soft, #8f99ad);
+  --chips-base-icon-color: var(--chips-comp-icon-root-color, var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor)));
+  --chips-base-icon-size: var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em));
+  --chips-base-icon-fill: var(--chips-comp-icon-root-fill, var(--chips-sys-icon-fill, 0));
+  --chips-base-icon-wght: var(--chips-comp-icon-root-wght, var(--chips-sys-icon-wght, 400));
+  --chips-base-icon-grad: var(--chips-comp-icon-root-grad, var(--chips-sys-icon-grad, 0));
+  --chips-base-icon-opsz: var(--chips-comp-icon-root-opsz, var(--chips-sys-icon-opsz, 24));
 }
 
 html,
@@ -66,6 +72,84 @@ body {
 [data-scope] {
   box-sizing: border-box;
   font-family: inherit;
+}
+
+[data-scope="icon"][data-part="root"] {
+  color: var(--chips-icon-color, var(--chips-base-icon-color));
+  font-size: var(--chips-icon-size, var(--chips-base-icon-size));
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: normal;
+  font-variation-settings:
+    "FILL" var(--chips-icon-fill, var(--chips-base-icon-fill)),
+    "wght" var(--chips-icon-wght, var(--chips-base-icon-wght)),
+    "GRAD" var(--chips-icon-grad, var(--chips-base-icon-grad)),
+    "opsz" var(--chips-icon-opsz, var(--chips-base-icon-opsz));
+  font-feature-settings: "liga";
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-scope="icon"][data-part="root"][data-icon-style="rounded"] {
+  font-family: "Material Symbols Rounded";
+}
+
+[data-scope="icon"][data-part="root"][data-icon-style="sharp"] {
+  font-family: "Material Symbols Sharp";
+}
+
+[data-scope="text"][data-part="root"] {
+  margin: 0;
+  color: var(--chips-comp-text-root-color-default);
+  font-size: var(--chips-comp-text-root-font-size);
+  line-height: var(--chips-comp-text-root-line-height);
+  font-weight: var(--chips-comp-text-root-font-weight-regular);
+}
+
+[data-scope="text"][data-part="root"][data-tone="muted"] {
+  color: var(--chips-comp-text-root-color-muted);
+}
+
+[data-scope="text"][data-part="root"][data-tone="accent"] {
+  color: var(--chips-comp-text-root-color-accent);
+}
+
+[data-scope="text"][data-part="root"][data-tone="error"] {
+  color: var(--chips-comp-text-root-color-error);
+}
+
+[data-scope="text"][data-part="root"][data-emphasis="strong"] {
+  font-weight: var(--chips-comp-text-root-font-weight-strong);
+}
+
+[data-scope="text"][data-part="root"][data-truncate="true"] {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-scope="label"][data-part="root"] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--chips-layout-gap-xs);
+  color: var(--chips-comp-label-root-color);
+  font-size: var(--chips-comp-label-root-font-size);
+  line-height: var(--chips-comp-label-root-line-height);
+  font-weight: var(--chips-comp-label-root-font-weight);
+}
+
+[data-scope="label"][data-part="required-indicator"] {
+  color: var(--chips-comp-label-required-indicator-color);
+}
+
+[data-scope="label"][data-part="status"] {
+  color: var(--chips-comp-label-status-color-error);
 }
 
 

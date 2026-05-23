@@ -1,0 +1,16 @@
+{
+  "chips": {
+    "comp": {
+      "icon": {
+        "root": {
+          "color": "{chips.sys.color.on-surface}",
+          "size": "1em",
+          "fill": 0,
+          "wght": 400,
+          "grad": 0,
+          "opsz": 24
+        }
+      }
+    }
+  }
+}

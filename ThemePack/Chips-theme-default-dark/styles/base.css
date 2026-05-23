@@ -18,12 +18,12 @@
   --chips-base-shadow-color: var(--chips-sys-color-shadow, rgba(0, 0, 0, 0.46));
   --chips-base-text-muted: var(--chips-sys-color-on-surface-muted, #b6bfd0);
   --chips-base-text-soft: var(--chips-sys-color-on-surface-soft, #8f99ad);
-  --chips-base-icon-color: var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor));
-  --chips-base-icon-size: var(--chips-sys-icon-size, 1em);
-  --chips-base-icon-fill: var(--chips-sys-icon-fill, 0);
-  --chips-base-icon-wght: var(--chips-sys-icon-wght, 400);
-  --chips-base-icon-grad: var(--chips-sys-icon-grad, 0);
-  --chips-base-icon-opsz: var(--chips-sys-icon-opsz, 24);
+  --chips-base-icon-color: var(--chips-comp-icon-root-color, var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor)));
+  --chips-base-icon-size: var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em));
+  --chips-base-icon-fill: var(--chips-comp-icon-root-fill, var(--chips-sys-icon-fill, 0));
+  --chips-base-icon-wght: var(--chips-comp-icon-root-wght, var(--chips-sys-icon-wght, 400));
+  --chips-base-icon-grad: var(--chips-comp-icon-root-grad, var(--chips-sys-icon-grad, 0));
+  --chips-base-icon-opsz: var(--chips-comp-icon-root-opsz, var(--chips-sys-icon-opsz, 24));
 }
 
 html,
@@ -80,6 +80,12 @@ body {
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: normal;
+  font-variation-settings:
+    "FILL" var(--chips-icon-fill, var(--chips-base-icon-fill)),
+    "wght" var(--chips-icon-wght, var(--chips-base-icon-wght)),
+    "GRAD" var(--chips-icon-grad, var(--chips-base-icon-grad)),
+    "opsz" var(--chips-icon-opsz, var(--chips-base-icon-opsz));
+  font-feature-settings: "liga";
   letter-spacing: normal;
   text-transform: none;
   white-space: nowrap;

@@ -218,6 +218,41 @@ export interface ChipsIconProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
   color?: string;
 }
 
+export type ChipsTextTone = "default" | "muted" | "accent" | "error";
+export type ChipsTextEmphasis = "regular" | "strong" | "code";
+export type ChipsTextElement = "span" | "p" | "strong" | "em" | "small" | "code" | "div";
+
+export interface ChipsDisplayTextProps {
+  i18n?: I18nTextSource | ((key: string, params?: Record<string, string | number>, fallback?: string) => string);
+  onDiagnostic?: (record: ObservationRecord | Record<string, unknown>) => void;
+}
+
+export interface ChipsTextProps extends ChipsDisplayTextProps, Omit<React.HTMLAttributes<HTMLElement>, "color"> {
+  as?: ChipsTextElement;
+  text?: React.ReactNode;
+  textKey?: string;
+  textParams?: Record<string, string | number>;
+  fallbackText?: string;
+  tone?: ChipsTextTone;
+  emphasis?: ChipsTextEmphasis;
+  truncate?: boolean;
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+}
+
+export interface ChipsLabelProps extends ChipsDisplayTextProps, React.LabelHTMLAttributes<HTMLLabelElement> {
+  label?: React.ReactNode;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  required?: boolean;
+  requiredIndicator?: React.ReactNode;
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+}
+
 export interface ButtonProps {
   children?: React.ReactNode;
   type?: "button" | "submit" | "reset";
@@ -818,6 +853,8 @@ export const InteractiveEventType: {
 
 export const COMPONENT_TOKEN_MAP: Record<string, string[]>;
 
+export const ChipsText: React.ForwardRefExoticComponent<ChipsTextProps & React.RefAttributes<HTMLElement>>;
+export const ChipsLabel: React.ForwardRefExoticComponent<ChipsLabelProps & React.RefAttributes<HTMLLabelElement>>;
 export const ChipsIcon: React.ForwardRefExoticComponent<ChipsIconProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsButton: React.ForwardRefExoticComponent<ButtonProps & React.RefAttributes<HTMLButtonElement>>;
 export const ChipsInput: React.ForwardRefExoticComponent<InputProps & React.RefAttributes<HTMLInputElement>>;
@@ -874,6 +911,7 @@ export function buildComponentContract(component: string): {
   tokens: string[];
 };
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
+export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];
 export const P0_DATA_FORM_COMPONENTS: ComponentMeta[];
 export const STAGE7_DATA_ADVANCED_COMPONENTS: ComponentMeta[];

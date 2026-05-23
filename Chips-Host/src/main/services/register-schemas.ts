@@ -163,6 +163,245 @@ const validateOptionalFiniteNumber = (value: unknown, field: string, errors: str
   }
 };
 
+const COMMAND_SCOPE_KINDS = new Set(['global', 'app', 'scene', 'surface', 'document']);
+const COMMAND_SOURCES = new Set(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api']);
+const COMMAND_ICON_STYLES = new Set(['outlined', 'rounded', 'sharp']);
+
+const validateOptionalStringArray = (value: unknown, field: string, errors: string[]): void => {
+  if (typeof value === 'undefined' || typeof value === 'string') {
+    validateOptionalString(value, field, errors);
+    return;
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+    errors.push(`${field} must be a non-empty string or string[]`);
+  }
+};
+
+const validateCommandCondition = (value: unknown, field: string, errors: string[]): void => {
+  if (typeof value === 'undefined' || typeof value === 'boolean') {
+    return;
+  }
+  if (!isRecord(value)) {
+    errors.push(`${field} must be a boolean or object`);
+    return;
+  }
+  if (typeof value.key !== 'string' || value.key.trim().length === 0) {
+    errors.push(`${field}.key must be a non-empty string`);
+  }
+  if (typeof value.in !== 'undefined' && !Array.isArray(value.in)) {
+    errors.push(`${field}.in must be an array when provided`);
+  }
+  if (typeof value.truthy !== 'undefined' && typeof value.truthy !== 'boolean') {
+    errors.push(`${field}.truthy must be a boolean when provided`);
+  }
+};
+
+const validateCommandIcon = (value: unknown, errors: string[]): void => {
+  if (typeof value === 'undefined') {
+    return;
+  }
+  if (!isRecord(value)) {
+    errors.push('icon must be an object');
+    return;
+  }
+  if (typeof value.name !== 'string' || value.name.trim().length === 0) {
+    errors.push('icon.name must be a non-empty string');
+  }
+  if (typeof value.style !== 'undefined' && (typeof value.style !== 'string' || !COMMAND_ICON_STYLES.has(value.style))) {
+    errors.push('icon.style is invalid');
+  }
+  if (typeof value.fill !== 'undefined' && value.fill !== 0 && value.fill !== 1) {
+    errors.push('icon.fill must be 0 or 1 when provided');
+  }
+  for (const key of ['wght', 'grad', 'opsz']) {
+    if (typeof value[key] !== 'undefined' && (typeof value[key] !== 'number' || !Number.isFinite(value[key]))) {
+      errors.push(`icon.${key} must be a finite number when provided`);
+    }
+  }
+};
+
+const validateCommandScope = (value: unknown, errors: string[]): void => {
+  if (typeof value === 'undefined') {
+    return;
+  }
+  if (!isRecord(value)) {
+    errors.push('scope must be an object');
+    return;
+  }
+  if (typeof value.kind !== 'string' || !COMMAND_SCOPE_KINDS.has(value.kind)) {
+    errors.push('scope.kind is invalid');
+  }
+  validateOptionalString(value.appId, 'scope.appId', errors);
+  validateOptionalString(value.sceneId, 'scope.sceneId', errors);
+  validateOptionalString(value.surfaceId, 'scope.surfaceId', errors);
+  validateOptionalString(value.documentId, 'scope.documentId', errors);
+};
+
+const validateCommandShortcut = (value: unknown, errors: string[]): void => {
+  if (typeof value === 'undefined') {
+    return;
+  }
+  const items = Array.isArray(value) ? value : [value];
+  for (const [index, item] of items.entries()) {
+    if (!isRecord(item)) {
+      errors.push(`shortcut.${index} must be an object`);
+      continue;
+    }
+    if (typeof item.accelerator !== 'string' || item.accelerator.trim().length === 0) {
+      errors.push(`shortcut.${index}.accelerator must be a non-empty string`);
+    }
+    if (
+      typeof item.platform !== 'undefined' &&
+      (typeof item.platform !== 'string' || !['all', 'desktop', 'web', 'mobile', 'headless'].includes(item.platform))
+    ) {
+      errors.push(`shortcut.${index}.platform is invalid`);
+    }
+    validateCommandCondition(item.when, `shortcut.${index}.when`, errors);
+  }
+};
+
+const validateCommandPlacement = (
+  value: unknown,
+  field: 'menuPlacement' | 'toolbarPlacement',
+  idField: 'menuId' | 'toolbarId',
+  errors: string[]
+): void => {
+  if (typeof value === 'undefined') {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    errors.push(`${field} must be an array`);
+    return;
+  }
+  for (const [index, item] of value.entries()) {
+    if (!isRecord(item)) {
+      errors.push(`${field}.${index} must be an object`);
+      continue;
+    }
+    if (typeof item[idField] !== 'string' || item[idField].trim().length === 0) {
+      errors.push(`${field}.${index}.${idField} must be a non-empty string`);
+    }
+    validateOptionalString(item.groupId, `${field}.${index}.groupId`, errors);
+    validateOptionalFiniteNumber(item.order, `${field}.${index}.order`, errors);
+  }
+};
+
+const validateCommandState = (value: unknown, errors: string[]): void => {
+  if (typeof value === 'undefined') {
+    return;
+  }
+  if (!isRecord(value)) {
+    errors.push('state must be an object');
+    return;
+  }
+  for (const key of ['enabled', 'visible', 'checked']) {
+    if (typeof value[key] !== 'undefined' && typeof value[key] !== 'boolean') {
+      errors.push(`state.${key} must be a boolean when provided`);
+    }
+  }
+  validateOptionalString(value.disabledReasonKey, 'state.disabledReasonKey', errors);
+  validateOptionalString(value.hiddenReasonKey, 'state.hiddenReasonKey', errors);
+  validateOptionalString(value.reasonKey, 'state.reasonKey', errors);
+};
+
+const validateCommandRegisterRequest: SchemaValidator = (input: unknown) => {
+  const command = isRecord(input) && isRecord(input.command) ? input.command : input;
+  if (!isRecord(command)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  for (const rawField of ['title', 'description', 'ariaLabel', 'label']) {
+    if (typeof command[rawField] !== 'undefined') {
+      errors.push(`${rawField} is not allowed; use i18n key fields`);
+    }
+  }
+  if (typeof command.commandId !== 'string' || command.commandId.trim().length === 0) {
+    errors.push('commandId must be a non-empty string');
+  }
+  if (typeof command.titleKey !== 'string' || command.titleKey.trim().length === 0) {
+    errors.push('titleKey must be a non-empty string');
+  }
+  validateOptionalString(command.descriptionKey, 'descriptionKey', errors);
+  validateOptionalString(command.ariaLabelKey, 'ariaLabelKey', errors);
+  if (typeof command.handlerId !== 'string' || command.handlerId.trim().length === 0) {
+    errors.push('handlerId must be a non-empty string');
+  }
+  validateCommandIcon(command.icon, errors);
+  validateCommandShortcut(command.shortcut, errors);
+  validateCommandScope(command.scope, errors);
+  validateOptionalStringArray(command.permission, 'permission', errors);
+  validateCommandCondition(command.enabledWhen, 'enabledWhen', errors);
+  validateCommandCondition(command.visibleWhen, 'visibleWhen', errors);
+  validateCommandCondition(command.checkedWhen, 'checkedWhen', errors);
+  validateCommandPlacement(command.menuPlacement, 'menuPlacement', 'menuId', errors);
+  validateCommandPlacement(command.toolbarPlacement, 'toolbarPlacement', 'toolbarId', errors);
+  validateOptionalStringArray(command.paletteKeywords, 'paletteKeywords', errors);
+  validateCommandState(command.state, errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCommandIdRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  if (typeof input.commandId !== 'string' || input.commandId.trim().length === 0) {
+    return { valid: false, errors: ['commandId must be a non-empty string'] };
+  }
+  return { valid: true };
+};
+
+const validateCommandListRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateOptionalString(input.commandId, 'commandId', errors);
+  validateOptionalString(input.ownerPluginId, 'ownerPluginId', errors);
+  validateCommandScope(input.scope, errors);
+  if (typeof input.source !== 'undefined' && (typeof input.source !== 'string' || !COMMAND_SOURCES.has(input.source))) {
+    errors.push('source is invalid');
+  }
+  if (typeof input.includeDisabled !== 'undefined' && typeof input.includeDisabled !== 'boolean') {
+    errors.push('includeDisabled must be a boolean when provided');
+  }
+  if (typeof input.includeHidden !== 'undefined' && typeof input.includeHidden !== 'boolean') {
+    errors.push('includeHidden must be a boolean when provided');
+  }
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCommandSetStateRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  if (typeof input.commandId !== 'string' || input.commandId.trim().length === 0) {
+    errors.push('commandId must be a non-empty string');
+  }
+  validateCommandState(input.state, errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCommandInvokeRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  if (typeof input.commandId !== 'string' || input.commandId.trim().length === 0) {
+    errors.push('commandId must be a non-empty string');
+  }
+  if (typeof input.source !== 'undefined' && (typeof input.source !== 'string' || !COMMAND_SOURCES.has(input.source))) {
+    errors.push('source is invalid');
+  }
+  if (typeof input.payload !== 'undefined' && !isRecord(input.payload)) {
+    errors.push('payload must be an object when provided');
+  }
+  if (typeof input.context !== 'undefined' && !isRecord(input.context)) {
+    errors.push('context must be an object when provided');
+  }
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 const validateModuleListProvidersRequest: SchemaValidator = (input: unknown) => {
   if (!isRecord(input)) {
     return { valid: false, errors: ['Input must be an object'] };
@@ -353,6 +592,19 @@ export const registerHostSchemas = (): void => {
   registerPair('i18n.setCurrent', ['locale']);
   registerPair('i18n.translate', ['key']);
   registerPair('i18n.listLocales', []);
+
+  schemaRegistry.register('schemas/command.register.request.json', validateCommandRegisterRequest);
+  schemaRegistry.register('schemas/command.register.response.json', objectWithKeys(['command']));
+  schemaRegistry.register('schemas/command.unregister.request.json', validateCommandIdRequest);
+  schemaRegistry.register('schemas/command.unregister.response.json', objectWithKeys(['ack']));
+  schemaRegistry.register('schemas/command.get.request.json', validateCommandIdRequest);
+  schemaRegistry.register('schemas/command.get.response.json', objectWithKeys([]));
+  schemaRegistry.register('schemas/command.list.request.json', validateCommandListRequest);
+  schemaRegistry.register('schemas/command.list.response.json', objectWithKeys(['commands']));
+  schemaRegistry.register('schemas/command.setState.request.json', validateCommandSetStateRequest);
+  schemaRegistry.register('schemas/command.setState.response.json', objectWithKeys(['command']));
+  schemaRegistry.register('schemas/command.invoke.request.json', validateCommandInvokeRequest);
+  schemaRegistry.register('schemas/command.invoke.response.json', objectWithKeys(['commandId', 'invocationId', 'dispatched', 'command']));
 
   registerPair('surface.open', ['request'], ['surface']);
   registerPair('surface.focus', ['surfaceId'], ['ack']);

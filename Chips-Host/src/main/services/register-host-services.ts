@@ -142,6 +142,160 @@ interface ModuleJobView {
   };
 }
 
+type CommandScopeKind = 'global' | 'app' | 'scene' | 'surface' | 'document';
+type CommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api';
+type CommandIconStyle = 'outlined' | 'rounded' | 'sharp';
+
+interface CommandIconDescriptor {
+  name: string;
+  style?: CommandIconStyle;
+  fill?: 0 | 1;
+  wght?: number;
+  grad?: number;
+  opsz?: number;
+  decorative?: boolean;
+}
+
+interface CommandScope {
+  kind: CommandScopeKind;
+  appId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  documentId?: string;
+}
+
+interface CommandCondition {
+  key: string;
+  equals?: unknown;
+  notEquals?: unknown;
+  in?: unknown[];
+  truthy?: boolean;
+}
+
+interface CommandShortcut {
+  accelerator: string;
+  platform?: HostKind | 'all';
+  when?: boolean | CommandCondition;
+  preventDefault?: boolean;
+}
+
+interface CommandMenuPlacement {
+  menuId: string;
+  groupId?: string;
+  order?: number;
+}
+
+interface CommandToolbarPlacement {
+  toolbarId: string;
+  groupId?: string;
+  order?: number;
+}
+
+interface CommandStatePatch {
+  enabled?: boolean;
+  visible?: boolean;
+  checked?: boolean;
+  disabledReasonKey?: string;
+  hiddenReasonKey?: string;
+}
+
+interface CommandDefinitionInput {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: CommandIconDescriptor;
+  shortcut?: CommandShortcut | CommandShortcut[];
+  scope?: CommandScope;
+  permission?: string | string[];
+  enabledWhen?: boolean | CommandCondition;
+  visibleWhen?: boolean | CommandCondition;
+  checkedWhen?: boolean | CommandCondition;
+  handlerId: string;
+  menuPlacement?: CommandMenuPlacement[];
+  toolbarPlacement?: CommandToolbarPlacement[];
+  paletteKeywords?: string[];
+  state?: CommandStatePatch;
+}
+
+interface RegisteredCommand {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: CommandIconDescriptor;
+  shortcut: CommandShortcut[];
+  scope: CommandScope;
+  permission: string[];
+  enabledWhen?: boolean | CommandCondition;
+  visibleWhen?: boolean | CommandCondition;
+  checkedWhen?: boolean | CommandCondition;
+  handlerId: string;
+  menuPlacement: CommandMenuPlacement[];
+  toolbarPlacement: CommandToolbarPlacement[];
+  paletteKeywords: string[];
+  state: CommandStatePatch;
+  ownerCallerId: string;
+  ownerPluginId?: string;
+  ownerSessionId?: string;
+  registeredAt: number;
+  updatedAt: number;
+}
+
+interface CommandInvocationContext {
+  pluginId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  documentId?: string;
+  data?: Record<string, unknown>;
+}
+
+interface CommandQueryOptions {
+  commandId?: string;
+  ownerPluginId?: string;
+  scope?: Partial<CommandScope>;
+  source?: CommandSource;
+  context?: CommandInvocationContext;
+  includeDisabled?: boolean;
+  includeHidden?: boolean;
+}
+
+interface CommandDiagnostic {
+  visible: boolean;
+  enabled: boolean;
+  checked: boolean;
+  hiddenReasonKey?: string;
+  disabledReasonKey?: string;
+}
+
+interface CommandView {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: CommandIconDescriptor;
+  shortcut: CommandShortcut[];
+  scope: CommandScope;
+  permission: string[];
+  handlerId: string;
+  menuPlacement: CommandMenuPlacement[];
+  toolbarPlacement: CommandToolbarPlacement[];
+  paletteKeywords: string[];
+  state: CommandStatePatch;
+  ownerPluginId?: string;
+  ownerSessionId?: string;
+  registeredAt: number;
+  updatedAt: number;
+  diagnostic: CommandDiagnostic;
+}
+
+interface CommandInvokeInput {
+  commandId: string;
+  source?: CommandSource;
+  payload?: Record<string, unknown>;
+  context?: CommandInvocationContext;
+}
+
 interface ThemeRecord {
   id: string;
   displayName: string;
@@ -175,6 +329,8 @@ interface RuntimeState {
   currentThemeId: string;
   locale: string;
   locales: Record<string, Record<string, string>>;
+  commands: Map<string, RegisteredCommand>;
+  commandShortcuts: Map<string, string[]>;
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
 }
@@ -348,6 +504,8 @@ const buildState = (): RuntimeState => ({
       'system.error': 'System error'
     }
   },
+  commands: new Map<string, RegisteredCommand>(),
+  commandShortcuts: new Map<string, string[]>(),
   routeMetrics: new Map<string, RouteMetric>(),
   activatedServices: new Set<string>()
 });
@@ -449,6 +607,18 @@ const mergeRecords = (base: Record<string, unknown>, overlay: Record<string, unk
 
 const asString = (value: unknown): string | undefined => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+};
+
+const asStringArray = (value: unknown): string[] => {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return [value.trim()];
+  }
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim());
 };
 
 const asPositiveFiniteNumber = (value: unknown): number | undefined => {
@@ -1130,6 +1300,612 @@ const ensureCallerPermission = (
     permission,
     callerId: routeContext.caller.id,
     callerType: routeContext.caller.type
+  });
+};
+
+const COMMAND_SCOPE_KINDS = new Set<CommandScopeKind>(['global', 'app', 'scene', 'surface', 'document']);
+const COMMAND_SOURCES = new Set<CommandSource>(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api']);
+const COMMAND_ICON_STYLES = new Set<CommandIconStyle>(['outlined', 'rounded', 'sharp']);
+
+const assertNoRawCommandText = (definition: Record<string, unknown>): void => {
+  const rawTextFields = ['title', 'description', 'ariaLabel', 'label'].filter((field) => typeof definition[field] !== 'undefined');
+  if (rawTextFields.length > 0) {
+    throw createError('COMMAND_I18N_KEY_REQUIRED', 'Command text must use i18n keys instead of raw text fields', {
+      fields: rawTextFields
+    });
+  }
+};
+
+const normalizeCommandIcon = (value: unknown): CommandIconDescriptor | undefined => {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'command.icon must be an IconDescriptor object');
+  }
+  const name = asString(value.name);
+  if (!name) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'command.icon.name must be a non-empty string');
+  }
+  const style = typeof value.style === 'string' && COMMAND_ICON_STYLES.has(value.style as CommandIconStyle)
+    ? value.style as CommandIconStyle
+    : undefined;
+  if (typeof value.style !== 'undefined' && !style) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'command.icon.style is invalid');
+  }
+  const result: CommandIconDescriptor = { name };
+  if (style) {
+    result.style = style;
+  }
+  if (value.fill === 0 || value.fill === 1) {
+    result.fill = value.fill;
+  }
+  for (const key of ['wght', 'grad', 'opsz'] as const) {
+    if (typeof value[key] === 'number' && Number.isFinite(value[key])) {
+      result[key] = value[key];
+    }
+  }
+  if (typeof value.decorative === 'boolean') {
+    result.decorative = value.decorative;
+  }
+  return result;
+};
+
+const normalizeCommandScope = (value: unknown, routeContext: RouteInvocationContext): CommandScope => {
+  if (typeof value === 'undefined') {
+    return {
+      kind: 'app',
+      appId: routeContext.caller.pluginId
+    };
+  }
+  if (!isRecord(value)) {
+    throw createError('COMMAND_SCOPE_INVALID', 'command.scope must be an object');
+  }
+  const kind = typeof value.kind === 'string' && COMMAND_SCOPE_KINDS.has(value.kind as CommandScopeKind)
+    ? value.kind as CommandScopeKind
+    : undefined;
+  if (!kind) {
+    throw createError('COMMAND_SCOPE_INVALID', 'command.scope.kind is invalid');
+  }
+  const scope: CommandScope = {
+    kind,
+    appId: asString(value.appId),
+    sceneId: asString(value.sceneId),
+    surfaceId: asString(value.surfaceId),
+    documentId: asString(value.documentId)
+  };
+  if (scope.kind === 'app') {
+    scope.appId = scope.appId ?? routeContext.caller.pluginId;
+    if (!scope.appId) {
+      throw createError('COMMAND_SCOPE_INVALID', 'app command scope requires appId or plugin caller context');
+    }
+    if (routeContext.caller.type === 'plugin' && routeContext.caller.pluginId && scope.appId !== routeContext.caller.pluginId) {
+      throw createError('COMMAND_SCOPE_INVALID', 'plugin callers can only register app commands for themselves', {
+        appId: scope.appId,
+        pluginId: routeContext.caller.pluginId
+      });
+    }
+  }
+  if (scope.kind === 'scene' && !scope.sceneId) {
+    throw createError('COMMAND_SCOPE_INVALID', 'scene command scope requires sceneId');
+  }
+  if (scope.kind === 'surface' && !scope.surfaceId) {
+    throw createError('COMMAND_SCOPE_INVALID', 'surface command scope requires surfaceId');
+  }
+  if (scope.kind === 'document' && !scope.documentId) {
+    throw createError('COMMAND_SCOPE_INVALID', 'document command scope requires documentId');
+  }
+  if (scope.kind === 'global' && routeContext.caller.type === 'plugin') {
+    ensureCallerPermission(routeContext, 'command.manage', 'command.register');
+  }
+  return scope;
+};
+
+const normalizeCommandCondition = (value: unknown, field: string): boolean | CommandCondition | undefined => {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (!isRecord(value)) {
+    throw createError('COMMAND_SCHEMA_INVALID', `${field} must be a boolean or condition object`);
+  }
+  const key = asString(value.key);
+  if (!key) {
+    throw createError('COMMAND_SCHEMA_INVALID', `${field}.key must be a non-empty string`);
+  }
+  const condition: CommandCondition = { key };
+  if (typeof value.equals !== 'undefined') {
+    condition.equals = deepClone(value.equals);
+  }
+  if (typeof value.notEquals !== 'undefined') {
+    condition.notEquals = deepClone(value.notEquals);
+  }
+  if (Array.isArray(value.in)) {
+    condition.in = value.in.map((item) => deepClone(item));
+  }
+  if (typeof value.truthy === 'boolean') {
+    condition.truthy = value.truthy;
+  }
+  return condition;
+};
+
+const normalizeCommandShortcut = (value: unknown): CommandShortcut[] => {
+  if (typeof value === 'undefined') {
+    return [];
+  }
+  const items = Array.isArray(value) ? value : [value];
+  return items.map((item) => {
+    if (!isRecord(item)) {
+      throw createError('COMMAND_SCHEMA_INVALID', 'command.shortcut items must be objects');
+    }
+    const accelerator = asString(item.accelerator);
+    if (!accelerator) {
+      throw createError('COMMAND_SCHEMA_INVALID', 'command.shortcut.accelerator must be a non-empty string');
+    }
+    const platform = typeof item.platform === 'string' && (item.platform === 'all' || ['desktop', 'web', 'mobile', 'headless'].includes(item.platform))
+      ? item.platform as HostKind | 'all'
+      : undefined;
+    if (typeof item.platform !== 'undefined' && !platform) {
+      throw createError('COMMAND_SCHEMA_INVALID', 'command.shortcut.platform is invalid');
+    }
+    const shortcut: CommandShortcut = {
+      accelerator,
+      when: normalizeCommandCondition(item.when, 'command.shortcut.when'),
+      preventDefault: typeof item.preventDefault === 'boolean' ? item.preventDefault : undefined
+    };
+    if (platform) {
+      shortcut.platform = platform;
+    }
+    return shortcut;
+  });
+};
+
+const normalizeCommandPlacement = (
+  value: unknown,
+  field: 'menuPlacement' | 'toolbarPlacement'
+): CommandMenuPlacement[] | CommandToolbarPlacement[] => {
+  if (typeof value === 'undefined') {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw createError('COMMAND_SCHEMA_INVALID', `command.${field} must be an array`);
+  }
+  if (field === 'menuPlacement') {
+    return value.map((item) => {
+      if (!isRecord(item)) {
+        throw createError('COMMAND_SCHEMA_INVALID', 'command.menuPlacement items must be objects');
+      }
+      const menuId = asString(item.menuId);
+      if (!menuId) {
+        throw createError('COMMAND_SCHEMA_INVALID', 'command.menuPlacement.menuId must be a non-empty string');
+      }
+      return {
+        menuId,
+        groupId: asString(item.groupId),
+        order: typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : undefined
+      };
+    });
+  }
+  return value.map((item) => {
+    if (!isRecord(item)) {
+      throw createError('COMMAND_SCHEMA_INVALID', 'command.toolbarPlacement items must be objects');
+    }
+    const toolbarId = asString(item.toolbarId);
+    if (!toolbarId) {
+      throw createError('COMMAND_SCHEMA_INVALID', 'command.toolbarPlacement.toolbarId must be a non-empty string');
+    }
+    return {
+      toolbarId,
+      groupId: asString(item.groupId),
+      order: typeof item.order === 'number' && Number.isFinite(item.order) ? item.order : undefined
+    };
+  });
+};
+
+const normalizeCommandStatePatch = (value: unknown): CommandStatePatch => {
+  if (typeof value === 'undefined') {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'command.state must be an object');
+  }
+  const statePatch: CommandStatePatch = {};
+  if (typeof value.enabled === 'boolean') {
+    statePatch.enabled = value.enabled;
+  }
+  if (typeof value.visible === 'boolean') {
+    statePatch.visible = value.visible;
+  }
+  if (typeof value.checked === 'boolean') {
+    statePatch.checked = value.checked;
+  }
+  const disabledReasonKey = asString(value.disabledReasonKey);
+  if (disabledReasonKey) {
+    statePatch.disabledReasonKey = disabledReasonKey;
+  } else {
+    const reasonKey = asString(value.reasonKey);
+    if (reasonKey) {
+      statePatch.disabledReasonKey = reasonKey;
+    }
+  }
+  const hiddenReasonKey = asString(value.hiddenReasonKey);
+  if (hiddenReasonKey) {
+    statePatch.hiddenReasonKey = hiddenReasonKey;
+  }
+  return statePatch;
+};
+
+const normalizeCommandDefinition = (
+  input: unknown,
+  routeContext: RouteInvocationContext
+): RegisteredCommand => {
+  const definition = isRecord(input) && isRecord(input.command) ? input.command : input;
+  if (!isRecord(definition)) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'command.register requires a command object');
+  }
+  assertNoRawCommandText(definition);
+  const commandId = asString(definition.commandId);
+  const titleKey = asString(definition.titleKey);
+  const handlerId = asString(definition.handlerId);
+  if (!commandId) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'commandId must be a non-empty string');
+  }
+  if (!titleKey) {
+    throw createError('COMMAND_I18N_KEY_REQUIRED', 'titleKey must be a non-empty i18n key', { commandId });
+  }
+  if (!handlerId) {
+    throw createError('COMMAND_SCHEMA_INVALID', 'handlerId must be a non-empty string', { commandId });
+  }
+  const registeredAt = Date.now();
+  const permission = asStringArray(definition.permission);
+  return {
+    commandId,
+    titleKey,
+    descriptionKey: asString(definition.descriptionKey),
+    ariaLabelKey: asString(definition.ariaLabelKey),
+    icon: normalizeCommandIcon(definition.icon),
+    shortcut: normalizeCommandShortcut(definition.shortcut),
+    scope: normalizeCommandScope(definition.scope, routeContext),
+    permission,
+    enabledWhen: normalizeCommandCondition(definition.enabledWhen, 'command.enabledWhen'),
+    visibleWhen: normalizeCommandCondition(definition.visibleWhen, 'command.visibleWhen'),
+    checkedWhen: normalizeCommandCondition(definition.checkedWhen, 'command.checkedWhen'),
+    handlerId,
+    menuPlacement: normalizeCommandPlacement(definition.menuPlacement, 'menuPlacement') as CommandMenuPlacement[],
+    toolbarPlacement: normalizeCommandPlacement(definition.toolbarPlacement, 'toolbarPlacement') as CommandToolbarPlacement[],
+    paletteKeywords: asStringArray(definition.paletteKeywords),
+    state: normalizeCommandStatePatch(definition.state),
+    ownerCallerId: routeContext.caller.id,
+    ownerPluginId: routeContext.caller.pluginId,
+    ownerSessionId: routeContext.caller.sessionId,
+    registeredAt,
+    updatedAt: registeredAt
+  };
+};
+
+const cloneCommandViewPart = <T>(value: T): T => deepClone(value) as T;
+
+const evaluateCommandCondition = (
+  condition: boolean | CommandCondition | undefined,
+  context: CommandInvocationContext | undefined,
+  defaultValue: boolean
+): boolean => {
+  if (typeof condition === 'undefined') {
+    return defaultValue;
+  }
+  if (typeof condition === 'boolean') {
+    return condition;
+  }
+  const source = context?.data ?? {};
+  const actual = source[condition.key];
+  if (typeof condition.equals !== 'undefined' && actual !== condition.equals) {
+    return false;
+  }
+  if (typeof condition.notEquals !== 'undefined' && actual === condition.notEquals) {
+    return false;
+  }
+  if (condition.in && !condition.in.some((item) => item === actual)) {
+    return false;
+  }
+  if (typeof condition.truthy === 'boolean' && Boolean(actual) !== condition.truthy) {
+    return false;
+  }
+  return true;
+};
+
+const callerHasPermissions = (routeContext: RouteInvocationContext, permissions: string[]): boolean => {
+  const granted = routeContext.caller.permissions ?? [];
+  return permissions.every((permission) => granted.includes(permission));
+};
+
+const buildCommandDiagnostic = (
+  command: RegisteredCommand,
+  routeContext: RouteInvocationContext,
+  queryContext?: CommandInvocationContext
+): CommandDiagnostic => {
+  const visible = (command.state.visible ?? true) && evaluateCommandCondition(command.visibleWhen, queryContext, true);
+  const enabled =
+    visible &&
+    (command.state.enabled ?? true) &&
+    evaluateCommandCondition(command.enabledWhen, queryContext, true) &&
+    callerHasPermissions(routeContext, command.permission);
+  return {
+    visible,
+    enabled,
+    checked: command.state.checked ?? evaluateCommandCondition(command.checkedWhen, queryContext, false),
+    hiddenReasonKey: visible ? undefined : command.state.hiddenReasonKey ?? 'chips.command.hidden',
+    disabledReasonKey: enabled
+      ? undefined
+      : command.state.disabledReasonKey ??
+        (!callerHasPermissions(routeContext, command.permission) ? 'chips.command.permissionDenied' : 'chips.command.disabled')
+  };
+};
+
+const toCommandView = (
+  command: RegisteredCommand,
+  routeContext: RouteInvocationContext,
+  queryContext?: CommandInvocationContext
+): CommandView => {
+  return {
+    commandId: command.commandId,
+    titleKey: command.titleKey,
+    descriptionKey: command.descriptionKey,
+    ariaLabelKey: command.ariaLabelKey,
+    icon: command.icon ? { ...command.icon } : undefined,
+    shortcut: cloneCommandViewPart(command.shortcut),
+    scope: { ...command.scope },
+    permission: [...command.permission],
+    handlerId: command.handlerId,
+    menuPlacement: cloneCommandViewPart(command.menuPlacement),
+    toolbarPlacement: cloneCommandViewPart(command.toolbarPlacement),
+    paletteKeywords: [...command.paletteKeywords],
+    state: { ...command.state },
+    ownerPluginId: command.ownerPluginId,
+    ownerSessionId: command.ownerSessionId,
+    registeredAt: command.registeredAt,
+    updatedAt: command.updatedAt,
+    diagnostic: buildCommandDiagnostic(command, routeContext, queryContext)
+  };
+};
+
+const getCommandOwnerKey = (command: RegisteredCommand): string => {
+  if (command.ownerPluginId) {
+    return `plugin:${command.ownerPluginId}`;
+  }
+  return `${command.ownerCallerId}`;
+};
+
+const getCommandRouteCallerOwnerKey = (routeContext: RouteInvocationContext): string => {
+  if (routeContext.caller.pluginId) {
+    return `plugin:${routeContext.caller.pluginId}`;
+  }
+  return `${routeContext.caller.id}`;
+};
+
+const ensureCommandOwnership = (
+  command: RegisteredCommand,
+  routeContext: RouteInvocationContext,
+  action: `${string}.${string}`
+): void => {
+  if (getCommandOwnerKey(command) === getCommandRouteCallerOwnerKey(routeContext)) {
+    return;
+  }
+  ensureCallerPermission(routeContext, 'command.manage', action);
+};
+
+const ensurePluginOwnsCommandPermissions = (
+  ctx: HostServiceContext,
+  command: RegisteredCommand
+): void => {
+  if (!command.ownerPluginId) {
+    return;
+  }
+  const plugin = ctx.runtime.get(command.ownerPluginId);
+  const granted = new Set(plugin.manifest.permissions);
+  const missing = command.permission.filter((permission) => !granted.has(permission));
+  if (missing.length > 0) {
+    throw createError('COMMAND_PERMISSION_UNDECLARED', 'Command permission must be declared by owner plugin manifest', {
+      commandId: command.commandId,
+      pluginId: command.ownerPluginId,
+      missing
+    });
+  }
+};
+
+const commandMatchesScope = (commandScope: CommandScope, requestedScope?: Partial<CommandScope>): boolean => {
+  if (!requestedScope) {
+    return true;
+  }
+  if (requestedScope.kind && commandScope.kind !== requestedScope.kind) {
+    return false;
+  }
+  for (const key of ['appId', 'sceneId', 'surfaceId', 'documentId'] as const) {
+    if (typeof requestedScope[key] !== 'undefined' && commandScope[key] !== requestedScope[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const parseCommandQueryOptions = (input: unknown): CommandQueryOptions => {
+  if (!isRecord(input)) {
+    return {};
+  }
+  const scope = isRecord(input.scope)
+    ? {
+        kind: typeof input.scope.kind === 'string' && COMMAND_SCOPE_KINDS.has(input.scope.kind as CommandScopeKind)
+          ? input.scope.kind as CommandScopeKind
+          : undefined,
+        appId: asString(input.scope.appId),
+        sceneId: asString(input.scope.sceneId),
+        surfaceId: asString(input.scope.surfaceId),
+        documentId: asString(input.scope.documentId)
+      }
+    : undefined;
+  return {
+    commandId: asString(input.commandId),
+    ownerPluginId: asString(input.ownerPluginId),
+    scope,
+    source: typeof input.source === 'string' && COMMAND_SOURCES.has(input.source as CommandSource)
+      ? input.source as CommandSource
+      : undefined,
+    context: isRecord(input.context) ? cloneCommandViewPart(input.context) as CommandInvocationContext : undefined,
+    includeDisabled: input.includeDisabled === true,
+    includeHidden: input.includeHidden === true
+  };
+};
+
+const listCommandViews = (
+  state: RuntimeState,
+  routeContext: RouteInvocationContext,
+  options: CommandQueryOptions = {}
+): CommandView[] => {
+  const views: CommandView[] = [];
+  for (const command of state.commands.values()) {
+    if (options.commandId && command.commandId !== options.commandId) {
+      continue;
+    }
+    if (options.ownerPluginId && command.ownerPluginId !== options.ownerPluginId) {
+      continue;
+    }
+    if (!commandMatchesScope(command.scope, options.scope)) {
+      continue;
+    }
+    const view = toCommandView(command, routeContext, options.context);
+    if (!options.includeHidden && !view.diagnostic.visible) {
+      continue;
+    }
+    views.push(view);
+  }
+  return views.sort((left, right) => left.commandId.localeCompare(right.commandId));
+};
+
+const unregisterCommandShortcuts = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  commandId: string
+): Promise<void> => {
+  const accelerators = state.commandShortcuts.get(commandId) ?? [];
+  for (const accelerator of accelerators) {
+    await ctx.pal.systemUi.shortcut.unregister(accelerator);
+  }
+  state.commandShortcuts.delete(commandId);
+};
+
+const registerCommandShortcuts = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  command: RegisteredCommand
+): Promise<void> => {
+  await unregisterCommandShortcuts(ctx, state, command.commandId);
+  const registered: string[] = [];
+  const platformInfo = await ctx.pal.environment.getInfo();
+  for (const shortcut of command.shortcut) {
+    if (shortcut.platform && shortcut.platform !== 'all' && shortcut.platform !== platformInfo.hostKind) {
+      continue;
+    }
+    const ok = await ctx.pal.systemUi.shortcut.register(shortcut.accelerator, () => {
+      void ctx.kernel.invoke<CommandInvokeInput, { invocationId: string; dispatched: boolean }>(
+        'command.invoke',
+        {
+          commandId: command.commandId,
+          source: 'shortcut',
+          payload: {
+            accelerator: shortcut.accelerator
+          },
+          context: {
+            pluginId: command.ownerPluginId,
+            sceneId: command.scope.sceneId,
+            surfaceId: command.scope.surfaceId,
+            documentId: command.scope.documentId
+          }
+        },
+        {
+          requestId: createId(),
+          timestamp: Date.now(),
+          caller: {
+            id: 'command-shortcut',
+            type: 'service',
+            permissions: ['command.invoke', ...command.permission]
+          }
+        }
+      );
+    });
+    if (!ok) {
+      throw createError('COMMAND_SHORTCUT_REGISTER_FAILED', `Cannot register command shortcut: ${shortcut.accelerator}`, {
+        commandId: command.commandId,
+        accelerator: shortcut.accelerator
+      });
+    }
+    registered.push(shortcut.accelerator);
+  }
+  if (registered.length > 0) {
+    state.commandShortcuts.set(command.commandId, registered);
+  }
+};
+
+const unregisterCommand = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  commandId: string,
+  reason: string
+): Promise<RegisteredCommand | undefined> => {
+  const command = state.commands.get(commandId);
+  if (!command) {
+    return undefined;
+  }
+  await unregisterCommandShortcuts(ctx, state, commandId);
+  state.commands.delete(commandId);
+  await ctx.kernel.events.emit('command.unregistered', 'command-service', {
+    commandId,
+    ownerPluginId: command.ownerPluginId,
+    ownerSessionId: command.ownerSessionId,
+    reason
+  });
+  await ctx.kernel.events.emit('command.changed', 'command-service', {
+    commandId,
+    change: 'unregistered',
+    ownerPluginId: command.ownerPluginId,
+    ownerSessionId: command.ownerSessionId
+  });
+  return command;
+};
+
+const unregisterCommandsByOwner = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  owner: { pluginId?: string; sessionId?: string },
+  reason: string
+): Promise<number> => {
+  const targets = [...state.commands.values()].filter((command) => {
+    if (owner.sessionId && command.ownerSessionId === owner.sessionId) {
+      return true;
+    }
+    return Boolean(owner.pluginId && command.ownerPluginId === owner.pluginId);
+  });
+  for (const command of targets) {
+    await unregisterCommand(ctx, state, command.commandId, reason);
+  }
+  return targets.length;
+};
+
+const emitCommandRegistryEvent = async (
+  ctx: HostServiceContext,
+  command: RegisteredCommand,
+  change: 'registered' | 'changed',
+  routeContext: RouteInvocationContext
+): Promise<void> => {
+  const commandView = toCommandView(command, routeContext);
+  if (change === 'registered') {
+    await ctx.kernel.events.emit('command.registered', 'command-service', {
+      command: commandView
+    });
+  }
+  await ctx.kernel.events.emit('command.changed', 'command-service', {
+    command: commandView,
+    change
   });
 };
 
@@ -3087,6 +3863,223 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     }
   };
 
+  const commandService: ServiceRegistration = {
+    name: 'command',
+    actions: {
+      register: {
+        descriptor: descriptor<Record<string, unknown>, { command: CommandView }>(
+          'command.register',
+          ['command.write'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'command.register', async (input, routeContext) => {
+            const command = normalizeCommandDefinition(input, routeContext);
+            const existing = state.commands.get(command.commandId);
+            if (existing && getCommandOwnerKey(existing) !== getCommandRouteCallerOwnerKey(routeContext)) {
+              throw createError('COMMAND_ALREADY_REGISTERED', `Command already registered: ${command.commandId}`, {
+                commandId: command.commandId,
+                ownerPluginId: existing.ownerPluginId
+              });
+            }
+            if (existing) {
+              command.registeredAt = existing.registeredAt;
+              command.updatedAt = Date.now();
+            }
+            ensurePluginOwnsCommandPermissions(ctx, command);
+            await registerCommandShortcuts(ctx, state, command);
+            state.commands.set(command.commandId, command);
+            await emitCommandRegistryEvent(ctx, command, existing ? 'changed' : 'registered', routeContext);
+            return { command: toCommandView(command, routeContext) };
+          })
+        )
+      },
+      unregister: {
+        descriptor: descriptor<{ commandId: string }, { ack: true }>(
+          'command.unregister',
+          ['command.write'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'command.unregister', async (input, routeContext) => {
+            const commandId = asString(input.commandId);
+            if (!commandId) {
+              throw createError('COMMAND_SCHEMA_INVALID', 'commandId must be a non-empty string');
+            }
+            const command = state.commands.get(commandId);
+            if (!command) {
+              throw createError('COMMAND_NOT_FOUND', `Command not found: ${commandId}`, { commandId });
+            }
+            ensureCommandOwnership(command, routeContext, 'command.unregister');
+            await unregisterCommand(ctx, state, commandId, 'owner-unregister');
+            return { ack: true };
+          })
+        )
+      },
+      get: {
+        descriptor: descriptor<{ commandId: string; context?: CommandInvocationContext; includeHidden?: boolean }, { command?: CommandView }>(
+          'command.get',
+          ['command.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'command.get', async (input, routeContext) => {
+            const commandId = asString(input.commandId);
+            if (!commandId) {
+              throw createError('COMMAND_SCHEMA_INVALID', 'commandId must be a non-empty string');
+            }
+            const command = state.commands.get(commandId);
+            if (!command) {
+              return { command: undefined };
+            }
+            const view = toCommandView(command, routeContext, input.context);
+            if (!input.includeHidden && !view.diagnostic.visible) {
+              return { command: undefined };
+            }
+            return { command: view };
+          })
+        )
+      },
+      list: {
+        descriptor: descriptor<CommandQueryOptions, { commands: CommandView[] }>(
+          'command.list',
+          ['command.read'],
+          2_000,
+          true,
+          0,
+          withMetrics(state, 'command.list', async (input, routeContext) => {
+            return {
+              commands: listCommandViews(state, routeContext, parseCommandQueryOptions(input))
+            };
+          })
+        )
+      },
+      setState: {
+        descriptor: descriptor<{ commandId: string; state: CommandStatePatch }, { command: CommandView }>(
+          'command.setState',
+          ['command.write'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'command.setState', async (input, routeContext) => {
+            const commandId = asString(input.commandId);
+            if (!commandId) {
+              throw createError('COMMAND_SCHEMA_INVALID', 'commandId must be a non-empty string');
+            }
+            const command = state.commands.get(commandId);
+            if (!command) {
+              throw createError('COMMAND_NOT_FOUND', `Command not found: ${commandId}`, { commandId });
+            }
+            ensureCommandOwnership(command, routeContext, 'command.setState');
+            command.state = {
+              ...command.state,
+              ...normalizeCommandStatePatch(input.state)
+            };
+            command.updatedAt = Date.now();
+            await emitCommandRegistryEvent(ctx, command, 'changed', routeContext);
+            return { command: toCommandView(command, routeContext) };
+          })
+        )
+      },
+      invoke: {
+        descriptor: descriptor<CommandInvokeInput, { commandId: string; invocationId: string; dispatched: boolean; command: CommandView }>(
+          'command.invoke',
+          ['command.invoke'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'command.invoke', async (input, routeContext) => {
+            const commandId = asString(input.commandId);
+            if (!commandId) {
+              throw createError('COMMAND_SCHEMA_INVALID', 'commandId must be a non-empty string');
+            }
+            const command = state.commands.get(commandId);
+            if (!command) {
+              throw createError('COMMAND_NOT_FOUND', `Command not found: ${commandId}`, { commandId });
+            }
+            const source = typeof input.source === 'string' && COMMAND_SOURCES.has(input.source)
+              ? input.source
+              : 'api';
+            if (typeof input.source !== 'undefined' && source === 'api' && input.source !== 'api') {
+              throw createError('COMMAND_SCHEMA_INVALID', `Invalid command source: ${String(input.source)}`);
+            }
+            const payload = typeof input.payload === 'undefined'
+              ? undefined
+              : isRecord(input.payload)
+                ? deepClone(input.payload)
+                : undefined;
+            if (typeof input.payload !== 'undefined' && !payload) {
+              throw createError('COMMAND_SCHEMA_INVALID', 'command.invoke payload must be an object when provided');
+            }
+            const invocationContext = input.context ? cloneCommandViewPart(input.context) : undefined;
+            const effectivePluginId = invocationContext?.pluginId ?? routeContext.caller.pluginId;
+            if (command.scope.kind === 'app' && effectivePluginId && command.scope.appId !== effectivePluginId) {
+              throw createError('COMMAND_SCOPE_MISMATCH', 'Command cannot be invoked outside its app scope', {
+                commandId,
+                appId: command.scope.appId,
+                pluginId: effectivePluginId
+              });
+            }
+            if (command.scope.kind === 'scene' && invocationContext?.sceneId !== command.scope.sceneId) {
+              throw createError('COMMAND_SCOPE_MISMATCH', 'Command cannot be invoked outside its scene scope', {
+                commandId,
+                sceneId: command.scope.sceneId
+              });
+            }
+            if (command.scope.kind === 'surface' && invocationContext?.surfaceId !== command.scope.surfaceId) {
+              throw createError('COMMAND_SCOPE_MISMATCH', 'Command cannot be invoked outside its surface scope', {
+                commandId,
+                surfaceId: command.scope.surfaceId
+              });
+            }
+            if (command.scope.kind === 'document' && invocationContext?.documentId !== command.scope.documentId) {
+              throw createError('COMMAND_SCOPE_MISMATCH', 'Command cannot be invoked outside its document scope', {
+                commandId,
+                documentId: command.scope.documentId
+              });
+            }
+            for (const permission of command.permission) {
+              ensureCallerPermission(routeContext, permission, 'command.invoke');
+            }
+            const view = toCommandView(command, routeContext, invocationContext);
+            if (!view.diagnostic.visible) {
+              throw createError('COMMAND_HIDDEN', `Command is hidden: ${commandId}`, {
+                commandId,
+                reasonKey: view.diagnostic.hiddenReasonKey
+              });
+            }
+            if (!view.diagnostic.enabled) {
+              throw createError('COMMAND_DISABLED', `Command is disabled: ${commandId}`, {
+                commandId,
+                reasonKey: view.diagnostic.disabledReasonKey
+              });
+            }
+            const invocationId = createId();
+            await ctx.kernel.events.emit('command.invoked', 'command-service', {
+              invocationId,
+              commandId,
+              command: view,
+              handlerId: command.handlerId,
+              ownerPluginId: command.ownerPluginId,
+              ownerSessionId: command.ownerSessionId,
+              source,
+              sceneId: invocationContext?.sceneId ?? command.scope.sceneId,
+              surfaceId: invocationContext?.surfaceId ?? command.scope.surfaceId,
+              documentId: invocationContext?.documentId ?? command.scope.documentId,
+              payload
+            });
+            return {
+              commandId,
+              invocationId,
+              dispatched: true,
+              command: view
+            };
+          })
+        )
+      }
+    }
+  };
+
   const surfaceService: ServiceRegistration = {
     name: 'surface',
     actions: {
@@ -3213,6 +4206,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const surface = await ctx.pal.surface.getState(input.surfaceId);
             await ctx.pal.surface.close(input.surfaceId);
             if (surface.sessionId) {
+              await unregisterCommandsByOwner(ctx, state, { sessionId: surface.sessionId }, 'session-closed');
               ctx.runtime.stopSession(surface.sessionId);
             }
             await emitSurfaceActionEvent(ctx, 'surface.closed', 'surface-service', surface);
@@ -3490,6 +4484,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const surface = await ctx.pal.surface.getState(input.windowId);
             await ctx.pal.surface.close(input.windowId);
             if (surface.sessionId) {
+              await unregisterCommandsByOwner(ctx, state, { sessionId: surface.sessionId }, 'session-closed');
               ctx.runtime.stopSession(surface.sessionId);
             }
             await emitSurfaceActionEvent(ctx, 'surface.closed', 'window-service', surface);
@@ -3648,6 +4643,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               await unregisterModulePluginState(ctx, state, input.pluginId, 'plugin-disabled');
               await syncModuleProviders(ctx, state);
             }
+            if (plugin.manifest.type === 'app') {
+              await unregisterCommandsByOwner(ctx, state, { pluginId: input.pluginId }, 'plugin-disabled');
+            }
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -3666,6 +4664,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'plugin.uninstall', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
             if (plugin.manifest.type === 'app') {
+              await unregisterCommandsByOwner(ctx, state, { pluginId: input.pluginId }, 'plugin-uninstalled');
               await removePluginShortcut(ctx, input.pluginId).catch(() => undefined);
             }
             if (plugin.manifest.type === 'module') {
@@ -5486,6 +6485,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     configService,
     themeService,
     i18nService,
+    commandService,
     surfaceService,
     transferService,
     associationService,

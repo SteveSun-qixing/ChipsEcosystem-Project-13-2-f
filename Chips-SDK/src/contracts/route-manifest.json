@@ -105,6 +105,24 @@
     "card.open": {
       "action": "card.open"
     },
+    "command.register": {
+      "action": "command.register"
+    },
+    "command.unregister": {
+      "action": "command.unregister"
+    },
+    "command.get": {
+      "action": "command.get"
+    },
+    "command.list": {
+      "action": "command.list"
+    },
+    "command.invoke": {
+      "action": "command.invoke"
+    },
+    "command.setState": {
+      "action": "command.setState"
+    },
     "config.batchSet": {
       "action": "config.batchSet"
     },

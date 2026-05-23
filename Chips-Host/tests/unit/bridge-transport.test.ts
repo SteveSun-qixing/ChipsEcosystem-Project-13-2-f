@@ -39,6 +39,8 @@ describe('BridgeTransport', () => {
     await bridge.notification.show({ title: 'chips', body: 'ready' });
     await bridge.tray.getState();
     await bridge.shortcut.list();
+    await bridge.command.list({ includeHidden: true });
+    await bridge.command.invoke('chips.demo.open', { source: 'toolbar' }, { source: 'toolbar' });
     await bridge.ipc.listChannels();
 
     expect(actions).toEqual([
@@ -55,6 +57,8 @@ describe('BridgeTransport', () => {
       'platform.notificationShow',
       'platform.trayGetState',
       'platform.shortcutList',
+      'command.list',
+      'command.invoke',
       'platform.ipcListChannels'
     ]);
   });

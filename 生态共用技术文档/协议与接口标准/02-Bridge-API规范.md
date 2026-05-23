@@ -53,6 +53,7 @@ Bridge 核心入口冻结为：
 | `clipboard` | 剪贴板读写 |
 | `shell` | 桌面 Shell 兼容别名 |
 | `surface` | 跨平台界面容器主语义 |
+| `command` | 菜单、工具栏、快捷键、命令面板共享的命令注册与调度 |
 | `transfer` | 打开路径、外链、在系统中定位、分享 |
 | `association` | 文件关联 / URL 打开入口治理 |
 | `platform` | 环境信息、能力快照、屏幕、电源、离屏导出 |
@@ -107,9 +108,83 @@ interface SurfaceOpenRequest {
 - `window.chips.emit(event, data?)` 是页面向 Host 发送事件的正式入口；
 - `file / resource / card / box / zip / module` 等服务能力当前通过 `window.chips.invoke("namespace.action", payload)` 或 `chips-sdk` 暴露，不额外扩展为新的 convenience 子域。
 
-## 4. `transfer` 与 `association`
+## 4. `command` 子域
 
-### 4.1 `transfer`
+`command` 是运行时 UI 动作的统一语义层。菜单、工具栏、快捷键、命令面板和上下文菜单必须消费同一条 command 记录，不得各自维护私有动作模型。
+
+正式动作：
+
+- `command.register(command)`
+- `command.unregister(commandId)`
+- `command.get(commandId, options?)`
+- `command.list(options?)`
+- `command.setState(commandId, state)`
+- `command.invoke(commandId, payload?, options?)`
+
+Command schema：
+
+```ts
+type CommandSource = "menu" | "toolbar" | "shortcut" | "palette" | "context-menu" | "api";
+
+interface CommandDefinition {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: IconDescriptor;
+  shortcut?: CommandShortcut | CommandShortcut[];
+  scope?: CommandScope;
+  permission?: string | string[];
+  enabledWhen?: boolean | CommandCondition;
+  visibleWhen?: boolean | CommandCondition;
+  checkedWhen?: boolean | CommandCondition;
+  handlerId: string;
+  menuPlacement?: CommandMenuPlacement[];
+  toolbarPlacement?: CommandToolbarPlacement[];
+  paletteKeywords?: string[];
+  state?: CommandState;
+}
+```
+
+约束：
+
+- 文案只允许使用 `titleKey / descriptionKey / ariaLabelKey`，不得在 command 中写 `title / description / ariaLabel` 原始文本。
+- `icon` 必须是运行时 `IconDescriptor`，最终由 `ChipsIcon` 消费；不得混入 `manifest.ui.launcher.icon` 这类系统入口图标路径。
+- `shortcut` 是 command 语义快捷键绑定，Host 可把它映射到底层 PAL 全局快捷键，但 registry 仍以 `commandId` 为主语义。
+- `permission` 表示执行 command 所需业务权限；注册方插件必须在 manifest permissions 中声明这些权限。
+- `scope.kind` 支持 `global / app / scene / surface / document`。普通插件默认注册 `app` scope；注册 `global` scope 需要 `command.manage`。
+- `enabledWhen / visibleWhen / checkedWhen` 只接受 boolean 或结构化 condition，不接受字符串表达式或第三方表达式语言。
+
+服务级权限：
+
+- `command.read`：查询 command。
+- `command.write`：注册、注销和更新自己拥有的 command。
+- `command.invoke`：调用 command。
+- `command.manage`：跨 owner 管理或注册全局 command。
+
+事件：
+
+- `command.registered`
+- `command.unregistered`
+- `command.changed`
+- `command.invoked`
+
+`command.invoke` 返回：
+
+```ts
+{
+  commandId: string;
+  invocationId: string;
+  dispatched: true;
+  command: CommandView;
+}
+```
+
+当前命令调用采用 Host registry + 事件调度模型：Host 完成存在性、scope、权限和状态校验后发出 `command.invoked`，插件侧 SDK 根据 `handlerId / ownerPluginId / ownerSessionId` 执行业务处理。业务 handler 函数不得通过 Bridge 传给 Host。
+
+## 5. `transfer` 与 `association`
+
+### 5.1 `transfer`
 
 正式动作：
 
@@ -125,7 +200,7 @@ interface SurfaceOpenRequest {
 
 `transfer.share` 在当前 PAL 不支持时，Host 必须返回显式错误，而不是静默成功。
 
-### 4.2 `association`
+### 5.2 `association`
 
 正式动作：
 
@@ -138,7 +213,7 @@ interface SurfaceOpenRequest {
 - 命中卡片 / 箱子 / 插件处理器的结果
 - 回退到系统外部打开的结果
 
-## 5. `platform` 子域
+## 6. `platform` 子域
 
 当前 `platform` 子域只保留平台原语与导出相关动作：
 
@@ -160,9 +235,9 @@ Bridge 返回结构说明：
 
 `getCapabilities()` 不再返回旧的字符串数组。
 
-## 6. Legacy 子域说明
+## 7. Legacy 子域说明
 
-### 6.1 `window`
+### 7.1 `window`
 
 `window.*` 当前继续保留，主要用于桌面兼容链路。
 
@@ -177,7 +252,7 @@ Bridge 返回结构说明：
 
 它本质上是 `surface(kind=window)` 的兼容别名，不再是新增跨平台能力的首选入口。
 
-### 6.2 `dialog / shell / tray / ipc`
+### 7.2 `dialog / shell / tray / ipc`
 
 这些 convenience 子域都会把 Host 返回结构解包为更直接的页面可用值。例如：
 
@@ -186,7 +261,7 @@ Bridge 返回结构说明：
 - `tray.set()` 返回当前 `TrayState`
 - `ipc.createChannel()` 返回 `PALIpcChannelInfo`
 
-### 6.3 通过 `invoke()` 暴露的正式服务命名空间
+### 7.3 通过 `invoke()` 暴露的正式服务命名空间
 
 当前 Bridge 页面侧还会通过 `invoke("namespace.action")` 访问以下正式服务域：
 
@@ -204,7 +279,7 @@ Bridge 返回结构说明：
 - `zip.compress / zip.extract / zip.list` 是网页基础卡片等整包导入场景的正式 ZIP 能力；
 - 这些动作属于 Host 服务命名空间，不应误写为 `window.chips.resource.*` 或 `window.chips.box.*` 直接子对象。
 
-## 7. 启动上下文
+## 8. 启动上下文
 
 Desktop preload 继续向页面暴露：
 
@@ -224,7 +299,7 @@ window.chips.platform.getLaunchContext()
 
 应用插件必须通过该入口读取真实启动来源，不得解析命令行或 Electron 私有对象。
 
-## 8. 事件规范
+## 9. 事件规范
 
 Bridge 事件命名统一采用点语义，例如：
 
@@ -238,93 +313,7 @@ Bridge 事件命名统一采用点语义，例如：
 - `theme:changed`
 - `theme-changed`
 
-### 8.1 文档型 Surface 高度事件
-
-当应用插件以文档流方式嵌入网页、路由页或其他可滚动宿主时，插件页面可以通过 `window.chips.emit("plugin.surface.resize", payload)` 向宿主发布文档级高度。该事件只描述当前插件文档希望宿主 surface 占用的块向高度，不替代 `surface.resize(surfaceId, width, height)` 这类 Host 容器尺寸动作。
-
-正式载荷为：
-
-```ts
-interface DocumentSurfaceResizePayload {
-  height: number;
-  contentHeight: number;
-  safeBlockStart?: number;
-  safeBlockEnd: number;
-  viewportHeight: number;
-  reason: "initial" | "content-resize" | "asset-load" | "font-load" | "viewport-resize";
-  stable: boolean;
-}
-```
-
-字段语义：
-
-- `height`：宿主应设置给文档 surface 的最终高度，必须已经包含阅读安全区。
-- `contentHeight`：插件文档自身真实内容高度，不包含额外阅读安全区。
-- `safeBlockStart`：发布方在块向起点保留的阅读安全区高度，用于避免宿主悬浮 chrome 遮挡内容。
-- `safeBlockEnd`：发布方加入到块向末尾的阅读安全区高度。
-- `viewportHeight`：插件发布事件时可见视口高度，用于宿主判断窗口缩放与响应式重排。
-- `reason`：高度变化原因；未知内部来源必须归一为 `content-resize` 后再对外发布。
-- `stable`：是否已经经过短暂稳定窗口确认。连续图片、字体或布局变化期间可先发布 `stable=false`，稳定后必须发布一次 `stable=true`。
-
-文档型 surface 的高度发布方必须是最外层文档承载组件，而不是直接把内部卡片、基础卡片或子 iframe 的高度原样转发。发布方需要测量自身真实文档流，包括内部 iframe、加载态、宿主壳层和主题 token 驱动的底部阅读安全区。
-
-滚动所有权约束：
-
-- 文档型 surface 默认由宿主页面承担主滚动；
-- 文档型插件壳层不得制造中间全窗滚动容器；
-- 只有网页基础卡片、阅读器正文等内容本身需要局部浏览的组件，才可以在自己的受控区域内保留局部滚动。
-
-调度要求：
-
-- 高度变化应通过 `requestAnimationFrame` 合并；
-- 图片、字体、异步资源和窗口缩放引发的连续变化应在约 120-180ms 安静窗口后发布 `stable=true`；
-- 内容变高可以即时发布并撑开宿主，内容变短不应在 `stable=false` 阶段强制宿主剧烈收缩，避免用户阅读到底部时页面跳动；
-- 宿主消费方应至少支持 `height` 字段，并在支持完整协议时按 `stable` 做收缩防跳处理。
-
-### 8.2 宿主悬浮 Chrome 事件
-
-当应用插件被嵌入 Web 文档型宿主，且固定定位 UI 需要脱离插件 iframe 绑定到宿主页面视口时，插件可以通过 `window.chips.emit("plugin.chrome.update", payload)` 发布通用悬浮 chrome 状态。宿主只渲染通用壳层控件，不理解卡片、箱子等业务语义。
-
-正式载荷为：
-
-```ts
-interface PluginChromeUpdatePayload {
-  title?: string;
-  metaLines?: string[];
-  back?: {
-    label: string;
-    enabled: boolean;
-    handledByPlugin?: boolean;
-  };
-  actions?: Array<{
-    id: string;
-    label: string;
-    icon?: string;
-    disabled?: boolean;
-  }>;
-  safeBlockStart?: number;
-}
-```
-
-字段语义：
-
-- `title`：宿主居中信息药丸主标题；
-- `metaLines`：标题下方的短元信息，通常为创建日期等插件已经本地化后的文本；
-- `back`：返回按钮状态；`handledByPlugin` 为 `true` 时宿主点击后只把动作回传插件，否则宿主可执行默认返回；
-- `actions`：预留给插件未来扩展的通用动作按钮；`icon` 只能作为语义提示，宿主可以映射为自己的图标体系，未知值应退回通用动作图标；
-- `safeBlockStart`：插件希望宿主顶部悬浮 chrome 预留的块向安全空间。
-
-宿主触发悬浮控件动作时，通过 `plugin.chrome.action` 回传：
-
-```ts
-interface PluginChromeActionPayload {
-  actionId: string;
-}
-```
-
-`plugin.chrome.*` 是通用应用插件宿主 chrome 协议，不得在社区页面或其他宿主内写入卡片查看器专属业务判断。
-
-## 9. 质量门禁
+## 10. 质量门禁
 
 1. Bridge 形状变化必须同步更新 Host、SDK、路由契约与共享文档。
 2. 子域新增动作时，必须先明确权限、返回结构、错误模型和不支持语义。

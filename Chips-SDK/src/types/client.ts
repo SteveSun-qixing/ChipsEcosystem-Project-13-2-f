@@ -73,6 +73,7 @@ export interface Client extends CoreClient {
   theme: import("../api/theme").ThemeApi;
   config: import("../api/config").ConfigApi;
   i18n: import("../api/i18n").I18nApi;
+  command: import("../api/command").CommandApi;
   plugin: import("../api/plugin").PluginApi;
   module: import("../api/module").ModuleApi;
   window: import("../api/window").WindowApi;

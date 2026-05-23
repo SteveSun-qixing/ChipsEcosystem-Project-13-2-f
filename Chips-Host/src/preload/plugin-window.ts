@@ -118,6 +118,7 @@ const parseBridgeContext = (): ParsedBridgeContext => {
         callerId: 'plugin-preload',
         callerType: 'plugin',
         pluginId: typeof parsed.pluginId === 'string' ? parsed.pluginId : undefined,
+        sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : undefined,
         permissions: Array.isArray(parsed.permissions)
           ? parsed.permissions.filter((item): item is string => typeof item === 'string')
           : []

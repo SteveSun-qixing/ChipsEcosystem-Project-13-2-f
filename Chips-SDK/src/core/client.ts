@@ -15,6 +15,7 @@ import { createDocumentApi } from "../api/document";
 import { createThemeApi } from "../api/theme";
 import { createConfigApi } from "../api/config";
 import { createI18nApi } from "../api/i18n";
+import { createCommandApi } from "../api/command";
 import { createPluginApi } from "../api/plugin";
 import { createModuleApi } from "../api/module";
 import { createWindowApi } from "../api/window";
@@ -156,6 +157,7 @@ export function createClient(config: ClientConfig = {}): Client {
     theme: createThemeApi(core),
     config: createConfigApi(core),
     i18n: createI18nApi(core),
+    command: createCommandApi(core),
     plugin: createPluginApi(core),
     module: createModuleApi(core),
     window: createWindowApi(core),

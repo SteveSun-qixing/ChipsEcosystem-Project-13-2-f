@@ -1429,4 +1429,430 @@ describe('Host services PAL routing', () => {
       })
     });
   });
+
+  it('registers, lists, invokes, updates, and unregisters commands through the Host registry', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+    const manifestPath = path.join(workspace, 'command-demo.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.demo.app',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Command Demo',
+          permissions: ['config.read'],
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>command-demo</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.demo.app');
+
+    const emittedEvents: Array<{ name: string; data: unknown }> = [];
+    const disposeEvents = kernel.events.on('*', (event) => {
+      emittedEvents.push({ name: event.name, data: event.data });
+    });
+    const context = createContextFactory();
+    const pluginContext = {
+      ...context(['command.read', 'command.write', 'command.invoke', 'config.read']),
+      caller: {
+        id: 'plugin-preload',
+        type: 'plugin' as const,
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-demo',
+        permissions: ['command.read', 'command.write', 'command.invoke', 'config.read']
+      }
+    };
+
+    try {
+      const registered = await kernel.invoke<
+        Record<string, unknown>,
+        {
+          command: {
+            commandId: string;
+            titleKey: string;
+            handlerId: string;
+            ownerPluginId?: string;
+            ownerSessionId?: string;
+            diagnostic: { visible: boolean; enabled: boolean };
+          };
+        }
+      >(
+        'command.register',
+        {
+          commandId: 'chips.demo.open-settings',
+          titleKey: 'app.commands.openSettings.title',
+          descriptionKey: 'app.commands.openSettings.description',
+          ariaLabelKey: 'app.commands.openSettings.ariaLabel',
+          icon: { name: 'settings', style: 'rounded' },
+          shortcut: { accelerator: 'CommandOrControl+,', platform: 'desktop' },
+          scope: { kind: 'app', appId: 'chips.demo.app' },
+          permission: ['config.read'],
+          enabledWhen: { key: 'mode', equals: 'ready' },
+          handlerId: 'open-settings',
+          menuPlacement: [{ menuId: 'app', groupId: 'settings', order: 10 }],
+          toolbarPlacement: [{ toolbarId: 'main', groupId: 'primary', order: 5 }],
+          paletteKeywords: ['settings', 'preferences']
+        },
+        pluginContext
+      );
+
+      expect(registered.command).toEqual(
+        expect.objectContaining({
+          commandId: 'chips.demo.open-settings',
+          titleKey: 'app.commands.openSettings.title',
+          handlerId: 'open-settings',
+          ownerPluginId: 'chips.demo.app',
+          ownerSessionId: 'session-demo',
+          diagnostic: expect.objectContaining({
+            visible: true,
+            enabled: false
+          })
+        })
+      );
+      expect(state.shortcuts).toContain('CommandOrControl+,');
+
+      const listed = await kernel.invoke<Record<string, unknown>, { commands: unknown[] }>(
+        'command.list',
+        {
+          includeDisabled: true,
+          context: { pluginId: 'chips.demo.app', data: { mode: 'ready' } }
+        },
+        pluginContext
+      );
+      expect(listed.commands).toHaveLength(1);
+      expect(listed.commands[0]).toEqual(
+        expect.objectContaining({
+          commandId: 'chips.demo.open-settings',
+          diagnostic: expect.objectContaining({ enabled: true })
+        })
+      );
+
+      const invoked = await kernel.invoke<
+        {
+          commandId: string;
+          source: 'toolbar';
+          payload: Record<string, unknown>;
+          context: { pluginId: string; data: Record<string, unknown> };
+        },
+        { commandId: string; invocationId: string; dispatched: boolean }
+      >(
+        'command.invoke',
+        {
+          commandId: 'chips.demo.open-settings',
+          source: 'toolbar',
+          payload: { target: 'settings' },
+          context: {
+            pluginId: 'chips.demo.app',
+            data: { mode: 'ready' }
+          }
+        },
+        pluginContext
+      );
+      expect(invoked).toEqual(
+        expect.objectContaining({
+          commandId: 'chips.demo.open-settings',
+          dispatched: true
+        })
+      );
+      expect(invoked.invocationId).toBeTruthy();
+      expect(emittedEvents.map((event) => event.name)).toEqual(
+        expect.arrayContaining(['command.registered', 'command.changed', 'command.invoked'])
+      );
+      expect(emittedEvents.find((event) => event.name === 'command.invoked')?.data).toEqual(
+        expect.objectContaining({
+          commandId: 'chips.demo.open-settings',
+          handlerId: 'open-settings',
+          ownerPluginId: 'chips.demo.app',
+          ownerSessionId: 'session-demo',
+          source: 'toolbar',
+          payload: { target: 'settings' }
+        })
+      );
+
+      const updated = await kernel.invoke<
+        { commandId: string; state: { enabled: boolean; disabledReasonKey: string } },
+        { command: { commandId: string; state: { enabled?: boolean; disabledReasonKey?: string } } }
+      >(
+        'command.setState',
+        {
+          commandId: 'chips.demo.open-settings',
+          state: {
+            enabled: false,
+            disabledReasonKey: 'app.commands.openSettings.disabled'
+          }
+        },
+        pluginContext
+      );
+      expect(updated.command.state).toEqual(
+        expect.objectContaining({
+          enabled: false,
+          disabledReasonKey: 'app.commands.openSettings.disabled'
+        })
+      );
+
+      await kernel.invoke('command.unregister', { commandId: 'chips.demo.open-settings' }, pluginContext);
+      expect(state.shortcuts).not.toContain('CommandOrControl+,');
+      const afterUnregister = await kernel.invoke<Record<string, unknown>, { commands: unknown[] }>(
+        'command.list',
+        { includeDisabled: true, includeHidden: true },
+        pluginContext
+      );
+      expect(afterUnregister.commands).toEqual([]);
+    } finally {
+      disposeEvents();
+    }
+  });
+
+  it('blocks commands without i18n keys or undeclared command permissions', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'command-owner.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.command.owner',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Command Owner',
+          permissions: ['config.read'],
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>command-owner</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.command.owner');
+
+    const context = createContextFactory();
+    const pluginContext = {
+      ...context(['command.write', 'command.invoke', 'config.read']),
+      caller: {
+        id: 'plugin-preload',
+        type: 'plugin' as const,
+        pluginId: 'chips.command.owner',
+        sessionId: 'session-command-owner',
+        permissions: ['command.write', 'command.invoke', 'config.read']
+      }
+    };
+
+    await expect(
+      kernel.invoke(
+        'command.register',
+        {
+          commandId: 'chips.command.owner.bad-title',
+          title: 'Open Settings',
+          handlerId: 'open-settings'
+        },
+        pluginContext
+      )
+    ).rejects.toMatchObject({
+      code: 'SCHEMA_VALIDATION_FAILED',
+      details: expect.arrayContaining([expect.stringContaining('title is not allowed')])
+    });
+
+    await expect(
+      kernel.invoke(
+        'command.register',
+        {
+          commandId: 'chips.command.owner.secret',
+          titleKey: 'app.commands.secret.title',
+          handlerId: 'secret',
+          permission: ['file.write']
+        },
+        pluginContext
+      )
+    ).rejects.toMatchObject({
+      code: 'COMMAND_PERMISSION_UNDECLARED'
+    });
+  });
+
+  it('cleans plugin session commands when the owning surface closes', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const manifestPath = path.join(workspace, 'command-surface.plugin.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.command.surface',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Command Surface',
+          permissions: ['config.read'],
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.html'), '<!doctype html><title>command-surface</title>', 'utf-8');
+    await runtime.install(manifestPath);
+    await runtime.enable('chips.command.surface');
+
+    const context = createContextFactory();
+    const opened = await kernel.invoke<
+      { request: { target: { type: 'plugin'; pluginId: string } } },
+      { surface: { id: string; sessionId?: string } }
+    >(
+      'surface.open',
+      {
+        request: {
+          target: {
+            type: 'plugin',
+            pluginId: 'chips.command.surface'
+          }
+        }
+      },
+      context(['window.control', 'plugin.manage'])
+    );
+    const pluginContext = {
+      ...context(['command.read', 'command.write', 'command.invoke', 'config.read']),
+      caller: {
+        id: 'plugin-preload',
+        type: 'plugin' as const,
+        pluginId: 'chips.command.surface',
+        sessionId: opened.surface.sessionId,
+        permissions: ['command.read', 'command.write', 'command.invoke', 'config.read']
+      }
+    };
+
+    await kernel.invoke(
+      'command.register',
+      {
+        commandId: 'chips.command.surface.refresh',
+        titleKey: 'app.commands.refresh.title',
+        handlerId: 'refresh',
+        shortcut: { accelerator: 'CommandOrControl+R' },
+        permission: ['config.read']
+      },
+      pluginContext
+    );
+    expect(state.shortcuts).toContain('CommandOrControl+R');
+
+    await kernel.invoke('surface.close', { surfaceId: opened.surface.id }, context(['window.control']));
+    const commands = await kernel.invoke<Record<string, unknown>, { commands: unknown[] }>(
+      'command.list',
+      { includeDisabled: true, includeHidden: true },
+      context(['command.read'])
+    );
+    expect(commands.commands).toEqual([]);
+    expect(state.shortcuts).not.toContain('CommandOrControl+R');
+    expect(runtime.snapshot().sessions).toHaveLength(0);
+  });
 });

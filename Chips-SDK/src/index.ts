@@ -61,6 +61,29 @@ export type { ThemeApi, ThemeMeta, ThemeState, ResolvedTheme, ThemeContract } fr
 export type { ConfigApi } from "./api/config";
 export type { I18nApi } from "./api/i18n";
 export type {
+  CommandApi,
+  CommandChangedEvent,
+  CommandCondition,
+  CommandConditionExpression,
+  CommandDefinitionInput,
+  CommandInvokedEvent,
+  CommandInvocationContext,
+  CommandInvokeOptions,
+  CommandInvokeResult,
+  CommandMenuPlacement,
+  CommandQueryOptions,
+  CommandRegisteredEvent,
+  CommandScope,
+  CommandScopeKind,
+  CommandSetStateOptions,
+  CommandShortcut,
+  CommandSource,
+  CommandState,
+  CommandToolbarPlacement,
+  CommandUnregisteredEvent,
+  CommandView,
+} from "./api/command";
+export type {
   PluginApi,
   PluginInfo,
   PluginType,

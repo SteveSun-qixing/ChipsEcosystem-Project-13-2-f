@@ -12,6 +12,8 @@ export type BridgePlatformId = NodeJS.Platform | 'web' | 'android' | 'ios' | 'se
 export type BridgeSurfaceKind = 'window' | 'tab' | 'route' | 'modal' | 'sheet' | 'fullscreen';
 export type BridgeSurfaceStateKind = 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden';
 export type BridgeWindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
+export type BridgeCommandScopeKind = 'global' | 'app' | 'scene' | 'surface' | 'document';
+export type BridgeCommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api';
 
 export interface BridgeWindowChromeOverlayOptions {
   color?: string;
@@ -186,6 +188,84 @@ export interface BridgeTransferShareInput {
   files?: string[];
 }
 
+export interface BridgeCommandScope {
+  kind: BridgeCommandScopeKind;
+  appId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  documentId?: string;
+}
+
+export interface BridgeCommandShortcut {
+  accelerator: string;
+  platform?: BridgeHostKind | 'all';
+  when?: boolean | Record<string, unknown>;
+  preventDefault?: boolean;
+}
+
+export interface BridgeCommandState {
+  enabled?: boolean;
+  visible?: boolean;
+  checked?: boolean;
+  disabledReasonKey?: string;
+  hiddenReasonKey?: string;
+}
+
+export interface BridgeCommandDefinition {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: Record<string, unknown>;
+  shortcut?: BridgeCommandShortcut | BridgeCommandShortcut[];
+  scope?: BridgeCommandScope;
+  permission?: string | string[];
+  enabledWhen?: boolean | Record<string, unknown>;
+  visibleWhen?: boolean | Record<string, unknown>;
+  checkedWhen?: boolean | Record<string, unknown>;
+  handlerId: string;
+  menuPlacement?: Array<Record<string, unknown>>;
+  toolbarPlacement?: Array<Record<string, unknown>>;
+  paletteKeywords?: string[];
+  state?: BridgeCommandState;
+}
+
+export interface BridgeCommandView extends BridgeCommandDefinition {
+  shortcut: BridgeCommandShortcut[];
+  scope: BridgeCommandScope;
+  permission: string[];
+  menuPlacement: Array<Record<string, unknown>>;
+  toolbarPlacement: Array<Record<string, unknown>>;
+  paletteKeywords: string[];
+  state: BridgeCommandState;
+  ownerPluginId?: string;
+  ownerSessionId?: string;
+  registeredAt: number;
+  updatedAt: number;
+  diagnostic?: Record<string, unknown>;
+}
+
+export interface BridgeCommandQueryOptions {
+  scope?: Partial<BridgeCommandScope>;
+  source?: BridgeCommandSource;
+  ownerPluginId?: string;
+  includeDisabled?: boolean;
+  includeHidden?: boolean;
+  context?: Record<string, unknown>;
+}
+
+export interface BridgeCommandInvokeOptions {
+  source?: BridgeCommandSource;
+  context?: Record<string, unknown>;
+}
+
+export interface BridgeCommandInvokeResult {
+  commandId: string;
+  invocationId: string;
+  dispatched: boolean;
+  command?: BridgeCommandView;
+}
+
 export interface BridgeAssociationCapabilities {
   fileAssociation: boolean;
   urlScheme: boolean;
@@ -266,6 +346,14 @@ export interface ChipsBridge {
     close(surfaceId: string): Promise<void>;
     list(): Promise<BridgeSurfaceState[]>;
   };
+  command: {
+    register(definition: BridgeCommandDefinition): Promise<BridgeCommandView>;
+    unregister(commandId: string): Promise<void>;
+    get(commandId: string, options?: BridgeCommandQueryOptions): Promise<BridgeCommandView | undefined>;
+    list(options?: BridgeCommandQueryOptions): Promise<BridgeCommandView[]>;
+    invoke(commandId: string, payload?: Record<string, unknown>, options?: BridgeCommandInvokeOptions): Promise<BridgeCommandInvokeResult>;
+    setState(commandId: string, state: BridgeCommandState): Promise<BridgeCommandView>;
+  };
   transfer: {
     openPath(path: string): Promise<void>;
     openExternal(url: string): Promise<void>;
@@ -335,6 +423,7 @@ export class BridgeTransport implements ChipsBridge {
   public readonly clipboard: ChipsBridge['clipboard'];
   public readonly shell: ChipsBridge['shell'];
   public readonly surface: ChipsBridge['surface'];
+  public readonly command: ChipsBridge['command'];
   public readonly transfer: ChipsBridge['transfer'];
   public readonly association: ChipsBridge['association'];
   public readonly platform: ChipsBridge['platform'];
@@ -485,6 +574,31 @@ export class BridgeTransport implements ChipsBridge {
       list: async () => {
         const result = await this.invoke<{ surfaces: BridgeSurfaceState[] }>('surface.list', {});
         return result.surfaces;
+      }
+    };
+
+    this.command = {
+      register: async (definition) => {
+        const result = await this.invoke<{ command: BridgeCommandView }>('command.register', definition);
+        return result.command;
+      },
+      unregister: async (commandId) => {
+        await this.invoke('command.unregister', { commandId });
+      },
+      get: async (commandId, options) => {
+        const result = await this.invoke<{ command?: BridgeCommandView }>('command.get', { commandId, ...(options ?? {}) });
+        return result.command;
+      },
+      list: async (options) => {
+        const result = await this.invoke<{ commands: BridgeCommandView[] }>('command.list', options ?? {});
+        return result.commands;
+      },
+      invoke: async (commandId, payload, options) => {
+        return this.invoke<BridgeCommandInvokeResult>('command.invoke', { commandId, payload: payload ?? {}, ...(options ?? {}) });
+      },
+      setState: async (commandId, state) => {
+        const result = await this.invoke<{ command: BridgeCommandView }>('command.setState', { commandId, state });
+        return result.command;
       }
     };
 

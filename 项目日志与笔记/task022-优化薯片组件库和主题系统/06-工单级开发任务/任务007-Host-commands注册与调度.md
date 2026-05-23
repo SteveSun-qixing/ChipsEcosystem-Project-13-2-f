@@ -28,10 +28,15 @@
 - 权限不足有标准错误。
 - command 文案使用 i18n key。
 
+## 5.1 本任务边界补充
+
+- 本任务先交付 Host command registry、Bridge 子域、SDK Domain API、route manifest、权限/scope 校验和公共契约文档。
+- 组件库 Toolbar/Menu/CommandPalette 的具体组件消费、应用脚手架默认模板接入、React hooks 接入分别进入后续任务，不在本任务内用局部实现抢跑。
+- 若后续发现新的 command 消费面，应按编号小数任务插入本目录，不把后续工作只留在工作日志中。
+
 ## 6. 验证命令
 
 ```bash
 cd Chips-Host && npm run build && npm test && npm run test:contract
 cd ../Chips-SDK && npm test
 ```
-

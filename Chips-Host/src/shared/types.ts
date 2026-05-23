@@ -4,6 +4,7 @@ export interface CallerInfo {
   id: string;
   type: CallerType;
   pluginId?: string;
+  sessionId?: string;
   windowId?: string;
   permissions?: string[];
 }

@@ -14,6 +14,7 @@ export interface ChipsBridge {
   emitScoped?(event: string, payload: unknown, scope: { token: string }): Promise<void>;
   window?: Record<string, unknown>;
   surface?: Record<string, unknown>;
+  command?: Record<string, unknown>;
   transfer?: Record<string, unknown>;
   association?: Record<string, unknown>;
   platform?: {
@@ -139,7 +140,7 @@ export function createTransportAdapter(
       };
     },
     once<T>(event: string, handler: (payload: T) => void): void {
-      const off = this.on<T>(event, (payload) => {
+      const off = this.on(event, (payload: T) => {
         off();
         handler(payload);
       });

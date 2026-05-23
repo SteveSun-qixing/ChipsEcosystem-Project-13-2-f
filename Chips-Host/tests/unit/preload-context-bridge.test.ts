@@ -51,6 +51,7 @@ describe('preload contextBridge exposure', () => {
       expect.objectContaining({
         invoke: expect.any(Function),
         window: expect.any(Object),
+        command: expect.any(Object),
         ipc: expect.any(Object)
       })
     );
@@ -127,6 +128,7 @@ describe('preload contextBridge exposure', () => {
       'chips',
       expect.objectContaining({
         invoke: expect.any(Function),
+        command: expect.any(Object),
         platform: expect.objectContaining({
           getPathForFile: expect.any(Function)
         }),

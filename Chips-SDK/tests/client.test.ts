@@ -468,6 +468,268 @@ describe("createClient", () => {
     });
   });
 
+  it("wraps command registry actions and changed subscriptions", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const command = {
+      commandId: "chips.demo.open-settings",
+      titleKey: "app.commands.openSettings.title",
+      descriptionKey: "app.commands.openSettings.description",
+      ariaLabelKey: "app.commands.openSettings.ariaLabel",
+      icon: {
+        name: "settings",
+        style: "rounded" as const,
+      },
+      shortcut: {
+        accelerator: "CommandOrControl+,",
+      },
+      scope: {
+        kind: "app" as const,
+        appId: "chips.demo",
+      },
+      enabledWhen: {
+        key: "environment",
+        equals: "ready",
+      },
+      visibleWhen: true,
+      permission: ["config.read"],
+      handlerId: "open-settings",
+      menuPlacement: [
+        {
+          menuId: "app",
+          groupId: "settings",
+          order: 20,
+        },
+      ],
+      toolbarPlacement: [
+        {
+          toolbarId: "main",
+          groupId: "primary",
+          order: 10,
+        },
+      ],
+      paletteKeywords: ["settings", "preferences"],
+      state: {
+        enabled: true,
+        visible: true,
+      },
+      ownerPluginId: "chips.demo",
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "command.register":
+          case "command.get":
+          case "command.setState":
+            return { command };
+          case "command.list":
+            return { commands: [command] };
+          case "command.invoke":
+            return {
+              commandId: command.commandId,
+              invocationId: "invocation-1",
+              dispatched: true,
+            };
+          case "command.unregister":
+            return { ack: true };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(client.command.register(command)).resolves.toEqual(command);
+    await client.command.unregister(command.commandId);
+    await expect(
+      client.command.get(command.commandId, {
+        scope: {
+          kind: "app",
+          appId: "chips.demo",
+        },
+        source: "menu",
+        includeDisabled: true,
+      }),
+    ).resolves.toEqual(command);
+    await expect(
+      client.command.list({
+        source: "palette",
+        includeHidden: true,
+      }),
+    ).resolves.toEqual([command]);
+    await expect(
+      client.command.invoke(
+        command.commandId,
+        {
+          target: "settings",
+        },
+        {
+          source: "toolbar",
+          context: {
+            sceneId: "scene-1",
+            surfaceId: "surface-1",
+          },
+        },
+      ),
+    ).resolves.toEqual({
+      commandId: command.commandId,
+      invocationId: "invocation-1",
+      dispatched: true,
+    });
+    await expect(
+      client.command.setState(command.commandId, {
+        enabled: false,
+        disabledReasonKey: "app.commands.openSettings.disabled",
+      }),
+    ).resolves.toEqual(command);
+
+    const changedEvents: unknown[] = [];
+    const off = client.command.onChanged((event) => {
+      changedEvents.push(event);
+    });
+    await client.events.emit("command.changed", {
+      commandId: command.commandId,
+      state: {
+        enabled: false,
+      },
+      change: "state",
+    });
+    off();
+    await client.events.emit("command.changed", {
+      commandId: command.commandId,
+      change: "updated",
+    });
+
+    expect(changedEvents).toEqual([
+      {
+        commandId: command.commandId,
+        state: {
+          enabled: false,
+        },
+        change: "state",
+      },
+    ]);
+    expect(calls).toEqual([
+      {
+        action: "command.register",
+        payload: {
+          commandId: "chips.demo.open-settings",
+          titleKey: "app.commands.openSettings.title",
+          descriptionKey: "app.commands.openSettings.description",
+          ariaLabelKey: "app.commands.openSettings.ariaLabel",
+          icon: {
+            name: "settings",
+            style: "rounded",
+          },
+          shortcut: {
+            accelerator: "CommandOrControl+,",
+          },
+          scope: {
+            kind: "app",
+            appId: "chips.demo",
+          },
+          enabledWhen: {
+            key: "environment",
+            equals: "ready",
+          },
+          visibleWhen: true,
+          permission: ["config.read"],
+          handlerId: "open-settings",
+          menuPlacement: [
+            {
+              menuId: "app",
+              groupId: "settings",
+              order: 20,
+            },
+          ],
+          toolbarPlacement: [
+            {
+              toolbarId: "main",
+              groupId: "primary",
+              order: 10,
+            },
+          ],
+          paletteKeywords: ["settings", "preferences"],
+          state: {
+            enabled: true,
+            visible: true,
+          },
+        },
+      },
+      {
+        action: "command.unregister",
+        payload: {
+          commandId: "chips.demo.open-settings",
+        },
+      },
+      {
+        action: "command.get",
+        payload: {
+          commandId: "chips.demo.open-settings",
+          scope: {
+            kind: "app",
+            appId: "chips.demo",
+          },
+          source: "menu",
+          includeDisabled: true,
+        },
+      },
+      {
+        action: "command.list",
+        payload: {
+          source: "palette",
+          includeHidden: true,
+        },
+      },
+      {
+        action: "command.invoke",
+        payload: {
+          commandId: "chips.demo.open-settings",
+          payload: {
+            target: "settings",
+          },
+          source: "toolbar",
+          context: {
+            sceneId: "scene-1",
+            surfaceId: "surface-1",
+          },
+        },
+      },
+      {
+        action: "command.setState",
+        payload: {
+          commandId: "chips.demo.open-settings",
+          state: {
+            enabled: false,
+            disabledReasonKey: "app.commands.openSettings.disabled",
+          },
+        },
+      },
+    ]);
+  });
+
+  it("rejects command definitions with raw text fields", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async () => {
+        throw new Error("transport should not be called");
+      },
+    });
+
+    await expect(
+      client.command.register({
+        commandId: "chips.demo.open-settings",
+        titleKey: "app.commands.openSettings.title",
+        title: "Open Settings",
+        handlerId: "open-settings",
+      } as any),
+    ).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      message: "command.register: title must be expressed as an i18n key field.",
+    });
+  });
+
   it("unwraps plugin metadata responses", async () => {
     const plugin = {
       id: "theme.theme.chips-official-default-theme",

@@ -116,6 +116,7 @@ export interface PluginSession {
 export interface ResolvedBridgeScope {
   callerId: string;
   pluginId: string;
+  sessionId: string;
   permissions: string[];
 }
 
@@ -526,6 +527,7 @@ export class PluginRuntime {
     return {
       callerId: `plugin-session:${session.sessionId}`,
       pluginId: session.pluginId,
+      sessionId: session.sessionId,
       permissions: [...session.permissions]
     };
   }

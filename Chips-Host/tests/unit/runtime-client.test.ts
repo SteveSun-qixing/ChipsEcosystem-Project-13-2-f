@@ -75,6 +75,42 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
     close: async () => undefined,
     list: async () => []
   },
+  command: {
+    register: async (definition) => ({
+      ...definition,
+      shortcut: [],
+      scope: definition.scope ?? { kind: 'app' },
+      permission: [],
+      menuPlacement: [],
+      toolbarPlacement: [],
+      paletteKeywords: [],
+      state: {},
+      registeredAt: Date.now(),
+      updatedAt: Date.now()
+    }),
+    unregister: async () => undefined,
+    get: async () => undefined,
+    list: async () => [],
+    invoke: async (commandId) => ({
+      commandId,
+      invocationId: 'invocation-1',
+      dispatched: true
+    }),
+    setState: async (commandId, state) => ({
+      commandId,
+      titleKey: 'test.command.title',
+      handlerId: commandId,
+      shortcut: [],
+      scope: { kind: 'app' },
+      permission: [],
+      menuPlacement: [],
+      toolbarPlacement: [],
+      paletteKeywords: [],
+      state,
+      registeredAt: Date.now(),
+      updatedAt: Date.now()
+    })
+  },
   transfer: {
     openPath: async () => undefined,
     openExternal: async () => undefined,

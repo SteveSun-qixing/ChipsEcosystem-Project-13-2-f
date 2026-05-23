@@ -22,6 +22,7 @@ export interface BridgeContextOptions {
   callerId?: string;
   callerType?: RouteInvocationContext['caller']['type'];
   pluginId?: string;
+  sessionId?: string;
   permissions?: string[];
 }
 
@@ -54,6 +55,10 @@ export const HOST_INTERNAL_PERMISSIONS = [
   'theme.write',
   'i18n.read',
   'i18n.write',
+  'command.read',
+  'command.write',
+  'command.invoke',
+  'command.manage',
   'plugin.read',
   'window.control',
   'plugin.manage',
@@ -116,6 +121,7 @@ const buildContext = (options?: BridgeContextOptions): RouteInvocationContext =>
       id: options?.callerId ?? 'renderer-preload',
       type: callerType,
       pluginId: callerType === 'plugin' ? options?.pluginId : undefined,
+      sessionId: callerType === 'plugin' ? options?.sessionId : undefined,
       permissions: sanitizePermissions(options?.permissions)
     },
     timestamp: now()
@@ -346,6 +352,7 @@ export const exposeBridgeToMainWorld = (
     clipboard: bridge.clipboard,
     shell: bridge.shell,
     surface: bridge.surface,
+    command: bridge.command,
     transfer: bridge.transfer,
     association: bridge.association,
     platform: createExposedPlatformBridge(bridge.platform, launchContext),

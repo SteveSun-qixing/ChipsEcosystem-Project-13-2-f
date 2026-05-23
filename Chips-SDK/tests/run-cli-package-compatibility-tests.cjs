@@ -137,8 +137,8 @@ const main = async () => {
     const entries = listEntries(buffer);
 
     assert.deepEqual(
-      entries.map((entry) => entry.path),
-      ['manifest.yaml', 'assets/icons/app-icon.ico', 'dist/main.js'],
+      entries.map((entry) => entry.path).sort(),
+      ['assets/icons/app-icon.ico', 'dist/main.js', 'manifest.yaml'],
       'package should include root manifest, runtime artifacts, and manifest-declared static assets'
     );
     assert.deepEqual(

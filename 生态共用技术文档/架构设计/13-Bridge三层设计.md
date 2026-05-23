@@ -54,6 +54,7 @@ Bridge 三层是插件访问 Host 正式能力的完整链路：
 - `clipboard`
 - `shell`
 - `surface`
+- `command`
 - `transfer`
 - `association`
 - `platform`
@@ -65,6 +66,7 @@ Bridge 三层是插件访问 Host 正式能力的完整链路：
 新增正式子域：
 
 - `surface`：跨平台界面容器语义
+- `command`：菜单、工具栏、快捷键、命令面板共享的命令语义
 - `transfer`：打开、导出、分享、定位文件
 - `association`：文件关联 / URL scheme / share target 入口治理
 
@@ -106,6 +108,7 @@ Runtime Client 的正式职责：
 当前已经对齐的新能力包括：
 
 - `client.surface.*`
+- `client.command.*`
 - `client.transfer.*`
 - `client.association.*`
 - `client.platform.getCapabilities()` 返回结构化能力快照
@@ -152,6 +155,10 @@ Bridge / Runtime 当前重点事件包括：
 - `surface.resized`
 - `surface.stateChanged`
 - `surface.closed`
+- `command.registered`
+- `command.unregistered`
+- `command.changed`
+- `command.invoked`
 - `window.opened`
 - `module.runtime.started`
 - `module.runtime.stopped`

@@ -10,5 +10,6 @@ export type {
   PluginType,
   RuntimeAuditEntry,
   RuntimeQuota,
-  RuntimeSnapshot
+  RuntimeSnapshot,
+  ResolvedBridgeScope
 } from './plugin-runtime';

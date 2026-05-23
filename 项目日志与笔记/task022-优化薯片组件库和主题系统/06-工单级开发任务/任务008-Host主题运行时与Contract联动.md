@@ -22,6 +22,17 @@
 4. 主题变化事件携带版本和诊断摘要。
 5. CLI 和设置面板可消费主题诊断。
 
+## 4.1 前置勘察补充
+
+任务007并行前置勘察确认任务008正式开发前必须处理以下阻断：
+
+1. 暗色主题包缺少布局原语 required tokens，完整 contract guard 接入后会阻断应用。
+2. 组件库 theme-contracts 文档/导出与实际 42 个 contract 存在漂移。
+3. 普通组件 contract 中出现 iframe 字段，与公共组件契约标准“只有高级 iframe 组件声明 iframe 附加契约”的口径冲突。
+4. 公共主题接口规范尚未定义完整 contract view、diagnostics、coverage、事件诊断摘要 schema。
+
+这些前置项已拆分为 `任务008.1` 与 `任务008.2`，任务008正式实现时必须先核对并纳入同一闭环。
+
 ## 5. 验收标准
 
 - 无效主题无法应用。
@@ -34,4 +45,3 @@
 cd Chips-Host && npm run build && npm test && npm run test:contract
 cd ../Chips-ComponentLibrary && npm run test:contracts
 ```
-

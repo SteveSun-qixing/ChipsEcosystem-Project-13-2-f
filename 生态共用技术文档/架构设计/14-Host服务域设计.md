@@ -2,7 +2,7 @@
 
 > **版本**：vNext 已落地口径  
 > **层级**：L3 Host Services  
-> **当前实现状态**：19 个服务域已在 Host 中注册
+> **当前实现状态**：20 个服务域已在 Host 中注册
 
 ## 架构归属声明（2026-04-08）
 
@@ -17,7 +17,7 @@
 | L2 | Host Kernel | 路由、事件、生命周期、权限上下文 | PAL | 页面 UI |
 | L3 | Host Services | 资源、配置、插件、模块、surface 等正式动作 | Kernel + PAL | 页面 UI |
 
-## 2. 当前服务域清单（19个）
+## 2. 当前服务域清单（20个）
 
 | 序号 | 服务域 | 说明 |
 |---|---|---|
@@ -26,24 +26,62 @@
 | 3 | `config` | 配置治理 |
 | 4 | `theme` | 主题管理 |
 | 5 | `i18n` | 多语言管理 |
-| 6 | `surface` | 跨平台界面容器主语义 |
-| 7 | `transfer` | 打开、导出、分享、定位文件 |
-| 8 | `association` | 文件关联 / URL 打开入口治理 |
-| 9 | `window` | 桌面窗口兼容别名 |
-| 10 | `plugin` | 插件安装、启停、查询、应用启动 |
-| 11 | `module` | 模块 provider、调用、任务管理 |
-| 12 | `platform` | 平台信息、能力快照、屏幕、电源、离屏导出 |
-| 13 | `log` | 日志查询与导出 |
-| 14 | `credential` | 凭证治理 |
-| 15 | `card` | 卡片解析、渲染、封面、编辑器、会话释放 |
-| 16 | `box` | 箱子会话与条目治理 |
-| 17 | `zip` | ZIP 压缩与解压 |
-| 18 | `serializer` | 序列化与校验 |
-| 19 | `control-plane` | 健康检查、指标、诊断 |
+| 6 | `command` | 菜单、工具栏、快捷键、命令面板共享的命令注册与调度 |
+| 7 | `surface` | 跨平台界面容器主语义 |
+| 8 | `transfer` | 打开、导出、分享、定位文件 |
+| 9 | `association` | 文件关联 / URL 打开入口治理 |
+| 10 | `window` | 桌面窗口兼容别名 |
+| 11 | `plugin` | 插件安装、启停、查询、应用启动 |
+| 12 | `module` | 模块 provider、调用、任务管理 |
+| 13 | `platform` | 平台信息、能力快照、屏幕、电源、离屏导出 |
+| 14 | `log` | 日志查询与导出 |
+| 15 | `credential` | 凭证治理 |
+| 16 | `card` | 卡片解析、渲染、封面、编辑器、会话释放 |
+| 17 | `box` | 箱子会话与条目治理 |
+| 18 | `zip` | ZIP 压缩与解压 |
+| 19 | `serializer` | 序列化与校验 |
+| 20 | `control-plane` | 健康检查、指标、诊断 |
 
 ## 3. 本轮新增的正式主语义
 
-### 3.1 `surface`
+### 3.1 `command`
+
+`command` 是运行时动作语义的统一注册表。
+
+正式动作：
+
+- `command.register`
+- `command.unregister`
+- `command.get`
+- `command.list`
+- `command.setState`
+- `command.invoke`
+
+当前关键语义：
+
+- `command.register` 只接收可序列化 command schema，不接收函数。
+- command 文案必须使用 `titleKey / descriptionKey / ariaLabelKey`。
+- command 图标必须使用运行时 `IconDescriptor`，由组件库 `ChipsIcon` 消费。
+- Host 维护 owner、scope、permission、state 和 placement 元数据。
+- 菜单、工具栏、快捷键、命令面板、上下文菜单必须从同一 registry 查询命令。
+- `command.invoke` 会校验存在性、scope、服务级权限、命令级权限、visible/enabled 状态，然后发出 `command.invoked` 事件。
+- 插件 surface 或插件被关闭/禁用/卸载时，Host 会清理对应 owner 的 commands 和 shortcut 映射。
+
+标准权限：
+
+- `command.read`
+- `command.write`
+- `command.invoke`
+- `command.manage`
+
+标准事件：
+
+- `command.registered`
+- `command.unregistered`
+- `command.changed`
+- `command.invoked`
+
+### 3.2 `surface`
 
 `surface` 已成为新的跨平台界面容器主语义。
 
@@ -76,7 +114,7 @@
 - `surface.stateChanged`
 - `surface.closed`
 
-### 3.2 `transfer`
+### 3.3 `transfer`
 
 正式动作：
 
@@ -85,7 +123,7 @@
 - `transfer.revealInShell`
 - `transfer.share`
 
-### 3.3 `association`
+### 3.4 `association`
 
 正式动作：
 
@@ -186,6 +224,10 @@
 - `plugin.init`
 - `plugin.ready`
 - `plugin.launched`
+- `command.registered`
+- `command.unregistered`
+- `command.changed`
+- `command.invoked`
 - `surface.opened`
 - `window.opened`
 - `module.runtime.started`

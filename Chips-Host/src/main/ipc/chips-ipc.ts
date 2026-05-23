@@ -78,6 +78,7 @@ const buildContext = (input: Partial<RouteInvocationContext> | undefined, event:
       id: typeof input?.caller?.id === 'string' ? input.caller.id : 'ipc-renderer',
       type: input?.caller?.type ?? 'plugin',
       pluginId: input?.caller?.pluginId,
+      sessionId: input?.caller?.sessionId,
       windowId: input?.caller?.windowId ?? (typeof sender?.id === 'number' ? String(sender.id) : undefined),
       permissions: input?.caller?.permissions
     },
@@ -90,7 +91,7 @@ const applyScopedContext = (
   context: RouteInvocationContext,
   scope: { token?: string } | undefined,
   resolver:
-    | ((token: string) => { callerId: string; pluginId: string; permissions: string[] } | null | undefined)
+    | ((token: string) => { callerId: string; pluginId: string; sessionId?: string; permissions: string[] } | null | undefined)
     | undefined
 ): RouteInvocationContext => {
   if (typeof scope?.token === 'undefined') {
@@ -118,6 +119,7 @@ const applyScopedContext = (
       id: resolved.callerId,
       type: 'plugin',
       pluginId: resolved.pluginId,
+      sessionId: resolved.sessionId,
       permissions: [...resolved.permissions]
     }
   };
@@ -154,7 +156,7 @@ export const bindKernelToElectronIpc = (
   kernel: Kernel,
   options?: {
     getPluginQuota?: (pluginId: string) => { messageRateBudget: number } | null | undefined;
-    resolveScopedBridgeContext?: (token: string) => { callerId: string; pluginId: string; permissions: string[] } | null | undefined;
+    resolveScopedBridgeContext?: (token: string) => { callerId: string; pluginId: string; sessionId?: string; permissions: string[] } | null | undefined;
   }
 ): ChipsIpcBinding => {
   const electron = loadElectronModule();

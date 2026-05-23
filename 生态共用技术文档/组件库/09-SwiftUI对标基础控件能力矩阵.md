@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -29,9 +29,9 @@
 | 选择控件 | Checkbox | `ChipsCheckbox` | 已落地 | `checkbox` | 维持表单选择闭环 |
 | 选择控件 | Radio | `ChipsRadioGroup` | 已落地 | `radio` | 维持互斥选择闭环 |
 | 选择控件 | Switch | `ChipsSwitch` | 已落地 | `switch` | 维持布尔开关闭环 |
-| 选择控件 | SegmentedControl | 无 | 待补齐 | `segmented-control` | 需要 roving focus 与单选/多选口径 |
+| 选择控件 | SegmentedControl | `ChipsSegmentedControl` | 已落地 | `segmented-control` | 维持 radiogroup/radio 语义、roving focus 与单选口径 |
 | 选择控件 | Select | `ChipsSelect` | 已落地 | `select` | 维持 listbox 选择闭环 |
-| 选择控件 | ComboBox | 无 | 待补齐 | `combo-box` | 需要输入过滤、弹层和 activedescendant 语义 |
+| 选择控件 | ComboBox | `ChipsComboBox` | 已落地 | `combo-box` | 维持输入过滤、弹层和 activedescendant 语义 |
 | 数值控件 | Slider | 无 | 待补齐 | `slider` | 需要 min/max/step、键盘增减、值文本 |
 | 数值控件 | Stepper | 无 | 待补齐 | `stepper` | 需要增减按钮、边界禁用、数值事件 |
 | 数值控件 | NumberInput | 无 | 待补齐 | `number-input` | 需要解析、夹取、错误和 stepper 协作 |
@@ -153,11 +153,27 @@
 - 主题 token：`chips.comp.secure-field.root.*`、`label/control/placeholder/description/toggle/status/focus`。
 - 可见性切换按钮必须有可访问名称并输出 `aria-pressed`；该控件只负责密码输入可见性，不承载密码管理、保存或自动填充策略。
 
-## 6. 后续批次建议
+## 6. 第四批已冻结控件
+
+### `ChipsSegmentedControl`
+
+- `data-scope="segmented-control"`，公开 part：`root / item / indicator / label / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.segmented-control.root.*`、`item.surface.*`、`label.color.*`、`indicator.surface`、`focus.outline`、`status.color.error`。
+- 根节点使用 `role="radiogroup"` 并必须有可访问名称；分段项使用 `role="radio"` 和 `aria-checked` 表达单选状态，方向键、Home、End 在可用项间移动并更新选择。
+
+### `ChipsComboBox`
+
+- `data-scope="combo-box"`，公开 part：`root / label / control / trigger / list / option / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.combo-box.root.*`、`label/control/placeholder/trigger/list/option/description/status/focus`。
+- 输入控件使用 `role="combobox"`、`aria-autocomplete="list"`、`aria-expanded`、`aria-controls` 和 `aria-activedescendant` 关联 listbox；选项使用 `role="option"` 与 `aria-selected`。
+
+## 7. 后续批次建议
 
 - 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
-- 批次 D：`SegmentedControl / ComboBox`。
+- 批次 D：`SegmentedControl / ComboBox`（已落地）。
 - 批次 E：`NumberInput / Stepper / Slider`。
 - 批次 F：`DatePicker / TimePicker`。
 - 批次 G：`Image / Media / ErrorState`。

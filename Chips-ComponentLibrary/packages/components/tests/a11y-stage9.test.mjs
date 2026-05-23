@@ -18,6 +18,13 @@ test("stage9 a11y gate validates all component rules", () => {
     validateComponentA11y("text-area", { "aria-label": "text area" }),
     validateComponentA11y("search-field", { role: "search", "aria-label": "search field" }),
     validateComponentA11y("secure-field", { "aria-label": "secure field", "aria-pressed": "false" }),
+    validateComponentA11y("segmented-control", { role: "radiogroup", "aria-label": "segmented control" }),
+    validateComponentA11y("combo-box", {
+      role: "combobox",
+      "aria-label": "combo box",
+      "aria-expanded": "true",
+      "aria-controls": "combo-list"
+    }),
     validateComponentA11y("button", { role: "button", "aria-label": "button" }),
     validateComponentA11y("input", { "aria-label": "input" }),
     validateComponentA11y("checkbox", { role: "checkbox", "aria-label": "checkbox" }),

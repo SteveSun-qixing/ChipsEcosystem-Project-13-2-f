@@ -543,6 +543,7 @@ export interface SwitchProps {
 export interface SelectOption {
   value: string;
   label: React.ReactNode;
+  textValue?: string;
   disabled?: boolean;
 }
 
@@ -561,6 +562,46 @@ export interface SelectProps {
   onOpenChange?: (open: boolean) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export type SegmentedControlOption = SelectOption;
+
+export interface SegmentedControlProps {
+  value?: string;
+  defaultValue?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  options?: SegmentedControlOption[];
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  i18n?: ChipsDisplayTextProps["i18n"];
+  onValueChange?: (value: string) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onDiagnostic?: ChipsDisplayTextProps["onDiagnostic"];
+  [key: string]: unknown;
+}
+
+export interface ComboBoxProps extends BaseTextInputProps {
+  value?: string;
+  defaultValue?: string;
+  inputValue?: string;
+  defaultInputValue?: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  autoComplete?: string;
+  options?: SelectOption[];
+  emptyLabel?: string;
+  emptyLabelKey?: string;
+  fallbackEmptyLabel?: string;
+  triggerLabel?: string;
+  triggerLabelKey?: string;
+  fallbackTriggerLabel?: string;
+  onValueChange?: (value: string) => void;
+  onInputValueChange?: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }
 
 export interface DialogProps {
@@ -1089,6 +1130,8 @@ export const ChipsCheckbox: React.ForwardRefExoticComponent<CheckboxProps & Reac
 export const ChipsRadioGroup: React.ForwardRefExoticComponent<RadioGroupProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsSwitch: React.ForwardRefExoticComponent<SwitchProps & React.RefAttributes<HTMLButtonElement>>;
 export const ChipsSelect: React.ForwardRefExoticComponent<SelectProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsSegmentedControl: React.ForwardRefExoticComponent<SegmentedControlProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsComboBox: React.ForwardRefExoticComponent<ComboBoxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;

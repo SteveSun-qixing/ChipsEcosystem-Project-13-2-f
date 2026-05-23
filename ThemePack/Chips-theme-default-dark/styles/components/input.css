@@ -312,3 +312,136 @@
 [data-scope="secure-field"][data-part="status"] {
   color: var(--chips-comp-secure-field-status-color-error);
 }
+
+/* ComboBox */
+
+[data-scope="combo-box"][data-part="root"] {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--chips-layout-gap-xs);
+  min-inline-size: 220cpx;
+  color: var(--chips-sys-color-on-surface);
+}
+
+[data-scope="combo-box"][data-part="root"][data-state="disabled"] {
+  opacity: 0.6;
+}
+
+[data-scope="combo-box"][data-part="label"] {
+  color: var(--chips-comp-combo-box-label-color);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+[data-scope="combo-box"][data-part="control"] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  border: 1px solid var(--chips-comp-combo-box-root-border-idle);
+  border-radius: var(--chips-comp-combo-box-root-radius, var(--chips-base-radius-md));
+  padding-inline: var(--chips-base-space-3);
+  padding-inline-end: calc(var(--chips-base-space-3) + 32px);
+  padding-block: var(--chips-base-space-2);
+  background-color: var(--chips-comp-combo-box-root-surface-idle);
+  color: var(--chips-comp-combo-box-control-color);
+  font: inherit;
+  line-height: 1.4;
+  outline: none;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    border-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="combo-box"][data-part="control"]:focus,
+[data-scope="combo-box"][data-part="root"]:focus-within [data-part="control"] {
+  background-color: var(--chips-comp-combo-box-root-surface-focus, var(--chips-comp-combo-box-root-surface-idle));
+  border-color: var(--chips-comp-combo-box-root-border-focus);
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-combo-box-focus-outline);
+}
+
+[data-scope="combo-box"][data-part="root"][data-state="error"] [data-part="control"],
+[data-scope="combo-box"][data-part="control"][aria-invalid="true"] {
+  border-color: var(--chips-comp-combo-box-root-border-error);
+}
+
+[data-scope="combo-box"][data-part="control"]::placeholder {
+  color: var(--chips-comp-combo-box-placeholder-color);
+}
+
+[data-scope="combo-box"][data-part="trigger"] {
+  position: absolute;
+  align-self: flex-end;
+  margin-block-start: calc(14px + var(--chips-layout-gap-xs) + var(--chips-base-space-1));
+  margin-inline-end: var(--chips-base-space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--chips-comp-combo-box-trigger-color-idle);
+  cursor: pointer;
+  padding: var(--chips-base-space-1);
+}
+
+[data-scope="combo-box"][data-part="trigger"]:hover {
+  color: var(--chips-comp-combo-box-trigger-color-hover);
+}
+
+[data-scope="combo-box"][data-part="trigger"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+[data-scope="combo-box"][data-part="list"] {
+  position: absolute;
+  z-index: 10;
+  inset-block-start: 100%;
+  inset-inline: 0;
+  margin-block-start: var(--chips-base-space-1);
+  padding: var(--chips-base-space-1);
+  max-block-size: 240cpx;
+  overflow: auto;
+  list-style: none;
+  border-radius: var(--chips-comp-combo-box-root-radius, var(--chips-base-radius-md));
+  border: 1px solid var(--chips-comp-combo-box-root-border-idle);
+  background-color: var(--chips-comp-combo-box-list-surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--chips-sys-color-shadow, #000000) 34%, transparent);
+}
+
+[data-scope="combo-box"][data-part="option"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-combo-box-option-surface-idle);
+  color: var(--chips-comp-combo-box-option-text-color);
+  cursor: pointer;
+}
+
+[data-scope="combo-box"][data-part="option"][data-highlighted="true"] {
+  background-color: var(--chips-comp-combo-box-option-surface-highlighted);
+}
+
+[data-scope="combo-box"][data-part="option"][data-selected="true"] {
+  background-color: var(--chips-comp-combo-box-option-surface-selected);
+}
+
+[data-scope="combo-box"][data-part="option"][aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+[data-scope="combo-box"][data-part="description"],
+[data-scope="combo-box"][data-part="status"] {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-scope="combo-box"][data-part="description"] {
+  color: var(--chips-comp-combo-box-description-color);
+}
+
+[data-scope="combo-box"][data-part="status"] {
+  color: var(--chips-comp-combo-box-status-color-error);
+}

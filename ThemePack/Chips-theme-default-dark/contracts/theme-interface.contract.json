@@ -202,6 +202,51 @@
       ]
     },
     {
+      "component": "combo-box",
+      "scope": "combo-box",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "trigger",
+        "list",
+        "option",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.combo-box.root.radius",
+        "chips.comp.combo-box.root.surface.idle",
+        "chips.comp.combo-box.root.surface.focus",
+        "chips.comp.combo-box.root.surface.disabled",
+        "chips.comp.combo-box.root.border.idle",
+        "chips.comp.combo-box.root.border.focus",
+        "chips.comp.combo-box.root.border.error",
+        "chips.comp.combo-box.label.color",
+        "chips.comp.combo-box.control.color",
+        "chips.comp.combo-box.placeholder.color",
+        "chips.comp.combo-box.trigger.color.idle",
+        "chips.comp.combo-box.trigger.color.hover",
+        "chips.comp.combo-box.list.surface",
+        "chips.comp.combo-box.option.surface.idle",
+        "chips.comp.combo-box.option.surface.highlighted",
+        "chips.comp.combo-box.option.surface.selected",
+        "chips.comp.combo-box.option.text.color",
+        "chips.comp.combo-box.description.color",
+        "chips.comp.combo-box.status.color.error",
+        "chips.comp.combo-box.focus.outline"
+      ]
+    },
+    {
       "component": "command-palette",
       "scope": "command-palette",
       "parts": [
@@ -1088,6 +1133,42 @@
         "chips.comp.secure-field.toggle.color.hover",
         "chips.comp.secure-field.status.color.error",
         "chips.comp.secure-field.focus.outline"
+      ]
+    },
+    {
+      "component": "segmented-control",
+      "scope": "segmented-control",
+      "parts": [
+        "root",
+        "item",
+        "indicator",
+        "label",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.segmented-control.root.radius",
+        "chips.comp.segmented-control.root.surface",
+        "chips.comp.segmented-control.root.border",
+        "chips.comp.segmented-control.item.surface.idle",
+        "chips.comp.segmented-control.item.surface.hover",
+        "chips.comp.segmented-control.item.surface.active",
+        "chips.comp.segmented-control.item.surface.selected",
+        "chips.comp.segmented-control.item.surface.disabled",
+        "chips.comp.segmented-control.label.color.idle",
+        "chips.comp.segmented-control.label.color.selected",
+        "chips.comp.segmented-control.label.color.disabled",
+        "chips.comp.segmented-control.indicator.surface",
+        "chips.comp.segmented-control.focus.outline",
+        "chips.comp.segmented-control.status.color.error"
       ]
     },
     {

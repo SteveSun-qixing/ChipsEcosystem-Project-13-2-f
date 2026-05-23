@@ -185,3 +185,86 @@
 [data-scope="select"][data-part="option"][data-state="active"] {
   background-color: var(--chips-comp-select-option-surface-selected);
 }
+
+/* SegmentedControl */
+
+[data-scope="segmented-control"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--chips-base-space-1);
+  padding: var(--chips-base-space-1);
+  border-radius: var(--chips-comp-segmented-control-root-radius, var(--chips-base-radius-md));
+  border: 1px solid var(--chips-comp-segmented-control-root-border);
+  background-color: var(--chips-comp-segmented-control-root-surface);
+}
+
+[data-scope="segmented-control"][data-part="root"][data-state="disabled"] {
+  opacity: 0.6;
+}
+
+[data-scope="segmented-control"][data-part="item"] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--chips-layout-density-compact);
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-1);
+  border: 0;
+  border-radius: calc(var(--chips-comp-segmented-control-root-radius, var(--chips-base-radius-md)) - 2px);
+  background-color: var(--chips-comp-segmented-control-item-surface-idle);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="segmented-control"][data-part="item"]:hover {
+  background-color: var(--chips-comp-segmented-control-item-surface-hover);
+}
+
+[data-scope="segmented-control"][data-part="item"][data-selected="true"] {
+  background-color: var(--chips-comp-segmented-control-item-surface-selected);
+}
+
+[data-scope="segmented-control"][data-part="item"][data-state="active"] {
+  background-color: var(--chips-comp-segmented-control-item-surface-active);
+}
+
+[data-scope="segmented-control"][data-part="item"][data-state="disabled"] {
+  background-color: var(--chips-comp-segmented-control-item-surface-disabled);
+  cursor: not-allowed;
+}
+
+[data-scope="segmented-control"][data-part="item"]:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-segmented-control-focus-outline);
+}
+
+[data-scope="segmented-control"][data-part="label"] {
+  color: var(--chips-comp-segmented-control-label-color-idle);
+}
+
+[data-scope="segmented-control"][data-part="item"][data-selected="true"] [data-part="label"] {
+  color: var(--chips-comp-segmented-control-label-color-selected);
+}
+
+[data-scope="segmented-control"][data-part="item"][data-state="disabled"] [data-part="label"] {
+  color: var(--chips-comp-segmented-control-label-color-disabled);
+}
+
+[data-scope="segmented-control"][data-part="indicator"] {
+  position: absolute;
+  inset-block-end: 3px;
+  inline-size: 16px;
+  block-size: 2px;
+  border-radius: 9999px;
+  background-color: var(--chips-comp-segmented-control-indicator-surface);
+}
+
+[data-scope="segmented-control"][data-part="status"] {
+  color: var(--chips-comp-segmented-control-status-color-error);
+  font-size: 12px;
+  line-height: 1.4;
+}

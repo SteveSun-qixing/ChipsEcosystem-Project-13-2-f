@@ -668,6 +668,44 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.secure-field.status.color.error",
     "chips.comp.secure-field.focus.outline"
   ],
+  "segmented-control": [
+    "chips.comp.segmented-control.root.radius",
+    "chips.comp.segmented-control.root.surface",
+    "chips.comp.segmented-control.root.border",
+    "chips.comp.segmented-control.item.surface.idle",
+    "chips.comp.segmented-control.item.surface.hover",
+    "chips.comp.segmented-control.item.surface.active",
+    "chips.comp.segmented-control.item.surface.selected",
+    "chips.comp.segmented-control.item.surface.disabled",
+    "chips.comp.segmented-control.label.color.idle",
+    "chips.comp.segmented-control.label.color.selected",
+    "chips.comp.segmented-control.label.color.disabled",
+    "chips.comp.segmented-control.indicator.surface",
+    "chips.comp.segmented-control.focus.outline",
+    "chips.comp.segmented-control.status.color.error"
+  ],
+  "combo-box": [
+    "chips.comp.combo-box.root.radius",
+    "chips.comp.combo-box.root.surface.idle",
+    "chips.comp.combo-box.root.surface.focus",
+    "chips.comp.combo-box.root.surface.disabled",
+    "chips.comp.combo-box.root.border.idle",
+    "chips.comp.combo-box.root.border.focus",
+    "chips.comp.combo-box.root.border.error",
+    "chips.comp.combo-box.label.color",
+    "chips.comp.combo-box.control.color",
+    "chips.comp.combo-box.placeholder.color",
+    "chips.comp.combo-box.trigger.color.idle",
+    "chips.comp.combo-box.trigger.color.hover",
+    "chips.comp.combo-box.list.surface",
+    "chips.comp.combo-box.option.surface.idle",
+    "chips.comp.combo-box.option.surface.highlighted",
+    "chips.comp.combo-box.option.surface.selected",
+    "chips.comp.combo-box.option.text.color",
+    "chips.comp.combo-box.description.color",
+    "chips.comp.combo-box.status.color.error",
+    "chips.comp.combo-box.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -1074,6 +1112,18 @@ export function buildComponentContract(component) {
       component: "secure-field",
       scope: "secure-field",
       parts: ["root", "label", "control", "visibility-toggle", "visibility-icon", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "segmented-control": {
+      component: "segmented-control",
+      scope: "segmented-control",
+      parts: ["root", "item", "indicator", "label", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "combo-box": {
+      component: "combo-box",
+      scope: "combo-box",
+      parts: ["root", "label", "control", "trigger", "list", "option", "description", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     button: {
@@ -1676,6 +1726,22 @@ function normalizeItems(items) {
       value: String(item.value),
       disabled: item.disabled === true
     }));
+}
+
+function getOptionText(option) {
+  if (!option) {
+    return "";
+  }
+
+  if (typeof option.textValue === "string") {
+    return option.textValue;
+  }
+
+  if (typeof option.label === "string" || typeof option.label === "number") {
+    return String(option.label);
+  }
+
+  return option.value;
 }
 
 export function getNextEnabledIndex(items, startIndex, direction = "next", loop = true) {
@@ -4572,6 +4638,534 @@ export const ChipsSelect = React.forwardRef((props, ref) => {
 });
 
 ChipsSelect.displayName = "ChipsSelect";
+
+export const ChipsSegmentedControl = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = "",
+    disabled = false,
+    loading = false,
+    error = null,
+    options = [],
+    ariaLabel,
+    ariaLabelledBy,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const normalizedOptions = normalizeItems(options);
+  const [currentValue, setCurrentValue] = useControllableState({
+    value,
+    defaultValue,
+    onChange: onValueChange
+  });
+  const selectedIndex = normalizedOptions.findIndex((item) => item.value === String(currentValue));
+  const [focusedIndex, setFocusedIndex] = React.useState(
+    selectedIndex >= 0 ? selectedIndex : getFirstEnabledIndex(normalizedOptions)
+  );
+
+  React.useEffect(() => {
+    const nextSelectedIndex = normalizedOptions.findIndex((item) => item.value === String(currentValue));
+    if (nextSelectedIndex >= 0 && normalizedOptions[nextSelectedIndex]?.disabled !== true) {
+      setFocusedIndex(nextSelectedIndex);
+      return;
+    }
+
+    setFocusedIndex(getFirstEnabledIndex(normalizedOptions));
+  }, [currentValue, normalizedOptions]);
+
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const resolvedAriaLabel = resolveAccessibleText({
+    value: ariaLabel || rest["aria-label"],
+    fallback: "",
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabelledBy = isNonEmptyString(ariaLabelledBy || rest["aria-labelledby"])
+    ? String(ariaLabelledBy || rest["aria-labelledby"]).trim()
+    : undefined;
+
+  if (!resolvedAriaLabel && !resolvedAriaLabelledBy) {
+    throw new Error("SEGMENTED_CONTROL_A11Y_LABEL_REQUIRED");
+  }
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const selectOption = (option, event) => {
+    if (disabledByState || !option || option.disabled) {
+      if (event) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    setCurrentValue(option.value);
+  };
+
+  const focusAndSelect = (index, event) => {
+    const option = normalizedOptions[index];
+    if (!option || option.disabled) {
+      return;
+    }
+    setFocusedIndex(index);
+    selectOption(option, event);
+  };
+
+  const handleRootKeyDown = (event) => {
+    if (disabledByState || normalizedOptions.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      focusAndSelect(getNextEnabledIndex(normalizedOptions, focusedIndex, "next", true), event);
+      return;
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusAndSelect(getNextEnabledIndex(normalizedOptions, focusedIndex, "prev", true), event);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusAndSelect(getFirstEnabledIndex(normalizedOptions), event);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      focusAndSelect(getNextEnabledIndex(normalizedOptions, 0, "prev", true), event);
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("segmented-control", "root", state),
+      ...handlers,
+      ref,
+      role: "radiogroup",
+      "aria-label": resolvedAriaLabel || undefined,
+      "aria-labelledby": resolvedAriaLabelledBy,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-value": currentValue !== undefined ? String(currentValue) : "",
+      onKeyDown: handleRootKeyDown
+    },
+    normalizedOptions.map((option, index) => {
+      const selected = option.value === String(currentValue);
+      const optionDisabled = disabledByState || option.disabled;
+      const itemState = optionDisabled
+        ? "disabled"
+        : selected
+          ? "active"
+          : state;
+
+      return React.createElement(
+        "button",
+        {
+          ...createScopeAttributes("segmented-control", "item", itemState),
+          key: `${option.value}-${index}`,
+          type: "button",
+          role: "radio",
+          disabled: optionDisabled,
+          "aria-checked": String(selected),
+          "aria-disabled": optionDisabled ? "true" : undefined,
+          "data-selected": String(selected),
+          tabIndex: index === focusedIndex && !optionDisabled ? 0 : -1,
+          onFocus: () => setFocusedIndex(index),
+          onClick: (event) => selectOption(option, event)
+        },
+        selected
+          ? React.createElement("span", {
+              ...createScopeAttributes("segmented-control", "indicator", itemState),
+              "aria-hidden": "true"
+            })
+          : null,
+        React.createElement(
+          "span",
+          createScopeAttributes("segmented-control", "label", itemState),
+          option.label
+        )
+      );
+    }),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("segmented-control", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsSegmentedControl.displayName = "ChipsSegmentedControl";
+
+export const ChipsComboBox = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = "",
+    inputValue,
+    defaultInputValue = "",
+    open,
+    defaultOpen = false,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    autoComplete = "off",
+    options = [],
+    emptyLabel,
+    emptyLabelKey,
+    fallbackEmptyLabel = "No results",
+    triggerLabel,
+    triggerLabelKey,
+    fallbackTriggerLabel = "Toggle options",
+    i18n,
+    onValueChange,
+    onInputValueChange,
+    onOpenChange,
+    onStateChange,
+    onDiagnostic,
+    onKeyDown,
+    onChange,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "combo-box",
+    value: inputValue,
+    defaultValue: defaultInputValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "COMBO_BOX_A11Y_LABEL_REQUIRED"
+  );
+
+  const normalizedOptions = normalizeItems(options);
+  const [currentValue, setCurrentValue] = useControllableState({
+    value,
+    defaultValue,
+    onChange: onValueChange
+  });
+  const [currentInputValue, setCurrentInputValue] = useControllableState({
+    value: inputValue,
+    defaultValue: defaultInputValue,
+    onChange: onInputValueChange
+  });
+  const [currentOpen, setCurrentOpen] = useControllableState({
+    value: open,
+    defaultValue: defaultOpen === true,
+    onChange: onOpenChange
+  });
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    value: currentInputValue,
+    defaultValue: undefined,
+    interaction
+  });
+
+  const filteredOptions = (() => {
+    const query = String(currentInputValue || "").trim().toLocaleLowerCase();
+    if (!query) {
+      return normalizedOptions;
+    }
+
+    return normalizedOptions.filter((option) =>
+      getOptionText(option).toLocaleLowerCase().includes(query)
+        || option.value.toLocaleLowerCase().includes(query)
+    );
+  })();
+  const selectedIndex = filteredOptions.findIndex((item) => item.value === String(currentValue));
+  const [highlightedIndex, setHighlightedIndex] = React.useState(
+    selectedIndex >= 0 ? selectedIndex : getFirstEnabledIndex(filteredOptions)
+  );
+
+  React.useEffect(() => {
+    if (selectedIndex >= 0 && filteredOptions[selectedIndex]?.disabled !== true) {
+      setHighlightedIndex(selectedIndex);
+      return;
+    }
+
+    setHighlightedIndex(getFirstEnabledIndex(filteredOptions));
+  }, [filteredOptions, selectedIndex]);
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const listId = React.useId();
+  const activeOption = currentOpen && highlightedIndex >= 0 ? filteredOptions[highlightedIndex] : null;
+  const activeDescendant = activeOption ? `${listId}-option-${activeOption.value}` : undefined;
+  const resolvedEmptyLabel = resolveAccessibleText({
+    value: emptyLabel,
+    key: emptyLabelKey,
+    fallback: fallbackEmptyLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedTriggerLabel = resolveAccessibleText({
+    value: triggerLabel,
+    key: triggerLabelKey,
+    fallback: fallbackTriggerLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  const updateOpen = (nextOpen) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      return;
+    }
+    setCurrentOpen(nextOpen);
+  };
+
+  const selectOption = (option, event) => {
+    if (!option || option.disabled || descriptor.disabledByState || descriptor.readOnly) {
+      if (event) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    setCurrentValue(option.value);
+    setCurrentInputValue(getOptionText(option));
+    setCurrentOpen(false);
+  };
+
+  const handleInputChange = (event) => {
+    if (typeof onChange === "function") {
+      onChange(event);
+    }
+    setCurrentInputValue(event.target.value);
+    if (!currentOpen && !descriptor.disabledByState && !descriptor.readOnly) {
+      setCurrentOpen(true);
+    }
+  };
+
+  const handleInputKeyDown = (event) => {
+    if (event.key === "Escape" && currentOpen) {
+      event.preventDefault();
+      setCurrentOpen(false);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!currentOpen) {
+        updateOpen(true);
+      } else {
+        setHighlightedIndex(getNextEnabledIndex(filteredOptions, highlightedIndex, "next", true));
+      }
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!currentOpen) {
+        updateOpen(true);
+      } else {
+        setHighlightedIndex(getNextEnabledIndex(filteredOptions, highlightedIndex, "prev", true));
+      }
+    } else if (event.key === "Home" && currentOpen) {
+      event.preventDefault();
+      setHighlightedIndex(getFirstEnabledIndex(filteredOptions));
+    } else if (event.key === "End" && currentOpen) {
+      event.preventDefault();
+      setHighlightedIndex(getNextEnabledIndex(filteredOptions, 0, "prev", true));
+    } else if (event.key === "Enter" && currentOpen) {
+      event.preventDefault();
+      selectOption(filteredOptions[highlightedIndex], event);
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("combo-box", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-open": String(currentOpen),
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": descriptor.normalizedError ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("combo-box", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    React.createElement("input", {
+      ...createScopeAttributes("combo-box", "control", descriptor.state),
+      ...descriptor.controlValueProps,
+      ref,
+      role: "combobox",
+      type: "text",
+      name,
+      placeholder,
+      autoComplete,
+      disabled: descriptor.disabledByState,
+      readOnly: descriptor.readOnly,
+      required: descriptor.required,
+      "aria-autocomplete": "list",
+      "aria-expanded": String(currentOpen),
+      "aria-controls": listId,
+      "aria-activedescendant": activeDescendant,
+      "aria-label": descriptor.ariaLabel,
+      "aria-labelledby": descriptor.ariaLabelledBy,
+      "aria-describedby": descriptor.describedBy,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "aria-readonly": descriptor.readOnly ? "true" : undefined,
+      onFocus: (event) => {
+        handlers.onFocus(event);
+        if (!descriptor.disabledByState && !descriptor.readOnly) {
+          setCurrentOpen(true);
+        }
+      },
+      onBlur: handlers.onBlur,
+      onChange: handleInputChange,
+      onKeyDown: handleInputKeyDown
+    }),
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("combo-box", "trigger", descriptor.state),
+        type: "button",
+        disabled: descriptor.disabledByState || descriptor.readOnly,
+        "aria-label": resolvedTriggerLabel,
+        "aria-haspopup": "listbox",
+        "aria-expanded": String(currentOpen),
+        "aria-controls": listId,
+        onClick: () => updateOpen(!currentOpen)
+      },
+      resolveIconContent(undefined, "chevron-down")
+    ),
+    currentOpen
+      ? React.createElement(
+          "ul",
+          {
+            ...createScopeAttributes("combo-box", "list", descriptor.state),
+            id: listId,
+            role: "listbox"
+          },
+          filteredOptions.length > 0
+            ? filteredOptions.map((option, index) => {
+                const selected = option.value === String(currentValue);
+                const highlighted = index === highlightedIndex;
+                const optionState = option.disabled
+                  ? "disabled"
+                  : highlighted
+                    ? "active"
+                    : descriptor.state;
+
+                return React.createElement(
+                  "li",
+                  {
+                    ...createScopeAttributes("combo-box", "option", optionState),
+                    id: `${listId}-option-${option.value}`,
+                    key: `${option.value}-${index}`,
+                    role: "option",
+                    "aria-selected": String(selected),
+                    "aria-disabled": option.disabled ? "true" : undefined,
+                    "data-highlighted": String(highlighted),
+                    "data-selected": String(selected),
+                    onMouseEnter: () => {
+                      if (!option.disabled) {
+                        setHighlightedIndex(index);
+                      }
+                    },
+                    onMouseDown: (event) => {
+                      event.preventDefault();
+                      selectOption(option, event);
+                    }
+                  },
+                  option.label
+                );
+              })
+            : React.createElement(
+                "li",
+                {
+                  ...createScopeAttributes("combo-box", "option", "disabled"),
+                  role: "option",
+                  "aria-disabled": "true",
+                  "aria-selected": "false",
+                  "data-empty": "true"
+                },
+                resolvedEmptyLabel
+              )
+        )
+      : null,
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsComboBox.displayName = "ChipsComboBox";
 
 export const ChipsDialog = React.forwardRef((props, ref) => {
   const {
@@ -9212,6 +9806,23 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "segmented-control") {
+    assertAriaProps(props, {
+      role: "radiogroup",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "combo-box") {
+    assertAriaProps(props, {
+      role: "combobox",
+      requireLabel: true,
+      requireControlsWhenExpanded: true
+    });
+    return true;
+  }
+
   if (component === "dialog") {
     assertAriaProps(props, {
       role: "button",
@@ -9525,6 +10136,18 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     name: "ChipsSecureField",
     scope: "secure-field",
     parts: ["root", "label", "control", "visibility-toggle", "visibility-icon", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsSegmentedControl",
+    scope: "segmented-control",
+    parts: ["root", "item", "indicator", "label", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsComboBox",
+    scope: "combo-box",
+    parts: ["root", "label", "control", "trigger", "list", "option", "description", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

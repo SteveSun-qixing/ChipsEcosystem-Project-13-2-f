@@ -33,6 +33,7 @@ import {
   ChipsRadioGroup,
   ChipsSearchField,
   ChipsSecureField,
+  ChipsSegmentedControl,
   ChipsSpinner,
   ChipsSkeleton,
   ChipsSplitPane,
@@ -48,6 +49,7 @@ import {
   ChipsTextArea,
   ChipsTextField,
   ChipsToggleButton,
+  ChipsComboBox,
   ChipsToolbar,
   ChipsToolbarItem,
   ChipsContextMenu,
@@ -199,6 +201,8 @@ test("buildComponentContract returns task015 base control component contracts", 
   const textArea = buildComponentContract("text-area");
   const searchField = buildComponentContract("search-field");
   const secureField = buildComponentContract("secure-field");
+  const segmentedControl = buildComponentContract("segmented-control");
+  const comboBox = buildComponentContract("combo-box");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -221,6 +225,12 @@ test("buildComponentContract returns task015 base control component contracts", 
   assert.equal(secureField.scope, "secure-field");
   assert.ok(secureField.parts.includes("visibility-toggle"));
   assert.ok(secureField.tokens.includes("chips.comp.secure-field.toggle.color.idle"));
+  assert.equal(segmentedControl.scope, "segmented-control");
+  assert.ok(segmentedControl.parts.includes("indicator"));
+  assert.ok(segmentedControl.tokens.includes("chips.comp.segmented-control.item.surface.selected"));
+  assert.equal(comboBox.scope, "combo-box");
+  assert.ok(comboBox.parts.includes("list"));
+  assert.ok(comboBox.tokens.includes("chips.comp.combo-box.option.surface.highlighted"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -258,6 +268,8 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["text-area"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["search-field"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["secure-field"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["segmented-control"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["combo-box"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -428,6 +440,24 @@ test("validateComponentA11y validates known components and rejects missing rule"
     validateComponentA11y("secure-field", {
       "aria-label": "password",
       "aria-pressed": "false"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("segmented-control", {
+      role: "radiogroup",
+      "aria-label": "view mode"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("combo-box", {
+      role: "combobox",
+      "aria-label": "choose card",
+      "aria-expanded": "true",
+      "aria-controls": "combo-list"
     }),
     true
   );
@@ -803,8 +833,8 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
   );
 });
 
-test("task015 base control metadata includes second and third batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 11);
+test("task015 base control metadata includes second through fourth batches", () => {
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 13);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -818,7 +848,9 @@ test("task015 base control metadata includes second and third batches", () => {
       "text-field",
       "text-area",
       "search-field",
-      "secure-field"
+      "secure-field",
+      "segmented-control",
+      "combo-box"
     ]
   );
 });
@@ -835,7 +867,9 @@ test("task015 base control component exports exist", () => {
     ChipsTextField,
     ChipsTextArea,
     ChipsSearchField,
-    ChipsSecureField
+    ChipsSecureField,
+    ChipsSegmentedControl,
+    ChipsComboBox
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -978,6 +1012,50 @@ test("task015 third batch components require accessible names", () => {
   assert.throws(() => ChipsTextArea.render({}, null), /TEXT_AREA_A11Y_LABEL_REQUIRED/);
   assert.throws(() => ChipsSearchField.render({}, null), /SEARCH_FIELD_A11Y_LABEL_REQUIRED/);
   assert.throws(() => ChipsSecureField.render({}, null), /SECURE_FIELD_A11Y_LABEL_REQUIRED/);
+});
+
+test("task015 fourth batch selection controls publish contract and a11y semantics", () => {
+  const segmentedControl = buildComponentContract("segmented-control");
+  const comboBox = buildComponentContract("combo-box");
+
+  assert.deepEqual(segmentedControl.parts, ["root", "item", "indicator", "label", "status"]);
+  assert.ok(segmentedControl.tokens.includes("chips.comp.segmented-control.focus.outline"));
+  assert.ok(segmentedControl.states.includes("focus"));
+  assert.deepEqual(comboBox.parts, ["root", "label", "control", "trigger", "list", "option", "description", "status"]);
+  assert.ok(comboBox.tokens.includes("chips.comp.combo-box.trigger.color.hover"));
+  assert.ok(comboBox.states.includes("active"));
+  assert.equal(
+    validateComponentA11y("segmented-control", {
+      role: "radiogroup",
+      "aria-label": "Mode"
+    }),
+    true
+  );
+  assert.equal(
+    validateComponentA11y("combo-box", {
+      role: "combobox",
+      "aria-label": "Card type",
+      "aria-expanded": "true",
+      "aria-controls": "card-type-list"
+    }),
+    true
+  );
+});
+
+test("task015 fourth batch selection controls reject missing a11y semantics", () => {
+  assert.throws(
+    () => validateComponentA11y("segmented-control", { role: "radiogroup" }),
+    /Either aria-label or aria-labelledby is required/
+  );
+  assert.throws(
+    () =>
+      validateComponentA11y("combo-box", {
+        role: "combobox",
+        "aria-label": "Card type",
+        "aria-expanded": "true"
+      }),
+    /aria-controls is required when aria-expanded is true/
+  );
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

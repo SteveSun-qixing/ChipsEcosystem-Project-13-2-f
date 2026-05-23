@@ -71,6 +71,8 @@ test("card runtime component tokens exist", () => {
   const textArea = readJson(path.join(root, "comp/text-area.json"));
   const searchField = readJson(path.join(root, "comp/search-field.json"));
   const secureField = readJson(path.join(root, "comp/secure-field.json"));
+  const segmentedControl = readJson(path.join(root, "comp/segmented-control.json"));
+  const comboBox = readJson(path.join(root, "comp/combo-box.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -130,6 +132,8 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(textArea, "chips.comp.text-area.control.color"));
   assert.ok(getPath(searchField, "chips.comp.search-field.clear.color.hover"));
   assert.ok(getPath(secureField, "chips.comp.secure-field.toggle.color.idle"));
+  assert.ok(getPath(segmentedControl, "chips.comp.segmented-control.item.surface.selected"));
+  assert.ok(getPath(comboBox, "chips.comp.combo-box.option.surface.highlighted"));
 });
 
 test("system token layer exists", () => {

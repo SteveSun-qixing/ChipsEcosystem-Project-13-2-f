@@ -42,6 +42,8 @@ ensureRequiredTokenPrefixes(resolved, [
   "chips.comp.text-area.",
   "chips.comp.search-field.",
   "chips.comp.secure-field.",
+  "chips.comp.segmented-control.",
+  "chips.comp.combo-box.",
   "chips.comp.button.",
   "chips.comp.input.",
   "chips.comp.checkbox.",

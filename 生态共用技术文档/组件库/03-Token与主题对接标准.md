@@ -27,6 +27,12 @@
   - `chips.comp.avatar.*`
   - `chips.comp.spinner.*`
   - `chips.comp.progress.*`
+  - `chips.comp.text-field.*`
+  - `chips.comp.text-area.*`
+  - `chips.comp.search-field.*`
+  - `chips.comp.secure-field.*`
+  - `chips.comp.segmented-control.*`
+  - `chips.comp.combo-box.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -117,6 +123,13 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.secure-field.*`
 
 四个输入控件的 `root.surface/border/focus`、`label/control/placeholder/description/status` 必须分别使用自身 scope 的 token，不得复用旧 `chips.comp.input.*` 作为正式样式入口。`SearchField` 的 `clear` 与 `search-icon`、`SecureField` 的 `visibility-toggle / visibility-icon` 只表达输入控件自身结构与状态，不得绑定业务搜索逻辑或密码管理能力。
+
+任务015第四批选择扩展控件 token 是分段选择和输入式选择的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.segmented-control.*`
+- `chips.comp.combo-box.*`
+
+`SegmentedControl` 的 `root/item/label/indicator/status/focus` token 只表达单选分段控件结构和状态；`ComboBox` 的 `root/control/trigger/list/option/description/status/focus` token 只表达输入过滤与 listbox 弹层视觉。主题包不得复用 `chips.comp.radio.*`、`chips.comp.select.*` 或旧 `chips.comp.input.*` 作为这两个控件的正式样式入口。
 
 ### 3.1 布局 token 基线
 

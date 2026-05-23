@@ -26,6 +26,11 @@ RUN npm run build --workspace chips-host \
  && npm run build --workspace chips.basecard.image \
  && npm run build --workspace chips.basecard.richtext \
  && npm run build --workspace chips.basecard.webpage \
+ && npm run build --workspace chips.basecard.music \
+ && npm run build --workspace chips.basecard.video \
+ && npm run build --workspace chips.basecard.score \
+ && npm run build --workspace chips.basecard.book \
+ && npm run build --workspace chips.basecard.hyperlink \
  && npm run build --workspace chips.layout.grid \
  && npm run build --workspace chips.module.chips.htmltoimage.plugin \
  && npm run build --workspace chips.module.chips.cardtohtml.plugin \
@@ -53,6 +58,11 @@ COPY --from=ecosystem-artifacts /app/Chips-PhotoViewer /app/Chips-PhotoViewer
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/webpage-BCP /app/Chips-BaseCardPlugin/webpage-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/music-BCP /app/Chips-BaseCardPlugin/music-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/video-BCP /app/Chips-BaseCardPlugin/video-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/score-BCP /app/Chips-BaseCardPlugin/score-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/book-BCP /app/Chips-BaseCardPlugin/book-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/hyperlink-BCP /app/Chips-BaseCardPlugin/hyperlink-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BoxLayoutPlugin/grid-BLP /app/Chips-BoxLayoutPlugin/grid-BLP
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
 COPY --from=ecosystem-artifacts /app/ThemePack/Chips-default /app/ThemePack/Chips-default
@@ -87,6 +97,11 @@ COPY --from=ecosystem-artifacts /app/Chips-PhotoViewer /app/Chips-PhotoViewer
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/image-BCP /app/Chips-BaseCardPlugin/image-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/richtext-BCP /app/Chips-BaseCardPlugin/richtext-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/webpage-BCP /app/Chips-BaseCardPlugin/webpage-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/music-BCP /app/Chips-BaseCardPlugin/music-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/video-BCP /app/Chips-BaseCardPlugin/video-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/score-BCP /app/Chips-BaseCardPlugin/score-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/book-BCP /app/Chips-BaseCardPlugin/book-BCP
+COPY --from=ecosystem-artifacts /app/Chips-BaseCardPlugin/hyperlink-BCP /app/Chips-BaseCardPlugin/hyperlink-BCP
 COPY --from=ecosystem-artifacts /app/Chips-BoxLayoutPlugin/grid-BLP /app/Chips-BoxLayoutPlugin/grid-BLP
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin /app/Chips-ModulePlugin/Chips-HtmltoImage-Plugin
 COPY --from=ecosystem-artifacts /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin /app/Chips-ModulePlugin/Chips-CardtoHTML-Plugin

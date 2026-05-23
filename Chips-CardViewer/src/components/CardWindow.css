@@ -72,6 +72,8 @@
 }
 
 .card-viewer-window--document-flow {
+  --chips-document-safe-area-block-end-fallback: clamp(56px, 10vh, 112px);
+
   display: block;
   flex: none;
   width: 100%;
@@ -87,6 +89,11 @@
   overflow: visible;
 }
 
+.card-viewer-window__content--document-flow {
+  width: 100%;
+  min-height: 0;
+}
+
 .card-viewer-window__frame-host--document-flow {
   width: 100%;
   height: auto;
@@ -98,4 +105,17 @@
   height: auto;
   min-height: 0;
   background: #ffffff;
+}
+
+.card-viewer-window__safe-area {
+  width: 100%;
+  height: var(
+    --chips-document-safe-area-block-end,
+    var(
+      --chips-sys-document-safe-area-block-end,
+      var(--chips-document-safe-area-block-end-fallback)
+    )
+  );
+  min-height: var(--chips-base-space-6, 24px);
+  pointer-events: none;
 }

@@ -144,7 +144,7 @@ const enUS = {
   'card.notReady': 'This card is still moving through the processing pipeline.',
   'card.opening': 'Opening the card for you…',
   'card.identifierLabel': 'Card file ID',
-  'card.viewerTitle': 'Card viewer',
+  'card.backToPrevious': 'Back',
   'card.summaryTitle': 'Card info',
   'card.viewerLoading': 'Loading the card viewer…',
   'card.openRawHtml': 'Open raw HTML',

@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { cardsApi, type CardDetail } from '../api/content';
+import {
+  CardViewerPageShell,
+  CardViewerPageStage,
+  CardViewerPageState,
+} from '../components/CardViewerPageShell';
 import { HostedPluginSurface } from '../components/HostedPluginSurface';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { closeWebPluginSession, createWebPluginSession, type WebPluginSessionView } from '../lib/host-runtime';
@@ -20,7 +25,8 @@ function normalizeCardDocumentUrl(value: string): string {
 }
 
 export default function CardDetailPage() {
-  const { t } = useAppPreferences();
+  const { t, formatDate } = useAppPreferences();
+  const navigate = useNavigate();
   const { cardId } = useParams<{ cardId: string }>();
   const [card, setCard] = useState<CardDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,54 +144,84 @@ export default function CardDetailPage() {
     };
   }, [card, cardId, session, t]);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    if (card?.user?.username) {
+      navigate(`/@${card.user.username}`);
+      return;
+    }
+
+    navigate('/');
+  };
+
+  const title = card?.title;
+  const meta = card ? (
+    <time dateTime={card.createdAt}>{formatDate(card.createdAt)}</time>
+  ) : null;
+  let body: React.ReactNode;
+
   if (loading) {
-    return (
-      <div className="card-detail-page card-detail-page--state">
-        <div className="card-detail-page__state-shell">
+    body = (
+      <CardViewerPageState>
+        <div className="card-viewer-page__state-panel">
           <span className="detail-transition-spinner" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !card) {
-    return (
-      <div className="card-detail-page card-detail-page--state">
-        <section className="panel error-panel card-detail-page__error-panel">
-          <h1>{error || t('detail.notFound')}</h1>
-        </section>
-      </div>
-    );
-  }
-
-  if (card.status === 'error') {
-    return (
-      <div className="card-detail-page card-detail-page--state">
-        <section className="panel error-panel card-detail-page__error-panel">
-          <h1>{t('card.errorState')}</h1>
-        </section>
-      </div>
-    );
-  }
-
-  if (card.status !== 'ready' || !card.htmlUrl || !session) {
-    return (
-      <div className="card-detail-page card-detail-page--state">
-        <section className="panel card-detail-page__pending-panel">
-          <div className="card-detail-page__state-shell">
-            <div className="card-detail-page__state-copy">
-              <span className="detail-transition-spinner" />
-              <p>{t('card.notReady')}</p>
-            </div>
+          <div className="card-viewer-page__state-copy">
+            <h2>{t('card.viewerLoading')}</h2>
           </div>
-        </section>
-      </div>
+        </div>
+      </CardViewerPageState>
+    );
+  } else if (error || !card) {
+    body = (
+      <CardViewerPageState>
+        <div className="card-viewer-page__state-panel">
+          <div className="card-viewer-page__state-copy">
+            <h2>{error || t('detail.notFound')}</h2>
+          </div>
+        </div>
+      </CardViewerPageState>
+    );
+  } else if (card.status === 'error') {
+    body = (
+      <CardViewerPageState>
+        <div className="card-viewer-page__state-panel">
+          <div className="card-viewer-page__state-copy">
+            <h2>{t('card.errorState')}</h2>
+          </div>
+        </div>
+      </CardViewerPageState>
+    );
+  } else if (card.status !== 'ready' || !card.htmlUrl || !session) {
+    body = (
+      <CardViewerPageState>
+        <div className="card-viewer-page__state-panel">
+          <span className="detail-transition-spinner" />
+          <div className="card-viewer-page__state-copy">
+            <h2>{t('card.notReady')}</h2>
+          </div>
+        </div>
+      </CardViewerPageState>
+    );
+  } else {
+    body = (
+      <CardViewerPageStage>
+        <HostedPluginSurface sessionId={session.sessionId} initialSession={session} surfaceMode="document" />
+      </CardViewerPageStage>
     );
   }
 
   return (
-    <div className="card-detail-page">
-      <HostedPluginSurface sessionId={session.sessionId} initialSession={session} surfaceMode="document" />
-    </div>
+    <CardViewerPageShell
+      title={title}
+      backLabel={t('card.backToPrevious')}
+      onBack={handleBack}
+      meta={meta}
+    >
+      {body}
+    </CardViewerPageShell>
   );
 }

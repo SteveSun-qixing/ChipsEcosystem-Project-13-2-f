@@ -144,7 +144,7 @@ const zhCN = {
   'card.notReady': '卡片仍在处理链路中，请稍后刷新。',
   'card.opening': '正在为你打开卡片…',
   'card.identifierLabel': '卡片文件 ID',
-  'card.viewerTitle': '卡片查看页',
+  'card.backToPrevious': '返回上一页',
   'card.summaryTitle': '卡片信息',
   'card.viewerLoading': '正在装载卡片内容…',
   'card.openRawHtml': '打开原始 HTML',

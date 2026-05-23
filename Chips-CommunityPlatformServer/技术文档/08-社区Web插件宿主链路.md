@@ -47,6 +47,17 @@
 1. `com.chips.card-viewer`
 2. `com.chips.photo-viewer`
 
+当前默认纳入社区服务器 Host 的基础卡片插件：
+
+1. `chips.basecard.richtext`，支持 `base.richtext`
+2. `chips.basecard.image`，支持 `base.image`
+3. `chips.basecard.webpage`，支持 `base.webpage`
+4. `chips.basecard.music`，支持 `base.music`
+5. `chips.basecard.video`，支持 `base.video`
+6. `chips.basecard.score`，支持 `base.score`
+7. `chips.basecard.book`，支持 `base.book`
+8. `chips.basecard.hyperlink`，支持 `base.hyperlink`
+
 ## 5. 前端宿主页职责
 
 社区前台当前通过以下组件承载 Web 插件：
@@ -103,9 +114,30 @@
 4. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
 5. `CardViewer` 用 iframe 承载对象存储中的卡片 HTML 文档；
 6. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
-7. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，并向外层插件宿主页发出 `plugin.surface.resize`；
+7. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
 8. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
 9. 用户最终滚动的是整个页面，而不是卡片查看器内部的小窗。
+
+当前高度事件遵循生态公共 `DocumentSurfaceResizePayload`：
+
+```ts
+interface DocumentSurfaceResizePayload {
+  height: number;
+  contentHeight: number;
+  safeBlockEnd: number;
+  viewportHeight: number;
+  reason: "initial" | "content-resize" | "asset-load" | "font-load" | "viewport-resize";
+  stable: boolean;
+}
+```
+
+社区链路补充实现规则：
+
+1. `HostedDocumentWindow` 是 Web 卡片查看态的高度发布方；它不会直接把内部复合卡片高度原样透传，而是统一测量自身文档流、内部 iframe、加载态和底部阅读安全区；
+2. 底部阅读安全区由 `--chips-document-safe-area-block-end` 驱动，社区宿主在 document surface 上提供默认 token 值；
+3. 高度发布使用 `requestAnimationFrame` 合并，连续资源加载、字体加载和窗口缩放会先发布 `stable=false`，约 160ms 稳定窗口后再发布 `stable=true`；
+4. 内容增长会即时撑开外层 iframe；内容变短时，CardViewer 与 `HostedPluginSurface` 都只在 `stable=true` 后收缩高度，避免用户阅读底部时页面突然上跳；
+5. `HostedPluginSurface(surfaceMode=document)` 只负责把稳定后的文档 surface 高度应用到插件 iframe，不承担卡片内容测量职责。
 
 ### 7.2 图片打开
 
@@ -151,6 +183,15 @@
 4. 卡片查看页不得再复用沉浸式应用窗口样式，否则会重新制造中间小窗与内部滚动；
 5. 卡片 HTML 正式导出壳层采用纯内容背景与零块向舞台留白，避免在社区 Web 查看链路顶部露出导出背景条；
 6. `PhotoViewer` Web 根舞台改为纯色背景，不再额外叠加顶部渐变层。
+
+卡片查看页当前已经拆出独立阅读体验壳层：
+
+1. `CardViewerPageShell` 不再提供顶部菜单栏，而是提供独立悬浮返回按钮、悬浮信息窗和后续功能按钮 slot；
+2. `CardViewerPageStage` 只承载卡片查看 surface，后续评论、分享、收藏等功能不得塞进 CardViewer 插件 iframe；
+3. 页面底部保留轻量阅读结束空间，最后一张卡不会紧贴浏览器底边；
+4. `/cards/:cardId` 不再提供“访问作者主页”入口；
+5. `/cards/:cardId` 的返回按钮优先走浏览器历史；无历史时回到作者主页，再无作者信息时回到首页。
+6. 卡片查看页顶部保留阅读安全区，避免悬浮控件遮挡卡片正文；卡片信息窗采用顶部居中的药丸形态，只展示卡片标题与创建日期两行信息。
 
 ## 10. Web 手势接管约束
 

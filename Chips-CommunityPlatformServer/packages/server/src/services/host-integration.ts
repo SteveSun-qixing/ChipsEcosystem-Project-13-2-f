@@ -578,6 +578,11 @@ export class HostIntegrationService {
       path.join(root, 'Chips-BaseCardPlugin/richtext-BCP'),
       path.join(root, 'Chips-BaseCardPlugin/image-BCP'),
       path.join(root, 'Chips-BaseCardPlugin/webpage-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/music-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/video-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/score-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/book-BCP'),
+      path.join(root, 'Chips-BaseCardPlugin/hyperlink-BCP'),
     ];
     const defaultLayoutPlugins = [
       path.join(root, 'Chips-BoxLayoutPlugin/grid-BLP'),

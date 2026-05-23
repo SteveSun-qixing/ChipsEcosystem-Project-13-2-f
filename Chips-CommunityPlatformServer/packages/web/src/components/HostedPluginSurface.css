@@ -1,4 +1,6 @@
 .hosted-plugin-surface {
+  --chips-document-safe-area-block-end: clamp(56px, 10vh, 112px);
+
   position: absolute;
   inset: 0;
   width: 100%;
@@ -12,7 +14,7 @@
   overflow: visible;
   min-height: 100vh;
   min-height: 100dvh;
-  background: #ffffff;
+  background: var(--ccps-sys-surface-raised, #ffffff);
 }
 
 .hosted-plugin-surface--state {
@@ -43,5 +45,5 @@
   height: auto;
   min-height: 100vh;
   min-height: 100dvh;
-  background: #ffffff;
+  background: var(--ccps-sys-surface-raised, #ffffff);
 }

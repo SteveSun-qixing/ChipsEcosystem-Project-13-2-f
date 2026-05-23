@@ -38,6 +38,25 @@ interface HostBridgeEmitMessage {
 type WebSurfaceNavigationKind = NonNullable<HostSurfaceOpenRequest['kind']>;
 type PendingTabHandle = Window | null;
 
+type DocumentSurfaceResizeReason =
+  | 'initial'
+  | 'content-resize'
+  | 'asset-load'
+  | 'font-load'
+  | 'viewport-resize';
+
+interface DocumentSurfaceResizePayload {
+  height: number;
+  contentHeight: number;
+  safeBlockEnd: number;
+  viewportHeight: number;
+  reason: DocumentSurfaceResizeReason;
+  stable: boolean;
+}
+
+const DOCUMENT_SURFACE_INITIAL_HEIGHT = 960;
+const DOCUMENT_SURFACE_MIN_HEIGHT = 320;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -178,7 +197,7 @@ function openHostedRoute(
 
 function openExternalUrl(
   url: string,
-  kind: WebSurfaceNavigationKind = 'tab',
+  _kind: WebSurfaceNavigationKind = 'tab',
   options?: {
     pendingTab?: PendingTabHandle;
     fallbackToCurrentPage?: boolean;
@@ -198,7 +217,21 @@ function openExternalUrl(
   }
 }
 
-function normalizeEmbeddedHeight(payload: unknown): number | null {
+function normalizeDocumentSurfaceReason(value: unknown): DocumentSurfaceResizeReason {
+  if (
+    value === 'initial'
+    || value === 'content-resize'
+    || value === 'asset-load'
+    || value === 'font-load'
+    || value === 'viewport-resize'
+  ) {
+    return value;
+  }
+
+  return 'content-resize';
+}
+
+function normalizeDocumentSurfaceResizePayload(payload: unknown): DocumentSurfaceResizePayload | null {
   if (!isRecord(payload)) {
     return null;
   }
@@ -208,7 +241,22 @@ function normalizeEmbeddedHeight(payload: unknown): number | null {
     return null;
   }
 
-  return Math.max(320, Math.ceil(height));
+  const normalizedHeight = Math.max(DOCUMENT_SURFACE_MIN_HEIGHT, Math.ceil(height));
+  const contentHeight = Number(payload.contentHeight);
+  const safeBlockEnd = Number(payload.safeBlockEnd);
+  const viewportHeight = Number(payload.viewportHeight);
+  const fallbackViewportHeight = Number.isFinite(window.innerHeight) ? Math.ceil(window.innerHeight) : 0;
+
+  return {
+    height: normalizedHeight,
+    contentHeight: Number.isFinite(contentHeight)
+      ? Math.max(DOCUMENT_SURFACE_MIN_HEIGHT, Math.ceil(contentHeight))
+      : normalizedHeight,
+    safeBlockEnd: Number.isFinite(safeBlockEnd) ? Math.max(0, Math.ceil(safeBlockEnd)) : 0,
+    viewportHeight: Number.isFinite(viewportHeight) ? Math.max(0, Math.ceil(viewportHeight)) : fallbackViewportHeight,
+    reason: normalizeDocumentSurfaceReason(payload.reason),
+    stable: payload.stable === true,
+  };
 }
 
 export function HostedPluginSurface({
@@ -219,15 +267,20 @@ export function HostedPluginSurface({
 }: HostedPluginSurfaceProps) {
   const { t } = useAppPreferences();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const embeddedHeightRef = useRef<number | null>(surfaceMode === 'document' ? DOCUMENT_SURFACE_INITIAL_HEIGHT : null);
   const [session, setSession] = useState<WebPluginSessionView | null>(initialSession);
   const [loading, setLoading] = useState(initialSession === null);
   const [error, setError] = useState('');
-  const [embeddedHeight, setEmbeddedHeight] = useState<number | null>(surfaceMode === 'document' ? 960 : null);
+  const [embeddedHeight, setEmbeddedHeight] = useState<number | null>(
+    surfaceMode === 'document' ? DOCUMENT_SURFACE_INITIAL_HEIGHT : null,
+  );
 
   const frameUrl = useMemo(() => buildHostedPluginEntryUrl(sessionId), [sessionId]);
 
   useEffect(() => {
-    setEmbeddedHeight(surfaceMode === 'document' ? 960 : null);
+    const nextHeight = surfaceMode === 'document' ? DOCUMENT_SURFACE_INITIAL_HEIGHT : null;
+    embeddedHeightRef.current = nextHeight;
+    setEmbeddedHeight(nextHeight);
   }, [sessionId, surfaceMode]);
 
   useEffect(() => {
@@ -302,9 +355,13 @@ export function HostedPluginSurface({
       if (data.type === 'chips.web-shell:emit') {
         const emitMessage = data as unknown as HostBridgeEmitMessage;
         if (surfaceMode === 'document' && emitMessage.event === 'plugin.surface.resize') {
-          const nextHeight = normalizeEmbeddedHeight(emitMessage.payload);
-          if (nextHeight) {
-            setEmbeddedHeight(nextHeight);
+          const resizePayload = normalizeDocumentSurfaceResizePayload(emitMessage.payload);
+          if (resizePayload) {
+            const currentHeight = embeddedHeightRef.current ?? DOCUMENT_SURFACE_INITIAL_HEIGHT;
+            if (resizePayload.height >= currentHeight || resizePayload.stable) {
+              embeddedHeightRef.current = resizePayload.height;
+              setEmbeddedHeight(resizePayload.height);
+            }
           }
         }
         return;
@@ -511,7 +568,7 @@ export function HostedPluginSurface({
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [sessionId, t]);
+  }, [sessionId, surfaceMode, t]);
 
   if (loading) {
     return (

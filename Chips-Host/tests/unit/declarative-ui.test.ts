@@ -3,7 +3,15 @@ import {
   EffectDispatcher,
   EventBindingRegistry,
   Form,
+  Image,
+  Media,
+  Navigation,
+  ScrollView,
+  Section,
   Stack,
+  Table,
+  Text,
+  Toolbar,
   View,
   bindNodeEvent,
   createCompoundComponent,
@@ -11,7 +19,8 @@ import {
   createTelemetryEffect,
   createUINode,
   createUIEffect,
-  guardAgainstBooleanModeProps
+  guardAgainstBooleanModeProps,
+  withNodeModifiers
 } from '../../src/renderer/declarative-ui';
 
 describe('Declarative UI', () => {
@@ -38,11 +47,158 @@ describe('Declarative UI', () => {
     expect(node.children?.[0]?.type).toBe('Stack');
   });
 
+  it('builds the expanded semantic primitive set', () => {
+    const node = Section({
+      id: 'settings',
+      modifiers: {
+        i18nKey: 'settings.title',
+        layout: { display: 'block', gap: 'md' },
+        accessibility: { role: 'region', label: 'Settings' },
+        testId: 'settings-section'
+      },
+      children: [
+        ScrollView({ id: 'settings-scroll', modifiers: { layout: { scrollAxis: 'vertical' } } }),
+        Text({ id: 'settings-title', props: { value: 'Settings' } }),
+        Image({ id: 'settings-cover', props: { source: 'card-root://cover.png', alt: 'Cover' } }),
+        Media({ id: 'settings-preview', props: { source: 'card-root://preview.mp4', kind: 'video' } }),
+        Table({ id: 'settings-table', props: { dataSource: 'settings.rows' } }),
+        Navigation({ id: 'settings-nav', props: { current: 'general' } }),
+        Toolbar({ id: 'settings-toolbar' })
+      ]
+    });
+
+    expect(node.type).toBe('Section');
+    expect(node.children?.map((child) => child.type)).toEqual([
+      'ScrollView',
+      'Text',
+      'Image',
+      'Media',
+      'Table',
+      'Navigation',
+      'Toolbar'
+    ]);
+    expect(node.modifiers).toMatchObject({
+      i18nKey: 'settings.title',
+      layout: { display: 'block', gap: 'md' },
+      accessibility: { role: 'region', label: 'Settings' },
+      testId: 'settings-section'
+    });
+  });
+
   it('rejects invalid node identifiers', () => {
     expect(() =>
       createUINode({
         id: '',
         type: 'View'
+      })
+    ).toThrow();
+  });
+
+  it('normalizes modifier theme scope and rejects mismatches', () => {
+    const node = createUINode({
+      id: 'themed-panel',
+      type: 'View',
+      modifiers: {
+        themeScope: 'app.settings'
+      }
+    });
+
+    expect(node.themeScope).toBe('app.settings');
+    expect(node.modifiers?.themeScope).toBe('app.settings');
+    expect(() =>
+      createUINode({
+        id: 'broken-panel',
+        type: 'View',
+        themeScope: 'app.a',
+        modifiers: {
+          themeScope: 'app.b'
+        }
+      })
+    ).toThrow();
+  });
+
+  it('rejects visual hardcoding in L8 props', () => {
+    let error: unknown;
+    try {
+      View({
+        id: 'visual-panel',
+        props: {
+          backgroundColor: '#ffffff'
+        }
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ code: 'DECLARATIVE_UI_VISUAL_PROP_FORBIDDEN' });
+  });
+
+  it('rejects executable events and non-string bindings', () => {
+    expect(() =>
+      createUINode({
+        id: 'event-panel',
+        type: 'View',
+        events: {
+          onClick: (() => undefined) as unknown as string
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      createUINode({
+        id: 'binding-panel',
+        type: 'View',
+        bindings: {
+          title: { path: 'card.title' } as unknown as string
+        }
+      })
+    ).toThrow();
+  });
+
+  it('validates modifier structure and shortcut command bindings', () => {
+    const node = withNodeModifiers(View({ id: 'command-panel' }), {
+      shortcut: [
+        {
+          key: 'K',
+          modifiers: ['cmd'],
+          command: 'palette.open',
+          when: 'focusScope:global'
+        }
+      ],
+      permission: {
+        action: 'card.update',
+        resource: 'card:current',
+        fallback: 'disable'
+      },
+      focusScope: {
+        id: 'global',
+        trap: false,
+        restore: true,
+        order: ['search', 'results']
+      },
+      presentation: {
+        surface: 'window',
+        mode: 'inline',
+        priority: 1
+      },
+      motion: {
+        preset: 'chips.motion.fade',
+        reduceMotion: 'respect'
+      }
+    });
+
+    expect(node.modifiers).toMatchObject({
+      shortcut: [{ key: 'K', modifiers: ['cmd'], command: 'palette.open' }],
+      permission: { action: 'card.update', fallback: 'disable' },
+      focusScope: { id: 'global', restore: true },
+      presentation: { surface: 'window', mode: 'inline', priority: 1 },
+      motion: { preset: 'chips.motion.fade', reduceMotion: 'respect' }
+    });
+    expect(() =>
+      withNodeModifiers(node, {
+        shortcut: {
+          key: '',
+          command: 'palette.open'
+        }
       })
     ).toThrow();
   });
@@ -69,7 +225,10 @@ describe('Declarative UI', () => {
 
     const tree = FormLayout.compose({
       root: {
-        id: 'profile-form'
+        id: 'profile-form',
+        modifiers: {
+          layout: { direction: 'vertical', gap: 'sm' }
+        }
       },
       slots: {
         header: View({ id: 'form-header' }),
@@ -80,6 +239,7 @@ describe('Declarative UI', () => {
 
     expect(tree.type).toBe('Form');
     expect(tree.children?.map((node) => node.props?.slot)).toEqual(['header', 'body', 'footer']);
+    expect(tree.modifiers?.layout).toMatchObject({ direction: 'vertical', gap: 'sm' });
   });
 
   it('blocks boolean mode props in compound components', () => {

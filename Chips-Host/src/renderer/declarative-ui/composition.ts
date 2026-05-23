@@ -1,6 +1,6 @@
 import { createError } from '../../shared/errors';
 import { createUINode } from './node-model';
-import type { NodeMap, UINode, UINodeInput, UINodeType } from './types';
+import type { NodeMap, NodeModifiers, UINode, UINodeInput, UINodeType } from './types';
 
 const BOOLEAN_MODE_KEY_PATTERN = /^(is|has|show|with)[A-Z]/;
 
@@ -28,6 +28,7 @@ export interface CompoundRootInput {
   bindings?: Record<string, string>;
   events?: Record<string, string>;
   themeScope?: string;
+  modifiers?: NodeModifiers;
 }
 
 export interface CompoundComposeInput {
@@ -143,6 +144,7 @@ export const createCompoundComponent = (definition: CompoundComponentDefinition)
       bindings: input.root.bindings,
       events: input.root.events,
       themeScope: input.root.themeScope,
+      modifiers: input.root.modifiers,
       children
     });
   };

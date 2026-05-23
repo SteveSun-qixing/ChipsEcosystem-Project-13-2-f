@@ -311,7 +311,7 @@ interface PluginChromeUpdatePayload {
 - `title`：宿主居中信息药丸主标题；
 - `metaLines`：标题下方的短元信息，通常为创建日期等插件已经本地化后的文本；
 - `back`：返回按钮状态；`handledByPlugin` 为 `true` 时宿主点击后只把动作回传插件，否则宿主可执行默认返回；
-- `actions`：预留给插件未来扩展的通用动作按钮；
+- `actions`：预留给插件未来扩展的通用动作按钮；`icon` 只能作为语义提示，宿主可以映射为自己的图标体系，未知值应退回通用动作图标；
 - `safeBlockStart`：插件希望宿主顶部悬浮 chrome 预留的块向安全空间。
 
 宿主触发悬浮控件动作时，通过 `plugin.chrome.action` 回传：

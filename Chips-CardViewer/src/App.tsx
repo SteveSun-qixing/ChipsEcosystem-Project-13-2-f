@@ -24,6 +24,9 @@ const DEFAULT_THEME_STATE: AppThemeState = {
 };
 
 const VIEWER_CHROME_SAFE_BLOCK_START = 96;
+const COVER_TOGGLE_ACTION_ID = "toggle-cover";
+
+type ViewerMode = "content" | "cover";
 
 function readDocumentThemeState(): AppThemeState {
   if (typeof document === "undefined") {
@@ -99,7 +102,11 @@ function createChromeState(params: {
   createdAt?: string;
   locale: string;
   backLabel: string;
+  showCoverLabel: string;
+  showContentLabel: string;
   hasSource: boolean;
+  coverAvailable: boolean;
+  viewerMode: ViewerMode;
 }): ViewerChromeState {
   const metaLine = formatDateLabel(params.createdAt, params.locale);
   return {
@@ -109,7 +116,15 @@ function createChromeState(params: {
       label: params.backLabel,
       enabled: params.hasSource,
     },
-    actions: [],
+    actions: params.hasSource && params.coverAvailable
+      ? [
+          {
+            id: COVER_TOGGLE_ACTION_ID,
+            label: params.viewerMode === "cover" ? params.showContentLabel : params.showCoverLabel,
+            icon: params.viewerMode === "cover" ? "document" : "cover",
+          },
+        ]
+      : [],
     safeBlockStart: VIEWER_CHROME_SAFE_BLOCK_START,
   };
 }
@@ -128,6 +143,7 @@ export function App() {
   );
   const client = useChipsClient(traceId);
   const [viewerSource, setViewerSource] = useState<CardViewerSource | null>(null);
+  const [viewerMode, setViewerMode] = useState<ViewerMode>("content");
   const [error, setError] = useState<string | null>(null);
   const [themeState, setThemeState] = useState<AppThemeState>(() => readDocumentThemeState());
   const [locale, setLocale] = useState(() => resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined));
@@ -162,6 +178,10 @@ export function App() {
           : null,
     });
   }, [logger, viewerSource]);
+
+  useEffect(() => {
+    setViewerMode("content");
+  }, [viewerSource]);
 
   useEffect(() => {
     if (!error) {
@@ -258,6 +278,7 @@ export function App() {
     });
     setError(null);
     setViewerSource(nextSource);
+    setViewerMode("content");
   }, [logger, t]);
 
   const handleOpenFile = useCallback(async () => {
@@ -304,6 +325,7 @@ export function App() {
       return;
     }
     setViewerSource(null);
+    setViewerMode("content");
   }, []);
 
   return (
@@ -319,37 +341,54 @@ export function App() {
         metadataErrorFallback={t("card-viewer.viewer.localMetadataError")}
       >
         <ViewerSource.Outlet>
-          {({ source, error: sourceError }) => (
-            <ViewerChrome.Provider
-              externalChrome={externalChrome}
-              onBack={handleBack}
-              state={createChromeState({
-                title: source?.title,
-                createdAt: source?.createdAt,
-                locale,
-                backLabel: t("card-viewer.actions.back"),
-                hasSource: Boolean(source),
-              })}
-            >
-              <CardViewerShell surfaceMode={surfaceMode}>
-                <ViewerChrome.Layer />
-                <ViewerStage
-                  source={source}
-                  error={error ?? sourceError}
-                  empty={emptyContent}
-                  unsupportedRemoteLabel={t("card-viewer.viewer.remoteCardUnsupported")}
-                  traceId={traceId}
-                  locale={locale}
-                  loadingLabel={t("card-viewer.viewer.documentLoading")}
-                  containerErrorLabel={t("card-viewer.viewer.documentContainerError")}
-                  fatalErrorFallback={t("card-viewer.viewer.documentFatalError")}
-                  renderErrorFallback={t("card-viewer.viewer.documentRenderError")}
-                  resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
-                  resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
-                />
-              </CardViewerShell>
-            </ViewerChrome.Provider>
-          )}
+          {({ source, error: sourceError }) => {
+            const coverAvailable = Boolean(source?.cover);
+
+            return (
+              <ViewerChrome.Provider
+                externalChrome={externalChrome}
+                onBack={handleBack}
+                onAction={(actionId) => {
+                  if (actionId === COVER_TOGGLE_ACTION_ID && coverAvailable) {
+                    setViewerMode((currentMode) => (currentMode === "cover" ? "content" : "cover"));
+                  }
+                }}
+                state={createChromeState({
+                  title: source?.title,
+                  createdAt: source?.createdAt,
+                  locale,
+                  backLabel: t("card-viewer.actions.back"),
+                  showCoverLabel: t("card-viewer.actions.showCover"),
+                  showContentLabel: t("card-viewer.actions.showContent"),
+                  hasSource: Boolean(source),
+                  coverAvailable,
+                  viewerMode,
+                })}
+              >
+                <CardViewerShell surfaceMode={surfaceMode}>
+                  <ViewerChrome.Layer />
+                  <ViewerStage
+                    source={source}
+                    viewerMode={coverAvailable ? viewerMode : "content"}
+                    error={error ?? sourceError}
+                    empty={emptyContent}
+                    unsupportedRemoteLabel={t("card-viewer.viewer.remoteCardUnsupported")}
+                    coverCloseLabel={t("card-viewer.viewer.coverCloseHint")}
+                    coverUnavailableLabel={t("card-viewer.viewer.coverUnavailable")}
+                    onCloseCover={() => setViewerMode("content")}
+                    traceId={traceId}
+                    locale={locale}
+                    loadingLabel={t("card-viewer.viewer.documentLoading")}
+                    containerErrorLabel={t("card-viewer.viewer.documentContainerError")}
+                    fatalErrorFallback={t("card-viewer.viewer.documentFatalError")}
+                    renderErrorFallback={t("card-viewer.viewer.documentRenderError")}
+                    resourceOpenErrorTitle={t("card-viewer.errors.resourceOpenFailedTitle")}
+                    resourceOpenErrorFallback={t("card-viewer.errors.resourceOpenFailed")}
+                  />
+                </CardViewerShell>
+              </ViewerChrome.Provider>
+            );
+          }}
         </ViewerSource.Outlet>
       </ViewerSource.Provider>
     </ChipsThemeProvider>

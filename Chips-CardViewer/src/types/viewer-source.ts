@@ -1,27 +1,42 @@
 export type ViewerDocumentKind = "card" | "box";
 
+export interface ViewerCoverSource {
+  title?: string;
+  coverUrl: string;
+  coverFragmentUrl?: string;
+  coverRenderMode?: "fragment-shadow" | "iframe";
+  ratio?: string;
+}
+
+interface CommunitySourceCoverFields {
+  coverUrl?: string;
+  coverFragmentUrl?: string;
+  coverRenderMode?: "fragment-shadow" | "iframe";
+  coverRatio?: string;
+}
+
 export type CardViewerSource =
   | {
       kind: "local-file";
       documentKind: ViewerDocumentKind;
       filePath: string;
     }
-  | {
+  | ({
       kind: "community-card";
       cardId: string;
       title: string;
       createdAt?: string;
       documentUrl: string;
       canonicalUrl?: string;
-    }
-  | {
+    } & CommunitySourceCoverFields)
+  | ({
       kind: "community-box";
       boxId: string;
       title: string;
       createdAt?: string;
       documentUrl: string;
       canonicalUrl?: string;
-    }
+    } & CommunitySourceCoverFields)
   | {
       kind: "remote-card-file";
       url: string;
@@ -35,6 +50,7 @@ export type ResolvedViewerSource =
       source: Extract<CardViewerSource, { kind: "local-file" }>;
       title?: string;
       createdAt?: string;
+      cover?: ViewerCoverSource;
     }
   | {
       renderKind: "hosted-document";
@@ -42,6 +58,7 @@ export type ResolvedViewerSource =
       title: string;
       createdAt?: string;
       documentUrl: string;
+      cover?: ViewerCoverSource;
     }
   | {
       renderKind: "unsupported";
@@ -68,6 +85,58 @@ function normalizeDocumentKind(value: unknown): ViewerDocumentKind | null {
     return value;
   }
   return null;
+}
+
+function normalizeCoverRatio(value: unknown): string | undefined {
+  const normalized = normalizeString(value);
+  if (!normalized || !/^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function normalizeCoverRenderMode(value: unknown): "fragment-shadow" | "iframe" | undefined {
+  if (value === "fragment-shadow" || value === "iframe") {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeViewerCoverSource(
+  value: Record<string, unknown>,
+  title?: string,
+): ViewerCoverSource | undefined {
+  const coverUrl = normalizeString(value.coverUrl);
+  if (!coverUrl) {
+    return undefined;
+  }
+
+  const coverFragmentUrl = normalizeString(value.coverFragmentUrl);
+  const coverRenderMode = normalizeCoverRenderMode(value.coverRenderMode);
+  const coverRatio = normalizeCoverRatio(value.coverRatio);
+
+  return {
+    ...(title ? { title } : {}),
+    coverUrl,
+    ...(coverFragmentUrl ? { coverFragmentUrl } : undefined),
+    ...(coverRenderMode ? { coverRenderMode } : undefined),
+    ...(coverRatio ? { ratio: coverRatio } : undefined),
+  };
+}
+
+function spreadCommunityCoverFields(
+  cover: ViewerCoverSource | undefined,
+): CommunitySourceCoverFields | undefined {
+  if (!cover) {
+    return undefined;
+  }
+
+  return {
+    coverUrl: cover.coverUrl,
+    ...(cover.coverFragmentUrl ? { coverFragmentUrl: cover.coverFragmentUrl } : undefined),
+    ...(cover.coverRenderMode ? { coverRenderMode: cover.coverRenderMode } : undefined),
+    ...(cover.ratio ? { coverRatio: cover.ratio } : undefined),
+  };
 }
 
 function inferDocumentKindFromPath(filePath: string): ViewerDocumentKind | null {
@@ -107,6 +176,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     if (!cardId || !title || !documentUrl) {
       return null;
     }
+    const cover = normalizeViewerCoverSource(value, title);
     return {
       kind,
       cardId,
@@ -114,6 +184,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
       documentUrl,
       ...(normalizeString(value.createdAt) ? { createdAt: normalizeString(value.createdAt) } : undefined),
       ...(normalizeString(value.canonicalUrl) ? { canonicalUrl: normalizeString(value.canonicalUrl) } : undefined),
+      ...spreadCommunityCoverFields(cover),
     };
   }
 
@@ -124,6 +195,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     if (!boxId || !title || !documentUrl) {
       return null;
     }
+    const cover = normalizeViewerCoverSource(value, title);
     return {
       kind,
       boxId,
@@ -131,6 +203,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
       documentUrl,
       ...(normalizeString(value.createdAt) ? { createdAt: normalizeString(value.createdAt) } : undefined),
       ...(normalizeString(value.canonicalUrl) ? { canonicalUrl: normalizeString(value.canonicalUrl) } : undefined),
+      ...spreadCommunityCoverFields(cover),
     };
   }
 

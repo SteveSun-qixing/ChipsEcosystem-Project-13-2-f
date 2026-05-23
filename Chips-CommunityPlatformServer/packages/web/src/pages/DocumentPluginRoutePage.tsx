@@ -7,23 +7,30 @@ import './DocumentPluginRoutePage.css';
 
 const CARD_VIEWER_PLUGIN_ID = 'com.chips.card-viewer';
 
+type DocumentRouteCoverFields = {
+  coverUrl?: string;
+  coverFragmentUrl?: string;
+  coverRenderMode?: 'fragment-shadow' | 'iframe';
+  coverRatio?: string;
+};
+
 export type DocumentRouteSource =
-  | {
+  | ({
       kind: 'community-card';
       cardId: string;
       title: string;
       createdAt?: string;
       documentUrl: string;
       canonicalUrl?: string;
-    }
-  | {
+    } & DocumentRouteCoverFields)
+  | ({
       kind: 'community-box';
       boxId: string;
       title: string;
       createdAt?: string;
       documentUrl: string;
       canonicalUrl?: string;
-    };
+    } & DocumentRouteCoverFields);
 
 interface DocumentPluginRoutePageProps {
   source: DocumentRouteSource | null;

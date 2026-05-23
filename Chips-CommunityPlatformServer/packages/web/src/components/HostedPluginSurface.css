@@ -89,6 +89,13 @@
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
 }
 
+.hosted-plugin-surface__chrome-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+  transform: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
 .hosted-plugin-surface__chrome-button:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--ccps-sys-accent, #3b82f6) 28%, transparent);
   outline-offset: 3px;
@@ -156,6 +163,14 @@
   justify-content: flex-end;
   gap: 10px;
   pointer-events: auto;
+}
+
+.hosted-plugin-surface__chrome-action-dot {
+  width: 4px;
+  height: 4px;
+  display: block;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 @media (max-width: 720px) {

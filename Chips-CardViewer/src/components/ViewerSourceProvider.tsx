@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Client } from "chips-sdk";
-import type { CardViewerSource, ResolvedViewerSource } from "../types/viewer-source";
+import type { CardViewerSource, ResolvedViewerSource, ViewerCoverSource } from "../types/viewer-source";
 
 interface ViewerSourceState {
   source: ResolvedViewerSource | null;
@@ -37,11 +37,39 @@ function normalizeString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeCoverRatio(value: unknown): string | undefined {
+  const normalized = normalizeString(value);
+  if (!normalized || !/^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+}
+
 function readCardMetadataTitle(rawMetadata: unknown): string | undefined {
   if (!isRecord(rawMetadata)) {
     return undefined;
   }
   return normalizeString(rawMetadata.name) ?? normalizeString(rawMetadata.title);
+}
+
+function normalizeCoverRenderMode(value: unknown): "fragment-shadow" | "iframe" | undefined {
+  return value === "fragment-shadow" || value === "iframe" ? value : undefined;
+}
+
+function resolveCommunityCover(source: Extract<CardViewerSource, { kind: "community-card" | "community-box" }>): ViewerCoverSource | undefined {
+  if (!source.coverUrl) {
+    return undefined;
+  }
+
+  const coverRatio = normalizeCoverRatio(source.coverRatio);
+
+  return {
+    title: source.title,
+    coverUrl: source.coverUrl,
+    ...(source.coverFragmentUrl ? { coverFragmentUrl: source.coverFragmentUrl } : undefined),
+    ...(source.coverRenderMode ? { coverRenderMode: source.coverRenderMode } : undefined),
+    ...(coverRatio ? { ratio: coverRatio } : undefined),
+  };
 }
 
 function resolveImmediateSource(source: CardViewerSource | null): ResolvedViewerSource | null {
@@ -56,6 +84,7 @@ function resolveImmediateSource(source: CardViewerSource | null): ResolvedViewer
       title: source.title,
       createdAt: source.createdAt,
       documentUrl: source.documentUrl,
+      cover: resolveCommunityCover(source),
     };
   }
 
@@ -73,6 +102,51 @@ function resolveImmediateSource(source: CardViewerSource | null): ResolvedViewer
     renderKind: "local-file",
     source,
     title: getFileName(source.filePath),
+  };
+}
+
+async function readLocalCardCover(
+  client: Client,
+  filePath: string,
+  title: string,
+): Promise<ViewerCoverSource | undefined> {
+  const coverInfo = await client.card.readInfo(filePath, ["cover"]).catch(() => null);
+  const cover = coverInfo?.info.cover;
+  const coverRenderMode = normalizeCoverRenderMode(cover?.renderMode);
+  if (!cover?.resourceUrl) {
+    return undefined;
+  }
+
+  const coverRatio = normalizeCoverRatio(cover.ratio);
+
+  return {
+    title: normalizeString(cover.title) ?? title,
+    coverUrl: cover.resourceUrl,
+    ...(cover.fragmentUrl ? { coverFragmentUrl: cover.fragmentUrl } : undefined),
+    ...(coverRenderMode ? { coverRenderMode } : undefined),
+    ...(coverRatio ? { ratio: coverRatio } : undefined),
+  };
+}
+
+async function readLocalBoxCover(
+  client: Client,
+  filePath: string,
+  title: string,
+): Promise<ViewerCoverSource | undefined> {
+  const cover = await client.box.renderCover(filePath).catch(() => null);
+  const coverRenderMode = normalizeCoverRenderMode(cover?.coverRenderMode);
+  if (!cover?.coverUrl) {
+    return undefined;
+  }
+
+  const coverRatio = normalizeCoverRatio(cover.ratio);
+
+  return {
+    title: normalizeString(cover.title) ?? title,
+    coverUrl: cover.coverUrl,
+    ...(cover.coverFragmentUrl ? { coverFragmentUrl: cover.coverFragmentUrl } : undefined),
+    ...(coverRenderMode ? { coverRenderMode } : undefined),
+    ...(coverRatio ? { ratio: coverRatio } : undefined),
   };
 }
 
@@ -114,13 +188,16 @@ function ViewerSourceProvider({
         if (source.documentKind === "card") {
           const info = await client.card.readInfo(source.filePath, ["metadata"]);
           const metadata = info.info.metadata;
+          const title = normalizeString(metadata?.name) ?? readCardMetadataTitle(metadata?.raw) ?? getFileName(source.filePath);
+          const cover = await readLocalCardCover(client, source.filePath, title);
           if (!cancelled) {
             setState({
               source: {
                 renderKind: "local-file",
                 source,
-                title: normalizeString(metadata?.name) ?? readCardMetadataTitle(metadata?.raw) ?? getFileName(source.filePath),
+                title,
                 createdAt: normalizeString(metadata?.createdAt) ?? normalizeString(metadata?.raw?.created_at),
+                ...(cover ? { cover } : undefined),
               },
               error: null,
             });
@@ -129,13 +206,16 @@ function ViewerSourceProvider({
         }
 
         const metadata = await client.box.readMetadata(source.filePath);
+        const title = normalizeString(metadata.name) ?? getFileName(source.filePath);
+        const cover = await readLocalBoxCover(client, source.filePath, title);
         if (!cancelled) {
           setState({
             source: {
               renderKind: "local-file",
               source,
-              title: normalizeString(metadata.name) ?? getFileName(source.filePath),
+              title,
               createdAt: normalizeString(metadata.createdAt),
+              ...(cover ? { cover } : undefined),
             },
             error: null,
           });

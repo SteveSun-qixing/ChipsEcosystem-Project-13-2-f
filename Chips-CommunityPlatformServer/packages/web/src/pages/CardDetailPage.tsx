@@ -96,6 +96,10 @@ export default function CardDetailPage() {
           createdAt: card.createdAt,
           documentUrl: card.htmlUrl,
           canonicalUrl: `/cards/${cardId}`,
+          ...(card.coverUrl ? { coverUrl: card.coverUrl } : undefined),
+          ...(card.coverFragmentUrl ? { coverFragmentUrl: card.coverFragmentUrl } : undefined),
+          ...(card.coverRenderMode ? { coverRenderMode: card.coverRenderMode } : undefined),
+          ...(card.coverRatio ? { coverRatio: card.coverRatio } : undefined),
         }
       : null;
 

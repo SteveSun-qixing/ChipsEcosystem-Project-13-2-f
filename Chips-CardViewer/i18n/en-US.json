@@ -2,7 +2,9 @@
   "card-viewer": {
     "actions": {
       "back": "Go Back",
-      "open": "Open File"
+      "open": "Open File",
+      "showCover": "Show Cover",
+      "showContent": "Show Content"
     },
     "dialogs": {
       "openFileTitle": "Open Card or Box File"
@@ -17,6 +19,8 @@
       "documentContainerError": "The document container is unavailable.",
       "documentFatalError": "A fatal error occurred while rendering the document.",
       "documentRenderError": "Failed to render the document window.",
+      "coverCloseHint": "Click the cover to return to content.",
+      "coverUnavailable": "No cover is available for this document.",
       "localMetadataError": "Unable to read document information. Check the Host card info chain.",
       "remoteCardUnsupported": "Remote card files must be resolved by the host into an official document source first."
     },

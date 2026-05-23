@@ -11,7 +11,7 @@ import {
   type WebPluginSessionView,
 } from '../lib/host-runtime';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
-import { Icon } from '../runtime/icons/Icon';
+import { Icon, type IconName } from '../runtime/icons/Icon';
 import './HostedPluginSurface.css';
 
 interface HostedPluginSurfaceProps {
@@ -317,6 +317,22 @@ function normalizePluginChromeState(payload: unknown): PluginChromeState | null 
     actions,
     safeBlockStart: Number.isFinite(safeBlockStart) ? Math.max(0, Math.ceil(safeBlockStart)) : PLUGIN_CHROME_SAFE_BLOCK_START,
   };
+}
+
+function resolveChromeActionIcon(icon: string | undefined): IconName | null {
+  if (icon === 'cover' || icon === 'document' || icon === 'card' || icon === 'box' || icon === 'sparkles') {
+    return icon;
+  }
+  return null;
+}
+
+function ChromeActionIcon({ icon }: { icon?: string }) {
+  const resolvedIcon = resolveChromeActionIcon(icon);
+  return resolvedIcon ? (
+    <Icon name={resolvedIcon} size={20} />
+  ) : (
+    <span aria-hidden="true" className="hosted-plugin-surface__chrome-action-dot" />
+  );
 }
 
 export function HostedPluginSurface({
@@ -736,7 +752,7 @@ export function HostedPluginSurface({
                     aria-label={action.label}
                     title={action.label}
                   >
-                    <span aria-hidden="true">{action.icon ?? '·'}</span>
+                    <ChromeActionIcon icon={action.icon} />
                   </button>
                 ))}
               </div>

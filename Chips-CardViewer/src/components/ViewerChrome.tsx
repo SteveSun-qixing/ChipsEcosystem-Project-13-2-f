@@ -37,6 +37,7 @@ interface ViewerChromeProviderProps {
   state: ViewerChromeState;
   externalChrome: boolean;
   onBack: () => void;
+  onAction?: (actionId: string) => void;
   children: React.ReactNode;
 }
 
@@ -61,6 +62,7 @@ function ViewerChromeProvider({
   state,
   externalChrome,
   onBack,
+  onAction,
   children,
 }: ViewerChromeProviderProps) {
   const bridge = useChipsBridge();
@@ -68,9 +70,11 @@ function ViewerChromeProvider({
     (actionId: string) => {
       if (actionId === "back" && state.back.enabled) {
         onBack();
+        return;
       }
+      onAction?.(actionId);
     },
-    [onBack, state.back.enabled],
+    [onAction, onBack, state.back.enabled],
   );
 
   useEffect(() => {
@@ -171,7 +175,10 @@ function ViewerChromeLayer() {
                 aria-label={action.label}
                 title={action.label}
               >
-                <span aria-hidden="true">{action.icon ?? "·"}</span>
+                <span
+                  aria-hidden="true"
+                  className={`viewer-chrome__action-icon${action.icon ? ` viewer-chrome__action-icon--${action.icon}` : ""}`}
+                />
               </button>
             ))}
           </div>

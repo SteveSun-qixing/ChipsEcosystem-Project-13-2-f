@@ -53,6 +53,10 @@ export default function BoxDetailPage() {
           createdAt: box.createdAt,
           documentUrl: box.documentUrl,
           canonicalUrl: `/boxes/${boxId}`,
+          ...(box.coverUrl ? { coverUrl: box.coverUrl } : undefined),
+          ...(box.coverFragmentUrl ? { coverFragmentUrl: box.coverFragmentUrl } : undefined),
+          ...(box.coverRenderMode ? { coverRenderMode: box.coverRenderMode } : undefined),
+          ...(box.coverRatio ? { coverRatio: box.coverRatio } : undefined),
         }
       : null;
 

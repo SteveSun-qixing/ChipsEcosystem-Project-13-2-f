@@ -9,6 +9,8 @@ export type IconName =
   | 'logout'
   | 'card'
   | 'box'
+  | 'cover'
+  | 'document'
   | 'clock'
   | 'sparkles'
   | 'check'
@@ -86,6 +88,23 @@ function getIconPath(name: IconName) {
           <path d="M12 3 4 7.5 12 12l8-4.5L12 3Z" />
           <path d="M4 7.5V16.5L12 21l8-4.5V7.5" />
           <path d="M12 12v9" />
+        </>
+      );
+    case 'cover':
+      return (
+        <>
+          <rect x="5" y="4" width="14" height="16" rx="2.5" />
+          <path d="m8 16 3.5-4 2.5 3 1.5-1.8L18 16" />
+          <path d="M8.5 8.5h.01" />
+        </>
+      );
+    case 'document':
+      return (
+        <>
+          <path d="M7 3.5h7l3 3V20a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 20V3.5Z" />
+          <path d="M14 3.5V7h3" />
+          <path d="M9.5 11h5" />
+          <path d="M9.5 15h5" />
         </>
       );
     case 'clock':

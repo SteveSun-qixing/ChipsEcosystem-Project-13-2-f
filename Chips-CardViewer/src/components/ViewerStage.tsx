@@ -2,12 +2,19 @@ import React from "react";
 import type { ResolvedViewerSource } from "../types/viewer-source";
 import { CardWindow } from "./CardWindow";
 import { HostedDocumentWindow } from "./HostedDocumentWindow";
+import { ViewerCoverSurface } from "./ViewerCoverSurface";
+
+type ViewerMode = "content" | "cover";
 
 interface ViewerStageProps {
   source: ResolvedViewerSource | null;
+  viewerMode: ViewerMode;
   error: string | null;
   empty: React.ReactNode;
   unsupportedRemoteLabel: string;
+  coverCloseLabel: string;
+  coverUnavailableLabel: string;
+  onCloseCover: () => void;
   traceId?: string;
   locale?: string;
   loadingLabel: string;
@@ -20,9 +27,13 @@ interface ViewerStageProps {
 
 export function ViewerStage({
   source,
+  viewerMode,
   error,
   empty,
   unsupportedRemoteLabel,
+  coverCloseLabel,
+  coverUnavailableLabel,
+  onCloseCover,
   traceId,
   locale,
   loadingLabel,
@@ -44,6 +55,28 @@ export function ViewerStage({
 
   if (!source) {
     return <>{empty}</>;
+  }
+
+  if (viewerMode === "cover") {
+    if (source.cover) {
+      return (
+        <ViewerCoverSurface
+          cover={source.cover}
+          title={source.cover.title ?? source.title ?? coverCloseLabel}
+          closeLabel={coverCloseLabel}
+          unavailableLabel={coverUnavailableLabel}
+          onClose={onCloseCover}
+        />
+      );
+    }
+
+    return (
+      <section className="card-viewer-shell__state" aria-live="polite">
+        <div className="card-viewer-shell__state-panel">
+          <h2>{coverUnavailableLabel}</h2>
+        </div>
+      </section>
+    );
   }
 
   if (source.renderKind === "hosted-document") {

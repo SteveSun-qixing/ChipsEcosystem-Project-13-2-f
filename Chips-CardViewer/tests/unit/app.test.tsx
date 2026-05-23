@@ -2,6 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import { App } from "../../src/App";
 import { CardWindow } from "../../src/components/CardWindow";
+import { ViewerCoverSurface } from "../../src/components/ViewerCoverSurface";
 import { parseCardViewerSource } from "../../src/types/viewer-source";
 
 const appMock = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ const appMock = vi.hoisted(() => ({
     },
     box: {
       readMetadata: vi.fn(),
+      renderCover: vi.fn(),
     },
     resource: {
       open: vi.fn(),
@@ -93,12 +95,44 @@ describe("App（卡片查看器根组件）", () => {
       cardId: "card-1",
       title: "社区卡片",
       documentUrl: "https://example.test/card.html",
+      coverUrl: "https://example.test/cover.html",
+      coverFragmentUrl: "https://example.test/cover-fragment.html",
+      coverRenderMode: "fragment-shadow",
+      coverRatio: "3:4",
     })).toMatchObject({
       kind: "community-card",
       cardId: "card-1",
       title: "社区卡片",
       documentUrl: "https://example.test/card.html",
+      coverUrl: "https://example.test/cover.html",
+      coverFragmentUrl: "https://example.test/cover-fragment.html",
+      coverRenderMode: "fragment-shadow",
+      coverRatio: "3:4",
     });
+  });
+
+  it("封面查看层应当使用受控文档 iframe 并提供点击返回命中层", () => {
+    const html = renderToString(
+      <ViewerCoverSurface
+        cover={{
+          title: "卡片封面",
+          coverUrl: "https://example.test/cover.html",
+          coverFragmentUrl: "https://example.test/cover-fragment.html",
+          coverRenderMode: "fragment-shadow",
+          ratio: "3:4",
+        }}
+        title="社区卡片"
+        closeLabel="点击封面返回内容"
+        unavailableLabel="当前文档没有可用封面。"
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('data-chips-app="card-viewer.cover"');
+    expect(html).toContain('data-scope="viewer-cover-frame"');
+    expect(html).toContain('data-ratio="3:4"');
+    expect(html).toContain("viewer-cover-surface__hit-target");
+    expect(html).toContain('aria-label="点击封面返回内容"');
   });
 
   it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {

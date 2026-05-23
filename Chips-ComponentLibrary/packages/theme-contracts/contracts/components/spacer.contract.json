@@ -1,0 +1,14 @@
+{
+  "component": "spacer",
+  "scope": "spacer",
+  "parts": [
+    "root"
+  ],
+  "states": [
+    "idle"
+  ],
+  "tokens": [
+    "chips.comp.spacer.root.size",
+    "chips.comp.spacer.root.surface"
+  ]
+}

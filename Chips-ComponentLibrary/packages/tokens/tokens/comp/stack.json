@@ -1,0 +1,15 @@
+{
+  "chips": {
+    "comp": {
+      "stack": {
+        "root": {
+          "gap": "{chips.layout.gap.md}",
+          "surface": "transparent"
+        },
+        "focus": {
+          "outline": "{chips.sys.color.primary}"
+        }
+      }
+    }
+  }
+}

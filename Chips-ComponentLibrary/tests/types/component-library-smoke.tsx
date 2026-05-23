@@ -1,4 +1,4 @@
-import { ChipsButton, ChipsThemeProvider, CompositeWindowMode, type CardDisplayAdapter, loadCompositeWindowData, toCardRuntimeStandardError, toComponentStandardError } from "@chips/component-library";
+import { ChipsButton, ChipsStack, ChipsThemeProvider, ChipsView, CompositeWindowMode, type CardDisplayAdapter, loadCompositeWindowData, toCardRuntimeStandardError, toComponentStandardError } from "@chips/component-library";
 
 const adapter: CardDisplayAdapter = {
   async resolveCoverFrame(input) {
@@ -34,13 +34,17 @@ const runtimeError = toCardRuntimeStandardError(new Error("runtime"), "CARD_RUNT
 
 export const smokeTree = (
   <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
-    <ChipsButton
-      variant="primary"
-      onPress={() => {
-        console.log(componentError.code, runtimeError.code);
-      }}
-    >
-      Save
-    </ChipsButton>
+    <ChipsView title="Demo" aria-label="Demo view">
+      <ChipsStack gap="8px">
+        <ChipsButton
+          variant="primary"
+          onPress={() => {
+            console.log(componentError.code, runtimeError.code);
+          }}
+        >
+          Save
+        </ChipsButton>
+      </ChipsStack>
+    </ChipsView>
   </ChipsThemeProvider>
 );

@@ -30,6 +30,25 @@ const flattenLayer = (layer: Record<string, unknown>, prefix?: string): Record<s
 };
 
 export const REQUIRED_THEME_TOKENS: string[] = [
+  // layout primitives
+  "chips.comp.view.root.surface",
+  "chips.comp.view.root.text.color",
+  "chips.comp.view.content.surface",
+  "chips.comp.box.root.surface",
+  "chips.comp.box.root.radius",
+  "chips.comp.stack.root.gap",
+  "chips.comp.inline.root.gap",
+  "chips.comp.grid.root.gap",
+  "chips.comp.grid.item.surface",
+  "chips.comp.section.root.surface",
+  "chips.comp.section.divider.color",
+  "chips.comp.scroll-view.root.surface",
+  "chips.comp.scroll-view.scrollbar.thumb",
+  "chips.comp.spacer.root.size",
+  "chips.comp.divider.root.color",
+  "chips.comp.divider.root.thickness",
+  "chips.comp.split-view.root.surface",
+  "chips.comp.split-view.detail.surface",
   // icon
   "chips.sys.icon.color",
   "chips.sys.icon.size",

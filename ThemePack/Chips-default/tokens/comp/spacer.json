@@ -1,0 +1,12 @@
+{
+  "chips": {
+    "comp": {
+      "spacer": {
+        "root": {
+          "size": "{chips.layout.gap.md}",
+          "surface": "transparent"
+        }
+      }
+    }
+  }
+}

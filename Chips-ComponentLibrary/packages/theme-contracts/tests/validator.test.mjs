@@ -34,6 +34,16 @@ function buildTokenTree() {
     merge(tree, readJson(path.join(root, fileName)));
   }
   for (const fileName of [
+    "view.json",
+    "box.json",
+    "stack.json",
+    "inline.json",
+    "grid.json",
+    "section.json",
+    "scroll-view.json",
+    "spacer.json",
+    "divider.json",
+    "split-view.json",
     "button.json",
     "input.json",
     "checkbox.json",
@@ -84,6 +94,20 @@ test("validateComponentContract accepts valid contract", () => {
     iframe: {
       requiredSandbox: true
     }
+  };
+
+  assert.equal(validateComponentContract(contract, flat), true);
+});
+
+test("validateComponentContract accepts non-iframe component contract", () => {
+  const tokenTree = buildTokenTree();
+  const flat = flattenTokens(tokenTree);
+  const contract = {
+    component: "view",
+    scope: "view",
+    parts: ["root", "content"],
+    states: ["idle"],
+    tokens: ["chips.comp.view.root.surface"]
   };
 
   assert.equal(validateComponentContract(contract, flat), true);

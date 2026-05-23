@@ -2,18 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildComponentContract,
+  buildLayoutComponentContract,
   ChipsButton,
+  ChipsBox,
   ChipsCheckbox,
   ChipsCommandPalette,
   ChipsDataGrid,
   ChipsDateTime,
+  ChipsDivider,
   ChipsDockPanel,
   ChipsDialog,
   ChipsEmptyState,
+  ChipsGrid,
   ChipsIcon,
   ChipsErrorBoundary,
   ChipsFormField,
   ChipsFormGroup,
+  ChipsInline,
   ChipsInput,
   ChipsInspector,
   ChipsLoadingBoundary,
@@ -25,12 +30,18 @@ import {
   ChipsSkeleton,
   ChipsSplitPane,
   ChipsSelect,
+  ChipsScrollView,
+  ChipsSection,
   ChipsSwitch,
+  ChipsSpacer,
+  ChipsSplitView,
+  ChipsStack,
   ChipsTabs,
   ChipsToast,
   ChipsToolWindow,
   ChipsTree,
   ChipsTooltip,
+  ChipsView,
   ChipsVirtualList,
   ChipsCardShell,
   COMPONENT_TOKEN_MAP,
@@ -154,7 +165,27 @@ test("buildComponentContract returns icon component contract", () => {
   assert.deepEqual(contract.parts, ["root"]);
 });
 
+test("layout primitive contracts are available through common contract builder", () => {
+  const view = buildComponentContract("view");
+  const splitView = buildLayoutComponentContract("split-view");
+
+  assert.equal(view.scope, "view");
+  assert.ok(view.tokens.includes("chips.comp.view.root.surface"));
+  assert.equal(splitView.scope, "split-view");
+  assert.ok(splitView.parts.includes("detail"));
+});
+
 test("component token map includes complete P0 base interactive keys", () => {
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.view));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.box));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.stack));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.inline));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.grid));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.section));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["scroll-view"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.spacer));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.divider));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["split-view"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -185,6 +216,45 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.toast));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["empty-state"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.skeleton));
+});
+
+test("layout primitives render standard data attributes", () => {
+  const view = ChipsView.render(
+    {
+      title: "Library",
+      children: "Content"
+    },
+    null
+  );
+  const box = ChipsBox.render({ padding: "12px" }, null);
+  const stack = ChipsStack.render({ direction: "horizontal", children: ["A", "B"] }, null);
+  const inline = ChipsInline.render({ children: ["A", "B"] }, null);
+  const grid = ChipsGrid.render({ columns: 2, children: ["A"] }, null);
+  const section = ChipsSection.render({ title: "General", children: "Body" }, null);
+  const scrollView = ChipsScrollView.render({ "aria-label": "Scrollable", children: "Body" }, null);
+  const spacer = ChipsSpacer.render({ size: "1rem" }, null);
+  const divider = ChipsDivider.render({ orientation: "vertical" }, null);
+  const splitView = ChipsSplitView.render(
+    {
+      "aria-label": "Split",
+      primary: "Navigation",
+      detail: "Detail"
+    },
+    null
+  );
+
+  assert.equal(view.props["data-scope"], "view");
+  assert.equal(box.props["data-scope"], "box");
+  assert.equal(stack.props["data-direction"], "horizontal");
+  assert.equal(inline.props["data-wrap"], "true");
+  assert.equal(grid.props["data-columns"], "2");
+  assert.equal(section.props["data-scope"], "section");
+  assert.equal(scrollView.props["data-axis"], "vertical");
+  assert.equal(ChipsBox.render({ loading: true }, null).props["data-state"], "loading");
+  assert.equal(ChipsScrollView.render({ axis: "invalid", "aria-label": "Fallback" }, null).props["data-axis"], "vertical");
+  assert.equal(spacer.props["aria-hidden"], "true");
+  assert.equal(divider.props.role, "separator");
+  assert.equal(splitView.props["data-variant"], "two-column");
 });
 
 test("validateComponentA11y validates known components and rejects missing rule", () => {
@@ -403,6 +473,45 @@ test("validateComponentA11y validates known components and rejects missing rule"
     validateComponentA11y("skeleton", {
       role: "status",
       "aria-label": "loading placeholder"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("view", {
+      role: "region",
+      "aria-label": "view"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("section", {
+      role: "region",
+      "aria-label": "section"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("scroll-view", {
+      role: "region",
+      "aria-label": "scroll view"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("split-view", {
+      role: "group",
+      "aria-label": "split view"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("divider", {
+      role: "separator"
     }),
     true
   );

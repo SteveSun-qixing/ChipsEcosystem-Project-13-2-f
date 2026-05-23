@@ -1,0 +1,23 @@
+{
+  "component": "stack",
+  "scope": "stack",
+  "parts": [
+    "root",
+    "item",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.stack.root.gap",
+    "chips.comp.stack.root.surface",
+    "chips.comp.stack.focus.outline"
+  ]
+}

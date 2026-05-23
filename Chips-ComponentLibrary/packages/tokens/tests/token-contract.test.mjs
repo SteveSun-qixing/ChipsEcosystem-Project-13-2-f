@@ -47,6 +47,16 @@ test("card runtime component tokens exist", () => {
   const toast = readJson(path.join(root, "comp/toast.json"));
   const emptyState = readJson(path.join(root, "comp/empty-state.json"));
   const skeleton = readJson(path.join(root, "comp/skeleton.json"));
+  const view = readJson(path.join(root, "comp/view.json"));
+  const box = readJson(path.join(root, "comp/box.json"));
+  const stack = readJson(path.join(root, "comp/stack.json"));
+  const inline = readJson(path.join(root, "comp/inline.json"));
+  const grid = readJson(path.join(root, "comp/grid.json"));
+  const section = readJson(path.join(root, "comp/section.json"));
+  const scrollView = readJson(path.join(root, "comp/scroll-view.json"));
+  const spacer = readJson(path.join(root, "comp/spacer.json"));
+  const divider = readJson(path.join(root, "comp/divider.json"));
+  const splitView = readJson(path.join(root, "comp/split-view.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -82,6 +92,16 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(toast, "chips.comp.toast.close.color"));
   assert.ok(getPath(emptyState, "chips.comp.empty-state.description.color"));
   assert.ok(getPath(skeleton, "chips.comp.skeleton.item.surface.active"));
+  assert.ok(getPath(view, "chips.comp.view.content.surface"));
+  assert.ok(getPath(box, "chips.comp.box.root.radius"));
+  assert.ok(getPath(stack, "chips.comp.stack.root.gap"));
+  assert.ok(getPath(inline, "chips.comp.inline.root.gap"));
+  assert.ok(getPath(grid, "chips.comp.grid.item.surface"));
+  assert.ok(getPath(section, "chips.comp.section.divider.color"));
+  assert.ok(getPath(scrollView, "chips.comp.scroll-view.scrollbar.thumb"));
+  assert.ok(getPath(spacer, "chips.comp.spacer.root.size"));
+  assert.ok(getPath(divider, "chips.comp.divider.root.thickness"));
+  assert.ok(getPath(splitView, "chips.comp.split-view.detail.surface"));
 });
 
 test("system token layer exists", () => {

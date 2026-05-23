@@ -43,15 +43,40 @@
   - `chips.comp.tool-window.*`
   - `chips.comp.error-boundary.*`
   - `chips.comp.loading-boundary.*`
-  - `chips.comp.notification.*`
-  - `chips.comp.toast.*`
-  - `chips.comp.empty-state.*`
-  - `chips.comp.skeleton.*`
-  - `chips.comp.card-cover-frame.*`
-  - `chips.comp.composite-card-window.*`
+      - `chips.comp.notification.*`
+      - `chips.comp.toast.*`
+      - `chips.comp.empty-state.*`
+      - `chips.comp.skeleton.*`
+      - `chips.comp.view.*`
+      - `chips.comp.box.*`
+      - `chips.comp.stack.*`
+      - `chips.comp.inline.*`
+      - `chips.comp.grid.*`
+      - `chips.comp.section.*`
+      - `chips.comp.scroll-view.*`
+      - `chips.comp.spacer.*`
+      - `chips.comp.divider.*`
+      - `chips.comp.split-view.*`
+      - `chips.comp.card-cover-frame.*`
+      - `chips.comp.composite-card-window.*`
 - 后续组件保持同一命名形态：`chips.comp.<component-name>.*`
 
 组件 token 必须可追溯到 `sys` 层语义 token，不允许直接绑定业务名。
+
+布局原语 token 是正式组件 token 的一部分，主题包必须覆盖其契约声明的 key。当前布局原语的最小契约前缀包括：
+
+- `chips.comp.view.*`
+- `chips.comp.box.*`
+- `chips.comp.stack.*`
+- `chips.comp.inline.*`
+- `chips.comp.grid.*`
+- `chips.comp.section.*`
+- `chips.comp.scroll-view.*`
+- `chips.comp.spacer.*`
+- `chips.comp.divider.*`
+- `chips.comp.split-view.*`
+
+布局原语只通过 token、CSS 变量和 `data-scope/data-part/data-state` 接收视觉实现；主题包不得通过选择业务页面结构或组件私有 DOM 层级来覆盖它们。
 
 ## 4. 主题包约束
 

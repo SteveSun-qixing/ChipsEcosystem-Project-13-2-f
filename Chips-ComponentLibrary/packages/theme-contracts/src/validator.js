@@ -63,7 +63,14 @@ export function validateComponentContract(contract, flatTokenMap) {
     }
   }
 
-  if (!isObject(contract.iframe) || contract.iframe.requiredSandbox !== true) {
+  if (isObject(contract.iframe)) {
+    if (contract.iframe.requiredSandbox !== true) {
+      throw new Error("THEME_CONTRACT_INVALID:iframe.requiredSandbox");
+    }
+  } else if (
+    contract.component === "card-cover-frame"
+    || contract.component === "composite-card-window"
+  ) {
     throw new Error("THEME_CONTRACT_INVALID:iframe.requiredSandbox");
   }
 

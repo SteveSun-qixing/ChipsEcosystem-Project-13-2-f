@@ -5,6 +5,39 @@ import {
   createAriaStatusProps,
   isKeyboardActivationKey
 } from "@chips/a11y";
+import {
+  buildLayoutComponentContract,
+  ChipsBox,
+  ChipsDivider,
+  ChipsGrid,
+  ChipsInline,
+  ChipsScrollView,
+  ChipsSection,
+  ChipsSpacer,
+  ChipsSplitView,
+  ChipsStack,
+  ChipsView,
+  LAYOUT_COMPONENT_TOKEN_MAP,
+  LAYOUT_PRIMITIVE_COMPONENTS,
+  validateLayoutComponentA11y
+} from "./layout-primitives.js";
+
+export {
+  buildLayoutComponentContract,
+  ChipsBox,
+  ChipsDivider,
+  ChipsGrid,
+  ChipsInline,
+  ChipsScrollView,
+  ChipsSection,
+  ChipsSpacer,
+  ChipsSplitView,
+  ChipsStack,
+  ChipsView,
+  LAYOUT_COMPONENT_TOKEN_MAP,
+  LAYOUT_PRIMITIVE_COMPONENTS,
+  validateLayoutComponentA11y
+};
 
 const INTERACTIVE_STATE_PRIORITY = [
   "disabled",
@@ -168,6 +201,7 @@ export const InteractiveEventType = {
 };
 
 export const COMPONENT_TOKEN_MAP = {
+  ...LAYOUT_COMPONENT_TOKEN_MAP,
   icon: [
     "chips.sys.icon.color",
     "chips.sys.icon.size",
@@ -454,6 +488,10 @@ export function createComponentMeta({ name, scope, parts, states }) {
 export function buildComponentContract(component) {
   if (typeof component !== "string" || component.length === 0) {
     throw new Error("COMPONENT_CONTRACT_INVALID:component");
+  }
+
+  if (Object.hasOwn(LAYOUT_COMPONENT_TOKEN_MAP, component)) {
+    return buildLayoutComponentContract(component);
   }
 
   if (!Object.hasOwn(COMPONENT_TOKEN_MAP, component)) {
@@ -5866,6 +5904,10 @@ export const ChipsToast = React.forwardRef((props, ref) => {
 ChipsToast.displayName = "ChipsToast";
 
 export function validateComponentA11y(component, props) {
+  if (Object.hasOwn(LAYOUT_COMPONENT_TOKEN_MAP, component)) {
+    return validateLayoutComponentA11y(component, props);
+  }
+
   if (component === "icon") {
     const decorative = props["aria-hidden"] === "true";
     const hasLabel = isNonEmptyString(props["aria-label"]) || isNonEmptyString(props["aria-labelledby"]);

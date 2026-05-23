@@ -16,19 +16,23 @@ function assertCommonShape(contract) {
   assert.ok(Array.isArray(contract.parts));
   assert.ok(Array.isArray(contract.states));
   assert.ok(Array.isArray(contract.tokens));
+}
+
+function assertIframeShape(contract) {
+  assertCommonShape(contract);
   assert.equal(contract.iframe.requiredSandbox, true);
 }
 
 test("card-cover-frame contract is complete", () => {
   const contract = readContract("card-cover-frame.contract.json");
-  assertCommonShape(contract);
+  assertIframeShape(contract);
   assert.ok(contract.parts.includes("iframe"));
   assert.ok(contract.states.includes("error"));
 });
 
 test("composite-card-window contract includes degraded state", () => {
   const contract = readContract("composite-card-window.contract.json");
-  assertCommonShape(contract);
+  assertIframeShape(contract);
   assert.ok(contract.states.includes("degraded"));
   assert.ok(contract.parts.includes("overlay"));
 });
@@ -275,4 +279,33 @@ test("skeleton contract contains item token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("item"));
   assert.ok(contract.tokens.includes("chips.comp.skeleton.item.surface.active"));
+});
+
+test("layout primitive contracts do not require iframe contract", () => {
+  const contract = readContract("view.contract.json");
+  assertCommonShape(contract);
+  assert.equal(contract.iframe, undefined);
+  assert.ok(contract.parts.includes("content"));
+  assert.ok(contract.tokens.includes("chips.comp.view.content.surface"));
+});
+
+test("layout primitive contract family contains expected semantic scopes", () => {
+  const expectations = [
+    ["box.contract.json", "box", "chips.comp.box.root.radius"],
+    ["stack.contract.json", "stack", "chips.comp.stack.root.gap"],
+    ["inline.contract.json", "inline", "chips.comp.inline.root.gap"],
+    ["grid.contract.json", "grid", "chips.comp.grid.item.surface"],
+    ["section.contract.json", "section", "chips.comp.section.divider.color"],
+    ["scroll-view.contract.json", "scroll-view", "chips.comp.scroll-view.scrollbar.thumb"],
+    ["spacer.contract.json", "spacer", "chips.comp.spacer.root.size"],
+    ["divider.contract.json", "divider", "chips.comp.divider.root.thickness"],
+    ["split-view.contract.json", "split-view", "chips.comp.split-view.detail.surface"]
+  ];
+
+  for (const [fileName, scope, token] of expectations) {
+    const contract = readContract(fileName);
+    assertCommonShape(contract);
+    assert.equal(contract.scope, scope);
+    assert.ok(contract.tokens.includes(token));
+  }
 });

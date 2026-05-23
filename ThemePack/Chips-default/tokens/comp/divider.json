@@ -1,0 +1,15 @@
+{
+  "chips": {
+    "comp": {
+      "divider": {
+        "root": {
+          "color": "{chips.sys.color.on-surface}",
+          "thickness": "1px"
+        },
+        "label": {
+          "color": "{chips.sys.color.on-surface}"
+        }
+      }
+    }
+  }
+}

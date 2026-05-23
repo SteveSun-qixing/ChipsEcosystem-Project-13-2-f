@@ -59,7 +59,12 @@ test("stage9 a11y gate validates all component rules", () => {
     validateComponentA11y("notification", { role: "region", "aria-label": "notifications" }),
     validateComponentA11y("toast", { role: "status", "aria-label": "toasts" }),
     validateComponentA11y("empty-state", { role: "region", "aria-label": "empty state" }),
-    validateComponentA11y("skeleton", { role: "status", "aria-label": "skeleton" })
+    validateComponentA11y("skeleton", { role: "status", "aria-label": "skeleton" }),
+    validateComponentA11y("view", { role: "region", "aria-label": "view" }),
+    validateComponentA11y("section", { role: "region", "aria-label": "section" }),
+    validateComponentA11y("scroll-view", { role: "region", "aria-label": "scroll view" }),
+    validateComponentA11y("split-view", { role: "group", "aria-label": "split view" }),
+    validateComponentA11y("divider", { role: "separator" })
   ];
 
   assert.equal(assertions.every((item) => item === true), true);

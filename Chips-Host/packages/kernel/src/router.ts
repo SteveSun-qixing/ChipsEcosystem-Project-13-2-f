@@ -149,10 +149,31 @@ export class KernelRouter {
 
   private guardPermissions(required: string[], context: RouteInvocationContext): void {
     if (!this.permissionGuard.check(required, context.caller.permissions)) {
-      throw createError('PERMISSION_DENIED', 'Caller does not have required permissions', {
-        required,
-        granted: context.caller.permissions
-      });
+      const granted = context.caller.permissions ?? [];
+      throw createError(
+        'PERMISSION_DENIED',
+        'Caller does not have required permissions',
+        {
+          required,
+          granted,
+          callerId: context.caller.id,
+          callerType: context.caller.type,
+          pluginId: context.caller.pluginId
+        },
+        false,
+        {
+          messageKey: 'chips.error.permissionDenied',
+          requestId: context.requestId,
+          permission: {
+            required,
+            granted,
+            messageKey: 'chips.error.permissionDenied',
+            callerId: context.caller.id,
+            callerType: context.caller.type,
+            pluginId: context.caller.pluginId
+          }
+        }
+      );
     }
   }
 

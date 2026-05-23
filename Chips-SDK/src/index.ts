@@ -205,5 +205,4 @@ export type {
   ResourceOpenResult,
 } from "./api/resource";
 export type { ZipApi, ZipEntryMeta } from "./api/zip";
-export type { StandardError } from "./types/errors";
-export type { CardViewerDocumentKind, CardViewerSource } from "./types/card-viewer";
+export type { PermissionDiagnostic, StandardError } from "./types/errors";

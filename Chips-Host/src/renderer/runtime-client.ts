@@ -105,8 +105,8 @@ export class RuntimeClient {
     };
   }
 
-  public once(event: string, handler: (payload: unknown) => void): void {
-    this.bridge.once(event, handler);
+  public once(event: string, handler: (payload: unknown) => void): () => void {
+    return this.bridge.once(event, handler);
   }
 
   public off(event: string, handler?: (payload: unknown) => void): void {

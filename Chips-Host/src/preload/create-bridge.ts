@@ -193,9 +193,14 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
           },
           once: (event, handler) => {
             const channel = `${CHIPS_EVENT_CHANNEL_PREFIX}${event}`;
-            electron.ipcRenderer!.once(channel, (_event: unknown, data: unknown) => {
+            const listener = (_event: unknown, data: unknown) => {
+              electron.ipcRenderer!.removeListener(channel, listener);
               handler(data);
-            });
+            };
+            electron.ipcRenderer!.on(channel, listener);
+            return () => {
+              electron.ipcRenderer!.removeListener(channel, listener);
+            };
           },
           emit: (event, data) => {
             electron.ipcRenderer!.send(CHIPS_EMIT_CHANNEL, { event, data });

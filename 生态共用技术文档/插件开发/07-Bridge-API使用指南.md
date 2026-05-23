@@ -12,9 +12,9 @@ Bridge API是插件访问系统能力的标准接口。本文介绍如何在插�
 
 ## 调用方式
 
-Bridge API使用统一的调用模式。invoke方法用于发起请求，语法是window.chips.invoke(service, method, payload)。
+Bridge API使用统一的调用模式。invoke方法用于发起请求，语法是 `window.chips.invoke(action, payload?)`。
 
-service参数指定目标服务，如card、box、file、theme等。method参数指定要调用的方法，如read、write、create等。payload参数是请求数据对象。
+action 使用 `namespace.action` 形式指定目标服务动作，例如 `card.render`、`box.openView`、`file.read`、`theme.apply`。payload 参数是请求数据对象。
 
 invoke方法返回Promise对象。建议使用async/await语法处理异步调用，使代码更简洁易读。
 
@@ -34,7 +34,9 @@ on方法用于订阅系统事件。
 
 事件类型使用命名空间格式，如card.created表示卡片创建事件。回调函数接收事件对象作为参数。
 
-事件监听应该在插件，在初始化时设置插件销毁时取消。取消使用off方法，传入订阅ID。
+事件监听应该在插件初始化时设置，并在插件销毁时取消。`window.chips.on(event, handler)` 返回取消订阅函数。`window.chips.once(event, handler)` 也返回取消订阅函数，回调最多触发一次，触发前调用取消函数后不得再触发。
+
+页面向 Host 发出事件时使用 `window.chips.emit(event, data?)`。该方法返回 `Promise<void>`；如果 Host 或传输层拒绝事件，Promise 会 reject 标准错误对象。
 
 ## 错误处理
 
@@ -42,12 +44,28 @@ on方法用于订阅系统事件。
 
 ```typescript
 interface StandardError {
-  code: string;        // 错误码
-  message: string;     // 错误描述
-  details?: unknown;   // 详细信息
-  retryable?: boolean; // 是否可重试
+  code: string;           // 错误码
+  message: string;        // 错误描述
+  messageKey?: string;    // 多语言文案 key
+  details?: unknown;      // 详细信息
+  retryable?: boolean;    // 是否可重试
+  requestId?: string;     // 请求唯一标识
+  traceId?: string;       // 链路追踪标识
+  permission?: {
+    domain?: string;
+    action?: string;
+    resource?: string;
+    required: string[];
+    granted: string[];
+    messageKey?: string;
+    callerId?: string;
+    callerType?: string;
+    pluginId?: string;
+  };
 }
 ```
+
+权限不足时，调用方应优先读取 `permission.required / permission.granted` 判断缺失权限，并使用 `messageKey` 交给多语言系统展示文案；不要通过解析 `message` 判断权限。
 
 ### 错误码体系
 
@@ -67,7 +85,7 @@ interface StandardError {
 - `SERVICE_PERMISSION_DENIED`：权限不足
 
 **Runtime 层错误 (RUNTIME_*)**：
-- `RUNTIME_RETRY_EXhausted`：重试次数耗尽
+- `RUNTIME_RETRY_EXHAUSTED`：重试次数耗尽
 - `RUNTIME_CIRCUIT_OPEN`：熔断器开启
 - `RUNTIME_ROUTE_TIMEOUT`：路由超时
 

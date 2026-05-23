@@ -1024,9 +1024,36 @@ client.platform.getPathForFile(file: unknown): string
 
 SDK方法返回Promise，错误通过Promise reject传递。
 
-错误对象包含code错误码、message错误描述、details详细信息。常见错误包括认证失败、权限不足、资源不存在等。
+错误对象采用生态统一 `StandardError` envelope。SDK 会保留 Host / Bridge 返回的 `messageKey / requestId / traceId / permission`，本地检测到 Bridge 不可用或 SDK 调用超时时也会生成 `requestId`，便于和 SDK logger、Host Kernel 日志串联。
+
+```typescript
+interface StandardError {
+  code: string;
+  message: string;
+  messageKey?: string;
+  details?: unknown;
+  retryable?: boolean;
+  requestId?: string;
+  traceId?: string;
+  permission?: {
+    domain?: string;
+    action?: string;
+    resource?: string;
+    required: string[];
+    granted: string[];
+    messageKey?: string;
+    callerId?: string;
+    callerType?: string;
+    pluginId?: string;
+  };
+}
+```
+
+常见错误包括 Bridge 不可用、调用超时、权限不足、资源不存在等。`retryable=true` 只表示错误允许重试；SDK 不会自动重试 `PERMISSION_DENIED` / `SERVICE_PERMISSION_DENIED`。
 
 建议使用try-catch捕获错误，并向用户提供友好的错误提示。
+
+事件 API 中，`client.events.on(...)` 和 `client.events.once(...)` 都返回取消订阅函数；`once` 触发前取消后不得再调用 handler。
 
 ## TypeScript支持
 

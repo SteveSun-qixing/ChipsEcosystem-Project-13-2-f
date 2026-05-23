@@ -43,15 +43,33 @@ describe('KernelRouter', () => {
       handler: async () => ({ ok: true })
     });
 
+    const requestContext = {
+      ...context('permission-denied-1'),
+      caller: {
+        ...context().caller,
+        permissions: []
+      }
+    };
     await expect(
-      router.invoke('secure.action', {}, {
-        ...context(),
-        caller: {
-          ...context().caller,
-          permissions: []
-        }
-      })
-    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+      router.invoke('secure.action', {}, requestContext)
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+      messageKey: 'chips.error.permissionDenied',
+      requestId: 'permission-denied-1',
+      permission: {
+        required: ['secure.use'],
+        granted: [],
+        callerId: 'tester',
+        callerType: 'service',
+        messageKey: 'chips.error.permissionDenied'
+      },
+      details: {
+        required: ['secure.use'],
+        granted: [],
+        callerId: 'tester',
+        callerType: 'service'
+      }
+    });
   });
 
   it('retries retryable errors for idempotent actions', async () => {

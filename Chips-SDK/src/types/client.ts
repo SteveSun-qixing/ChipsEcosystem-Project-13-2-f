@@ -27,7 +27,7 @@ export interface ClientConfig {
     token: string;
   };
 
-  /** 默认超时时间（毫秒）。具体超时由 Host/Bridge 控制，本字段仅用于未来扩展与诊断。 */
+  /** SDK 调用超时时间（毫秒）。为 0 或未设置时不启用 SDK 侧超时。 */
   timeoutMs?: number;
 
   /** 最大重试次数（仅对 retryable=true 的错误生效）。 */
@@ -55,7 +55,7 @@ export interface SdkLogger {
 
 export interface EventsApi {
   on<T>(event: string, handler: (payload: T) => void): () => void;
-  once<T>(event: string, handler: (payload: T) => void): void;
+  once<T>(event: string, handler: (payload: T) => void): () => void;
   emit<T>(event: string, payload: T): Promise<void>;
 }
 

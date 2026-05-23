@@ -32,16 +32,23 @@ Bridge 核心入口冻结为：
 
 - `invoke(action, payload?)`
 - `invokeScoped(action, payload, { token })`
-- `on(event, handler)`
-- `once(event, handler)`
-- `emit(event, data?)`
-- `emitScoped(event, data, { token })`
+- `on(event, handler): () => void`
+- `once(event, handler): () => void`
+- `emit(event, data?): Promise<void>`
+- `emitScoped(event, data, { token }): Promise<void>`
 
 动作名统一采用 `namespace.action` 形式，例如：
 
 - `surface.open`
 - `plugin.launch`
 - `platform.getCapabilities`
+
+事件订阅语义：
+
+- `on` 返回取消订阅函数，调用后不得再触发该 handler；
+- `once` 也返回取消订阅函数，handler 最多触发一次，触发前取消后不得再触发；
+- `emit / emitScoped` 必须返回 `Promise<void>`，传输层或 Host 拒绝事件时必须 reject 标准错误对象；
+- Bridge 不得吞掉上游错误 envelope，`messageKey / requestId / traceId / permission` 必须原样透传给 SDK 或页面侧调用方。
 
 ### 2.2 当前正式子域
 

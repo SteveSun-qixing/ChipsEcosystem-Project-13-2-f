@@ -1301,12 +1301,33 @@ const ensureCallerPermission = (
     return;
   }
 
-  throw createError('PERMISSION_DENIED', `Caller lacks permission: ${permission}`, {
-    action,
-    permission,
-    callerId: routeContext.caller.id,
-    callerType: routeContext.caller.type
-  });
+  throw createError(
+    'PERMISSION_DENIED',
+    `Caller lacks permission: ${permission}`,
+    {
+      action,
+      permission,
+      required: [permission],
+      granted: grantedPermissions,
+      callerId: routeContext.caller.id,
+      callerType: routeContext.caller.type,
+      pluginId: routeContext.caller.pluginId
+    },
+    false,
+    {
+      messageKey: 'chips.error.permissionDenied',
+      requestId: routeContext.requestId,
+      permission: {
+        action,
+        required: [permission],
+        granted: grantedPermissions,
+        messageKey: 'chips.error.permissionDenied',
+        callerId: routeContext.caller.id,
+        callerType: routeContext.caller.type,
+        pluginId: routeContext.caller.pluginId
+      }
+    }
+  );
 };
 
 const COMMAND_SCOPE_KINDS = new Set<CommandScopeKind>(['global', 'app', 'scene', 'surface', 'document']);

@@ -237,7 +237,21 @@ describe('PluginRuntime', () => {
     );
 
     await runtime.install(manifestPath);
-    expect(() => runtime.ensurePermission('chips.perm.plugin', 'file.write')).toThrow();
+    let permissionError: unknown;
+    try {
+      runtime.ensurePermission('chips.perm.plugin', 'file.write');
+    } catch (error) {
+      permissionError = error;
+    }
+    expect(permissionError).toMatchObject({
+      code: 'PERMISSION_DENIED',
+      messageKey: 'chips.error.permissionDenied',
+      permission: expect.objectContaining({
+        required: ['file.write'],
+        granted: ['file.read'],
+        pluginId: 'chips.perm.plugin'
+      })
+    });
 
     const quota = runtime.setQuota('chips.perm.plugin', {
       cpuBudget: 40,

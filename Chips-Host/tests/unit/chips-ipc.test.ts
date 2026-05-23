@@ -171,7 +171,7 @@ describe('chips ipc bridge', () => {
         resolve(payload.data);
       });
     });
-    bridge.emit('demo.renderer', { source: 'renderer' });
+    await bridge.emit('demo.renderer', { source: 'renderer' });
     await expect(fromRenderer).resolves.toEqual({ source: 'renderer' });
     expect(electronMock.mainListeners.has(CHIPS_EMIT_CHANNEL)).toBe(true);
     expect(electronMock.rendererListeners.has(`${CHIPS_EVENT_CHANNEL_PREFIX}demo.updated`)).toBe(true);

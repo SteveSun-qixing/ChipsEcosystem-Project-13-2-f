@@ -1,6 +1,6 @@
 import { detectEnvironment } from "./environment";
 import { createPluginBridgeAdapter, createTransportAdapter, type BridgeAdapter } from "./bridge-adapter";
-import { createError, isStandardError } from "../types/errors";
+import { createError, isPermissionDeniedError, normalizeStandardError } from "../types/errors";
 import type {
   Client,
   ClientConfig,
@@ -50,10 +50,25 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
   };
 
   async function invoke<I, O>(action: string, payload: I): Promise<O> {
+    const requestId = createRequestId();
+
     if (!adapter) {
       throw createError(
         "BRIDGE_UNAVAILABLE",
         "No available transport or Bridge adapter in current environment.",
+        {
+          action,
+          environment,
+          hasWindow: typeof window !== "undefined",
+          hasChips:
+            typeof window !== "undefined" &&
+            typeof (window as unknown as { chips?: unknown }).chips !== "undefined",
+        },
+        false,
+        {
+          messageKey: "chips.error.bridgeUnavailable",
+          requestId,
+        },
       );
     }
 
@@ -61,22 +76,36 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
     const maxRetries = coreConfig.retries ?? 0;
 
     while (true) {
+      const attempt = ctx.attempt + 1;
+      const start = Date.now();
+
       try {
-        const start = Date.now();
-        const result = await adapter.invoke<I, O>(action, payload, coreConfig);
+        const result = await withTimeout(
+          adapter.invoke<I, O>(action, payload, coreConfig),
+          coreConfig.timeoutMs ?? 0,
+          action,
+          requestId,
+        );
         const duration = Date.now() - start;
 
         coreConfig.logger?.debug?.({
           level: "debug",
           time: new Date().toISOString(),
           action,
+          requestId,
           message: "SDK invoke success",
-          details: { durationMs: duration, attempt: ctx.attempt },
+          details: { durationMs: duration, attempt },
         });
 
         return result;
       } catch (err) {
-        const stdErr: StandardError = normalizeError(err);
+        const duration = Date.now() - start;
+        const stdErr: StandardError = normalizeStandardError(
+          err,
+          "Unknown error during SDK invocation.",
+          "INTERNAL_ERROR",
+          { requestId, action },
+        );
         ctx.attempt += 1;
         ctx.error = stdErr;
 
@@ -84,11 +113,19 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
           level: "error",
           time: new Date().toISOString(),
           action,
+          requestId: stdErr.requestId,
           message: stdErr.message,
-          details: { code: stdErr.code, attempt: ctx.attempt, retryable: stdErr.retryable },
+          details: {
+            code: stdErr.code,
+            attempt,
+            durationMs: duration,
+            retryable: stdErr.retryable,
+            traceId: stdErr.traceId,
+            permission: stdErr.permission,
+          },
         });
 
-        if (!stdErr.retryable || ctx.attempt > maxRetries) {
+        if (!shouldRetry(stdErr, ctx.attempt, maxRetries)) {
           throw stdErr;
         }
 
@@ -102,7 +139,7 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
     on<T>(_event: string, _handler: (payload: T) => void): () => void {
       throw createError("EVENTS_UNAVAILABLE", "Events API is not available without a transport.");
     },
-    once<T>(_event: string, _handler: (payload: T) => void): void {
+    once<T>(_event: string, _handler: (payload: T) => void): () => void {
       throw createError("EVENTS_UNAVAILABLE", "Events API is not available without a transport.");
     },
     emit<T>(_event: string, _payload: T): Promise<void> {
@@ -119,31 +156,55 @@ export function createCoreClient(config: ClientConfig = {}): CoreClient {
   };
 }
 
-function normalizeError(err: unknown): StandardError {
-  if (isStandardError(err)) return err;
-  const e = err as any;
-  if (typeof e?.code === "string" && typeof e?.message === "string") {
-    return {
-      code: e.code,
-      message: e.message,
-      details: e.details,
-      retryable: !!e.retryable,
-      requestId: e.requestId,
-      traceId: e.traceId,
-    };
-  }
-  return createError(
-    "INTERNAL_ERROR",
-    e?.message ?? "Unknown error during SDK invocation.",
-    e,
-    false,
-  );
-}
-
 function computeBackoffDelay(attempt: number): number {
   const base = 200;
   const factor = Math.min(attempt, 5);
   return base * Math.pow(2, factor - 1);
+}
+
+function shouldRetry(error: StandardError, attempt: number, maxRetries: number): boolean {
+  return error.retryable === true && !isPermissionDeniedError(error) && attempt <= maxRetries;
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  action: string,
+  requestId: string,
+): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return promise;
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(
+        createError(
+          "BRIDGE_TIMEOUT",
+          `Bridge call timeout for action: ${action}`,
+          { action, timeoutMs },
+          true,
+          {
+            messageKey: "chips.error.bridgeTimeout",
+            requestId,
+          },
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
+function createRequestId(): string {
+  const cryptoSource = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  if (typeof cryptoSource?.randomUUID === "function") {
+    return cryptoSource.randomUUID();
+  }
+  return `sdk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function createClient(config: ClientConfig = {}): Client {

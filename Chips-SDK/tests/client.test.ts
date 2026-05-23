@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect } from "vitest";
 import { createClient } from "../src/core/client";
 import type { StandardError } from "../src/types/errors";
 import type { CardEditorRenderOptions, CardEditorRenderResult } from "../src/api/card";
+import type { SdkLogRecord } from "../src/types/client";
 
 afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
@@ -437,6 +438,157 @@ describe("createClient", () => {
     expect(captured).toBeDefined();
     expect(captured?.code).toBe("INTERNAL_ERROR");
     expect(captured?.message).toContain("boom");
+  });
+
+  it("applies SDK invoke timeouts and logs request ids", async () => {
+    const logs: SdkLogRecord[] = [];
+    const client = createClient({
+      environment: "node",
+      timeoutMs: 5,
+      logger: {
+        debug(record) {
+          logs.push(record);
+        },
+        info(record) {
+          logs.push(record);
+        },
+        warn(record) {
+          logs.push(record);
+        },
+        error(record) {
+          logs.push(record);
+        },
+      },
+      transport: async () => new Promise(() => undefined),
+    });
+
+    let captured: StandardError | undefined;
+    try {
+      await client.file.read("/test.txt");
+    } catch (err) {
+      captured = err as StandardError;
+    }
+
+    expect(captured).toMatchObject({
+      code: "BRIDGE_TIMEOUT",
+      messageKey: "chips.error.bridgeTimeout",
+      retryable: true,
+      details: {
+        action: "file.read",
+        timeoutMs: 5,
+      },
+    });
+    expect(captured?.requestId).toEqual(expect.any(String));
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      level: "error",
+      action: "file.read",
+      requestId: captured?.requestId,
+      details: {
+        code: "BRIDGE_TIMEOUT",
+        attempt: 1,
+        retryable: true,
+      },
+    });
+  });
+
+  it("retries retryable errors and keeps one request id across attempts", async () => {
+    const logs: SdkLogRecord[] = [];
+    let calls = 0;
+    const client = createClient({
+      environment: "node",
+      retries: 1,
+      logger: {
+        debug(record) {
+          logs.push(record);
+        },
+        info(record) {
+          logs.push(record);
+        },
+        warn(record) {
+          logs.push(record);
+        },
+        error(record) {
+          logs.push(record);
+        },
+      },
+      transport: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw {
+            code: "BRIDGE_CONNECTION_LOST",
+            message: "Bridge connection lost.",
+            retryable: true,
+          };
+        }
+        return { content: "content" };
+      },
+    });
+
+    await expect(client.file.read("/test.txt")).resolves.toBe("content");
+
+    expect(calls).toBe(2);
+    expect(logs.map((record) => record.level)).toEqual(["error", "debug"]);
+    expect(logs[0]?.requestId).toEqual(logs[1]?.requestId);
+    expect(logs[0]).toMatchObject({
+      action: "file.read",
+      details: {
+        code: "BRIDGE_CONNECTION_LOST",
+        attempt: 1,
+        retryable: true,
+      },
+    });
+    expect(logs[1]).toMatchObject({
+      action: "file.read",
+      details: {
+        attempt: 2,
+      },
+    });
+  });
+
+  it("normalizes permission denied errors and never retries them", async () => {
+    let calls = 0;
+    const client = createClient({
+      environment: "node",
+      retries: 3,
+      transport: async () => {
+        calls += 1;
+        throw {
+          code: "PERMISSION_DENIED",
+          message: "Caller lacks permission: file.read",
+          details: {
+            action: "file.read",
+            resource: "/secret.txt",
+            required: ["file.read"],
+            granted: ["theme.read"],
+            callerId: "plugin.demo",
+            callerType: "plugin",
+          },
+          retryable: true,
+        };
+      },
+    });
+
+    let captured: StandardError | undefined;
+    try {
+      await client.file.read("/secret.txt");
+    } catch (err) {
+      captured = err as StandardError;
+    }
+
+    expect(calls).toBe(1);
+    expect(captured).toMatchObject({
+      code: "PERMISSION_DENIED",
+      permission: {
+        action: "file.read",
+        resource: "/secret.txt",
+        required: ["file.read"],
+        granted: ["theme.read"],
+        messageKey: "chips.error.permissionDenied",
+        callerId: "plugin.demo",
+        callerType: "plugin",
+      },
+    });
   });
 
   it("unwraps i18n responses and preserves theme snapshots", async () => {
@@ -1248,7 +1400,7 @@ describe("createClient", () => {
           return { locale: "en-US" };
         },
         on: () => () => undefined,
-        once: () => undefined,
+        once: () => () => undefined,
         emit: async () => undefined,
         emitScoped: async () => undefined,
       },
@@ -1520,6 +1672,36 @@ describe("createClient", () => {
 
     expect(captured).toBeDefined();
     expect(captured?.code).toBe("BRIDGE_UNAVAILABLE");
+    expect(captured?.messageKey).toBe("chips.error.bridgeUnavailable");
+    expect(captured?.requestId).toEqual(expect.any(String));
+    expect(captured?.details).toMatchObject({
+      action: "file.read",
+      environment: "node",
+      hasWindow: false,
+      hasChips: false,
+    });
+  });
+
+  it("supports cancellable once subscriptions for custom transports", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async () => undefined,
+    });
+    const events: unknown[] = [];
+
+    const cancelFirst = client.events.once("theme.changed", (payload) => {
+      events.push(payload);
+    });
+    cancelFirst();
+    await client.events.emit("theme.changed", { id: "theme-1" });
+
+    client.events.once("theme.changed", (payload) => {
+      events.push(payload);
+    });
+    await client.events.emit("theme.changed", { id: "theme-2" });
+    await client.events.emit("theme.changed", { id: "theme-3" });
+
+    expect(events).toEqual([{ id: "theme-2" }]);
   });
 
   it("unwraps Host IPC encoded standard errors from the plugin bridge", async () => {
@@ -1528,11 +1710,11 @@ describe("createClient", () => {
       chips: {
         invoke: async () => {
           throw new Error(
-            '__chips_ipc_error__:{"code":"ROUTE_TIMEOUT","message":"Route timeout: platform.dialogOpenFile","details":{"timeoutMs":2000},"retryable":true}',
+            '__chips_ipc_error__:{"code":"ROUTE_TIMEOUT","message":"Route timeout: platform.dialogOpenFile","messageKey":"chips.error.routeTimeout","details":{"timeoutMs":2000},"retryable":true,"requestId":"host-request-1","traceId":"trace-1"}',
           );
         },
         on: () => () => undefined,
-        once: () => undefined,
+        once: () => () => undefined,
         emit: async () => undefined,
       },
     } as unknown as Window;
@@ -1552,7 +1734,10 @@ describe("createClient", () => {
       expect(captured).toBeDefined();
       expect(captured?.code).toBe("ROUTE_TIMEOUT");
       expect(captured?.message).toBe("Route timeout: platform.dialogOpenFile");
+      expect(captured?.messageKey).toBe("chips.error.routeTimeout");
       expect(captured?.retryable).toBe(true);
+      expect(captured?.requestId).toBe("host-request-1");
+      expect(captured?.traceId).toBe("trace-1");
     } finally {
       if (previousWindow) {
         globalThis.window = previousWindow;
@@ -1568,7 +1753,7 @@ describe("createClient", () => {
       chips: {
         invoke: async () => undefined,
         on: () => () => undefined,
-        once: () => undefined,
+        once: () => () => undefined,
         emit: async () => undefined,
         platform: {
           getPathForFile(file: unknown) {
@@ -1599,7 +1784,7 @@ describe("createClient", () => {
       chips: {
         invoke: async () => undefined,
         on: () => () => undefined,
-        once: () => undefined,
+        once: () => () => undefined,
         emit: async () => undefined,
         platform: {
           getLaunchContext: () => ({

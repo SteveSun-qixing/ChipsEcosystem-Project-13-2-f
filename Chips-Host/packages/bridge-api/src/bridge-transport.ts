@@ -287,16 +287,16 @@ export type BridgeAssociationOpenPathResult =
 
 export interface BridgeEventAdapter {
   on(event: string, handler: BridgeEventHandler): () => void;
-  once(event: string, handler: BridgeEventHandler): void;
-  emit(event: string, data?: unknown): void;
+  once(event: string, handler: BridgeEventHandler): () => void;
+  emit(event: string, data?: unknown): Promise<void> | void;
 }
 
 export interface ChipsBridge {
   invoke<T = unknown>(action: string, payload?: unknown): Promise<T>;
   invokeScoped?<T = unknown>(action: string, payload: unknown, scope: { token: string }): Promise<T>;
   on(event: string, handler: BridgeEventHandler): () => void;
-  once(event: string, handler: BridgeEventHandler): void;
-  emit(event: string, data?: unknown): void;
+  once(event: string, handler: BridgeEventHandler): () => void;
+  emit(event: string, data?: unknown): Promise<void>;
   emitScoped?(event: string, data: unknown, scope: { token: string }): Promise<void>;
   window: {
     open(config: unknown): Promise<BridgeSurfaceState>;
@@ -449,15 +449,16 @@ export class BridgeTransport implements ChipsBridge {
             },
             once: (event, handler) => {
               if (this.eventAdapter) {
-                this.eventAdapter.once(event, handler);
-                return;
+                return this.eventAdapter.once(event, handler);
               }
               this.emitter.once(event, handler);
+              return () => {
+                this.emitter.off(event, handler);
+              };
             },
             emit: (event, data) => {
               if (this.eventAdapter) {
-                this.eventAdapter.emit(event, data);
-                return;
+                return this.eventAdapter.emit(event, data);
               }
               this.emitter.emit(event, data);
             }
@@ -737,12 +738,12 @@ export class BridgeTransport implements ChipsBridge {
     return this.transport.on(event, handler);
   }
 
-  public once(event: string, handler: BridgeEventHandler): void {
-    this.transport.once(event, handler);
+  public once(event: string, handler: BridgeEventHandler): () => void {
+    return this.transport.once(event, handler);
   }
 
-  public emit(event: string, data?: unknown): void {
-    void this.transport.emit(event, data);
+  public async emit(event: string, data?: unknown): Promise<void> {
+    await this.transport.emit(event, data);
   }
 
   public pushFromHost(event: string, payload: unknown): void {

@@ -52,10 +52,20 @@ export const createError = (
   code: string,
   message: string,
   details?: unknown,
-  retryable = false
+  retryable = false,
+  options: {
+    messageKey?: string;
+    requestId?: string;
+    traceId?: string;
+    permission?: StandardError['permission'];
+  } = {}
 ): StandardError => ({
   code,
   message,
   details,
-  retryable
+  retryable,
+  messageKey: options.messageKey,
+  requestId: options.requestId,
+  traceId: options.traceId,
+  permission: options.permission
 });

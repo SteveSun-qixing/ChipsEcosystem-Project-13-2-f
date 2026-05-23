@@ -19,8 +19,22 @@ export interface RouteInvocationContext {
 export interface StandardError {
   code: string;
   message: string;
+  messageKey?: string;
   details?: unknown;
   retryable?: boolean;
+  requestId?: string;
+  traceId?: string;
+  permission?: {
+    domain?: string;
+    action?: string;
+    resource?: string;
+    required: string[];
+    granted: string[];
+    messageKey?: string;
+    callerId?: string;
+    callerType?: string;
+    pluginId?: string;
+  };
 }
 
 export interface EventPayload<T = unknown> {

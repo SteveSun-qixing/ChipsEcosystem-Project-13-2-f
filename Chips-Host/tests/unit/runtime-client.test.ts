@@ -5,8 +5,8 @@ import type { ChipsBridge } from '../../packages/bridge-api/src';
 const createBridge = (handler: (action: string, payload: unknown) => Promise<unknown>): ChipsBridge => ({
   invoke: (action, payload) => handler(action, payload) as Promise<any>,
   on: () => () => undefined,
-  once: () => undefined,
-  emit: () => undefined,
+  once: () => () => undefined,
+  emit: async () => undefined,
   window: {
     open: async () => ({
       id: 'window-1',

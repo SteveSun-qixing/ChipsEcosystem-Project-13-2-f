@@ -535,10 +535,26 @@ export class PluginRuntime {
   public ensurePermission(pluginId: string, permission: string): void {
     const plugin = this.get(pluginId);
     if (!plugin.manifest.permissions.includes(permission)) {
-      throw createError('PERMISSION_DENIED', `Plugin lacks permission: ${permission}`, {
-        pluginId,
-        permission
-      });
+      throw createError(
+        'PERMISSION_DENIED',
+        `Plugin lacks permission: ${permission}`,
+        {
+          pluginId,
+          permission,
+          required: [permission],
+          granted: plugin.manifest.permissions
+        },
+        false,
+        {
+          messageKey: 'chips.error.permissionDenied',
+          permission: {
+            required: [permission],
+            granted: plugin.manifest.permissions,
+            messageKey: 'chips.error.permissionDenied',
+            pluginId
+          }
+        }
+      );
     }
   }
 

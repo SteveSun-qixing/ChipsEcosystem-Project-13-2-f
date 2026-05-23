@@ -1,5 +1,6 @@
 import { createError } from '../../../src/shared/errors';
-import type { NormalizedNode, ThemeSnapshot } from './types';
+import { createRenderDiagnosticForNode } from './diagnostics';
+import type { NormalizedNode, RenderNodeDiagnostic, ThemeSnapshot } from './types';
 
 const resolveScopedToken = (theme: ThemeSnapshot, scope: string | undefined, tokenName: string): unknown => {
   if (scope && theme.scopes?.[scope] && tokenName in theme.scopes[scope]!) {
@@ -30,6 +31,47 @@ export const resolveNodeProps = (
     resolved[key] = value;
   }
   return resolved;
+};
+
+export const collectThemeDiagnosticsForNode = (node: NormalizedNode, theme: ThemeSnapshot): RenderNodeDiagnostic[] => {
+  const diagnostics: RenderNodeDiagnostic[] = [];
+  for (const [prop, value] of Object.entries(node.props)) {
+    if (typeof value !== 'string' || !value.startsWith('token.')) {
+      continue;
+    }
+    const tokenName = value.slice('token.'.length);
+    if (resolveScopedToken(theme, node.themeScope, tokenName) !== undefined) {
+      continue;
+    }
+    diagnostics.push(
+      createRenderDiagnosticForNode(node, {
+        stage: 'theme-resolve',
+        severity: 'P1',
+        code: 'RENDER_THEME_TOKEN_NOT_FOUND',
+        message: `Token is not defined: ${tokenName}`,
+        suggestion: 'Add this token to the active theme snapshot or replace the prop with an existing semantic token.',
+        details: {
+          prop,
+          token: tokenName,
+          scope: node.themeScope,
+          themeId: theme.id
+        }
+      })
+    );
+  }
+  return diagnostics;
+};
+
+export const collectThemeDiagnostics = (root: NormalizedNode, theme: ThemeSnapshot): RenderNodeDiagnostic[] => {
+  const diagnostics: RenderNodeDiagnostic[] = [];
+  const visit = (node: NormalizedNode): void => {
+    diagnostics.push(...collectThemeDiagnosticsForNode(node, theme));
+    for (const child of node.children) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return diagnostics;
 };
 
 const resolveNode = (node: NormalizedNode, theme: ThemeSnapshot): NormalizedNode => {

@@ -908,15 +908,51 @@ describe("createClient", () => {
             contentFiles: [],
             target: "offscreen-render",
             semanticHash: "hash-1",
+            diagnostics: [
+              {
+                nodeId: "root",
+                path: "root",
+                stage: "contract-validate",
+                severity: "P1",
+                code: "RENDER_CONTRACT_A11Y_NAME_REQUIRED",
+                message: "Command node requires an accessible name",
+                suggestion: "Provide an accessible name.",
+                qualityGateBlocking: true,
+              },
+            ],
+            qualityGate: {
+              passed: false,
+              blockingCount: 1,
+              highestSeverity: "P1",
+              blockingDiagnostics: [
+                {
+                  nodeId: "root",
+                  path: "root",
+                  stage: "contract-validate",
+                  severity: "P1",
+                  code: "RENDER_CONTRACT_A11Y_NAME_REQUIRED",
+                  message: "Command node requires an accessible name",
+                  suggestion: "Provide an accessible name.",
+                  qualityGateBlocking: true,
+                },
+              ],
+            },
           },
         };
       },
     });
 
-    await client.card.render("/tmp/demo.card", {
+    const result = await client.card.render("/tmp/demo.card", {
       target: "offscreen-render",
       themeId: "chips-official.default-dark-theme",
       locale: "en-US",
+    });
+    expect(result.view.qualityGate?.passed).toBe(false);
+    expect(result.view.diagnostics?.[0]).toMatchObject({
+      path: "root",
+      severity: "P1",
+      suggestion: expect.any(String),
+      qualityGateBlocking: true,
     });
 
     expect(calls).toEqual([

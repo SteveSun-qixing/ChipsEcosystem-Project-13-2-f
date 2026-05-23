@@ -89,6 +89,7 @@ export interface CardRenderOptions {
 
 export interface RenderNodeDiagnostic {
   nodeId: string;
+  path: string;
   stage:
     | "node-normalize"
     | "contract-validate"
@@ -96,9 +97,19 @@ export interface RenderNodeDiagnostic {
     | "layout-compute"
     | "render-commit"
     | "effect-dispatch";
+  severity: "P0" | "P1" | "P2" | "info";
   code: string;
   message: string;
+  suggestion: string;
+  qualityGateBlocking: boolean;
   details?: unknown;
+}
+
+export interface RenderQualityGateResult {
+  passed: boolean;
+  blockingCount: number;
+  highestSeverity?: "P0" | "P1" | "P2" | "info";
+  blockingDiagnostics: RenderNodeDiagnostic[];
 }
 
 export interface RenderConsistencyResult {
@@ -116,6 +127,7 @@ export interface CardRenderView {
   target: string;
   semanticHash: string;
   diagnostics?: RenderNodeDiagnostic[];
+  qualityGate?: RenderQualityGateResult;
   consistency?: RenderConsistencyResult;
 }
 

@@ -1,13 +1,14 @@
-import { toStandardError } from '../../../src/shared/errors';
+import { createError, toStandardError } from '../../../src/shared/errors';
 import { now } from '../../../src/shared/utils';
 import { appRootAdapter, cardIframeAdapter, createDefaultAdapters } from './adapters';
-import { validateSingleNodeContract } from './contract-validator';
+import { collectSingleNodeContractDiagnostics } from './contract-validator';
+import { createRenderDiagnosticForNode, evaluateRenderQualityGate, isRenderNodeDiagnostic } from './diagnostics';
 import { dispatchRenderEffects } from './effect-dispatch';
 import { hashSemanticTree, toNumber } from './helpers';
 import { computeChildOrigin, computeNodeLayout } from './layout-compute';
 import { normalizeDeclarationTree } from './node-normalizer';
 import { createIncrementalPlan, RenderQueueScheduler } from './render-queue';
-import { resolveNodeProps } from './theme-resolver';
+import { collectThemeDiagnosticsForNode, resolveNodeProps } from './theme-resolver';
 import type {
   DeclarativeNode,
   ErrorBoundaryConfig,
@@ -38,6 +39,7 @@ const buildPipelineDurationRecord = (): Record<RenderPipelineStage, number> => (
 const cloneNodeWithoutChildren = (node: NormalizedNode): Omit<NormalizedNode, 'children'> => {
   return {
     id: node.id,
+    path: node.path,
     type: node.type,
     props: { ...node.props },
     state: { ...node.state },
@@ -135,6 +137,18 @@ export class UnifiedRenderingEngine {
     const adapter = this.getAdapter(target);
 
     const addDiagnostic = (entry: RenderNodeDiagnostic): void => {
+      if (
+        diagnostics.some(
+          (diagnostic) =>
+            diagnostic.nodeId === entry.nodeId &&
+            diagnostic.path === entry.path &&
+            diagnostic.stage === entry.stage &&
+            diagnostic.code === entry.code &&
+            diagnostic.message === entry.message
+        )
+      ) {
+        return;
+      }
       diagnostics.push(entry);
       const bucket = diagnosticsByNode.get(entry.nodeId) ?? [];
       bucket.push(entry);
@@ -159,21 +173,34 @@ export class UnifiedRenderingEngine {
       }
     };
 
+    const failWithDiagnostic = (diagnostic: RenderNodeDiagnostic): never => {
+      throw createError(diagnostic.code, diagnostic.message, {
+        diagnostic,
+        qualityGate: evaluateRenderQualityGate(diagnostics)
+      });
+    };
+
     const normalizeBoundaryFallback = (
       node: NormalizedNode,
       stage: RenderPipelineStage,
       error: unknown,
       regionFallback?: ErrorBoundaryConfig['fallback']
     ): NormalizedNode => {
-      const standard = toStandardError(error, 'RENDER_PIPELINE_STAGE_FAILED');
-      const diagnostic: RenderNodeDiagnostic = {
-        nodeId: node.id,
+      const diagnosticFromError = isRenderNodeDiagnostic(error) ? error : undefined;
+      const standard = diagnosticFromError ? undefined : toStandardError(error, 'RENDER_PIPELINE_STAGE_FAILED');
+      const diagnostic = createRenderDiagnosticForNode(node, {
         stage,
-        code: standard.code,
-        message: standard.message,
-        details: standard.details
-      };
-      addDiagnostic(diagnostic);
+        code: diagnosticFromError?.code ?? standard!.code,
+        message: diagnosticFromError?.message ?? standard!.message,
+        severity: diagnosticFromError?.severity ?? 'P1',
+        suggestion:
+          diagnosticFromError?.suggestion ??
+          'Check this node contract and fallback configuration, then rerun the L9 render validation.',
+        details: diagnosticFromError?.details ?? standard!.details
+      });
+      if (!diagnosticFromError) {
+        addDiagnostic(diagnostic);
+      }
       const fallback = node.errorBoundary?.fallback ?? regionFallback;
       return createFallbackNormalizedNode(node, fallback, stage, diagnostic);
     };
@@ -189,7 +216,14 @@ export class UnifiedRenderingEngine {
       const nextRegionFallback = ownBoundary === 'region' ? node.errorBoundary?.fallback : regionFallback;
 
       try {
-        validateSingleNodeContract(node, adapter);
+        const nodeDiagnostics = collectSingleNodeContractDiagnostics(node, adapter);
+        for (const diagnostic of nodeDiagnostics) {
+          addDiagnostic(diagnostic);
+        }
+        const fatalDiagnostic = nodeDiagnostics.find((diagnostic) => diagnostic.qualityGateBlocking);
+        if (fatalDiagnostic && (isolate || options?.failOnQualityGate)) {
+          failWithDiagnostic(fatalDiagnostic);
+        }
         return {
           ...cloneNodeWithoutChildren(node),
           children: node.children.map((child) => validateNode(child, nextRegionBoundary, nextRegionFallback))
@@ -213,7 +247,15 @@ export class UnifiedRenderingEngine {
       const nextRegionFallback = ownBoundary === 'region' ? node.errorBoundary?.fallback : regionFallback;
 
       try {
-        const resolvedProps = resolveNodeProps(node.props, context.theme, node.themeScope);
+        const nodeDiagnostics = collectThemeDiagnosticsForNode(node, context.theme);
+        for (const diagnostic of nodeDiagnostics) {
+          addDiagnostic(diagnostic);
+        }
+        const fatalDiagnostic = nodeDiagnostics.find((diagnostic) => diagnostic.qualityGateBlocking);
+        if (fatalDiagnostic && (isolate || options?.failOnQualityGate)) {
+          failWithDiagnostic(fatalDiagnostic);
+        }
+        const resolvedProps = fatalDiagnostic ? { ...node.props } : resolveNodeProps(node.props, context.theme, node.themeScope);
         return {
           ...cloneNodeWithoutChildren(node),
           props: resolvedProps,
@@ -266,6 +308,7 @@ export class UnifiedRenderingEngine {
 
         return {
           id: node.id,
+          path: node.path,
           type: node.type,
           props: { ...node.props },
           state: { ...node.state },
@@ -285,13 +328,14 @@ export class UnifiedRenderingEngine {
         }
 
         const standard = toStandardError(error, 'RENDER_LAYOUT_COMPUTE_FAILED');
-        const diagnostic: RenderNodeDiagnostic = {
-          nodeId: node.id,
+        const diagnostic = createRenderDiagnosticForNode(node, {
           stage: 'layout-compute',
+          severity: 'P1',
           code: standard.code,
           message: standard.message,
+          suggestion: 'Check semantic layout props and computed dimensions for this node.',
           details: standard.details
-        };
+        });
         addDiagnostic(diagnostic);
 
         const fallbackType = node.errorBoundary?.fallback?.type ?? nextRegionFallback?.type ?? 'View';
@@ -309,6 +353,7 @@ export class UnifiedRenderingEngine {
 
         return {
           id: node.id,
+          path: node.path,
           type: fallbackType,
           props: fallbackProps,
           state: {},
@@ -363,6 +408,7 @@ export class UnifiedRenderingEngine {
       root: prepared,
       semanticHash,
       diagnostics,
+      qualityGate: evaluateRenderQualityGate(diagnostics),
       effects,
       pipelineDurations: durations,
       incremental

@@ -9,7 +9,15 @@ import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import { parseYamlLite } from '../../../src/shared/yaml-lite';
 import { createId } from '../../../src/shared/utils';
 import { CardPacker } from '../../card-packer/src';
-import type { RenderConsistencyResult, RenderNodeDiagnostic, RenderTarget, RenderViewport, ThemeSnapshot } from '../../unified-rendering/src';
+import { evaluateRenderQualityGate } from '../../unified-rendering/src';
+import type {
+  RenderConsistencyResult,
+  RenderNodeDiagnostic,
+  RenderQualityGateResult,
+  RenderTarget,
+  RenderViewport,
+  ThemeSnapshot
+} from '../../unified-rendering/src';
 import { StoreZipService } from '../../zip-service/src';
 
 export interface CardAst {
@@ -59,6 +67,7 @@ export interface RenderedCardView {
   target: RenderTarget;
   semanticHash: string;
   diagnostics: RenderNodeDiagnostic[];
+  qualityGate: RenderQualityGateResult;
   consistency?: RenderConsistencyResult;
 }
 
@@ -1678,9 +1687,13 @@ const createDiagnostic = (
   details?: unknown
 ): RenderNodeDiagnostic => ({
   nodeId,
+  path: `card.nodes.${nodeId}`,
   stage: 'render-commit',
+  severity: 'P1',
   code,
   message,
+  suggestion: 'Check the card node content, plugin registration, and render output for this node.',
+  qualityGateBlocking: true,
   details
 });
 
@@ -1841,6 +1854,7 @@ export class CardService {
         target,
         semanticHash,
         diagnostics,
+        qualityGate: evaluateRenderQualityGate(diagnostics),
         consistency: options?.verifyConsistency ? createConsistencySnapshot(semanticHash) : undefined
       };
     }, { persistArchive: true });

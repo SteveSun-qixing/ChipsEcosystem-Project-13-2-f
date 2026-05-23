@@ -758,6 +758,11 @@ describe('CardService rendering', () => {
     expect(galleryDocument.nodeHtml).toContain('renderBasecardView');
     expect(galleryDocument.nodeHtml).toContain('const resolveResourceUrl = async (resourcePath) =>');
     expect(galleryDocument.nodeHtml).toContain('assets/hero.png');
+    expect(view.diagnostics).toEqual([]);
+    expect(view.qualityGate).toMatchObject({
+      passed: true,
+      blockingCount: 0
+    });
   }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('keeps archive-backed composite image resources reachable after render returns', async () => {

@@ -367,6 +367,8 @@ describe('Host services integration', () => {
         documentUrl: string;
         sessionId: string;
         semanticHash: string;
+        diagnostics?: Array<{ nodeId: string; path: string; severity: string; qualityGateBlocking: boolean }>;
+        qualityGate?: { passed: boolean; blockingCount: number };
         consistency?: { consistent: boolean };
       };
     }>('card.render', {
@@ -392,6 +394,8 @@ describe('Host services integration', () => {
     expect(introNodeHtml).toContain('Render Intro');
     expect(introNodeHtml).toContain('Rendered through host service.');
     expect(rendered.view.semanticHash.length).toBeGreaterThan(10);
+    expect(rendered.view.diagnostics).toEqual([]);
+    expect(rendered.view.qualityGate).toMatchObject({ passed: true, blockingCount: 0 });
     expect(rendered.view.consistency?.consistent).toBe(true);
 
     await expect(

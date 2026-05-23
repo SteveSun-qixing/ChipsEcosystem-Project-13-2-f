@@ -60,6 +60,7 @@ export interface ThemeResolveResult {
 
 export interface NormalizedNode {
   id: string;
+  path: string;
   type: DeclarativeNodeType;
   props: Record<string, unknown>;
   state: Record<string, unknown>;
@@ -87,16 +88,23 @@ export interface VisibleRange {
   total: number;
 }
 
+export type RenderDiagnosticSeverity = 'P0' | 'P1' | 'P2' | 'info';
+
 export interface RenderNodeDiagnostic {
   nodeId: string;
+  path: string;
   stage: RenderPipelineStage;
+  severity: RenderDiagnosticSeverity;
   code: string;
   message: string;
+  suggestion: string;
+  qualityGateBlocking: boolean;
   details?: unknown;
 }
 
 export interface PreparedRenderNode {
   id: string;
+  path: string;
   type: DeclarativeNodeType;
   props: Record<string, unknown>;
   state: Record<string, unknown>;
@@ -163,6 +171,7 @@ export interface RenderExecutionOptions {
   skipEffects?: boolean;
   batchSize?: number;
   shouldYield?: (batchIndex: number) => boolean;
+  failOnQualityGate?: boolean;
 }
 
 export interface RenderResult {
@@ -171,9 +180,17 @@ export interface RenderResult {
   root: PreparedRenderNode;
   semanticHash: string;
   diagnostics: RenderNodeDiagnostic[];
+  qualityGate: RenderQualityGateResult;
   effects: EffectDispatchSummary;
   pipelineDurations: Record<RenderPipelineStage, number>;
   incremental: IncrementalScheduleResult;
+}
+
+export interface RenderQualityGateResult {
+  passed: boolean;
+  blockingCount: number;
+  highestSeverity?: RenderDiagnosticSeverity;
+  blockingDiagnostics: RenderNodeDiagnostic[];
 }
 
 export interface RenderRequest {

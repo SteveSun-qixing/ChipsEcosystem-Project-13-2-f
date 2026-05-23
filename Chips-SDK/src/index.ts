@@ -40,6 +40,8 @@ export type {
   CardRenderOptions,
   CardRenderResult,
   CardRenderView,
+  RenderNodeDiagnostic,
+  RenderQualityGateResult,
   CompositeInteractionPayload,
   CompositeInteractionPolicy,
   CompositeResourceOpenPayload,

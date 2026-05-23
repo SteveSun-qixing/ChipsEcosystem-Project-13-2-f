@@ -1,6 +1,18 @@
 export { normalizeDeclarationTree } from './node-normalizer';
-export { validateNodeContract, validateSingleNodeContract } from './contract-validator';
-export { resolveThemeForTree, resolveNodeProps } from './theme-resolver';
+export {
+  collectContractDiagnostics,
+  collectSingleNodeContractDiagnostics,
+  validateNodeContract,
+  validateSingleNodeContract
+} from './contract-validator';
+export { resolveThemeForTree, resolveNodeProps, collectThemeDiagnostics, collectThemeDiagnosticsForNode } from './theme-resolver';
+export {
+  createRenderDiagnostic,
+  createRenderDiagnosticForNode,
+  evaluateRenderQualityGate,
+  isQualityGateBlockingDiagnostic,
+  isRenderNodeDiagnostic
+} from './diagnostics';
 export { computeNodeLayout, computeChildOrigin } from './layout-compute';
 export {
   appRootAdapter,
@@ -27,12 +39,14 @@ export type {
   RenderCommitOutput,
   RenderConsistencyResult,
   RenderContext,
+  RenderDiagnosticSeverity,
   RenderEffect,
   RenderEffectExecutor,
   RenderEffectKind,
   RenderExecutionOptions,
   RenderNodeDiagnostic,
   RenderPipelineStage,
+  RenderQualityGateResult,
   RenderQueueBatch,
   RenderResult,
   RenderTarget,

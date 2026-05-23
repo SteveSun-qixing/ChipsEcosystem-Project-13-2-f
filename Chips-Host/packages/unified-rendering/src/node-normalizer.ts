@@ -38,6 +38,7 @@ const normalizeNode = (node: DeclarativeNode, path: string): NormalizedNode => {
 
   return {
     id: createNodeId(node.id, path),
+    path,
     type,
     props: {
       ...defaults,

@@ -8,7 +8,10 @@ describe('Theme Runtime', () => {
   it('resolves five-layer tokens and builds component token map', () => {
     const themeTokens: Record<string, unknown> = {
       ref: {
-        white: '#ffffff'
+        white: '#ffffff',
+        spacing: {
+          md: '12cpx'
+        }
       },
       sys: {
         text: {
@@ -23,12 +26,23 @@ describe('Theme Runtime', () => {
             },
             dialog: {
               surface: '{white}'
+            },
+            grid: {
+              gap: '{chips.layout.gap.md}'
             }
           }
         }
       },
       motion: {},
-      layout: {}
+      layout: {
+        chips: {
+          layout: {
+            gap: {
+              md: '{spacing.md}'
+            }
+          }
+        }
+      }
     };
 
     const layers = mergeThemeLayers([{ id: 'chips.test.theme', tokens: themeTokens }]);
@@ -38,9 +52,12 @@ describe('Theme Runtime', () => {
     expect(resolved.variables['text.primary']).toBe('#ffffff');
     expect(resolved.variables['chips.comp.button.background']).toBe('#ffffff');
     expect(resolved.variables['chips.comp.dialog.surface']).toBe('#ffffff');
+    expect(resolved.variables['chips.layout.gap.md']).toBe('12cpx');
+    expect(resolved.variables['chips.comp.grid.gap']).toBe('12cpx');
 
     expect(resolved.componentTokens.button!['chips.comp.button.background']).toBe('#ffffff');
     expect(resolved.componentTokens.dialog!['chips.comp.dialog.surface']).toBe('#ffffff');
+    expect(resolved.componentTokens.grid!['chips.comp.grid.gap']).toBe('12cpx');
   });
 
   it('builds theme scope chain from context', () => {

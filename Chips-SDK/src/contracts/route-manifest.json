@@ -15,6 +15,30 @@
     "box.renderCover": {
       "action": "box.renderCover"
     },
+    "box.listLayoutDescriptors": {
+      "action": "box.listLayoutDescriptors"
+    },
+    "box.readLayoutDescriptor": {
+      "action": "box.readLayoutDescriptor"
+    },
+    "box.normalizeLayoutConfig": {
+      "action": "box.normalizeLayoutConfig"
+    },
+    "box.validateLayoutConfig": {
+      "action": "box.validateLayoutConfig"
+    },
+    "box.getLayoutInitialQuery": {
+      "action": "box.getLayoutInitialQuery"
+    },
+    "box.renderLayoutFrame": {
+      "action": "box.renderLayoutFrame"
+    },
+    "box.renderLayoutEditor": {
+      "action": "box.renderLayoutEditor"
+    },
+    "box.releaseRenderSession": {
+      "action": "box.releaseRenderSession"
+    },
     "box.openView": {
       "action": "box.openView"
     },

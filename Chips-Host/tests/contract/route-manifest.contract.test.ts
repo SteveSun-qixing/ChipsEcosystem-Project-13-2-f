@@ -152,4 +152,15 @@ describe('route manifest contract', () => {
     expect(manifest.length).toBeGreaterThan(60);
     expect(manifest).toContain('control-plane.health');
   });
+
+  it('matches the SDK public route manifest', async () => {
+    const sdkManifestPath = path.resolve(__dirname, '../../../Chips-SDK/src/contracts/route-manifest.json');
+    const sdkManifest = JSON.parse(await fs.readFile(sdkManifestPath, 'utf-8')) as {
+      routes: Record<string, unknown>;
+    };
+    const hostRoutes = app.kernel.getRouteManifest().slice().sort();
+    const sdkRoutes = Object.keys(sdkManifest.routes).sort();
+
+    expect(sdkRoutes).toEqual(hostRoutes);
+  });
 });

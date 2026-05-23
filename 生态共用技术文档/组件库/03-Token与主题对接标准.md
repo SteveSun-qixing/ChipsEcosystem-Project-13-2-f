@@ -61,7 +61,8 @@
       - `chips.comp.composite-card-window.*`
 - 后续组件保持同一命名形态：`chips.comp.<component-name>.*`
 
-组件 token 必须可追溯到 `sys` 层语义 token，不允许直接绑定业务名。
+组件 token 必须可追溯到 `sys`、`motion` 或 `layout` 层语义 token，不允许直接绑定业务名。
+Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> comp`，因此组件 token 可以引用 `chips.layout.*` 与 `chips.motion.*` 这类公共运行时 token。
 
 布局原语 token 是正式组件 token 的一部分，主题包必须覆盖其契约声明的 key。当前布局原语的最小契约前缀包括：
 

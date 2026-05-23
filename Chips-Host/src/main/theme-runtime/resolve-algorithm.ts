@@ -127,12 +127,12 @@ export const resolveThemeFromLayers = (layers: ThemeTokenLayers): ResolvedTheme 
   const motionFlat = flattenLayer(layers.motion);
   const layoutFlat = flattenLayer(layers.layout);
 
-  // 在默认主题未完整分层的情况下允许直接引用 ref 层的键名（例如 {ref.white}），
-  // 也允许像 {bg} 这样简单引用在 sys 层内未预先定义的键。
+  // motion/layout are shared runtime layers that component tokens may reference.
+  // They cannot depend on component tokens, so resolve them before comp.
   const sysResolved = resolveLayerWithRefs(sysFlat, refFlat, [refFlat]);
-  const compResolved = resolveLayerWithRefs(compFlat, sysResolved, [refFlat, sysResolved]);
   const motionResolved = resolveLayerWithRefs(motionFlat, refFlat, [refFlat, sysResolved]);
   const layoutResolved = resolveLayerWithRefs(layoutFlat, refFlat, [refFlat, sysResolved]);
+  const compResolved = resolveLayerWithRefs(compFlat, sysResolved, [refFlat, sysResolved, motionResolved, layoutResolved]);
 
   const variables: Record<string, unknown> = {
     ...refFlat,

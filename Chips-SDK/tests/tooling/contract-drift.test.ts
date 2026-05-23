@@ -41,7 +41,7 @@ function collectInvokedActions(srcRoot: string): Set<string> {
   const actions = new Set<string>();
 
   const pattern =
-    /client\.invoke\s*(?:<[^>]+>)?\s*\(\s*["']([^"']+)["']/g;
+    /client\.invoke\s*(?:<[\s\S]*?>)?\s*\(\s*["']([^"']+)["']/g;
 
   for (const file of files) {
     const source = fs.readFileSync(file, "utf-8");

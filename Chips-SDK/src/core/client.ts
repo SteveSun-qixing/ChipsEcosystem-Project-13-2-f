@@ -26,6 +26,10 @@ import { createPlatformApi } from "../api/platform";
 import { createBoxApi } from "../api/box";
 import { createResourceApi } from "../api/resource";
 import { createZipApi } from "../api/zip";
+import { createLogApi } from "../api/log";
+import { createCredentialApi } from "../api/credential";
+import { createSerializerApi } from "../api/serializer";
+import { createControlPlaneApi } from "../api/control-plane";
 
 export function createCoreClient(config: ClientConfig = {}): CoreClient {
   const environment: SdkEnvironment =
@@ -229,5 +233,9 @@ export function createClient(config: ClientConfig = {}): Client {
     box: createBoxApi(core),
     resource: createResourceApi(core),
     zip: createZipApi(core),
+    log: createLogApi(core),
+    credential: createCredentialApi(core),
+    serializer: createSerializerApi(core),
+    controlPlane: createControlPlaneApi(core),
   };
 }

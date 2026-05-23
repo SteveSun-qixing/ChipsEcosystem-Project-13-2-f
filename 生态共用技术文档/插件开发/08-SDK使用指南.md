@@ -1082,6 +1082,74 @@ client.theme.onChanged((payload: ThemeChangedPayload) => {
 });
 ```
 
+## 系统治理能力
+
+SDK 提供日志、凭证、序列化和控制平面封装，分别映射 Host `log.*`、`credential.*`、`serializer.*` 与 `control-plane.*` 服务动作。
+
+### 日志
+
+```typescript
+client.log.write({
+  level: "info",
+  message: "Card export completed",
+  metadata: {
+    cardFile: "/workspace/demo.card",
+  },
+}): Promise<LogEntry>
+
+client.log.query({ level?: "debug" | "info" | "warn" | "error", requestId?: string }): Promise<LogEntry[]>
+client.log.export(): Promise<string>
+```
+
+说明：
+
+- Host `log.write` 的附加字段名是 `metadata`，不是 `data`；
+- `log.query` 当前按 `level` 与 `requestId` 查询，不接收通用 `filter/limit`；
+- `log.export()` 当前无入参，返回导出后的日志载荷字符串。
+
+### 凭证
+
+```typescript
+client.credential.get(ref: string): Promise<string | null>
+client.credential.set(ref: string, value: string): Promise<void>
+client.credential.delete(ref: string): Promise<void>
+client.credential.rotate(ref: string): Promise<string>
+```
+
+说明：
+
+- 凭证能力是高敏感治理接口，调用方必须声明并获得 Host `credential.manage` 权限；
+- SDK 不缓存凭证明文，也不在业务层复制凭证加密逻辑；
+- `set/delete` 返回 `Promise<void>`，Host `{ ack: true }` 只作为路由确认。
+
+### 序列化
+
+```typescript
+client.serializer.encode(payload: unknown): Promise<string>
+client.serializer.decode<T = unknown>(payload: string): Promise<T>
+client.serializer.validate(payload: unknown, schema: string): Promise<boolean>
+```
+
+说明：
+
+- 当前 Host 序列化实现是 JSON payload 的 Base64 编解码；
+- `serializer.validate` 只返回布尔值，具体 schema 错误详情不作为 SDK 当前公共返回面。
+
+### 控制平面
+
+```typescript
+client.controlPlane.health(): Promise<ControlPlaneHealthResult>
+client.controlPlane.check(): Promise<ControlPlaneCheckResult>
+client.controlPlane.metrics(): Promise<ControlPlaneMetrics>
+client.controlPlane.diagnose(): Promise<ControlPlaneDiagnoseResult>
+```
+
+说明：
+
+- SDK 属性名为 `controlPlane`，对应 Host route key `control-plane.*`；
+- 当前控制平面四个动作均无入参；
+- `diagnose` 需要 Host `control.write` 权限，普通插件应优先使用只读的 `health/check/metrics`。
+
 ## 平台辅助能力
 
 对于必须由 preload 在本地完成的拖拽路径解析场景，SDK 透出正式辅助入口：

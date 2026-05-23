@@ -2006,6 +2006,204 @@ describe("createClient", () => {
     ]);
   });
 
+  it("wraps log, credential, serializer, and control-plane routes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const logEntry = {
+      traceId: "trace-1",
+      requestId: "request-1",
+      pluginId: "chips.demo",
+      namespace: "log",
+      action: "write",
+      result: "success" as const,
+      level: "info" as const,
+      message: "ready",
+      timestamp: 1_710_000_000_000,
+      metadata: {
+        stage: "test",
+      },
+    };
+    const metrics = {
+      "file.read": {
+        count: 3,
+        failures: 0,
+        p50: 2,
+        p95: 5,
+      },
+    };
+    const diagnose = {
+      routeCount: 159,
+      serviceCount: 20,
+      config: {
+        themeId: "chips-official.default-theme",
+      },
+      runtimeSnapshot: {
+        sessions: [],
+      },
+      topFailureRoutes: [],
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "log.write":
+            return { entry: logEntry };
+          case "log.query":
+            return { entries: [logEntry] };
+          case "log.export":
+            return { payload: "{\"entries\":[]}" };
+          case "credential.get":
+            return { value: "secret-value" };
+          case "credential.set":
+          case "credential.delete":
+            return { ack: true };
+          case "credential.rotate":
+            return { value: "rotated-secret" };
+          case "serializer.encode":
+            return { payload: "eyJoZWxsbyI6IndvcmxkIn0=" };
+          case "serializer.decode":
+            return { payload: { hello: "world" } };
+          case "serializer.validate":
+            return { valid: true };
+          case "control-plane.health":
+            return { status: "ok", report: { ready: true } };
+          case "control-plane.check":
+            return { services: [{ name: "file" }] };
+          case "control-plane.metrics":
+            return { metrics };
+          case "control-plane.diagnose":
+            return { diagnose };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(
+      client.log.write({
+        level: "info",
+        message: "ready",
+        metadata: {
+          stage: "test",
+        },
+      }),
+    ).resolves.toEqual(logEntry);
+    await expect(client.log.query({ level: "info", requestId: "request-1" })).resolves.toEqual([logEntry]);
+    await expect(client.log.export()).resolves.toBe("{\"entries\":[]}");
+    await expect(client.credential.get("plugins/demo/token")).resolves.toBe("secret-value");
+    await expect(client.credential.set("plugins/demo/token", "next-secret")).resolves.toBeUndefined();
+    await expect(client.credential.delete("plugins/demo/token")).resolves.toBeUndefined();
+    await expect(client.credential.rotate("plugins/demo/token")).resolves.toBe("rotated-secret");
+    await expect(client.serializer.encode({ hello: "world" })).resolves.toBe("eyJoZWxsbyI6IndvcmxkIn0=");
+    await expect(client.serializer.decode<{ hello: string }>("eyJoZWxsbyI6IndvcmxkIn0=")).resolves.toEqual({
+      hello: "world",
+    });
+    await expect(client.serializer.validate({ hello: "world" }, "demo.schema.json")).resolves.toBe(true);
+    await expect(client.controlPlane.health()).resolves.toEqual({ status: "ok", report: { ready: true } });
+    await expect(client.controlPlane.check()).resolves.toEqual({ services: [{ name: "file" }] });
+    await expect(client.controlPlane.metrics()).resolves.toEqual(metrics);
+    await expect(client.controlPlane.diagnose()).resolves.toEqual(diagnose);
+
+    expect(calls).toEqual([
+      {
+        action: "log.write",
+        payload: {
+          level: "info",
+          message: "ready",
+          metadata: {
+            stage: "test",
+          },
+        },
+      },
+      {
+        action: "log.query",
+        payload: {
+          level: "info",
+          requestId: "request-1",
+        },
+      },
+      { action: "log.export", payload: {} },
+      {
+        action: "credential.get",
+        payload: {
+          ref: "plugins/demo/token",
+        },
+      },
+      {
+        action: "credential.set",
+        payload: {
+          ref: "plugins/demo/token",
+          value: "next-secret",
+        },
+      },
+      {
+        action: "credential.delete",
+        payload: {
+          ref: "plugins/demo/token",
+        },
+      },
+      {
+        action: "credential.rotate",
+        payload: {
+          ref: "plugins/demo/token",
+        },
+      },
+      {
+        action: "serializer.encode",
+        payload: {
+          payload: {
+            hello: "world",
+          },
+        },
+      },
+      {
+        action: "serializer.decode",
+        payload: {
+          payload: "eyJoZWxsbyI6IndvcmxkIn0=",
+        },
+      },
+      {
+        action: "serializer.validate",
+        payload: {
+          payload: {
+            hello: "world",
+          },
+          schema: "demo.schema.json",
+        },
+      },
+      { action: "control-plane.health", payload: {} },
+      { action: "control-plane.check", payload: {} },
+      { action: "control-plane.metrics", payload: {} },
+      { action: "control-plane.diagnose", payload: {} },
+    ]);
+  });
+
+  it("validates log, credential, and serializer wrapper arguments", async () => {
+    const client = createClient({
+      environment: "node",
+      transport: async () => {
+        throw new Error("transport should not be called");
+      },
+    });
+
+    await expect(client.log.write({ level: "verbose" as any, message: "ready" })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(client.log.write({ level: "info", message: "" })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(client.credential.get("")).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(client.serializer.decode("")).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(client.serializer.validate({}, 123 as any)).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+  });
+
   it("throws BRIDGE_UNAVAILABLE when no transport and no window.chips", async () => {
     const client = createClient({
       environment: "node",

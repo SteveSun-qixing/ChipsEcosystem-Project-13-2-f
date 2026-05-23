@@ -84,6 +84,10 @@ export interface Client extends CoreClient {
   box: import("../api/box").BoxApi;
   resource: import("../api/resource").ResourceApi;
   zip: import("../api/zip").ZipApi;
+  log: import("../api/log").LogApi;
+  credential: import("../api/credential").CredentialApi;
+  serializer: import("../api/serializer").SerializerApi;
+  controlPlane: import("../api/control-plane").ControlPlaneApi;
 }
 
 export interface InvocationContext {

@@ -374,7 +374,51 @@
 
 ---
 
-## 8. 工具与脚手架能力需求（FR-SDK-TOOLS）
+## 8. 系统治理能力需求（FR-SDK-SYSTEM）
+
+### FR-SDK-SYSTEM-001 日志与凭证能力封装
+
+- SDK 必须封装 Host `log` 与 `credential` 服务动作：
+
+  ```ts
+  client.log.write(input: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    message: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<LogEntry>;
+  client.log.query(options?: { level?: LogLevel; requestId?: string }): Promise<LogEntry[]>;
+  client.log.export(): Promise<string>;
+
+  client.credential.get(ref: string): Promise<string | null>;
+  client.credential.set(ref: string, value: string): Promise<void>;
+  client.credential.delete(ref: string): Promise<void>;
+  client.credential.rotate(ref: string): Promise<string>;
+  ```
+
+- 日志封装必须与 Host `LogEntry` 结构保持一致，`metadata` 是正式附加字段。
+- 凭证封装只做类型化访问，不在 SDK 层缓存敏感值。
+
+### FR-SDK-SYSTEM-002 序列化与控制平面能力封装
+
+- SDK 必须封装 Host `serializer` 与 `control-plane` 服务动作：
+
+  ```ts
+  client.serializer.encode(payload: unknown): Promise<string>;
+  client.serializer.decode<T = unknown>(payload: string): Promise<T>;
+  client.serializer.validate(payload: unknown, schema: string): Promise<boolean>;
+
+  client.controlPlane.health(): Promise<ControlPlaneHealthResult>;
+  client.controlPlane.check(): Promise<ControlPlaneCheckResult>;
+  client.controlPlane.metrics(): Promise<ControlPlaneMetrics>;
+  client.controlPlane.diagnose(): Promise<ControlPlaneDiagnoseResult>;
+  ```
+
+- `controlPlane` 是 SDK 属性名，映射 Host `control-plane.*` route key；SDK 不把连字符 route key 直接暴露为对象属性名。
+- 控制平面当前正式动作均无入参，SDK 不添加 `scope/types` 等未落地参数。
+
+---
+
+## 9. 工具与脚手架能力需求（FR-SDK-TOOLS）
 
 ### FR-SDK-TOOLS-001 类型定义与公共类型导出
 
@@ -398,7 +442,7 @@
 
 ---
 
-## 9. 需求验收映射
+## 10. 需求验收映射
 
 | 需求组 | 验收方式 | 通过标准 |
 |---|---|---|
@@ -408,4 +452,5 @@
 | FR-SDK-CARD-DISPLAY | 组件库 demo 联调 + E2E | 各应用场景显示一致，事件协议与 origin 安全生效 |
 | FR-SDK-THEME | Host Theme 服务契约测试 | 主题链路行为与生态共用规范一致 |
 | FR-SDK-PLUGIN | 插件运行环境联调 | 插件信息查询与窗口/模块辅助能力可用 |
+| FR-SDK-SYSTEM | SDK Domain API 单元测试 + Host 契约测试 | 日志、凭证、序列化、控制平面封装与 Host route 对齐 |
 | FR-SDK-TOOLS | 类型检查 + 契约校验脚本 | 类型定义完整，契约消费能力预留 |

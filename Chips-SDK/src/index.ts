@@ -222,4 +222,21 @@ export type {
   ResourceOpenResult,
 } from "./api/resource";
 export type { ZipApi, ZipEntryMeta } from "./api/zip";
+export type {
+  LogApi,
+  LogEntry,
+  LogLevel,
+  LogQueryOptions,
+  LogWriteInput,
+} from "./api/log";
+export type { CredentialApi } from "./api/credential";
+export type { SerializerApi } from "./api/serializer";
+export type {
+  ControlPlaneApi,
+  ControlPlaneCheckResult,
+  ControlPlaneDiagnoseResult,
+  ControlPlaneHealthResult,
+  ControlPlaneMetric,
+  ControlPlaneMetrics,
+} from "./api/control-plane";
 export type { PermissionDiagnostic, StandardError } from "./types/errors";

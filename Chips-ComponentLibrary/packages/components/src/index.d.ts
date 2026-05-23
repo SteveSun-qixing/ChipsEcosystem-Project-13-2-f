@@ -162,7 +162,7 @@ export interface ChipsCommandProviderProps {
   adapter?: ChipsCommandAdapter;
   commands?: ChipsCommandView[];
   query?: ChipsCommandQueryOptions;
-  i18n?: I18nTextSource | ((key: string, params?: Record<string, string | number>) => string);
+  i18n?: I18nTextSource | ((key: string, params?: Record<string, string | number>, fallback?: string) => string);
   children?: React.ReactNode;
 }
 

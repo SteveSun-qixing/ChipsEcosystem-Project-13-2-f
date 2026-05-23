@@ -982,14 +982,14 @@ function getNestedValueByPath(source, pathExpression) {
   return current;
 }
 
-function resolveI18nTranslate(i18nAdapter, key, params) {
+function resolveI18nTranslate(i18nAdapter, key, params, fallback) {
   if (!i18nAdapter) {
     return null;
   }
 
   try {
     if (typeof i18nAdapter === "function") {
-      const result = i18nAdapter(key, params);
+      const result = i18nAdapter(key, params, fallback);
       return typeof result === "string" ? result : null;
     }
 
@@ -1022,7 +1022,7 @@ export function resolveI18nText(params = {}) {
   } = params;
 
   if (typeof key === "string" && key.length > 0) {
-    const translated = resolveI18nTranslate(i18n, key, i18nParams);
+    const translated = resolveI18nTranslate(i18n, key, i18nParams, fallback);
     if (translated && typeof translated === "object" && translated.__error) {
       if (typeof onDiagnostic === "function") {
         onDiagnostic({

@@ -3,6 +3,9 @@
     "shell": {
       "subtitle": "标准应用插件"
     },
+    "language": {
+      "switchTo": "切换到 {locale}"
+    },
     "sample": {
       "form": {
         "title": "示例表单"

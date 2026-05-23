@@ -11,6 +11,8 @@ test("component-library aggregate exports the formal package surface", () => {
   assert.equal(typeof aggregate.useChipsClient, "function");
   assert.equal(typeof aggregate.useChipsTheme, "function");
   assert.equal(typeof aggregate.useChipsI18n, "function");
+  assert.equal(typeof aggregate.createChipsI18nText, "function");
+  assert.equal(typeof aggregate.useChipsI18nText, "function");
   assert.equal(typeof aggregate.useChipsSurface, "function");
   assert.equal(typeof aggregate.useChipsPermission, "function");
   assert.equal(typeof aggregate.useChipsCommand, "function");

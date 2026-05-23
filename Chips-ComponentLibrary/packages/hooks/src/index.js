@@ -15,6 +15,8 @@ const STATUS_IDLE = "idle";
 const STATUS_LOADING = "loading";
 const STATUS_READY = "ready";
 const STATUS_ERROR = "error";
+const DEFAULT_LOCALE = "zh-CN";
+const DEFAULT_FALLBACK_LOCALE = "en-US";
 
 function toThemeCacheKey(themeId, version) {
   const safeThemeId = typeof themeId === "string" && themeId.length > 0 ? themeId : "default";
@@ -124,6 +126,74 @@ function mergePermissions(...sources) {
     }
   }
   return [...permissions];
+}
+
+function normalizeLocaleBundles(bundles) {
+  return bundles && typeof bundles === "object" ? bundles : {};
+}
+
+function readLocalePath(source, key) {
+  if (!source || typeof source !== "object" || typeof key !== "string" || key.length === 0) {
+    return undefined;
+  }
+  return key.split(".").reduce((current, segment) => {
+    if (!current || typeof current !== "object") {
+      return undefined;
+    }
+    return current[segment];
+  }, source);
+}
+
+function interpolateLocaleText(template, params) {
+  if (!params || typeof params !== "object") {
+    return template;
+  }
+  return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, name) => {
+    const replacement = params[name];
+    return typeof replacement === "undefined" ? match : String(replacement);
+  });
+}
+
+function resolveFallbackLocales(options, locale) {
+  const locales = [];
+  const add = (candidate) => {
+    if (typeof candidate === "string" && candidate.length > 0 && !locales.includes(candidate)) {
+      locales.push(candidate);
+    }
+  };
+  if (Array.isArray(options.fallbackLocales)) {
+    for (const fallbackLocale of options.fallbackLocales) {
+      add(fallbackLocale);
+    }
+  }
+  add(options.fallbackLocale || DEFAULT_FALLBACK_LOCALE);
+  add(options.defaultLocale || DEFAULT_LOCALE);
+  add(locale);
+  return locales;
+}
+
+export function createChipsI18nText(options = {}) {
+  const bundles = normalizeLocaleBundles(options.bundles);
+  const locale = options.locale || options.defaultLocale || DEFAULT_LOCALE;
+  const fallbackLocales = resolveFallbackLocales(options, locale);
+  return (key, params, fallback) => {
+    const lookupLocales = [locale, ...fallbackLocales].filter((candidate, index, all) => (
+      typeof candidate === "string" && candidate.length > 0 && all.indexOf(candidate) === index
+    ));
+    for (const lookupLocale of lookupLocales) {
+      const value = readLocalePath(bundles[lookupLocale], key);
+      if (typeof value === "string") {
+        return interpolateLocaleText(value, params);
+      }
+    }
+    if (typeof fallback === "string") {
+      return interpolateLocaleText(fallback, params);
+    }
+    if (typeof options.missingText === "function") {
+      return options.missingText(key, { locale, params });
+    }
+    return key;
+  };
 }
 
 export function ChipsTokenProvider({ resolver, children }) {
@@ -721,6 +791,15 @@ export function useChipsI18n() {
       return environment.refreshLocale();
     }
   };
+}
+
+export function useChipsI18nText(options = {}) {
+  const i18n = useChipsI18n();
+  const locale = i18n.locale || options.defaultLocale || DEFAULT_LOCALE;
+  return React.useMemo(() => createChipsI18nText({
+    ...options,
+    locale
+  }), [locale, options.bundles, options.defaultLocale, options.fallbackLocale, options.fallbackLocales, options.missingText]);
 }
 
 export function useChipsSurface() {

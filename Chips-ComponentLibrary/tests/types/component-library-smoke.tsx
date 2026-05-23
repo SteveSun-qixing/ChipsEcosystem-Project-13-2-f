@@ -11,6 +11,7 @@ import {
   loadCompositeWindowData,
   toCardRuntimeStandardError,
   toComponentStandardError,
+  useChipsI18nText,
   useChipsClient,
   useChipsDiagnostics,
   useChipsEnvironment,
@@ -83,6 +84,16 @@ function EnvironmentSmoke(): null {
   const client = useChipsClient();
   const theme = useChipsTheme();
   const i18n = useChipsI18n();
+  const text = useChipsI18nText({
+    bundles: {
+      "zh-CN": {
+        demo: {
+          title: "演示"
+        }
+      }
+    },
+    fallbackLocale: "en-US"
+  });
   const surface = useChipsSurface();
   const permission = useChipsPermission();
   const diagnostics = useChipsDiagnostics();
@@ -91,6 +102,7 @@ function EnvironmentSmoke(): null {
   void client;
   void theme.refresh();
   void i18n.t("demo.title");
+  void text("demo.title");
   void surface.refresh();
   void permission.hasPermission("theme.read");
   void diagnostics.clear();

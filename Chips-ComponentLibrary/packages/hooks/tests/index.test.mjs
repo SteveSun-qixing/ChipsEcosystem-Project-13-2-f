@@ -6,12 +6,14 @@ import {
   ChipsEnvironmentProvider,
   ChipsThemeProvider,
   ChipsTokenProvider,
+  createChipsI18nText,
   subscribeThemeChanged,
   useChipsClient,
   useChipsCommand,
   useChipsDiagnostics,
   useChipsEnvironment,
   useChipsI18n,
+  useChipsI18nText,
   useChipsPermission,
   useChipsSurface,
   useChipsTheme,
@@ -26,10 +28,12 @@ test("hooks package exports expected APIs", () => {
   assert.equal(typeof ChipsTokenProvider, "function");
   assert.equal(typeof ChipsThemeProvider, "function");
   assert.equal(typeof ChipsEnvironmentProvider, "function");
+  assert.equal(typeof createChipsI18nText, "function");
   assert.equal(typeof useChipsEnvironment, "function");
   assert.equal(typeof useChipsClient, "function");
   assert.equal(typeof useChipsTheme, "function");
   assert.equal(typeof useChipsI18n, "function");
+  assert.equal(typeof useChipsI18nText, "function");
   assert.equal(typeof useChipsSurface, "function");
   assert.equal(typeof useChipsPermission, "function");
   assert.equal(typeof useChipsCommand, "function");
@@ -89,6 +93,55 @@ test("applyThemeVariables throws when target is invalid", () => {
     () => applyThemeVariables({}, { "chips.sys.color.surface": "#fff" }),
     /THEME_VARIABLE_TARGET_INVALID/
   );
+});
+
+test("createChipsI18nText resolves nested keys, fallbacks and params synchronously", () => {
+  const text = createChipsI18nText({
+    locale: "zh-CN",
+    fallbackLocale: "en-US",
+    bundles: {
+      "zh-CN": {
+        demo: {
+          greeting: "你好，{name}"
+        }
+      },
+      "en-US": {
+        demo: {
+          greeting: "Hello, {name}",
+          fallback: "Fallback {value}"
+        }
+      }
+    }
+  });
+
+  assert.equal(text("demo.greeting", { name: "薯片" }), "你好，薯片");
+  assert.equal(text("demo.fallback", { value: 7 }), "Fallback 7");
+  assert.equal(text("demo.missing", undefined, "Missing {key}"), "Missing {key}");
+  assert.equal(text("demo.unknown"), "demo.unknown");
+});
+
+test("createChipsI18nText applies fallback locale order and missing text", () => {
+  const text = createChipsI18nText({
+    locale: "fr-FR",
+    fallbackLocales: ["ja-JP", "en-US"],
+    fallbackLocale: "zh-CN",
+    missingText: (key, context) => `${context.locale}:${key}`,
+    bundles: {
+      "ja-JP": {
+        demo: {
+          ordered: "日本語"
+        }
+      },
+      "en-US": {
+        demo: {
+          ordered: "English"
+        }
+      }
+    }
+  });
+
+  assert.equal(text("demo.ordered"), "日本語");
+  assert.equal(text("demo.missing"), "fr-FR:demo.missing");
 });
 
 test("mock chips client exposes theme, i18n, surface and translation state for environment hooks", async () => {

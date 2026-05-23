@@ -55,6 +55,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const localesPath = path.join(targetDir, "src/i18n/locales.ts");
     const runtimeClientPath = path.join(targetDir, "src/runtime/chips-client.ts");
     const commandTestPath = path.join(targetDir, "tests/unit/commands.test.ts");
+    const appTestPath = path.join(targetDir, "tests/unit/app.test.tsx");
 
     await stat(manifestPath);
     await stat(pkgPath);
@@ -66,12 +67,14 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     await stat(localesPath);
     await stat(runtimeClientPath);
     await stat(commandTestPath);
+    await stat(appTestPath);
 
     const manifestContent = await readFile(manifestPath, "utf8");
     const packageContent = JSON.parse(await readFile(pkgPath, "utf8"));
     const appSourceContent = await readFile(appSourcePath, "utf8");
     const appCommandsContent = await readFile(appCommandsPath, "utf8");
     const useAppCommandsContent = await readFile(useAppCommandsPath, "utf8");
+    const appTestContent = await readFile(appTestPath, "utf8");
     const zhCnContent = await readFile(path.join(targetDir, "i18n/zh-CN.json"), "utf8");
     const enUsContent = await readFile(path.join(targetDir, "i18n/en-US.json"), "utf8");
     assert.ok(
@@ -94,7 +97,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       manifestContent.includes("surface:\n    defaultKind: window"),
       "manifest.yaml 应包含 ui.surface 默认容器配置",
     );
-    for (const permission of ["command.read", "command.write", "command.invoke"]) {
+    for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
       assert.ok(
         manifestContent.includes(`  - ${permission}`),
         `manifest.yaml 应声明 ${permission}`,
@@ -147,9 +150,12 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "ChipsEnvironmentProvider",
       "useChipsTheme",
       "useChipsI18n",
+      "useChipsI18nText",
       "useChipsSurface",
       "useChipsPermission",
       "useChipsDiagnostics",
+      "setLocale",
+      "supportedLocales",
     ]) {
       assert.ok(
         appSourceContent.includes(requiredText),
@@ -167,6 +173,19 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
         !useAppCommandsContent.includes("ipcRenderer"),
       "命令运行时不得绕过 SDK 直连 Host/Electron",
     );
+    const localesContent = await readFile(localesPath, "utf8");
+    assert.ok(
+      localesContent.includes("export const localeBundles") &&
+        localesContent.includes("export const supportedLocales"),
+      "本地 i18n adapter 应导出语言包与支持语言列表，供渲染期同步文案和切换入口复用",
+    );
+    assert.ok(
+      appTestContent.includes("createChipsI18nText") &&
+        appTestContent.includes("localeBundles") &&
+        appTestContent.includes("supportedLocales") &&
+        appTestContent.includes("app-standard.language.switchTo"),
+      "App 单元测试应覆盖同步 i18n adapter、fallback 与语言切换文案 key",
+    );
     await assert.rejects(
       stat(path.join(targetDir, "src/hooks/useChipsBridge.ts")),
       { code: "ENOENT" },
@@ -181,6 +200,10 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     ]) {
       assert.ok(zhCnContent.includes(key), `中文 i18n 应包含 command key：${key}`);
       assert.ok(enUsContent.includes(key), `英文 i18n 应包含 command key：${key}`);
+    }
+    for (const key of ["switchTo"]) {
+      assert.ok(zhCnContent.includes(key), `中文 i18n 应包含语言切换 key：${key}`);
+      assert.ok(enUsContent.includes(key), `英文 i18n 应包含语言切换 key：${key}`);
     }
 
     for (const dirName of FORBIDDEN_PROJECT_DIRS) {

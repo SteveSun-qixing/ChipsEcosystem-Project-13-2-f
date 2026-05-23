@@ -694,6 +694,17 @@ test("resolveI18nText supports function and object adapters", () => {
   assert.equal(fromObject, "Y");
 });
 
+test("resolveI18nText passes fallback to function adapters", () => {
+  const fromFunction = resolveI18nText({
+    i18n: (key, params, fallback) => `${fallback}:${params.name}:${key}`,
+    key: "demo.key",
+    fallback: "Fallback",
+    params: { name: "chips" }
+  });
+
+  assert.equal(fromFunction, "Fallback:chips:demo.key");
+});
+
 test("resolveI18nText falls back when adapter throws", () => {
   const diagnostics = [];
   const text = resolveI18nText({

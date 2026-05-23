@@ -65,9 +65,11 @@ npm run dev        # 启动开发服务器（等价 chips dev server）
 
 - 前端框架：React（参见生态设计原稿与应用插件开发指南）
 - UI 能力：`@chips/component-library`（组件库对外使用总览）
-- 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本
+- 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本；React 渲染期通过 `useChipsI18nText()` 消费 `localeBundles`，语言切换按钮通过 `useChipsI18n().setLocale()` 进入 Host `i18n.setCurrent`
 - 主题系统：通过组件库 `ChipsEnvironmentProvider` 注入 SDK client，再由 `useChipsTheme` 与 `ChipsThemeProvider` 接入主题运行时，不在业务代码中硬编码颜色/圆角/阴影
 - 系统能力调用：React 组件优先通过 `ChipsEnvironmentProvider/useChips*` hooks 消费 `chips-sdk` client，不越层直接访问 Host 内部模块
+
+标准模板默认声明 `i18n.read / i18n.write`：读取语言状态和翻译文本使用 `i18n.read`，切换语言需要 `i18n.write`。如果移除语言切换入口，应同步收窄权限。
 
 ## 5. Command 基线
 

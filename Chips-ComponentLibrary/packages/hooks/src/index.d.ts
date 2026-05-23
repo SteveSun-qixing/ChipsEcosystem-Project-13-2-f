@@ -227,6 +227,18 @@ export interface UseChipsI18nResult {
   setLocale(locale: string): Promise<string | null>;
 }
 
+export type ChipsI18nTextParams = Record<string, string | number | boolean | null | undefined>;
+export type ChipsI18nText = (key: string, params?: ChipsI18nTextParams, fallback?: string) => string;
+
+export interface ChipsI18nTextOptions {
+  bundles?: Record<string, Record<string, unknown>>;
+  locale?: string;
+  defaultLocale?: string;
+  fallbackLocale?: string;
+  fallbackLocales?: string[];
+  missingText?: (key: string, context: { locale: string; params?: ChipsI18nTextParams }) => string;
+}
+
 export interface UseChipsSurfaceResult {
   surface: ChipsSurfaceContext | null;
   launchContext: ChipsLaunchContext | null;
@@ -309,6 +321,8 @@ export function useChipsEnvironment(): ChipsEnvironmentValue;
 export function useChipsClient<T extends ChipsClientLike = ChipsClientLike>(): T;
 export function useChipsTheme(): UseChipsThemeResult;
 export function useChipsI18n(): UseChipsI18nResult;
+export function createChipsI18nText(options?: ChipsI18nTextOptions): ChipsI18nText;
+export function useChipsI18nText(options?: Omit<ChipsI18nTextOptions, "locale">): ChipsI18nText;
 export function useChipsSurface(): UseChipsSurfaceResult;
 export function useChipsPermission(): UseChipsPermissionResult;
 export function useChipsCommand(): ChipsCommandEnvironmentApi;

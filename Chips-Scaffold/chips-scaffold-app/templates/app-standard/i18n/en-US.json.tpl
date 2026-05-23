@@ -3,6 +3,9 @@
     "shell": {
       "subtitle": "Standard app plugin"
     },
+    "language": {
+      "switchTo": "Switch to {locale}"
+    },
     "sample": {
       "form": {
         "title": "Sample form"

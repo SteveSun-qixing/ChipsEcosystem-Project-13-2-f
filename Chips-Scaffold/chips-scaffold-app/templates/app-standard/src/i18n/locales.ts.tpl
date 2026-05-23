@@ -3,10 +3,12 @@ import enUS from "../../i18n/en-US.json";
 
 type LocaleTree = Record<string, unknown>;
 
-const localeBundles: Record<string, LocaleTree> = {
+export const localeBundles: Record<string, LocaleTree> = {
   "zh-CN": zhCN,
   "en-US": enUS,
 };
+
+export const supportedLocales = ["zh-CN", "en-US"] as const;
 
 function readPath(source: LocaleTree, key: string): unknown {
   return key.split(".").reduce<unknown>((current, segment) => {

@@ -115,7 +115,7 @@ async function main() {
     }
 
     const manifestText = await readFile(path.join(projectDir, "manifest.yaml"), "utf8");
-    for (const permission of ["command.read", "command.write", "command.invoke"]) {
+    for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
       if (!manifestText.includes(`  - ${permission}`)) {
         throw new Error(`E2E: 应用模板 manifest 缺少 ${permission}`);
       }
@@ -134,6 +134,14 @@ async function main() {
     );
     const commandRuntimeSource = await readFile(
       path.join(projectDir, "src", "commands", "useAppCommands.ts"),
+      "utf8",
+    );
+    const localeSource = await readFile(
+      path.join(projectDir, "src", "i18n", "locales.ts"),
+      "utf8",
+    );
+    const appTestSource = await readFile(
+      path.join(projectDir, "tests", "unit", "app.test.tsx"),
       "utf8",
     );
     for (const requiredText of [
@@ -164,12 +172,25 @@ async function main() {
       "ChipsEnvironmentProvider",
       "useChipsTheme",
       "useChipsI18n",
+      "useChipsI18nText",
       "useChipsSurface",
       "useChipsPermission",
       "useChipsDiagnostics",
+      "setLocale",
+      "supportedLocales",
     ]) {
       if (!appSource.includes(requiredText)) {
         throw new Error(`E2E: App 环境入口缺少 ${requiredText}`);
+      }
+    }
+    for (const requiredText of ["export const localeBundles", "export const supportedLocales"]) {
+      if (!localeSource.includes(requiredText)) {
+        throw new Error(`E2E: 本地 i18n adapter 缺少 ${requiredText}`);
+      }
+    }
+    for (const requiredText of ["createChipsI18nText", "localeBundles", "supportedLocales", "app-standard.language.switchTo"]) {
+      if (!appTestSource.includes(requiredText)) {
+        throw new Error(`E2E: app 单元测试缺少同步 i18n adapter 覆盖 ${requiredText}`);
       }
     }
     if (/window\.chips\.invoke\(["']command\./.test(commandRuntimeSource)) {
@@ -181,9 +202,9 @@ async function main() {
 
     const zhCnText = await readFile(path.join(projectDir, "i18n", "zh-CN.json"), "utf8");
     const enUsText = await readFile(path.join(projectDir, "i18n", "en-US.json"), "utf8");
-    for (const key of ["showWelcome", "refreshTheme", "lastInvoked", "palette"]) {
+    for (const key of ["showWelcome", "refreshTheme", "lastInvoked", "palette", "switchTo"]) {
       if (!zhCnText.includes(key) || !enUsText.includes(key)) {
-        throw new Error(`E2E: i18n 文件缺少 command key：${key}`);
+        throw new Error(`E2E: i18n 文件缺少 key：${key}`);
       }
     }
   } finally {

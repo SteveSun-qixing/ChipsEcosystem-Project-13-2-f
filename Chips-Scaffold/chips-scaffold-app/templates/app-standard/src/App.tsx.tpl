@@ -12,6 +12,7 @@ import {
   useChipsDiagnostics,
   useChipsEnvironment,
   useChipsI18n,
+  useChipsI18nText,
   useChipsPermission,
   useChipsSurface,
   useChipsTheme,
@@ -19,7 +20,7 @@ import {
 import { ExamplePanel } from "./components/ExamplePanel";
 import { useAppCommands } from "./commands/useAppCommands";
 import { chipsClient } from "./runtime/chips-client";
-import { translateLocalKey } from "./i18n/locales";
+import { localeBundles, supportedLocales } from "./i18n/locales";
 
 type TextParams = Record<string, string | number>;
 type TextResolver = (key: string, fallback?: string, params?: TextParams) => string;
@@ -34,10 +35,11 @@ function useTemplateI18n(): {
 } {
   const i18n = useChipsI18n();
   const locale = i18n.locale || "zh-CN";
-  const translate = useMemo(
-    () => (key: string, params?: TextParams) => translateLocalKey(key, locale, params),
-    [locale],
-  );
+  const translate = useChipsI18nText({
+    bundles: localeBundles,
+    fallbackLocale: "en-US",
+    defaultLocale: "zh-CN",
+  });
   const text = useMemo<TextResolver>(
     () => (key, fallback = key, params) => resolveI18nText({
       i18n: translate,
@@ -52,7 +54,24 @@ function useTemplateI18n(): {
 }
 
 function Header() {
-  const { text } = useTemplateI18n();
+  const { locale, text } = useTemplateI18n();
+  const i18n = useChipsI18n();
+  const diagnostics = useChipsDiagnostics();
+  const nextLocale = locale === "zh-CN" ? "en-US" : "zh-CN";
+  const languageButtonText = text("app-standard.language.switchTo", "Switch language", {
+    locale: nextLocale,
+  });
+  const canSwitchLanguage = supportedLocales.includes(nextLocale as (typeof supportedLocales)[number]);
+  const switchLanguage = () => {
+    void i18n.setLocale(nextLocale).catch((error: unknown) => {
+      diagnostics.push({
+        code: "APP_I18N_SET_LOCALE_FAILED",
+        message: error instanceof Error ? error.message : "Failed to switch language.",
+        source: "i18n",
+        details: { locale: nextLocale },
+      });
+    });
+  };
 
   return (
     <header
@@ -63,9 +82,18 @@ function Header() {
       }}
     >
       <h1 style={{ margin: 0, fontSize: 18 }}>{{ DISPLAY_NAME }}</h1>
-      <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.8 }}>
-        {text("app-standard.shell.subtitle")}
-      </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.8 }}>
+          {text("app-standard.shell.subtitle")}
+        </p>
+        <ChipsButton
+          variant="secondary"
+          disabled={!canSwitchLanguage || i18n.status === "loading"}
+          onPress={switchLanguage}
+        >
+          {languageButtonText}
+        </ChipsButton>
+      </div>
     </header>
   );
 }
@@ -250,6 +278,7 @@ export function App() {
       initialPermissions={[
         "theme.read",
         "i18n.read",
+        "i18n.write",
         "command.read",
         "command.write",
         "command.invoke",

@@ -103,7 +103,7 @@ async function main() {
 
     try {
       const manifestText = await readFile(path.join(base, "manifest.yaml.tpl"), "utf8");
-      for (const permission of ["command.read", "command.write", "command.invoke"]) {
+      for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
         if (!manifestText.includes(`  - ${permission}`)) {
           console.error(
             `[check-templates] 模板 ${dir} manifest.yaml.tpl 缺少权限：${permission}`,
@@ -159,9 +159,12 @@ async function main() {
         "useChipsClient",
         "useChipsTheme",
         "useChipsI18n",
+        "useChipsI18nText",
         "useChipsSurface",
         "useChipsPermission",
         "useChipsDiagnostics",
+        "setLocale",
+        "supportedLocales",
       ]) {
         if (!sourceText.includes(requiredText)) {
           console.error(
@@ -181,6 +184,37 @@ async function main() {
         if (forbiddenPattern.test(sourceText)) {
           console.error(
             `[check-templates] 模板 ${dir} 源码包含禁止的 Host/Node 直连模式：${forbiddenPattern}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const localesText = await readFile(path.join(base, "src/i18n/locales.ts.tpl"), "utf8");
+      for (const requiredText of ["localeBundles", "supportedLocales"]) {
+        if (!localesText.includes(`export const ${requiredText}`)) {
+          console.error(
+            `[check-templates] 模板 ${dir} 本地 i18n adapter 缺少导出：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const appTestText = await readFile(path.join(base, "tests/unit/app.test.tsx.tpl"), "utf8");
+      for (const requiredText of ["createChipsI18nText", "localeBundles", "supportedLocales", "app-standard.language.switchTo"]) {
+        if (!appTestText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} app 单元测试缺少同步 i18n adapter 覆盖：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const zhCnText = await readFile(path.join(base, "i18n/zh-CN.json.tpl"), "utf8");
+      const enUsText = await readFile(path.join(base, "i18n/en-US.json.tpl"), "utf8");
+      for (const key of ["switchTo"]) {
+        if (!zhCnText.includes(key) || !enUsText.includes(key)) {
+          console.error(
+            `[check-templates] 模板 ${dir} i18n 资源缺少语言切换 key：${key}`,
           );
           hasError = true;
         }

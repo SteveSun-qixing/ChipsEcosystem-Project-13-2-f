@@ -64,6 +64,12 @@ npm install
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
 - `chipsdev module invoke`：在真实 Electron Host 中调用模块 capability/method
+- `chipsdev preview`：生成项目预览链路报告
+- `chipsdev component gallery`：生成组件矩阵与主题契约覆盖报告
+- `chipsdev theme inspect`：读取主题包 manifest/contracts/tokens/dist 并输出检查报告
+- `chipsdev quality gate`：汇总项目、SDK、组件库与主题质量门禁报告
+- `chipsdev assimilate scan/report`：扫描外部 Web 项目并生成同化报告
+- `chipsdev diagnostics`：输出生态开发工具诊断报告
 - `chipsdev build`：执行正式构建
 - `chipsdev test`：执行 Vitest 单元测试
 - `chipsdev lint`：执行 ESLint 检查
@@ -149,6 +155,94 @@ chipsdev module invoke \
 - `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
 - 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
 - 因此，依赖 `platform.renderHtmlToImage`、`platform.renderHtmlToPdf` 之类 Electron 渲染导出能力的模块，必须使用 `chipsdev module invoke` 验证。
+
+## 开发者报告命令
+
+以下命令面向开发期治理，默认输出人读摘要；追加 `--json` 会输出完整机器可读 JSON；追加 `--out <file>` 会把完整 JSON 报告写入指定文件。报告统一包含 `kind / schemaVersion / generatedAt / summary / checks` 等字段，供脚本、生态设置面板和 CI 读取。
+
+### `chipsdev preview`
+
+```bash
+chipsdev preview [--mode mock|host] [--target app|component|card|box|layout|theme] [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 读取当前工程 `chips.config.mjs` 与 `manifest.yaml`；
+2. 校验 `runtime.targets`、应用 `ui.surface` 和 manifest entry 资产状态；
+3. 输出 Host mock 与真实开发工作区预览链路说明；
+4. mock 预览能力以 `chips-sdk/testing` 为正式测试入口，不复制 Host 运行时主实现；
+5. 真实应用窗口联调仍以 `chipsdev run` 为准。
+
+### `chipsdev component gallery`
+
+```bash
+chipsdev component gallery [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 读取 `Chips-ComponentLibrary/packages/theme-contracts/contracts/components/*.contract.json`；
+2. 读取组件库 token 构建产物 `packages/tokens/dist/json/tokens.json`；
+3. 输出每个组件的 `parts / states / requiredTokens / optionalTokens / coverage`；
+4. 同步附带组件库最新 `reports/quality-gate/quality-gate-latest.json` 与 `reports/perf/perf-stage9-latest.json` 摘要；
+5. 不运行重型质量门禁脚本，只汇总当前已生成报告。
+
+### `chipsdev theme inspect`
+
+```bash
+chipsdev theme inspect [--theme <themeId|path>] [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 默认检查生态 `ThemePack/*` 下的主题包；
+2. `--theme` 可指定 `themeId`、插件 ID、主题目录或 `manifest.yaml` 路径；
+3. 读取 `manifest.yaml`、`entry.tokens`、`entry.themeCss`、`ui.layout.contract`、`ui.layout.minFunctionalSet`；
+4. 按主题包正式 token 层级语义合成合同 token tree 后检查 required token 覆盖；
+5. 本命令只读诊断主题包，不修改 ThemePack，不替代后续主题包升级工单。
+
+### `chipsdev quality gate`
+
+```bash
+chipsdev quality gate [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 检查当前工程 `package.json / chips.config.mjs / manifest.yaml` 状态；
+2. 检查 SDK `src/contracts/route-manifest.json` 是否存在；
+3. 汇总组件库最新 quality/perf 报告；
+4. 汇总 `chipsdev theme inspect` 的主题检查摘要；
+5. 本命令是统一读取型门禁摘要，不替代各仓库正式验证命令，例如 `npm test`、`npm run verify`、`npm run quality:gate`。
+
+### `chipsdev assimilate scan/report`
+
+```bash
+chipsdev assimilate scan /path/to/web-project [--json] [--out report.json]
+chipsdev assimilate report /path/to/web-project [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 识别 React、Vite、静态 HTML、Electron 等 Web 项目特征；
+2. 扫描直接 Node/Electron API、浏览器存储、网络请求、文件输入/下载、`window.open`、剪贴板和快捷键处理；
+3. 扫描硬编码颜色/字体/圆角/阴影和硬编码用户可见文案；
+4. 根据 native control 痕迹输出 Chips 组件替换建议；
+5. 生成初版 app manifest 建议，包括 `runtime.targets`、`ui.surface` 和可推断权限；
+6. `report` 在 `scan` 基础上附加迁移步骤；命令不会自动改写外部项目源码。
+
+### `chipsdev diagnostics`
+
+```bash
+chipsdev diagnostics [--json] [--out report.json]
+```
+
+正式语义：
+
+1. 汇总 SDK route manifest 的 route 数量、namespace 分布与权限集合；
+2. 汇总组件矩阵、主题检查和质量门禁摘要；
+3. 用于快速判断生态开发工具链是否处于可消费状态。
 
 ## 插件与主题调试
 

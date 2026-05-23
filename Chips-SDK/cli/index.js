@@ -14,6 +14,14 @@ const { createRequire } = require('node:module');
 const { pathToFileURL } = require('node:url');
 const childProcess = require('node:child_process');
 const yaml = require('yaml');
+const {
+  createAssimilationScanReport,
+  createComponentGalleryReport,
+  createDiagnosticsReport,
+  createPreviewReport,
+  createQualityGateReport,
+  createThemeInspectReport
+} = require('../src/tooling/developer-tools.cjs');
 
 const PROJECT_CONFIG_FILE = 'chips.config.mjs';
 const MANIFEST_FILE = 'manifest.yaml';
@@ -33,6 +41,11 @@ const COMMANDS = new Set([
   'doctor',
   'open',
   'module',
+  'preview',
+  'component',
+  'quality',
+  'assimilate',
+  'diagnostics',
   'server',
   'debug',
   'build',
@@ -120,6 +133,11 @@ const printHelp = () => {
       '  doctor      检查开发工作区健康状态',
       '  open        在开发工作区链路中打开目标文件',
       '  module      在真实 Electron Host 中调试模块插件能力调用',
+      '  preview     生成项目预览链路报告（Host mock / 真实 Host 工作区）',
+      '  component   生成组件矩阵和主题契约覆盖报告',
+      '  quality     汇总 SDK / 组件库 / 主题包质量门禁报告',
+      '  assimilate  扫描外部 Web 项目并生成同化报告',
+      '  diagnostics 输出生态开发工具诊断报告',
       '  server      启动 Vite 开发服务器',
       '  debug       以调试模式启动目标项目（与 server 行为一致，可扩展调试预设）',
       '  build       执行正式构建（优先使用工程 build 脚本）',
@@ -140,6 +158,94 @@ const printHelp = () => {
 const parseArgs = (argv) => {
   const [command = 'help', ...rest] = argv;
   return { command, args: rest };
+};
+
+const parseReportOptions = (args, optionDefinitions = {}) => {
+  const options = {
+    json: false,
+    out: undefined,
+    values: {},
+    positionals: []
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (token === '--out') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error('--out 需要提供输出文件路径。');
+      }
+      options.out = path.resolve(value);
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith('--')) {
+      const name = token.slice(2);
+      const definition = optionDefinitions[name];
+      if (!definition) {
+        throw new Error(`不支持的参数：${token}`);
+      }
+
+      if (definition.type === 'boolean') {
+        options.values[name] = true;
+        continue;
+      }
+
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error(`${token} 需要提供参数值。`);
+      }
+      options.values[name] = value;
+      index += 1;
+      continue;
+    }
+
+    options.positionals.push(token);
+  }
+
+  return options;
+};
+
+const writeReportFile = async (filePath, report) => {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, JSON.stringify(report, null, 2), 'utf-8');
+};
+
+const printReport = async (report, options, renderHuman) => {
+  if (options.out) {
+    await writeReportFile(options.out, report);
+  }
+
+  if (options.json) {
+    log(report);
+    return;
+  }
+
+  const lines = renderHuman(report);
+  if (options.out) {
+    lines.push(`JSON 报告已写入：${options.out}`);
+  } else {
+    lines.push('提示：添加 --json 可输出机器可读 JSON，添加 --out <file> 可保存完整报告。');
+  }
+  log(lines.join('\n'));
+};
+
+const formatStatus = (status) => status ?? 'unknown';
+
+const renderCheckLines = (checks, limit = 12) => {
+  const lines = [];
+  for (const check of checks.slice(0, limit)) {
+    lines.push(`  - ${check.name}: ${formatStatus(check.status)}`);
+  }
+  if (checks.length > limit) {
+    lines.push(`  - ... 还有 ${checks.length - limit} 项检查，使用 --json 查看完整内容`);
+  }
+  return lines;
 };
 
 const loadJsonFile = async (filePath, fallback) => {
@@ -1773,6 +1879,241 @@ const handlePublish = async () => {
   });
 };
 
+const handlePreview = async (args) => {
+  const projectRoot = resolveProjectRoot();
+  const options = parseReportOptions(args, {
+    mode: { type: 'string' },
+    target: { type: 'string' }
+  });
+  const allowedModes = new Set(['mock', 'host']);
+  const allowedTargets = new Set(['app', 'component', 'card', 'box', 'layout', 'theme']);
+  const mode = options.values.mode ?? 'mock';
+  const target = options.values.target ?? 'app';
+
+  if (!allowedModes.has(mode)) {
+    throw new Error('--mode 只支持 mock 或 host。');
+  }
+  if (!allowedTargets.has(target)) {
+    throw new Error('--target 只支持 app/component/card/box/layout/theme。');
+  }
+
+  let projectConfig = null;
+  try {
+    projectConfig = await loadProjectConfig(projectRoot);
+  } catch {
+    projectConfig = null;
+  }
+
+  const report = createPreviewReport({
+    projectRoot,
+    ecosystemRoot: resolveEcosystemRoot(),
+    mode,
+    target,
+    projectConfig
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev preview：${payload.summary.status}`,
+    `项目：${payload.project.manifest?.id ?? payload.project.config?.type ?? projectRoot}`,
+    `模式：${payload.previewPlan.mode}；目标：${payload.previewPlan.target}`,
+    '检查：',
+    ...renderCheckLines(payload.checks)
+  ]);
+};
+
+const handleComponentCommand = async (args) => {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand || subcommand === 'help') {
+    log(
+      [
+        'chipsdev component 用法：',
+        '  chipsdev component gallery [--json] [--out <file>]',
+        '',
+        '说明：',
+        '  - 从组件库 theme-contracts 与 token 构建产物生成组件 part/state/token 矩阵；',
+        '  - 同步读取组件库最新 quality/perf 报告摘要；',
+        '  - 默认输出人读摘要，--json 输出完整机器可读报告。'
+      ].join('\n')
+    );
+    return;
+  }
+
+  if (subcommand !== 'gallery') {
+    throw new Error(`不支持的 component 子命令：${subcommand}`);
+  }
+
+  const options = parseReportOptions(rest);
+  const report = createComponentGalleryReport({
+    ecosystemRoot: resolveEcosystemRoot()
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev component gallery：${payload.summary.status}`,
+    `组件数量：${payload.summary.componentCount}`,
+    `状态矩阵单元：${payload.summary.stateCellCount}`,
+    `必需 token 覆盖率：${Math.round(payload.summary.requiredTokenCoverage * 10000) / 100}%`,
+    `缺失必需 token：${payload.summary.missingRequiredTokenCount}`,
+    `组件库质量报告：${payload.reports.qualityGateLatest?.status ?? 'missing'}`,
+    '检查：',
+    ...renderCheckLines(payload.checks)
+  ]);
+};
+
+const handleThemeInspect = async (args) => {
+  const [subcommand, ...rest] = args;
+  if (!subcommand || subcommand === 'help') {
+    log(
+      [
+        'chipsdev theme inspect 用法：',
+        '  chipsdev theme inspect [--theme <themeId|path>] [--json] [--out <file>]',
+        '',
+        '说明：',
+        '  - 读取主题包 manifest、entry、contracts、tokens 与 dist 产物；',
+        '  - 只做诊断报告，不修改主题包；',
+        '  - 可用 --theme 指定主题 ID、主题目录或 manifest 路径。'
+      ].join('\n')
+    );
+    return;
+  }
+
+  if (subcommand !== 'inspect') {
+    await delegateHostManagedCommand('theme', args);
+    return;
+  }
+
+  const options = parseReportOptions(rest, {
+    theme: { type: 'string' }
+  });
+  const report = createThemeInspectReport({
+    ecosystemRoot: resolveEcosystemRoot(),
+    themeRef: options.values.theme,
+    baseDir: resolveProjectRoot()
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev theme inspect：${payload.summary.status}`,
+    `主题数量：${payload.summary.themeCount}`,
+    `失败主题：${payload.summary.failedThemes.length}`,
+    '主题：',
+    ...payload.themes.slice(0, 8).map((theme) => {
+      const id = theme.manifest?.themeId ?? path.basename(theme.themeDir);
+      return `  - ${id}: ${theme.status}，组件 ${theme.contractSummary.componentCount}，token ${theme.tokenSummary.tokenCount}`;
+    }),
+    ...(payload.themes.length > 8 ? [`  - ... 还有 ${payload.themes.length - 8} 个主题`] : []),
+    '检查：',
+    ...renderCheckLines(payload.checks)
+  ]);
+};
+
+const handleQualityCommand = async (args) => {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand || subcommand === 'help') {
+    log(
+      [
+        'chipsdev quality 用法：',
+        '  chipsdev quality gate [--json] [--out <file>]',
+        '',
+        '说明：',
+        '  - 汇总当前项目、SDK route manifest、组件库 quality/perf 最新报告和主题检查摘要；',
+        '  - 本命令读取既有报告，不替代项目正式 npm test / npm run quality:gate。'
+      ].join('\n')
+    );
+    return;
+  }
+
+  if (subcommand !== 'gate') {
+    throw new Error(`不支持的 quality 子命令：${subcommand}`);
+  }
+
+  const options = parseReportOptions(rest);
+  const report = createQualityGateReport({
+    projectRoot: resolveProjectRoot(),
+    ecosystemRoot: resolveEcosystemRoot()
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev quality gate：${payload.summary.status}`,
+    `失败检查：${payload.summary.failedCheckCount}`,
+    `警告检查：${payload.summary.warningCheckCount}`,
+    `组件库质量：${payload.reports.componentLibraryQuality?.status ?? 'missing'}`,
+    `主题检查：${payload.reports.themes.status}`,
+    '检查：',
+    ...renderCheckLines(payload.checks)
+  ]);
+};
+
+const handleAssimilateCommand = async (args) => {
+  const [subcommand, targetPath, ...rest] = args;
+
+  if (!subcommand || subcommand === 'help') {
+    log(
+      [
+        'chipsdev assimilate 用法：',
+        '  chipsdev assimilate scan <path> [--json] [--out <file>]',
+        '  chipsdev assimilate report <path> [--json] [--out <file>]',
+        '',
+        '说明：',
+        '  - 扫描 React/Vite/静态 Web/Electron 混合项目的 Host 能力、样式、文案和组件替换风险；',
+        '  - report 在 scan 基础上附加迁移计划；',
+        '  - 不自动改写外部项目源码。'
+      ].join('\n')
+    );
+    return;
+  }
+
+  if (subcommand !== 'scan' && subcommand !== 'report') {
+    throw new Error(`不支持的 assimilate 子命令：${subcommand}`);
+  }
+  if (!targetPath) {
+    throw new Error(`chipsdev assimilate ${subcommand} 需要提供项目路径。`);
+  }
+
+  const targetRoot = path.resolve(resolveProjectRoot(), targetPath);
+  if (!fs.existsSync(targetRoot) || !fs.statSync(targetRoot).isDirectory()) {
+    throw new Error(`同化目标路径不存在或不是目录：${targetRoot}`);
+  }
+
+  const options = parseReportOptions(rest);
+  const report = createAssimilationScanReport({
+    targetRoot,
+    reportLevel: subcommand
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev assimilate ${subcommand}：${payload.summary.status}`,
+    `同化评分：${payload.summary.score}`,
+    `框架识别：${payload.project.frameworks.length > 0 ? payload.project.frameworks.join(', ') : 'unknown'}`,
+    `扫描文件：${payload.project.scannedFileCount}`,
+    `必须修复：${payload.summary.requiredFixCount}`,
+    `建议修复：${payload.summary.recommendedFixCount}`,
+    `组件替换建议：${payload.summary.componentSuggestionCount}`,
+    `Manifest 建议 ID：${payload.manifestSuggestion.id}`,
+    '重点问题：',
+    ...payload.summary.requiredFixes.slice(0, 8).map((item) => `  - ${item.title}: ${item.count}`)
+  ]);
+};
+
+const handleDiagnostics = async (args) => {
+  const options = parseReportOptions(args);
+  const report = createDiagnosticsReport({
+    projectRoot: resolveProjectRoot(),
+    ecosystemRoot: resolveEcosystemRoot()
+  });
+
+  await printReport(report, options, (payload) => [
+    `chipsdev diagnostics：${payload.summary.status}`,
+    `Route 数量：${payload.routes.routeCount}`,
+    `权限数量：${payload.routes.permissions.length}`,
+    `组件矩阵：${payload.summaries.componentGallery.status}`,
+    `主题检查：${payload.summaries.themeInspect.status}`,
+    `质量门禁：${payload.summaries.qualityGate.status}`,
+    '检查：',
+    ...renderCheckLines(payload.checks)
+  ]);
+};
+
 const main = async () => {
   const { command, args } = parseArgs(process.argv.slice(2));
 
@@ -1799,7 +2140,9 @@ const main = async () => {
   }
 
   try {
-    if (HOST_MANAGED_COMMANDS.has(command)) {
+    if (command === 'theme' && args[0] === 'inspect') {
+      await handleThemeInspect(args);
+    } else if (HOST_MANAGED_COMMANDS.has(command)) {
       await delegateHostManagedCommand(command, args);
     } else if (command === 'init') {
       await handleInit();
@@ -1821,6 +2164,16 @@ const main = async () => {
       await handleValidate();
     } else if (command === 'module') {
       await handleModuleCommand(args);
+    } else if (command === 'preview') {
+      await handlePreview(args);
+    } else if (command === 'component') {
+      await handleComponentCommand(args);
+    } else if (command === 'quality') {
+      await handleQualityCommand(args);
+    } else if (command === 'assimilate') {
+      await handleAssimilateCommand(args);
+    } else if (command === 'diagnostics') {
+      await handleDiagnostics(args);
     } else if (command === 'create') {
       await handleCreate(args);
     } else if (command === 'login') {

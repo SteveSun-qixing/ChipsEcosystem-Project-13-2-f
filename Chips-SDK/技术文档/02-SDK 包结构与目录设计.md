@@ -7,7 +7,7 @@
 
 ## 1. 仓库物理目录规划
 
-结合《薯片生态前端 vNext 架构设计手册》关于包边界的建议，`Chips-SDK` 仓库目录规划如下（仅文档设计，不代表当前已创建）：
+结合《薯片生态前端 vNext 架构设计手册》关于包边界的建议，`Chips-SDK` 仓库当前目录规划如下：
 
 ```text
 Chips-SDK/
@@ -15,25 +15,37 @@ Chips-SDK/
   tsconfig.json
   src/
     core/              # Core Client Layer：客户端工厂与 Bridge 适配
-    api-wrapper/       # Domain Wrapper Layer：按能力域拆分的封装
-      file/
-      card/
-      box/
-      resource/
-      theme/
-      config/
-      i18n/
-      plugin/
-      module/
-      window/
-      platform/
+    api/               # Domain API Layer：按能力域拆分的封装
+      association.ts
+      box.ts
+      card.ts
+      command.ts
+      config.ts
+      control-plane.ts
+      credential.ts
+      document.ts
+      file.ts
+      i18n.ts
+      icon.ts
+      log.ts
+      module.ts
+      platform.ts
+      plugin.ts
+      resource.ts
+      serializer.ts
+      surface.ts
+      theme.ts
+      transfer.ts
+      window.ts
+      zip.ts
     types/             # 公共类型定义与导出
-    tooling/           # 契约校验、调试工具、测试辅助
+    testing/           # SDK 测试辅助入口，对外通过 chips-sdk/testing 导出
+    tooling/           # 契约校验、开发者报告与调试工具
     contracts/         # route-manifest 与其他契约快照（只读数据）
   tests/
-    core/
-    api-wrapper/
-    integration/
+    *.test.ts
+    tooling/
+    run-cli-*.cjs
   技术文档/
   需求文档/
   开发计划/
@@ -59,31 +71,35 @@ Chips-SDK/
 
 ---
 
-## 3. Domain Wrapper Layer 目录
+## 3. Domain API Layer 目录
 
 ### 3.1 通用约束
 
 - 所有能力域封装仅依赖 `core/client` 导出的调用接口，不直接依赖 `window.chips`。
-- 每个能力域一个子目录，导出该域的类型与 API。
+- 每个能力域一个 `src/api/*.ts` 文件，导出该域的类型与 API。
 - 对外公开 API 须通过顶层入口统一导出（例如 `src/index.ts`）。
 
 ### 3.2 能力域子目录示例
 
-- `src/api-wrapper/file/`：
-  - `index.ts`：导出 `read/write/list/stat` 封装。
-  - `types.ts`：文件相关类型。
-  - `__tests__/file.test.ts`：对应单元测试（放在 `tests/api-wrapper/file` 亦可）。
+- `src/api/file.ts`：导出 `read/write/list/stat/watch` 等文件能力封装。
+- `src/api/card.ts`：导出 `pack/unpack/readMetadata/parse/render/validate/resolveDocumentPath` 等卡片能力封装。
+- `src/api/platform.ts`：导出 dialog、clipboard、shell、notification、tray、shortcut、ipc 等平台能力封装。
+- `src/api/control-plane.ts`：导出 health/check/metrics/diagnose 等控制面能力封装。
 
-- `src/api-wrapper/card/`：
-  - `index.ts`：导出 `parse/validate/render` 与统一显示接口。
-  - `display.ts`：`coverFrame/compositeWindow` 显示链路封装。
-  - `types.ts`：卡片文档与渲染结果类型。
+其他能力域（`box/resource/theme/config/i18n/plugin/module/window/association/credential/log/serializer/zip`）以类似方式组织。
 
-- 其他能力域（`box/resource/theme/config/i18n/plugin/module/window/platform`）以类似方式组织。
+## 4. testing/ 目录
+
+`src/testing/` 是 SDK 正式测试辅助入口，对外通过 `chips-sdk/testing` 导出。
+
+- `src/testing/mock-host.ts`：Host simulator，覆盖调用记录、状态、事件总线、action handler、fault、delay 与权限拒绝。
+- `src/testing/index.ts`：导出 `createMockChipsHost`、`createMockChipsClient`、launch/surface/permission fixtures。
+
+测试辅助只能模拟公开 Bridge action、事件和标准错误形态，不得 import Host 主运行时实现，不得复制 KernelRouter、service registry 或 Runtime Client。
 
 ---
 
-## 4. types/ 目录
+## 5. types/ 目录
 
 `src/types/` 存放：
 
@@ -110,7 +126,7 @@ Chips-SDK/
 
 ---
 
-## 5. tooling/ 目录
+## 6. tooling/ 目录
 
 `src/tooling/` 主要用于：
 
@@ -121,16 +137,22 @@ Chips-SDK/
 - 调试工具：
   - 调试日志控制与格式统一；
   - 性能采样工具（测量封装层额外开销）。
+- 开发者报告：
+  - `chipsdev preview` 报告；
+  - `chipsdev component gallery` 组件矩阵；
+  - `chipsdev theme inspect` 主题检查；
+  - `chipsdev quality gate` 门禁摘要；
+  - `chipsdev assimilate scan/report` 外部 Web 项目同化报告；
+  - `chipsdev diagnostics` 生态工具链诊断。
 
 建议文件：
 
 - `src/tooling/route-manifest.ts`
-- `src/tooling/diagnostics.ts`
-- `src/tooling/perf-benchmark.ts`
+- `src/tooling/developer-tools.cjs`
 
 ---
 
-## 6. contracts/ 目录
+## 7. contracts/ 目录
 
 `src/contracts/` 用于存放只读契约快照数据，例如：
 
@@ -144,7 +166,7 @@ Chips-SDK/
 
 ---
 
-## 7. 顶层入口设计
+## 8. 顶层入口设计
 
 顶层入口（`src/index.ts`）职责：
 
@@ -162,24 +184,20 @@ Chips-SDK/
 
 ---
 
-## 8. 测试目录规划
+## 9. 测试目录规划
 
 `tests/` 建议结构：
 
 ```text
 tests/
-  core/
-    client.test.ts
-    environment.test.ts
-  api-wrapper/
-    file.test.ts
-    card.test.ts
-    card-display.test.ts
-    theme.test.ts
-    plugin.test.ts
-  integration/
-    host-bridge-mock.test.ts
-    real-host-smoke.test.ts   # 可选：仅在具备 Host 环境时运行
+  client.test.ts
+  card.test.ts
+  resource.test.ts
+  testing.test.ts
+  route-manifest.test.ts
+  tooling/
+    contract-drift.test.ts
+  run-cli-*.cjs
 ```
 
 测试必须覆盖：
@@ -187,9 +205,10 @@ tests/
 - 正常路径：各能力域 API 在模拟 Host 环境中的基本行为。
 - 错误路径：Bridge 不可用、超时、权限拒绝等场景。
 - 边界路径：非法参数、空路径、大文件等。
+- CLI 集成路径：工程创建、Host 管理委托、模块 invoke、打包兼容、开发者报告命令与同化扫描。
 
 ---
 
-## 9. 小结
+## 10. 小结
 
-本文件定义了 `Chips-SDK` 仓库的物理目录与内部模块划分，为后续实现提供统一的结构约束。实际创建目录与文件时必须严格遵守本设计，禁止在实现阶段临时改变结构或引入未规划的模块；若确需调整，应先更新本文件并通过评审。
+本文件定义了 `Chips-SDK` 仓库的物理目录与内部模块划分。SDK 只提供类型化封装、测试辅助、脚手架和开发者工具，不承载 Host 运行时主实现。

@@ -128,6 +128,10 @@ async function main() {
       path.join(projectDir, "src", "commands", "app-commands.ts"),
       "utf8",
     );
+    const appSource = await readFile(
+      path.join(projectDir, "src", "App.tsx"),
+      "utf8",
+    );
     const commandRuntimeSource = await readFile(
       path.join(projectDir, "src", "commands", "useAppCommands.ts"),
       "utf8",
@@ -150,13 +154,29 @@ async function main() {
       "client.command.invoke",
       "client.command.onInvoked",
       "createCommandAdapter",
+      "useChipsClient",
     ]) {
       if (!commandRuntimeSource.includes(requiredText)) {
         throw new Error(`E2E: command runtime 缺少 ${requiredText}`);
       }
     }
+    for (const requiredText of [
+      "ChipsEnvironmentProvider",
+      "useChipsTheme",
+      "useChipsI18n",
+      "useChipsSurface",
+      "useChipsPermission",
+      "useChipsDiagnostics",
+    ]) {
+      if (!appSource.includes(requiredText)) {
+        throw new Error(`E2E: App 环境入口缺少 ${requiredText}`);
+      }
+    }
     if (/window\.chips\.invoke\(["']command\./.test(commandRuntimeSource)) {
       throw new Error("E2E: command runtime 不得绕过 SDK 直连 Bridge action");
+    }
+    if (/\buseChipsBridge\b/.test(`${appSource}\n${commandRuntimeSource}`)) {
+      throw new Error("E2E: 应用模板不得生成旧的 useChipsBridge 私有入口");
     }
 
     const zhCnText = await readFile(path.join(projectDir, "i18n", "zh-CN.json"), "utf8");

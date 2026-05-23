@@ -1,24 +1,20 @@
 import React from "react";
-import { ChipsButton, resolveI18nText } from "@chips/component-library";
+import { ChipsButton, resolveI18nText, useChipsI18n } from "@chips/component-library";
 import { translateLocalKey } from "../i18n/locales";
 
 interface ExamplePanelProps {
   title: string;
 }
 
-function t(key: string, params?: Record<string, string | number>): string {
-  return translateLocalKey(key, "zh-CN", params);
-}
-
-function text(key: string, fallback = key): string {
-  return resolveI18nText({
-    i18n: t,
+export function ExamplePanel({ title }: ExamplePanelProps) {
+  const i18n = useChipsI18n();
+  const locale = i18n.locale || "zh-CN";
+  const localText = (key: string, fallback = key): string => resolveI18nText({
+    i18n: (nextKey, params) => translateLocalKey(nextKey, locale, params),
     key,
     fallback,
   });
-}
 
-export function ExamplePanel({ title }: ExamplePanelProps) {
   return (
     <section
       data-chips-app="app-standard.example-panel"
@@ -30,9 +26,9 @@ export function ExamplePanel({ title }: ExamplePanelProps) {
     >
       <h2 style={{ fontSize: 14, marginBottom: 8 }}>{title}</h2>
       <p style={{ fontSize: 12, marginBottom: 12 }}>
-        {text("app-standard.examplePanel.body")}
+        {localText("app-standard.examplePanel.body")}
       </p>
-      <ChipsButton variant="secondary">{text("app-standard.actions.learnMore")}</ChipsButton>
+      <ChipsButton variant="secondary">{localText("app-standard.actions.learnMore")}</ChipsButton>
     </section>
   );
 }

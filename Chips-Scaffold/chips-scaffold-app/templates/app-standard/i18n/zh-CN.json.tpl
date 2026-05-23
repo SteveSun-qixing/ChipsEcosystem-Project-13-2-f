@@ -48,10 +48,17 @@
         "errorWithCode": "命令错误：{code}"
       }
     },
-    "bridge": {
-      "title": "Host 状态",
+    "environment": {
+      "title": "Host 环境",
       "themeLabel": "当前主题：",
-      "error": "主题读取错误：{code}"
+      "localeLabel": "当前语言：",
+      "surfaceLabel": "当前容器：",
+      "permissionLabel": "命令权限：",
+      "diagnosticsLabel": "诊断数量：",
+      "permissionReady": "可调用命令",
+      "permissionMissing": "缺少 command.invoke",
+      "unknown": "未知",
+      "error": "环境读取错误：{code}"
     },
     "examplePanel": {
       "title": "组件库示例面板",

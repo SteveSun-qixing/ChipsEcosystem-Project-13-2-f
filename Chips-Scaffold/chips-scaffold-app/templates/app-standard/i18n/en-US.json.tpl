@@ -48,10 +48,17 @@
         "errorWithCode": "Command error: {code}"
       }
     },
-    "bridge": {
-      "title": "Host status",
+    "environment": {
+      "title": "Host environment",
       "themeLabel": "Current theme: ",
-      "error": "Theme read error: {code}"
+      "localeLabel": "Current locale: ",
+      "surfaceLabel": "Current surface: ",
+      "permissionLabel": "Command permission: ",
+      "diagnosticsLabel": "Diagnostics: ",
+      "permissionReady": "Command ready",
+      "permissionMissing": "Missing command.invoke",
+      "unknown": "Unknown",
+      "error": "Environment read error: {code}"
     },
     "examplePanel": {
       "title": "Component library panel",

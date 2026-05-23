@@ -51,6 +51,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const eslintConfigPath = path.join(targetDir, ".eslintrc.cjs");
     const appCommandsPath = path.join(targetDir, "src/commands/app-commands.ts");
     const useAppCommandsPath = path.join(targetDir, "src/commands/useAppCommands.ts");
+    const appSourcePath = path.join(targetDir, "src/App.tsx");
     const localesPath = path.join(targetDir, "src/i18n/locales.ts");
     const runtimeClientPath = path.join(targetDir, "src/runtime/chips-client.ts");
     const commandTestPath = path.join(targetDir, "tests/unit/commands.test.ts");
@@ -59,6 +60,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     await stat(pkgPath);
     await stat(indexHtmlPath);
     await stat(eslintConfigPath);
+    await stat(appSourcePath);
     await stat(appCommandsPath);
     await stat(useAppCommandsPath);
     await stat(localesPath);
@@ -67,6 +69,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
 
     const manifestContent = await readFile(manifestPath, "utf8");
     const packageContent = JSON.parse(await readFile(pkgPath, "utf8"));
+    const appSourceContent = await readFile(appSourcePath, "utf8");
     const appCommandsContent = await readFile(appCommandsPath, "utf8");
     const useAppCommandsContent = await readFile(useAppCommandsPath, "utf8");
     const zhCnContent = await readFile(path.join(targetDir, "i18n/zh-CN.json"), "utf8");
@@ -140,11 +143,34 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
         useAppCommandsContent.includes("client.command.onInvoked"),
       "命令运行时应通过 SDK command API 注册、调用并监听 handlerId",
     );
+    for (const requiredText of [
+      "ChipsEnvironmentProvider",
+      "useChipsTheme",
+      "useChipsI18n",
+      "useChipsSurface",
+      "useChipsPermission",
+      "useChipsDiagnostics",
+    ]) {
+      assert.ok(
+        appSourceContent.includes(requiredText),
+        `根组件应通过 React Environment 正式入口消费 ${requiredText}`,
+      );
+    }
+    assert.ok(
+      useAppCommandsContent.includes("useChipsClient") &&
+        !useAppCommandsContent.includes("../runtime/chips-client"),
+      "命令运行时应从 Environment 注入的 SDK client 获取 command API",
+    );
     assert.ok(
       !useAppCommandsContent.includes('window.chips.invoke("command.') &&
         !useAppCommandsContent.includes("BrowserWindow") &&
         !useAppCommandsContent.includes("ipcRenderer"),
       "命令运行时不得绕过 SDK 直连 Host/Electron",
+    );
+    await assert.rejects(
+      stat(path.join(targetDir, "src/hooks/useChipsBridge.ts")),
+      { code: "ENOENT" },
+      "初始化工程不应生成旧的 useChipsBridge 私有入口",
     );
     for (const key of [
       "showWelcome",

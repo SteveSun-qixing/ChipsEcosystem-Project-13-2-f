@@ -1,80 +1,59 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   ChipsButton,
   ChipsCommandPalette,
   ChipsCommandProvider,
+  ChipsEnvironmentProvider,
   ChipsInput,
   ChipsMenuBar,
   ChipsThemeProvider,
   ChipsToolbar,
   resolveI18nText,
+  useChipsDiagnostics,
+  useChipsEnvironment,
+  useChipsI18n,
+  useChipsPermission,
+  useChipsSurface,
+  useChipsTheme,
 } from "@chips/component-library";
 import { ExamplePanel } from "./components/ExamplePanel";
 import { useAppCommands } from "./commands/useAppCommands";
 import { chipsClient } from "./runtime/chips-client";
 import { translateLocalKey } from "./i18n/locales";
 
-declare global {
-  interface Window {
-    chips?: {
-      on?(event: string, handler: (payload: unknown) => void): () => void;
-      off?(event: string, handler: (payload: unknown) => void): void;
-      addEventListener?(event: string, handler: EventListener): void;
-      removeEventListener?(event: string, handler: EventListener): void;
-      subscribe?(event: string, handler: (payload: unknown) => void): () => void;
-    };
-  }
-}
+type TextParams = Record<string, string | number>;
+type TextResolver = (key: string, fallback?: string, params?: TextParams) => string;
 
-type ThemeInfo = {
-  themeId?: string;
-  displayName?: string;
-  version?: string;
-};
+const DEFAULT_THEME_ID = "chips-official.default-theme";
+const DEFAULT_THEME_VERSION = "1.0.0";
 
-function t(key: string, params?: Record<string, string | number>): string {
-  return translateLocalKey(key, "zh-CN", params);
-}
+function useTemplateI18n(): {
+  locale: string;
+  translate: (key: string, params?: TextParams) => string;
+  text: TextResolver;
+} {
+  const i18n = useChipsI18n();
+  const locale = i18n.locale || "zh-CN";
+  const translate = useMemo(
+    () => (key: string, params?: TextParams) => translateLocalKey(key, locale, params),
+    [locale],
+  );
+  const text = useMemo<TextResolver>(
+    () => (key, fallback = key, params) => resolveI18nText({
+      i18n: translate,
+      key,
+      fallback,
+      params,
+    }),
+    [translate],
+  );
 
-function text(key: string, fallback = key, params?: Record<string, string | number>): string {
-  return resolveI18nText({
-    i18n: t,
-    key,
-    fallback,
-    params,
-  });
-}
-
-function useChipsThemeInfo() {
-  const [themeInfo, setThemeInfo] = useState<ThemeInfo | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    chipsClient.theme
-      .getCurrent()
-      .then((info) => {
-        if (!cancelled) {
-          setThemeInfo(info);
-          setErrorCode(null);
-        }
-      })
-      .catch((error: { code?: string }) => {
-        if (!cancelled) {
-          setErrorCode(error?.code || "THEME_RUNTIME_ERROR");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { themeInfo, errorCode };
+  return { locale, translate, text };
 }
 
 function Header() {
+  const { text } = useTemplateI18n();
+
   return (
     <header
       data-chips-app="app-standard.header"
@@ -92,6 +71,7 @@ function Header() {
 }
 
 function CommandWorkspace() {
+  const { text, translate } = useTemplateI18n();
   const {
     adapter,
     phase,
@@ -105,7 +85,7 @@ function CommandWorkspace() {
         label: text("app-standard.commands.menu.app"),
       },
     ],
-    [],
+    [text],
   );
   const statusText = lastInvoked
     ? text("app-standard.commands.status.lastInvoked", "command invoked", {
@@ -123,7 +103,7 @@ function CommandWorkspace() {
       style={{ display: "flex", flexDirection: "column", gap: 12 }}
     >
       <h2 style={{ fontSize: 14, margin: 0 }}>{text("app-standard.commands.sectionTitle")}</h2>
-      <ChipsCommandProvider adapter={adapter} i18n={t}>
+      <ChipsCommandProvider adapter={adapter} i18n={translate}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <ChipsMenuBar
             menus={menuDescriptors}
@@ -150,8 +130,58 @@ function CommandWorkspace() {
   );
 }
 
+function EnvironmentStatus() {
+  const { locale, text } = useTemplateI18n();
+  const theme = useChipsTheme();
+  const surface = useChipsSurface();
+  const permission = useChipsPermission();
+  const diagnostics = useChipsDiagnostics();
+  const themeInfo = theme.theme;
+  const surfaceInfo = surface.surface;
+  const errorCode = theme.error?.code || surface.error?.code || diagnostics.error?.code;
+  const unknown = text("app-standard.environment.unknown");
+  const commandPermissionText = permission.hasPermission("command.invoke")
+    ? text("app-standard.environment.permissionReady")
+    : text("app-standard.environment.permissionMissing");
+
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <h2 style={{ fontSize: 14, marginBottom: 8 }}>{text("app-standard.environment.title")}</h2>
+      <p style={{ fontSize: 12, margin: 0 }}>
+        {text("app-standard.environment.themeLabel")}
+        <code>
+          {themeInfo?.themeId || unknown} / {themeInfo?.displayName || unknown}
+        </code>
+      </p>
+      <p style={{ fontSize: 12, margin: 0 }}>
+        {text("app-standard.environment.localeLabel")}
+        <code>{locale}</code>
+      </p>
+      <p style={{ fontSize: 12, margin: 0 }}>
+        {text("app-standard.environment.surfaceLabel")}
+        <code>
+          {surfaceInfo?.kind || unknown} / {surfaceInfo?.sceneId || unknown}
+        </code>
+      </p>
+      <p style={{ fontSize: 12, margin: 0 }}>
+        {text("app-standard.environment.permissionLabel")}
+        <code>{commandPermissionText}</code>
+      </p>
+      <p style={{ fontSize: 12, margin: 0 }}>
+        {text("app-standard.environment.diagnosticsLabel")}
+        <code>{diagnostics.diagnostics.length}</code>
+      </p>
+      {errorCode ? (
+        <p style={{ color: "var(--chips-sys-color-danger)", fontSize: 12, margin: 0 }}>
+          {text("app-standard.environment.error", "environment error", { code: errorCode })}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function MainContent() {
-  const { themeInfo, errorCode } = useChipsThemeInfo();
+  const { text } = useTemplateI18n();
 
   return (
     <main
@@ -170,35 +200,24 @@ function MainContent() {
 
       <CommandWorkspace />
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <h2 style={{ fontSize: 14, marginBottom: 8 }}>{text("app-standard.bridge.title")}</h2>
-        {errorCode ? (
-          <p style={{ color: "var(--chips-sys-color-danger)", fontSize: 12 }}>
-            {text("app-standard.bridge.error", "theme error", { code: errorCode })}
-          </p>
-        ) : (
-          <p style={{ fontSize: 12 }}>
-            {text("app-standard.bridge.themeLabel")}
-            <code>
-              {themeInfo?.themeId || "unknown"} / {themeInfo?.displayName || "Unknown"}
-            </code>
-          </p>
-        )}
-      </section>
+      <EnvironmentStatus />
 
       <ExamplePanel title={text("app-standard.examplePanel.title")} />
     </main>
   );
 }
 
-export function App() {
-  const themeEventSource = typeof window !== "undefined" ? window.chips : undefined;
+function AppShell() {
+  const environment = useChipsEnvironment();
+  const theme = useChipsTheme();
+  const themeId = theme.theme?.themeId || DEFAULT_THEME_ID;
+  const version = theme.theme?.version || DEFAULT_THEME_VERSION;
 
   return (
     <ChipsThemeProvider
-      themeId="chips-official.default-theme"
-      version="1.0.0"
-      eventSource={themeEventSource}
+      themeId={themeId}
+      version={version}
+      eventSource={environment.eventSource}
       eventName="theme.changed"
     >
       <div
@@ -215,5 +234,28 @@ export function App() {
         <MainContent />
       </div>
     </ChipsThemeProvider>
+  );
+}
+
+export function App() {
+  return (
+    <ChipsEnvironmentProvider
+      client={chipsClient}
+      initialTheme={{
+        themeId: DEFAULT_THEME_ID,
+        displayName: "Default",
+        version: DEFAULT_THEME_VERSION,
+      }}
+      initialLocale="zh-CN"
+      initialPermissions={[
+        "theme.read",
+        "i18n.read",
+        "command.read",
+        "command.write",
+        "command.invoke",
+      ]}
+    >
+      <AppShell />
+    </ChipsEnvironmentProvider>
   );
 }

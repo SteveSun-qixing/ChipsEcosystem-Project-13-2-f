@@ -11,6 +11,22 @@ const TEMPLATES_ROOT = path.join(ROOT, "templates");
 
 /** 简单的模板完整性检查脚本，用于在 CI 中作为质量门禁的一部分。 */
 
+async function collectTemplateSourceFiles(dir) {
+  const files = [];
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await collectTemplateSourceFiles(entryPath));
+      continue;
+    }
+    if (entry.isFile() && /\.(?:ts|tsx|js|jsx|mjs|cjs)\.tpl$/.test(entry.name)) {
+      files.push(entryPath);
+    }
+  }
+  return files;
+}
+
 async function main() {
   const entries = await readdir(TEMPLATES_ROOT, { withFileTypes: true });
   const templateDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
@@ -132,20 +148,30 @@ async function main() {
         }
       }
 
-      const sourceFiles = [
-        "src/App.tsx.tpl",
-        "src/components/ExamplePanel.tsx.tpl",
-        "src/commands/app-commands.ts.tpl",
-        "src/commands/useAppCommands.ts.tpl",
-        "src/runtime/chips-client.ts.tpl",
-        "src/i18n/locales.ts.tpl",
-      ];
+      const sourceFiles = await collectTemplateSourceFiles(path.join(base, "src"));
       const sourceText = (
         await Promise.all(
-          sourceFiles.map((rel) => readFile(path.join(base, rel), "utf8")),
+          sourceFiles.map((sourcePath) => readFile(sourcePath, "utf8")),
         )
       ).join("\n");
+      for (const requiredText of [
+        "ChipsEnvironmentProvider",
+        "useChipsClient",
+        "useChipsTheme",
+        "useChipsI18n",
+        "useChipsSurface",
+        "useChipsPermission",
+        "useChipsDiagnostics",
+      ]) {
+        if (!sourceText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} React 环境入口缺少：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
       for (const forbiddenPattern of [
+        /\buseChipsBridge\b/,
         /window\.chips\.invoke\(["']command\./,
         /\bBrowserWindow\b/,
         /\bipcRenderer\b/,

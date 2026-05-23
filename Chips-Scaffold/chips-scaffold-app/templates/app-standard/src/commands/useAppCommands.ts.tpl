@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  useChipsClient,
   createCommandAdapter,
   type ChipsCommandAdapter,
 } from "@chips/component-library";
@@ -11,7 +12,6 @@ import {
   isAppCommandInvokedEvent,
   type AppCommandStatus,
 } from "./app-commands";
-import { chipsClient } from "../runtime/chips-client";
 
 type CommandRegistryPhase = "idle" | "registering" | "ready" | "error";
 
@@ -38,7 +38,8 @@ function toErrorCode(error: unknown): string {
 }
 
 export function useAppCommands(options: UseAppCommandsOptions = {}): UseAppCommandsResult {
-  const client = options.client ?? chipsClient;
+  const environmentClient = useChipsClient<Client>();
+  const client = options.client ?? environmentClient;
   const adapter = useMemo(() => createCommandAdapter(client), [client]);
   const [phase, setPhase] = useState<CommandRegistryPhase>("idle");
   const [errorCode, setErrorCode] = useState<string | null>(null);

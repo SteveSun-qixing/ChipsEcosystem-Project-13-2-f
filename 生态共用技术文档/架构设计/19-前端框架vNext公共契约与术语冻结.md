@@ -126,7 +126,7 @@
 | Host | `src/preload/create-bridge.ts`、`src/main/services/register-host-services.ts`、`src/renderer/declarative-ui/*`、`packages/unified-rendering/*` | Host 已承载 Bridge、服务域、L8、L9 主链路。 |
 | SDK | `src/core/client.ts`、`src/api/surface.ts`、`src/contracts/route-manifest.json`、`tests/tooling/contract-drift.test.ts` | SDK 当前作为 Bridge/Runtime Client 消费侧封装与契约测试辅助存在。 |
 | ComponentLibrary | `packages/component-library/index.*`、`packages/components`、`packages/primitives`、`packages/theme-contracts`、`tests/types/component-library-smoke.tsx` | 组件库以无头组件、primitive、主题契约和类型烟测为主。 |
-| Scaffold | `chips-scaffold-app/templates/app-standard/manifest.yaml.tpl` | App 模板已声明 `runtime.targets`、`ui.surface`、主题/多语言基础权限。 |
+| Scaffold | `chips-scaffold-app/templates/app-standard/manifest.yaml.tpl`、`chips-scaffold-app/templates/app-standard/src/App.tsx.tpl` | App 模板已声明 `runtime.targets`、`ui.surface`、主题/多语言基础权限，并默认通过 `ChipsEnvironmentProvider/useChips*` 注入 SDK client 与 Host 环境。 |
 | ThemePack | `ThemePack/Chips-default/manifest.yaml`、`ThemePack/Chips-theme-default-dark/manifest.yaml`、`tokens/comp/*` | 主题包以 theme 插件 manifest、token 和 CSS 资源承载视觉实现。 |
 | EcoSettingsPanel | `manifest.yaml`、`src/features/themes/*`、`i18n/*` | 设置面板以 app 插件形式消费主题、多语言、插件治理能力。 |
 

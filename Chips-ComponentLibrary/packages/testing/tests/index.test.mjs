@@ -5,6 +5,8 @@ import {
   assertHasContractAttrs,
   assertStatePriority,
   createComponentFixture,
+  createMockChipsClient,
+  createMockChipsEnvironment,
   createThemeFallbackFixture,
   injectFault,
   resolveFallbackScopeValue
@@ -70,4 +72,33 @@ test("injectFault returns typed fault payload", () => {
   const fault = injectFault("token-missing", { key: "chips.comp.button.root.surface.idle" });
   assert.equal(fault.type, "token-missing");
   assert.equal(fault.payload.key, "chips.comp.button.root.surface.idle");
+});
+
+test("createMockChipsClient provides SDK-like environment APIs", async () => {
+  const client = createMockChipsClient({
+    permissions: ["theme.read"],
+    translations: {
+      "demo.title": "Demo"
+    }
+  });
+  const changed = [];
+  client.events.on("theme.changed", (payload) => changed.push(payload.themeId));
+
+  assert.equal((await client.theme.getCurrent()).themeId, "chips-official.default-theme");
+  assert.equal(await client.i18n.translate("demo.title"), "Demo");
+  assert.equal(client.platform.getLaunchContext().surfaceContext.permissions.includes("theme.read"), true);
+
+  await client.theme.apply("chips.dark");
+  assert.equal(changed[0], "chips.dark");
+  assert.equal(client.calls.some((call) => call.action === "theme.apply"), true);
+});
+
+test("createMockChipsEnvironment returns Provider-ready props", () => {
+  const environment = createMockChipsEnvironment({
+    permissions: ["surface.read"]
+  });
+
+  assert.equal(typeof environment.client.theme.getCurrent, "function");
+  assert.equal(environment.initialSurface.surfaceId, "test-surface");
+  assert.deepEqual(environment.initialPermissions, ["surface.read"]);
 });

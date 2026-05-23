@@ -1,4 +1,24 @@
-import { ChipsButton, ChipsStack, ChipsThemeProvider, ChipsView, CompositeWindowMode, type CardDisplayAdapter, loadCompositeWindowData, toCardRuntimeStandardError, toComponentStandardError } from "@chips/component-library";
+import {
+  ChipsButton,
+  ChipsEnvironmentProvider,
+  ChipsStack,
+  ChipsThemeProvider,
+  ChipsView,
+  CompositeWindowMode,
+  type CardDisplayAdapter,
+  type ChipsClientLike,
+  type ChipsEnvironmentValue,
+  loadCompositeWindowData,
+  toCardRuntimeStandardError,
+  toComponentStandardError,
+  useChipsClient,
+  useChipsDiagnostics,
+  useChipsEnvironment,
+  useChipsI18n,
+  useChipsPermission,
+  useChipsSurface,
+  useChipsTheme
+} from "@chips/component-library";
 
 const adapter: CardDisplayAdapter = {
   async resolveCoverFrame(input) {
@@ -31,20 +51,68 @@ void loadCompositeWindowData(adapter, {
 
 const componentError = toComponentStandardError(new Error("component"));
 const runtimeError = toCardRuntimeStandardError(new Error("runtime"), "CARD_RUNTIME_SMOKE");
+const mockClient: ChipsClientLike = {
+  events: {
+    on() {
+      return () => undefined;
+    }
+  },
+  theme: {
+    async getCurrent() {
+      return { themeId: "chips-official.default-theme", displayName: "Default", version: "1.0.0" };
+    },
+    async apply() {
+      return undefined;
+    }
+  },
+  i18n: {
+    async getCurrent() {
+      return "zh-CN";
+    },
+    async setCurrent() {
+      return undefined;
+    },
+    async translate(key) {
+      return key;
+    }
+  }
+};
+
+function EnvironmentSmoke(): null {
+  const environment: ChipsEnvironmentValue = useChipsEnvironment();
+  const client = useChipsClient();
+  const theme = useChipsTheme();
+  const i18n = useChipsI18n();
+  const surface = useChipsSurface();
+  const permission = useChipsPermission();
+  const diagnostics = useChipsDiagnostics();
+
+  void environment.refresh();
+  void client;
+  void theme.refresh();
+  void i18n.t("demo.title");
+  void surface.refresh();
+  void permission.hasPermission("theme.read");
+  void diagnostics.clear();
+  return null;
+}
 
 export const smokeTree = (
-  <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
-    <ChipsView title="Demo" aria-label="Demo view">
-      <ChipsStack gap="8px">
-        <ChipsButton
-          variant="primary"
-          onPress={() => {
-            console.log(componentError.code, runtimeError.code);
-          }}
-        >
-          Save
-        </ChipsButton>
-      </ChipsStack>
-    </ChipsView>
-  </ChipsThemeProvider>
+  <ChipsEnvironmentProvider client={mockClient}>
+    <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
+      <ChipsView title="Demo" aria-label="Demo view">
+        <ChipsStack gap="8px">
+          <EnvironmentSmoke />
+          <ChipsButton
+            variant="primary"
+            onPress={() => {
+              console.log(componentError.code, runtimeError.code);
+            }}
+          >
+            Save
+          </ChipsButton>
+        </ChipsStack>
+      </ChipsView>
+    </ChipsThemeProvider>
+  </ChipsEnvironmentProvider>
 );

@@ -41,6 +41,42 @@ npm install
 
 客户端实例是 SDK 的核心入口，通过实例调用各种功能方法。
 
+React 应用应把 SDK client 注入组件库环境 Provider，而不是在每个页面里重复手写 Host 接线：
+
+```tsx
+import { createClient } from "chips-sdk";
+import {
+  ChipsEnvironmentProvider,
+  useChipsTheme,
+  useChipsI18n,
+  useChipsSurface,
+} from "@chips/component-library";
+
+const client = createClient();
+
+export function AppRoot() {
+  return (
+    <ChipsEnvironmentProvider client={client}>
+      <App />
+    </ChipsEnvironmentProvider>
+  );
+}
+
+function App() {
+  const theme = useChipsTheme();
+  const i18n = useChipsI18n();
+  const surface = useChipsSurface();
+  // 使用 theme.theme / i18n.t / surface.surface 渲染业务 UI
+}
+```
+
+说明：
+
+- `chips-sdk` 仍只提供纯 TypeScript client 与 Domain API；
+- React hooks 位于 `@chips/hooks`，并由 `@chips/component-library` 聚合导出；
+- hooks 只消费注入的 SDK client，不承载 Host runtime 主实现；
+- 单元测试可使用 `@chips/testing` 的 `createMockChipsClient/createMockChipsEnvironment` 构造 mock 环境。
+
 ## 文件操作
 
 SDK提供卡片文件的读写能力。

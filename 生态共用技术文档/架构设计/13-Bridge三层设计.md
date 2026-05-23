@@ -117,9 +117,24 @@ Runtime Client 的正式职责：
 
 L7 面向业务代码的正式调用顺序：
 
-1. 优先使用 `chips-sdk` 的 API / `createClient()`
-2. 在必须直连 Bridge 的场景使用 `window.chips.*`
-3. 不允许页面代码直接依赖任何 transport 实现细节
+1. React 应用优先使用 `@chips/component-library` / `@chips/hooks` 提供的 `ChipsEnvironmentProvider` 与 `useChips*` hooks。
+2. 非 React 场景或底层封装优先使用 `chips-sdk` 的 API / `createClient()`。
+3. 在必须直连 Bridge 的场景使用 `window.chips.*`。
+4. 不允许页面代码直接依赖任何 transport 实现细节。
+
+当前正式 React 环境入口包括：
+
+- `ChipsEnvironmentProvider`
+- `useChipsEnvironment`
+- `useChipsClient`
+- `useChipsTheme`
+- `useChipsI18n`
+- `useChipsSurface`
+- `useChipsPermission`
+- `useChipsCommand`
+- `useChipsDiagnostics`
+
+这些 hooks 只消费注入的 SDK client 或同形 mock client，不承载 Host runtime 主实现，也不直接访问 Host 内部包。测试场景可用 `@chips/testing` 的 `createMockChipsClient/createMockChipsEnvironment` 注入 Provider。
 
 ## 5. 应用插件启动链路
 

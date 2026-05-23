@@ -7,11 +7,123 @@ const ThemeRuntimeContext = React.createContext({
   cacheKey: "default:0",
   lastChangedAt: 0
 });
+const ChipsEnvironmentContext = React.createContext(null);
+
+const EMPTY_ARRAY = Object.freeze([]);
+
+const STATUS_IDLE = "idle";
+const STATUS_LOADING = "loading";
+const STATUS_READY = "ready";
+const STATUS_ERROR = "error";
 
 function toThemeCacheKey(themeId, version) {
   const safeThemeId = typeof themeId === "string" && themeId.length > 0 ? themeId : "default";
   const safeVersion = typeof version === "string" && version.length > 0 ? version : "0";
   return `${safeThemeId}:${safeVersion}`;
+}
+
+function createChipsHookError(code, message, details) {
+  const error = new Error(message || code);
+  error.code = code;
+  if (typeof details !== "undefined") {
+    error.details = details;
+  }
+  return error;
+}
+
+function normalizeClient(value) {
+  return value && typeof value === "object" ? value : null;
+}
+
+function createClientEventSource(client) {
+  return {
+    subscribe(eventName, handler) {
+      if (!client?.events || typeof client.events.on !== "function") {
+        return () => {};
+      }
+      return client.events.on(eventName, handler);
+    }
+  };
+}
+
+function appendDiagnostic(setDiagnostics, diagnostic) {
+  if (!diagnostic) {
+    return;
+  }
+  setDiagnostics((current) => [...current, diagnostic]);
+}
+
+function toDiagnostic(error, fallbackCode, source) {
+  if (!error) {
+    return null;
+  }
+  if (typeof error === "object") {
+    return {
+      code: typeof error.code === "string" ? error.code : fallbackCode,
+      message: typeof error.message === "string" ? error.message : fallbackCode,
+      messageKey: typeof error.messageKey === "string" ? error.messageKey : undefined,
+      details: error.details,
+      retryable: error.retryable === true,
+      requestId: typeof error.requestId === "string" ? error.requestId : undefined,
+      traceId: typeof error.traceId === "string" ? error.traceId : undefined,
+      permission: error.permission,
+      source
+    };
+  }
+  return {
+    code: fallbackCode,
+    message: String(error),
+    source
+  };
+}
+
+function normalizeThemeVersion(theme) {
+  if (!theme || typeof theme !== "object") {
+    return undefined;
+  }
+  return theme.version || theme.themeVersion;
+}
+
+function resolveSurfaceContext(launchContext) {
+  if (!launchContext || typeof launchContext !== "object") {
+    return null;
+  }
+  if (launchContext.surfaceContext && typeof launchContext.surfaceContext === "object") {
+    return launchContext.surfaceContext;
+  }
+  if (
+    launchContext.sceneId ||
+    launchContext.surfaceId ||
+    launchContext.pluginId ||
+    launchContext.sessionId ||
+    launchContext.kind
+  ) {
+    return {
+      sceneId: launchContext.sceneId || "default-scene",
+      surfaceId: launchContext.surfaceId,
+      pluginId: launchContext.pluginId,
+      sessionId: launchContext.sessionId,
+      kind: launchContext.kind || "window",
+      presentation: launchContext.presentation || {},
+      launchParams: launchContext.launchParams || {}
+    };
+  }
+  return null;
+}
+
+function mergePermissions(...sources) {
+  const permissions = new Set();
+  for (const source of sources) {
+    if (!Array.isArray(source)) {
+      continue;
+    }
+    for (const permission of source) {
+      if (typeof permission === "string" && permission.length > 0) {
+        permissions.add(permission);
+      }
+    }
+  }
+  return [...permissions];
 }
 
 export function ChipsTokenProvider({ resolver, children }) {
@@ -268,4 +380,383 @@ export function useComponentTokens(componentScope) {
 
 export function useThemeRuntime() {
   return React.useContext(ThemeRuntimeContext);
+}
+
+export function ChipsEnvironmentProvider(props) {
+  const {
+    client: providedClient,
+    createClient,
+    initialTheme = null,
+    initialLocale,
+    initialLaunchContext = null,
+    initialSurface = null,
+    initialPermissions = EMPTY_ARRAY,
+    initialDiagnostics = EMPTY_ARRAY,
+    onDiagnostic,
+    children
+  } = props;
+
+  const clientRef = React.useRef(null);
+  if (!clientRef.current) {
+    clientRef.current = normalizeClient(providedClient) || (typeof createClient === "function" ? normalizeClient(createClient()) : null);
+  }
+  React.useEffect(() => {
+    const nextClient = normalizeClient(providedClient);
+    if (nextClient && nextClient !== clientRef.current) {
+      clientRef.current = nextClient;
+    }
+  }, [providedClient]);
+
+  const client = clientRef.current;
+  const [theme, setTheme] = React.useState(initialTheme);
+  const [locale, setLocale] = React.useState(initialLocale || null);
+  const [launchContext, setLaunchContext] = React.useState(initialLaunchContext);
+  const [surface, setSurface] = React.useState(initialSurface || resolveSurfaceContext(initialLaunchContext));
+  const [permissions, setPermissions] = React.useState(() => mergePermissions(initialPermissions, initialSurface?.permissions));
+  const [diagnostics, setDiagnostics] = React.useState(() => (
+    Array.isArray(initialDiagnostics) ? [...initialDiagnostics] : []
+  ));
+  const [status, setStatus] = React.useState({
+    theme: initialTheme ? STATUS_READY : STATUS_IDLE,
+    i18n: initialLocale ? STATUS_READY : STATUS_IDLE,
+    surface: initialSurface || initialLaunchContext ? STATUS_READY : STATUS_IDLE,
+    diagnostics: STATUS_IDLE
+  });
+  const [error, setError] = React.useState(null);
+
+  const eventSource = React.useMemo(() => createClientEventSource(client), [client]);
+
+  const pushDiagnostic = React.useCallback((diagnostic) => {
+    if (!diagnostic) {
+      return;
+    }
+    setDiagnostics((current) => [...current, diagnostic]);
+    if (typeof onDiagnostic === "function") {
+      onDiagnostic(diagnostic);
+    }
+  }, [onDiagnostic]);
+
+  const clearDiagnostics = React.useCallback(() => {
+    setDiagnostics([]);
+    setError(null);
+  }, []);
+
+  const refreshTheme = React.useCallback(async () => {
+    if (!client?.theme || typeof client.theme.getCurrent !== "function") {
+      return null;
+    }
+    setStatus((current) => ({ ...current, theme: STATUS_LOADING }));
+    try {
+      const nextTheme = await client.theme.getCurrent();
+      setTheme(nextTheme);
+      setStatus((current) => ({ ...current, theme: STATUS_READY }));
+      return nextTheme;
+    } catch (nextError) {
+      const diagnostic = toDiagnostic(nextError, "CHIPS_THEME_REFRESH_FAILED", "theme");
+      setError(diagnostic);
+      pushDiagnostic(diagnostic);
+      setStatus((current) => ({ ...current, theme: STATUS_ERROR }));
+      throw nextError;
+    }
+  }, [client, pushDiagnostic]);
+
+  const refreshLocale = React.useCallback(async () => {
+    if (!client?.i18n || typeof client.i18n.getCurrent !== "function") {
+      return null;
+    }
+    setStatus((current) => ({ ...current, i18n: STATUS_LOADING }));
+    try {
+      const nextLocale = await client.i18n.getCurrent();
+      setLocale(nextLocale);
+      setStatus((current) => ({ ...current, i18n: STATUS_READY }));
+      return nextLocale;
+    } catch (nextError) {
+      const diagnostic = toDiagnostic(nextError, "CHIPS_I18N_REFRESH_FAILED", "i18n");
+      setError(diagnostic);
+      pushDiagnostic(diagnostic);
+      setStatus((current) => ({ ...current, i18n: STATUS_ERROR }));
+      throw nextError;
+    }
+  }, [client, pushDiagnostic]);
+
+  const refreshSurface = React.useCallback(async () => {
+    if (!client?.platform || typeof client.platform.getLaunchContext !== "function") {
+      return null;
+    }
+    setStatus((current) => ({ ...current, surface: STATUS_LOADING }));
+    try {
+      const nextLaunchContext = client.platform.getLaunchContext();
+      const nextSurface = resolveSurfaceContext(nextLaunchContext);
+      setLaunchContext(nextLaunchContext || null);
+      setSurface(nextSurface);
+      setPermissions((current) => mergePermissions(current, nextSurface?.permissions));
+      setStatus((current) => ({ ...current, surface: STATUS_READY }));
+      return nextSurface;
+    } catch (nextError) {
+      const diagnostic = toDiagnostic(nextError, "CHIPS_SURFACE_REFRESH_FAILED", "surface");
+      setError(diagnostic);
+      pushDiagnostic(diagnostic);
+      setStatus((current) => ({ ...current, surface: STATUS_ERROR }));
+      throw nextError;
+    }
+  }, [client, pushDiagnostic]);
+
+  const refreshDiagnostics = React.useCallback(async () => {
+    if (!client?.controlPlane || typeof client.controlPlane.diagnose !== "function") {
+      return null;
+    }
+    setStatus((current) => ({ ...current, diagnostics: STATUS_LOADING }));
+    try {
+      const diagnose = await client.controlPlane.diagnose();
+      const diagnostic = {
+        code: "CHIPS_CONTROL_PLANE_DIAGNOSE",
+        message: "Control plane diagnose completed.",
+        details: diagnose,
+        source: "controlPlane"
+      };
+      pushDiagnostic(diagnostic);
+      setStatus((current) => ({ ...current, diagnostics: STATUS_READY }));
+      return diagnose;
+    } catch (nextError) {
+      const diagnostic = toDiagnostic(nextError, "CHIPS_DIAGNOSTICS_REFRESH_FAILED", "diagnostics");
+      setError(diagnostic);
+      pushDiagnostic(diagnostic);
+      setStatus((current) => ({ ...current, diagnostics: STATUS_ERROR }));
+      throw nextError;
+    }
+  }, [client, pushDiagnostic]);
+
+  const refresh = React.useCallback(async () => {
+    const tasks = [];
+    if (client?.theme && typeof client.theme.getCurrent === "function") {
+      tasks.push(refreshTheme());
+    }
+    if (client?.i18n && typeof client.i18n.getCurrent === "function") {
+      tasks.push(refreshLocale());
+    }
+    if (client?.platform && typeof client.platform.getLaunchContext === "function") {
+      tasks.push(refreshSurface());
+    }
+    const results = await Promise.allSettled(tasks);
+    return results;
+  }, [client, refreshLocale, refreshSurface, refreshTheme]);
+
+  const hasPermission = React.useCallback((permission) => {
+    return permissions.includes(permission);
+  }, [permissions]);
+
+  const translate = React.useCallback(async (key, params) => {
+    if (!client?.i18n || typeof client.i18n.translate !== "function") {
+      return key;
+    }
+    return client.i18n.translate(key, params);
+  }, [client]);
+
+  const command = React.useMemo(() => ({
+    register: (...args) => client?.command?.register?.(...args),
+    unregister: (...args) => client?.command?.unregister?.(...args),
+    get: (...args) => client?.command?.get?.(...args),
+    list: (...args) => client?.command?.list?.(...args),
+    invoke: (...args) => client?.command?.invoke?.(...args),
+    setState: (...args) => client?.command?.setState?.(...args),
+    onRegistered: (...args) => client?.command?.onRegistered?.(...args),
+    onUnregistered: (...args) => client?.command?.onUnregistered?.(...args),
+    onChanged: (...args) => client?.command?.onChanged?.(...args),
+    onInvoked: (...args) => client?.command?.onInvoked?.(...args)
+  }), [client]);
+
+  React.useEffect(() => {
+    if (!client) {
+      const diagnostic = {
+        code: "CHIPS_CLIENT_MISSING",
+        message: "Chips client is required by ChipsEnvironmentProvider.",
+        source: "environment"
+      };
+      setError(diagnostic);
+      appendDiagnostic(setDiagnostics, diagnostic);
+      return undefined;
+    }
+
+    const boot = async () => {
+      await refresh();
+    };
+    boot();
+    return undefined;
+  }, [client, pushDiagnostic, refresh]);
+
+  React.useEffect(() => {
+    if (!client?.theme || typeof client.theme.onChanged !== "function") {
+      return undefined;
+    }
+    return client.theme.onChanged((payload) => {
+      if (payload && typeof payload === "object") {
+        setTheme((current) => ({
+          ...(current && typeof current === "object" ? current : {}),
+          themeId: payload.themeId || current?.themeId,
+          version: normalizeThemeVersion(payload) || current?.version
+        }));
+      }
+      refreshTheme().catch(() => {});
+    });
+  }, [client, refreshTheme]);
+
+  React.useEffect(() => {
+    const subscribe = client?.i18n && typeof client.i18n.onChanged === "function"
+      ? client.i18n.onChanged.bind(client.i18n)
+      : client?.events && typeof client.events.on === "function"
+        ? (handler) => client.events.on("language.changed", handler)
+        : null;
+    if (!subscribe) {
+      return undefined;
+    }
+    return subscribe((payload) => {
+      if (payload && typeof payload.locale === "string") {
+        setLocale(payload.locale);
+      } else {
+        refreshLocale().catch(() => {});
+      }
+    });
+  }, [client, refreshLocale]);
+
+  const value = React.useMemo(() => ({
+    client,
+    eventSource,
+    theme,
+    locale,
+    launchContext,
+    surface,
+    permissions,
+    diagnostics,
+    status,
+    error,
+    ready: Boolean(client) && status.theme !== STATUS_LOADING && status.i18n !== STATUS_LOADING && status.surface !== STATUS_LOADING,
+    refresh,
+    refreshTheme,
+    refreshLocale,
+    refreshSurface,
+    refreshDiagnostics,
+    hasPermission,
+    translate,
+    command,
+    pushDiagnostic,
+    clearDiagnostics
+  }), [
+    client,
+    eventSource,
+    theme,
+    locale,
+    launchContext,
+    surface,
+    permissions,
+    diagnostics,
+    status,
+    error,
+    refresh,
+    refreshTheme,
+    refreshLocale,
+    refreshSurface,
+    refreshDiagnostics,
+    hasPermission,
+    translate,
+    command,
+    pushDiagnostic,
+    clearDiagnostics
+  ]);
+
+  return React.createElement(ChipsEnvironmentContext.Provider, { value }, children);
+}
+
+export function useChipsEnvironment() {
+  const context = React.useContext(ChipsEnvironmentContext);
+  if (!context) {
+    throw createChipsHookError(
+      "CHIPS_ENVIRONMENT_CONTEXT_MISSING",
+      "useChipsEnvironment must be used inside ChipsEnvironmentProvider."
+    );
+  }
+  return context;
+}
+
+export function useChipsClient() {
+  const environment = useChipsEnvironment();
+  if (!environment.client) {
+    throw createChipsHookError("CHIPS_CLIENT_MISSING", "Chips client is not available in the current environment.");
+  }
+  return environment.client;
+}
+
+export function useChipsTheme() {
+  const environment = useChipsEnvironment();
+  return {
+    theme: environment.theme,
+    status: environment.status.theme,
+    error: environment.error?.source === "theme" ? environment.error : null,
+    refresh: environment.refreshTheme,
+    apply: async (themeId) => {
+      const client = environment.client;
+      if (!client?.theme || typeof client.theme.apply !== "function") {
+        throw createChipsHookError("CHIPS_THEME_API_MISSING", "client.theme.apply is not available.");
+      }
+      await client.theme.apply(themeId);
+      return environment.refreshTheme();
+    }
+  };
+}
+
+export function useChipsI18n() {
+  const environment = useChipsEnvironment();
+  return {
+    locale: environment.locale,
+    status: environment.status.i18n,
+    error: environment.error?.source === "i18n" ? environment.error : null,
+    t: environment.translate,
+    translate: environment.translate,
+    refresh: environment.refreshLocale,
+    setLocale: async (locale) => {
+      const client = environment.client;
+      if (!client?.i18n || typeof client.i18n.setCurrent !== "function") {
+        throw createChipsHookError("CHIPS_I18N_API_MISSING", "client.i18n.setCurrent is not available.");
+      }
+      await client.i18n.setCurrent(locale);
+      return environment.refreshLocale();
+    }
+  };
+}
+
+export function useChipsSurface() {
+  const environment = useChipsEnvironment();
+  return {
+    surface: environment.surface,
+    launchContext: environment.launchContext,
+    status: environment.status.surface,
+    error: environment.error?.source === "surface" ? environment.error : null,
+    refresh: environment.refreshSurface
+  };
+}
+
+export function useChipsPermission() {
+  const environment = useChipsEnvironment();
+  return {
+    permissions: environment.permissions,
+    hasPermission: environment.hasPermission,
+    diagnostics: environment.diagnostics.filter((diagnostic) => diagnostic?.permission),
+    latest: environment.error?.permission ? environment.error.permission : null
+  };
+}
+
+export function useChipsCommand() {
+  const environment = useChipsEnvironment();
+  return environment.command;
+}
+
+export function useChipsDiagnostics() {
+  const environment = useChipsEnvironment();
+  return {
+    diagnostics: environment.diagnostics,
+    status: environment.status.diagnostics,
+    error: environment.error,
+    refresh: environment.refreshDiagnostics,
+    push: environment.pushDiagnostic,
+    clear: environment.clearDiagnostics
+  };
 }

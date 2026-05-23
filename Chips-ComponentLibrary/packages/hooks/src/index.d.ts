@@ -55,6 +55,202 @@ export interface ThemeEventSource {
   subscribe?(eventName: string, handler: (payload: unknown) => void): (() => void) | void;
 }
 
+export type ChipsRuntimeStatus = "idle" | "loading" | "ready" | "error";
+
+export interface ChipsRuntimeDiagnostic {
+  code: string;
+  message: string;
+  messageKey?: string;
+  details?: unknown;
+  retryable?: boolean;
+  requestId?: string;
+  traceId?: string;
+  permission?: ChipsPermissionDiagnostic;
+  source?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsPermissionDiagnostic {
+  domain?: string;
+  action?: string;
+  resource?: string;
+  required: string[];
+  granted: string[];
+  messageKey?: string;
+  callerId?: string;
+  callerType?: string;
+  pluginId?: string;
+}
+
+export interface ChipsThemeState {
+  themeId: string;
+  displayName?: string;
+  version?: string;
+  parentTheme?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsSurfaceContext {
+  sceneId: string;
+  surfaceId?: string;
+  pluginId?: string;
+  sessionId?: string;
+  kind?: string;
+  presentation?: Record<string, unknown>;
+  launchParams?: Record<string, unknown>;
+  permissions?: string[];
+  [key: string]: unknown;
+}
+
+export interface ChipsLaunchContext {
+  pluginId?: string;
+  sessionId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  kind?: string;
+  presentation?: Record<string, unknown>;
+  surfaceContext?: ChipsSurfaceContext;
+  launchParams?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ChipsEventsLike {
+  on<T = unknown>(eventName: string, handler: (payload: T) => void): () => void;
+}
+
+export interface ChipsClientLike {
+  events?: ChipsEventsLike;
+  theme?: {
+    getCurrent(): Promise<ChipsThemeState>;
+    apply(themeId: string): Promise<void>;
+    onChanged?(handler: (payload: ThemeChangedPayload) => void): () => void;
+  };
+  i18n?: {
+    getCurrent(): Promise<string>;
+    setCurrent(locale: string): Promise<void>;
+    translate(key: string, params?: Record<string, unknown>): Promise<string>;
+    onChanged?(handler: (payload: { locale: string }) => void): () => void;
+  };
+  platform?: {
+    getLaunchContext(): ChipsLaunchContext | null;
+  };
+  command?: {
+    register?(definition: unknown): Promise<unknown>;
+    unregister?(commandId: string): Promise<void>;
+    get?(commandId: string, options?: Record<string, unknown>): Promise<unknown>;
+    list?(options?: Record<string, unknown>): Promise<unknown[]>;
+    invoke?(commandId: string, payload?: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
+    setState?(commandId: string, state: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
+    onRegistered?(handler: (payload: unknown) => void): () => void;
+    onUnregistered?(handler: (payload: unknown) => void): () => void;
+    onChanged?(handler: (payload: unknown) => void): () => void;
+    onInvoked?(handler: (payload: unknown) => void): () => void;
+  };
+  controlPlane?: {
+    diagnose(): Promise<unknown>;
+  };
+  [key: string]: unknown;
+}
+
+export interface ChipsEnvironmentStatus {
+  theme: ChipsRuntimeStatus;
+  i18n: ChipsRuntimeStatus;
+  surface: ChipsRuntimeStatus;
+  diagnostics: ChipsRuntimeStatus;
+}
+
+export interface ChipsCommandEnvironmentApi {
+  register(...args: unknown[]): Promise<unknown> | undefined;
+  unregister(...args: unknown[]): Promise<unknown> | undefined;
+  get(...args: unknown[]): Promise<unknown> | undefined;
+  list(...args: unknown[]): Promise<unknown> | undefined;
+  invoke(...args: unknown[]): Promise<unknown> | undefined;
+  setState(...args: unknown[]): Promise<unknown> | undefined;
+  onRegistered(...args: unknown[]): (() => void) | undefined;
+  onUnregistered(...args: unknown[]): (() => void) | undefined;
+  onChanged(...args: unknown[]): (() => void) | undefined;
+  onInvoked(...args: unknown[]): (() => void) | undefined;
+}
+
+export interface ChipsEnvironmentValue {
+  client: ChipsClientLike | null;
+  eventSource: ThemeEventSource;
+  theme: ChipsThemeState | null;
+  locale: string | null;
+  launchContext: ChipsLaunchContext | null;
+  surface: ChipsSurfaceContext | null;
+  permissions: string[];
+  diagnostics: ChipsRuntimeDiagnostic[];
+  status: ChipsEnvironmentStatus;
+  error: ChipsRuntimeDiagnostic | null;
+  ready: boolean;
+  refresh(): Promise<PromiseSettledResult<unknown>[]>;
+  refreshTheme(): Promise<ChipsThemeState | null>;
+  refreshLocale(): Promise<string | null>;
+  refreshSurface(): Promise<ChipsSurfaceContext | null>;
+  refreshDiagnostics(): Promise<unknown>;
+  hasPermission(permission: string): boolean;
+  translate(key: string, params?: Record<string, unknown>): Promise<string>;
+  command: ChipsCommandEnvironmentApi;
+  pushDiagnostic(diagnostic: ChipsRuntimeDiagnostic): void;
+  clearDiagnostics(): void;
+}
+
+export interface ChipsEnvironmentProviderProps {
+  client?: ChipsClientLike | null;
+  createClient?: () => ChipsClientLike | null;
+  initialTheme?: ChipsThemeState | null;
+  initialLocale?: string;
+  initialLaunchContext?: ChipsLaunchContext | null;
+  initialSurface?: ChipsSurfaceContext | null;
+  initialPermissions?: string[];
+  initialDiagnostics?: ChipsRuntimeDiagnostic[];
+  onDiagnostic?: (diagnostic: ChipsRuntimeDiagnostic) => void;
+  children?: React.ReactNode;
+}
+
+export interface UseChipsThemeResult {
+  theme: ChipsThemeState | null;
+  status: ChipsRuntimeStatus;
+  error: ChipsRuntimeDiagnostic | null;
+  refresh(): Promise<ChipsThemeState | null>;
+  apply(themeId: string): Promise<ChipsThemeState | null>;
+}
+
+export interface UseChipsI18nResult {
+  locale: string | null;
+  status: ChipsRuntimeStatus;
+  error: ChipsRuntimeDiagnostic | null;
+  t(key: string, params?: Record<string, unknown>): Promise<string>;
+  translate(key: string, params?: Record<string, unknown>): Promise<string>;
+  refresh(): Promise<string | null>;
+  setLocale(locale: string): Promise<string | null>;
+}
+
+export interface UseChipsSurfaceResult {
+  surface: ChipsSurfaceContext | null;
+  launchContext: ChipsLaunchContext | null;
+  status: ChipsRuntimeStatus;
+  error: ChipsRuntimeDiagnostic | null;
+  refresh(): Promise<ChipsSurfaceContext | null>;
+}
+
+export interface UseChipsPermissionResult {
+  permissions: string[];
+  hasPermission(permission: string): boolean;
+  diagnostics: ChipsRuntimeDiagnostic[];
+  latest: ChipsPermissionDiagnostic | null;
+}
+
+export interface UseChipsDiagnosticsResult {
+  diagnostics: ChipsRuntimeDiagnostic[];
+  status: ChipsRuntimeStatus;
+  error: ChipsRuntimeDiagnostic | null;
+  refresh(): Promise<unknown>;
+  push(diagnostic: ChipsRuntimeDiagnostic): void;
+  clear(): void;
+}
+
 export interface ThemeChunkDiagnostic {
   chunkIndex: number;
   chunkSize: number;
@@ -108,3 +304,12 @@ export function useTokenResolver(): TokenResolver;
 export function useToken<T = unknown>(tokenKey: string): T;
 export function useComponentTokens(componentScope: string): Record<string, unknown>;
 export function useThemeRuntime(): ThemeRuntimeState;
+export function ChipsEnvironmentProvider(props: ChipsEnvironmentProviderProps): React.ReactElement;
+export function useChipsEnvironment(): ChipsEnvironmentValue;
+export function useChipsClient<T extends ChipsClientLike = ChipsClientLike>(): T;
+export function useChipsTheme(): UseChipsThemeResult;
+export function useChipsI18n(): UseChipsI18nResult;
+export function useChipsSurface(): UseChipsSurfaceResult;
+export function useChipsPermission(): UseChipsPermissionResult;
+export function useChipsCommand(): ChipsCommandEnvironmentApi;
+export function useChipsDiagnostics(): UseChipsDiagnosticsResult;

@@ -196,6 +196,26 @@ test("command-palette contract contains shortcut token", () => {
   assert.ok(contract.tokens.includes("chips.comp.command-palette.shortcut.color"));
 });
 
+test("command consumer contracts expose command parts and tokens", () => {
+  const toolbar = readContract("toolbar.contract.json");
+  const menuBar = readContract("menu-bar.contract.json");
+  const contextMenu = readContract("context-menu.contract.json");
+  const shortcut = readContract("shortcut.contract.json");
+
+  assertCommonShape(toolbar);
+  assertCommonShape(menuBar);
+  assertCommonShape(contextMenu);
+  assertCommonShape(shortcut);
+  assert.ok(toolbar.parts.includes("icon"));
+  assert.ok(toolbar.tokens.includes("chips.comp.toolbar.item.icon.color"));
+  assert.ok(menuBar.parts.includes("shortcut"));
+  assert.ok(menuBar.tokens.includes("chips.comp.menu-bar.shortcut.color"));
+  assert.ok(contextMenu.parts.includes("group"));
+  assert.ok(contextMenu.tokens.includes("chips.comp.context-menu.content.surface"));
+  assert.ok(shortcut.parts.includes("key"));
+  assert.ok(shortcut.tokens.includes("chips.comp.shortcut.key.text.color"));
+});
+
 test("split-pane contract contains resizer token", () => {
   const contract = readContract("split-pane.contract.json");
   assertCommonShape(contract);

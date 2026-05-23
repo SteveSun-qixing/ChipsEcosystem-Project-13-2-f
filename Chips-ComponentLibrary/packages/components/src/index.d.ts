@@ -63,11 +63,107 @@ export interface TreeNode {
 
 export interface CommandPaletteItem {
   id?: string | number;
+  commandId?: string;
+  label?: React.ReactNode;
   title?: string;
   subtitle?: string;
   keywords?: string[];
+  shortcut?: string;
   disabled?: boolean;
+  checked?: boolean;
+  command?: ChipsCommandView;
   [key: string]: unknown;
+}
+
+export type ChipsCommandSource = "menu" | "toolbar" | "shortcut" | "palette" | "context-menu" | "api";
+
+export interface ChipsCommandShortcut {
+  accelerator: string;
+  platform?: "all" | "desktop" | "web" | "mobile" | "headless";
+  [key: string]: unknown;
+}
+
+export interface ChipsCommandPlacement {
+  menuId?: string;
+  toolbarId?: string;
+  groupId?: string;
+  order?: number;
+  section?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsCommandState {
+  enabled?: boolean;
+  visible?: boolean;
+  checked?: boolean;
+  busy?: boolean;
+  reasonKey?: string;
+  disabledReasonKey?: string;
+  hiddenReasonKey?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsCommandDiagnostic {
+  visible?: boolean;
+  enabled?: boolean;
+  checked?: boolean;
+  reasonKey?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsCommandView {
+  commandId: string;
+  titleKey: string;
+  descriptionKey?: string;
+  ariaLabelKey?: string;
+  icon?: ChipsIconDescriptor;
+  shortcut?: string | ChipsCommandShortcut | ChipsCommandShortcut[];
+  menuPlacement?: ChipsCommandPlacement[];
+  toolbarPlacement?: ChipsCommandPlacement[];
+  paletteKeywords?: string[];
+  state?: ChipsCommandState;
+  diagnostic?: ChipsCommandDiagnostic;
+  disabledReasonKey?: string;
+  hiddenReasonKey?: string;
+  [key: string]: unknown;
+}
+
+export interface ChipsResolvedCommandView extends ChipsCommandView {
+  label: string;
+  description: string;
+  ariaLabel: string;
+  disabled: boolean;
+  hidden: boolean;
+  checked: boolean;
+  shortcutLabel: string;
+  menuPlacement: ChipsCommandPlacement[];
+  toolbarPlacement: ChipsCommandPlacement[];
+  paletteKeywords: string[];
+}
+
+export interface ChipsCommandQueryOptions {
+  source?: ChipsCommandSource;
+  includeDisabled?: boolean;
+  includeHidden?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ChipsCommandAdapter {
+  listCommands(options?: ChipsCommandQueryOptions): Promise<ChipsCommandView[]>;
+  invokeCommand(
+    commandId: string,
+    payload?: Record<string, unknown>,
+    options?: { source?: ChipsCommandSource; context?: Record<string, unknown> },
+  ): Promise<unknown>;
+  onCommandsChanged?(handler: (event: unknown) => void): () => void;
+}
+
+export interface ChipsCommandProviderProps {
+  adapter?: ChipsCommandAdapter;
+  commands?: ChipsCommandView[];
+  query?: ChipsCommandQueryOptions;
+  i18n?: I18nTextSource | ((key: string, params?: Record<string, string | number>) => string);
+  children?: React.ReactNode;
 }
 
 export interface VirtualItem {
@@ -295,6 +391,60 @@ export interface MenuProps {
   [key: string]: unknown;
 }
 
+export interface CommandConsumerBaseProps {
+  commands?: ChipsCommandView[];
+  adapter?: ChipsCommandAdapter;
+  i18n?: ChipsCommandProviderProps["i18n"];
+  query?: ChipsCommandQueryOptions;
+  payload?: Record<string, unknown>;
+  invocationContext?: Record<string, unknown>;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  onCommandInvoke?: (command: ChipsResolvedCommandView) => void;
+  onStateChange?: (state: InteractiveState) => void;
+}
+
+export interface ShortcutProps extends Pick<CommandConsumerBaseProps, "onStateChange"> {
+  shortcut?: string | ChipsCommandShortcut | ChipsCommandShortcut[];
+  command?: ChipsCommandView;
+  disabled?: boolean;
+  ariaLabel?: string;
+  separator?: string;
+  [key: string]: unknown;
+}
+
+export interface ToolbarProps extends CommandConsumerBaseProps {
+  toolbarId?: string;
+  groupId?: string;
+  ariaLabel?: string;
+  [key: string]: unknown;
+}
+
+export interface ToolbarItemProps extends Omit<CommandConsumerBaseProps, "commands" | "query"> {
+  command?: ChipsCommandView;
+  visualState?: InteractiveState;
+  [key: string]: unknown;
+}
+
+export interface MenuBarDescriptor {
+  menuId: string;
+  label?: React.ReactNode;
+}
+
+export interface MenuBarProps extends CommandConsumerBaseProps {
+  menus?: MenuBarDescriptor[];
+  ariaLabel?: string;
+  [key: string]: unknown;
+}
+
+export interface ContextMenuProps extends CommandConsumerBaseProps {
+  menuId?: string;
+  triggerContent?: React.ReactNode;
+  children?: React.ReactNode;
+  [key: string]: unknown;
+}
+
 export interface TooltipProps {
   open?: boolean;
   defaultOpen?: boolean;
@@ -414,6 +564,12 @@ export interface CommandPaletteProps {
   query?: string;
   defaultQuery?: string;
   items?: CommandPaletteItem[];
+  commands?: ChipsCommandView[];
+  adapter?: ChipsCommandAdapter;
+  i18n?: ChipsCommandProviderProps["i18n"];
+  commandQuery?: ChipsCommandQueryOptions;
+  payload?: Record<string, unknown>;
+  invocationContext?: Record<string, unknown>;
   disabled?: boolean;
   loading?: boolean;
   error?: StandardErrorLike | null;
@@ -673,6 +829,12 @@ export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.Re
 export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsMenu: React.ForwardRefExoticComponent<MenuProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsCommandProvider: React.FC<ChipsCommandProviderProps>;
+export const ChipsShortcut: React.ForwardRefExoticComponent<ShortcutProps & React.RefAttributes<HTMLElement>>;
+export const ChipsToolbarItem: React.ForwardRefExoticComponent<ToolbarItemProps & React.RefAttributes<HTMLButtonElement>>;
+export const ChipsToolbar: React.ForwardRefExoticComponent<ToolbarProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsMenuBar: React.ForwardRefExoticComponent<MenuBarProps & React.RefAttributes<HTMLElement>>;
+export const ChipsContextMenu: React.ForwardRefExoticComponent<ContextMenuProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTooltip: React.ForwardRefExoticComponent<TooltipProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsFormField: React.ForwardRefExoticComponent<FormFieldProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsFormGroup: React.ForwardRefExoticComponent<FormGroupProps & React.RefAttributes<HTMLFieldSetElement>>;
@@ -748,6 +910,25 @@ export function resolveConfigValue<T>(params: {
   onDiagnostic?: (record: ObservationRecord | Record<string, unknown>) => void;
 }): T;
 export function resolveDockPanelStateMap(panels: DockPanelItem[], stateMap?: Record<string, string>): Record<string, string>;
+export function createCommandAdapter(client: unknown): ChipsCommandAdapter;
+export function useChipsCommandContext(): ChipsCommandProviderProps | null;
+export function useChipsCommands(options?: {
+  adapter?: ChipsCommandAdapter;
+  commands?: ChipsCommandView[];
+  query?: ChipsCommandQueryOptions;
+}): { commands: ChipsCommandView[]; loading: boolean; error: StandardErrorLike | null };
+export function resolveCommandToolbarItems(
+  commands: ChipsCommandView[],
+  options?: { toolbarId?: string; groupId?: string; i18n?: ChipsCommandProviderProps["i18n"]; includeHidden?: boolean },
+): ChipsResolvedCommandView[];
+export function resolveCommandMenuGroups(
+  commands: ChipsCommandView[],
+  options?: { menuId?: string; i18n?: ChipsCommandProviderProps["i18n"]; includeHidden?: boolean },
+): Array<{ groupId: string; items: ChipsResolvedCommandView[] }>;
+export function resolveCommandPaletteItems(
+  commands: ChipsCommandView[],
+  options?: { i18n?: ChipsCommandProviderProps["i18n"]; includeHidden?: boolean },
+): CommandPaletteItem[];
 export function resolveI18nText(params: {
   i18n?: I18nTextSource;
   key: string;

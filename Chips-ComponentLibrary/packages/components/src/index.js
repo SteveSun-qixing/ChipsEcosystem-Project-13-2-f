@@ -293,6 +293,41 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.menu.item.text.color",
     "chips.comp.menu.focus.outline"
   ],
+  toolbar: [
+    "chips.comp.toolbar.root.surface",
+    "chips.comp.toolbar.group.gap",
+    "chips.comp.toolbar.item.surface.idle",
+    "chips.comp.toolbar.item.surface.hover",
+    "chips.comp.toolbar.item.surface.active",
+    "chips.comp.toolbar.item.surface.disabled",
+    "chips.comp.toolbar.item.text.color",
+    "chips.comp.toolbar.item.icon.color",
+    "chips.comp.toolbar.focus.outline"
+  ],
+  "menu-bar": [
+    "chips.comp.menu-bar.root.surface",
+    "chips.comp.menu-bar.menu.surface.idle",
+    "chips.comp.menu-bar.menu.surface.hover",
+    "chips.comp.menu-bar.item.surface.hover",
+    "chips.comp.menu-bar.item.text.color",
+    "chips.comp.menu-bar.shortcut.color",
+    "chips.comp.menu-bar.focus.outline"
+  ],
+  "context-menu": [
+    "chips.comp.context-menu.root.surface",
+    "chips.comp.context-menu.trigger.surface.idle",
+    "chips.comp.context-menu.content.surface",
+    "chips.comp.context-menu.item.surface.hover",
+    "chips.comp.context-menu.item.text.color",
+    "chips.comp.context-menu.shortcut.color",
+    "chips.comp.context-menu.focus.outline"
+  ],
+  shortcut: [
+    "chips.comp.shortcut.root.surface",
+    "chips.comp.shortcut.key.surface",
+    "chips.comp.shortcut.key.text.color",
+    "chips.comp.shortcut.separator.color"
+  ],
   tooltip: [
     "chips.comp.tooltip.content.radius",
     "chips.comp.tooltip.content.surface",
@@ -573,6 +608,30 @@ export function buildComponentContract(component) {
       scope: "menu",
       parts: ["root", "trigger", "content", "item", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    toolbar: {
+      component: "toolbar",
+      scope: "toolbar",
+      parts: ["root", "group", "item", "icon", "label", "shortcut", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "menu-bar": {
+      component: "menu-bar",
+      scope: "menu-bar",
+      parts: ["root", "menu", "content", "group", "item", "shortcut", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "context-menu": {
+      component: "context-menu",
+      scope: "context-menu",
+      parts: ["root", "trigger", "content", "group", "item", "shortcut", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    shortcut: {
+      component: "shortcut",
+      scope: "shortcut",
+      parts: ["root", "key", "separator"],
+      states: ["idle", "disabled"]
     },
     tooltip: {
       component: "tooltip",
@@ -1116,6 +1175,312 @@ export function getNextEnabledIndex(items, startIndex, direction = "next", loop 
 
 function getFirstEnabledIndex(items) {
   return getNextEnabledIndex(items, -1, "next", true);
+}
+
+function isCommandRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function commandString(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+function commandArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeCommandShortcutValue(shortcut) {
+  const source = Array.isArray(shortcut) ? shortcut[0] : shortcut;
+  if (!source) {
+    return "";
+  }
+  if (typeof source === "string") {
+    return commandString(source);
+  }
+  if (isCommandRecord(source)) {
+    return commandString(source.accelerator);
+  }
+  return "";
+}
+
+function resolveCommandText(command, field, fallback = "", i18n) {
+  const key = commandString(command?.[`${field}Key`]);
+  return resolveI18nText({
+    i18n,
+    key,
+    fallback: commandString(fallback) || key
+  });
+}
+
+function isCommandVisible(command) {
+  if (!isCommandRecord(command)) {
+    return false;
+  }
+  if (command.state && isCommandRecord(command.state) && command.state.visible === false) {
+    return false;
+  }
+  if (command.diagnostic && isCommandRecord(command.diagnostic) && command.diagnostic.visible === false) {
+    return false;
+  }
+  return true;
+}
+
+function isCommandEnabled(command) {
+  if (!isCommandRecord(command)) {
+    return false;
+  }
+  if (command.state && isCommandRecord(command.state) && command.state.enabled === false) {
+    return false;
+  }
+  if (command.diagnostic && isCommandRecord(command.diagnostic) && command.diagnostic.enabled === false) {
+    return false;
+  }
+  return true;
+}
+
+function isCommandChecked(command) {
+  if (!isCommandRecord(command)) {
+    return false;
+  }
+  if (command.state && isCommandRecord(command.state) && command.state.checked === true) {
+    return true;
+  }
+  if (command.diagnostic && isCommandRecord(command.diagnostic) && command.diagnostic.checked === true) {
+    return true;
+  }
+  return false;
+}
+
+function compareCommandOrder(left, right) {
+  const leftOrder = typeof left.order === "number" && Number.isFinite(left.order) ? left.order : 0;
+  const rightOrder = typeof right.order === "number" && Number.isFinite(right.order) ? right.order : 0;
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+  return String(left.commandId).localeCompare(String(right.commandId));
+}
+
+function normalizeCommandView(command, options = {}) {
+  if (!isCommandRecord(command)) {
+    return null;
+  }
+
+  const commandId = commandString(command.commandId);
+  const titleKey = commandString(command.titleKey);
+  if (!commandId || !titleKey) {
+    return null;
+  }
+
+  const label = resolveCommandText(command, "title", commandId, options.i18n);
+  const description = commandString(command.descriptionKey)
+    ? resolveCommandText(command, "description", "", options.i18n)
+    : "";
+  const ariaLabel = commandString(command.ariaLabelKey)
+    ? resolveCommandText(command, "ariaLabel", label, options.i18n)
+    : label;
+
+  return {
+    ...command,
+    commandId,
+    titleKey,
+    label,
+    description,
+    ariaLabel,
+    disabled: !isCommandEnabled(command),
+    hidden: !isCommandVisible(command),
+    checked: isCommandChecked(command),
+    shortcutLabel: normalizeCommandShortcutValue(command.shortcut),
+    disabledReasonKey: commandString(command.disabledReasonKey || command.state?.disabledReasonKey || command.state?.reasonKey),
+    hiddenReasonKey: commandString(command.hiddenReasonKey || command.state?.hiddenReasonKey),
+    paletteKeywords: commandArray(command.paletteKeywords).filter((keyword) => typeof keyword === "string"),
+    menuPlacement: commandArray(command.menuPlacement).filter(isCommandRecord),
+    toolbarPlacement: commandArray(command.toolbarPlacement).filter(isCommandRecord)
+  };
+}
+
+function normalizeCommandViews(commands, options = {}) {
+  return commandArray(commands)
+    .map((command) => normalizeCommandView(command, options))
+    .filter((command) => command && (options.includeHidden === true || !command.hidden));
+}
+
+function commandPlacementMatches(placement, targetKey, targetValue) {
+  const value = commandString(targetValue);
+  if (!value) {
+    return true;
+  }
+  return commandString(placement?.[targetKey]) === value;
+}
+
+export function createCommandAdapter(client) {
+  const commandApi = client?.command ?? client;
+  if (!commandApi || typeof commandApi !== "object") {
+    throw new Error("COMMAND_ADAPTER_INVALID:client");
+  }
+  if (typeof commandApi.list !== "function" || typeof commandApi.invoke !== "function") {
+    throw new Error("COMMAND_ADAPTER_INVALID:command-api");
+  }
+
+  return {
+    listCommands: (options) => commandApi.list(options),
+    invokeCommand: (commandId, payload, options) => commandApi.invoke(commandId, payload, options),
+    onCommandsChanged:
+      typeof commandApi.onChanged === "function"
+        ? (handler) => commandApi.onChanged(handler)
+        : undefined
+  };
+}
+
+export function resolveCommandToolbarItems(commands, options = {}) {
+  const toolbarId = commandString(options.toolbarId);
+  const groupId = commandString(options.groupId);
+  const views = normalizeCommandViews(commands, options);
+  const rows = [];
+
+  for (const command of views) {
+    const placements = command.toolbarPlacement.length > 0 ? command.toolbarPlacement : [{}];
+    for (const placement of placements) {
+      if (!commandPlacementMatches(placement, "toolbarId", toolbarId)) {
+        continue;
+      }
+      if (groupId && commandString(placement.groupId) !== groupId) {
+        continue;
+      }
+      rows.push({
+        ...command,
+        placement,
+        groupId: commandString(placement.groupId) || "default",
+        order: typeof placement.order === "number" ? placement.order : 0
+      });
+    }
+  }
+
+  return rows.sort(compareCommandOrder);
+}
+
+export function resolveCommandMenuGroups(commands, options = {}) {
+  const menuId = commandString(options.menuId);
+  const views = normalizeCommandViews(commands, options);
+  const groups = new Map();
+
+  for (const command of views) {
+    const placements = command.menuPlacement.length > 0 ? command.menuPlacement : [{}];
+    for (const placement of placements) {
+      if (!commandPlacementMatches(placement, "menuId", menuId)) {
+        continue;
+      }
+      const groupId = commandString(placement.groupId) || "default";
+      const item = {
+        ...command,
+        placement,
+        groupId,
+        order: typeof placement.order === "number" ? placement.order : 0
+      };
+      if (!groups.has(groupId)) {
+        groups.set(groupId, []);
+      }
+      groups.get(groupId).push(item);
+    }
+  }
+
+  return [...groups.entries()].map(([groupId, items]) => ({
+    groupId,
+    items: items.sort(compareCommandOrder)
+  }));
+}
+
+export function resolveCommandPaletteItems(commands, options = {}) {
+  return normalizeCommandViews(commands, options)
+    .map((command) => ({
+      id: command.commandId,
+      commandId: command.commandId,
+      label: command.label,
+      titleKey: command.titleKey,
+      subtitle: command.description,
+      descriptionKey: command.descriptionKey,
+      ariaLabel: command.ariaLabel,
+      ariaLabelKey: command.ariaLabelKey,
+      icon: command.icon,
+      shortcut: command.shortcutLabel,
+      keywords: command.paletteKeywords,
+      disabled: command.disabled,
+      checked: command.checked,
+      command
+    }))
+    .sort((left, right) => String(left.label).localeCompare(String(right.label)));
+}
+
+const CommandContext = React.createContext(null);
+
+export function useChipsCommandContext() {
+  return React.useContext(CommandContext);
+}
+
+export function useChipsCommands(options = {}) {
+  const context = useChipsCommandContext();
+  const adapter = options.adapter || context?.adapter;
+  const hasStaticCommands = Array.isArray(options.commands);
+  const [remoteCommands, setRemoteCommands] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const query = {
+    ...context?.query,
+    ...options.query
+  };
+  const queryKey = JSON.stringify(query);
+
+  React.useEffect(() => {
+    if (hasStaticCommands) {
+      setLoading(false);
+      setError(null);
+      return undefined;
+    }
+    if (!adapter || typeof adapter.listCommands !== "function") {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await adapter.listCommands(query);
+        if (!cancelled) {
+          setRemoteCommands(commandArray(result));
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setError(toStandardError(nextError, "COMMAND_LIST_FAILED"));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    const dispose = typeof adapter.onCommandsChanged === "function"
+      ? adapter.onCommandsChanged(() => {
+          load();
+        })
+      : undefined;
+
+    return () => {
+      cancelled = true;
+      if (typeof dispose === "function") {
+        dispose();
+      }
+    };
+  }, [adapter, hasStaticCommands, queryKey]);
+
+  return {
+    commands: hasStaticCommands ? options.commands : remoteCommands,
+    loading,
+    error
+  };
 }
 
 function normalizePositiveNumber(value, fallback) {
@@ -2753,6 +3118,625 @@ export const ChipsMenu = React.forwardRef((props, ref) => {
 
 ChipsMenu.displayName = "ChipsMenu";
 
+function renderCommandIcon(command, scope, state) {
+  if (!command?.icon) {
+    return null;
+  }
+  return React.createElement(
+    "span",
+    {
+      ...createScopeAttributes(scope, "icon", state),
+      "aria-hidden": "true"
+    },
+    React.createElement(ChipsIcon, {
+      descriptor: {
+        ...command.icon,
+        decorative: true
+      }
+    })
+  );
+}
+
+function renderCommandLabel(command, scope, state) {
+  return React.createElement(
+    "span",
+    createScopeAttributes(scope, "label", state),
+    command.label
+  );
+}
+
+function renderCommandShortcut(shortcut, scope, state) {
+  if (!shortcut) {
+    return null;
+  }
+  return React.createElement(
+    "span",
+    createScopeAttributes(scope, "shortcut", state),
+    shortcut
+  );
+}
+
+function resolveCommandAdapter(props, context) {
+  return props.adapter || context?.adapter || null;
+}
+
+function invokeCommand(adapter, command, source, payload, context) {
+  if (!adapter || typeof adapter.invokeCommand !== "function") {
+    return undefined;
+  }
+  return adapter.invokeCommand(command.commandId, payload, {
+    source,
+    context
+  });
+}
+
+export const ChipsCommandProvider = (props) => {
+  const {
+    adapter,
+    commands,
+    query,
+    i18n,
+    children
+  } = props;
+
+  const value = React.useMemo(
+    () => ({
+      adapter,
+      commands: Array.isArray(commands) ? commands : undefined,
+      query: query && typeof query === "object" ? query : undefined,
+      i18n
+    }),
+    [adapter, commands, query, i18n]
+  );
+
+  return React.createElement(CommandContext.Provider, { value }, children);
+};
+
+ChipsCommandProvider.displayName = "ChipsCommandProvider";
+
+export const ChipsShortcut = React.forwardRef((props, ref) => {
+  const {
+    shortcut,
+    command,
+    disabled = false,
+    ariaLabel,
+    separator = "+",
+    onStateChange
+  } = props;
+
+  const shortcutLabel = command
+    ? normalizeCommandShortcutValue(command.shortcut)
+    : normalizeCommandShortcutValue(shortcut);
+  const keys = shortcutLabel
+    .split("+")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const state = disabled ? "disabled" : "idle";
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  return React.createElement(
+    "kbd",
+    {
+      ...createScopeAttributes("shortcut", "root", state),
+      ref,
+      "aria-label": ariaLabel || shortcutLabel,
+      "aria-disabled": disabled ? "true" : undefined
+    },
+    keys.map((key, index) =>
+      React.createElement(
+        React.Fragment,
+        { key: `${key}-${index}` },
+        index > 0
+          ? React.createElement(
+              "span",
+              {
+                ...createScopeAttributes("shortcut", "separator", state),
+                "aria-hidden": "true"
+              },
+              separator
+            )
+          : null,
+        React.createElement(
+          "span",
+          createScopeAttributes("shortcut", "key", state),
+          key
+        )
+      )
+    )
+  );
+});
+
+ChipsShortcut.displayName = "ChipsShortcut";
+
+export const ChipsToolbarItem = React.forwardRef((props, ref) => {
+  const context = useChipsCommandContext();
+  const {
+    command,
+    adapter,
+    i18n = context?.i18n,
+    disabled = false,
+    loading = false,
+    error = null,
+    payload,
+    invocationContext,
+    visualState,
+    onCommandInvoke,
+    onStateChange
+  } = props;
+
+  const resolvedCommand = normalizeCommandView(command, { i18n });
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading || !resolvedCommand || resolvedCommand.disabled;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = visualState || resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const commandAdapter = resolveCommandAdapter({ adapter }, context);
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const selectCommand = () => {
+    if (!resolvedCommand || resolvedCommand.disabled || disabledByState) {
+      return;
+    }
+    if (typeof onCommandInvoke === "function") {
+      onCommandInvoke(resolvedCommand);
+    }
+    invokeCommand(commandAdapter, resolvedCommand, "toolbar", payload, invocationContext);
+  };
+
+  return React.createElement(
+    "button",
+    {
+      ...createScopeAttributes("toolbar", "item", state),
+      ...handlers,
+      ref,
+      type: "button",
+      disabled: disabledByState,
+      "aria-label": resolvedCommand?.ariaLabel,
+      "aria-pressed": resolvedCommand?.checked ? "true" : undefined,
+      "aria-disabled": resolvedCommand?.disabled ? "true" : undefined,
+      "data-command-id": resolvedCommand?.commandId,
+      "data-checked": String(Boolean(resolvedCommand?.checked)),
+      onClick: selectCommand
+    },
+    resolvedCommand ? renderCommandIcon(resolvedCommand, "toolbar", state) : null,
+    resolvedCommand ? renderCommandLabel(resolvedCommand, "toolbar", state) : null,
+    resolvedCommand ? renderCommandShortcut(resolvedCommand.shortcutLabel, "toolbar", state) : null
+  );
+});
+
+ChipsToolbarItem.displayName = "ChipsToolbarItem";
+
+export const ChipsToolbar = React.forwardRef((props, ref) => {
+  const context = useChipsCommandContext();
+  const {
+    commands = context?.commands,
+    toolbarId,
+    groupId,
+    adapter,
+    i18n = context?.i18n,
+    query,
+    disabled = false,
+    loading: loadingProp = false,
+    error: errorProp = null,
+    ariaLabel,
+    payload,
+    invocationContext,
+    onCommandInvoke,
+    onStateChange
+  } = props;
+
+  const { commands: commandSource, loading, error } = useChipsCommands({
+    adapter: resolveCommandAdapter({ adapter }, context),
+    commands,
+    query: {
+      source: "toolbar",
+      ...query
+    }
+  });
+  const normalizedError = normalizeError(errorProp || error);
+  const disabledByState = disabled || loadingProp || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const items = resolveCommandToolbarItems(commandSource, {
+    toolbarId,
+    groupId,
+    i18n
+  });
+  const commandAdapter = resolveCommandAdapter({ adapter }, context);
+
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading: loadingProp || loading,
+    error: normalizedError,
+    interaction
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.groupId)) {
+      groups.set(item.groupId, []);
+    }
+    groups.get(item.groupId).push(item);
+  }
+
+  return React.createElement(
+    "div",
+    {
+      ...createScopeAttributes("toolbar", "root", state),
+      ...handlers,
+      ref,
+      role: "toolbar",
+      "aria-label": ariaLabel,
+      "aria-disabled": disabledByState ? "true" : undefined
+    },
+    [...groups.entries()].map(([currentGroupId, groupItems]) =>
+      React.createElement(
+        "div",
+        {
+          ...createScopeAttributes("toolbar", "group", state),
+          key: currentGroupId,
+          role: "group",
+          "data-group-id": currentGroupId
+        },
+        groupItems.map((command) =>
+          React.createElement(
+            ChipsToolbarItem,
+            {
+              key: command.commandId,
+              command,
+              adapter: commandAdapter,
+              i18n,
+              disabled: disabledByState,
+              payload,
+              invocationContext,
+              visualState: state,
+              onCommandInvoke
+            }
+          )
+        )
+      )
+    ),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("toolbar", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsToolbar.displayName = "ChipsToolbar";
+
+function renderCommandMenuItems(params) {
+  const {
+    scope,
+    state,
+    groups,
+    disabled,
+    selectCommand
+  } = params;
+
+  return groups.map((group) =>
+    React.createElement(
+      "li",
+      {
+        ...createScopeAttributes(scope, "group", state),
+        key: group.groupId,
+        role: "none",
+        "data-group-id": group.groupId
+      },
+      React.createElement(
+        "ul",
+        { role: "group" },
+        group.items.map((command) =>
+          React.createElement(
+            "li",
+            {
+              key: command.commandId,
+              role: "none"
+            },
+            React.createElement(
+              "button",
+              {
+                ...createScopeAttributes(scope, "item", state),
+                type: "button",
+                role: "menuitem",
+                disabled: disabled || command.disabled,
+                "aria-label": command.ariaLabel,
+                "aria-disabled": command.disabled ? "true" : undefined,
+                "aria-checked": command.checked ? "true" : undefined,
+                "data-command-id": command.commandId,
+                onClick: () => selectCommand(command)
+              },
+              renderCommandIcon(command, scope, state),
+              renderCommandLabel(command, scope, state),
+              renderCommandShortcut(command.shortcutLabel, scope, state)
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+export const ChipsMenuBar = React.forwardRef((props, ref) => {
+  const context = useChipsCommandContext();
+  const {
+    commands = context?.commands,
+    adapter,
+    i18n = context?.i18n,
+    menus = [],
+    query,
+    disabled = false,
+    loading: loadingProp = false,
+    error: errorProp = null,
+    ariaLabel,
+    payload,
+    invocationContext,
+    onCommandInvoke,
+    onStateChange
+  } = props;
+
+  const { commands: commandSource, loading, error } = useChipsCommands({
+    adapter: resolveCommandAdapter({ adapter }, context),
+    commands,
+    query: {
+      source: "menu",
+      ...query
+    }
+  });
+  const normalizedError = normalizeError(errorProp || error);
+  const disabledByState = disabled || loadingProp || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const commandAdapter = resolveCommandAdapter({ adapter }, context);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading: loadingProp || loading,
+    error: normalizedError,
+    interaction
+  });
+  const [openMenuId, setOpenMenuId] = React.useState(null);
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const normalizedMenus = Array.isArray(menus) && menus.length > 0
+    ? menus
+    : [...new Set(
+        normalizeCommandViews(commandSource, { i18n })
+          .flatMap((command) => command.menuPlacement.map((placement) => commandString(placement.menuId) || "app"))
+      )].map((menuId) => ({ menuId, label: menuId }));
+
+  const selectCommand = (command) => {
+    if (command.disabled || disabledByState) {
+      return;
+    }
+    if (typeof onCommandInvoke === "function") {
+      onCommandInvoke(command);
+    }
+    invokeCommand(commandAdapter, command, "menu", payload, invocationContext);
+    setOpenMenuId(null);
+  };
+
+  return React.createElement(
+    "nav",
+    {
+      ...createScopeAttributes("menu-bar", "root", state),
+      ...handlers,
+      ref,
+      role: "menubar",
+      "aria-label": ariaLabel,
+      "aria-disabled": disabledByState ? "true" : undefined
+    },
+    normalizedMenus.map((menu) => {
+      const menuId = commandString(menu.menuId) || "app";
+      const groups = resolveCommandMenuGroups(commandSource, {
+        menuId,
+        i18n
+      });
+      const open = openMenuId === menuId;
+      return React.createElement(
+        "div",
+        {
+          ...createScopeAttributes("menu-bar", "menu", state),
+          key: menuId,
+          role: "none",
+          "data-menu-id": menuId
+        },
+        React.createElement(
+          "button",
+          {
+            ...createScopeAttributes("menu-bar", "menu", state),
+            type: "button",
+            role: "menuitem",
+            disabled: disabledByState,
+            "aria-haspopup": "menu",
+            "aria-expanded": String(open),
+            onClick: () => setOpenMenuId(open ? null : menuId)
+          },
+          menu.label || menuId
+        ),
+        open
+          ? React.createElement(
+              "ul",
+              {
+                ...createScopeAttributes("menu-bar", "content", state),
+                role: "menu"
+              },
+              renderCommandMenuItems({
+                scope: "menu-bar",
+                state,
+                groups,
+                disabled: disabledByState,
+                selectCommand
+              })
+            )
+          : null
+      );
+    }),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("menu-bar", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsMenuBar.displayName = "ChipsMenuBar";
+
+export const ChipsContextMenu = React.forwardRef((props, ref) => {
+  const context = useChipsCommandContext();
+  const {
+    commands = context?.commands,
+    adapter,
+    i18n = context?.i18n,
+    menuId,
+    query,
+    disabled = false,
+    loading: loadingProp = false,
+    error: errorProp = null,
+    triggerContent,
+    children,
+    payload,
+    invocationContext,
+    onCommandInvoke,
+    onStateChange
+  } = props;
+
+  const { commands: commandSource, loading, error } = useChipsCommands({
+    adapter: resolveCommandAdapter({ adapter }, context),
+    commands,
+    query: {
+      source: "context-menu",
+      ...query
+    }
+  });
+  const normalizedError = normalizeError(errorProp || error);
+  const disabledByState = disabled || loadingProp || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const [open, setOpen] = React.useState(false);
+  const commandAdapter = resolveCommandAdapter({ adapter }, context);
+  const groups = resolveCommandMenuGroups(commandSource, {
+    menuId,
+    i18n
+  });
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading: loadingProp || loading,
+    error: normalizedError,
+    interaction
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const selectCommand = (command) => {
+    if (command.disabled || disabledByState) {
+      return;
+    }
+    if (typeof onCommandInvoke === "function") {
+      onCommandInvoke(command);
+    }
+    invokeCommand(commandAdapter, command, "context-menu", payload, invocationContext);
+    setOpen(false);
+  };
+
+  const handleContextMenu = (event) => {
+    if (disabledByState) {
+      return;
+    }
+    event.preventDefault();
+    setOpen(true);
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...createScopeAttributes("context-menu", "root", state),
+      ...handlers,
+      ref,
+      "data-open": String(open),
+      "aria-disabled": disabledByState ? "true" : undefined
+    },
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("context-menu", "trigger", state),
+        type: "button",
+        role: "button",
+        disabled: disabledByState,
+        "aria-haspopup": "menu",
+        "aria-expanded": String(open),
+        onContextMenu: handleContextMenu,
+        onClick: () => setOpen(!open)
+      },
+      triggerContent || children
+    ),
+    open
+      ? React.createElement(
+          "ul",
+          {
+            ...createScopeAttributes("context-menu", "content", state),
+            role: "menu"
+          },
+          renderCommandMenuItems({
+            scope: "context-menu",
+            state,
+            groups,
+            disabled: disabledByState,
+            selectCommand
+          })
+        )
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("context-menu", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsContextMenu.displayName = "ChipsContextMenu";
+
 export const ChipsTooltip = React.forwardRef((props, ref) => {
   const {
     open,
@@ -3854,12 +4838,19 @@ export const ChipsDateTime = React.forwardRef((props, ref) => {
 ChipsDateTime.displayName = "ChipsDateTime";
 
 export const ChipsCommandPalette = React.forwardRef((props, ref) => {
+  const context = useChipsCommandContext();
   const {
     open,
     defaultOpen = false,
     query,
     defaultQuery = "",
     items = [],
+    commands = context?.commands,
+    adapter,
+    i18n = context?.i18n,
+    commandQuery,
+    payload,
+    invocationContext,
     disabled = false,
     loading = false,
     error = null,
@@ -3872,8 +4863,21 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
     onStateChange
   } = props;
 
-  const normalizedError = normalizeError(error);
-  const disabledByState = disabled || loading;
+  const { commands: commandSource, loading: commandLoading, error: commandError } = useChipsCommands({
+    adapter: resolveCommandAdapter({ adapter }, context),
+    commands,
+    query: {
+      source: "palette",
+      ...commandQuery
+    }
+  });
+  const commandAdapter = resolveCommandAdapter({ adapter }, context);
+  const hasCommandSource = Array.isArray(commands) || !!commandAdapter;
+  const sourceItems = hasCommandSource
+    ? resolveCommandPaletteItems(commandSource, { i18n })
+    : items;
+  const normalizedError = normalizeError(error || commandError);
+  const disabledByState = disabled || loading || commandLoading;
   const { interaction, handlers } = useInteractiveState(disabledByState);
   const [currentOpen, setCurrentOpen] = useControllableState({
     value: open,
@@ -3888,7 +4892,7 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
 
   const filteredItems = React.useMemo(
     () =>
-      filterCommandPaletteItems(items, currentQuery).map((item, index) => ({
+      filterCommandPaletteItems(sourceItems, currentQuery).map((item, index) => ({
         ...item,
         id:
           typeof item.id === "string" || typeof item.id === "number"
@@ -3896,7 +4900,7 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
             : String(index),
         disabled: item && item.disabled === true
       })),
-    [items, currentQuery]
+    [sourceItems, currentQuery]
   );
 
   const [highlightedIndex, setHighlightedIndex] = React.useState(
@@ -3909,7 +4913,7 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
-    loading,
+    loading: loading || commandLoading,
     error: normalizedError,
     interaction
   });
@@ -3929,6 +4933,9 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
     }
     if (typeof onSelect === "function") {
       onSelect(item);
+    }
+    if (item.command && !item.disabled) {
+      invokeCommand(commandAdapter, item.command, "palette", payload, invocationContext);
     }
     setCurrentOpen(false);
   };
@@ -6004,6 +7011,38 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "toolbar") {
+    assertAriaProps(props, {
+      role: "toolbar",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "menu-bar") {
+    assertAriaProps(props, {
+      role: "menubar",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "context-menu") {
+    assertAriaProps(props, {
+      role: "button",
+      requireLabel: true,
+      requireControlsWhenExpanded: true
+    });
+    return true;
+  }
+
+  if (component === "shortcut") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "tooltip") {
     assertAriaProps(props, {
       role: "tooltip"
@@ -6233,6 +7272,30 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
     scope: "menu",
     parts: ["root", "trigger", "content", "item", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsToolbar",
+    scope: "toolbar",
+    parts: ["root", "group", "item", "icon", "label", "shortcut", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsMenuBar",
+    scope: "menu-bar",
+    parts: ["root", "menu", "content", "group", "item", "shortcut", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsContextMenu",
+    scope: "context-menu",
+    parts: ["root", "trigger", "content", "group", "item", "shortcut", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsShortcut",
+    scope: "shortcut",
+    parts: ["root", "key", "separator"],
+    states: ["idle", "disabled"]
   }),
   createComponentMeta({
     name: "ChipsTooltip",

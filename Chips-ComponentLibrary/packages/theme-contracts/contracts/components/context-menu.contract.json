@@ -1,0 +1,31 @@
+{
+  "component": "context-menu",
+  "scope": "context-menu",
+  "parts": [
+    "root",
+    "trigger",
+    "content",
+    "group",
+    "item",
+    "shortcut",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.context-menu.root.surface",
+    "chips.comp.context-menu.trigger.surface.idle",
+    "chips.comp.context-menu.content.surface",
+    "chips.comp.context-menu.item.surface.hover",
+    "chips.comp.context-menu.item.text.color",
+    "chips.comp.context-menu.shortcut.color",
+    "chips.comp.context-menu.focus.outline"
+  ]
+}

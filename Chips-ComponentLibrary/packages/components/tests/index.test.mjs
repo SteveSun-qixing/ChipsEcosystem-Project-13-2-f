@@ -23,6 +23,7 @@ import {
   ChipsInspector,
   ChipsLoadingBoundary,
   ChipsMenu,
+  ChipsMenuBar,
   ChipsNotification,
   ChipsPanelHeader,
   ChipsPopover,
@@ -37,6 +38,10 @@ import {
   ChipsSplitView,
   ChipsStack,
   ChipsTabs,
+  ChipsToolbar,
+  ChipsToolbarItem,
+  ChipsContextMenu,
+  ChipsShortcut,
   ChipsToast,
   ChipsToolWindow,
   ChipsTree,
@@ -47,6 +52,7 @@ import {
   COMPONENT_TOKEN_MAP,
   clampSplitRatio,
   createObservationRecord,
+  createCommandAdapter,
   dismissSystemMessage,
   applyDataGridSort,
   computeVirtualWindow,
@@ -62,6 +68,9 @@ import {
   P0_BASE_INTERACTIVE_COMPONENTS,
   P0_DATA_FORM_COMPONENTS,
   resolveConfigValue,
+  resolveCommandMenuGroups,
+  resolveCommandPaletteItems,
+  resolveCommandToolbarItems,
   resolveDockPanelStateMap,
   resolveI18nText,
   resolveSystemMessageQueue,
@@ -761,7 +770,7 @@ test("resolveConfigValue falls back when source or parser throws", () => {
 });
 
 test("P0 base interactive metadata is complete", () => {
-  assert.equal(P0_BASE_INTERACTIVE_COMPONENTS.length, 11);
+  assert.equal(P0_BASE_INTERACTIVE_COMPONENTS.length, 15);
   assert.deepEqual(
     P0_BASE_INTERACTIVE_COMPONENTS.map((item) => item.scope),
     [
@@ -775,6 +784,10 @@ test("P0 base interactive metadata is complete", () => {
       "popover",
       "tabs",
       "menu",
+      "toolbar",
+      "menu-bar",
+      "context-menu",
+      "shortcut",
       "tooltip"
     ]
   );
@@ -792,6 +805,11 @@ test("all base interactive component exports exist", () => {
     ChipsPopover,
     ChipsTabs,
     ChipsMenu,
+    ChipsToolbar,
+    ChipsToolbarItem,
+    ChipsMenuBar,
+    ChipsContextMenu,
+    ChipsShortcut,
     ChipsTooltip
   ]) {
     assert.equal(typeof component, "object");
@@ -1024,6 +1042,83 @@ test("filterCommandPaletteItems filters by label and shortcut", () => {
   assert.equal(byLabel[0].id, "1");
   assert.equal(byShortcut.length, 1);
   assert.equal(byShortcut[0].id, "2");
+});
+
+test("command helpers resolve one command for toolbar menu and palette", () => {
+  const commands = [
+    {
+      commandId: "chips.card.open",
+      titleKey: "command.card.open",
+      descriptionKey: "command.card.open.description",
+      ariaLabelKey: "command.card.open.aria",
+      icon: { name: "folder_open" },
+      shortcut: { accelerator: "Mod+O" },
+      menuPlacement: [{ menuId: "file", groupId: "primary", order: 10 }],
+      toolbarPlacement: [{ toolbarId: "main", groupId: "file", order: 5 }],
+      paletteKeywords: ["card", "file"],
+      state: { enabled: true, visible: true }
+    },
+    {
+      commandId: "chips.card.hidden",
+      titleKey: "command.card.hidden",
+      menuPlacement: [{ menuId: "file" }],
+      toolbarPlacement: [{ toolbarId: "main" }],
+      state: { visible: false }
+    }
+  ];
+  const i18n = (key) => `t:${key}`;
+
+  const toolbarItems = resolveCommandToolbarItems(commands, { toolbarId: "main", i18n });
+  const menuGroups = resolveCommandMenuGroups(commands, { menuId: "file", i18n });
+  const paletteItems = resolveCommandPaletteItems(commands, { i18n });
+
+  assert.equal(toolbarItems.length, 1);
+  assert.equal(toolbarItems[0].commandId, "chips.card.open");
+  assert.equal(toolbarItems[0].label, "t:command.card.open");
+  assert.equal(toolbarItems[0].shortcutLabel, "Mod+O");
+  assert.equal(menuGroups.length, 1);
+  assert.equal(menuGroups[0].groupId, "primary");
+  assert.equal(menuGroups[0].items[0].commandId, "chips.card.open");
+  assert.equal(paletteItems.length, 1);
+  assert.equal(paletteItems[0].id, "chips.card.open");
+  assert.equal(paletteItems[0].shortcut, "Mod+O");
+});
+
+test("createCommandAdapter wraps SDK command API", async () => {
+  const calls = [];
+  const adapter = createCommandAdapter({
+    command: {
+      list: async (query) => {
+        calls.push(["list", query]);
+        return [{ commandId: "chips.card.open", titleKey: "command.card.open" }];
+      },
+      invoke: async (commandId, payload, options) => {
+        calls.push(["invoke", commandId, payload, options]);
+        return { commandId, dispatched: true };
+      },
+      onChanged: (handler) => {
+        calls.push(["subscribe", typeof handler]);
+        return () => calls.push(["unsubscribe"]);
+      }
+    }
+  });
+
+  const listed = await adapter.listCommands({ source: "toolbar" });
+  const invoked = await adapter.invokeCommand("chips.card.open", { id: "demo" }, { source: "toolbar" });
+  const dispose = adapter.onCommandsChanged(() => {});
+  dispose();
+
+  assert.equal(listed.length, 1);
+  assert.equal(invoked.dispatched, true);
+  assert.deepEqual(calls[0], ["list", { source: "toolbar" }]);
+  assert.deepEqual(calls[1], [
+    "invoke",
+    "chips.card.open",
+    { id: "demo" },
+    { source: "toolbar" }
+  ]);
+  assert.deepEqual(calls[2], ["subscribe", "function"]);
+  assert.deepEqual(calls[3], ["unsubscribe"]);
 });
 
 test("clampSplitRatio returns ratio in defined range", () => {

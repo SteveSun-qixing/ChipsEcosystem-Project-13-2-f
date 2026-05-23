@@ -1,0 +1,33 @@
+{
+  "component": "toolbar",
+  "scope": "toolbar",
+  "parts": [
+    "root",
+    "group",
+    "item",
+    "icon",
+    "label",
+    "shortcut",
+    "status"
+  ],
+  "states": [
+    "idle",
+    "hover",
+    "focus",
+    "active",
+    "disabled",
+    "loading",
+    "error"
+  ],
+  "tokens": [
+    "chips.comp.toolbar.root.surface",
+    "chips.comp.toolbar.group.gap",
+    "chips.comp.toolbar.item.surface.idle",
+    "chips.comp.toolbar.item.surface.hover",
+    "chips.comp.toolbar.item.surface.active",
+    "chips.comp.toolbar.item.surface.disabled",
+    "chips.comp.toolbar.item.text.color",
+    "chips.comp.toolbar.item.icon.color",
+    "chips.comp.toolbar.focus.outline"
+  ]
+}

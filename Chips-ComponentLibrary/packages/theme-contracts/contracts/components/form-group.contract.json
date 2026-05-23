@@ -23,12 +23,5 @@
     "chips.comp.form-group.description.color",
     "chips.comp.form-group.divider.color",
     "chips.comp.form-group.status.color.error"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

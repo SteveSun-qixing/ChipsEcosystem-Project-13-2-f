@@ -24,12 +24,5 @@
     "chips.comp.switch.track.surface.disabled",
     "chips.comp.switch.thumb.surface",
     "chips.comp.switch.label.color"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

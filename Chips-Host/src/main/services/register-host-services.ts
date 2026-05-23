@@ -11,6 +11,8 @@ import { rewriteThemeCssAssetUrls } from '../theme-runtime/css-assets';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
 import { buildThemeContractsView, type ThemeContract, validateThemeContractWithTokens } from '../theme-runtime/contract-guard';
 import { toRenderThemeSnapshot } from '../theme-runtime/render-bridge';
+import { buildThemeDiagnosticSummary } from '../theme-runtime/diagnostics';
+import type { ThemeChangedEvent, ThemeContractView, ThemeResolveResult } from '../theme-runtime/types';
 import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
 import { cloneWindowChromeOptions, resolveManifestWindowChrome } from '../../shared/window-chrome';
@@ -854,7 +856,11 @@ const readThemeContract = async (installPath: string, contractPath?: string): Pr
   const resolvedPath = path.resolve(installPath, normalizeThemeAssetPath(contractPath));
   const raw = await fs.readFile(resolvedPath, 'utf-8');
   const parsed = JSON.parse(raw) as unknown;
-  if (!isRecord(parsed) || !Array.isArray(parsed.components) || typeof parsed.version !== 'string') {
+  if (
+    !isRecord(parsed) ||
+    !Array.isArray(parsed.components) ||
+    (typeof parsed.version !== 'string' && typeof parsed.contractVersion !== 'string')
+  ) {
     throw createError('THEME_CONTRACT_INVALID', 'Theme contract file is invalid', {
       contractPath: resolvedPath
     });
@@ -2776,6 +2782,55 @@ const resolveThemeContext = (state: RuntimeState, inputIds: string[]) => {
   };
 };
 
+const buildThemeContractViewForContext = (
+  context: ReturnType<typeof resolveThemeContext>,
+  component?: string
+): ThemeContractView => {
+  return buildThemeContractsView(
+    {
+      themeId: context.activeTheme.id,
+      themeVersion: context.activeTheme.version,
+      sourceThemeId: context.activeTheme.id
+    },
+    context.activeTheme.contract,
+    context.resolvedTheme.variables,
+    component
+  );
+};
+
+const buildThemeResolveResult = (context: ReturnType<typeof resolveThemeContext>): ThemeResolveResult => {
+  const contractView = buildThemeContractViewForContext(context);
+  const diagnostics = [...context.resolvedTheme.diagnostics, ...contractView.components.flatMap((component) => component.diagnostics)];
+  const summary = buildThemeDiagnosticSummary(diagnostics, contractView.summary.coverage);
+
+  return {
+    resolved: context.records.map((theme, index) => ({
+      id: theme.id,
+      displayName: theme.displayName,
+      version: theme.version,
+      order: index
+    })),
+    tokens: context.resolvedTheme.variables,
+    diagnostics,
+    summary
+  };
+};
+
+const buildThemeChangedPayload = (
+  context: ReturnType<typeof resolveThemeContext>,
+  previousThemeId: string
+): ThemeChangedEvent => {
+  const resolveResult = buildThemeResolveResult(context);
+
+  return {
+    previousThemeId,
+    themeId: context.activeTheme.id,
+    themeVersion: context.activeTheme.version,
+    timestamp: Date.now(),
+    diagnosticsSummary: resolveResult.summary
+  };
+};
+
 const syncCurrentThemeState = (state: RuntimeState): void => {
   const configuredThemeId = asString(resolveConfigValue(state, 'ui.theme'));
   const defaultTheme = state.themes.find((theme) => theme.isDefault);
@@ -3001,11 +3056,8 @@ const syncInstalledThemes = async (ctx: HostServiceContext, state: RuntimeState)
   syncCurrentThemeState(state);
 
   if (state.currentThemeId !== previousThemeId && state.themes.length > 0) {
-    await ctx.kernel.events.emit('theme.changed', 'theme-service', {
-      previousThemeId,
-      themeId: state.currentThemeId,
-      timestamp: Date.now()
-    });
+    const context = resolveThemeContext(state, []);
+    await ctx.kernel.events.emit('theme.changed', 'theme-service', buildThemeChangedPayload(context, previousThemeId));
   }
 };
 
@@ -3685,11 +3737,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             state.configUser.set('ui.theme', context.activeTheme.id);
             await persistConfigScope(ctx.workspacePath, 'user', state.configUser);
 
-            await ctx.kernel.events.emit('theme.changed', 'theme-service', {
-              previousThemeId,
-              themeId: context.activeTheme.id,
-              timestamp: Date.now()
-            });
+            await ctx.kernel.events.emit('theme.changed', 'theme-service', buildThemeChangedPayload(context, previousThemeId));
 
             return { success: true, themeId: context.activeTheme.id };
           })
@@ -3740,14 +3788,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
       resolve: {
         descriptor: descriptor<
           { chain: string[] },
-          {
-            resolved: Array<{
-              id: string;
-              displayName: string;
-              order: number;
-            }>;
-            tokens: Record<string, unknown>;
-          }
+          ThemeResolveResult
         >(
           'theme.resolve',
           ['theme.read'],
@@ -3756,42 +3797,20 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'theme.resolve', async (input) => {
             const context = resolveThemeContext(state, input.chain);
-            return {
-              resolved: context.records.map((theme, index) => ({
-                id: theme.id,
-                displayName: theme.displayName,
-                order: index
-              })),
-              tokens: context.resolvedTheme.variables
-            };
+            return buildThemeResolveResult(context);
           })
         )
       },
       contractGet: {
-        descriptor: descriptor<
-          { component?: string },
-          {
-            contracts: {
-              [component: string]: {
-                scope: string;
-                parts: string[];
-                states: string[];
-                tokens: string[];
-              };
-            };
-          }
-        >(
+        descriptor: descriptor<{ component?: string }, ThemeContractView>(
           'theme.contract.get',
           ['theme.read'],
           2_000,
           true,
           0,
           withMetrics(state, 'theme.contract.get', async (input) => {
-            const theme = findThemeRecord(state, state.currentThemeId);
-            if (!theme) {
-              throw createError('THEME_NOT_FOUND', 'Current theme not found');
-            }
-            return buildThemeContractsView(theme.contract, input.component);
+            const context = resolveThemeContext(state, []);
+            return buildThemeContractViewForContext(context, input.component);
           })
         )
       }

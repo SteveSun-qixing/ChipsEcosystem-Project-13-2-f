@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../../src/main/theme-runtime/resolve-algorithm';
+import { buildThemeContractsView, validateThemeContractWithTokens } from '../../src/main/theme-runtime/contract-guard';
 import { buildThemeScopeChain } from '../../src/main/theme-runtime/scope-chain';
 import { toRenderThemeSnapshot } from '../../src/main/theme-runtime/render-bridge';
 import { resolveNodeProps, type ThemeSnapshot as RenderThemeSnapshot } from '../../packages/unified-rendering/src';
@@ -58,6 +59,7 @@ describe('Theme Runtime', () => {
     expect(resolved.componentTokens.button!['chips.comp.button.background']).toBe('#ffffff');
     expect(resolved.componentTokens.dialog!['chips.comp.dialog.surface']).toBe('#ffffff');
     expect(resolved.componentTokens.grid!['chips.comp.grid.gap']).toBe('12cpx');
+    expect(resolved.summary.status).toBe('complete');
   });
 
   it('builds theme scope chain from context', () => {
@@ -107,5 +109,107 @@ describe('Theme Runtime', () => {
     const resolvedProps = resolveNodeProps(props, snapshot, undefined);
     expect(resolvedProps.tone).toBe('#ffffff');
     expect(resolvedProps.other).toBe('value');
+  });
+
+  it('builds theme contract view with coverage and structured diagnostics', () => {
+    const contract = {
+      version: '1.0.0',
+      components: [
+        {
+          name: 'button',
+          scope: 'button',
+          parts: ['root', 'label'],
+          states: ['idle', 'hover'],
+          tokens: ['chips.comp.button.root.surface.idle', 'chips.comp.button.label.color.idle'],
+          optionalTokens: ['chips.comp.button.root.surface.hover'],
+          a11yConstraints: [{ key: 'button.accessible-name' }],
+          motionConstraints: [{ key: 'button.focus-visible' }]
+        }
+      ]
+    };
+
+    const view = buildThemeContractsView(
+      { themeId: 'chips.test.theme', themeVersion: '1.0.0' },
+      contract,
+      {
+        'chips.comp.button.root.surface.idle': '#ffffff'
+      }
+    );
+
+    expect(view).toMatchObject({
+      schemaVersion: '1.0.0',
+      themeId: 'chips.test.theme',
+      themeVersion: '1.0.0',
+      contractVersion: '1.0.0',
+      summary: {
+        total: 2,
+        blocking: 1,
+        status: 'blocked'
+      }
+    });
+    expect(view.components[0]).toMatchObject({
+      component: 'button',
+      scope: 'button',
+      requiredTokens: ['chips.comp.button.root.surface.idle', 'chips.comp.button.label.color.idle'],
+      optionalTokens: ['chips.comp.button.root.surface.hover'],
+      coverage: {
+        requiredTokenCount: 2,
+        coveredRequiredTokenCount: 1,
+        missingRequiredTokenCount: 1,
+        optionalTokenCount: 1,
+        coveredOptionalTokenCount: 0,
+        missingOptionalTokenCount: 1,
+        status: 'blocked'
+      }
+    });
+    expect(view.components[0]?.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'THEME_REQUIRED_TOKEN_MISSING',
+        messageKey: 'theme.diagnostics.requiredTokenMissing',
+        themeId: 'chips.test.theme',
+        component: 'button',
+        part: 'label',
+        state: 'idle',
+        tokenKey: 'chips.comp.button.label.color.idle',
+        layer: 'comp',
+        blocking: true
+      })
+    );
+  });
+
+  it('rejects invalid contract with structured blocking diagnostics', () => {
+    const contract = {
+      version: '1.0.0',
+      components: [
+        {
+          name: 'button',
+          scope: 'button',
+          parts: ['root'],
+          states: ['idle'],
+          tokens: ['chips.comp.button.root.surface.idle']
+        }
+      ]
+    };
+
+    expect(() => validateThemeContractWithTokens('chips.test.theme', contract, {})).toThrowError(
+      expect.objectContaining({
+        code: 'THEME_CONTRACT_INVALID',
+        details: expect.objectContaining({
+          diagnostics: [
+            expect.objectContaining({
+              code: 'THEME_REQUIRED_TOKEN_MISSING',
+              component: 'button',
+              tokenKey: 'chips.comp.button.root.surface.idle',
+              blocking: true
+            })
+          ],
+          summary: expect.objectContaining({
+            blocking: 1,
+            status: 'blocked'
+          })
+        })
+      })
+    );
   });
 });

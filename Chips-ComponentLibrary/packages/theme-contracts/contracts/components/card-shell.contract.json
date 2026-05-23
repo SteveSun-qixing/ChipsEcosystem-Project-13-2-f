@@ -25,12 +25,5 @@
     "chips.comp.card-shell.footer.surface",
     "chips.comp.card-shell.border.color",
     "chips.comp.card-shell.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

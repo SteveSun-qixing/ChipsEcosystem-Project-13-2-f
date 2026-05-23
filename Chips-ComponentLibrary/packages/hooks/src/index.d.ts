@@ -12,9 +12,38 @@ export interface TokenResolver {
   keys(): Iterable<string>;
 }
 
+export type ThemeDiagnosticSeverity = "info" | "warning" | "error";
+export type ThemeDiagnosticStatus = "complete" | "warning" | "blocked";
+
+export interface ThemeCoverageSummary {
+  componentCount: number;
+  coveredComponentCount: number;
+  requiredTokenCount: number;
+  coveredRequiredTokenCount: number;
+  missingRequiredTokenCount: number;
+  optionalTokenCount: number;
+  coveredOptionalTokenCount: number;
+  missingOptionalTokenCount: number;
+  requiredCoverage: number;
+  optionalCoverage: number;
+}
+
+export interface ThemeDiagnosticSummary {
+  total: number;
+  blocking: number;
+  bySeverity: Record<ThemeDiagnosticSeverity, number>;
+  byCode: Record<string, number>;
+  status: ThemeDiagnosticStatus;
+  coverage?: ThemeCoverageSummary;
+}
+
 export interface ThemeChangedPayload {
+  previousThemeId?: string;
   themeId?: string;
+  themeVersion?: string;
   version?: string;
+  timestamp?: number;
+  diagnosticsSummary?: ThemeDiagnosticSummary;
   [key: string]: unknown;
 }
 

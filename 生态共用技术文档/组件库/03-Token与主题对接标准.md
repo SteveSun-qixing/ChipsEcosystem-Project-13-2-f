@@ -110,3 +110,15 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - token 缺失：回退默认 token 并输出告警
 - 主题解析失败：回退默认主题
 - 契约不匹配：阻断主题应用
+
+## 7. 诊断与覆盖率输出
+
+主题运行时和组件库 contract validator 必须共享 `ThemeDiagnostic` 与 `ThemeDiagnosticSummary` schema，避免 Host、SDK、主题包和设置面板各自定义诊断口径。
+
+- `theme.resolve` 必须返回 `tokens / diagnostics / summary`。
+- `theme.contract.get` 必须返回 `ThemeContractView`，其中每个组件包含 `coverage / diagnostics`。
+- 缺失 required token 必须产生 `THEME_REQUIRED_TOKEN_MISSING`，并定位到 `component / part / state / tokenKey / layer`。
+- 缺失 optional token 必须产生 `THEME_OPTIONAL_TOKEN_MISSING`，但 `blocking=false`。
+- `theme.changed` 事件必须携带 `diagnosticsSummary`，用于设置面板、组件库刷新工具和 CLI 快速判断主题健康状态。
+
+设置面板、CLI 与主题包测试只消费该公共 schema，不直接解析 Host 内部错误对象或主题包私有字段。

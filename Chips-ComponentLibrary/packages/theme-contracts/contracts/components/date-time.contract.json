@@ -23,12 +23,5 @@
     "chips.comp.date-time.input.text.color",
     "chips.comp.date-time.icon.color",
     "chips.comp.date-time.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

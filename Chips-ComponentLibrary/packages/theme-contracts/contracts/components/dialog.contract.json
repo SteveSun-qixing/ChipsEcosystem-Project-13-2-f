@@ -27,12 +27,5 @@
     "chips.comp.dialog.title.color",
     "chips.comp.dialog.close.color",
     "chips.comp.dialog.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

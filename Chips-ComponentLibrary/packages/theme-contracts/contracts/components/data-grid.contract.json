@@ -27,12 +27,5 @@
     "chips.comp.data-grid.cell.text.color",
     "chips.comp.data-grid.border.color",
     "chips.comp.data-grid.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

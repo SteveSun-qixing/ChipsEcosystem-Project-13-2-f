@@ -193,8 +193,10 @@ const syncThemeToDocument = async (): Promise<void> => {
     bridge.invoke<{ themeId: string; displayName: string; version: string }>('theme.getCurrent', {}),
     bridge.invoke<{ css: string; themeId: string }>('theme.getAllCss', {}),
     bridge.invoke<{
-      resolved: Array<{ id: string; displayName: string; order: number }>;
+      resolved: Array<{ id: string; displayName: string; version: string; order: number }>;
       tokens: Record<string, unknown>;
+      diagnostics?: unknown[];
+      summary?: unknown;
     }>('theme.resolve', { chain: [] })
   ]);
 

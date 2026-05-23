@@ -25,12 +25,5 @@
     "chips.comp.popover.content.border",
     "chips.comp.popover.arrow.surface",
     "chips.comp.popover.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

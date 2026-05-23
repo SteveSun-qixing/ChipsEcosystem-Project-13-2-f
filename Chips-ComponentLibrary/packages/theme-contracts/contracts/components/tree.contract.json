@@ -26,12 +26,5 @@
     "chips.comp.tree.toggle.color",
     "chips.comp.tree.guide.color",
     "chips.comp.tree.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

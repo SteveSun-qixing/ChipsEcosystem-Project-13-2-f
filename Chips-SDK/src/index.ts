@@ -57,7 +57,23 @@ export type {
   FileReadOptions,
   FileStat,
 } from "./api/file";
-export type { ThemeApi, ThemeMeta, ThemeState, ResolvedTheme, ThemeContract } from "./api/theme";
+export type {
+  ResolvedTheme,
+  ThemeApi,
+  ThemeChangedPayload,
+  ThemeConstraint,
+  ThemeContractComponentView,
+  ThemeContractCoverage,
+  ThemeContractView,
+  ThemeCoverageSummary,
+  ThemeDiagnostic,
+  ThemeDiagnosticSeverity,
+  ThemeDiagnosticStatus,
+  ThemeDiagnosticSummary,
+  ThemeMeta,
+  ThemeState,
+  ThemeTokenLayer
+} from "./api/theme";
 export type { ConfigApi } from "./api/config";
 export type { I18nApi } from "./api/i18n";
 export type {

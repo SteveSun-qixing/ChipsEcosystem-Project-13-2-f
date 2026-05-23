@@ -585,8 +585,8 @@ export const registerHostSchemas = (): void => {
   registerPair('theme.apply', ['id']);
   registerPair('theme.getCurrent', []);
   registerPair('theme.getAllCss', []);
-  registerPair('theme.resolve', ['chain']);
-  registerPair('theme.contract.get', []);
+  registerPair('theme.resolve', ['chain'], ['resolved', 'tokens', 'diagnostics', 'summary']);
+  registerPair('theme.contract.get', [], ['schemaVersion', 'themeId', 'themeVersion', 'contractVersion', 'components', 'summary']);
 
   registerPair('i18n.getCurrent', []);
   registerPair('i18n.setCurrent', ['locale']);

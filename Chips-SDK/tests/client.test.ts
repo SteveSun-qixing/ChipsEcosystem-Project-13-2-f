@@ -776,6 +776,143 @@ describe("createClient", () => {
     await expect(client.plugin.getLayoutPlugin("grid-layout")).resolves.toBeUndefined();
   });
 
+  it("forwards theme diagnostics schema and changed events", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const summary = {
+      total: 1,
+      blocking: 1,
+      bySeverity: { info: 0, warning: 0, error: 1 },
+      byCode: { THEME_REQUIRED_TOKEN_MISSING: 1 },
+      status: "blocked" as const,
+      coverage: {
+        componentCount: 1,
+        coveredComponentCount: 0,
+        requiredTokenCount: 2,
+        coveredRequiredTokenCount: 1,
+        missingRequiredTokenCount: 1,
+        optionalTokenCount: 0,
+        coveredOptionalTokenCount: 0,
+        missingOptionalTokenCount: 0,
+        requiredCoverage: 0.5,
+        optionalCoverage: 1,
+      },
+    };
+    const diagnostic = {
+      severity: "error" as const,
+      code: "THEME_REQUIRED_TOKEN_MISSING",
+      messageKey: "theme.diagnostics.requiredTokenMissing",
+      themeId: "chips.test.theme",
+      sourceThemeId: "chips.test.theme",
+      component: "button",
+      part: "label",
+      state: "idle",
+      tokenKey: "chips.comp.button.label.color.idle",
+      layer: "comp" as const,
+      scope: "component",
+      suggestionKey: "theme.suggestions.addRequiredToken",
+      details: { tokenKey: "chips.comp.button.label.color.idle" },
+      blocking: true,
+    };
+    const contractView = {
+      schemaVersion: "1.0.0",
+      themeId: "chips.test.theme",
+      themeVersion: "1.0.0",
+      contractVersion: "1.0.0",
+      components: [
+        {
+          component: "button",
+          scope: "button",
+          parts: ["root", "label"],
+          states: ["idle"],
+          requiredTokens: ["chips.comp.button.root.surface.idle", "chips.comp.button.label.color.idle"],
+          optionalTokens: [],
+          a11yConstraints: [],
+          motionConstraints: [],
+          coverage: {
+            requiredTokenCount: 2,
+            coveredRequiredTokenCount: 1,
+            missingRequiredTokenCount: 1,
+            optionalTokenCount: 0,
+            coveredOptionalTokenCount: 0,
+            missingOptionalTokenCount: 0,
+            requiredCoverage: 0.5,
+            optionalCoverage: 1,
+            status: "blocked" as const,
+          },
+          diagnostics: [diagnostic],
+        },
+      ],
+      summary,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "theme.resolve") {
+          return {
+            resolved: [{ id: "chips.test.theme", displayName: "Test", version: "1.0.0", order: 0 }],
+            tokens: { "chips.comp.button.root.surface.idle": "#fff" },
+            diagnostics: [diagnostic],
+            summary,
+          };
+        }
+        if (action === "theme.contract.get") {
+          return contractView;
+        }
+        throw { code: "SERVICE_NOT_FOUND", message: action };
+      },
+    });
+    const clientEvents = client.events as typeof client.events & {
+      on<T>(eventName: string, handler: (payload: T) => void): () => void;
+    };
+    clientEvents.on = (eventName, handler) => {
+      listeners.set(eventName, handler as (payload: unknown) => void);
+      return () => listeners.delete(eventName);
+    };
+
+    await expect(client.theme.resolve(["chips.test.theme"])).resolves.toEqual({
+      resolved: [{ id: "chips.test.theme", displayName: "Test", version: "1.0.0", order: 0 }],
+      tokens: { "chips.comp.button.root.surface.idle": "#fff" },
+      diagnostics: [diagnostic],
+      summary,
+    });
+    await expect(client.theme.contract.get("button")).resolves.toEqual(contractView);
+
+    const changedEvents: unknown[] = [];
+    const off = client.theme.onChanged((payload) => changedEvents.push(payload));
+    listeners.get("theme.changed")?.({
+      previousThemeId: "chips.old",
+      themeId: "chips.test.theme",
+      themeVersion: "1.0.0",
+      timestamp: 1,
+      diagnosticsSummary: summary,
+    });
+    off();
+    listeners.get("theme.changed")?.({
+      previousThemeId: "chips.old",
+      themeId: "chips.test.theme",
+      themeVersion: "1.0.0",
+      timestamp: 2,
+      diagnosticsSummary: summary,
+    });
+
+    expect(changedEvents).toEqual([
+      {
+        previousThemeId: "chips.old",
+        themeId: "chips.test.theme",
+        themeVersion: "1.0.0",
+        timestamp: 1,
+        diagnosticsSummary: summary,
+      },
+    ]);
+    expect(calls).toEqual([
+      { action: "theme.resolve", payload: { chain: ["chips.test.theme"] } },
+      { action: "theme.contract.get", payload: { component: "button" } },
+    ]);
+  });
+
   it("unwraps box runtime responses and validates required arguments", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
     const inspection = {

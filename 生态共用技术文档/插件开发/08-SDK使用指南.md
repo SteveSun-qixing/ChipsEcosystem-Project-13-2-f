@@ -973,19 +973,29 @@ client.theme.getAllCss(): Promise<{ css: string; themeId: string }>
 client.theme.apply(themeId: string): Promise<void>
 ```
 
-获取主题契约使用 `client.theme.contract.get()` 方法，获取主题接口点定义。方法签名：
+获取主题契约使用 `client.theme.contract.get()` 方法，获取主题接口点、覆盖率与诊断视图。方法签名：
 
 ```typescript
-client.theme.contract.get(component?: string): Promise<ThemeContract>
+client.theme.contract.get(component?: string): Promise<ThemeContractView>
 ```
 
-解析主题链使用 `client.theme.resolve()` 方法，返回解析链路与 token 视图。方法签名：
+解析主题链使用 `client.theme.resolve()` 方法，返回解析链路、token 视图、诊断列表与诊断摘要。方法签名：
 
 ```typescript
 client.theme.resolve(chain: string[]): Promise<{
-  resolved: Array<{ id: string; displayName: string; order: number }>;
+  resolved: Array<{ id: string; displayName: string; version: string; order: number }>;
   tokens: Record<string, unknown>;
+  diagnostics: ThemeDiagnostic[];
+  summary: ThemeDiagnosticSummary;
 }>
+```
+
+订阅主题变化使用 `client.theme.onChanged()`，事件载荷包含主题版本和诊断摘要：
+
+```typescript
+client.theme.onChanged((payload: ThemeChangedPayload) => {
+  console.log(payload.themeId, payload.themeVersion, payload.diagnosticsSummary.status);
+});
 ```
 
 ## 平台辅助能力

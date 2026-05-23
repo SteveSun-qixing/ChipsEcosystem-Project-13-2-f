@@ -25,12 +25,5 @@
     "chips.comp.button.label.color.idle",
     "chips.comp.button.label.color.disabled",
     "chips.comp.button.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

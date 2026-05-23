@@ -23,12 +23,5 @@
     "chips.comp.input.root.border.error",
     "chips.comp.input.value.color",
     "chips.comp.input.placeholder.color"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

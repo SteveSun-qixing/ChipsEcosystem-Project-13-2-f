@@ -25,12 +25,5 @@
     "chips.comp.radio.control.surface.disabled",
     "chips.comp.radio.indicator.color.checked",
     "chips.comp.radio.label.color"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

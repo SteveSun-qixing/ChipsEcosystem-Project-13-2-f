@@ -27,12 +27,5 @@
     "chips.comp.command-palette.result.text.color",
     "chips.comp.command-palette.shortcut.color",
     "chips.comp.command-palette.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

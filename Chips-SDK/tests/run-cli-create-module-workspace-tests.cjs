@@ -8,6 +8,10 @@ const os = require('node:os');
 const projectRoot = path.resolve(__dirname, '..');
 const ecosystemRoot = path.resolve(projectRoot, '..');
 const cliPath = path.join(projectRoot, 'cli', 'index.js');
+const TEST_NPM_OVERRIDES = {
+  tldts: '7.0.30',
+  'tldts-core': '7.0.30'
+};
 
 const run = (command, args, cwd, env = process.env) =>
   new Promise((resolve, reject) => {
@@ -65,7 +69,8 @@ const linkedEntries = ['Chips-SDK', 'Chips-Scaffold', 'Chips-ComponentLibrary'];
             'Chips-ComponentLibrary/packages/adapters/*',
             'Chips-Scaffold/*',
             'ThemePack/*'
-          ]
+          ],
+          overrides: TEST_NPM_OVERRIDES
         },
         null,
         2

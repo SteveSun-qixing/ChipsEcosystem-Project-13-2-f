@@ -24,12 +24,5 @@
     "chips.comp.checkbox.control.surface.disabled",
     "chips.comp.checkbox.indicator.color.checked",
     "chips.comp.checkbox.label.color"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

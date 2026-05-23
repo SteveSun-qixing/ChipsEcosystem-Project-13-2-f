@@ -26,12 +26,5 @@
     "chips.comp.panel-header.action.surface.idle",
     "chips.comp.panel-header.action.surface.active",
     "chips.comp.panel-header.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

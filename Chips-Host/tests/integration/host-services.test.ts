@@ -224,15 +224,54 @@ describe('Host services integration', () => {
 
   it('resolves theme token chain and enforces max depth', async () => {
     const resolved = await runtime.invoke<{
-      resolved: Array<{ id: string; displayName: string; order: number }>;
+      resolved: Array<{ id: string; displayName: string; version: string; order: number }>;
       tokens: Record<string, unknown>;
+      diagnostics: Array<{
+        severity: string;
+        code: string;
+        messageKey: string;
+        blocking: boolean;
+      }>;
+      summary: {
+        total: number;
+        blocking: number;
+        status: string;
+      };
     }>('theme.resolve', {
       chain: ['chips-official.default-theme']
     });
     expect(resolved.resolved.length).toBeGreaterThan(0);
     expect(resolved.resolved[0]?.id).toBe('chips-official.default-theme');
+    expect(resolved.resolved[0]?.version).toBeTruthy();
     expect(resolved.resolved[0]?.order).toBe(0);
     expect(Object.keys(resolved.tokens).length).toBeGreaterThan(0);
+    expect(Array.isArray(resolved.diagnostics)).toBe(true);
+    expect(resolved.summary).toMatchObject({
+      total: expect.any(Number),
+      blocking: expect.any(Number),
+      status: expect.stringMatching(/^(complete|warning|blocked)$/)
+    });
+
+    const contract = await runtime.invoke<{
+      schemaVersion: string;
+      themeId: string;
+      themeVersion: string;
+      contractVersion: string;
+      components: Array<{
+        component: string;
+        requiredTokens: string[];
+        optionalTokens: string[];
+        coverage: { status: string; requiredCoverage: number };
+        diagnostics: unknown[];
+      }>;
+      summary: { status: string };
+    }>('theme.contract.get', {});
+    expect(contract.schemaVersion).toBe('1.0.0');
+    expect(contract.themeId).toBe('chips-official.default-theme');
+    expect(contract.themeVersion).toBeTruthy();
+    expect(contract.contractVersion).toBeTruthy();
+    expect(contract.components.some((component) => component.component === 'button')).toBe(true);
+    expect(contract.summary.status).toMatch(/^(complete|warning|blocked)$/);
 
     await expect(
       runtime.invoke('theme.resolve', {

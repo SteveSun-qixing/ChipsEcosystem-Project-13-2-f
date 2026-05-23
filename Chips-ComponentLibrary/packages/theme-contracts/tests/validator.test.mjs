@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  buildComponentContractView,
+  buildThemeContractView,
   flattenTokens,
   validateComponentContract
 } from "../src/validator.js";
@@ -131,4 +133,71 @@ test("validateComponentContract rejects unknown token", () => {
     () => validateComponentContract(contract, flat),
     /THEME_CONTRACT_TOKEN_MISSING/
   );
+});
+
+test("buildThemeContractView returns frozen diagnostics schema and coverage", () => {
+  const tokenTree = buildTokenTree();
+  const contract = {
+    version: "1.0.0",
+    components: [
+      {
+        component: "button",
+        scope: "button",
+        parts: ["root", "label"],
+        states: ["idle"],
+        tokens: [
+          "chips.comp.button.root.surface.idle",
+          "chips.comp.button.label.color.missing"
+        ],
+        optionalTokens: ["chips.comp.button.root.surface.hover"],
+        a11yConstraints: [{ key: "button.accessible-name" }],
+        motionConstraints: [{ key: "button.focus-visible" }]
+      }
+    ]
+  };
+
+  const view = buildThemeContractView(contract, tokenTree, {
+    themeId: "chips.test.theme",
+    themeVersion: "1.0.0"
+  });
+
+  assert.equal(view.schemaVersion, "1.0.0");
+  assert.equal(view.themeId, "chips.test.theme");
+  assert.equal(view.contractVersion, "1.0.0");
+  assert.equal(view.components.length, 1);
+  assert.deepEqual(view.components[0].requiredTokens, [
+    "chips.comp.button.root.surface.idle",
+    "chips.comp.button.label.color.missing"
+  ]);
+  assert.deepEqual(view.components[0].optionalTokens, ["chips.comp.button.root.surface.hover"]);
+  assert.equal(view.components[0].coverage.requiredTokenCount, 2);
+  assert.equal(view.components[0].coverage.coveredRequiredTokenCount, 1);
+  assert.equal(view.components[0].coverage.missingRequiredTokenCount, 1);
+  assert.equal(view.summary.blocking, 1);
+  assert.equal(view.summary.status, "blocked");
+  assert.equal(view.components[0].diagnostics[0].code, "THEME_REQUIRED_TOKEN_MISSING");
+  assert.equal(view.components[0].diagnostics[0].messageKey, "theme.diagnostics.requiredTokenMissing");
+  assert.equal(view.components[0].diagnostics[0].component, "button");
+  assert.equal(view.components[0].diagnostics[0].part, "label");
+  assert.equal(view.components[0].diagnostics[0].state, undefined);
+  assert.equal(view.components[0].diagnostics[0].blocking, true);
+});
+
+test("buildComponentContractView accepts requiredTokens alias", () => {
+  const tokenTree = buildTokenTree();
+  const flat = flattenTokens(tokenTree);
+  const view = buildComponentContractView(
+    {
+      component: "button",
+      scope: "button",
+      parts: ["root"],
+      states: ["idle"],
+      requiredTokens: ["chips.comp.button.root.surface.idle"]
+    },
+    flat,
+    { themeId: "chips.test.theme" }
+  );
+
+  assert.deepEqual(view.requiredTokens, ["chips.comp.button.root.surface.idle"]);
+  assert.equal(view.coverage.status, "complete");
 });

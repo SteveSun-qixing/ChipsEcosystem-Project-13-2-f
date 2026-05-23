@@ -23,12 +23,5 @@
     "chips.comp.tooltip.content.text.color",
     "chips.comp.tooltip.arrow.surface",
     "chips.comp.tooltip.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

@@ -21,12 +21,5 @@
     "chips.comp.skeleton.item.surface.active",
     "chips.comp.skeleton.status.color.info",
     "chips.comp.skeleton.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const base = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../contracts/components");
+const iframeComponents = new Set(["card-cover-frame", "composite-card-window"]);
 
 function readContract(fileName) {
   return JSON.parse(fs.readFileSync(path.join(base, fileName), "utf8"));
@@ -42,6 +43,17 @@ test("button contract contains interactive states", () => {
   assertCommonShape(contract);
   assert.ok(contract.states.includes("active"));
   assert.ok(contract.tokens.includes("chips.comp.button.root.surface.idle"));
+});
+
+test("only advanced iframe components expose iframe contract extension", () => {
+  for (const fileName of fs.readdirSync(base).filter((item) => item.endsWith(".contract.json"))) {
+    const contract = readContract(fileName);
+    if (iframeComponents.has(contract.component)) {
+      assert.equal(contract.iframe.requiredSandbox, true);
+      continue;
+    }
+    assert.equal(contract.iframe, undefined, `${contract.component} must not declare iframe contract`);
+  }
 });
 
 test("input contract contains focus and error tokens", () => {

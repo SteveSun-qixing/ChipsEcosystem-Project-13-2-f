@@ -25,12 +25,5 @@
     "chips.comp.dock-panel.content.surface",
     "chips.comp.dock-panel.status.color.error",
     "chips.comp.dock-panel.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

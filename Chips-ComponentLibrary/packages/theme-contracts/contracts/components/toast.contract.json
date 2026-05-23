@@ -27,12 +27,5 @@
     "chips.comp.toast.action.surface.active",
     "chips.comp.toast.close.color",
     "chips.comp.toast.focus.outline"
-  ],
-  "iframe": {
-    "requiredSandbox": true,
-    "lifecycleEvents": [
-      "ready",
-      "error"
-    ]
-  }
+  ]
 }

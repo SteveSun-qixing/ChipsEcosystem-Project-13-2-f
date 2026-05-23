@@ -295,10 +295,12 @@
   client.theme.getCurrent(options?: { appId?: string; pluginId?: string }): Promise<ThemeState>;
   client.theme.getAllCss(): Promise<{ css: string; themeId: string }>;
   client.theme.resolve(chain: string[]): Promise<ResolvedTheme>;
-  client.theme.contract.get(component?: string): Promise<ThemeContract>;
+  client.theme.contract.get(component?: string): Promise<ThemeContractView>;
+  client.theme.onChanged(handler: (payload: ThemeChangedPayload) => void): () => void;
   ```
 
 - 对 `theme.resolve` 与 `theme.contract.get` 的结构必须使用生态共用文档中冻结的类型。
+- `ResolvedTheme` 必须包含 `tokens / diagnostics / summary`；`ThemeContractView` 必须包含 component coverage 和结构化 diagnostics；SDK 只做类型化透传，不重新定义 Host 诊断模型。
 
 ### FR-SDK-THEME-002 配置与多语言封装
 

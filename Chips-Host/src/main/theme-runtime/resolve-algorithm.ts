@@ -1,6 +1,7 @@
 import { createError } from '../../shared/errors';
 import type { ThemeTokenLayers, ThemeSnapshot, ResolvedTheme } from './types';
 import { asThemeTokenLayers } from './token-layers';
+import { buildThemeDiagnosticSummary } from './diagnostics';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -147,7 +148,8 @@ export const resolveThemeFromLayers = (layers: ThemeTokenLayers): ResolvedTheme 
   return {
     variables,
     componentTokens,
-    diagnostics: []
+    diagnostics: [],
+    summary: buildThemeDiagnosticSummary([])
   };
 };
 

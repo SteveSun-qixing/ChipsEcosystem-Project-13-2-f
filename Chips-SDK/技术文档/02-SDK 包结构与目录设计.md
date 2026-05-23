@@ -90,7 +90,7 @@ Chips-SDK/
 - 公共基础类型：
   - `StandardError`
   - `CardDocument`, `CardRenderView`, `BoxInspectionResult`, `BoxOpenViewResult`, `BoxEntrySnapshot`
-  - `ThemeMeta`, `ThemeState`, `ResolvedTheme`, `ThemeContract`
+  - `ThemeMeta`, `ThemeState`, `ResolvedTheme`, `ThemeContractView`, `ThemeDiagnostic`, `ThemeDiagnosticSummary`, `ThemeChangedPayload`
   - `PluginInfo`, `WindowConfig`, `WindowState` 等。
 - 环境与客户端配置类型：
   - `SdkEnvironment`

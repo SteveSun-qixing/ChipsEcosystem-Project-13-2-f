@@ -1,15 +1,89 @@
-import { createAndExposeBridgeForKernel, type BridgeContextOptions } from './create-bridge';
+import {
+  createAndExposeBridgeForKernel,
+  type BridgeContextOptions,
+  type PlatformLaunchContext
+} from './create-bridge';
+import type { SurfaceContext, SurfaceKind, SurfacePresentation } from '../../packages/pal/src';
 
 const CHIPS_BRIDGE_CONTEXT_ARG_PREFIX = '--chips-bridge-context=';
 
 interface ParsedBridgeContext {
   bridge: BridgeContextOptions;
-  launchContext: {
-    pluginId?: string;
-    sessionId?: string;
-    launchParams: Record<string, unknown>;
-  };
+  launchContext: PlatformLaunchContext;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const surfaceKinds: SurfaceKind[] = ['window', 'tab', 'route', 'modal', 'sheet', 'fullscreen'];
+
+const normalizeLaunchParams = (value: unknown): Record<string, unknown> => {
+  return isRecord(value) ? { ...value } : {};
+};
+
+const normalizeSurfacePresentation = (value: unknown): SurfacePresentation | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  return { ...value } as SurfacePresentation;
+};
+
+const normalizeSurfaceContext = (value: unknown): SurfaceContext | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const sceneId = typeof value.sceneId === 'string' ? value.sceneId : undefined;
+  const kind = typeof value.kind === 'string' && surfaceKinds.includes(value.kind as SurfaceKind)
+    ? value.kind as SurfaceKind
+    : undefined;
+  const presentation = normalizeSurfacePresentation(value.presentation);
+  if (!sceneId || !kind || !presentation) {
+    return undefined;
+  }
+
+  const commandContext = isRecord(value.commandContext)
+    ? {
+        commandId:
+          typeof value.commandContext.commandId === 'string'
+            ? value.commandContext.commandId
+            : '',
+        source:
+          typeof value.commandContext.source === 'string'
+            ? value.commandContext.source
+            : undefined,
+        payload: normalizeLaunchParams(value.commandContext.payload)
+      }
+    : undefined;
+
+  return {
+    surfaceId: typeof value.surfaceId === 'string' ? value.surfaceId : undefined,
+    sceneId,
+    pluginId: typeof value.pluginId === 'string' ? value.pluginId : undefined,
+    sessionId: typeof value.sessionId === 'string' ? value.sessionId : undefined,
+    kind,
+    presentation,
+    launchParams: normalizeLaunchParams(value.launchParams),
+    documentContext: isRecord(value.documentContext)
+      ? {
+          documentId:
+            typeof value.documentContext.documentId === 'string'
+              ? value.documentContext.documentId
+              : '',
+          title:
+            typeof value.documentContext.title === 'string'
+              ? value.documentContext.title
+              : undefined,
+          url:
+            typeof value.documentContext.url === 'string'
+              ? value.documentContext.url
+              : undefined
+        }
+      : undefined,
+    commandContext: commandContext?.commandId ? commandContext : undefined
+  };
+};
 
 const parseBridgeContext = (): ParsedBridgeContext => {
   const targetArg = process.argv.find((value) => value.startsWith(CHIPS_BRIDGE_CONTEXT_ARG_PREFIX));
@@ -34,7 +108,10 @@ const parseBridgeContext = (): ParsedBridgeContext => {
       sessionId?: unknown;
       permissions?: unknown;
       launchParams?: unknown;
+      surfaceContext?: unknown;
     };
+    const surfaceContext = normalizeSurfaceContext(parsed.surfaceContext);
+    const launchParams = normalizeLaunchParams(parsed.launchParams);
 
     return {
       bridge: {
@@ -48,10 +125,12 @@ const parseBridgeContext = (): ParsedBridgeContext => {
       launchContext: {
         pluginId: typeof parsed.pluginId === 'string' ? parsed.pluginId : undefined,
         sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : undefined,
-        launchParams:
-          parsed.launchParams && typeof parsed.launchParams === 'object' && !Array.isArray(parsed.launchParams)
-            ? { ...(parsed.launchParams as Record<string, unknown>) }
-            : {}
+        sceneId: surfaceContext?.sceneId,
+        surfaceId: surfaceContext?.surfaceId,
+        kind: surfaceContext?.kind,
+        presentation: surfaceContext?.presentation,
+        surfaceContext,
+        launchParams
       }
     };
   } catch {

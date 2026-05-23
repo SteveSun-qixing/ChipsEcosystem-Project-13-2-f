@@ -905,6 +905,32 @@ export class PluginRuntime {
     }
 
     const runtime = this.parseRuntimeManifestMeta(record, manifestPath);
+    if (record.type === 'app' && !runtime) {
+      throw createError('PLUGIN_INVALID', 'app plugins must declare runtime.targets', {
+        manifestPath,
+        field: 'runtime.targets',
+        type: record.type
+      });
+    }
+    if (record.type === 'app' && !ui?.surface?.defaultKind) {
+      throw createError('PLUGIN_INVALID', 'app plugins must declare ui.surface.defaultKind', {
+        manifestPath,
+        field: 'ui.surface.defaultKind',
+        type: record.type
+      });
+    }
+    if (record.type === 'app') {
+      const preferredKinds = ui?.surface?.preferredKinds;
+      for (const targetId of runtimeTargetIds) {
+        if (!preferredKinds?.[targetId]) {
+          throw createError('PLUGIN_INVALID', `app plugins must declare ui.surface.preferredKinds.${targetId}`, {
+            manifestPath,
+            field: `ui.surface.preferredKinds.${targetId}`,
+            type: record.type
+          });
+        }
+      }
+    }
     const capabilityFallbacks = this.parseCapabilityFallbacks(record, manifestPath);
 
     const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;

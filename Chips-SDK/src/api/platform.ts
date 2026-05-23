@@ -1,5 +1,6 @@
 import type { CoreClient } from "../types/client";
 import { createError } from "../types/errors";
+import type { SurfaceContext, SurfaceKind, SurfacePresentation } from "./surface";
 
 export type PlatformHostKind = "desktop" | "web" | "mobile" | "headless";
 export type PlatformId = NodeJS.Platform | "web" | "android" | "ios" | "server";
@@ -73,6 +74,11 @@ export interface PlatformCapabilitySnapshot {
 export interface PlatformLaunchContext {
   pluginId?: string;
   sessionId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  kind?: SurfaceKind;
+  presentation?: SurfacePresentation;
+  surfaceContext?: SurfaceContext;
   launchParams: Record<string, unknown>;
 }
 
@@ -195,15 +201,84 @@ const normalizeLaunchParams = (value: unknown): Record<string, unknown> => {
   return { ...(value as Record<string, unknown>) };
 };
 
+const surfaceKinds: SurfaceKind[] = ["window", "tab", "route", "modal", "sheet", "fullscreen"];
+
+const normalizeSurfacePresentation = (value: unknown): SurfacePresentation | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return { ...(value as SurfacePresentation) };
+};
+
+const normalizeSurfaceContext = (value: unknown): SurfaceContext | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const kind = typeof candidate.kind === "string" && surfaceKinds.includes(candidate.kind as SurfaceKind)
+    ? (candidate.kind as SurfaceKind)
+    : undefined;
+  const presentation = normalizeSurfacePresentation(candidate.presentation);
+  if (typeof candidate.sceneId !== "string" || !kind || !presentation) {
+    return undefined;
+  }
+
+  const documentContext =
+    candidate.documentContext && typeof candidate.documentContext === "object" && !Array.isArray(candidate.documentContext)
+      ? (candidate.documentContext as Record<string, unknown>)
+      : undefined;
+  const commandContext =
+    candidate.commandContext && typeof candidate.commandContext === "object" && !Array.isArray(candidate.commandContext)
+      ? (candidate.commandContext as Record<string, unknown>)
+      : undefined;
+
+  return {
+    surfaceId: typeof candidate.surfaceId === "string" ? candidate.surfaceId : undefined,
+    sceneId: candidate.sceneId,
+    pluginId: typeof candidate.pluginId === "string" ? candidate.pluginId : undefined,
+    sessionId: typeof candidate.sessionId === "string" ? candidate.sessionId : undefined,
+    kind,
+    presentation,
+    launchParams: normalizeLaunchParams(candidate.launchParams),
+    documentContext:
+      typeof documentContext?.documentId === "string"
+        ? {
+            documentId: documentContext.documentId,
+            title: typeof documentContext.title === "string" ? documentContext.title : undefined,
+            url: typeof documentContext.url === "string" ? documentContext.url : undefined,
+          }
+        : undefined,
+    commandContext:
+      typeof commandContext?.commandId === "string"
+        ? {
+            commandId: commandContext.commandId,
+            source: typeof commandContext.source === "string" ? commandContext.source : undefined,
+            payload: normalizeLaunchParams(commandContext.payload),
+          }
+        : undefined,
+  };
+};
+
 const normalizeLaunchContext = (raw: unknown): PlatformLaunchContext => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { launchParams: {} };
   }
 
   const candidate = raw as Record<string, unknown>;
+  const surfaceContext = normalizeSurfaceContext(candidate.surfaceContext);
+  const kind = typeof candidate.kind === "string" && surfaceKinds.includes(candidate.kind as SurfaceKind)
+    ? (candidate.kind as SurfaceKind)
+    : surfaceContext?.kind;
+  const presentation = normalizeSurfacePresentation(candidate.presentation) ?? surfaceContext?.presentation;
   return {
     pluginId: typeof candidate.pluginId === "string" ? candidate.pluginId : undefined,
     sessionId: typeof candidate.sessionId === "string" ? candidate.sessionId : undefined,
+    sceneId: typeof candidate.sceneId === "string" ? candidate.sceneId : surfaceContext?.sceneId,
+    surfaceId: typeof candidate.surfaceId === "string" ? candidate.surfaceId : surfaceContext?.surfaceId,
+    kind,
+    presentation,
+    surfaceContext,
     launchParams: normalizeLaunchParams(candidate.launchParams),
   };
 };

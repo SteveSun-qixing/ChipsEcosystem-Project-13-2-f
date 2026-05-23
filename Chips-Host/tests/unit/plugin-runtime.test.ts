@@ -22,6 +22,52 @@ afterEach(async () => {
   await fs.rm(workspace, { recursive: true, force: true });
 });
 
+const appManifestContract = {
+  runtime: {
+    targets: {
+      desktop: { supported: true },
+      web: { supported: false },
+      mobile: { supported: false },
+      headless: { supported: false }
+    }
+  },
+  ui: {
+    surface: {
+      defaultKind: 'window',
+      preferredKinds: {
+        desktop: 'window',
+        web: 'route',
+        mobile: 'fullscreen',
+        headless: 'window'
+      }
+    }
+  }
+};
+
+const appRuntimeYamlLines = [
+  'runtime:',
+  '  targets:',
+  '    desktop:',
+  '      supported: true',
+  '    web:',
+  '      supported: false',
+  '    mobile:',
+  '      supported: false',
+  '    headless:',
+  '      supported: false'
+];
+
+const appSurfaceYamlLines = [
+  'ui:',
+  '  surface:',
+  '    defaultKind: window',
+  '    preferredKinds:',
+  '      desktop: window',
+  '      web: route',
+  '      mobile: fullscreen',
+  '      headless: window'
+];
+
 describe('PluginRuntime', () => {
   it('installs/enables/queries plugins', async () => {
     const manifestPath = path.join(workspace, 'demo.plugin.json');
@@ -33,7 +79,8 @@ describe('PluginRuntime', () => {
           version: '1.0.0',
           type: 'app',
           name: 'Demo Plugin',
-          permissions: ['file.read']
+          permissions: ['file.read'],
+          ...appManifestContract
         },
         null,
         2
@@ -62,7 +109,9 @@ describe('PluginRuntime', () => {
         'name: Root Manifest Plugin',
         'permissions:',
         '  - file.read',
-        'entry: dist/index.html'
+        'entry: dist/index.html',
+        ...appRuntimeYamlLines,
+        ...appSurfaceYamlLines
       ].join('\n'),
       'utf-8'
     );
@@ -92,10 +141,18 @@ describe('PluginRuntime', () => {
         'permissions:',
         '  - file.read',
         'entry: dist/index.html',
+        ...appRuntimeYamlLines,
         'ui:',
         '  launcher:',
         '    displayName: Launcher App',
-        '    icon: assets/icons/app-icon.ico'
+        '    icon: assets/icons/app-icon.ico',
+        '  surface:',
+        '    defaultKind: window',
+        '    preferredKinds:',
+        '      desktop: window',
+        '      web: route',
+        '      mobile: fullscreen',
+        '      headless: window'
       ].join('\n'),
       'utf-8'
     );
@@ -143,7 +200,8 @@ describe('PluginRuntime', () => {
           version: '1.0.0',
           type: 'app',
           name: 'Session Plugin',
-          permissions: ['file.read']
+          permissions: ['file.read'],
+          ...appManifestContract
         },
         null,
         2
@@ -170,7 +228,8 @@ describe('PluginRuntime', () => {
           version: '1.0.0',
           type: 'app',
           name: 'Permission Plugin',
-          permissions: ['file.read']
+          permissions: ['file.read'],
+          ...appManifestContract
         },
         null,
         2
@@ -202,7 +261,9 @@ describe('PluginRuntime', () => {
         '  - file.read',
         'capabilities:',
         '  - preview',
-        'entry: dist/main.js'
+        'entry: dist/main.js',
+        ...appRuntimeYamlLines,
+        ...appSurfaceYamlLines
       ].join('\n'),
       'utf-8'
     );
@@ -239,7 +300,9 @@ describe('PluginRuntime', () => {
         'name: SDK Generated Plugin',
         'permissions:',
         '  - file.read',
-        'entry: dist/main.js'
+        'entry: dist/main.js',
+        ...appRuntimeYamlLines,
+        ...appSurfaceYamlLines
       ].join('\n'),
       'utf-8'
     );
@@ -285,7 +348,9 @@ describe('PluginRuntime', () => {
       'name: Replaceable Plugin',
       'permissions:',
       '  - file.read',
-      'entry: dist/index.html'
+      'entry: dist/index.html',
+      ...appRuntimeYamlLines,
+      ...appSurfaceYamlLines
     ].join('\n');
 
     await fs.writeFile(path.join(v1Dir, 'manifest.yaml'), manifestText, 'utf-8');
@@ -329,7 +394,8 @@ describe('PluginRuntime', () => {
           type: 'app',
           name: 'Signed Plugin',
           permissions: ['file.read'],
-          source: 'official'
+          source: 'official',
+          ...appManifestContract
         },
         null,
         2

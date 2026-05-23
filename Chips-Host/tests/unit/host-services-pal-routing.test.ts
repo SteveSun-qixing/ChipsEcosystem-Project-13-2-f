@@ -23,6 +23,7 @@ interface PalState {
   clipboardFiles: string[];
   imageConversions: Array<{ sourceFile: string; outputFile: string; overwrite?: boolean }>;
   windowCreateArgs: unknown[];
+  surfaces: Map<string, Awaited<ReturnType<PALAdapter['surface']['open']>>>;
   dialogOpenArgs: unknown[];
   dialogSaveArgs: unknown[];
   dialogMessageArgs: unknown[];
@@ -43,6 +44,7 @@ const createPalState = (): PalState => ({
   clipboardFiles: [],
   imageConversions: [],
   windowCreateArgs: [],
+  surfaces: new Map(),
   dialogOpenArgs: [],
   dialogSaveArgs: [],
   dialogMessageArgs: [],
@@ -457,30 +459,58 @@ const createPal = (state: PalState): PALAdapter => {
         sessionId: request.target.type === 'plugin' ? request.target.sessionId : undefined,
         permissions: request.target.type === 'plugin' ? request.target.permissions : undefined,
         launchParams: request.target.type === 'plugin' ? request.target.launchParams : undefined,
+        surfaceContext: request.context,
         chrome: request.presentation?.chrome
       });
-      return {
+      const surfaceState = {
         ...created,
+        context: request.context
+          ? {
+              ...request.context,
+              surfaceId: created.id,
+              kind: created.kind
+            }
+          : undefined,
         metadata: request.kind && request.kind !== 'window' ? { requestedKind: request.kind } : undefined
       };
+      state.surfaces.set(surfaceState.id, surfaceState);
+      return surfaceState;
     },
     async focus(id: string) {
       await windowManager.focus(id);
+      const surfaceState = state.surfaces.get(id);
+      if (surfaceState) {
+        surfaceState.focused = true;
+      }
     },
     async resize(id: string, width: number, height: number) {
       await windowManager.resize(id, width, height);
+      const surfaceState = state.surfaces.get(id);
+      if (surfaceState) {
+        surfaceState.width = width;
+        surfaceState.height = height;
+      }
     },
     async setState(id: string, currentState: 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden') {
       await windowManager.setState(id, currentState === 'hidden' ? 'normal' : currentState);
+      const surfaceState = state.surfaces.get(id);
+      if (surfaceState) {
+        surfaceState.state = currentState;
+      }
     },
     async getState(id: string) {
+      const surfaceState = state.surfaces.get(id);
+      if (surfaceState) {
+        return surfaceState;
+      }
       return windowManager.getState(id);
     },
     async close(id: string) {
       await windowManager.close(id);
+      state.surfaces.delete(id);
     },
     async list() {
-      return windowManager.list();
+      return [...state.surfaces.values()];
     }
   };
 
@@ -934,7 +964,26 @@ describe('Host services PAL routing', () => {
           type: 'app',
           name: 'Launchable Plugin',
           permissions: ['file.read'],
-          entry: 'dist/index.html'
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
         },
         null,
         2
@@ -967,6 +1016,11 @@ describe('Host services PAL routing', () => {
     expect(state.windowCreateArgs[0]).toEqual(
       expect.objectContaining({
         pluginId: 'chips.launchable.plugin',
+        surfaceContext: expect.objectContaining({
+          pluginId: 'chips.launchable.plugin',
+          sessionId: launched.session.sessionId,
+          kind: 'window'
+        }),
         launchParams: expect.objectContaining({
           source: 'card-box-library',
           workspacePath: workspace
@@ -1037,72 +1091,139 @@ describe('Host services PAL routing', () => {
     await runtime.install(manifestPath);
     await runtime.enable('chips.surface.launchable.plugin');
 
+    const emittedEvents: Array<{ name: string; data: unknown }> = [];
+    const disposeEvents = kernel.events.on('*', (event) => {
+      emittedEvents.push({ name: event.name, data: event.data });
+    });
     const context = createContextFactory();
-    const opened = await kernel.invoke<
-      {
-        request: {
-          kind: 'route';
-          target: { type: 'plugin'; pluginId: string; launchParams: Record<string, unknown> };
-          presentation: { title: string; width: number; height: number; resizable: boolean };
-        };
-      },
-      {
-        surface: {
-          id: string;
+    try {
+      const opened = await kernel.invoke<
+        {
+          request: {
+            kind: 'route';
+            target: { type: 'plugin'; pluginId: string; launchParams: Record<string, unknown> };
+            presentation: { title: string; width: number; height: number; resizable: boolean };
+          };
+        },
+        {
+      surface: {
+        id: string;
+        pluginId?: string;
+        sessionId?: string;
+        context?: {
+          surfaceId?: string;
+          sceneId: string;
           pluginId?: string;
           sessionId?: string;
-          metadata?: Record<string, unknown>;
+          kind: string;
+          presentation: { title?: string; width?: number; height?: number; resizable?: boolean };
+          launchParams?: Record<string, unknown>;
         };
-      }
-    >(
-      'surface.open',
-      {
-        request: {
-          kind: 'route',
-          target: {
-            type: 'plugin',
-            pluginId: 'chips.surface.launchable.plugin',
-            launchParams: {
-              source: 'surface.open'
+        metadata?: Record<string, unknown>;
+      };
+        }
+      >(
+        'surface.open',
+        {
+          request: {
+            kind: 'route',
+            target: {
+              type: 'plugin',
+              pluginId: 'chips.surface.launchable.plugin',
+              launchParams: {
+                source: 'surface.open'
+              }
+            },
+            presentation: {
+              title: 'Surface Launch Title',
+              width: 1440,
+              height: 900,
+              resizable: false
             }
-          },
-          presentation: {
+          }
+        },
+        context(['window.control', 'plugin.manage'])
+      );
+
+      expect(opened.surface.id).toBe('window-1');
+      expect(opened.surface.pluginId).toBe('chips.surface.launchable.plugin');
+      expect(opened.surface.sessionId).toBeTruthy();
+      expect(opened.surface.context).toEqual(
+        expect.objectContaining({
+          surfaceId: 'window-1',
+          pluginId: 'chips.surface.launchable.plugin',
+          sessionId: opened.surface.sessionId,
+          kind: 'window',
+          presentation: expect.objectContaining({
             title: 'Surface Launch Title',
             width: 1440,
             height: 900,
             resizable: false
-          }
-        }
-      },
-      context(['window.control', 'plugin.manage'])
-    );
-
-    expect(opened.surface.id).toBe('window-1');
-    expect(opened.surface.pluginId).toBe('chips.surface.launchable.plugin');
-    expect(opened.surface.sessionId).toBeTruthy();
-    expect(opened.surface.metadata).toEqual(
-      expect.objectContaining({
-        requestedKind: 'route'
-      })
-    );
-    expect(state.windowCreateArgs).toHaveLength(1);
-    expect(state.windowCreateArgs[0]).toEqual(
-      expect.objectContaining({
-        title: 'Surface Launch Title',
-        width: 1440,
-        height: 900,
-        resizable: false,
-        pluginId: 'chips.surface.launchable.plugin',
-        launchParams: expect.objectContaining({
-          source: 'surface.open',
-          workspacePath: workspace
+          }),
+          launchParams: expect.objectContaining({
+            source: 'surface.open',
+            workspacePath: workspace
+          })
         })
-      })
-    );
-    const snapshot = runtime.snapshot();
-    expect(snapshot.sessions).toHaveLength(1);
-    expect(snapshot.sessions[0]?.sessionId).toBe(opened.surface.sessionId);
-    expect(snapshot.sessions[0]?.status).toBe('running');
+      );
+      expect(opened.surface.metadata).toEqual(
+        expect.objectContaining({
+          requestedKind: 'route',
+          sceneId: opened.surface.context?.sceneId
+        })
+      );
+      expect(state.windowCreateArgs).toHaveLength(1);
+      expect(state.windowCreateArgs[0]).toEqual(
+        expect.objectContaining({
+          title: 'Surface Launch Title',
+          width: 1440,
+          height: 900,
+          resizable: false,
+          pluginId: 'chips.surface.launchable.plugin',
+          surfaceContext: expect.objectContaining({
+            sceneId: opened.surface.context?.sceneId,
+            pluginId: 'chips.surface.launchable.plugin',
+            sessionId: opened.surface.sessionId,
+            kind: 'route'
+          }),
+          launchParams: expect.objectContaining({
+            source: 'surface.open',
+            workspacePath: workspace
+          })
+        })
+      );
+      const snapshot = runtime.snapshot();
+      expect(snapshot.sessions).toHaveLength(1);
+      expect(snapshot.sessions[0]?.sessionId).toBe(opened.surface.sessionId);
+      expect(snapshot.sessions[0]?.status).toBe('running');
+      expect(emittedEvents.map((event) => event.name)).toEqual(
+        expect.arrayContaining(['scene.created', 'scene.active', 'surface.opened', 'window.opened', 'plugin.launched'])
+      );
+      expect(emittedEvents.find((event) => event.name === 'plugin.launched')?.data).toEqual(
+        expect.objectContaining({
+          pluginId: 'chips.surface.launchable.plugin',
+          sessionId: opened.surface.sessionId,
+          sceneId: opened.surface.context?.sceneId,
+          surfaceId: opened.surface.id,
+          surfaceKind: 'window'
+        })
+      );
+
+      emittedEvents.length = 0;
+      await kernel.invoke('surface.focus', { surfaceId: opened.surface.id }, context(['window.control']));
+      await kernel.invoke(
+        'surface.resize',
+        { surfaceId: opened.surface.id, width: 1200, height: 760 },
+        context(['window.control'])
+      );
+      await kernel.invoke('surface.close', { surfaceId: opened.surface.id }, context(['window.control']));
+      expect(emittedEvents.map((event) => event.name)).toEqual(
+        expect.arrayContaining(['surface.focused', 'surface.resized', 'surface.closed', 'scene.inactive', 'scene.closed'])
+      );
+      expect(runtime.snapshot().sessions).toHaveLength(0);
+    } finally {
+      disposeEvents();
+    }
   });
 
   it('requires plugin.manage when surface.open targets a plugin surface', async () => {
@@ -1133,7 +1254,26 @@ describe('Host services PAL routing', () => {
           type: 'app',
           name: 'Surface Permission Plugin',
           permissions: ['file.read'],
-          entry: 'dist/index.html'
+          entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
+          ui: {
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
+            }
+          }
         },
         null,
         2
@@ -1232,9 +1372,26 @@ describe('Host services PAL routing', () => {
           name: 'Card Viewer',
           permissions: ['plugin.read'],
           entry: 'dist/index.html',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: false }
+            }
+          },
           ui: {
             launcher: {
               displayName: 'Card Viewer'
+            },
+            surface: {
+              defaultKind: 'window',
+              preferredKinds: {
+                desktop: 'window',
+                web: 'route',
+                mobile: 'fullscreen',
+                headless: 'window'
+              }
             }
           }
         },

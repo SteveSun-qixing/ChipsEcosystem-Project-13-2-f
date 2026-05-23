@@ -203,7 +203,21 @@ describe('Node PAL BrowserWindow host chain', () => {
       url: 'https://chips.local/app',
       pluginId: 'chips.demo.app',
       sessionId: 'session-1',
-      permissions: ['theme.read', 'i18n.read']
+      permissions: ['theme.read', 'i18n.read'],
+      surfaceContext: {
+        sceneId: 'scene-1',
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-1',
+        kind: 'window',
+        presentation: {
+          title: 'Demo App',
+          width: 900,
+          height: 700
+        },
+        launchParams: {
+          source: 'unit-test'
+        }
+      }
     });
 
     expect(MockBrowserWindow.instances).toHaveLength(1);
@@ -221,6 +235,26 @@ describe('Node PAL BrowserWindow host chain', () => {
     expect(opened.pluginId).toBe('chips.demo.app');
     expect(opened.sessionId).toBe('session-1');
     expect(opened.url).toBe('https://chips.local/app');
+    expect(opened.context).toEqual(
+      expect.objectContaining({
+        sceneId: 'scene-1',
+        surfaceId: opened.id,
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-1',
+        kind: 'window'
+      })
+    );
+
+    const bridgeArg = (browserWindow.options.webPreferences as { additionalArguments: string[] }).additionalArguments[0]!;
+    const bridgePayload = JSON.parse(Buffer.from(bridgeArg.split('=')[1]!, 'base64url').toString('utf-8'));
+    expect(bridgePayload.surfaceContext).toEqual(
+      expect.objectContaining({
+        sceneId: 'scene-1',
+        surfaceId: opened.id,
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-1'
+      })
+    );
 
     await pal.window.focus(opened.id);
     await pal.window.resize(opened.id, 1280, 800);

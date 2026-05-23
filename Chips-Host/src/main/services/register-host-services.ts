@@ -17,7 +17,7 @@ import { cloneWindowChromeOptions, resolveManifestWindowChrome } from '../../sha
 import { PluginRuntime } from '../../runtime';
 import type { PluginRecord } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
-import type { HostKind, PALAdapter, SurfaceKind, SurfacePresentation, SurfaceState, WindowChromeOptions } from '../../../packages/pal/src';
+import type { HostKind, PALAdapter, SurfaceContext, SurfaceKind, SurfacePresentation, SurfaceState, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
 import { CardInfoService } from '../../../packages/card-info-service/src';
 import { CardOpenService } from '../../../packages/card-open-service/src';
@@ -996,6 +996,109 @@ const mergeWindowChromeOptions = (
   return Object.keys(merged).length > 0 ? merged : undefined;
 };
 
+const cloneSurfacePresentation = (presentation: SurfacePresentation): SurfacePresentation => {
+  return {
+    ...presentation,
+    chrome: cloneWindowChromeOptions(presentation.chrome)
+  };
+};
+
+const cloneSurfaceContext = (context: SurfaceContext): SurfaceContext => {
+  return {
+    ...context,
+    presentation: cloneSurfacePresentation(context.presentation),
+    launchParams: context.launchParams ? { ...context.launchParams } : undefined,
+    documentContext: context.documentContext ? { ...context.documentContext } : undefined,
+    commandContext: context.commandContext
+      ? {
+          ...context.commandContext,
+          payload: context.commandContext.payload ? { ...context.commandContext.payload } : undefined
+        }
+      : undefined
+  };
+};
+
+const withSurfaceContext = (surface: SurfaceState, context: SurfaceContext): SurfaceState => {
+  const nextContext = cloneSurfaceContext({
+    ...context,
+    surfaceId: surface.id,
+    kind: surface.kind
+  });
+  return {
+    ...surface,
+    context: nextContext,
+    metadata: {
+      ...(surface.metadata ?? {}),
+      sceneId: nextContext.sceneId
+    }
+  };
+};
+
+const buildSurfaceLifecyclePayload = (surface: SurfaceState): Record<string, unknown> => {
+  return {
+    surfaceId: surface.id,
+    sceneId: surface.context?.sceneId,
+    pluginId: surface.pluginId ?? surface.context?.pluginId,
+    sessionId: surface.sessionId ?? surface.context?.sessionId,
+    kind: surface.kind,
+    presentation: surface.context?.presentation,
+    surface
+  };
+};
+
+const emitSurfaceCreatedEvents = async (
+  ctx: HostServiceContext,
+  source: string,
+  surface: SurfaceState
+): Promise<void> => {
+  const payload = buildSurfaceLifecyclePayload(surface);
+  if (surface.context) {
+    await ctx.kernel.events.emit('scene.created', source, payload);
+    await ctx.kernel.events.emit('scene.active', source, payload);
+  }
+  await ctx.kernel.events.emit('surface.opened', source, surface);
+  if (surface.kind === 'window') {
+    await ctx.kernel.events.emit('window.opened', source, surface);
+  }
+};
+
+const emitSurfaceActionEvent = async (
+  ctx: HostServiceContext,
+  eventName: string,
+  source: string,
+  surface: SurfaceState,
+  extra?: Record<string, unknown>
+): Promise<void> => {
+  await ctx.kernel.events.emit(eventName, source, {
+    ...buildSurfaceLifecyclePayload(surface),
+    ...(extra ?? {})
+  });
+};
+
+const buildGenericSurfaceContext = (
+  request: Parameters<PALAdapter['surface']['open']>[0],
+  presentation: SurfacePresentation
+): SurfaceContext => {
+  const launchParams = request.target.type === 'plugin' ? request.target.launchParams : undefined;
+  return {
+    sceneId: request.context?.sceneId ?? createId(),
+    pluginId: request.target.type === 'plugin' ? request.target.pluginId : request.context?.pluginId,
+    sessionId: request.target.type === 'plugin' ? request.target.sessionId : request.context?.sessionId,
+    kind: request.kind ?? request.context?.kind ?? 'window',
+    presentation: cloneSurfacePresentation(presentation),
+    launchParams: launchParams ? { ...launchParams } : request.context?.launchParams,
+    documentContext:
+      request.target.type === 'document'
+        ? {
+            documentId: request.target.documentId,
+            title: request.target.title,
+            url: request.target.url
+          }
+        : request.context?.documentContext,
+    commandContext: request.context?.commandContext
+  };
+};
+
 const resolvePluginSurfaceKind = (
   plugin: PluginRecord,
   hostKind: HostKind,
@@ -1039,6 +1142,8 @@ const openPluginSurface = async (
     presentation?: SurfacePresentation;
     launchParams?: Record<string, unknown>;
     url?: string;
+    sceneId?: string;
+    context?: SurfaceContext;
   }
 ): Promise<{
   surface: SurfaceState;
@@ -1065,10 +1170,11 @@ const openPluginSurface = async (
     });
   }
 
-  const session = ctx.runtime.pluginInit(pluginId, {
+  const launchParams = {
     ...(options?.launchParams ?? {}),
     workspacePath: ctx.workspacePath
-  });
+  };
+  const session = ctx.runtime.pluginInit(pluginId, launchParams);
   await ctx.kernel.events.emit('plugin.init', 'plugin-service', { pluginId, sessionId: session.sessionId });
   ctx.runtime.completeHandshake(session.sessionId, session.sessionNonce);
   await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId, sessionId: session.sessionId });
@@ -1096,9 +1202,27 @@ const openPluginSurface = async (
     : Number.isFinite(defaultHeight)
       ? defaultHeight
       : 800;
+  const presentation: SurfacePresentation = {
+    title: surfaceTitle,
+    width: surfaceWidth,
+    height: surfaceHeight,
+    resizable: options?.presentation?.resizable,
+    alwaysOnTop: options?.presentation?.alwaysOnTop,
+    chrome
+  };
+  const surfaceContext: SurfaceContext = {
+    sceneId: options?.sceneId ?? options?.context?.sceneId ?? createId(),
+    pluginId,
+    sessionId: session.sessionId,
+    kind: surfaceKind,
+    presentation: cloneSurfacePresentation(presentation),
+    launchParams: { ...session.launchParams },
+    documentContext: options?.context?.documentContext,
+    commandContext: options?.context?.commandContext
+  };
 
   try {
-    const surface = await ctx.pal.surface.open({
+    const openedSurface = await ctx.pal.surface.open({
       kind: surfaceKind,
       target: {
         type: 'plugin',
@@ -1108,23 +1232,16 @@ const openPluginSurface = async (
         permissions: session.permissions,
         launchParams: session.launchParams
       },
-      presentation: {
-        title: surfaceTitle,
-        width: surfaceWidth,
-        height: surfaceHeight,
-        resizable: options?.presentation?.resizable,
-        alwaysOnTop: options?.presentation?.alwaysOnTop,
-        chrome
-      }
+      presentation,
+      context: surfaceContext
     });
+    const surface = withSurfaceContext(openedSurface, surfaceContext);
 
-    await ctx.kernel.events.emit('surface.opened', 'plugin-service', surface);
-    if (surface.kind === 'window') {
-      await ctx.kernel.events.emit('window.opened', 'plugin-service', surface);
-    }
+    await emitSurfaceCreatedEvents(ctx, 'plugin-service', surface);
     await ctx.kernel.events.emit('plugin.launched', 'plugin-service', {
       pluginId,
       sessionId: session.sessionId,
+      sceneId: surface.context?.sceneId,
       surfaceId: surface.id,
       surfaceKind: surface.kind,
       windowId: surface.kind === 'window' ? surface.id : undefined
@@ -2988,24 +3105,33 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
                 kind: request.kind,
                 presentation: request.presentation,
                 launchParams: request.target.launchParams,
-                url: request.target.url
+                url: request.target.url,
+                context: request.context
               });
               return { surface: opened.surface };
             }
 
-            const surface = await ctx.pal.surface.open({
+            const presentation = request.presentation
+              ? {
+                  ...request.presentation,
+                  chrome: resolveThemedWindowChrome(state, request.presentation.chrome)
+                }
+              : {
+                  title:
+                    request.target.type === 'document'
+                      ? request.target.title ?? request.target.documentId
+                      : request.target.type === 'url'
+                        ? request.target.url
+                        : undefined
+                };
+            const surfaceContext = request.context ?? buildGenericSurfaceContext(request, presentation);
+            const openedSurface = await ctx.pal.surface.open({
               ...request,
-              presentation: request.presentation
-                ? {
-                    ...request.presentation,
-                    chrome: resolveThemedWindowChrome(state, request.presentation.chrome)
-                  }
-                : undefined
+              presentation,
+              context: surfaceContext
             });
-            await ctx.kernel.events.emit('surface.opened', 'surface-service', surface);
-            if (surface.kind === 'window') {
-              await ctx.kernel.events.emit('window.opened', 'surface-service', surface);
-            }
+            const surface = withSurfaceContext(openedSurface, surfaceContext);
+            await emitSurfaceCreatedEvents(ctx, 'surface-service', surface);
             return { surface };
           })
         )
@@ -3019,6 +3145,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'surface.focus', async (input) => {
             await ctx.pal.surface.focus(input.surfaceId);
+            const surface = await ctx.pal.surface.getState(input.surfaceId);
+            await emitSurfaceActionEvent(ctx, 'surface.focused', 'surface-service', surface);
+            if (surface.context) {
+              await emitSurfaceActionEvent(ctx, 'scene.active', 'surface-service', surface);
+            }
             return { ack: true };
           })
         )
@@ -3032,6 +3163,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'surface.resize', async (input) => {
             await ctx.pal.surface.resize(input.surfaceId, input.width, input.height);
+            const surface = await ctx.pal.surface.getState(input.surfaceId);
+            await emitSurfaceActionEvent(ctx, 'surface.resized', 'surface-service', surface, {
+              width: input.width,
+              height: input.height
+            });
             return { ack: true };
           })
         )
@@ -3045,6 +3181,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'surface.setState', async (input) => {
             await ctx.pal.surface.setState(input.surfaceId, input.state);
+            const surface = await ctx.pal.surface.getState(input.surfaceId);
+            await emitSurfaceActionEvent(ctx, 'surface.stateChanged', 'surface-service', surface, {
+              state: input.state
+            });
             return { ack: true };
           })
         )
@@ -3070,7 +3210,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'surface.close', async (input) => {
+            const surface = await ctx.pal.surface.getState(input.surfaceId);
             await ctx.pal.surface.close(input.surfaceId);
+            if (surface.sessionId) {
+              ctx.runtime.stopSession(surface.sessionId);
+            }
+            await emitSurfaceActionEvent(ctx, 'surface.closed', 'surface-service', surface);
+            if (surface.context) {
+              await emitSurfaceActionEvent(ctx, 'scene.inactive', 'surface-service', surface);
+              await emitSurfaceActionEvent(ctx, 'scene.closed', 'surface-service', surface);
+            }
             return { ack: true };
           })
         )
@@ -3230,7 +3379,13 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.open', async (input) => {
-            const surface = await ctx.pal.surface.open({
+            const presentation: SurfacePresentation = {
+              title: input.config.title,
+              width: input.config.width,
+              height: input.config.height,
+              chrome: resolveThemedWindowChrome(state, input.config.chrome)
+            };
+            const request: Parameters<PALAdapter['surface']['open']>[0] = {
               kind: 'window',
               target: input.config.pluginId
                 ? {
@@ -3245,14 +3400,15 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
                     type: 'url',
                     url: input.config.url ?? ''
                   },
-              presentation: {
-                title: input.config.title,
-                width: input.config.width,
-                height: input.config.height,
-                chrome: resolveThemedWindowChrome(state, input.config.chrome)
-              }
+              presentation
+            };
+            const surfaceContext = buildGenericSurfaceContext(request, presentation);
+            const openedSurface = await ctx.pal.surface.open({
+              ...request,
+              context: surfaceContext
             });
-            await ctx.kernel.events.emit('window.opened', 'window-service', surface);
+            const surface = withSurfaceContext(openedSurface, surfaceContext);
+            await emitSurfaceCreatedEvents(ctx, 'window-service', surface);
             return { window: surface };
           })
         )
@@ -3266,6 +3422,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'window.focus', async (input) => {
             await ctx.pal.surface.focus(input.windowId);
+            const surface = await ctx.pal.surface.getState(input.windowId);
+            await emitSurfaceActionEvent(ctx, 'surface.focused', 'window-service', surface);
+            if (surface.context) {
+              await emitSurfaceActionEvent(ctx, 'scene.active', 'window-service', surface);
+            }
             return { ack: true };
           })
         )
@@ -3279,6 +3440,11 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'window.resize', async (input) => {
             await ctx.pal.surface.resize(input.windowId, input.width, input.height);
+            const surface = await ctx.pal.surface.getState(input.windowId);
+            await emitSurfaceActionEvent(ctx, 'surface.resized', 'window-service', surface, {
+              width: input.width,
+              height: input.height
+            });
             return { ack: true };
           })
         )
@@ -3292,6 +3458,10 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'window.setState', async (input) => {
             await ctx.pal.surface.setState(input.windowId, input.state);
+            const surface = await ctx.pal.surface.getState(input.windowId);
+            await emitSurfaceActionEvent(ctx, 'surface.stateChanged', 'window-service', surface, {
+              state: input.state
+            });
             return { ack: true };
           })
         )
@@ -3317,7 +3487,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           false,
           0,
           withMetrics(state, 'window.close', async (input) => {
+            const surface = await ctx.pal.surface.getState(input.windowId);
             await ctx.pal.surface.close(input.windowId);
+            if (surface.sessionId) {
+              ctx.runtime.stopSession(surface.sessionId);
+            }
+            await emitSurfaceActionEvent(ctx, 'surface.closed', 'window-service', surface);
+            if (surface.context) {
+              await emitSurfaceActionEvent(ctx, 'scene.inactive', 'window-service', surface);
+              await emitSurfaceActionEvent(ctx, 'scene.closed', 'window-service', surface);
+            }
             return { ack: true };
           })
         )

@@ -112,6 +112,30 @@ export interface BridgeSurfacePresentation {
   chrome?: BridgeWindowChromeOptions;
 }
 
+export interface BridgeSurfaceDocumentContext {
+  documentId: string;
+  title?: string;
+  url?: string;
+}
+
+export interface BridgeSurfaceCommandContext {
+  commandId: string;
+  source?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface BridgeSurfaceContext {
+  surfaceId?: string;
+  sceneId: string;
+  pluginId?: string;
+  sessionId?: string;
+  kind: BridgeSurfaceKind;
+  presentation: BridgeSurfacePresentation;
+  launchParams?: Record<string, unknown>;
+  documentContext?: BridgeSurfaceDocumentContext;
+  commandContext?: BridgeSurfaceCommandContext;
+}
+
 export type BridgeSurfaceTarget =
   | {
       type: 'plugin';
@@ -136,6 +160,7 @@ export interface BridgeSurfaceOpenRequest {
   kind?: BridgeSurfaceKind;
   target: BridgeSurfaceTarget;
   presentation?: BridgeSurfacePresentation;
+  context?: BridgeSurfaceContext;
 }
 
 export interface BridgeSurfaceState {
@@ -150,6 +175,7 @@ export interface BridgeSurfaceState {
   pluginId?: string;
   sessionId?: string;
   chrome?: BridgeWindowChromeOptions;
+  context?: BridgeSurfaceContext;
   metadata?: Record<string, unknown>;
 }
 
@@ -263,6 +289,11 @@ export interface ChipsBridge {
     getLaunchContext?(): {
       pluginId?: string;
       sessionId?: string;
+      sceneId?: string;
+      surfaceId?: string;
+      kind?: BridgeSurfaceKind;
+      presentation?: BridgeSurfacePresentation;
+      surfaceContext?: BridgeSurfaceContext;
       launchParams: Record<string, unknown>;
     };
   };

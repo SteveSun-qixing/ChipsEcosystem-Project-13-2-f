@@ -87,6 +87,9 @@ export type {
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type {
   SurfaceApi,
+  SurfaceCommandContext,
+  SurfaceContext,
+  SurfaceDocumentContext,
   SurfaceKind,
   SurfaceOpenRequest,
   SurfacePresentation,

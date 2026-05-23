@@ -52,6 +52,16 @@ describe("createClient", () => {
       focused: false,
       state: "normal" as const,
       url: "/image-viewer",
+      context: {
+        surfaceId: "surface-1",
+        sceneId: "scene-image",
+        kind: "route" as const,
+        presentation: {
+          title: "图片页",
+          width: 1280,
+          height: 800,
+        },
+      },
     };
     const capabilitySnapshot = {
       hostKind: "desktop" as const,
@@ -1196,6 +1206,29 @@ describe("createClient", () => {
           getLaunchContext: () => ({
             pluginId: "chips.app.demo",
             sessionId: "session-demo",
+            sceneId: "scene-demo",
+            surfaceId: "surface-demo",
+            kind: "window",
+            presentation: {
+              title: "Demo",
+              width: 1200,
+              height: 800,
+            },
+            surfaceContext: {
+              surfaceId: "surface-demo",
+              sceneId: "scene-demo",
+              pluginId: "chips.app.demo",
+              sessionId: "session-demo",
+              kind: "window",
+              presentation: {
+                title: "Demo",
+                width: 1200,
+                height: 800,
+              },
+              launchParams: {
+                targetPath: "/tmp/demo.card",
+              },
+            },
             launchParams: {
               targetPath: "/tmp/demo.card",
               source: "chipsdev.run",
@@ -1218,6 +1251,29 @@ describe("createClient", () => {
       expect(client.platform.getLaunchContext()).toEqual({
         pluginId: "chips.app.demo",
         sessionId: "session-demo",
+        sceneId: "scene-demo",
+        surfaceId: "surface-demo",
+        kind: "window",
+        presentation: {
+          title: "Demo",
+          width: 1200,
+          height: 800,
+        },
+        surfaceContext: {
+          surfaceId: "surface-demo",
+          sceneId: "scene-demo",
+          pluginId: "chips.app.demo",
+          sessionId: "session-demo",
+          kind: "window",
+          presentation: {
+            title: "Demo",
+            width: 1200,
+            height: 800,
+          },
+          launchParams: {
+            targetPath: "/tmp/demo.card",
+          },
+        },
         launchParams: {
           targetPath: "/tmp/demo.card",
           source: "chipsdev.run",
@@ -1227,12 +1283,23 @@ describe("createClient", () => {
       windowStub.chips.platform.getLaunchContext = () => ({
         pluginId: 123,
         sessionId: null,
+        sceneId: 456,
+        surfaceContext: {
+          sceneId: "scene-invalid",
+          kind: "invalid",
+          presentation: {},
+        },
         launchParams: ["invalid"],
       });
 
       expect(client.platform.getLaunchContext()).toEqual({
         pluginId: undefined,
         sessionId: undefined,
+        sceneId: undefined,
+        surfaceId: undefined,
+        kind: undefined,
+        presentation: undefined,
+        surfaceContext: undefined,
         launchParams: {},
       });
     } finally {

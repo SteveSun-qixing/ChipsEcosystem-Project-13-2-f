@@ -30,6 +30,30 @@ export interface SurfacePresentation {
   chrome?: WindowChromeOptions;
 }
 
+export interface SurfaceDocumentContext {
+  documentId: string;
+  title?: string;
+  url?: string;
+}
+
+export interface SurfaceCommandContext {
+  commandId: string;
+  source?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface SurfaceContext {
+  surfaceId?: string;
+  sceneId: string;
+  pluginId?: string;
+  sessionId?: string;
+  kind: SurfaceKind;
+  presentation: SurfacePresentation;
+  launchParams?: Record<string, unknown>;
+  documentContext?: SurfaceDocumentContext;
+  commandContext?: SurfaceCommandContext;
+}
+
 export type SurfaceTarget =
   | {
       type: 'plugin';
@@ -54,6 +78,7 @@ export interface SurfaceOpenRequest {
   kind?: SurfaceKind;
   target: SurfaceTarget;
   presentation?: SurfacePresentation;
+  context?: SurfaceContext;
 }
 
 export interface SurfaceState {
@@ -68,6 +93,7 @@ export interface SurfaceState {
   pluginId?: string;
   sessionId?: string;
   chrome?: WindowChromeOptions;
+  context?: SurfaceContext;
   metadata?: Record<string, unknown>;
 }
 
@@ -82,6 +108,7 @@ export interface WindowOptions {
   sessionId?: string;
   permissions?: string[];
   launchParams?: Record<string, unknown>;
+  surfaceContext?: SurfaceContext;
   chrome?: WindowChromeOptions;
 }
 

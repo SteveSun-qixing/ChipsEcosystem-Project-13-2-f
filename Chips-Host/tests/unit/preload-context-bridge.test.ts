@@ -82,7 +82,37 @@ describe('preload contextBridge exposure', () => {
 
     const bridge = createAndExposeBridgeForKernel(null, {
       callerId: 'preload-runtime',
-      permissions: ['platform.read']
+      permissions: ['platform.read'],
+      launchContext: {
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-demo',
+        sceneId: 'scene-demo',
+        surfaceId: 'surface-demo',
+        kind: 'window',
+        presentation: {
+          title: 'Demo',
+          width: 1200,
+          height: 800
+        },
+        surfaceContext: {
+          surfaceId: 'surface-demo',
+          sceneId: 'scene-demo',
+          pluginId: 'chips.demo.app',
+          sessionId: 'session-demo',
+          kind: 'window',
+          presentation: {
+            title: 'Demo',
+            width: 1200,
+            height: 800
+          },
+          launchParams: {
+            source: 'unit-test'
+          }
+        },
+        launchParams: {
+          source: 'unit-test'
+        }
+      }
     });
     const response = await bridge.invoke('platform.getInfo', {});
 
@@ -107,10 +137,28 @@ describe('preload contextBridge exposure', () => {
     const exposed = exposeInMainWorld.mock.calls[0]?.[1] as {
       platform: {
         getPathForFile(file: unknown): string;
+        getLaunchContext(): unknown;
       };
     };
     const resolvedPath = exposed.platform.getPathForFile({ name: 'demo.card' });
     expect(resolvedPath).toBe('/tmp/demo.card');
     expect(getPathForFile).toHaveBeenCalledTimes(1);
+    expect(exposed.platform.getLaunchContext()).toEqual(
+      expect.objectContaining({
+        pluginId: 'chips.demo.app',
+        sessionId: 'session-demo',
+        sceneId: 'scene-demo',
+        surfaceId: 'surface-demo',
+        kind: 'window',
+        surfaceContext: expect.objectContaining({
+          sceneId: 'scene-demo',
+          surfaceId: 'surface-demo',
+          pluginId: 'chips.demo.app'
+        }),
+        launchParams: {
+          source: 'unit-test'
+        }
+      })
+    );
   });
 });

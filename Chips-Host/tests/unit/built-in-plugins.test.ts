@@ -89,10 +89,27 @@ const createBuiltInSettingsPanel = async (): Promise<void> => {
       '  - "plugin.read"',
       '  - "plugin.manage"',
       'entry: dist/index.html',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: false',
       'ui:',
       '  launcher:',
       '    displayName: Settings Panel',
-      '    icon: assets/icons/app-icon.ico'
+      '    icon: assets/icons/app-icon.ico',
+      '  surface:',
+      '    defaultKind: window',
+      '    preferredKinds:',
+      '      desktop: window',
+      '      web: route',
+      '      mobile: fullscreen',
+      '      headless: window'
     ].join('\n'),
     'utf-8'
   );

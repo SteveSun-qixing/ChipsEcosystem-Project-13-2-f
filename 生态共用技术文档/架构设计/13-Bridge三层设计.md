@@ -124,14 +124,16 @@ L7 面向业务代码的正式调用顺序：
 
 1. 调用 `surface.open({ target: { type: "plugin" } })` 或 `plugin.launch(...)`
 2. Host Runtime 创建插件会话并完成握手
-3. PAL `surface.open()` 创建实际容器
-4. preload 读取 launch context，向页面注入 `window.chips`
+3. Host 创建 `SurfaceContext`，包含 `sceneId / sessionId / pluginId / kind / presentation`
+4. PAL `surface.open()` 创建实际容器并回填 `surfaceId`
+5. preload 读取 launch context，向页面注入 `window.chips`
 
 当前语义：
 
 - `surface.open(target=plugin)` 已走正式插件会话主链路
 - `plugin.launch` 保留为 app 插件兼容入口，并复用同一底层实现
 - `window.open` 继续存在，但它是桌面窗口别名，不再承担新的跨平台插件生命周期语义
+- `platform.getLaunchContext()` 会返回 `surfaceContext`，应用通过它获得 App / Scene 运行上下文
 
 ## 6. 统一事件语义
 
@@ -141,7 +143,15 @@ Bridge / Runtime 当前重点事件包括：
 - `plugin.init`
 - `plugin.ready`
 - `plugin.launched`
+- `scene.created`
+- `scene.active`
+- `scene.inactive`
+- `scene.closed`
 - `surface.opened`
+- `surface.focused`
+- `surface.resized`
+- `surface.stateChanged`
+- `surface.closed`
 - `window.opened`
 - `module.runtime.started`
 - `module.runtime.stopped`

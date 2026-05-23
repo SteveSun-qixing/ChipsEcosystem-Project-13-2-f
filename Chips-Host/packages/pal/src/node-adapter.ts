@@ -66,6 +66,7 @@ import type {
   PowerState,
   ScreenInfo,
   SurfaceOpenRequest,
+  SurfaceContext,
   SurfaceState,
   LauncherCreateOptions,
   LauncherLocation,
@@ -99,10 +100,39 @@ const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined): Wind
   };
 };
 
+const cloneSurfacePresentation = (
+  presentation: SurfaceContext['presentation'] | undefined
+): SurfaceContext['presentation'] => {
+  return {
+    ...(presentation ?? {}),
+    chrome: cloneWindowChromeOptions(presentation?.chrome)
+  };
+};
+
+const cloneSurfaceContext = (context: SurfaceContext | undefined): SurfaceContext | undefined => {
+  if (!context) {
+    return undefined;
+  }
+
+  return {
+    ...context,
+    presentation: cloneSurfacePresentation(context.presentation),
+    launchParams: context.launchParams ? { ...context.launchParams } : undefined,
+    documentContext: context.documentContext ? { ...context.documentContext } : undefined,
+    commandContext: context.commandContext
+      ? {
+          ...context.commandContext,
+          payload: context.commandContext.payload ? { ...context.commandContext.payload } : undefined
+        }
+      : undefined
+  };
+};
+
 const cloneWindowState = (state: WindowState): WindowState => {
   return {
     ...state,
-    chrome: cloneWindowChromeOptions(state.chrome)
+    chrome: cloneWindowChromeOptions(state.chrome),
+    context: cloneSurfaceContext(state.context)
   };
 };
 
@@ -270,12 +300,23 @@ class NodeWindowManager implements PALWindow, PALSurface {
       sessionId: target.type === 'plugin' ? target.sessionId : undefined,
       permissions: target.type === 'plugin' ? target.permissions : undefined,
       launchParams: target.type === 'plugin' ? target.launchParams : undefined,
+      surfaceContext: request.context,
       chrome: presentation.chrome
     });
+
+    const surfaceContext: SurfaceContext | undefined = request.context
+      ? {
+          ...request.context,
+          surfaceId: created.id,
+          kind: 'window',
+          presentation: cloneSurfacePresentation(request.context.presentation)
+        }
+      : undefined;
 
     return {
       ...created,
       kind: 'window',
+      context: surfaceContext,
       metadata:
         requestedKind === 'window'
           ? undefined
@@ -291,6 +332,14 @@ class NodeWindowManager implements PALWindow, PALSurface {
     const title = options.title;
     const width = options.width;
     const height = options.height;
+    const surfaceContext = options.surfaceContext
+      ? {
+          ...options.surfaceContext,
+          surfaceId: id,
+          kind: 'window' as const,
+          presentation: cloneSurfacePresentation(options.surfaceContext.presentation)
+        }
+      : undefined;
     const state: WindowState = {
       id,
       kind: 'window',
@@ -302,6 +351,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
       url: options.url,
       pluginId: options.pluginId,
       sessionId: options.sessionId,
+      context: surfaceContext,
       chrome: cloneWindowChromeOptions(options.chrome)
     };
 
@@ -311,7 +361,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
         contextIsolation: true,
         sandbox: false
       };
-      const additionalArguments = this.buildBridgeArguments(options);
+      const additionalArguments = this.buildBridgeArguments({ ...options, surfaceContext });
       if (additionalArguments.length > 0) {
         webPreferences.additionalArguments = additionalArguments;
       }
@@ -507,7 +557,8 @@ class NodeWindowManager implements PALWindow, PALSurface {
       pluginId: options.pluginId,
       permissions: options.permissions ?? [],
       sessionId: options.sessionId,
-      launchParams: options.launchParams ?? {}
+      launchParams: options.launchParams ?? {},
+      surfaceContext: cloneSurfaceContext(options.surfaceContext)
     };
 
     return [

@@ -107,12 +107,18 @@ ui:
    - `sheet`
    - `fullscreen`
 3. `preferredKinds` 必须覆盖合法目标平台标识。
+   - `desktop`
+   - `web`
+   - `mobile`
+   - `headless`
 4. Host 在 `surface.open(target=plugin)` 时，会优先按：
    - 调用方显式请求的 `kind`
    - `ui.surface.preferredKinds[currentHostKind]`
    - `ui.surface.defaultKind`
    - Host 默认值
    进行解析。
+
+`type: app` 插件必须同时声明完整 `runtime.targets` 与完整 `ui.surface`。Host、SDK CLI 和脚手架校验都应把缺少 `runtime.targets`、缺少 `ui.surface.defaultKind`、缺少任一目标平台 `preferredKinds` 视为无效 Manifest。
 
 ## 5. 应用插件原生壳层：`ui.window` 与 `ui.launcher`
 

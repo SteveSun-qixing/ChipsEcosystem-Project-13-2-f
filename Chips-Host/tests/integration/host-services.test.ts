@@ -24,6 +24,32 @@ const writeText = async (filePath: string, content: string): Promise<void> => {
   await fs.writeFile(filePath, content, 'utf-8');
 };
 
+const appRuntimeYamlLines = [
+  'runtime:',
+  '  targets:',
+  '    desktop:',
+  '      supported: true',
+  '    web:',
+  '      supported: false',
+  '    mobile:',
+  '      supported: false',
+  '    headless:',
+  '      supported: false'
+];
+
+const appSurfaceYamlLines = [
+  '  surface:',
+  '    defaultKind: window',
+  '    preferredKinds:',
+  '      desktop: window',
+  '      web: route',
+  '      mobile: fullscreen',
+  '      headless: window'
+];
+
+const appSurfaceYamlLinesAtIndent = (indent: string): string[] =>
+  appSurfaceYamlLines.map((line) => `${indent}${line}`);
+
 const createLayoutPluginFixture = async (rootDir: string): Promise<string> => {
   const pluginDir = path.join(rootDir, 'fixture-grid-layout-plugin');
   await writeText(
@@ -810,7 +836,26 @@ describe('Host services integration', () => {
         version: '1.0.0',
         type: 'app',
         name: 'Runtime Plugin',
-        permissions: ['file.read']
+        permissions: ['file.read'],
+        runtime: {
+          targets: {
+            desktop: { supported: true },
+            web: { supported: false },
+            mobile: { supported: false },
+            headless: { supported: false }
+          }
+        },
+        ui: {
+          surface: {
+            defaultKind: 'window',
+            preferredKinds: {
+              desktop: 'window',
+              web: 'route',
+              mobile: 'fullscreen',
+              headless: 'window'
+            }
+          }
+        }
       })
     );
 
@@ -1188,7 +1233,10 @@ describe('Host services integration', () => {
         'name: Runtime CPK Plugin',
         'permissions:',
         '  - file.read',
-        'entry: dist/main.js'
+        'entry: dist/main.js',
+        ...appRuntimeYamlLines,
+        'ui:',
+        ...appSurfaceYamlLines
       ].join('\n'),
       'utf-8'
     );
@@ -1297,6 +1345,7 @@ describe('Host services integration', () => {
         'name: Card Handler',
         'permissions:',
         '  - file.read',
+        ...appRuntimeYamlLines,
         'ui:',
         '  window:',
         '    chrome:',
@@ -1306,6 +1355,7 @@ describe('Host services integration', () => {
         '        color: "#ffffff00"',
         '        symbolColor: "#667085"',
         '        height: 44',
+        ...appSurfaceYamlLines,
         'capabilities:',
         '  - file-handler:.card',
         'entry: dist/index.html'
@@ -1364,6 +1414,9 @@ describe('Host services integration', () => {
         'permissions:',
         '  - file.read',
         'entry: dist/index.html',
+        ...appRuntimeYamlLines,
+        'ui:',
+        ...appSurfaceYamlLines,
         'capabilities:',
         '  - file-handler:.png'
       ].join('\n'),
@@ -1400,6 +1453,9 @@ describe('Host services integration', () => {
         'permissions:',
         '  - resource.read',
         'entry: dist/index.html',
+        ...appRuntimeYamlLines,
+        'ui:',
+        ...appSurfaceYamlLines,
         'capabilities:',
         '  - resource-handler:view:image/*'
       ].join('\n'),

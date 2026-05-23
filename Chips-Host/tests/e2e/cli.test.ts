@@ -7,6 +7,28 @@ import { StoreZipService } from '../../packages/zip-service/src';
 let workspace: string;
 const themeManifestPath = path.resolve(process.cwd(), '../ThemePack/Chips-default/manifest.yaml');
 
+const appManifestContract = {
+  runtime: {
+    targets: {
+      desktop: { supported: true },
+      web: { supported: false },
+      mobile: { supported: false },
+      headless: { supported: false }
+    }
+  },
+  ui: {
+    surface: {
+      defaultKind: 'window',
+      preferredKinds: {
+        desktop: 'window',
+        web: 'route',
+        mobile: 'fullscreen',
+        headless: 'window'
+      }
+    }
+  }
+};
+
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-cli-test-'));
   process.env.CHIPS_HOME = workspace;
@@ -56,7 +78,8 @@ describe('chips cli', () => {
         version: '1.0.0',
         type: 'app',
         name: 'CLI Plugin',
-        permissions: ['file.read']
+        permissions: ['file.read'],
+        ...appManifestContract
       })
     );
 
@@ -75,7 +98,8 @@ describe('chips cli', () => {
         version: '1.0.0',
         type: 'app',
         name: 'Replaceable CLI Plugin',
-        permissions: ['file.read']
+        permissions: ['file.read'],
+        ...appManifestContract
       })
     );
 

@@ -61,7 +61,20 @@
 
 - `surface.open(target=plugin)` 会创建正式插件会话并调用 PAL `surface.open()`
 - 对于 `target=plugin`，当前还要求 `plugin.manage`
+- `surface.open` 会生成或透传 `SurfaceContext`，用于关联 `sceneId / surfaceId / pluginId / sessionId / kind / presentation`
 - `surface.opened` 是新的统一容器事件
+
+标准生命周期事件：
+
+- `scene.created`
+- `scene.active`
+- `scene.inactive`
+- `scene.closed`
+- `surface.opened`
+- `surface.focused`
+- `surface.resized`
+- `surface.stateChanged`
+- `surface.closed`
 
 ### 3.2 `transfer`
 

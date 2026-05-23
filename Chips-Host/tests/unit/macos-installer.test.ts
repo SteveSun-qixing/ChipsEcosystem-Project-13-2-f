@@ -127,10 +127,27 @@ beforeEach(async () => {
       'permissions:',
       '  - "plugin.read"',
       'entry: dist/index.html',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: false',
       'ui:',
       '  launcher:',
       '    displayName: Settings Panel',
-      '    icon: assets/icons/app-icon.ico'
+      '    icon: assets/icons/app-icon.ico',
+      '  surface:',
+      '    defaultKind: window',
+      '    preferredKinds:',
+      '      desktop: window',
+      '      web: route',
+      '      mobile: fullscreen',
+      '      headless: window'
     ].join('\n')
   );
   await write(path.join(workspaceRoot, 'Chips-EcoSettingsPanel', 'dist', 'index.html'), '<!doctype html>\n');
@@ -157,10 +174,27 @@ beforeEach(async () => {
       '  - "file-handler:.bmp"',
       '  - "file-handler:.svg"',
       '  - "file-handler:.avif"',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: false',
       'ui:',
       '  launcher:',
       '    displayName: 图片查看器',
-      '    icon: assets/icons/app-icon.ico'
+      '    icon: assets/icons/app-icon.ico',
+      '  surface:',
+      '    defaultKind: window',
+      '    preferredKinds:',
+      '      desktop: window',
+      '      web: route',
+      '      mobile: fullscreen',
+      '      headless: window'
     ].join('\n')
   );
   await write(path.join(workspaceRoot, 'Chips-PhotoViewer', 'dist', 'index.html'), '<!doctype html>\n');

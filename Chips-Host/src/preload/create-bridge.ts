@@ -16,12 +16,24 @@ import {
   CHIPS_WINDOW_CHANNEL_PREFIX
 } from '../main/ipc/chips-ipc';
 import type { StandardError } from '../shared/types';
+import type { SurfaceContext, SurfaceKind, SurfacePresentation } from '../../packages/pal/src';
 
 export interface BridgeContextOptions {
   callerId?: string;
   callerType?: RouteInvocationContext['caller']['type'];
   pluginId?: string;
   permissions?: string[];
+}
+
+export interface PlatformLaunchContext {
+  pluginId?: string;
+  sessionId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  kind?: SurfaceKind;
+  presentation?: SurfacePresentation;
+  surfaceContext?: SurfaceContext;
+  launchParams: Record<string, unknown>;
 }
 
 export interface BridgeScopeOptions {
@@ -238,16 +250,56 @@ export const createBridgeForKernel = (kernel: Kernel | null, options?: BridgeCon
 
 type ExposedPlatformBridge = ChipsBridge['platform'] & {
   getPathForFile(file: unknown): string;
-  getLaunchContext(): {
-    pluginId?: string;
-    sessionId?: string;
-    launchParams: Record<string, unknown>;
+  getLaunchContext(): PlatformLaunchContext;
+};
+
+const cloneLaunchContext = (launchContext?: Partial<PlatformLaunchContext>): PlatformLaunchContext => {
+  const surfaceContext = launchContext?.surfaceContext
+    ? {
+        ...launchContext.surfaceContext,
+        presentation: {
+          ...launchContext.surfaceContext.presentation,
+          chrome: launchContext.surfaceContext.presentation.chrome
+            ? { ...launchContext.surfaceContext.presentation.chrome }
+            : undefined
+        },
+        launchParams: launchContext.surfaceContext.launchParams
+          ? { ...launchContext.surfaceContext.launchParams }
+          : undefined,
+        documentContext: launchContext.surfaceContext.documentContext
+          ? { ...launchContext.surfaceContext.documentContext }
+          : undefined,
+        commandContext: launchContext.surfaceContext.commandContext
+          ? {
+              ...launchContext.surfaceContext.commandContext,
+              payload: launchContext.surfaceContext.commandContext.payload
+                ? { ...launchContext.surfaceContext.commandContext.payload }
+                : undefined
+            }
+          : undefined
+      }
+    : undefined;
+
+  return {
+    pluginId: launchContext?.pluginId,
+    sessionId: launchContext?.sessionId,
+    sceneId: launchContext?.sceneId ?? surfaceContext?.sceneId,
+    surfaceId: launchContext?.surfaceId ?? surfaceContext?.surfaceId,
+    kind: launchContext?.kind ?? surfaceContext?.kind,
+    presentation: launchContext?.presentation
+      ? {
+          ...launchContext.presentation,
+          chrome: launchContext.presentation.chrome ? { ...launchContext.presentation.chrome } : undefined
+        }
+      : surfaceContext?.presentation,
+    surfaceContext,
+    launchParams: launchContext?.launchParams ? { ...launchContext.launchParams } : {}
   };
 };
 
 const createExposedPlatformBridge = (
   platform: ChipsBridge['platform'],
-  launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> }
+  launchContext?: Partial<PlatformLaunchContext>
 ): ExposedPlatformBridge => {
   return {
     ...platform,
@@ -264,11 +316,7 @@ const createExposedPlatformBridge = (
       }
     },
     getLaunchContext() {
-      return {
-        pluginId: launchContext?.pluginId,
-        sessionId: launchContext?.sessionId,
-        launchParams: launchContext?.launchParams ? { ...launchContext.launchParams } : {}
-      };
+      return cloneLaunchContext(launchContext);
     }
   };
 };
@@ -276,7 +324,7 @@ const createExposedPlatformBridge = (
 export const exposeBridgeToMainWorld = (
   bridge: BridgeTransport,
   name = 'chips',
-  launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> }
+  launchContext?: Partial<PlatformLaunchContext>
 ): void => {
   const scopedBridge = bridge as BridgeTransport & Pick<ChipsBridge, 'invokeScoped' | 'emitScoped'>;
   const exposed: ChipsBridge & { platform: ExposedPlatformBridge } = {
@@ -320,7 +368,7 @@ export const createAndExposeBridgeForKernel = (
   kernel: Kernel | null,
   options?: BridgeContextOptions & {
     exposeName?: string;
-    launchContext?: { pluginId?: string; sessionId?: string; launchParams?: Record<string, unknown> };
+    launchContext?: Partial<PlatformLaunchContext>;
   }
 ): BridgeTransport => {
   const bridge = createBridgeForKernel(kernel, options);

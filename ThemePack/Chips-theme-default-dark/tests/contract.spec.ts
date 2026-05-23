@@ -1,52 +1,53 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { REQUIRED_THEME_TOKENS } from "../src/validate-theme";
-
-interface ThemeTokenLayers {
-  ref: Record<string, unknown>;
-  sys: Record<string, unknown>;
-  comp: Record<string, unknown>;
-  motion: Record<string, unknown>;
-  layout: Record<string, unknown>;
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
-const flattenLayer = (layer: Record<string, unknown>): Record<string, unknown> => {
-  const flat: Record<string, unknown> = {};
-  const walk = (node: unknown, pathParts: string[]): void => {
-    if (!isRecord(node)) {
-      const key = pathParts.join(".");
-      flat[key] = node;
-      return;
-    }
-    for (const [k, v] of Object.entries(node)) {
-      walk(v, [...pathParts, k]);
-    }
-  };
-  walk(layer, []);
-  return flat;
-};
+import { buildContractTokenTree, validateTheme } from "../src/validate-theme";
 
 describe("theme contract", () => {
-  it("provides required component tokens for core interactive components", async () => {
+  it("passes the full component-library contract baseline", async () => {
     const projectRoot = path.resolve(__dirname, "..");
-    const tokensPath = path.join(projectRoot, "dist", "tokens.json");
-    const raw = await fs.readFile(tokensPath, "utf-8");
-    const parsed = JSON.parse(raw) as ThemeTokenLayers;
+    const result = await validateTheme(projectRoot);
 
-    const variables = {
-      ...flattenLayer(parsed.ref),
-      ...flattenLayer(parsed.sys),
-      ...flattenLayer(parsed.comp),
-      ...flattenLayer(parsed.motion),
-      ...flattenLayer(parsed.layout),
-    };
+    expect(result.contract.components).toHaveLength(46);
+    expect(result.view.summary.status).toBe("complete");
+    expect(result.view.summary.blocking).toBe(0);
+    expect(result.view.summary.coverage?.componentCount).toBe(46);
+    expect(result.view.summary.coverage?.requiredCoverage).toBe(1);
+    expect(result.view.components.every((component) => component.coverage.status === "complete")).toBe(true);
+  });
 
-    for (const tokenKey of REQUIRED_THEME_TOKENS) {
-      expect(tokenKey in variables).toBe(true);
-    }
+  it("emits the frozen diagnostic schema for missing required tokens", async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const result = await validateTheme(projectRoot);
+    const button = result.contract.components.find((component) => component.component === "button");
+    expect(button).toBeTruthy();
+
+    const tokenTree = buildContractTokenTree({
+      ref: {},
+      sys: {},
+      comp: {},
+      motion: {},
+      layout: {}
+    });
+    const { buildThemeContractView } = await import(
+      "../../../Chips-ComponentLibrary/packages/theme-contracts/src/validator.js"
+    );
+    const view = buildThemeContractView(
+      { schemaVersion: "1.0.0", contractVersion: "1.0.0", components: [button] },
+      tokenTree,
+      { themeId: "chips-official.default-dark-theme", themeVersion: "1.0.0" }
+    );
+    const diagnostic = view.components[0]?.diagnostics[0];
+
+    expect(view.summary.status).toBe("blocked");
+    expect(diagnostic).toMatchObject({
+      severity: "error",
+      code: "THEME_REQUIRED_TOKEN_MISSING",
+      messageKey: "theme.diagnostics.requiredTokenMissing",
+      component: "button",
+      tokenKey: "chips.comp.button.root.radius",
+      layer: "comp",
+      scope: "component",
+      blocking: true
+    });
   });
 });

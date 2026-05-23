@@ -31,7 +31,7 @@
 ## 常用命令
 
 - `npm run build`：构建主题 Token 与 CSS，输出到 `dist/`。
-- `npm run validate:theme`：对构建结果进行基础校验（Token 结构与关键组件契约）。
+- `npm run validate:theme`：对构建结果进行主题契约校验，覆盖组件库当前正式 contract 基线。
 - `npm test`：运行本地单元测试。
 - `chipsdev package`：生成符合插件安装契约的 `.cpk` 主题包。
 

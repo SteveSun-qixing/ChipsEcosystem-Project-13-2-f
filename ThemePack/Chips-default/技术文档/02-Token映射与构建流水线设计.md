@@ -140,10 +140,10 @@
 - `tests/tokens.spec.ts`：
   - 验证 `dist/tokens.json` 中存在 `ref/sys/comp/motion/layout` 五个对象；
 - `tests/contract.spec.ts`：
-  - 通过 flatten 后的 `comp` 层 token 验证常见组件（如 button）的关键 token 存在；
+  - 读取 `contracts/theme-interface.contract.json`，验证当前组件库正式 contract 基线全部覆盖；
+  - 覆盖缺失 required token 时的 `ThemeDiagnostic` 定位字段；
 - `src/validate-theme.ts`：
   - 作为 `npm run validate:theme` 的入口；
-  - 在构建后进行额外的静态检查，输出清晰错误信息，便于在 CI 中使用。
+  - 在构建后生成 `ThemeContractView` 并输出统一 `summary/diagnostics`，便于在 CI 中使用。
 
 上述三个部分与 `build-tokens.ts` 共同构成默认主题包的最小质量门禁。
-

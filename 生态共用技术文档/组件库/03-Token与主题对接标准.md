@@ -120,5 +120,6 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - 缺失 required token 必须产生 `THEME_REQUIRED_TOKEN_MISSING`，并定位到 `component / part / state / tokenKey / layer`。
 - 缺失 optional token 必须产生 `THEME_OPTIONAL_TOKEN_MISSING`，但 `blocking=false`。
 - `theme.changed` 事件必须携带 `diagnosticsSummary`，用于设置面板、组件库刷新工具和 CLI 快速判断主题健康状态。
+- 主题包本地校验不得维护独立硬编码 token 白名单；必须读取 `contracts/theme-interface.contract.json` 并通过组件库正式 contract validator 生成同一 `ThemeContractView`。
 
 设置面板、CLI 与主题包测试只消费该公共 schema，不直接解析 Host 内部错误对象或主题包私有字段。

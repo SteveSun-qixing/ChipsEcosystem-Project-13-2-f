@@ -1,12 +1,49 @@
 {
-  "version": "1.0.0",
+  "schemaVersion": "1.0.0",
+  "contractVersion": "1.0.0",
   "components": [
     {
-      "name": "button",
-      "scope": "comp",
-      "parts": ["root"],
-      "states": ["default", "disabled"],
-      "tokens": [
+      "component": "box",
+      "scope": "box",
+      "parts": [
+        "root",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.box.root.surface",
+        "chips.comp.box.root.border.color",
+        "chips.comp.box.root.radius",
+        "chips.comp.box.focus.outline"
+      ]
+    },
+    {
+      "component": "button",
+      "scope": "button",
+      "parts": [
+        "root",
+        "label",
+        "spinner",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
         "chips.comp.button.root.radius",
         "chips.comp.button.root.surface.idle",
         "chips.comp.button.root.surface.hover",
@@ -18,11 +55,503 @@
       ]
     },
     {
-      "name": "input",
-      "scope": "comp",
-      "parts": ["root", "value", "placeholder"],
-      "states": ["default", "focus", "error"],
-      "tokens": [
+      "component": "card-cover-frame",
+      "scope": "card-cover-frame",
+      "parts": [
+        "root",
+        "frame-container",
+        "iframe",
+        "name",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "loading",
+        "ready",
+        "error",
+        "disabled",
+        "empty"
+      ],
+      "requiredTokens": [
+        "chips.comp.card-cover-frame.border.radius",
+        "chips.comp.card-cover-frame.name.color",
+        "chips.comp.card-cover-frame.status.color.normal",
+        "chips.comp.card-cover-frame.status.color.error"
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
+    },
+    {
+      "component": "card-shell",
+      "scope": "card-shell",
+      "parts": [
+        "root",
+        "header",
+        "toolbar",
+        "content",
+        "footer",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.card-shell.root.surface",
+        "chips.comp.card-shell.header.surface",
+        "chips.comp.card-shell.content.surface",
+        "chips.comp.card-shell.footer.surface",
+        "chips.comp.card-shell.border.color",
+        "chips.comp.card-shell.focus.outline"
+      ]
+    },
+    {
+      "component": "checkbox",
+      "scope": "checkbox",
+      "parts": [
+        "root",
+        "control",
+        "indicator",
+        "label",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.checkbox.control.radius",
+        "chips.comp.checkbox.control.surface.unchecked",
+        "chips.comp.checkbox.control.surface.checked",
+        "chips.comp.checkbox.control.surface.disabled",
+        "chips.comp.checkbox.indicator.color.checked",
+        "chips.comp.checkbox.label.color"
+      ]
+    },
+    {
+      "component": "command-palette",
+      "scope": "command-palette",
+      "parts": [
+        "root",
+        "trigger",
+        "search",
+        "list",
+        "item",
+        "shortcut",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.command-palette.root.surface",
+        "chips.comp.command-palette.search.surface.idle",
+        "chips.comp.command-palette.search.border.idle",
+        "chips.comp.command-palette.result.surface.active",
+        "chips.comp.command-palette.result.text.color",
+        "chips.comp.command-palette.shortcut.color",
+        "chips.comp.command-palette.focus.outline"
+      ]
+    },
+    {
+      "component": "composite-card-window",
+      "scope": "composite-card-window",
+      "parts": [
+        "root",
+        "iframe",
+        "overlay",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "resolving",
+        "rendering",
+        "ready",
+        "degraded",
+        "error",
+        "disabled"
+      ],
+      "requiredTokens": [
+        "chips.comp.composite-card-window.overlay.surface",
+        "chips.comp.composite-card-window.overlay.text",
+        "chips.comp.composite-card-window.status.color.normal",
+        "chips.comp.composite-card-window.status.color.error"
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
+    },
+    {
+      "component": "context-menu",
+      "scope": "context-menu",
+      "parts": [
+        "root",
+        "trigger",
+        "content",
+        "group",
+        "item",
+        "shortcut",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.context-menu.root.surface",
+        "chips.comp.context-menu.trigger.surface.idle",
+        "chips.comp.context-menu.content.surface",
+        "chips.comp.context-menu.item.surface.hover",
+        "chips.comp.context-menu.item.text.color",
+        "chips.comp.context-menu.shortcut.color",
+        "chips.comp.context-menu.focus.outline"
+      ]
+    },
+    {
+      "component": "data-grid",
+      "scope": "data-grid",
+      "parts": [
+        "root",
+        "table",
+        "header",
+        "row",
+        "cell",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.data-grid.root.surface",
+        "chips.comp.data-grid.header.surface",
+        "chips.comp.data-grid.header.text.color",
+        "chips.comp.data-grid.row.surface.idle",
+        "chips.comp.data-grid.row.surface.selected",
+        "chips.comp.data-grid.cell.text.color",
+        "chips.comp.data-grid.border.color",
+        "chips.comp.data-grid.focus.outline"
+      ]
+    },
+    {
+      "component": "date-time",
+      "scope": "date-time",
+      "parts": [
+        "root",
+        "input",
+        "icon",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.date-time.input.surface.idle",
+        "chips.comp.date-time.input.border.idle",
+        "chips.comp.date-time.input.border.error",
+        "chips.comp.date-time.input.text.color",
+        "chips.comp.date-time.icon.color",
+        "chips.comp.date-time.focus.outline"
+      ]
+    },
+    {
+      "component": "dialog",
+      "scope": "dialog",
+      "parts": [
+        "root",
+        "trigger",
+        "backdrop",
+        "content",
+        "title",
+        "description",
+        "close",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.dialog.backdrop.surface",
+        "chips.comp.dialog.content.radius",
+        "chips.comp.dialog.content.surface",
+        "chips.comp.dialog.title.color",
+        "chips.comp.dialog.close.color",
+        "chips.comp.dialog.focus.outline"
+      ]
+    },
+    {
+      "component": "divider",
+      "scope": "divider",
+      "parts": [
+        "root",
+        "label"
+      ],
+      "states": [
+        "idle"
+      ],
+      "requiredTokens": [
+        "chips.comp.divider.root.color",
+        "chips.comp.divider.root.thickness",
+        "chips.comp.divider.label.color"
+      ]
+    },
+    {
+      "component": "dock-panel",
+      "scope": "dock-panel",
+      "parts": [
+        "root",
+        "tab-list",
+        "tab",
+        "content",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.dock-panel.root.surface",
+        "chips.comp.dock-panel.tab.surface.idle",
+        "chips.comp.dock-panel.tab.surface.active",
+        "chips.comp.dock-panel.tab.text.color",
+        "chips.comp.dock-panel.content.surface",
+        "chips.comp.dock-panel.status.color.error",
+        "chips.comp.dock-panel.focus.outline"
+      ]
+    },
+    {
+      "component": "empty-state",
+      "scope": "empty-state",
+      "parts": [
+        "root",
+        "icon",
+        "title",
+        "description",
+        "action",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.empty-state.root.surface",
+        "chips.comp.empty-state.icon.color",
+        "chips.comp.empty-state.title.color",
+        "chips.comp.empty-state.description.color",
+        "chips.comp.empty-state.action.surface.active",
+        "chips.comp.empty-state.focus.outline"
+      ]
+    },
+    {
+      "component": "error-boundary",
+      "scope": "error-boundary",
+      "parts": [
+        "root",
+        "title",
+        "description",
+        "action",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.error-boundary.root.surface",
+        "chips.comp.error-boundary.root.border.error",
+        "chips.comp.error-boundary.title.color",
+        "chips.comp.error-boundary.description.color",
+        "chips.comp.error-boundary.action.surface.idle",
+        "chips.comp.error-boundary.action.surface.active",
+        "chips.comp.error-boundary.status.color.error",
+        "chips.comp.error-boundary.focus.outline"
+      ]
+    },
+    {
+      "component": "form-field",
+      "scope": "form-field",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "helper",
+        "error",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.form-field.label.color",
+        "chips.comp.form-field.control.surface.idle",
+        "chips.comp.form-field.control.border.idle",
+        "chips.comp.form-field.control.border.error",
+        "chips.comp.form-field.helper.color",
+        "chips.comp.form-field.error.color",
+        "chips.comp.form-field.focus.outline"
+      ]
+    },
+    {
+      "component": "form-group",
+      "scope": "form-group",
+      "parts": [
+        "root",
+        "legend",
+        "description",
+        "content",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.form-group.root.gap",
+        "chips.comp.form-group.legend.color",
+        "chips.comp.form-group.description.color",
+        "chips.comp.form-group.divider.color",
+        "chips.comp.form-group.status.color.error"
+      ]
+    },
+    {
+      "component": "grid",
+      "scope": "grid",
+      "parts": [
+        "root",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.grid.root.gap",
+        "chips.comp.grid.root.surface",
+        "chips.comp.grid.item.surface",
+        "chips.comp.grid.focus.outline"
+      ]
+    },
+    {
+      "component": "inline",
+      "scope": "inline",
+      "parts": [
+        "root",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.inline.root.gap",
+        "chips.comp.inline.root.surface",
+        "chips.comp.inline.focus.outline"
+      ]
+    },
+    {
+      "component": "input",
+      "scope": "input",
+      "parts": [
+        "root",
+        "control",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
         "chips.comp.input.root.radius",
         "chips.comp.input.root.surface.idle",
         "chips.comp.input.root.surface.focus",
@@ -30,6 +559,730 @@
         "chips.comp.input.root.border.error",
         "chips.comp.input.value.color",
         "chips.comp.input.placeholder.color"
+      ]
+    },
+    {
+      "component": "inspector",
+      "scope": "inspector",
+      "parts": [
+        "root",
+        "section",
+        "header",
+        "body",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.inspector.root.surface",
+        "chips.comp.inspector.section.header.surface.idle",
+        "chips.comp.inspector.section.header.surface.active",
+        "chips.comp.inspector.section.header.text.color",
+        "chips.comp.inspector.section.body.surface",
+        "chips.comp.inspector.focus.outline"
+      ]
+    },
+    {
+      "component": "loading-boundary",
+      "scope": "loading-boundary",
+      "parts": [
+        "root",
+        "content",
+        "fallback",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.loading-boundary.root.surface",
+        "chips.comp.loading-boundary.fallback.surface",
+        "chips.comp.loading-boundary.skeleton.surface.idle",
+        "chips.comp.loading-boundary.skeleton.surface.active",
+        "chips.comp.loading-boundary.status.color.info",
+        "chips.comp.loading-boundary.focus.outline"
+      ]
+    },
+    {
+      "component": "menu-bar",
+      "scope": "menu-bar",
+      "parts": [
+        "root",
+        "menu",
+        "content",
+        "group",
+        "item",
+        "shortcut",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.menu-bar.root.surface",
+        "chips.comp.menu-bar.menu.surface.idle",
+        "chips.comp.menu-bar.menu.surface.hover",
+        "chips.comp.menu-bar.item.surface.hover",
+        "chips.comp.menu-bar.item.text.color",
+        "chips.comp.menu-bar.shortcut.color",
+        "chips.comp.menu-bar.focus.outline"
+      ]
+    },
+    {
+      "component": "menu",
+      "scope": "menu",
+      "parts": [
+        "root",
+        "trigger",
+        "content",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.menu.content.radius",
+        "chips.comp.menu.content.surface",
+        "chips.comp.menu.item.surface.hover",
+        "chips.comp.menu.item.surface.active",
+        "chips.comp.menu.item.text.color",
+        "chips.comp.menu.focus.outline"
+      ]
+    },
+    {
+      "component": "notification",
+      "scope": "notification",
+      "parts": [
+        "root",
+        "list",
+        "item",
+        "title",
+        "message",
+        "action",
+        "close",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.notification.root.surface",
+        "chips.comp.notification.item.surface.idle",
+        "chips.comp.notification.item.surface.active",
+        "chips.comp.notification.title.color",
+        "chips.comp.notification.message.color",
+        "chips.comp.notification.action.surface.active",
+        "chips.comp.notification.close.color",
+        "chips.comp.notification.focus.outline"
+      ]
+    },
+    {
+      "component": "panel-header",
+      "scope": "panel-header",
+      "parts": [
+        "root",
+        "title",
+        "subtitle",
+        "actions",
+        "toggle",
+        "close",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.panel-header.root.surface",
+        "chips.comp.panel-header.title.color",
+        "chips.comp.panel-header.subtitle.color",
+        "chips.comp.panel-header.action.surface.idle",
+        "chips.comp.panel-header.action.surface.active",
+        "chips.comp.panel-header.focus.outline"
+      ]
+    },
+    {
+      "component": "popover",
+      "scope": "popover",
+      "parts": [
+        "root",
+        "trigger",
+        "positioner",
+        "content",
+        "arrow",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.popover.trigger.surface.idle",
+        "chips.comp.popover.content.radius",
+        "chips.comp.popover.content.surface",
+        "chips.comp.popover.content.border",
+        "chips.comp.popover.arrow.surface",
+        "chips.comp.popover.focus.outline"
+      ]
+    },
+    {
+      "component": "radio",
+      "scope": "radio",
+      "parts": [
+        "root",
+        "item",
+        "control",
+        "indicator",
+        "label",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.radio.control.radius",
+        "chips.comp.radio.control.surface.unchecked",
+        "chips.comp.radio.control.surface.checked",
+        "chips.comp.radio.control.surface.disabled",
+        "chips.comp.radio.indicator.color.checked",
+        "chips.comp.radio.label.color"
+      ]
+    },
+    {
+      "component": "scroll-view",
+      "scope": "scroll-view",
+      "parts": [
+        "root",
+        "viewport",
+        "content",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.scroll-view.root.surface",
+        "chips.comp.scroll-view.viewport.surface",
+        "chips.comp.scroll-view.scrollbar.thumb",
+        "chips.comp.scroll-view.focus.outline"
+      ]
+    },
+    {
+      "component": "section",
+      "scope": "section",
+      "parts": [
+        "root",
+        "header",
+        "title",
+        "description",
+        "content",
+        "footer",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.section.root.surface",
+        "chips.comp.section.header.surface",
+        "chips.comp.section.title.color",
+        "chips.comp.section.description.color",
+        "chips.comp.section.content.surface",
+        "chips.comp.section.footer.surface",
+        "chips.comp.section.divider.color",
+        "chips.comp.section.focus.outline"
+      ]
+    },
+    {
+      "component": "select",
+      "scope": "select",
+      "parts": [
+        "root",
+        "trigger",
+        "value",
+        "icon",
+        "list",
+        "option",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.select.trigger.radius",
+        "chips.comp.select.trigger.surface.idle",
+        "chips.comp.select.trigger.surface.focus",
+        "chips.comp.select.trigger.border.idle",
+        "chips.comp.select.option.surface.selected",
+        "chips.comp.select.option.text.color"
+      ]
+    },
+    {
+      "component": "shortcut",
+      "scope": "shortcut",
+      "parts": [
+        "root",
+        "key",
+        "separator"
+      ],
+      "states": [
+        "idle",
+        "disabled"
+      ],
+      "requiredTokens": [
+        "chips.comp.shortcut.root.surface",
+        "chips.comp.shortcut.key.surface",
+        "chips.comp.shortcut.key.text.color",
+        "chips.comp.shortcut.separator.color"
+      ]
+    },
+    {
+      "component": "skeleton",
+      "scope": "skeleton",
+      "parts": [
+        "root",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.skeleton.root.surface",
+        "chips.comp.skeleton.item.surface.idle",
+        "chips.comp.skeleton.item.surface.active",
+        "chips.comp.skeleton.status.color.info",
+        "chips.comp.skeleton.focus.outline"
+      ]
+    },
+    {
+      "component": "spacer",
+      "scope": "spacer",
+      "parts": [
+        "root"
+      ],
+      "states": [
+        "idle"
+      ],
+      "requiredTokens": [
+        "chips.comp.spacer.root.size",
+        "chips.comp.spacer.root.surface"
+      ]
+    },
+    {
+      "component": "split-pane",
+      "scope": "split-pane",
+      "parts": [
+        "root",
+        "pane-start",
+        "resizer",
+        "pane-end",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.split-pane.root.surface",
+        "chips.comp.split-pane.pane.surface",
+        "chips.comp.split-pane.handle.surface.idle",
+        "chips.comp.split-pane.handle.surface.active",
+        "chips.comp.split-pane.handle.border.color",
+        "chips.comp.split-pane.focus.outline"
+      ]
+    },
+    {
+      "component": "split-view",
+      "scope": "split-view",
+      "parts": [
+        "root",
+        "primary",
+        "secondary",
+        "detail",
+        "divider",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.split-view.root.surface",
+        "chips.comp.split-view.primary.surface",
+        "chips.comp.split-view.secondary.surface",
+        "chips.comp.split-view.detail.surface",
+        "chips.comp.split-view.divider.color",
+        "chips.comp.split-view.focus.outline"
+      ]
+    },
+    {
+      "component": "stack",
+      "scope": "stack",
+      "parts": [
+        "root",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.stack.root.gap",
+        "chips.comp.stack.root.surface",
+        "chips.comp.stack.focus.outline"
+      ]
+    },
+    {
+      "component": "switch",
+      "scope": "switch",
+      "parts": [
+        "root",
+        "track",
+        "thumb",
+        "label",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.switch.track.radius",
+        "chips.comp.switch.track.surface.off",
+        "chips.comp.switch.track.surface.on",
+        "chips.comp.switch.track.surface.disabled",
+        "chips.comp.switch.thumb.surface",
+        "chips.comp.switch.label.color"
+      ]
+    },
+    {
+      "component": "tabs",
+      "scope": "tabs",
+      "parts": [
+        "root",
+        "list",
+        "trigger",
+        "panel",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.tabs.list.border",
+        "chips.comp.tabs.trigger.surface.idle",
+        "chips.comp.tabs.trigger.surface.active",
+        "chips.comp.tabs.trigger.text.color",
+        "chips.comp.tabs.panel.surface",
+        "chips.comp.tabs.focus.outline"
+      ]
+    },
+    {
+      "component": "toast",
+      "scope": "toast",
+      "parts": [
+        "root",
+        "list",
+        "item",
+        "message",
+        "action",
+        "close",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.toast.root.surface",
+        "chips.comp.toast.item.surface.idle",
+        "chips.comp.toast.item.surface.active",
+        "chips.comp.toast.message.color",
+        "chips.comp.toast.action.surface.active",
+        "chips.comp.toast.close.color",
+        "chips.comp.toast.focus.outline"
+      ]
+    },
+    {
+      "component": "tool-window",
+      "scope": "tool-window",
+      "parts": [
+        "root",
+        "header",
+        "controls",
+        "body",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.tool-window.root.surface",
+        "chips.comp.tool-window.header.surface",
+        "chips.comp.tool-window.body.surface",
+        "chips.comp.tool-window.control.surface.idle",
+        "chips.comp.tool-window.control.surface.active",
+        "chips.comp.tool-window.status.color.error",
+        "chips.comp.tool-window.focus.outline"
+      ]
+    },
+    {
+      "component": "toolbar",
+      "scope": "toolbar",
+      "parts": [
+        "root",
+        "group",
+        "item",
+        "icon",
+        "label",
+        "shortcut",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.toolbar.root.surface",
+        "chips.comp.toolbar.group.gap",
+        "chips.comp.toolbar.item.surface.idle",
+        "chips.comp.toolbar.item.surface.hover",
+        "chips.comp.toolbar.item.surface.active",
+        "chips.comp.toolbar.item.surface.disabled",
+        "chips.comp.toolbar.item.text.color",
+        "chips.comp.toolbar.item.icon.color",
+        "chips.comp.toolbar.focus.outline"
+      ]
+    },
+    {
+      "component": "tooltip",
+      "scope": "tooltip",
+      "parts": [
+        "root",
+        "trigger",
+        "content",
+        "arrow",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.tooltip.content.radius",
+        "chips.comp.tooltip.content.surface",
+        "chips.comp.tooltip.content.text.color",
+        "chips.comp.tooltip.arrow.surface",
+        "chips.comp.tooltip.focus.outline"
+      ]
+    },
+    {
+      "component": "tree",
+      "scope": "tree",
+      "parts": [
+        "root",
+        "node",
+        "toggle",
+        "label",
+        "children",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.tree.root.surface",
+        "chips.comp.tree.node.surface.idle",
+        "chips.comp.tree.node.surface.selected",
+        "chips.comp.tree.node.text.color",
+        "chips.comp.tree.toggle.color",
+        "chips.comp.tree.guide.color",
+        "chips.comp.tree.focus.outline"
+      ]
+    },
+    {
+      "component": "view",
+      "scope": "view",
+      "parts": [
+        "root",
+        "header",
+        "title",
+        "content",
+        "footer",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.view.root.surface",
+        "chips.comp.view.root.text.color",
+        "chips.comp.view.header.surface",
+        "chips.comp.view.title.color",
+        "chips.comp.view.content.surface",
+        "chips.comp.view.footer.surface",
+        "chips.comp.view.focus.outline"
+      ]
+    },
+    {
+      "component": "virtual-list",
+      "scope": "virtual-list",
+      "parts": [
+        "root",
+        "viewport",
+        "content",
+        "item",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.virtual-list.container.surface",
+        "chips.comp.virtual-list.item.surface.idle",
+        "chips.comp.virtual-list.item.surface.active",
+        "chips.comp.virtual-list.item.text.color",
+        "chips.comp.virtual-list.scrollbar.thumb",
+        "chips.comp.virtual-list.focus.outline"
       ]
     }
   ]

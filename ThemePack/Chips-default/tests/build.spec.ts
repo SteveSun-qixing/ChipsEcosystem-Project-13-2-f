@@ -31,6 +31,8 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain('data-scope="secure-field"');
     expect(themeCss).toContain('data-scope="segmented-control"');
     expect(themeCss).toContain('data-scope="combo-box"');
+    expect(themeCss).toContain('data-scope="number-input"');
+    expect(themeCss).toContain('data-scope="stepper"');
     expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');

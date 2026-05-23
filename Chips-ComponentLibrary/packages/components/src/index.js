@@ -234,6 +234,180 @@ function clampNumber(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function getDecimalPrecision(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  const source = String(value);
+  if (source.includes("e-")) {
+    const [, exponent] = source.split("e-");
+    return Number.parseInt(exponent, 10) || 0;
+  }
+
+  const [, fraction = ""] = source.split(".");
+  return fraction.length;
+}
+
+function roundNumericValue(value, precision) {
+  const multiplier = 10 ** Math.min(Math.max(precision, 0), 12);
+  return Math.round((value + Number.EPSILON) * multiplier) / multiplier;
+}
+
+function normalizeNumericRange(params = {}) {
+  const min = toFiniteNumber(params.min, 0);
+  const rawMax = toFiniteNumber(params.max, 100);
+  const max = rawMax > min ? rawMax : 100;
+  const rawStep = toFiniteNumber(params.step, 1);
+  const step = rawStep > 0 ? rawStep : 1;
+  const rawLargeStep = toFiniteNumber(params.largeStep, step * 10);
+  const largeStep = rawLargeStep > 0 ? rawLargeStep : step * 10;
+  const precision = Math.max(
+    getDecimalPrecision(min),
+    getDecimalPrecision(max),
+    getDecimalPrecision(step),
+    getDecimalPrecision(largeStep)
+  );
+
+  return {
+    min,
+    max,
+    step,
+    largeStep,
+    precision
+  };
+}
+
+function alignNumericStep(value, range) {
+  const offset = (value - range.min) / range.step;
+  return roundNumericValue(range.min + Math.round(offset) * range.step, range.precision);
+}
+
+function clampNumericValue(value, range) {
+  return roundNumericValue(clampNumber(value, range.min, range.max), range.precision);
+}
+
+function normalizeNumericValue(value, range, options = {}) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  const clamped = clampNumericValue(numeric, range);
+  return options.align === false ? clamped : clampNumericValue(alignNumericStep(clamped, range), range);
+}
+
+function parseNumericText(text, range, options = {}) {
+  const source = String(text ?? "").trim();
+  if (source.length === 0) {
+    return {
+      kind: options.required ? "invalid" : "empty",
+      value: null,
+      text: source
+    };
+  }
+
+  const numeric = Number(source);
+  if (!Number.isFinite(numeric)) {
+    return {
+      kind: "invalid",
+      value: null,
+      text: source
+    };
+  }
+
+  return {
+    kind: "valid",
+    value: normalizeNumericValue(numeric, range, options),
+    text: source
+  };
+}
+
+function formatNumericValue(value, formatValue) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "";
+  }
+
+  if (typeof formatValue === "function") {
+    return String(formatValue(value));
+  }
+
+  return String(value);
+}
+
+function resolveNumericValueText(value, range, valueText, formatValue) {
+  if (isNonEmptyString(valueText)) {
+    return valueText.trim();
+  }
+
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return undefined;
+  }
+
+  return formatNumericValue(clampNumericValue(Number(value), range), formatValue);
+}
+
+function getNumericStepForKey(key, range) {
+  if (key === "ArrowUp" || key === "ArrowRight") {
+    return range.step;
+  }
+
+  if (key === "ArrowDown" || key === "ArrowLeft") {
+    return -range.step;
+  }
+
+  if (key === "PageUp") {
+    return range.largeStep;
+  }
+
+  if (key === "PageDown") {
+    return -range.largeStep;
+  }
+
+  return 0;
+}
+
+function getNextNumericValue(currentValue, range, delta, fallbackValue = range.min) {
+  const base = Number.isFinite(Number(currentValue)) ? Number(currentValue) : fallbackValue;
+  return normalizeNumericValue(base + delta, range);
+}
+
+export function resolveNumericControlModel(params = {}) {
+  const range = normalizeNumericRange(params);
+  const required = params.required === true;
+  const parsed = params.text !== undefined
+    ? parseNumericText(params.text, range, {
+        required,
+        align: params.align !== false
+      })
+    : null;
+  const valueSource = parsed
+    ? parsed.kind === "valid"
+      ? parsed.value
+      : null
+    : params.value;
+  const value = normalizeNumericValue(valueSource, range, {
+    align: params.align !== false
+  });
+
+  return {
+    ...range,
+    value,
+    text: params.text !== undefined
+      ? String(params.text)
+      : formatNumericValue(value, params.formatValue),
+    empty: parsed?.kind === "empty" || value === null,
+    invalid: parsed?.kind === "invalid",
+    atMin: value !== null && value <= range.min,
+    atMax: value !== null && value >= range.max,
+    valueText: resolveNumericValueText(value, range, params.valueText, params.formatValue)
+  };
+}
+
 function resolveProgressMetrics(params = {}) {
   const rawMin = toFiniteNumber(params.min, 0);
   const rawMax = toFiniteNumber(params.max, 100);
@@ -706,6 +880,47 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.combo-box.status.color.error",
     "chips.comp.combo-box.focus.outline"
   ],
+  "number-input": [
+    "chips.comp.number-input.root.radius",
+    "chips.comp.number-input.root.surface.idle",
+    "chips.comp.number-input.root.surface.focus",
+    "chips.comp.number-input.root.surface.disabled",
+    "chips.comp.number-input.root.border.idle",
+    "chips.comp.number-input.root.border.focus",
+    "chips.comp.number-input.root.border.error",
+    "chips.comp.number-input.label.color",
+    "chips.comp.number-input.control.color",
+    "chips.comp.number-input.placeholder.color",
+    "chips.comp.number-input.decrement.color.idle",
+    "chips.comp.number-input.decrement.color.hover",
+    "chips.comp.number-input.decrement.color.disabled",
+    "chips.comp.number-input.increment.color.idle",
+    "chips.comp.number-input.increment.color.hover",
+    "chips.comp.number-input.increment.color.disabled",
+    "chips.comp.number-input.description.color",
+    "chips.comp.number-input.status.color.error",
+    "chips.comp.number-input.focus.outline"
+  ],
+  stepper: [
+    "chips.comp.stepper.root.radius",
+    "chips.comp.stepper.root.gap",
+    "chips.comp.stepper.label.color",
+    "chips.comp.stepper.value.color",
+    "chips.comp.stepper.decrement.surface.idle",
+    "chips.comp.stepper.decrement.surface.hover",
+    "chips.comp.stepper.decrement.surface.active",
+    "chips.comp.stepper.decrement.surface.disabled",
+    "chips.comp.stepper.decrement.icon.color.idle",
+    "chips.comp.stepper.decrement.icon.color.disabled",
+    "chips.comp.stepper.increment.surface.idle",
+    "chips.comp.stepper.increment.surface.hover",
+    "chips.comp.stepper.increment.surface.active",
+    "chips.comp.stepper.increment.surface.disabled",
+    "chips.comp.stepper.increment.icon.color.idle",
+    "chips.comp.stepper.increment.icon.color.disabled",
+    "chips.comp.stepper.status.color.error",
+    "chips.comp.stepper.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -1124,6 +1339,18 @@ export function buildComponentContract(component) {
       component: "combo-box",
       scope: "combo-box",
       parts: ["root", "label", "control", "trigger", "list", "option", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "number-input": {
+      component: "number-input",
+      scope: "number-input",
+      parts: ["root", "label", "control", "decrement", "increment", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    stepper: {
+      component: "stepper",
+      scope: "stepper",
+      parts: ["root", "label", "decrement", "value", "increment", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     button: {
@@ -5166,6 +5393,654 @@ export const ChipsComboBox = React.forwardRef((props, ref) => {
 });
 
 ChipsComboBox.displayName = "ChipsComboBox";
+
+function createNumericChangeDetails(params) {
+  const { model, previousValue, source, text } = params;
+  return {
+    source,
+    previousValue,
+    value: model.value,
+    text: text ?? model.text,
+    min: model.min,
+    max: model.max,
+    step: model.step,
+    largeStep: model.largeStep,
+    atMin: model.atMin,
+    atMax: model.atMax,
+    empty: model.empty,
+    invalid: model.invalid
+  };
+}
+
+function resolveNumericError(params) {
+  const {
+    error,
+    invalid,
+    invalidMessage,
+    invalidMessageKey,
+    fallbackInvalidMessage,
+    i18n,
+    onDiagnostic
+  } = params;
+  const normalizedError = normalizeError(error);
+  if (normalizedError || !invalid) {
+    return normalizedError;
+  }
+
+  const message = resolveAccessibleText({
+    value: invalidMessage,
+    key: invalidMessageKey,
+    fallback: fallbackInvalidMessage,
+    i18n,
+    onDiagnostic
+  });
+
+  return message
+    ? {
+        code: "NUMERIC_VALUE_INVALID",
+        message
+      }
+    : null;
+}
+
+function assertNumericAccessibleName(descriptor, errorCode) {
+  if (!descriptor.hasAccessibleName) {
+    throw new Error(errorCode);
+  }
+}
+
+export const ChipsNumberInput = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = null,
+    textValue,
+    defaultTextValue,
+    min,
+    max,
+    step,
+    largeStep,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    inputMode = "decimal",
+    autoComplete,
+    valueText,
+    formatValue,
+    invalidMessage,
+    invalidMessageKey = "component.numberInput.invalid",
+    fallbackInvalidMessage = "Invalid number",
+    decrementLabel,
+    decrementLabelKey,
+    fallbackDecrementLabel = "Decrease value",
+    incrementLabel,
+    incrementLabelKey,
+    fallbackIncrementLabel = "Increase value",
+    decrementContent,
+    incrementContent,
+    i18n,
+    onValueChange,
+    onInputChange,
+    onStateChange,
+    onEnterPress,
+    onKeyDown,
+    onChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "number-input",
+    value: textValue,
+    defaultValue: defaultTextValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertNumericAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "NUMBER_INPUT_A11Y_LABEL_REQUIRED"
+  );
+
+  const range = normalizeNumericRange({ min, max, step, largeStep });
+  const normalizedDefaultValue = normalizeNumericValue(defaultValue, range, { align: false });
+  const controlledValue = value !== undefined;
+  const controlledText = textValue !== undefined;
+  const [internalValue, setInternalValue] = React.useState(normalizedDefaultValue);
+  const [internalText, setInternalText] = React.useState(() => {
+    if (defaultTextValue !== undefined) {
+      return String(defaultTextValue);
+    }
+    return formatNumericValue(normalizedDefaultValue, formatValue);
+  });
+  const currentValue = controlledValue
+    ? normalizeNumericValue(value, range, { align: false })
+    : internalValue;
+  const currentText = controlledText
+    ? String(textValue)
+    : internalText;
+  const currentModel = resolveNumericControlModel({
+    value: currentValue,
+    text: currentText,
+    min,
+    max,
+    step,
+    largeStep,
+    required,
+    valueText,
+    formatValue,
+    align: false
+  });
+  const effectiveError = resolveNumericError({
+    error,
+    invalid: currentModel.invalid,
+    invalidMessage,
+    invalidMessageKey,
+    fallbackInvalidMessage,
+    i18n,
+    onDiagnostic
+  });
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    value: currentText,
+    defaultValue: undefined,
+    error: effectiveError,
+    interaction
+  });
+  const invalid = Boolean(effectiveError) || currentModel.invalid;
+  const empty = currentText.trim().length === 0;
+  const resolvedDecrementLabel = resolveAccessibleText({
+    value: decrementLabel,
+    key: decrementLabelKey,
+    fallback: fallbackDecrementLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedIncrementLabel = resolveAccessibleText({
+    value: incrementLabel,
+    key: incrementLabelKey,
+    fallback: fallbackIncrementLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  React.useEffect(() => {
+    if (!controlledText && controlledValue) {
+      setInternalText(formatNumericValue(currentValue, formatValue));
+    }
+  }, [controlledText, controlledValue, currentValue, formatValue]);
+
+  const updateText = (nextText, event) => {
+    if (!controlledText) {
+      setInternalText(nextText);
+    }
+    if (typeof onInputChange === "function") {
+      onInputChange(nextText, event);
+    }
+  };
+
+  const commitValue = (nextValue, event, source, nextText) => {
+    const normalizedValue = nextValue === null
+      ? null
+      : normalizeNumericValue(nextValue, range, { align: true });
+    const model = resolveNumericControlModel({
+      value: normalizedValue,
+      min,
+      max,
+      step,
+      largeStep,
+      required,
+      valueText,
+      formatValue
+    });
+    const displayText = nextText !== undefined
+      ? nextText
+      : formatNumericValue(model.value, formatValue);
+
+    if (!controlledValue) {
+      setInternalValue(model.value);
+    }
+    if (!controlledText) {
+      setInternalText(displayText);
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange(
+        model.value,
+        createNumericChangeDetails({
+          model,
+          previousValue: currentValue,
+          source,
+          text: displayText
+        }),
+        event
+      );
+    }
+  };
+
+  const commitText = (event, source) => {
+    const parsed = parseNumericText(currentText, range, { required, align: true });
+    if (parsed.kind === "invalid") {
+      return false;
+    }
+    if (parsed.kind === "empty") {
+      commitValue(null, event, source, "");
+      return true;
+    }
+    commitValue(parsed.value, event, source);
+    return true;
+  };
+
+  const stepValue = (delta, event, source) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      event?.preventDefault?.();
+      return;
+    }
+    const parsed = parseNumericText(currentText, range, { required: false, align: true });
+    const base = parsed.kind === "valid" ? parsed.value : currentValue;
+    const nextValue = getNextNumericValue(base, range, delta, range.min);
+    commitValue(nextValue, event, source);
+  };
+
+  const handleChange = (event) => {
+    if (typeof onChange === "function") {
+      onChange(event);
+    }
+    updateText(event.target.value, event);
+  };
+
+  const handleKeyDown = (event) => {
+    const delta = getNumericStepForKey(event.key, range);
+    if (delta !== 0) {
+      event.preventDefault();
+      stepValue(delta, event, "keyboard");
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      commitValue(range.min, event, "keyboard");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      commitValue(range.max, event, "keyboard");
+    } else if (event.key === "Enter") {
+      if (commitText(event, "commit") && typeof onEnterPress === "function") {
+        onEnterPress(currentModel.value, event);
+      }
+    } else if (event.key === "Escape") {
+      updateText(formatNumericValue(currentValue, formatValue), event);
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  const decrementDisabled = descriptor.disabledByState || descriptor.readOnly || currentModel.atMin;
+  const incrementDisabled = descriptor.disabledByState || descriptor.readOnly || currentModel.atMax;
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("number-input", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": invalid ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": invalid ? "true" : "false",
+      "data-empty": empty ? "true" : "false",
+      "data-at-min": currentModel.atMin ? "true" : "false",
+      "data-at-max": currentModel.atMax ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("number-input", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    React.createElement("input", {
+      ...createScopeAttributes("number-input", "control", descriptor.state),
+      ref,
+      role: "spinbutton",
+      type: "text",
+      name,
+      placeholder,
+      inputMode,
+      autoComplete,
+      disabled: descriptor.disabledByState,
+      readOnly: descriptor.readOnly,
+      required: descriptor.required,
+      value: currentText,
+      "aria-label": descriptor.ariaLabel,
+      "aria-labelledby": descriptor.ariaLabelledBy,
+      "aria-describedby": descriptor.describedBy,
+      "aria-invalid": invalid ? "true" : undefined,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "aria-readonly": descriptor.readOnly ? "true" : undefined,
+      "aria-valuemin": range.min,
+      "aria-valuemax": range.max,
+      "aria-valuenow": currentModel.value !== null && !currentModel.invalid ? currentModel.value : undefined,
+      "aria-valuetext": currentModel.valueText,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": invalid ? "true" : "false",
+      "data-empty": empty ? "true" : "false",
+      onChange: handleChange,
+      onFocus: handlers.onFocus,
+      onBlur: (event) => {
+        handlers.onBlur(event);
+        commitText(event, "blur");
+      },
+      onKeyDown: handleKeyDown
+    }),
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("number-input", "decrement", descriptor.state),
+        type: "button",
+        disabled: decrementDisabled,
+        "aria-label": resolvedDecrementLabel,
+        "aria-disabled": decrementDisabled ? "true" : undefined,
+        onClick: (event) => stepValue(-range.step, event, "decrement")
+      },
+      resolveIconContent(decrementContent, "collapse")
+    ),
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("number-input", "increment", descriptor.state),
+        type: "button",
+        disabled: incrementDisabled,
+        "aria-label": resolvedIncrementLabel,
+        "aria-disabled": incrementDisabled ? "true" : undefined,
+        onClick: (event) => stepValue(range.step, event, "increment")
+      },
+      resolveIconContent(incrementContent, "expand")
+    ),
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsNumberInput.displayName = "ChipsNumberInput";
+
+export const ChipsStepper = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = 0,
+    min,
+    max,
+    step,
+    largeStep,
+    orientation = "horizontal",
+    disabled = false,
+    loading = false,
+    error = null,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy,
+    valueText,
+    formatValue,
+    decrementLabel,
+    decrementLabelKey,
+    fallbackDecrementLabel = "Decrease value",
+    incrementLabel,
+    incrementLabelKey,
+    fallbackIncrementLabel = "Increase value",
+    decrementContent,
+    incrementContent,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const resolvedLabel = resolveAccessibleText({
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabel = resolveAccessibleText({
+    value: ariaLabel || rest["aria-label"],
+    key: ariaLabelKey,
+    params: ariaLabelParams,
+    fallback: fallbackAriaLabel || resolvedLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabelledBy = isNonEmptyString(ariaLabelledBy || rest["aria-labelledby"])
+    ? String(ariaLabelledBy || rest["aria-labelledby"]).trim()
+    : undefined;
+
+  if (!resolvedAriaLabel && !resolvedAriaLabelledBy) {
+    throw new Error("STEPPER_A11Y_LABEL_REQUIRED");
+  }
+
+  const range = normalizeNumericRange({ min, max, step, largeStep });
+  const normalizedDefaultValue = normalizeNumericValue(defaultValue, range) ?? range.min;
+  const [currentValue, setCurrentValue] = useControllableState({
+    value: value === undefined ? undefined : (normalizeNumericValue(value, range) ?? range.min),
+    defaultValue: normalizedDefaultValue
+  });
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const model = resolveNumericControlModel({
+    value: currentValue,
+    min,
+    max,
+    step,
+    largeStep,
+    valueText,
+    formatValue
+  });
+  const resolvedDecrementLabel = resolveAccessibleText({
+    value: decrementLabel,
+    key: decrementLabelKey,
+    fallback: fallbackDecrementLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedIncrementLabel = resolveAccessibleText({
+    value: incrementLabel,
+    key: incrementLabelKey,
+    fallback: fallbackIncrementLabel,
+    i18n,
+    onDiagnostic
+  });
+  const normalizedOrientation = orientation === "vertical" ? "vertical" : "horizontal";
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const commitValue = (nextValue, event, source) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    const nextModel = resolveNumericControlModel({
+      value: nextValue,
+      min,
+      max,
+      step,
+      largeStep,
+      valueText,
+      formatValue
+    });
+    setCurrentValue(nextModel.value);
+    if (typeof onValueChange === "function") {
+      onValueChange(
+        nextModel.value,
+        createNumericChangeDetails({
+          model: nextModel,
+          previousValue: model.value,
+          source
+        }),
+        event
+      );
+    }
+  };
+
+  const stepValue = (delta, event, source) => {
+    const nextValue = getNextNumericValue(model.value, range, delta, range.min);
+    commitValue(nextValue, event, source);
+  };
+
+  const handleKeyDown = (event) => {
+    const delta = getNumericStepForKey(event.key, range);
+    if (delta !== 0) {
+      event.preventDefault();
+      stepValue(delta, event, "keyboard");
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      commitValue(range.min, event, "keyboard");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      commitValue(range.max, event, "keyboard");
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  const decrementDisabled = disabledByState || model.atMin;
+  const incrementDisabled = disabledByState || model.atMax;
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("stepper", "root", state),
+      ...handlers,
+      ref,
+      role: "group",
+      tabIndex: disabledByState ? undefined : 0,
+      "aria-label": resolvedAriaLabel || undefined,
+      "aria-labelledby": resolvedAriaLabelledBy,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-orientation": normalizedOrientation,
+      "data-at-min": model.atMin ? "true" : "false",
+      "data-at-max": model.atMax ? "true" : "false",
+      onKeyDown: handleKeyDown
+    },
+    resolvedLabel
+      ? React.createElement(
+          "span",
+          createScopeAttributes("stepper", "label", state),
+          resolvedLabel
+        )
+      : null,
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("stepper", "decrement", state),
+        type: "button",
+        disabled: decrementDisabled,
+        "aria-label": resolvedDecrementLabel,
+        "aria-disabled": decrementDisabled ? "true" : undefined,
+        onClick: (event) => stepValue(-range.step, event, "decrement")
+      },
+      resolveIconContent(decrementContent, "collapse")
+    ),
+    React.createElement(
+      "output",
+      {
+        ...createScopeAttributes("stepper", "value", state),
+        "aria-live": "polite",
+        "data-value": model.value !== null ? String(model.value) : ""
+      },
+      model.valueText ?? formatNumericValue(model.value, formatValue)
+    ),
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("stepper", "increment", state),
+        type: "button",
+        disabled: incrementDisabled,
+        "aria-label": resolvedIncrementLabel,
+        "aria-disabled": incrementDisabled ? "true" : undefined,
+        onClick: (event) => stepValue(range.step, event, "increment")
+      },
+      resolveIconContent(incrementContent, "expand")
+    ),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("stepper", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsStepper.displayName = "ChipsStepper";
 
 export const ChipsDialog = React.forwardRef((props, ref) => {
   const {
@@ -9823,6 +10698,22 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "number-input") {
+    assertAriaProps(props, {
+      role: "spinbutton",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "stepper") {
+    assertAriaProps(props, {
+      role: "group",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "dialog") {
     assertAriaProps(props, {
       role: "button",
@@ -10148,6 +11039,18 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     name: "ChipsComboBox",
     scope: "combo-box",
     parts: ["root", "label", "control", "trigger", "list", "option", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsNumberInput",
+    scope: "number-input",
+    parts: ["root", "label", "control", "decrement", "increment", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsStepper",
+    scope: "stepper",
+    parts: ["root", "label", "decrement", "value", "increment", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

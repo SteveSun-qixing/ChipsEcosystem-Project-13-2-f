@@ -34,6 +34,8 @@ import {
   ChipsSearchField,
   ChipsSecureField,
   ChipsSegmentedControl,
+  ChipsNumberInput,
+  ChipsStepper,
   ChipsSpinner,
   ChipsSkeleton,
   ChipsSplitPane,
@@ -92,6 +94,7 @@ import {
   resolveI18nText,
   resolveSystemMessageQueue,
   resolveInteractiveState,
+  resolveNumericControlModel,
   resolveTextInputDescriptor,
   STAGE7_DATA_ADVANCED_COMPONENTS,
   STAGE7_WORKBENCH_COMPONENTS,
@@ -203,6 +206,8 @@ test("buildComponentContract returns task015 base control component contracts", 
   const secureField = buildComponentContract("secure-field");
   const segmentedControl = buildComponentContract("segmented-control");
   const comboBox = buildComponentContract("combo-box");
+  const numberInput = buildComponentContract("number-input");
+  const stepper = buildComponentContract("stepper");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -231,6 +236,12 @@ test("buildComponentContract returns task015 base control component contracts", 
   assert.equal(comboBox.scope, "combo-box");
   assert.ok(comboBox.parts.includes("list"));
   assert.ok(comboBox.tokens.includes("chips.comp.combo-box.option.surface.highlighted"));
+  assert.equal(numberInput.scope, "number-input");
+  assert.ok(numberInput.parts.includes("control"));
+  assert.ok(numberInput.tokens.includes("chips.comp.number-input.root.border.error"));
+  assert.equal(stepper.scope, "stepper");
+  assert.ok(stepper.parts.includes("value"));
+  assert.ok(stepper.tokens.includes("chips.comp.stepper.increment.surface.active"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -270,6 +281,8 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["secure-field"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["segmented-control"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["combo-box"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["number-input"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.stepper));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -458,6 +471,22 @@ test("validateComponentA11y validates known components and rejects missing rule"
       "aria-label": "choose card",
       "aria-expanded": "true",
       "aria-controls": "combo-list"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("number-input", {
+      role: "spinbutton",
+      "aria-label": "quantity"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("stepper", {
+      role: "group",
+      "aria-label": "quantity stepper"
     }),
     true
   );
@@ -833,8 +862,8 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
   );
 });
 
-test("task015 base control metadata includes second through fourth batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 13);
+test("task015 base control metadata includes second through fifth batches", () => {
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 15);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -850,7 +879,9 @@ test("task015 base control metadata includes second through fourth batches", () 
       "search-field",
       "secure-field",
       "segmented-control",
-      "combo-box"
+      "combo-box",
+      "number-input",
+      "stepper"
     ]
   );
 });
@@ -869,7 +900,9 @@ test("task015 base control component exports exist", () => {
     ChipsSearchField,
     ChipsSecureField,
     ChipsSegmentedControl,
-    ChipsComboBox
+    ChipsComboBox,
+    ChipsNumberInput,
+    ChipsStepper
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -1055,6 +1088,68 @@ test("task015 fourth batch selection controls reject missing a11y semantics", ()
         "aria-expanded": "true"
       }),
     /aria-controls is required when aria-expanded is true/
+  );
+});
+
+test("resolveNumericControlModel normalizes range step and text states", () => {
+  const decimal = resolveNumericControlModel({
+    min: 0,
+    max: 1,
+    step: 0.1,
+    value: 0.26
+  });
+  const empty = resolveNumericControlModel({
+    text: "",
+    required: false
+  });
+  const invalid = resolveNumericControlModel({
+    text: "not-a-number"
+  });
+
+  assert.equal(decimal.value, 0.3);
+  assert.equal(decimal.atMin, false);
+  assert.equal(decimal.atMax, false);
+  assert.equal(empty.value, null);
+  assert.equal(empty.empty, true);
+  assert.equal(empty.invalid, false);
+  assert.equal(invalid.value, null);
+  assert.equal(invalid.invalid, true);
+});
+
+test("task015 fifth batch numeric controls publish contract and a11y semantics", () => {
+  const numberInput = buildComponentContract("number-input");
+  const stepper = buildComponentContract("stepper");
+
+  assert.deepEqual(numberInput.parts, ["root", "label", "control", "decrement", "increment", "description", "status"]);
+  assert.ok(numberInput.tokens.includes("chips.comp.number-input.decrement.color.hover"));
+  assert.ok(numberInput.states.includes("focus"));
+  assert.deepEqual(stepper.parts, ["root", "label", "decrement", "value", "increment", "status"]);
+  assert.ok(stepper.tokens.includes("chips.comp.stepper.root.gap"));
+  assert.ok(stepper.states.includes("active"));
+  assert.equal(
+    validateComponentA11y("number-input", {
+      role: "spinbutton",
+      "aria-label": "Quantity"
+    }),
+    true
+  );
+  assert.equal(
+    validateComponentA11y("stepper", {
+      role: "group",
+      "aria-label": "Quantity"
+    }),
+    true
+  );
+});
+
+test("task015 fifth batch numeric controls reject missing a11y semantics", () => {
+  assert.throws(
+    () => validateComponentA11y("number-input", { role: "spinbutton" }),
+    /Either aria-label or aria-labelledby is required/
+  );
+  assert.throws(
+    () => validateComponentA11y("stepper", { role: "group" }),
+    /Either aria-label or aria-labelledby is required/
   );
 });
 

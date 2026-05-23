@@ -44,6 +44,8 @@ ensureRequiredTokenPrefixes(resolved, [
   "chips.comp.secure-field.",
   "chips.comp.segmented-control.",
   "chips.comp.combo-box.",
+  "chips.comp.number-input.",
+  "chips.comp.stepper.",
   "chips.comp.button.",
   "chips.comp.input.",
   "chips.comp.checkbox.",

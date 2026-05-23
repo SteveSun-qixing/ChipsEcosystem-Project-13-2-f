@@ -604,6 +604,119 @@ export interface ComboBoxProps extends BaseTextInputProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }
 
+export type NumericControlChangeSource =
+  | "input"
+  | "commit"
+  | "blur"
+  | "keyboard"
+  | "decrement"
+  | "increment";
+
+export interface NumericControlDetails {
+  source: NumericControlChangeSource | string;
+  previousValue?: number | null;
+  value: number | null;
+  text: string;
+  min: number;
+  max: number;
+  step: number;
+  largeStep: number;
+  atMin: boolean;
+  atMax: boolean;
+  empty: boolean;
+  invalid: boolean;
+}
+
+export interface NumericControlModel {
+  min: number;
+  max: number;
+  step: number;
+  largeStep: number;
+  precision: number;
+  value: number | null;
+  text: string;
+  empty: boolean;
+  invalid: boolean;
+  atMin: boolean;
+  atMax: boolean;
+  valueText?: string;
+}
+
+export interface NumberInputProps extends Omit<BaseTextInputProps, "value" | "defaultValue" | "onValueChange" | "onEnterPress"> {
+  value?: number | null;
+  defaultValue?: number | null;
+  textValue?: string;
+  defaultTextValue?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  largeStep?: number;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  autoComplete?: string;
+  valueText?: string;
+  formatValue?: (value: number) => string;
+  invalidMessage?: string;
+  invalidMessageKey?: string;
+  fallbackInvalidMessage?: string;
+  decrementLabel?: string;
+  decrementLabelKey?: string;
+  fallbackDecrementLabel?: string;
+  incrementLabel?: string;
+  incrementLabelKey?: string;
+  fallbackIncrementLabel?: string;
+  decrementContent?: React.ReactNode;
+  incrementContent?: React.ReactNode;
+  onValueChange?: (
+    value: number | null,
+    details: NumericControlDetails,
+    event?: React.SyntheticEvent,
+  ) => void;
+  onInputChange?: (value: string, event?: React.ChangeEvent<HTMLInputElement>) => void;
+  onEnterPress?: (value: number | null, event?: React.KeyboardEvent<HTMLInputElement>) => void;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+}
+
+export interface StepperProps extends ChipsDisplayTextProps {
+  value?: number | null;
+  defaultValue?: number | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  largeStep?: number;
+  orientation?: "horizontal" | "vertical";
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  ariaLabel?: string;
+  ariaLabelKey?: string;
+  ariaLabelParams?: Record<string, string | number>;
+  fallbackAriaLabel?: string;
+  ariaLabelledBy?: string;
+  valueText?: string;
+  formatValue?: (value: number) => string;
+  decrementLabel?: string;
+  decrementLabelKey?: string;
+  fallbackDecrementLabel?: string;
+  incrementLabel?: string;
+  incrementLabelKey?: string;
+  fallbackIncrementLabel?: string;
+  decrementContent?: React.ReactNode;
+  incrementContent?: React.ReactNode;
+  onValueChange?: (
+    value: number | null,
+    details: NumericControlDetails,
+    event?: React.SyntheticEvent,
+  ) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  [key: string]: unknown;
+}
+
 export interface DialogProps {
   open?: boolean;
   defaultOpen?: boolean;
@@ -1132,6 +1245,8 @@ export const ChipsSwitch: React.ForwardRefExoticComponent<SwitchProps & React.Re
 export const ChipsSelect: React.ForwardRefExoticComponent<SelectProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsSegmentedControl: React.ForwardRefExoticComponent<SegmentedControlProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsComboBox: React.ForwardRefExoticComponent<ComboBoxProps & React.RefAttributes<HTMLInputElement>>;
+export const ChipsNumberInput: React.ForwardRefExoticComponent<NumberInputProps & React.RefAttributes<HTMLInputElement>>;
+export const ChipsStepper: React.ForwardRefExoticComponent<StepperProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
@@ -1182,6 +1297,7 @@ export function buildComponentContract(component: string): {
 };
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
 export function resolveTextInputDescriptor(params?: Record<string, unknown>): TextInputDescriptor;
+export function resolveNumericControlModel(params?: Record<string, unknown>): NumericControlModel;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];

@@ -130,13 +130,6 @@
         "disabled",
         "empty"
       ],
-      "iframe": {
-        "requiredSandbox": true,
-        "lifecycleEvents": [
-          "ready",
-          "error"
-        ]
-      },
       "requiredTokens": [
         "chips.comp.card-cover-frame.border.radius",
         "chips.comp.card-cover-frame.name.color",
@@ -295,13 +288,6 @@
         "error",
         "disabled"
       ],
-      "iframe": {
-        "requiredSandbox": true,
-        "lifecycleEvents": [
-          "ready",
-          "error"
-        ]
-      },
       "requiredTokens": [
         "chips.comp.composite-card-window.overlay.surface",
         "chips.comp.composite-card-window.overlay.text",
@@ -883,6 +869,49 @@
       ]
     },
     {
+      "component": "number-input",
+      "scope": "number-input",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "decrement",
+        "increment",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.number-input.root.radius",
+        "chips.comp.number-input.root.surface.idle",
+        "chips.comp.number-input.root.surface.focus",
+        "chips.comp.number-input.root.surface.disabled",
+        "chips.comp.number-input.root.border.idle",
+        "chips.comp.number-input.root.border.focus",
+        "chips.comp.number-input.root.border.error",
+        "chips.comp.number-input.label.color",
+        "chips.comp.number-input.control.color",
+        "chips.comp.number-input.placeholder.color",
+        "chips.comp.number-input.decrement.color.idle",
+        "chips.comp.number-input.decrement.color.hover",
+        "chips.comp.number-input.decrement.color.disabled",
+        "chips.comp.number-input.increment.color.idle",
+        "chips.comp.number-input.increment.color.hover",
+        "chips.comp.number-input.increment.color.disabled",
+        "chips.comp.number-input.description.color",
+        "chips.comp.number-input.status.color.error",
+        "chips.comp.number-input.focus.outline"
+      ]
+    },
+    {
       "component": "panel-header",
       "scope": "panel-header",
       "parts": [
@@ -1362,6 +1391,47 @@
         "chips.comp.stack.root.gap",
         "chips.comp.stack.root.surface",
         "chips.comp.stack.focus.outline"
+      ]
+    },
+    {
+      "component": "stepper",
+      "scope": "stepper",
+      "parts": [
+        "root",
+        "label",
+        "decrement",
+        "value",
+        "increment",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.stepper.root.radius",
+        "chips.comp.stepper.root.gap",
+        "chips.comp.stepper.label.color",
+        "chips.comp.stepper.value.color",
+        "chips.comp.stepper.decrement.surface.idle",
+        "chips.comp.stepper.decrement.surface.hover",
+        "chips.comp.stepper.decrement.surface.active",
+        "chips.comp.stepper.decrement.surface.disabled",
+        "chips.comp.stepper.decrement.icon.color.idle",
+        "chips.comp.stepper.decrement.icon.color.disabled",
+        "chips.comp.stepper.increment.surface.idle",
+        "chips.comp.stepper.increment.surface.hover",
+        "chips.comp.stepper.increment.surface.active",
+        "chips.comp.stepper.increment.surface.disabled",
+        "chips.comp.stepper.increment.icon.color.idle",
+        "chips.comp.stepper.increment.icon.color.disabled",
+        "chips.comp.stepper.status.color.error",
+        "chips.comp.stepper.focus.outline"
       ]
     },
     {

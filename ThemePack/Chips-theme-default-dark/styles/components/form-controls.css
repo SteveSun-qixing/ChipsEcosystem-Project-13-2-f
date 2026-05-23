@@ -268,3 +268,104 @@
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Stepper */
+
+[data-scope="stepper"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--chips-comp-stepper-root-gap, var(--chips-layout-gap-xs));
+  color: var(--chips-sys-color-on-surface);
+}
+
+[data-scope="stepper"][data-part="root"][data-orientation="vertical"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+[data-scope="stepper"][data-part="root"][data-state="disabled"] {
+  opacity: 0.6;
+}
+
+[data-scope="stepper"][data-part="root"]:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-stepper-focus-outline);
+}
+
+[data-scope="stepper"][data-part="label"] {
+  color: var(--chips-comp-stepper-label-color);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+[data-scope="stepper"][data-part="decrement"],
+[data-scope="stepper"][data-part="increment"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--chips-layout-density-compact);
+  min-block-size: var(--chips-layout-density-compact);
+  border: 1px solid var(--chips-base-border-subtle);
+  border-radius: var(--chips-comp-stepper-root-radius, var(--chips-base-radius-md));
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="stepper"][data-part="decrement"] {
+  background-color: var(--chips-comp-stepper-decrement-surface-idle);
+  color: var(--chips-comp-stepper-decrement-icon-color-idle);
+}
+
+[data-scope="stepper"][data-part="increment"] {
+  background-color: var(--chips-comp-stepper-increment-surface-idle);
+  color: var(--chips-comp-stepper-increment-icon-color-idle);
+}
+
+[data-scope="stepper"][data-part="decrement"]:hover {
+  background-color: var(--chips-comp-stepper-decrement-surface-hover);
+}
+
+[data-scope="stepper"][data-part="increment"]:hover {
+  background-color: var(--chips-comp-stepper-increment-surface-hover);
+}
+
+[data-scope="stepper"][data-part="decrement"]:active {
+  background-color: var(--chips-comp-stepper-decrement-surface-active);
+}
+
+[data-scope="stepper"][data-part="increment"]:active {
+  background-color: var(--chips-comp-stepper-increment-surface-active);
+}
+
+[data-scope="stepper"][data-part="decrement"]:disabled {
+  background-color: var(--chips-comp-stepper-decrement-surface-disabled);
+  color: var(--chips-comp-stepper-decrement-icon-color-disabled);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+[data-scope="stepper"][data-part="increment"]:disabled {
+  background-color: var(--chips-comp-stepper-increment-surface-disabled);
+  color: var(--chips-comp-stepper-increment-icon-color-disabled);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+[data-scope="stepper"][data-part="value"] {
+  min-inline-size: 48cpx;
+  text-align: center;
+  color: var(--chips-comp-stepper-value-color);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-scope="stepper"][data-part="status"] {
+  color: var(--chips-comp-stepper-status-color-error);
+  font-size: 12px;
+  line-height: 1.4;
+}

@@ -76,6 +76,8 @@ test("task015 base control contracts expose button display feedback and input sc
   const secureField = readContract("secure-field.contract.json");
   const segmentedControl = readContract("segmented-control.contract.json");
   const comboBox = readContract("combo-box.contract.json");
+  const numberInput = readContract("number-input.contract.json");
+  const stepper = readContract("stepper.contract.json");
 
   for (const contract of [
     iconButton,
@@ -90,7 +92,9 @@ test("task015 base control contracts expose button display feedback and input sc
     searchField,
     secureField,
     segmentedControl,
-    comboBox
+    comboBox,
+    numberInput,
+    stepper
   ]) {
     assertCommonShape(contract);
   }
@@ -120,6 +124,12 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(comboBox.parts.includes("list"));
   assert.ok(comboBox.parts.includes("option"));
   assert.ok(comboBox.tokens.includes("chips.comp.combo-box.option.surface.highlighted"));
+  assert.ok(numberInput.parts.includes("control"));
+  assert.ok(numberInput.parts.includes("increment"));
+  assert.ok(numberInput.tokens.includes("chips.comp.number-input.root.border.error"));
+  assert.ok(stepper.parts.includes("value"));
+  assert.ok(stepper.parts.includes("increment"));
+  assert.ok(stepper.tokens.includes("chips.comp.stepper.increment.surface.active"));
 });
 
 test("only advanced iframe components expose iframe contract extension", () => {

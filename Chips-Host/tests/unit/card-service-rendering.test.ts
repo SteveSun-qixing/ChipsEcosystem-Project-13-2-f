@@ -62,6 +62,156 @@ const createTempDir = async (prefix: string): Promise<string> => {
   return dir;
 };
 
+const writeText = async (filePath: string, content: string): Promise<void> => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, content, 'utf-8');
+};
+
+type BaseCardPluginFixtureKind = 'richtext' | 'image';
+
+const createBaseCardPluginFixture = async (
+  rootDir: string,
+  kind: BaseCardPluginFixtureKind,
+): Promise<string> => {
+  const pluginDir = path.join(rootDir, `fixture-${kind}-basecard-plugin`);
+  const pluginId = kind === 'richtext' ? 'chips.basecard.richtext' : 'chips.basecard.image';
+  const cardTypes = kind === 'richtext' ? ['base.richtext', 'RichTextCard'] : ['base.image', 'ImageCard'];
+  const displayName = kind === 'richtext' ? 'Rich Text Base Card' : 'Image Base Card';
+
+  await writeText(
+    path.join(pluginDir, 'manifest.yaml'),
+    [
+      `id: ${pluginId}`,
+      `name: ${displayName}`,
+      'version: "1.0.0"',
+      'type: card',
+      'entry: dist/index.mjs',
+      `description: Host unit fixture for ${displayName}`,
+      'capabilities:',
+      '  cardTypes:',
+      ...cardTypes.map((cardType) => `    - ${cardType}`),
+      'permissions: []',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: true',
+      '',
+    ].join('\n'),
+  );
+
+  await writeText(
+    path.join(pluginDir, 'dist/index.mjs'),
+    kind === 'richtext' ? createRichTextPluginEntry(pluginId, cardTypes, displayName) : createImagePluginEntry(pluginId, cardTypes, displayName),
+  );
+
+  return path.join(pluginDir, 'manifest.yaml');
+};
+
+const installBaseCardPluginFixture = async (
+  runtime: PluginRuntime,
+  rootDir: string,
+  kind: BaseCardPluginFixtureKind,
+): Promise<void> => {
+  const manifestPath = await createBaseCardPluginFixture(rootDir, kind);
+  const install = await runtime.install(manifestPath);
+  await runtime.enable(install.manifest.id);
+};
+
+const createRichTextPluginEntry = (pluginId: string, cardTypes: string[], displayName: string): string => [
+  'const toText = (value) => (value === null || value === undefined ? "" : String(value));',
+  'const htmlEntities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", [String.fromCharCode(34)]: "&quot;", [String.fromCharCode(39)]: "&#39;" };',
+  'const escapeHtml = (value) => toText(value).replace(/[&<>"\']/g, (char) => htmlEntities[char]);',
+  'const richTextDefaults = { card_type: "RichTextCard", content_format: "markdown", content_source: "inline", content_text: "" };',
+  'export function renderBasecardView(ctx = {}) {',
+  '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
+  '  const text = toText(ctx.config?.content_text ?? ctx.config?.contentText);',
+  '  const article = documentRef.createElement("article");',
+  '  article.dataset.scope = "richtext-card";',
+  `  article.dataset.pluginId = ${JSON.stringify(pluginId)};`,
+  '  article.innerHTML = `<div class="chips-richtext-view">${escapeHtml(text).replace(/^#\\s*/, "")}</div>`;',
+  '  ctx.container?.replaceChildren(article);',
+  '  return () => article.remove();',
+  '}',
+  'export function renderBasecardEditor(ctx = {}) {',
+  '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
+  '  const toolbar = documentRef.createElement("div");',
+  '  toolbar.className = "chips-basecard-editor__floating-toolbar";',
+  '  toolbar.textContent = "Rich text tools";',
+  '  const editor = documentRef.createElement("textarea");',
+  '  editor.className = "chips-basecard-editor__surface";',
+  '  editor.value = toText(ctx.initialConfig?.content_text ?? ctx.initialConfig?.contentText);',
+  '  editor.addEventListener("input", () => ctx.onChange?.({ ...richTextDefaults, ...(ctx.initialConfig ?? {}), content_text: editor.value }));',
+  '  ctx.container?.replaceChildren(toolbar, editor);',
+  '  return () => ctx.container?.replaceChildren();',
+  '}',
+  'export const basecardDefinition = {',
+  `  pluginId: ${JSON.stringify(pluginId)},`,
+  `  cardType: ${JSON.stringify(cardTypes[0])},`,
+  `  cardTypes: ${JSON.stringify(cardTypes)},`,
+  `  displayName: ${JSON.stringify(displayName)},`,
+  '  icon: { name: "article", decorative: true },',
+  '  createDefaultConfig() { return { ...richTextDefaults }; },',
+  '  normalizeConfig(input = {}) { return { ...richTextDefaults, ...input }; },',
+  '  validateConfig() { return { valid: true, errors: {} }; },',
+  '  collectResourcePaths() { return []; },',
+  '  renderView: renderBasecardView,',
+  '  renderEditor: renderBasecardEditor,',
+  '};',
+  '',
+].join('\n');
+
+const createImagePluginEntry = (pluginId: string, cardTypes: string[], displayName: string): string => [
+  'const asImages = (config) => Array.isArray(config?.images) ? config.images : [];',
+  'export function renderBasecardView(ctx = {}) {',
+  '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
+  '  const root = documentRef.createElement("section");',
+  '  root.dataset.scope = "image-card";',
+  `  root.dataset.pluginId = ${JSON.stringify(pluginId)};`,
+  '  for (const image of asImages(ctx.config)) {',
+  '    const img = documentRef.createElement("img");',
+  '    const source = String(image?.file_path ?? image?.src ?? "");',
+  '    img.alt = String(image?.alt ?? image?.title ?? "");',
+  '    img.dataset.resourcePath = source;',
+  '    if (ctx.resolveResourceUrl && source) {',
+  '      Promise.resolve(ctx.resolveResourceUrl(source)).then((url) => { img.src = url; }).catch(() => { img.src = source; });',
+  '    } else {',
+  '      img.src = source;',
+  '    }',
+  '    root.appendChild(img);',
+  '  }',
+  '  ctx.container?.replaceChildren(root);',
+  '  return () => root.remove();',
+  '}',
+  'export function renderBasecardEditor(ctx = {}) {',
+  '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
+  '  const panel = documentRef.createElement("section");',
+  '  panel.className = "chips-image-card-editor";',
+  '  panel.textContent = "Image card editor";',
+  '  ctx.container?.replaceChildren(panel);',
+  '  return () => ctx.container?.replaceChildren();',
+  '}',
+  'export const basecardDefinition = {',
+  `  pluginId: ${JSON.stringify(pluginId)},`,
+  `  cardType: ${JSON.stringify(cardTypes[0])},`,
+  `  cardTypes: ${JSON.stringify(cardTypes)},`,
+  `  displayName: ${JSON.stringify(displayName)},`,
+  '  icon: { name: "image", decorative: true },',
+  '  createDefaultConfig() { return { card_type: "ImageCard", images: [] }; },',
+  '  normalizeConfig(input = {}) { return { card_type: "ImageCard", images: asImages(input), ...input }; },',
+  '  validateConfig() { return { valid: true, errors: {} }; },',
+  '  collectResourcePaths(config = {}) { return asImages(config).map((image) => image?.file_path).filter((value) => typeof value === "string" && value.length > 0); },',
+  '  renderView: renderBasecardView,',
+  '  renderEditor: renderBasecardEditor,',
+  '};',
+  '',
+].join('\n');
+
 const installBlobUrlSupport = (window: JsdomWindowLike): void => {
   const url = window.URL as typeof URL & {
     createObjectURL?: (blob: Blob) => string;
@@ -357,8 +507,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
@@ -396,8 +545,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
@@ -438,8 +586,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const previewView = await service.render(cardDir, {
@@ -470,8 +617,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -498,8 +644,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.renderEditor({
@@ -549,8 +694,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'image');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.renderBasecard({
@@ -599,8 +743,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'image');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -626,8 +769,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'image');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
@@ -657,8 +799,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/image-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'image');
     const service = new CardService({
       runtime,
       workspaceRoot: process.cwd(),
@@ -696,8 +837,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-dark-theme'
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardFile, {
@@ -718,8 +858,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -769,8 +908,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -798,8 +936,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -823,8 +960,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -908,8 +1044,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -1028,8 +1163,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -1134,8 +1268,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {
@@ -1226,8 +1359,7 @@ describe('CardService rendering', () => {
       themeId: 'chips-official.default-theme',
     });
     await runtime.load();
-    const install = await runtime.install(path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP'));
-    await runtime.enable(install.manifest.id);
+    await installBaseCardPluginFixture(runtime, workspace, 'richtext');
     const service = new CardService({ runtime, workspaceRoot: process.cwd() });
 
     const view = await service.render(cardDir, {

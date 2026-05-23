@@ -14,6 +14,11 @@ const MANAGED_RESOURCE_CONTENT = Buffer.from('cover-bytes', 'utf-8');
 
 let workspace: string;
 
+const writeText = async (filePath: string, content: string): Promise<void> => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, content, 'utf-8');
+};
+
 const unwrapBinaryRoutePayload = (value: Buffer | { type: 'Buffer'; data: number[] }): Buffer => {
   if (Buffer.isBuffer(value)) {
     return value;
@@ -88,6 +93,108 @@ const createRenderBoxArchive = async (): Promise<string> => {
   return boxFile;
 };
 
+const createRichTextCardPluginFixture = async (): Promise<string> => {
+  const pluginDir = path.join(workspace, 'fixture-richtext-card-plugin');
+  await writeText(
+    path.join(pluginDir, 'manifest.yaml'),
+    [
+      'id: chips.basecard.richtext.fixture',
+      'name: 富文本基础卡片插件',
+      'version: "1.0.0"',
+      'type: card',
+      'entry: dist/index.mjs',
+      'description: Host managed render protocol fixture rich text plugin',
+      'capabilities:',
+      '  cardTypes:',
+      '    - base.richtext',
+      '    - RichTextCard',
+      'permissions: []',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: true',
+      '',
+    ].join('\n'),
+  );
+  await writeText(
+    path.join(pluginDir, 'dist/index.mjs'),
+    [
+      'export const basecardDefinition = {',
+      '  pluginId: "chips.basecard.richtext.fixture",',
+      '  cardTypes: ["base.richtext", "RichTextCard"],',
+      '  createDefaultConfig() { return {}; },',
+      '  normalizeConfig(input = {}) { return input; },',
+      '  validateConfig() { return { valid: true, errors: {} }; },',
+      '  collectResourcePaths() { return []; },',
+      '  renderView({ config }) {',
+      '    const text = String(config?.content_text ?? config?.contentText ?? "");',
+      '    return `<article data-scope="richtext-card">${text}</article>`;',
+      '  },',
+      '  renderEditor() { return `<section data-scope="richtext-card-editor"></section>`; },',
+      '};',
+      '',
+    ].join('\n'),
+  );
+  return path.join(pluginDir, 'manifest.yaml');
+};
+
+const createLayoutPluginFixture = async (): Promise<string> => {
+  const pluginDir = path.join(workspace, 'fixture-grid-layout-plugin');
+  await writeText(
+    path.join(pluginDir, 'manifest.yaml'),
+    [
+      'id: chips.layout.grid.fixture',
+      'name: 网格布局插件',
+      'version: "1.0.0"',
+      'type: layout',
+      'entry: dist/index.mjs',
+      'description: Host managed render protocol fixture grid layout plugin',
+      'permissions:',
+      '  - box.read',
+      '  - theme.read',
+      '  - i18n.read',
+      'runtime:',
+      '  targets:',
+      '    desktop:',
+      '      supported: true',
+      '    web:',
+      '      supported: false',
+      '    mobile:',
+      '      supported: false',
+      '    headless:',
+      '      supported: true',
+      'layout:',
+      '  layoutType: chips.layout.grid',
+      '  displayName: 网格布局插件',
+      '',
+    ].join('\n'),
+  );
+  await writeText(
+    path.join(pluginDir, 'dist/index.mjs'),
+    [
+      'export const layoutDefinition = {',
+      '  pluginId: "chips.layout.grid.fixture",',
+      '  layoutType: "chips.layout.grid",',
+      '  displayName: "网格布局插件",',
+      '  createDefaultConfig() { return {}; },',
+      '  normalizeConfig(input = {}) { return input; },',
+      '  validateConfig() { return { valid: true, errors: {} }; },',
+      '  getInitialQuery() { return {}; },',
+      '  renderView() {},',
+      '  renderEditor() {},',
+      '};',
+      '',
+    ].join('\n'),
+  );
+  return path.join(pluginDir, 'manifest.yaml');
+};
+
 beforeEach(async () => {
   workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-host-render-protocol-'));
 });
@@ -126,7 +233,7 @@ describe('HostApplication managed render protocol', () => {
       });
       await bootstrapRuntime.invoke('plugin.enable', { pluginId: defaultTheme.pluginId });
       const richtextPlugin = await bootstrapRuntime.invoke<{ pluginId: string }>('plugin.install', {
-        manifestPath: path.resolve(process.cwd(), '../Chips-BaseCardPlugin/richtext-BCP/manifest.yaml'),
+        manifestPath: await createRichTextCardPluginFixture(),
       });
       await bootstrapRuntime.invoke('plugin.enable', { pluginId: richtextPlugin.pluginId });
 
@@ -244,7 +351,7 @@ describe('HostApplication managed render protocol', () => {
       });
       await bootstrapRuntime.invoke('plugin.enable', { pluginId: defaultTheme.pluginId });
       const gridLayout = await bootstrapRuntime.invoke<{ pluginId: string }>('plugin.install', {
-        manifestPath: path.resolve(process.cwd(), '../Chips-BoxLayoutPlugin/grid-BLP/manifest.yaml'),
+        manifestPath: await createLayoutPluginFixture(),
       });
       await bootstrapRuntime.invoke('plugin.enable', { pluginId: gridLayout.pluginId });
 

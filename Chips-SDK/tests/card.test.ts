@@ -135,6 +135,52 @@ describe("CardApi", () => {
     });
   });
 
+  it("unwraps card.parse ast and validates card files through the Host contract", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const ast = {
+      metadata: {
+        name: "Demo Card",
+      },
+      content: [],
+    };
+
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "card.parse") {
+          return { ast } as any;
+        }
+        if (action === "card.validate") {
+          return {
+            valid: false,
+            errors: ["metadata.name is required"],
+          } as any;
+        }
+        throw new Error(`unexpected action: ${action}`);
+      }),
+    );
+
+    await expect(api.parse("/tmp/demo.card")).resolves.toEqual(ast);
+    await expect(api.validate("/tmp/demo.card")).resolves.toEqual({
+      valid: false,
+      errors: ["metadata.name is required"],
+    });
+    expect(calls).toEqual([
+      {
+        action: "card.parse",
+        payload: {
+          cardFile: "/tmp/demo.card",
+        },
+      },
+      {
+        action: "card.validate",
+        payload: {
+          cardFile: "/tmp/demo.card",
+        },
+      },
+    ]);
+  });
+
   it("passes card open requests into card.open and unwraps result", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
 

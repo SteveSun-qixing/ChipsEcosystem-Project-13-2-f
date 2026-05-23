@@ -134,6 +134,33 @@ describe("ResourceApi", () => {
     });
   });
 
+  it("unwraps resource.readMetadata metadata returned by the official route", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const metadata = {
+      path: "/tmp/demo.mp3",
+      size: 4096,
+      isFile: true,
+      isDirectory: false,
+      mtimeMs: 1_710_000_000_000,
+    };
+    const api = createResourceApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          metadata,
+        } as never;
+      }),
+    );
+
+    await expect(api.readMetadata("/tmp/demo.mp3")).resolves.toEqual(metadata);
+    expect(calls[0]).toEqual({
+      action: "resource.readMetadata",
+      payload: {
+        resourceId: "/tmp/demo.mp3",
+      },
+    });
+  });
+
   it("unwraps nested Buffer-json payloads returned across the bridge serialization boundary", async () => {
     const api = createResourceApi(
       createStubClient(async () => {

@@ -139,7 +139,7 @@ export function createThemeApi(client: CoreClient): ThemeApi {
       if (!themeId) {
         throw createError("INVALID_ARGUMENT", "theme.apply: themeId is required.");
       }
-      return client.invoke("theme.apply", { id: themeId });
+      await client.invoke("theme.apply", { id: themeId });
     },
     async getCurrent(options) {
       return client.invoke<{ appId?: string; pluginId?: string }, ThemeState>("theme.getCurrent", options ?? {});

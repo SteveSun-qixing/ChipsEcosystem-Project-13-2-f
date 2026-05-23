@@ -171,37 +171,42 @@ export function createFileApi(client: CoreClient): FileApi {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.stat: path is required.");
       }
-      return client.invoke("file.stat", { path });
+      const result = await client.invoke<{ path: string }, { meta: FileStat }>("file.stat", { path });
+      return result.meta;
     },
     async list(dir, options) {
       if (!dir) {
         throw createError("INVALID_ARGUMENT", "file.list: dir is required.");
       }
-      return client.invoke("file.list", { dir, options });
+      const result = await client.invoke<
+        { dir: string; options?: FileListOptions },
+        { entries: FileEntry[] }
+      >("file.list", { dir, options });
+      return result.entries;
     },
     async mkdir(path) {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.mkdir: path is required.");
       }
-      return client.invoke("file.mkdir", { path });
+      await client.invoke("file.mkdir", { path });
     },
     async delete(path, options) {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.delete: path is required.");
       }
-      return client.invoke("file.delete", { path, options });
+      await client.invoke("file.delete", { path, options });
     },
     async move(sourcePath, destPath) {
       if (!sourcePath || !destPath) {
         throw createError("INVALID_ARGUMENT", "file.move: sourcePath and destPath are required.");
       }
-      return client.invoke("file.move", { sourcePath, destPath });
+      await client.invoke("file.move", { sourcePath, destPath });
     },
     async copy(sourcePath, destPath) {
       if (!sourcePath || !destPath) {
         throw createError("INVALID_ARGUMENT", "file.copy: sourcePath and destPath are required.");
       }
-      return client.invoke("file.copy", { sourcePath, destPath });
+      await client.invoke("file.copy", { sourcePath, destPath });
     },
   };
 }

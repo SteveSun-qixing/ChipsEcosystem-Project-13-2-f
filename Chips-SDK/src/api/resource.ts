@@ -98,9 +98,12 @@ export interface ResourceOpenResult {
 }
 
 export interface ResourceMeta {
-  id: string;
-  mimeType: string;
-  size: number;
+  path?: string;
+  mimeType?: string;
+  size?: number;
+  isFile?: boolean;
+  isDirectory?: boolean;
+  mtimeMs?: number;
   [key: string]: unknown;
 }
 
@@ -229,7 +232,11 @@ export function createResourceApi(client: CoreClient): ResourceApi {
       if (!resourceId) {
         throw createError("INVALID_ARGUMENT", "resource.readMetadata: resourceId is required.");
       }
-      return client.invoke("resource.readMetadata", { resourceId });
+      const result = await client.invoke<{ resourceId: string }, { metadata: ResourceMeta }>(
+        "resource.readMetadata",
+        { resourceId },
+      );
+      return result.metadata;
     },
     async readBinary(resourceId) {
       if (!resourceId) {

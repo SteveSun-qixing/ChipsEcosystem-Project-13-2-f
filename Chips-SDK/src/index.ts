@@ -74,14 +74,15 @@ export type {
   ThemeState,
   ThemeTokenLayer
 } from "./api/theme";
-export type { ConfigApi } from "./api/config";
-export type { I18nApi } from "./api/i18n";
+export type { ConfigApi, ConfigScope, ConfigWriteOptions } from "./api/config";
+export type { I18nApi, LanguageChangedPayload } from "./api/i18n";
 export type {
   CommandApi,
   CommandChangedEvent,
   CommandCondition,
   CommandConditionExpression,
   CommandDefinitionInput,
+  CommandDiagnostic,
   CommandInvokedEvent,
   CommandInvocationContext,
   CommandInvokeOptions,

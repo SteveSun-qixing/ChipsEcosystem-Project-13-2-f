@@ -103,10 +103,10 @@ client.card.readMetadata(cardFile: string): Promise<Record<string, unknown>>
 client.card.parse(cardPath: string): Promise<CardDocument>
 ```
 
-验证卡片使用 `client.card.validate()` 方法，验证卡片结构是否符合规范。方法签名：
+验证卡片使用 `client.card.validate()` 方法，传入卡片文件路径，验证卡片结构是否符合规范。方法签名：
 
 ```typescript
-client.card.validate(cardDoc: CardDocument): Promise<ValidationResult>
+client.card.validate(cardFile: string): Promise<ValidationResult>
 ```
 
 渲染卡片使用 `client.card.render()` 方法，传入卡片文件路径。返回渲染后的视图对象。方法签名：
@@ -137,6 +137,17 @@ Uint8Array
 - 若 Host / Bridge 因传输序列化返回 `latin1` 字节串、Base64 字符串、`Buffer` JSON、`ArrayBuffer` 或其他 TypedArray，SDK 会在内部统一归一为 `Uint8Array`；
 - 调用方不应在业务层自行兼容 `.content.data`、`{ type: "Buffer" }` 等中间包装形状；
 - 该接口适用于编辑器链路中的资源转码结果读取、图片头判断、音频元数据解析等需要稳定字节数组的场景。
+
+### `client.file.stat(...)` 与 `client.file.list(...)`
+
+SDK 会把 Host `file.stat` 的 `{ meta }` 与 `file.list` 的 `{ entries }` 路由响应解包后返回：
+
+```typescript
+client.file.stat(path: string): Promise<FileStat>
+client.file.list(dir: string, options?: FileListOptions): Promise<FileEntry[]>
+```
+
+调用方只消费 `FileStat` 与 `FileEntry[]`，不得在业务层依赖 `{ meta }` 或 `{ entries }` 这类 Host 路由 envelope。
 
 ## 资源打开路由
 
@@ -185,6 +196,20 @@ ArrayBuffer
 - 若 Host / Bridge 运行时内部经过 `Buffer` 包装，或在桥接序列化后退化为 `{ data: { type: "Buffer", data: number[] } }`，SDK 会在内部统一解包，再向业务层返回 `ArrayBuffer`；
 - 调用方不得把 `.data` 包装对象当作公共契约，也不应在业务层自行兼容多种返回形状；
 - 该接口适用于音频元数据解析、图片字节读取、自定义资源解析等需要原始字节的场景。
+
+### `client.resource.readMetadata(...)`
+
+推荐用法：
+
+```typescript
+const metadata = await client.resource.readMetadata("/tmp/demo.mp3");
+```
+
+使用语义：
+
+- SDK 会把 Host `resource.readMetadata` 的 `{ metadata }` 响应解包为 `ResourceMeta`；
+- 对本地文件与 `file://` 资源，当前 metadata 至少可包含 `size / isFile / isDirectory / mtimeMs` 等文件统计信息；
+- 调用方不得在业务层依赖 `{ metadata }` 路由 envelope。
 
 ### `client.resource.open(...)`
 

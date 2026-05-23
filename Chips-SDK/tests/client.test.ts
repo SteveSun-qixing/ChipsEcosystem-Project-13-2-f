@@ -383,19 +383,24 @@ describe("createClient", () => {
 
   it("passes recursive list and delete options into file routes", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
+    const entry = {
+      path: "/workspace/card/content/demo.yaml",
+      isFile: true,
+      isDirectory: false,
+    };
 
     const client = createClient({
       environment: "node",
       transport: async (action, payload) => {
         calls.push({ action, payload });
         if (action === "file.list") {
-          return { entries: [] };
+          return { entries: [entry] };
         }
         return undefined;
       },
     });
 
-    await client.file.list("/workspace/card", { recursive: true });
+    await expect(client.file.list("/workspace/card", { recursive: true })).resolves.toEqual([entry]);
     await client.file.delete("/workspace/card/tmp", { recursive: true });
 
     expect(calls).toEqual([
@@ -415,6 +420,86 @@ describe("createClient", () => {
           options: {
             recursive: true,
           },
+        },
+      },
+    ]);
+  });
+
+  it("unwraps file.stat and config responses from Host route envelopes", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const stat = {
+      path: "/workspace/card",
+      size: 128,
+      isFile: false,
+      isDirectory: true,
+      mtimeMs: 1_710_000_000_000,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "file.stat":
+            return { meta: stat };
+          case "config.get":
+            return { value: "chips-official.default-theme" };
+          case "config.set":
+          case "config.batchSet":
+          case "config.reset":
+            return { ack: true };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(client.file.stat("/workspace/card")).resolves.toEqual(stat);
+    await expect(client.config.get("ui.theme")).resolves.toBe("chips-official.default-theme");
+    await expect(client.config.set("ui.theme", "chips-official.dark", { scope: "workspace" })).resolves.toBeUndefined();
+    await expect(
+      client.config.batchSet(
+        {
+          "ui.theme": "chips-official.dark",
+          "ui.locale": "zh-CN",
+        },
+        { scope: "user" },
+      ),
+    ).resolves.toBeUndefined();
+    await expect(client.config.reset("ui.theme", { scope: "user" })).resolves.toBeUndefined();
+
+    expect(calls).toEqual([
+      {
+        action: "file.stat",
+        payload: { path: "/workspace/card" },
+      },
+      {
+        action: "config.get",
+        payload: { key: "ui.theme" },
+      },
+      {
+        action: "config.set",
+        payload: {
+          key: "ui.theme",
+          value: "chips-official.dark",
+          scope: "workspace",
+        },
+      },
+      {
+        action: "config.batchSet",
+        payload: {
+          entries: {
+            "ui.theme": "chips-official.dark",
+            "ui.locale": "zh-CN",
+          },
+          scope: "user",
+        },
+      },
+      {
+        action: "config.reset",
+        payload: {
+          key: "ui.theme",
+          scope: "user",
         },
       },
     ]);
@@ -591,12 +676,16 @@ describe("createClient", () => {
     });
   });
 
-  it("unwraps i18n responses and preserves theme snapshots", async () => {
+  it("unwraps i18n responses, void acks, and language changed events", async () => {
+    const listeners = new Map<string, (payload: unknown) => void>();
     const client = createClient({
       environment: "node",
       transport: async (action) => {
         if (action === "i18n.getCurrent") {
           return { locale: "zh-CN" };
+        }
+        if (action === "i18n.setCurrent") {
+          return { ack: true };
         }
         if (action === "i18n.translate") {
           return { text: "系统已就绪" };
@@ -610,14 +699,29 @@ describe("createClient", () => {
         throw { code: "SERVICE_NOT_FOUND", message: action };
       },
     });
+    const clientEvents = client.events as typeof client.events & {
+      on<T>(eventName: string, handler: (payload: T) => void): () => void;
+    };
+    clientEvents.on = (eventName, handler) => {
+      listeners.set(eventName, handler as (payload: unknown) => void);
+      return () => listeners.delete(eventName);
+    };
 
     await expect(client.i18n.getCurrent()).resolves.toBe("zh-CN");
+    await expect(client.i18n.setCurrent("en-US")).resolves.toBeUndefined();
     await expect(client.i18n.translate("system.ready")).resolves.toBe("系统已就绪");
     await expect(client.i18n.listLocales()).resolves.toEqual(["zh-CN", "en-US"]);
     await expect(client.theme.getAllCss()).resolves.toEqual({
       css: ":root{--chips-sys-color-surface:#fff;}",
       themeId: "chips-official.default-theme",
     });
+
+    const changedEvents: unknown[] = [];
+    const off = client.i18n.onChanged((payload) => changedEvents.push(payload));
+    listeners.get("language.changed")?.({ locale: "en-US" });
+    off();
+    listeners.get("language.changed")?.({ locale: "zh-CN" });
+    expect(changedEvents).toEqual([{ locale: "en-US" }]);
   });
 
   it("wraps command registry actions and changed subscriptions", async () => {
@@ -664,6 +768,11 @@ describe("createClient", () => {
         enabled: true,
         visible: true,
       },
+      diagnostic: {
+        visible: true,
+        enabled: true,
+        checked: false,
+      },
       ownerPluginId: "chips.demo",
     };
 
@@ -683,6 +792,7 @@ describe("createClient", () => {
               commandId: command.commandId,
               invocationId: "invocation-1",
               dispatched: true,
+              command,
             };
           case "command.unregister":
             return { ack: true };
@@ -728,6 +838,7 @@ describe("createClient", () => {
       commandId: command.commandId,
       invocationId: "invocation-1",
       dispatched: true,
+      command,
     });
     await expect(
       client.command.setState(command.commandId, {
@@ -1013,6 +1124,9 @@ describe("createClient", () => {
         if (action === "theme.contract.get") {
           return contractView;
         }
+        if (action === "theme.apply") {
+          return { success: true, themeId: "chips.test.theme" };
+        }
         throw { code: "SERVICE_NOT_FOUND", message: action };
       },
     });
@@ -1031,6 +1145,7 @@ describe("createClient", () => {
       summary,
     });
     await expect(client.theme.contract.get("button")).resolves.toEqual(contractView);
+    await expect(client.theme.apply("chips.test.theme")).resolves.toBeUndefined();
 
     const changedEvents: unknown[] = [];
     const off = client.theme.onChanged((payload) => changedEvents.push(payload));
@@ -1062,6 +1177,7 @@ describe("createClient", () => {
     expect(calls).toEqual([
       { action: "theme.resolve", payload: { chain: ["chips.test.theme"] } },
       { action: "theme.contract.get", payload: { component: "button" } },
+      { action: "theme.apply", payload: { id: "chips.test.theme" } },
     ]);
   });
 

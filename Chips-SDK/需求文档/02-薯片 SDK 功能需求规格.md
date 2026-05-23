@@ -134,7 +134,7 @@
     fields?: Array<'status' | 'metadata' | 'cover'>
   ): Promise<CardReadInfoResult>;
   client.card.parse(cardFile: string): Promise<CardDocument>;
-  client.card.validate(cardDoc: CardDocument): Promise<ValidationResult>;
+  client.card.validate(cardFile: string): Promise<ValidationResult>;
   client.card.open(cardFile: string): Promise<{
     mode: 'card-window';
     windowId?: string;
@@ -308,12 +308,18 @@
 
   ```ts
   client.config.get<T = unknown>(key: string): Promise<T | undefined>;
-  client.config.set<T = unknown>(key: string, value: T): Promise<void>;
+  client.config.set<T = unknown>(key: string, value: T, options?: { scope?: 'user' | 'workspace' | 'system' }): Promise<void>;
+  client.config.batchSet(
+    entries: Record<string, unknown>,
+    options?: { scope?: 'user' | 'workspace' | 'system' }
+  ): Promise<void>;
+  client.config.reset(key?: string, options?: { scope?: 'user' | 'workspace' | 'system' }): Promise<void>;
 
   client.i18n.getCurrent(): Promise<string>;
   client.i18n.setCurrent(locale: string): Promise<void>;
   client.i18n.translate(key: string, params?: Record<string, unknown>): Promise<string>;
   client.i18n.listLocales(): Promise<string[]>;
+  client.i18n.onChanged(handler: (payload: { locale: string }) => void): () => void;
   ```
 
 ---

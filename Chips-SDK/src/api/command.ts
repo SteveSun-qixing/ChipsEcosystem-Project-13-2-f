@@ -78,6 +78,14 @@ export interface CommandDefinitionInput {
   checkedWhen?: CommandCondition;
 }
 
+export interface CommandDiagnostic {
+  visible: boolean;
+  enabled: boolean;
+  checked: boolean;
+  hiddenReasonKey?: string;
+  disabledReasonKey?: string;
+}
+
 export interface CommandView extends CommandDefinitionInput {
   ownerPluginId?: string;
   ownerSessionId?: string;
@@ -85,6 +93,7 @@ export interface CommandView extends CommandDefinitionInput {
   updatedAt?: number;
   disabledReasonKey?: string;
   hiddenReasonKey?: string;
+  diagnostic: CommandDiagnostic;
 }
 
 export interface CommandQueryOptions {
@@ -111,10 +120,9 @@ export interface CommandInvokeOptions {
 
 export interface CommandInvokeResult {
   commandId: string;
-  invocationId?: string;
+  invocationId: string;
   dispatched: boolean;
-  result?: unknown;
-  state?: CommandState;
+  command: CommandView;
 }
 
 export interface CommandSetStateOptions {
@@ -148,10 +156,10 @@ export interface CommandChangedEvent {
 
 export interface CommandInvokedEvent {
   commandId: string;
-  invocationId?: string;
+  invocationId: string;
   source?: CommandSource;
   payload?: Record<string, unknown>;
-  command?: CommandView;
+  command: CommandView;
   handlerId?: string;
   ownerPluginId?: string;
   ownerSessionId?: string;

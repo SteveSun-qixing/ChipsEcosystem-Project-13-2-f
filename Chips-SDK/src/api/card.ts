@@ -58,7 +58,7 @@ export interface CardOpenResult {
 
 export interface ValidationResult {
   valid: boolean;
-  errors?: Array<{ path: string; message: string; code?: string }>;
+  errors: string[];
 }
 
 export interface RenderViewport {
@@ -342,7 +342,7 @@ export interface CardApi {
   readMetadata(cardFile: string): Promise<CardMetadata>;
   readInfo(cardFile: string, fields?: CardInfoField[]): Promise<CardReadInfoResult>;
   parse(cardFile: string): Promise<CardDocument>;
-  validate(card: CardDocument): Promise<ValidationResult>;
+  validate(cardFile: string): Promise<ValidationResult>;
   open(cardFile: string): Promise<CardOpenResult>;
   render(cardFile: string, options?: CardRenderOptions): Promise<CardRenderResult>;
   releaseRenderSession(sessionId: string): Promise<void>;
@@ -428,13 +428,14 @@ export function createCardApi(client: CoreClient): CardApi {
       if (!cardFile) {
         throw createError("INVALID_ARGUMENT", "card.parse: cardFile is required.");
       }
-      return client.invoke("card.parse", { cardFile });
+      const result = await client.invoke<{ cardFile: string }, { ast: CardDocument }>("card.parse", { cardFile });
+      return result.ast;
     },
-    async validate(card) {
-      if (!card) {
-        throw createError("INVALID_ARGUMENT", "card.validate: card document is required.");
+    async validate(cardFile) {
+      if (!cardFile) {
+        throw createError("INVALID_ARGUMENT", "card.validate: cardFile is required.");
       }
-      return client.invoke("card.validate", { card });
+      return client.invoke<{ cardFile: string }, ValidationResult>("card.validate", { cardFile });
     },
     async open(cardFile) {
       if (!cardFile) {

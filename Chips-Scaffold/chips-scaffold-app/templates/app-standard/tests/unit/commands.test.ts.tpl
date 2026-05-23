@@ -39,16 +39,43 @@ describe("app command registry contract", () => {
       transport: async (action, payload) => {
         calls.push({ action, payload });
         if (action === "command.register") {
-          return { command: payload };
+          return {
+            command: {
+              ...(payload as Record<string, unknown>),
+              diagnostic: {
+                visible: true,
+                enabled: true,
+                checked: false,
+              },
+            },
+          };
         }
         if (action === "command.list") {
-          return { commands: appCommandDefinitions };
+          return {
+            commands: appCommandDefinitions.map((definition) => ({
+              ...definition,
+              diagnostic: {
+                visible: true,
+                enabled: true,
+                checked: false,
+              },
+            })),
+          };
         }
         if (action === "command.invoke") {
+          const command = {
+            ...appCommandDefinitions[0],
+            diagnostic: {
+              visible: true,
+              enabled: true,
+              checked: false,
+            },
+          };
           return {
             commandId: APP_COMMAND_IDS.showWelcome,
             invocationId: "invocation-test",
             dispatched: true,
+            command,
           };
         }
         throw { code: "UNEXPECTED_ACTION", message: action };
@@ -78,6 +105,14 @@ describe("app command registry contract", () => {
       ownerPluginId: APP_PLUGIN_ID,
       invocationId: "invocation-test",
       source: "palette",
+      command: {
+        ...appCommandDefinitions[0],
+        diagnostic: {
+          visible: true,
+          enabled: true,
+          checked: false,
+        },
+      },
     };
 
     expect(isAppCommandInvokedEvent(event)).toBe(true);

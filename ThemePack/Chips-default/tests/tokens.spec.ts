@@ -35,5 +35,9 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.avatar?.fallback?.color).toBeDefined();
     expect(parsed.comp.chips?.comp?.spinner?.motion?.duration).toBeDefined();
     expect(parsed.comp.chips?.comp?.progress?.range?.surface?.indeterminate).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["text-field"]?.root?.border?.error).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["text-area"]?.control?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["search-field"]?.clear?.color?.hover).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["secure-field"]?.toggle?.color?.idle).toBeDefined();
   });
 });

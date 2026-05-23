@@ -31,6 +31,8 @@ import {
   ChipsPopover,
   ChipsProgress,
   ChipsRadioGroup,
+  ChipsSearchField,
+  ChipsSecureField,
   ChipsSpinner,
   ChipsSkeleton,
   ChipsSplitPane,
@@ -43,6 +45,8 @@ import {
   ChipsStack,
   ChipsTabs,
   ChipsText,
+  ChipsTextArea,
+  ChipsTextField,
   ChipsToggleButton,
   ChipsToolbar,
   ChipsToolbarItem,
@@ -86,6 +90,7 @@ import {
   resolveI18nText,
   resolveSystemMessageQueue,
   resolveInteractiveState,
+  resolveTextInputDescriptor,
   STAGE7_DATA_ADVANCED_COMPONENTS,
   STAGE7_WORKBENCH_COMPONENTS,
   STAGE8_SYSTEM_UX_COMPONENTS,
@@ -186,10 +191,14 @@ test("buildComponentContract returns icon component contract", () => {
   assert.ok(contract.tokens.includes("chips.comp.icon.root.color"));
 });
 
-test("buildComponentContract returns task015 second batch component contracts", () => {
+test("buildComponentContract returns task015 base control component contracts", () => {
   const iconButton = buildComponentContract("icon-button");
   const toggleButton = buildComponentContract("toggle-button");
   const progress = buildComponentContract("progress");
+  const textField = buildComponentContract("text-field");
+  const textArea = buildComponentContract("text-area");
+  const searchField = buildComponentContract("search-field");
+  const secureField = buildComponentContract("secure-field");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -200,6 +209,18 @@ test("buildComponentContract returns task015 second batch component contracts", 
   assert.equal(progress.scope, "progress");
   assert.ok(progress.parts.includes("range"));
   assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
+  assert.equal(textField.scope, "text-field");
+  assert.ok(textField.parts.includes("control"));
+  assert.ok(textField.tokens.includes("chips.comp.text-field.root.border.error"));
+  assert.equal(textArea.scope, "text-area");
+  assert.ok(textArea.parts.includes("description"));
+  assert.ok(textArea.tokens.includes("chips.comp.text-area.control.color"));
+  assert.equal(searchField.scope, "search-field");
+  assert.ok(searchField.parts.includes("clear"));
+  assert.ok(searchField.tokens.includes("chips.comp.search-field.clear.color.hover"));
+  assert.equal(secureField.scope, "secure-field");
+  assert.ok(secureField.parts.includes("visibility-toggle"));
+  assert.ok(secureField.tokens.includes("chips.comp.secure-field.toggle.color.idle"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -233,6 +254,10 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.avatar));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.spinner));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.progress));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["text-field"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["text-area"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["search-field"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["secure-field"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -373,6 +398,36 @@ test("validateComponentA11y validates known components and rejects missing rule"
     validateComponentA11y("progress", {
       role: "progressbar",
       "aria-label": "Upload progress"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("text-field", {
+      "aria-label": "card name"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("text-area", {
+      "aria-label": "description"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("search-field", {
+      role: "search",
+      "aria-label": "search"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("secure-field", {
+      "aria-label": "password",
+      "aria-pressed": "false"
     }),
     true
   );
@@ -748,8 +803,8 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
   );
 });
 
-test("task015 second batch metadata is complete", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 7);
+test("task015 base control metadata includes second and third batches", () => {
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 11);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -759,12 +814,16 @@ test("task015 second batch metadata is complete", () => {
       "tag",
       "avatar",
       "spinner",
-      "progress"
+      "progress",
+      "text-field",
+      "text-area",
+      "search-field",
+      "secure-field"
     ]
   );
 });
 
-test("task015 second batch component exports exist", () => {
+test("task015 base control component exports exist", () => {
   for (const component of [
     ChipsIconButton,
     ChipsToggleButton,
@@ -772,7 +831,11 @@ test("task015 second batch component exports exist", () => {
     ChipsTag,
     ChipsAvatar,
     ChipsSpinner,
-    ChipsProgress
+    ChipsProgress,
+    ChipsTextField,
+    ChipsTextArea,
+    ChipsSearchField,
+    ChipsSecureField
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -872,6 +935,49 @@ test("ChipsProgress clamps determinate value and separates indeterminate aria", 
   assert.equal(indeterminate.props["data-mode"], "indeterminate");
   assert.equal(indeterminate.props["aria-valuenow"], undefined);
   assert.throws(() => ChipsProgress.render({ value: 1 }, null), /PROGRESS_A11Y_LABEL_REQUIRED/);
+});
+
+test("resolveTextInputDescriptor builds shared input a11y state", () => {
+  const descriptor = resolveTextInputDescriptor({
+    scope: "text-field",
+    label: "Card name",
+    description: "Shown in the library",
+    error: "Required",
+    required: true,
+    readOnly: true,
+    value: "Daily note"
+  });
+
+  assert.equal(descriptor.scope, "text-field");
+  assert.equal(descriptor.state, "error");
+  assert.equal(descriptor.ariaLabel, "Card name");
+  assert.equal(descriptor.required, true);
+  assert.equal(descriptor.readOnly, true);
+  assert.equal(descriptor.controlValueProps.value, "Daily note");
+  assert.equal(descriptor.normalizedError.message, "Required");
+  assert.equal(descriptor.describedBy, "text-field-description text-field-status");
+  assert.equal(descriptor.hasAccessibleName, true);
+});
+
+test("resolveTextInputDescriptor supports labelledby and i18n labels", () => {
+  const descriptor = resolveTextInputDescriptor({
+    scope: "search-field",
+    ariaLabelKey: "search.label",
+    fallbackAriaLabel: "Search",
+    ariaDescribedBy: "external-hint",
+    description: "Find cards",
+    i18n: (key, _params, fallback) => `${fallback}:${key}`
+  });
+
+  assert.equal(descriptor.ariaLabel, "Search:search.label");
+  assert.equal(descriptor.describedBy, "external-hint search-field-description");
+});
+
+test("task015 third batch components require accessible names", () => {
+  assert.throws(() => ChipsTextField.render({}, null), /TEXT_FIELD_A11Y_LABEL_REQUIRED/);
+  assert.throws(() => ChipsTextArea.render({}, null), /TEXT_AREA_A11Y_LABEL_REQUIRED/);
+  assert.throws(() => ChipsSearchField.render({}, null), /SEARCH_FIELD_A11Y_LABEL_REQUIRED/);
+  assert.throws(() => ChipsSecureField.render({}, null), /SECURE_FIELD_A11Y_LABEL_REQUIRED/);
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

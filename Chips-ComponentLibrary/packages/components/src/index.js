@@ -2,6 +2,7 @@ import React from "react";
 import { createScopeAttributes } from "@chips/primitives";
 import {
   assertAriaProps,
+  buildAriaDescribedBy,
   createAriaStatusProps,
   isKeyboardActivationKey
 } from "@chips/a11y";
@@ -96,7 +97,10 @@ const DEFAULT_ICON_DESCRIPTOR_MAP = Object.freeze({
   close: Object.freeze({ name: "close" }),
   expand: Object.freeze({ name: "add" }),
   collapse: Object.freeze({ name: "remove" }),
-  calendar: Object.freeze({ name: "calendar_month" })
+  calendar: Object.freeze({ name: "calendar_month" }),
+  search: Object.freeze({ name: "search" }),
+  visibility: Object.freeze({ name: "visibility" }),
+  "visibility-off": Object.freeze({ name: "visibility_off" })
 });
 
 function getDefaultIconDescriptor(type) {
@@ -599,6 +603,71 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.progress.status.color.error",
     "chips.comp.progress.focus.outline"
   ],
+  "text-field": [
+    "chips.comp.text-field.root.radius",
+    "chips.comp.text-field.root.surface.idle",
+    "chips.comp.text-field.root.surface.focus",
+    "chips.comp.text-field.root.surface.disabled",
+    "chips.comp.text-field.root.border.idle",
+    "chips.comp.text-field.root.border.focus",
+    "chips.comp.text-field.root.border.error",
+    "chips.comp.text-field.label.color",
+    "chips.comp.text-field.control.color",
+    "chips.comp.text-field.placeholder.color",
+    "chips.comp.text-field.description.color",
+    "chips.comp.text-field.status.color.error",
+    "chips.comp.text-field.focus.outline"
+  ],
+  "text-area": [
+    "chips.comp.text-area.root.radius",
+    "chips.comp.text-area.root.surface.idle",
+    "chips.comp.text-area.root.surface.focus",
+    "chips.comp.text-area.root.surface.disabled",
+    "chips.comp.text-area.root.border.idle",
+    "chips.comp.text-area.root.border.focus",
+    "chips.comp.text-area.root.border.error",
+    "chips.comp.text-area.label.color",
+    "chips.comp.text-area.control.color",
+    "chips.comp.text-area.placeholder.color",
+    "chips.comp.text-area.description.color",
+    "chips.comp.text-area.status.color.error",
+    "chips.comp.text-area.focus.outline"
+  ],
+  "search-field": [
+    "chips.comp.search-field.root.radius",
+    "chips.comp.search-field.root.surface.idle",
+    "chips.comp.search-field.root.surface.focus",
+    "chips.comp.search-field.root.surface.disabled",
+    "chips.comp.search-field.root.border.idle",
+    "chips.comp.search-field.root.border.focus",
+    "chips.comp.search-field.root.border.error",
+    "chips.comp.search-field.label.color",
+    "chips.comp.search-field.control.color",
+    "chips.comp.search-field.placeholder.color",
+    "chips.comp.search-field.description.color",
+    "chips.comp.search-field.icon.color",
+    "chips.comp.search-field.clear.color.idle",
+    "chips.comp.search-field.clear.color.hover",
+    "chips.comp.search-field.status.color.error",
+    "chips.comp.search-field.focus.outline"
+  ],
+  "secure-field": [
+    "chips.comp.secure-field.root.radius",
+    "chips.comp.secure-field.root.surface.idle",
+    "chips.comp.secure-field.root.surface.focus",
+    "chips.comp.secure-field.root.surface.disabled",
+    "chips.comp.secure-field.root.border.idle",
+    "chips.comp.secure-field.root.border.focus",
+    "chips.comp.secure-field.root.border.error",
+    "chips.comp.secure-field.label.color",
+    "chips.comp.secure-field.control.color",
+    "chips.comp.secure-field.placeholder.color",
+    "chips.comp.secure-field.description.color",
+    "chips.comp.secure-field.toggle.color.idle",
+    "chips.comp.secure-field.toggle.color.hover",
+    "chips.comp.secure-field.status.color.error",
+    "chips.comp.secure-field.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -982,6 +1051,30 @@ export function buildComponentContract(component) {
       scope: "progress",
       parts: ["root", "track", "range", "label", "value", "status"],
       states: TASK015_BASE_CONTROL_STATES
+    },
+    "text-field": {
+      component: "text-field",
+      scope: "text-field",
+      parts: ["root", "label", "control", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "text-area": {
+      component: "text-area",
+      scope: "text-area",
+      parts: ["root", "label", "control", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "search-field": {
+      component: "search-field",
+      scope: "search-field",
+      parts: ["root", "label", "search-icon", "control", "clear", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "secure-field": {
+      component: "secure-field",
+      scope: "secure-field",
+      parts: ["root", "label", "control", "visibility-toggle", "visibility-icon", "description", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
     },
     button: {
       component: "button",
@@ -3063,6 +3156,858 @@ export const ChipsProgress = React.forwardRef((props, ref) => {
 });
 
 ChipsProgress.displayName = "ChipsProgress";
+
+function resolveInputDescriptor(params = {}) {
+  const {
+    scope,
+    value,
+    defaultValue,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy,
+    ariaDescribedBy,
+    i18n,
+    onDiagnostic,
+    interaction
+  } = params;
+
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const resolvedLabel = resolveAccessibleText({
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedDescription = resolveAccessibleText({
+    value: description,
+    key: descriptionKey,
+    params: descriptionParams,
+    fallback: fallbackDescription,
+    i18n,
+    onDiagnostic
+  });
+  const normalizedAriaLabel = resolveAccessibleText({
+    value: ariaLabel,
+    key: ariaLabelKey,
+    params: ariaLabelParams,
+    fallback: fallbackAriaLabel || resolvedLabel,
+    i18n,
+    onDiagnostic
+  });
+  const normalizedAriaLabelledBy = isNonEmptyString(ariaLabelledBy)
+    ? ariaLabelledBy.trim()
+    : undefined;
+  const descriptionId = resolvedDescription ? `${scope}-description` : undefined;
+  const statusId = normalizedError ? `${scope}-status` : undefined;
+  const describedBy = buildAriaDescribedBy([
+    ariaDescribedBy,
+    descriptionId,
+    statusId
+  ]);
+  const controlValueProps = value !== undefined
+    ? { value }
+    : defaultValue !== undefined
+      ? { defaultValue }
+      : {};
+
+  return {
+    scope,
+    state,
+    disabledByState,
+    normalizedError,
+    required: required === true,
+    readOnly: readOnly === true,
+    label: resolvedLabel,
+    description: resolvedDescription,
+    descriptionId,
+    statusId,
+    ariaLabel: normalizedAriaLabel || undefined,
+    ariaLabelledBy: normalizedAriaLabelledBy,
+    describedBy: describedBy || undefined,
+    controlValueProps,
+    hasAccessibleName: Boolean(normalizedAriaLabel || normalizedAriaLabelledBy)
+  };
+}
+
+function assertInputAccessibleName(descriptor, errorCode) {
+  if (!descriptor.hasAccessibleName) {
+    throw new Error(errorCode);
+  }
+}
+
+function createInputAdornment(part, scope, state, content) {
+  if (content === undefined || content === null) {
+    return null;
+  }
+
+  return React.createElement(
+    "span",
+    {
+      ...createScopeAttributes(scope, part, state),
+      "aria-hidden": "true"
+    },
+    content
+  );
+}
+
+function renderInputDescription(descriptor) {
+  if (!descriptor.description) {
+    return null;
+  }
+
+  return React.createElement(
+    "span",
+    {
+      ...createScopeAttributes(descriptor.scope, "description", descriptor.state),
+      id: descriptor.descriptionId
+    },
+    descriptor.description
+  );
+}
+
+function renderInputStatus(descriptor) {
+  if (!descriptor.normalizedError) {
+    return null;
+  }
+
+  return React.createElement(
+    "span",
+    {
+      ...createScopeAttributes(descriptor.scope, "status", descriptor.state),
+      id: descriptor.statusId,
+      ...createAriaStatusProps({ live: "assertive" })
+    },
+    descriptor.normalizedError.message
+  );
+}
+
+function createTextInputControlProps(params) {
+  const {
+    scope,
+    descriptor,
+    ref,
+    placeholder,
+    name,
+    autoComplete,
+    maxLength,
+    minLength,
+    inputMode,
+    pattern,
+    type = "text",
+    rows,
+    resize,
+    onValueChange,
+    onEnterPress,
+    onKeyDown,
+    onChange
+  } = params;
+
+  const handleChange = (event) => {
+    if (typeof onChange === "function") {
+      onChange(event);
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange(event.target.value, event);
+    }
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && typeof onEnterPress === "function") {
+      onEnterPress(event.target.value, event);
+    }
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  return {
+    ...createScopeAttributes(scope, "control", descriptor.state),
+    ...descriptor.controlValueProps,
+    ref,
+    type,
+    name,
+    rows,
+    disabled: descriptor.disabledByState,
+    readOnly: descriptor.readOnly,
+    required: descriptor.required,
+    placeholder,
+    autoComplete,
+    maxLength,
+    minLength,
+    inputMode,
+    pattern,
+    "aria-label": descriptor.ariaLabel,
+    "aria-labelledby": descriptor.ariaLabelledBy,
+    "aria-describedby": descriptor.describedBy,
+    "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+    "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+    "aria-required": descriptor.required ? "true" : undefined,
+    "aria-readonly": descriptor.readOnly ? "true" : undefined,
+    "data-required": String(descriptor.required),
+    "data-readonly": String(descriptor.readOnly),
+    "data-invalid": descriptor.normalizedError ? "true" : "false",
+    "data-resize": resize,
+    onChange: handleChange,
+    onKeyDown: handleKeyDown
+  };
+}
+
+export function resolveTextInputDescriptor(params = {}) {
+  return resolveInputDescriptor(params);
+}
+
+export const ChipsTextField = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    autoComplete,
+    maxLength,
+    minLength,
+    inputMode,
+    pattern,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onEnterPress,
+    onChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "text-field",
+    value,
+    defaultValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "TEXT_FIELD_A11Y_LABEL_REQUIRED"
+  );
+
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    interaction
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const controlProps = createTextInputControlProps({
+    scope: "text-field",
+    descriptor,
+    ref,
+    placeholder,
+    name,
+    autoComplete,
+    maxLength,
+    minLength,
+    inputMode,
+    pattern,
+    onValueChange,
+    onEnterPress,
+    onKeyDown,
+    onChange
+  });
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("text-field", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": descriptor.normalizedError ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("text-field", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    React.createElement("input", controlProps),
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsTextField.displayName = "ChipsTextField";
+
+export const ChipsTextArea = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    rows = 3,
+    resize = "block",
+    maxLength,
+    minLength,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onEnterPress,
+    onChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "text-area",
+    value,
+    defaultValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "TEXT_AREA_A11Y_LABEL_REQUIRED"
+  );
+
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    interaction
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const controlProps = createTextInputControlProps({
+    scope: "text-area",
+    descriptor,
+    ref,
+    placeholder,
+    name,
+    rows,
+    resize,
+    maxLength,
+    minLength,
+    type: undefined,
+    onValueChange,
+    onEnterPress,
+    onKeyDown,
+    onChange
+  });
+  delete controlProps.type;
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("text-area", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": descriptor.normalizedError ? "true" : "false",
+      "data-resize": resize
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("text-area", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    React.createElement("textarea", controlProps),
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsTextArea.displayName = "ChipsTextArea";
+
+export const ChipsSearchField = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    searchIcon,
+    clearLabel,
+    clearLabelKey,
+    fallbackClearLabel = "Clear search",
+    showClear = true,
+    i18n,
+    onValueChange,
+    onSearch,
+    onEnterPress,
+    onClear,
+    onStateChange,
+    onChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "search-field",
+    value,
+    defaultValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "SEARCH_FIELD_A11Y_LABEL_REQUIRED"
+  );
+
+  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue ?? "");
+  const currentValue = value !== undefined ? value : uncontrolledValue;
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    interaction
+  });
+  const resolvedClearLabel = resolveAccessibleText({
+    value: clearLabel,
+    key: clearLabelKey,
+    fallback: fallbackClearLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const handleValueChange = (nextValue, event) => {
+    if (value === undefined) {
+      setUncontrolledValue(nextValue);
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange(nextValue, event);
+    }
+  };
+  const handleSearch = (nextValue, event) => {
+    if (typeof onSearch === "function") {
+      onSearch(nextValue, event);
+    }
+    if (typeof onEnterPress === "function") {
+      onEnterPress(nextValue, event);
+    }
+  };
+  const handleClear = (event) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      event.preventDefault();
+      return;
+    }
+    if (value === undefined) {
+      setUncontrolledValue("");
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange("", event);
+    }
+    if (typeof onClear === "function") {
+      onClear(event);
+    }
+  };
+  const handleClearKeyDown = (event) => {
+    if (isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      handleClear(event);
+    }
+  };
+
+  const controlProps = createTextInputControlProps({
+    scope: "search-field",
+    descriptor: {
+      ...descriptor,
+      controlValueProps: { value: currentValue }
+    },
+    ref,
+    placeholder,
+    name,
+    type: "search",
+    onValueChange: handleValueChange,
+    onEnterPress: handleSearch,
+    onKeyDown,
+    onChange
+  });
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("search-field", "root", descriptor.state),
+      ...handlers,
+      role: "search",
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": descriptor.normalizedError ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("search-field", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    createInputAdornment(
+      "search-icon",
+      "search-field",
+      descriptor.state,
+      searchIcon ?? resolveIconContent(undefined, "search")
+    ),
+    React.createElement("input", controlProps),
+    showClear && currentValue
+      ? React.createElement(
+          "button",
+          {
+            ...createScopeAttributes("search-field", "clear", descriptor.state),
+            type: "button",
+            disabled: descriptor.disabledByState || descriptor.readOnly,
+            "aria-label": resolvedClearLabel,
+            onClick: handleClear,
+            onKeyDown: handleClearKeyDown
+          },
+          resolveIconContent(undefined, "close")
+        )
+      : null,
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsSearchField.displayName = "ChipsSearchField";
+
+export const ChipsSecureField = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    autoComplete = "current-password",
+    revealLabel,
+    revealLabelKey,
+    fallbackRevealLabel = "Show password",
+    concealLabel,
+    concealLabelKey,
+    fallbackConcealLabel = "Hide password",
+    visible,
+    defaultVisible = false,
+    i18n,
+    onValueChange,
+    onVisibilityChange,
+    onStateChange,
+    onEnterPress,
+    onChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "secure-field",
+    value,
+    defaultValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "SECURE_FIELD_A11Y_LABEL_REQUIRED"
+  );
+
+  const [internalVisible, setInternalVisible] = React.useState(defaultVisible === true);
+  const isVisible = visible !== undefined ? visible === true : internalVisible;
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    interaction
+  });
+  const toggleLabel = resolveAccessibleText({
+    value: isVisible ? concealLabel : revealLabel,
+    key: isVisible ? concealLabelKey : revealLabelKey,
+    fallback: isVisible ? fallbackConcealLabel : fallbackRevealLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const handleVisibilityToggle = (event) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      event.preventDefault();
+      return;
+    }
+    const nextVisible = !isVisible;
+    if (visible === undefined) {
+      setInternalVisible(nextVisible);
+    }
+    if (typeof onVisibilityChange === "function") {
+      onVisibilityChange(nextVisible, event);
+    }
+  };
+  const handleVisibilityKeyDown = (event) => {
+    if (isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      handleVisibilityToggle(event);
+    }
+  };
+
+  const controlProps = createTextInputControlProps({
+    scope: "secure-field",
+    descriptor,
+    ref,
+    placeholder,
+    name,
+    autoComplete,
+    type: isVisible ? "text" : "password",
+    onValueChange,
+    onEnterPress,
+    onKeyDown,
+    onChange
+  });
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("secure-field", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": descriptor.normalizedError ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": descriptor.normalizedError ? "true" : "false",
+      "data-visible": String(isVisible)
+    },
+    descriptor.label
+      ? React.createElement(
+          "span",
+          createScopeAttributes("secure-field", "label", descriptor.state),
+          descriptor.label
+        )
+      : null,
+    React.createElement("input", controlProps),
+    React.createElement(
+      "button",
+      {
+        ...createScopeAttributes("secure-field", "visibility-toggle", descriptor.state),
+        type: "button",
+        disabled: descriptor.disabledByState || descriptor.readOnly,
+        "aria-label": toggleLabel,
+        "aria-pressed": String(isVisible),
+        onClick: handleVisibilityToggle,
+        onKeyDown: handleVisibilityKeyDown
+      },
+      React.createElement(
+        "span",
+        {
+          ...createScopeAttributes("secure-field", "visibility-icon", descriptor.state),
+          "aria-hidden": "true"
+        },
+        resolveIconContent(undefined, isVisible ? "visibility-off" : "visibility")
+      )
+    ),
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsSecureField.displayName = "ChipsSecureField";
 
 export const ChipsInput = React.forwardRef((props, ref) => {
   const {
@@ -8190,6 +9135,35 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "text-field" || component === "text-area") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "search-field") {
+    assertAriaProps(props, {
+      role: "search",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "secure-field") {
+    assertAriaProps(props, {
+      requireLabel: true
+    });
+    if (props["aria-pressed"] !== undefined
+      && props["aria-pressed"] !== "true"
+      && props["aria-pressed"] !== "false") {
+      const error = new Error("Secure field visibility toggle must expose a boolean aria-pressed value.");
+      error.code = "A11Y_SECURE_FIELD_VISIBILITY_PRESSED_INVALID";
+      throw error;
+    }
+    return true;
+  }
+
   if (component === "button") {
     assertAriaProps(props, {
       role: "button",
@@ -8528,6 +9502,30 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     scope: "progress",
     parts: ["root", "track", "range", "label", "value", "status"],
     states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsTextField",
+    scope: "text-field",
+    parts: ["root", "label", "control", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsTextArea",
+    scope: "text-area",
+    parts: ["root", "label", "control", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsSearchField",
+    scope: "search-field",
+    parts: ["root", "label", "search-icon", "control", "clear", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsSecureField",
+    scope: "secure-field",
+    parts: ["root", "label", "control", "visibility-toggle", "visibility-icon", "description", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];
 

@@ -25,6 +25,10 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain('data-scope="icon-button"');
     expect(themeCss).toContain('data-scope="badge"');
     expect(themeCss).toContain('data-scope="progress"');
+    expect(themeCss).toContain('data-scope="text-field"');
+    expect(themeCss).toContain('data-scope="text-area"');
+    expect(themeCss).toContain('data-scope="search-field"');
+    expect(themeCss).toContain('data-scope="secure-field"');
     expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');

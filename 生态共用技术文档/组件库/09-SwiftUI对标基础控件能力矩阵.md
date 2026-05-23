@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -22,10 +22,10 @@
 | 按钮与命令 | Button | `ChipsButton` | 已落地 | `button` | 维持基础动作按钮闭环 |
 | 按钮与命令 | IconButton | `ChipsIconButton` | 已落地 | `icon-button` | 必须强制可访问名称和 44px 热区 |
 | 按钮与命令 | ToggleButton | `ChipsToggleButton` | 已落地 | `toggle-button` | 独立导出与 contract，切换态使用 `aria-pressed` |
-| 输入控件 | TextField | `ChipsInput` 相邻能力 | 待补齐 | `text-field` | 需要独立单行文本输入 scope 或明确等价标准 |
-| 输入控件 | TextArea | 无 | 待补齐 | `text-area` | 需要多行输入、描述、错误、键盘行为 |
-| 输入控件 | SearchField | 无 | 待补齐 | `search-field` | 需要搜索/清空槽位与 Enter 搜索语义 |
-| 输入控件 | SecureField | 无 | 待补齐 | `secure-field` | 需要密码可见性切换与 a11y |
+| 输入控件 | TextField | `ChipsTextField` | 已落地 | `text-field` | 维持单行文本输入、描述、错误和 Enter 语义闭环 |
+| 输入控件 | TextArea | `ChipsTextArea` | 已落地 | `text-area` | 维持多行输入、描述、错误和 resize 语义闭环 |
+| 输入控件 | SearchField | `ChipsSearchField` | 已落地 | `search-field` | 维持搜索/清空槽位与 Enter 搜索语义 |
+| 输入控件 | SecureField | `ChipsSecureField` | 已落地 | `secure-field` | 维持密码可见性切换与 a11y |
 | 选择控件 | Checkbox | `ChipsCheckbox` | 已落地 | `checkbox` | 维持表单选择闭环 |
 | 选择控件 | Radio | `ChipsRadioGroup` | 已落地 | `radio` | 维持互斥选择闭环 |
 | 选择控件 | Switch | `ChipsSwitch` | 已落地 | `switch` | 维持布尔开关闭环 |
@@ -123,10 +123,40 @@
 - 主题 token：`chips.comp.progress.track.*`、`range.surface.*`、`label.color`、`value.color`、`status.color.error`、`focus.outline`。
 - 确定进度必须输出 `aria-valuemin / aria-valuemax / aria-valuenow`；不确定进度不得输出 `aria-valuenow`。
 
-## 5. 后续批次建议
+## 5. 第三批已冻结控件
+
+### `ChipsTextField`
+
+- `data-scope="text-field"`，公开 part：`root / label / control / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.text-field.root.*`、`label.color`、`control.color`、`placeholder.color`、`description.color`、`status.color.error`、`focus.outline`。
+- 必须通过 `label/labelKey/aria-label/aria-labelledby` 提供可访问名称；描述与错误通过 `aria-describedby` 关联。
+
+### `ChipsTextArea`
+
+- `data-scope="text-area"`，公开 part：`root / label / control / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.text-area.root.*`、`label.color`、`control.color`、`placeholder.color`、`description.color`、`status.color.error`、`focus.outline`。
+- 支持多行文本、描述、错误和 `resize` 模式；`Enter` 默认保留换行语义，只有显式 `onEnterPress` 时才向业务上报。
+
+### `ChipsSearchField`
+
+- `data-scope="search-field"`，公开 part：`root / label / search-icon / control / clear / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.search-field.root.*`、`label/control/placeholder/description/icon/clear/status/focus`。
+- 根节点使用 `role="search"`；`Enter` 触发 `onSearch`；清空按钮必须有可访问名称，并只负责清空输入值和通知业务。
+
+### `ChipsSecureField`
+
+- `data-scope="secure-field"`，公开 part：`root / label / control / visibility-toggle / visibility-icon / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.secure-field.root.*`、`label/control/placeholder/description/toggle/status/focus`。
+- 可见性切换按钮必须有可访问名称并输出 `aria-pressed`；该控件只负责密码输入可见性，不承载密码管理、保存或自动填充策略。
+
+## 6. 后续批次建议
 
 - 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
-- 批次 C：`TextField / TextArea / SearchField / SecureField`。
+- 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
 - 批次 D：`SegmentedControl / ComboBox`。
 - 批次 E：`NumberInput / Stepper / Slider`。
 - 批次 F：`DatePicker / TimePicker`。

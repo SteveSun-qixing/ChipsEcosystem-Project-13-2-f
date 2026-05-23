@@ -109,6 +109,15 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `chips.comp.icon-button.root.size` 与 `chips.comp.avatar.root.size` 允许引用或定义结构尺寸；`chips.comp.spinner.motion.duration` 必须引用 `chips.motion.duration.*`，不得在组件库运行时硬编码动画时长。`ChipsProgress` 的动态宽度只由运行时 CSS 变量 `--chips-progress-ratio` 表达，主题包只负责 `track/range/label/value/status/focus` token。
 
+任务015第三批基础输入控件 token 是文本、搜索与密码输入的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.text-field.*`
+- `chips.comp.text-area.*`
+- `chips.comp.search-field.*`
+- `chips.comp.secure-field.*`
+
+四个输入控件的 `root.surface/border/focus`、`label/control/placeholder/description/status` 必须分别使用自身 scope 的 token，不得复用旧 `chips.comp.input.*` 作为正式样式入口。`SearchField` 的 `clear` 与 `search-icon`、`SecureField` 的 `visibility-toggle / visibility-icon` 只表达输入控件自身结构与状态，不得绑定业务搜索逻辑或密码管理能力。
+
 ### 3.1 布局 token 基线
 
 `chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。

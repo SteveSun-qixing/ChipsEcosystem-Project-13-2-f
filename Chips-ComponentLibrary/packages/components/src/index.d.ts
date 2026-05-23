@@ -396,12 +396,97 @@ export interface ProgressProps extends ChipsDisplayTextProps {
   [key: string]: unknown;
 }
 
+export interface TextInputDescriptor {
+  scope: string;
+  state: InteractiveState;
+  disabledByState: boolean;
+  normalizedError: StandardErrorLike | null;
+  required: boolean;
+  readOnly: boolean;
+  label: string;
+  description: string;
+  descriptionId?: string;
+  statusId?: string;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  describedBy?: string;
+  controlValueProps: Record<string, unknown>;
+  hasAccessibleName: boolean;
+}
+
+export interface BaseTextInputProps extends ChipsDisplayTextProps {
+  value?: string;
+  defaultValue?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  readOnly?: boolean;
+  required?: boolean;
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  ariaLabel?: string;
+  ariaLabelKey?: string;
+  ariaLabelParams?: Record<string, string | number>;
+  fallbackAriaLabel?: string;
+  description?: string;
+  descriptionKey?: string;
+  descriptionParams?: Record<string, string | number>;
+  fallbackDescription?: string;
+  placeholder?: string;
+  name?: string;
+  maxLength?: number;
+  minLength?: number;
+  onValueChange?: (value: string, event?: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onEnterPress?: (value: string, event?: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  [key: string]: unknown;
+}
+
+export interface TextFieldProps extends BaseTextInputProps {
+  autoComplete?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  pattern?: string;
+}
+
+export interface TextAreaProps extends BaseTextInputProps {
+  rows?: number;
+  resize?: "none" | "inline" | "block" | "both";
+}
+
+export interface SearchFieldProps extends BaseTextInputProps {
+  searchIcon?: React.ReactNode;
+  clearLabel?: string;
+  clearLabelKey?: string;
+  fallbackClearLabel?: string;
+  showClear?: boolean;
+  onSearch?: (value: string, event?: React.KeyboardEvent<HTMLInputElement>) => void;
+  onClear?: (event?: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
+}
+
+export interface SecureFieldProps extends BaseTextInputProps {
+  autoComplete?: string;
+  revealLabel?: string;
+  revealLabelKey?: string;
+  fallbackRevealLabel?: string;
+  concealLabel?: string;
+  concealLabelKey?: string;
+  fallbackConcealLabel?: string;
+  visible?: boolean;
+  defaultVisible?: boolean;
+  onVisibilityChange?: (
+    visible: boolean,
+    event?: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>,
+  ) => void;
+}
+
 export interface InputProps {
   value?: string;
   defaultValue?: string;
   disabled?: boolean;
   loading?: boolean;
-  error?: StandardErrorLike | null;
+  error?: StandardErrorLike | string | null;
   readOnly?: boolean;
   placeholder?: string;
   onValueChange?: (value: string) => void;
@@ -995,6 +1080,10 @@ export const ChipsTag: React.ForwardRefExoticComponent<TagProps & React.RefAttri
 export const ChipsAvatar: React.ForwardRefExoticComponent<AvatarProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsSpinner: React.ForwardRefExoticComponent<SpinnerProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsProgress: React.ForwardRefExoticComponent<ProgressProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsTextField: React.ForwardRefExoticComponent<TextFieldProps & React.RefAttributes<HTMLInputElement>>;
+export const ChipsTextArea: React.ForwardRefExoticComponent<TextAreaProps & React.RefAttributes<HTMLTextAreaElement>>;
+export const ChipsSearchField: React.ForwardRefExoticComponent<SearchFieldProps & React.RefAttributes<HTMLInputElement>>;
+export const ChipsSecureField: React.ForwardRefExoticComponent<SecureFieldProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsInput: React.ForwardRefExoticComponent<InputProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsCheckbox: React.ForwardRefExoticComponent<CheckboxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsRadioGroup: React.ForwardRefExoticComponent<RadioGroupProps & React.RefAttributes<HTMLDivElement>>;
@@ -1049,6 +1138,7 @@ export function buildComponentContract(component: string): {
   tokens: string[];
 };
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
+export function resolveTextInputDescriptor(params?: Record<string, unknown>): TextInputDescriptor;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];

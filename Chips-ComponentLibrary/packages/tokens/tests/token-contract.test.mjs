@@ -67,6 +67,10 @@ test("card runtime component tokens exist", () => {
   const avatar = readJson(path.join(root, "comp/avatar.json"));
   const spinner = readJson(path.join(root, "comp/spinner.json"));
   const progress = readJson(path.join(root, "comp/progress.json"));
+  const textField = readJson(path.join(root, "comp/text-field.json"));
+  const textArea = readJson(path.join(root, "comp/text-area.json"));
+  const searchField = readJson(path.join(root, "comp/search-field.json"));
+  const secureField = readJson(path.join(root, "comp/secure-field.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -122,6 +126,10 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(avatar, "chips.comp.avatar.fallback.color"));
   assert.ok(getPath(spinner, "chips.comp.spinner.motion.duration"));
   assert.ok(getPath(progress, "chips.comp.progress.range.surface.indeterminate"));
+  assert.ok(getPath(textField, "chips.comp.text-field.root.border.error"));
+  assert.ok(getPath(textArea, "chips.comp.text-area.control.color"));
+  assert.ok(getPath(searchField, "chips.comp.search-field.clear.color.hover"));
+  assert.ok(getPath(secureField, "chips.comp.secure-field.toggle.color.idle"));
 });
 
 test("system token layer exists", () => {

@@ -980,6 +980,46 @@
       ]
     },
     {
+      "component": "search-field",
+      "scope": "search-field",
+      "parts": [
+        "root",
+        "label",
+        "search-icon",
+        "control",
+        "clear",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.search-field.root.radius",
+        "chips.comp.search-field.root.surface.idle",
+        "chips.comp.search-field.root.surface.focus",
+        "chips.comp.search-field.root.surface.disabled",
+        "chips.comp.search-field.root.border.idle",
+        "chips.comp.search-field.root.border.focus",
+        "chips.comp.search-field.root.border.error",
+        "chips.comp.search-field.label.color",
+        "chips.comp.search-field.control.color",
+        "chips.comp.search-field.placeholder.color",
+        "chips.comp.search-field.description.color",
+        "chips.comp.search-field.icon.color",
+        "chips.comp.search-field.clear.color.idle",
+        "chips.comp.search-field.clear.color.hover",
+        "chips.comp.search-field.status.color.error",
+        "chips.comp.search-field.focus.outline"
+      ]
+    },
+    {
       "component": "section",
       "scope": "section",
       "parts": [
@@ -1009,6 +1049,45 @@
         "chips.comp.section.footer.surface",
         "chips.comp.section.divider.color",
         "chips.comp.section.focus.outline"
+      ]
+    },
+    {
+      "component": "secure-field",
+      "scope": "secure-field",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "visibility-toggle",
+        "visibility-icon",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.secure-field.root.radius",
+        "chips.comp.secure-field.root.surface.idle",
+        "chips.comp.secure-field.root.surface.focus",
+        "chips.comp.secure-field.root.surface.disabled",
+        "chips.comp.secure-field.root.border.idle",
+        "chips.comp.secure-field.root.border.focus",
+        "chips.comp.secure-field.root.border.error",
+        "chips.comp.secure-field.label.color",
+        "chips.comp.secure-field.control.color",
+        "chips.comp.secure-field.placeholder.color",
+        "chips.comp.secure-field.description.color",
+        "chips.comp.secure-field.toggle.color.idle",
+        "chips.comp.secure-field.toggle.color.hover",
+        "chips.comp.secure-field.status.color.error",
+        "chips.comp.secure-field.focus.outline"
       ]
     },
     {
@@ -1318,6 +1397,76 @@
         "chips.comp.text.root.line-height",
         "chips.comp.text.root.font-weight.regular",
         "chips.comp.text.root.font-weight.strong"
+      ]
+    },
+    {
+      "component": "text-area",
+      "scope": "text-area",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.text-area.root.radius",
+        "chips.comp.text-area.root.surface.idle",
+        "chips.comp.text-area.root.surface.focus",
+        "chips.comp.text-area.root.surface.disabled",
+        "chips.comp.text-area.root.border.idle",
+        "chips.comp.text-area.root.border.focus",
+        "chips.comp.text-area.root.border.error",
+        "chips.comp.text-area.label.color",
+        "chips.comp.text-area.control.color",
+        "chips.comp.text-area.placeholder.color",
+        "chips.comp.text-area.description.color",
+        "chips.comp.text-area.status.color.error",
+        "chips.comp.text-area.focus.outline"
+      ]
+    },
+    {
+      "component": "text-field",
+      "scope": "text-field",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.text-field.root.radius",
+        "chips.comp.text-field.root.surface.idle",
+        "chips.comp.text-field.root.surface.focus",
+        "chips.comp.text-field.root.surface.disabled",
+        "chips.comp.text-field.root.border.idle",
+        "chips.comp.text-field.root.border.focus",
+        "chips.comp.text-field.root.border.error",
+        "chips.comp.text-field.label.color",
+        "chips.comp.text-field.control.color",
+        "chips.comp.text-field.placeholder.color",
+        "chips.comp.text-field.description.color",
+        "chips.comp.text-field.status.color.error",
+        "chips.comp.text-field.focus.outline"
       ]
     },
     {

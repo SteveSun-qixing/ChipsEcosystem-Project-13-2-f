@@ -62,7 +62,7 @@ test("display primitive contracts contain text label and icon tokens", () => {
   assert.ok(icon.tokens.includes("chips.comp.icon.root.opsz"));
 });
 
-test("task015 second batch contracts expose button display and feedback scopes", () => {
+test("task015 base control contracts expose button display feedback and input scopes", () => {
   const iconButton = readContract("icon-button.contract.json");
   const toggleButton = readContract("toggle-button.contract.json");
   const badge = readContract("badge.contract.json");
@@ -70,8 +70,24 @@ test("task015 second batch contracts expose button display and feedback scopes",
   const avatar = readContract("avatar.contract.json");
   const spinner = readContract("spinner.contract.json");
   const progress = readContract("progress.contract.json");
+  const textField = readContract("text-field.contract.json");
+  const textArea = readContract("text-area.contract.json");
+  const searchField = readContract("search-field.contract.json");
+  const secureField = readContract("secure-field.contract.json");
 
-  for (const contract of [iconButton, toggleButton, badge, tag, avatar, spinner, progress]) {
+  for (const contract of [
+    iconButton,
+    toggleButton,
+    badge,
+    tag,
+    avatar,
+    spinner,
+    progress,
+    textField,
+    textArea,
+    searchField,
+    secureField
+  ]) {
     assertCommonShape(contract);
   }
   assert.ok(iconButton.parts.includes("icon"));
@@ -87,6 +103,14 @@ test("task015 second batch contracts expose button display and feedback scopes",
   assert.ok(spinner.tokens.includes("chips.comp.spinner.motion.duration"));
   assert.ok(progress.parts.includes("range"));
   assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
+  assert.ok(textField.parts.includes("control"));
+  assert.ok(textField.tokens.includes("chips.comp.text-field.root.border.error"));
+  assert.ok(textArea.parts.includes("description"));
+  assert.ok(textArea.tokens.includes("chips.comp.text-area.control.color"));
+  assert.ok(searchField.parts.includes("clear"));
+  assert.ok(searchField.tokens.includes("chips.comp.search-field.clear.color.hover"));
+  assert.ok(secureField.parts.includes("visibility-toggle"));
+  assert.ok(secureField.tokens.includes("chips.comp.secure-field.toggle.color.idle"));
 });
 
 test("only advanced iframe components expose iframe contract extension", () => {

@@ -88,30 +88,132 @@ export function injectFault(type, payload = {}) {
   };
 }
 
-export function createMockChipsClient(options = {}) {
+export function createMockSurfaceContext(overrides = {}) {
+  return {
+    sceneId: overrides.sceneId || "test-scene",
+    surfaceId: overrides.surfaceId || "test-surface",
+    pluginId: overrides.pluginId || "com.chips.test-plugin",
+    sessionId: overrides.sessionId || "test-session",
+    kind: overrides.kind || "window",
+    presentation: {
+      title: "Test Surface",
+      width: 960,
+      height: 640,
+      ...(overrides.presentation || {})
+    },
+    launchParams: {
+      ...(overrides.launchParams || {})
+    },
+    ...(overrides.documentContext ? { documentContext: overrides.documentContext } : {}),
+    ...(overrides.commandContext ? { commandContext: overrides.commandContext } : {}),
+    permissions: Array.isArray(overrides.permissions) ? [...overrides.permissions] : []
+  };
+}
+
+export function createMockLaunchContext(overrides = {}) {
+  const surfaceContext = overrides.surfaceContext || createMockSurfaceContext(overrides.surface || {});
+  return {
+    pluginId: overrides.pluginId || surfaceContext.pluginId,
+    sessionId: overrides.sessionId || surfaceContext.sessionId,
+    sceneId: overrides.sceneId || surfaceContext.sceneId,
+    surfaceId: overrides.surfaceId || surfaceContext.surfaceId,
+    kind: overrides.kind || surfaceContext.kind,
+    presentation: overrides.presentation || surfaceContext.presentation,
+    surfaceContext,
+    launchParams: {
+      ...(overrides.launchParams || {})
+    }
+  };
+}
+
+export function createMockPermissionDeniedError(action, required, granted = [], options = {}) {
+  const requiredList = Array.isArray(required) ? required : [required];
+  return {
+    code: "PERMISSION_DENIED",
+    message: options.message || `Permission denied for ${action}.`,
+    messageKey: options.messageKey || "chips.error.permissionDenied",
+    retryable: false,
+    details: {
+      action,
+      required: requiredList,
+      granted
+    },
+    permission: {
+      action,
+      required: requiredList,
+      granted,
+      messageKey: options.messageKey || "chips.error.permissionDenied",
+      pluginId: options.pluginId
+    }
+  };
+}
+
+export function createMockThemeDiagnosticSummary(overrides = {}) {
+  return {
+    total: 0,
+    blocking: 0,
+    bySeverity: {
+      info: 0,
+      warning: 0,
+      error: 0
+    },
+    byCode: {},
+    status: "complete",
+    ...overrides
+  };
+}
+
+export function createMockChipsHost(options = {}) {
   const listeners = new Map();
   const calls = [];
+  const actionHandlers = new Map(Object.entries(options.actions || {}));
+  const faults = new Map(Object.entries(options.faults || {}));
+  const delays = new Map(Object.entries(options.delays || {}));
+  let surfaceSeed = 0;
+  let invocationSeed = 0;
+  const surfaceContext = createMockSurfaceContext({
+    permissions: options.permissions || [],
+    ...(options.surfaceContext || {})
+  });
   const state = {
     theme: options.theme || {
       themeId: "chips-official.default-theme",
       displayName: "薯片官方 · 默认主题",
       version: "1.0.0"
     },
-    locale: options.locale || "zh-CN",
-    launchContext: options.launchContext || {
-      sceneId: "test-scene",
-      surfaceId: "test-surface",
-      kind: "window",
-      surfaceContext: {
-        sceneId: "test-scene",
-        surfaceId: "test-surface",
-        kind: "window",
-        presentation: {},
-        launchParams: {},
-        permissions: options.permissions || []
+    themes: options.themes || [
+      {
+        id: "chips-official.default-theme",
+        displayName: "薯片官方 · 默认主题",
+        version: "1.0.0",
+        isDefault: true
       },
-      launchParams: {}
-    },
+      {
+        id: "chips-official.default-dark-theme",
+        displayName: "薯片官方 · 默认深色主题",
+        version: "1.0.0",
+        isDefault: false,
+        parentTheme: "chips-official.default-theme"
+      }
+    ],
+    locale: options.locale || "zh-CN",
+    locales: options.locales || ["zh-CN", "en-US"],
+    translations: options.translations || {},
+    launchContext: options.launchContext || createMockLaunchContext({ surfaceContext }),
+    surfaces: [
+      {
+        id: surfaceContext.surfaceId,
+        kind: surfaceContext.kind,
+        title: surfaceContext.presentation.title,
+        width: surfaceContext.presentation.width,
+        height: surfaceContext.presentation.height,
+        focused: true,
+        state: "normal",
+        pluginId: surfaceContext.pluginId,
+        sessionId: surfaceContext.sessionId,
+        context: surfaceContext
+      }
+    ],
     diagnostics: options.diagnostics || {
       routeCount: 0,
       serviceCount: 0,
@@ -119,10 +221,11 @@ export function createMockChipsClient(options = {}) {
       runtimeSnapshot: {},
       topFailureRoutes: []
     },
-    commands: Array.isArray(options.commands) ? [...options.commands] : []
+    commands: Array.isArray(options.commands) ? [...options.commands] : [],
+    permissions: options.permissions || []
   };
 
-  const emitLocal = (eventName, payload) => {
+  const emit = async (eventName, payload) => {
     const handlers = listeners.get(eventName);
     if (!handlers) {
       return;
@@ -142,7 +245,172 @@ export function createMockChipsClient(options = {}) {
     };
   };
 
-  const client = {
+  const delay = (delayMs) => new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+
+  const normalizeCommand = (definition) => ({
+    ...definition,
+    diagnostic: definition.diagnostic || {
+      visible: true,
+      enabled: true,
+      checked: false
+    },
+    registeredAt: definition.registeredAt || Date.now(),
+    updatedAt: definition.updatedAt || Date.now()
+  });
+
+  const invokeDefault = async (action, payload = {}) => {
+    switch (action) {
+      case "theme.getCurrent":
+        if (options.failTheme) throw options.failTheme;
+        return state.theme;
+      case "theme.apply": {
+        const previousThemeId = state.theme.themeId;
+        const themeId = payload.id || payload.themeId;
+        state.theme = {
+          ...state.theme,
+          themeId
+        };
+        await emit("theme.changed", {
+          previousThemeId,
+          themeId,
+          themeVersion: state.theme.version,
+          timestamp: Date.now(),
+          diagnosticsSummary: createMockThemeDiagnosticSummary()
+        });
+        return { ack: true };
+      }
+      case "theme.list":
+        return { themes: state.themes };
+      case "theme.getAllCss":
+        return { css: ":root { --chips-sys-color-surface: #ffffff; }", themeId: state.theme.themeId };
+      case "theme.resolve":
+        return {
+          resolved: (Array.isArray(payload.chain) ? payload.chain : [state.theme.themeId]).map((id, order) => ({
+            id,
+            displayName: id,
+            version: state.theme.version,
+            order
+          })),
+          tokens: {},
+          diagnostics: [],
+          summary: createMockThemeDiagnosticSummary()
+        };
+      case "theme.contract.get":
+        return {
+          schemaVersion: "1.0.0",
+          themeId: state.theme.themeId,
+          themeVersion: state.theme.version,
+          contractVersion: "1.0.0",
+          components: [],
+          summary: createMockThemeDiagnosticSummary()
+        };
+      case "i18n.getCurrent":
+        if (options.failI18n) throw options.failI18n;
+        return { locale: state.locale };
+      case "i18n.setCurrent":
+        state.locale = payload.locale;
+        if (!state.locales.includes(payload.locale)) {
+          state.locales.push(payload.locale);
+        }
+        await emit("language.changed", { locale: state.locale });
+        return { ack: true };
+      case "i18n.translate": {
+        const localeMap = state.translations[state.locale];
+        const text = localeMap && typeof localeMap === "object"
+          ? localeMap[payload.key]
+          : state.translations[payload.key];
+        return { text: typeof text === "string" ? text : payload.key };
+      }
+      case "i18n.listLocales":
+        return { locales: state.locales };
+      case "surface.list":
+        return { surfaces: state.surfaces };
+      case "surface.getState":
+        return { state: state.surfaces.find((surface) => surface.id === payload.surfaceId) };
+      case "surface.open": {
+        surfaceSeed += 1;
+        const request = payload.request || {};
+        const nextSurfaceContext = request.context || createMockSurfaceContext({
+          surfaceId: `surface-${surfaceSeed}`,
+          kind: request.kind || "window",
+          pluginId: request.target?.type === "plugin" ? request.target.pluginId : undefined,
+          presentation: request.presentation || {}
+        });
+        const surface = {
+          id: nextSurfaceContext.surfaceId,
+          kind: nextSurfaceContext.kind,
+          title: nextSurfaceContext.presentation.title,
+          width: nextSurfaceContext.presentation.width,
+          height: nextSurfaceContext.presentation.height,
+          focused: true,
+          state: "normal",
+          pluginId: nextSurfaceContext.pluginId,
+          sessionId: nextSurfaceContext.sessionId,
+          context: nextSurfaceContext
+        };
+        state.surfaces.push(surface);
+        return { surface };
+      }
+      case "surface.focus":
+      case "surface.resize":
+      case "surface.setState":
+      case "surface.close":
+        return { ack: true };
+      case "command.register": {
+        const command = normalizeCommand(payload);
+        state.commands = state.commands.filter((item) => item.commandId !== command.commandId).concat(command);
+        await emit("command.registered", { commandId: command.commandId, command });
+        await emit("command.changed", { commandId: command.commandId, command, change: "registered" });
+        return { command };
+      }
+      case "command.unregister":
+        state.commands = state.commands.filter((command) => command.commandId !== payload.commandId);
+        await emit("command.unregistered", { commandId: payload.commandId, reason: "unregistered" });
+        await emit("command.changed", { commandId: payload.commandId, change: "unregistered" });
+        return { ack: true };
+      case "command.get":
+        return { command: state.commands.find((command) => command.commandId === payload.commandId) };
+      case "command.list":
+        return { commands: state.commands };
+      case "command.invoke": {
+        invocationSeed += 1;
+        const command = state.commands.find((item) => item.commandId === payload.commandId);
+        const result = {
+          commandId: payload.commandId,
+          invocationId: `invocation-${invocationSeed}`,
+          dispatched: true,
+          command
+        };
+        await emit("command.invoked", {
+          ...result,
+          source: payload.source,
+          payload: payload.payload,
+          handlerId: command?.handlerId
+        });
+        return result;
+      }
+      case "command.setState": {
+        const command = state.commands.find((item) => item.commandId === payload.commandId);
+        if (command) {
+          command.state = {
+            ...(command.state || {}),
+            ...(payload.state || {})
+          };
+          await emit("command.changed", { commandId: payload.commandId, command, state: payload.state, change: "state" });
+        }
+        return { command };
+      }
+      case "control-plane.diagnose":
+        if (options.failDiagnostics) throw options.failDiagnostics;
+        return { diagnose: state.diagnostics };
+      default:
+        throw new Error(`MOCK_HOST_ACTION_NOT_REGISTERED:${action}`);
+    }
+  };
+
+  const host = {
     calls,
     state,
     events: {
@@ -155,29 +423,75 @@ export function createMockChipsClient(options = {}) {
         return unsubscribe;
       },
       async emit(eventName, payload) {
-        emitLocal(eventName, payload);
+        await emit(eventName, payload);
       }
+    },
+    emit,
+    async transport(action, payload = {}) {
+      const call = {
+        action,
+        payload,
+        timestamp: Date.now()
+      };
+      calls.push(call);
+      const delayMs = delays.get(action);
+      if (delayMs > 0) {
+        await delay(delayMs);
+      }
+      if (faults.has(action)) {
+        const fault = faults.get(action);
+        throw typeof fault === "function" ? await fault(payload, { action, payload, call, host }) : fault;
+      }
+      if (actionHandlers.has(action)) {
+        return actionHandlers.get(action)(payload, { action, payload, call, host });
+      }
+      return invokeDefault(action, payload);
+    },
+    setActionHandler(action, handler) {
+      actionHandlers.set(action, handler);
+    },
+    clearActionHandler(action) {
+      actionHandlers.delete(action);
+    },
+    setFault(action, fault) {
+      faults.set(action, fault);
+    },
+    clearFault(action) {
+      faults.delete(action);
+    },
+    setPermissionDenied(action, required, granted = [], faultOptions = {}) {
+      faults.set(action, createMockPermissionDeniedError(action, required, granted, faultOptions));
+    },
+    setDelay(action, delayMs) {
+      delays.set(action, delayMs);
+    },
+    clearDelay(action) {
+      delays.delete(action);
+    },
+    resetCalls() {
+      calls.splice(0, calls.length);
     },
     theme: {
       async getCurrent() {
-        calls.push({ action: "theme.getCurrent", payload: {} });
-        if (options.failTheme) throw options.failTheme;
-        return state.theme;
+        return host.transport("theme.getCurrent", {});
       },
       async apply(themeId) {
-        calls.push({ action: "theme.apply", payload: { themeId } });
-        const previousThemeId = state.theme.themeId;
-        state.theme = {
-          ...state.theme,
-          themeId
-        };
-        emitLocal("theme.changed", {
-          previousThemeId,
-          themeId,
-          themeVersion: state.theme.version,
-          timestamp: Date.now(),
-          diagnosticsSummary: { total: 0, blocking: 0, bySeverity: {}, byCode: {}, status: "complete" }
-        });
+        await host.transport("theme.apply", { id: themeId });
+      },
+      async list(publisher) {
+        const result = await host.transport("theme.list", { publisher });
+        return result.themes;
+      },
+      async getAllCss() {
+        return host.transport("theme.getAllCss", {});
+      },
+      async resolve(chain) {
+        return host.transport("theme.resolve", { chain });
+      },
+      contract: {
+        async get(component) {
+          return host.transport("theme.contract.get", component ? { component } : {});
+        }
       },
       onChanged(handler) {
         return on("theme.changed", handler);
@@ -185,21 +499,19 @@ export function createMockChipsClient(options = {}) {
     },
     i18n: {
       async getCurrent() {
-        calls.push({ action: "i18n.getCurrent", payload: {} });
-        if (options.failI18n) throw options.failI18n;
-        return state.locale;
+        const result = await host.transport("i18n.getCurrent", {});
+        return result.locale;
       },
       async setCurrent(locale) {
-        calls.push({ action: "i18n.setCurrent", payload: { locale } });
-        state.locale = locale;
-        emitLocal("language.changed", { locale });
+        await host.transport("i18n.setCurrent", { locale });
       },
       async translate(key, params) {
-        calls.push({ action: "i18n.translate", payload: { key, params } });
-        if (options.translations && Object.hasOwn(options.translations, key)) {
-          return String(options.translations[key]);
-        }
-        return key;
+        const result = await host.transport("i18n.translate", { key, params });
+        return result.text;
+      },
+      async listLocales() {
+        const result = await host.transport("i18n.listLocales", {});
+        return result.locales;
       },
       onChanged(handler) {
         return on("language.changed", handler);
@@ -207,38 +519,31 @@ export function createMockChipsClient(options = {}) {
     },
     platform: {
       getLaunchContext() {
-        calls.push({ action: "platform.getLaunchContext", payload: {} });
         return state.launchContext;
       }
     },
     command: {
       async register(definition) {
-        calls.push({ action: "command.register", payload: definition });
-        state.commands.push(definition);
-        emitLocal("command.changed", { reason: "registered" });
-        return definition;
+        const result = await host.transport("command.register", definition);
+        return result.command;
       },
       async unregister(commandId) {
-        calls.push({ action: "command.unregister", payload: { commandId } });
-        state.commands = state.commands.filter((command) => command.commandId !== commandId);
-        emitLocal("command.changed", { reason: "unregistered" });
+        await host.transport("command.unregister", { commandId });
       },
       async get(commandId) {
-        calls.push({ action: "command.get", payload: { commandId } });
-        return state.commands.find((command) => command.commandId === commandId);
+        const result = await host.transport("command.get", { commandId });
+        return result.command;
       },
       async list(options) {
-        calls.push({ action: "command.list", payload: options || {} });
-        return state.commands;
+        const result = await host.transport("command.list", options || {});
+        return result.commands;
       },
       async invoke(commandId, payload, invokeOptions) {
-        calls.push({ action: "command.invoke", payload: { commandId, payload, options: invokeOptions } });
-        emitLocal("command.invoked", { commandId, payload, options: invokeOptions });
-        return { commandId, payload };
+        return host.transport("command.invoke", { commandId, payload: payload || {}, ...(invokeOptions || {}) });
       },
       async setState(commandId, commandState, setStateOptions) {
-        calls.push({ action: "command.setState", payload: { commandId, state: commandState, options: setStateOptions } });
-        return state.commands.find((command) => command.commandId === commandId);
+        const result = await host.transport("command.setState", { commandId, state: commandState, options: setStateOptions });
+        return result.command;
       },
       onRegistered(handler) {
         return on("command.registered", handler);
@@ -255,14 +560,19 @@ export function createMockChipsClient(options = {}) {
     },
     controlPlane: {
       async diagnose() {
-        calls.push({ action: "control-plane.diagnose", payload: {} });
-        if (options.failDiagnostics) throw options.failDiagnostics;
-        return state.diagnostics;
+        const result = await host.transport("control-plane.diagnose", {});
+        return result.diagnose;
       }
     }
   };
 
-  return client;
+  return host;
+}
+
+export function createMockChipsClient(options = {}) {
+  const host = createMockChipsHost(options);
+  host.mockHost = host;
+  return host;
 }
 
 export function createMockChipsEnvironment(options = {}) {

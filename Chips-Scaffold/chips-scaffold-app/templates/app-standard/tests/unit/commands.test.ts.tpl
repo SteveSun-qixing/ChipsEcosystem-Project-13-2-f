@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createClient, type CommandInvokedEvent } from "chips-sdk";
+import type { CommandInvokedEvent } from "chips-sdk";
+import { createMockChipsClient } from "chips-sdk/testing";
 import {
   APP_COMMAND_HANDLER_IDS,
   APP_COMMAND_IDS,
@@ -32,70 +33,29 @@ describe("app command registry contract", () => {
     }
   });
 
-  it("uses SDK command API actions for register/list/invoke", async () => {
-    const calls: Array<{ action: string; payload: unknown }> = [];
-    const client = createClient({
-      environment: "node",
-      transport: async (action, payload) => {
-        calls.push({ action, payload });
-        if (action === "command.register") {
-          return {
-            command: {
-              ...(payload as Record<string, unknown>),
-              diagnostic: {
-                visible: true,
-                enabled: true,
-                checked: false,
-              },
-            },
-          };
-        }
-        if (action === "command.list") {
-          return {
-            commands: appCommandDefinitions.map((definition) => ({
-              ...definition,
-              diagnostic: {
-                visible: true,
-                enabled: true,
-                checked: false,
-              },
-            })),
-          };
-        }
-        if (action === "command.invoke") {
-          const command = {
-            ...appCommandDefinitions[0],
-            diagnostic: {
-              visible: true,
-              enabled: true,
-              checked: false,
-            },
-          };
-          return {
-            commandId: APP_COMMAND_IDS.showWelcome,
-            invocationId: "invocation-test",
-            dispatched: true,
-            command,
-          };
-        }
-        throw { code: "UNEXPECTED_ACTION", message: action };
-      },
+  it("uses SDK testing mock host for register/list/invoke", async () => {
+    const client = createMockChipsClient();
+    const invoked: string[] = [];
+    client.command.onInvoked((event) => {
+      invoked.push(event.commandId);
     });
 
     await client.command.register(appCommandDefinitions[0]);
     await client.command.list({ source: "toolbar" });
     await client.command.invoke(APP_COMMAND_IDS.showWelcome, {}, { source: "toolbar" });
 
-    expect(calls.map((call) => call.action)).toEqual([
+    expect(client.calls.map((call) => call.action)).toEqual([
       "command.register",
       "command.list",
       "command.invoke",
     ]);
-    expect(calls[2].payload).toMatchObject({
+    expect(client.calls[2].payload).toMatchObject({
       commandId: APP_COMMAND_IDS.showWelcome,
       source: "toolbar",
       payload: {},
     });
+    expect(invoked).toEqual([APP_COMMAND_IDS.showWelcome]);
+    client.restoreBridge();
   });
 
   it("handles command.invoked events by handlerId", () => {

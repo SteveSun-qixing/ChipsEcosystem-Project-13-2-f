@@ -1,5 +1,25 @@
 export { createClient } from "./core/client";
+export {
+  createMockChipsClient,
+  createMockChipsHost,
+  createMockLaunchContext,
+  createMockPermissionDeniedError,
+  createMockSurfaceContext,
+  createMockThemeDiagnosticSummary,
+} from "./testing";
 export type { Client, ClientConfig, SdkLogRecord, SdkLogger } from "./types/client";
+export type {
+  MockActionContext,
+  MockActionFault,
+  MockActionHandler,
+  MockBridgeTarget,
+  MockChipsClient,
+  MockChipsClientOptions,
+  MockChipsHost,
+  MockChipsHostCall,
+  MockChipsHostOptions,
+  MockChipsHostState,
+} from "./testing";
 export type {
   DocumentApi,
   DocumentType,

@@ -22,7 +22,10 @@ import {
   useToken,
   useTokenResolver
 } from "../src/index.js";
-import { createMockChipsClient } from "../../testing/src/index.js";
+import {
+  createMockChipsClient,
+  createMockPermissionDeniedError
+} from "../../testing/src/index.js";
 
 test("hooks package exports expected APIs", () => {
   assert.equal(typeof ChipsTokenProvider, "function");
@@ -175,19 +178,42 @@ test("mock chips client emits theme and language changes through SDK-like events
 });
 
 test("mock chips client preserves permission diagnostics for hook tests", async () => {
-  const permissionError = {
-    code: "PERMISSION_DENIED",
-    message: "Denied",
-    permission: {
-      required: ["theme.read"],
-      granted: []
-    }
-  };
+  const permissionError = createMockPermissionDeniedError("theme.getCurrent", "theme.read");
   const client = createMockChipsClient({ failTheme: permissionError });
 
   await assert.rejects(() => client.theme.getCurrent(), (error) => {
     assert.equal(error.code, "PERMISSION_DENIED");
     assert.deepEqual(error.permission.required, ["theme.read"]);
+    return true;
+  });
+});
+
+test("mock chips client exposes Host-like calls, command events and injected faults", async () => {
+  const client = createMockChipsClient();
+  const events = [];
+  client.command.onRegistered((payload) => events.push(["registered", payload.commandId]));
+  client.command.onInvoked((payload) => events.push(["invoked", payload.commandId]));
+
+  await client.command.register({
+    commandId: "chips.demo.save",
+    titleKey: "demo.commands.save.title",
+    handlerId: "save"
+  });
+  await client.command.invoke("chips.demo.save", { source: "test" }, { source: "toolbar" });
+
+  assert.deepEqual(events, [
+    ["registered", "chips.demo.save"],
+    ["invoked", "chips.demo.save"]
+  ]);
+  assert.deepEqual(client.calls.map((call) => call.action), [
+    "command.register",
+    "command.invoke"
+  ]);
+
+  client.setPermissionDenied("control-plane.diagnose", "control.write", ["control.read"]);
+  await assert.rejects(() => client.controlPlane.diagnose(), (error) => {
+    assert.equal(error.code, "PERMISSION_DENIED");
+    assert.deepEqual(error.permission.granted, ["control.read"]);
     return true;
   });
 });

@@ -209,6 +209,16 @@ async function main() {
         }
       }
 
+      const commandTestText = await readFile(path.join(base, "tests/unit/commands.test.ts.tpl"), "utf8");
+      for (const requiredText of ["chips-sdk/testing", "createMockChipsClient", "client.calls", "command.onInvoked"]) {
+        if (!commandTestText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} command 单元测试缺少 SDK testing mock 覆盖：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
+
       const zhCnText = await readFile(path.join(base, "i18n/zh-CN.json.tpl"), "utf8");
       const enUsText = await readFile(path.join(base, "i18n/en-US.json.tpl"), "utf8");
       for (const key of ["switchTo"]) {

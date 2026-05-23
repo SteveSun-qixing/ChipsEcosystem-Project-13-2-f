@@ -75,6 +75,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const appCommandsContent = await readFile(appCommandsPath, "utf8");
     const useAppCommandsContent = await readFile(useAppCommandsPath, "utf8");
     const appTestContent = await readFile(appTestPath, "utf8");
+    const commandTestContent = await readFile(commandTestPath, "utf8");
     const zhCnContent = await readFile(path.join(targetDir, "i18n/zh-CN.json"), "utf8");
     const enUsContent = await readFile(path.join(targetDir, "i18n/en-US.json"), "utf8");
     assert.ok(
@@ -185,6 +186,13 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
         appTestContent.includes("supportedLocales") &&
         appTestContent.includes("app-standard.language.switchTo"),
       "App 单元测试应覆盖同步 i18n adapter、fallback 与语言切换文案 key",
+    );
+    assert.ok(
+      commandTestContent.includes("chips-sdk/testing") &&
+        commandTestContent.includes("createMockChipsClient") &&
+        commandTestContent.includes("client.calls") &&
+        commandTestContent.includes("command.onInvoked"),
+      "Command 单元测试应复用 SDK testing mock host 覆盖命令 action 与事件链路",
     );
     await assert.rejects(
       stat(path.join(targetDir, "src/hooks/useChipsBridge.ts")),

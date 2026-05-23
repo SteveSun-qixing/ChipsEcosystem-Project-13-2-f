@@ -75,7 +75,48 @@ function App() {
 - `chips-sdk` 仍只提供纯 TypeScript client 与 Domain API；
 - React hooks 位于 `@chips/hooks`，并由 `@chips/component-library` 聚合导出；
 - hooks 只消费注入的 SDK client，不承载 Host runtime 主实现；
-- 单元测试可使用 `@chips/testing` 的 `createMockChipsClient/createMockChipsEnvironment` 构造 mock 环境。
+- 单元测试优先使用 `chips-sdk/testing` 的 Host 模拟器与 mock client；组件库 Provider 场景可继续使用 `@chips/testing` 的 `createMockChipsEnvironment` 做 React 注入适配。
+
+## 测试辅助入口
+
+SDK 正式提供 `chips-sdk/testing` 子入口，用于应用插件、脚手架生成工程、组件库 hook 测试和生态工具的单元测试。该入口只模拟公开 Bridge action、事件与标准错误形态，不承载 Host 运行时主实现。
+
+常用导出：
+
+```typescript
+import {
+  createMockChipsHost,
+  createMockChipsClient,
+  createMockLaunchContext,
+  createMockSurfaceContext,
+  createMockPermissionDeniedError,
+} from "chips-sdk/testing";
+```
+
+使用方式：
+
+```typescript
+const client = createMockChipsClient();
+
+await client.theme.apply("chips-official.default-dark-theme");
+await client.command.register({
+  commandId: "chips.app.demo.show-welcome",
+  titleKey: "demo.commands.showWelcome.title",
+  handlerId: "show-welcome",
+});
+
+expect(client.calls.map((call) => call.action)).toContain("command.register");
+
+client.restoreBridge();
+```
+
+边界：
+
+- `createMockChipsClient()` 默认安装测试用 `window.chips`，因此 `client.platform.getLaunchContext()` 会走与 preload Bridge 同形的读取路径；
+- 只需要测试 SDK timeout / retry 时，可传入 `installBridge: false`，此时 client 使用 mock host 的 custom transport；
+- `createMockChipsHost()` 可直接控制 `transport`、事件总线、调用记录、状态、延迟、故障与权限拒绝；
+- 权限拒绝应使用 `setPermissionDenied(...)` 或 `createMockPermissionDeniedError(...)`，保持 `permission.required/granted/messageKey` 等标准诊断字段；
+- 测试结束后应调用 `client.restoreBridge()` 或保存 `host.installBridge()` 返回的 restore 函数，避免污染同进程其他测试。
 
 ## 文件操作
 

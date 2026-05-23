@@ -144,6 +144,10 @@ async function main() {
       path.join(projectDir, "tests", "unit", "app.test.tsx"),
       "utf8",
     );
+    const commandTestSource = await readFile(
+      path.join(projectDir, "tests", "unit", "commands.test.ts"),
+      "utf8",
+    );
     for (const requiredText of [
       "titleKey",
       "descriptionKey",
@@ -191,6 +195,11 @@ async function main() {
     for (const requiredText of ["createChipsI18nText", "localeBundles", "supportedLocales", "app-standard.language.switchTo"]) {
       if (!appTestSource.includes(requiredText)) {
         throw new Error(`E2E: app 单元测试缺少同步 i18n adapter 覆盖 ${requiredText}`);
+      }
+    }
+    for (const requiredText of ["chips-sdk/testing", "createMockChipsClient", "client.calls", "command.onInvoked"]) {
+      if (!commandTestSource.includes(requiredText)) {
+        throw new Error(`E2E: command 单元测试缺少 SDK testing mock 覆盖 ${requiredText}`);
       }
     }
     if (/window\.chips\.invoke\(["']command\./.test(commandRuntimeSource)) {

@@ -427,7 +427,7 @@ function loadComponentContracts(componentLibraryRoot) {
   const contractDir = path.join(componentLibraryRoot, "packages", "theme-contracts", "contracts", "components");
   const files = walkFiles(contractDir, {
     extensions: new Set([".json"]),
-    skipDirs: new Set(),
+    skipDirs: new Set([...DEFAULT_SKIP_DIRS, "归档", "archive"]),
     maxFiles: 10000
   });
   return files.map((filePath) => ({

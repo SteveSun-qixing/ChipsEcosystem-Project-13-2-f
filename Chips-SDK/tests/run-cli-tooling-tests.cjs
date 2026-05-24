@@ -164,6 +164,9 @@ const main = async () => {
     assert.equal(componentGallery.summary.status, 'passed');
     assert.ok(componentGallery.summary.componentCount >= 40);
     assert.ok(componentGallery.components.some((component) => component.component === 'button'));
+    assert.ok(
+      componentGallery.components.every((component) => !component.contractPath.includes(`${path.sep}归档${path.sep}`))
+    );
 
     const themeInspect = await runJson(
       ['theme', 'inspect', '--theme', 'chips-official.default-theme'],

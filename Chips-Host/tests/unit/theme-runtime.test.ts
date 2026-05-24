@@ -62,6 +62,86 @@ describe('Theme Runtime', () => {
     expect(resolved.summary.status).toBe('complete');
   });
 
+  it('resolves same-layer token references before cross-layer consumers', () => {
+    const themeTokens: Record<string, unknown> = {
+      ref: {
+        chips: {
+          ref: {
+            color: {
+              blue: '#2563eb',
+              red: '#dc2626'
+            }
+          }
+        }
+      },
+      sys: {
+        chips: {
+          sys: {
+            color: {
+              primary: '{chips.ref.color.blue}',
+              danger: '{chips.ref.color.red}'
+            },
+            icon: {
+              'color-accent': '{chips.sys.color.primary}',
+              'color-danger': '{chips.sys.color.danger}'
+            }
+          }
+        }
+      },
+      comp: {
+        chips: {
+          comp: {
+            icon: {
+              accent: '{chips.sys.icon.color-accent}',
+              danger: '{chips.sys.icon.color-danger}'
+            }
+          }
+        }
+      },
+      motion: {},
+      layout: {}
+    };
+
+    const layers = mergeThemeLayers([{ id: 'chips.test.theme', tokens: themeTokens }]);
+    const resolved = resolveThemeFromLayers(layers);
+
+    expect(resolved.variables['chips.sys.color.primary']).toBe('#2563eb');
+    expect(resolved.variables['chips.sys.icon.color-accent']).toBe('#2563eb');
+    expect(resolved.variables['chips.sys.icon.color-danger']).toBe('#dc2626');
+    expect(resolved.variables['chips.comp.icon.accent']).toBe('#2563eb');
+    expect(resolved.variables['chips.comp.icon.danger']).toBe('#dc2626');
+  });
+
+  it('rejects circular same-layer token references', () => {
+    const themeTokens: Record<string, unknown> = {
+      ref: {},
+      sys: {
+        chips: {
+          sys: {
+            color: {
+              primary: '{chips.sys.color.accent}',
+              accent: '{chips.sys.color.primary}'
+            }
+          }
+        }
+      },
+      comp: {},
+      motion: {},
+      layout: {}
+    };
+
+    const layers = mergeThemeLayers([{ id: 'chips.test.theme', tokens: themeTokens }]);
+
+    expect(() => resolveThemeFromLayers(layers)).toThrowError(
+      expect.objectContaining({
+        code: 'THEME_TOKEN_CYCLE',
+        details: expect.objectContaining({
+          path: ['chips.sys.color.primary', 'chips.sys.color.accent', 'chips.sys.color.primary']
+        })
+      })
+    );
+  });
+
   it('builds theme scope chain from context', () => {
     const chain = buildThemeScopeChain({
       globalId: null,

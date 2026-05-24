@@ -36,46 +36,85 @@ const flattenLayer = (layer: Record<string, unknown>, prefix?: string): Record<s
   return flat;
 };
 
-const resolveReference = (
-  raw: unknown,
-  primary: Record<string, unknown>,
-  fallback: Record<string, unknown>[]
+const createTokenMissingError = (key: string, value: unknown, path: string) => {
+  return createError(
+    'THEME_TOKEN_MISSING',
+    `Token "${key}" references missing token: ${path}`,
+    { key, value, path },
+    false
+  );
+};
+
+const createTokenCycleError = (key: string, value: unknown, path: string[]) => {
+  return createError(
+    'THEME_TOKEN_CYCLE',
+    `Token "${key}" has circular token references`,
+    { key, value, path },
+    false
+  );
+};
+
+const resolveTokenValue = (
+  key: string,
+  layer: Record<string, unknown>,
+  fallback: Record<string, unknown>[],
+  resolved: Record<string, unknown>,
+  stack: string[]
 ): unknown => {
+  if (key in resolved) {
+    return resolved[key];
+  }
+
+  if (!(key in layer)) {
+    throw createTokenMissingError(stack[stack.length - 1] ?? key, undefined, key);
+  }
+
+  const raw = layer[key];
   if (typeof raw !== 'string') {
+    resolved[key] = raw;
     return raw;
   }
-  const match = raw.match(/^\{(.+)\}$/);
+
+  const match = raw.match(/^\{([^{}]+)\}$/);
   if (!match) {
+    resolved[key] = raw;
     return raw;
   }
-  const path = match[1]!;
-  if (path in primary) {
-    return primary[path];
+
+  const path = match[1]!.trim();
+  if (path in layer) {
+    if (stack.includes(path)) {
+      throw createTokenCycleError(key, raw, [...stack, path]);
+    }
+    const value = resolveTokenValue(path, layer, fallback, resolved, [...stack, path]);
+    resolved[key] = value;
+    return value;
   }
-  for (const layer of fallback) {
-    if (path in layer) {
-      return layer[path];
+
+  for (const fallbackLayer of fallback) {
+    if (path in fallbackLayer) {
+      const value = fallbackLayer[path];
+      resolved[key] = value;
+      return value;
     }
   }
-  throw createError('THEME_TOKEN_MISSING', `Referenced token not found: ${path}`, { path });
+
+  throw createTokenMissingError(key, raw, path);
 };
 
 const resolveLayerWithRefs = (
   layer: Record<string, unknown>,
-  primary: Record<string, unknown>,
   fallback: Record<string, unknown>[]
 ): Record<string, unknown> => {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(layer)) {
     try {
-      result[key] = resolveReference(value, primary, fallback);
+      result[key] = resolveTokenValue(key, layer, fallback, result, [key]);
     } catch (error) {
-      throw createError(
-        'THEME_TOKEN_MISSING',
-        `Token "${key}" references missing token`,
-        { key, value },
-        false
-      );
+      if (error && typeof error === 'object' && 'code' in error) {
+        throw error;
+      }
+      throw createError('THEME_TOKEN_MISSING', `Token "${key}" references missing token`, { key, value }, false);
     }
   }
   return result;
@@ -130,13 +169,14 @@ export const resolveThemeFromLayers = (layers: ThemeTokenLayers): ResolvedTheme 
 
   // motion/layout are shared runtime layers that component tokens may reference.
   // They cannot depend on component tokens, so resolve them before comp.
-  const sysResolved = resolveLayerWithRefs(sysFlat, refFlat, [refFlat]);
-  const motionResolved = resolveLayerWithRefs(motionFlat, refFlat, [refFlat, sysResolved]);
-  const layoutResolved = resolveLayerWithRefs(layoutFlat, refFlat, [refFlat, sysResolved]);
-  const compResolved = resolveLayerWithRefs(compFlat, sysResolved, [refFlat, sysResolved, motionResolved, layoutResolved]);
+  const refResolved = resolveLayerWithRefs(refFlat, []);
+  const sysResolved = resolveLayerWithRefs(sysFlat, [refResolved]);
+  const motionResolved = resolveLayerWithRefs(motionFlat, [refResolved, sysResolved]);
+  const layoutResolved = resolveLayerWithRefs(layoutFlat, [refResolved, sysResolved]);
+  const compResolved = resolveLayerWithRefs(compFlat, [refResolved, sysResolved, motionResolved, layoutResolved]);
 
   const variables: Record<string, unknown> = {
-    ...refFlat,
+    ...refResolved,
     ...sysResolved,
     ...compResolved,
     ...motionResolved,

@@ -996,10 +996,34 @@ export interface DialogProps {
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
   modal?: boolean;
+  labelledBy?: string;
+  describedBy?: string;
+  contentId?: string;
   onOpenChange?: (open: boolean) => void;
   onStateChange?: (state: InteractiveState) => void;
   onCloseReason?: (reason: string) => void;
   [key: string]: unknown;
+}
+
+export interface DialogTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+
+export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface DialogSectionProps extends React.HTMLAttributes<HTMLElement> {
+  as?: React.ElementType;
+}
+
+export interface DialogCloseProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+
+export interface DialogCompoundComponent extends React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
+  Trigger: React.ForwardRefExoticComponent<DialogTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+  Content: React.ForwardRefExoticComponent<DialogContentProps & React.RefAttributes<HTMLDivElement>>;
+  Header: React.ForwardRefExoticComponent<DialogSectionProps & React.RefAttributes<HTMLElement>>;
+  Body: React.ForwardRefExoticComponent<DialogSectionProps & React.RefAttributes<HTMLElement>>;
+  Footer: React.ForwardRefExoticComponent<DialogSectionProps & React.RefAttributes<HTMLElement>>;
+  Actions: React.ForwardRefExoticComponent<DialogSectionProps & React.RefAttributes<HTMLElement>>;
+  Close: React.ForwardRefExoticComponent<DialogCloseProps & React.RefAttributes<HTMLButtonElement>>;
 }
 
 export interface PopoverProps {
@@ -1011,9 +1035,23 @@ export interface PopoverProps {
   triggerContent?: React.ReactNode;
   children?: React.ReactNode;
   closeOnEscape?: boolean;
+  contentId?: string;
   onOpenChange?: (open: boolean) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface PopoverTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+
+export interface PopoverContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface PopoverArrowProps extends React.HTMLAttributes<HTMLSpanElement> {}
+
+export interface PopoverCompoundComponent extends React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
+  Trigger: React.ForwardRefExoticComponent<PopoverTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+  Content: React.ForwardRefExoticComponent<PopoverContentProps & React.RefAttributes<HTMLDivElement>>;
+  Arrow: React.ForwardRefExoticComponent<PopoverArrowProps & React.RefAttributes<HTMLSpanElement>>;
 }
 
 export interface TabsItem {
@@ -1024,6 +1062,7 @@ export interface TabsItem {
 }
 
 export interface TabsProps {
+  children?: React.ReactNode;
   items?: TabsItem[];
   value?: string;
   defaultValue?: string;
@@ -1034,6 +1073,25 @@ export interface TabsProps {
   onValueChange?: (value: string) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface TabsListProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  value: string | number;
+  index?: number;
+}
+
+export interface TabsPanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  value: string | number;
+  index?: number;
+}
+
+export interface TabsCompoundComponent extends React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
+  List: React.ForwardRefExoticComponent<TabsListProps & React.RefAttributes<HTMLDivElement>>;
+  Trigger: React.ForwardRefExoticComponent<TabsTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+  Panel: React.ForwardRefExoticComponent<TabsPanelProps & React.RefAttributes<HTMLDivElement>>;
 }
 
 export interface MenuItem {
@@ -1553,9 +1611,9 @@ export const ChipsStepper: React.ForwardRefExoticComponent<StepperProps & React.
 export const ChipsSlider: React.ForwardRefExoticComponent<SliderProps & React.RefAttributes<HTMLButtonElement>>;
 export const ChipsDatePicker: React.ForwardRefExoticComponent<DatePickerProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsTimePicker: React.ForwardRefExoticComponent<TimePickerProps & React.RefAttributes<HTMLInputElement>>;
-export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsDialog: DialogCompoundComponent;
+export const ChipsPopover: PopoverCompoundComponent;
+export const ChipsTabs: TabsCompoundComponent;
 export const ChipsMenu: React.ForwardRefExoticComponent<MenuProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsCommandProvider: React.FC<ChipsCommandProviderProps>;
 export const ChipsShortcut: React.ForwardRefExoticComponent<ShortcutProps & React.RefAttributes<HTMLElement>>;

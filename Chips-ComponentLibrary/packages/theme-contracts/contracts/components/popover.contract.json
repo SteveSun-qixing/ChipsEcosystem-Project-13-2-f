@@ -4,7 +4,6 @@
   "parts": [
     "root",
     "trigger",
-    "positioner",
     "content",
     "arrow",
     "status"

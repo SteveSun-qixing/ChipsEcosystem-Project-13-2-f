@@ -68,6 +68,11 @@ export const StandardCompoundSlotSchemas = {
     trigger: { type: 'Command', required: true, multiple: true, part: 'trigger', role: 'tab' },
     panel: { type: 'Section', required: true, multiple: true, part: 'panel', role: 'tabpanel' }
   },
+  Popover: {
+    trigger: { type: 'Command', required: true, multiple: false, part: 'trigger' },
+    content: { type: ['View', 'Stack', 'Section'], required: true, multiple: false, part: 'content', role: 'dialog' },
+    arrow: { type: 'View', required: false, multiple: false, part: 'arrow' }
+  },
   Menu: {
     trigger: { type: 'Command', required: false, multiple: false, part: 'trigger' },
     content: { type: 'Section', required: true, multiple: false, part: 'content', role: 'menu' },

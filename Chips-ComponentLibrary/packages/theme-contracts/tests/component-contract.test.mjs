@@ -204,18 +204,24 @@ test("select contract contains list and option parts", () => {
   assert.ok(contract.tokens.includes("chips.comp.select.option.surface.selected"));
 });
 
-test("dialog contract contains content and close parts", () => {
+test("dialog contract contains compound content section and close parts", () => {
   const contract = readContract("dialog.contract.json");
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("content"));
+  assert.ok(contract.parts.includes("header"));
+  assert.ok(contract.parts.includes("body"));
+  assert.ok(contract.parts.includes("footer"));
+  assert.ok(contract.parts.includes("actions"));
   assert.ok(contract.parts.includes("close"));
   assert.ok(contract.tokens.includes("chips.comp.dialog.content.surface"));
+  assert.ok(contract.tokens.includes("chips.comp.dialog.header.color"));
 });
 
-test("popover contract contains positioner and arrow parts", () => {
+test("popover contract contains public content and arrow parts", () => {
   const contract = readContract("popover.contract.json");
   assertCommonShape(contract);
-  assert.ok(contract.parts.includes("positioner"));
+  assert.equal(contract.parts.includes("positioner"), false);
+  assert.ok(contract.parts.includes("content"));
   assert.ok(contract.parts.includes("arrow"));
   assert.ok(contract.tokens.includes("chips.comp.popover.content.border"));
 });

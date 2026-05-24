@@ -1692,6 +1692,27 @@ test("all base interactive component exports exist", () => {
   }
 });
 
+test("Dialog Popover and Tabs expose formal compound parts", () => {
+  assert.equal(ChipsDialog.Root, ChipsDialog);
+  assert.equal(typeof ChipsDialog.Trigger.render, "function");
+  assert.equal(typeof ChipsDialog.Content.render, "function");
+  assert.equal(typeof ChipsDialog.Header.render, "function");
+  assert.equal(typeof ChipsDialog.Body.render, "function");
+  assert.equal(typeof ChipsDialog.Footer.render, "function");
+  assert.equal(typeof ChipsDialog.Actions.render, "function");
+  assert.equal(typeof ChipsDialog.Close.render, "function");
+
+  assert.equal(ChipsPopover.Root, ChipsPopover);
+  assert.equal(typeof ChipsPopover.Trigger.render, "function");
+  assert.equal(typeof ChipsPopover.Content.render, "function");
+  assert.equal(typeof ChipsPopover.Arrow.render, "function");
+
+  assert.equal(ChipsTabs.Root, ChipsTabs);
+  assert.equal(typeof ChipsTabs.List.render, "function");
+  assert.equal(typeof ChipsTabs.Trigger.render, "function");
+  assert.equal(typeof ChipsTabs.Panel.render, "function");
+});
+
 test("all stage-seven data-form component exports exist", () => {
   for (const component of [ChipsFormField, ChipsFormGroup, ChipsVirtualList]) {
     assert.equal(typeof component, "object");
@@ -1742,7 +1763,13 @@ test("buildComponentContract includes stage-six third batch components", () => {
   const tooltip = buildComponentContract("tooltip");
 
   assert.ok(dialog.tokens.includes("chips.comp.dialog.content.surface"));
+  assert.ok(dialog.parts.includes("header"));
+  assert.ok(dialog.parts.includes("body"));
+  assert.ok(dialog.parts.includes("footer"));
+  assert.ok(dialog.parts.includes("actions"));
+  assert.ok(dialog.tokens.includes("chips.comp.dialog.header.color"));
   assert.ok(popover.tokens.includes("chips.comp.popover.content.border"));
+  assert.equal(popover.parts.includes("positioner"), false);
   assert.ok(tabs.tokens.includes("chips.comp.tabs.panel.surface"));
   assert.ok(menu.tokens.includes("chips.comp.menu.item.surface.active"));
   assert.ok(tooltip.tokens.includes("chips.comp.tooltip.content.text.color"));

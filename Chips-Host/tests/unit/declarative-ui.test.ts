@@ -293,7 +293,17 @@ describe('Declarative UI', () => {
     );
   });
 
-  it('validates standard compound slot schemas for Tabs, Menu, Form, and DataGrid', () => {
+  it('validates standard compound slot schemas for Dialog, Popover, Tabs, Menu, Form, and DataGrid', () => {
+    const Dialog = createCompoundComponent({
+      name: 'Dialog',
+      rootType: 'Section',
+      slots: StandardCompoundSlotSchemas.Dialog
+    });
+    const Popover = createCompoundComponent({
+      name: 'Popover',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.Popover
+    });
     const Tabs = createCompoundComponent({
       name: 'Tabs',
       rootType: 'Navigation',
@@ -315,6 +325,30 @@ describe('Declarative UI', () => {
       slots: StandardCompoundSlotSchemas.DataGrid
     });
 
+    expect(
+      Dialog.validate({
+        root: { id: 'dialog-root' },
+        slots: {
+          trigger: Command({ id: 'dialog-trigger' }),
+          content: Section({ id: 'dialog-content' }),
+          header: Section({ id: 'dialog-header' }),
+          body: View({ id: 'dialog-body' }),
+          footer: Toolbar({ id: 'dialog-footer' }),
+          actions: Toolbar({ id: 'dialog-actions' }),
+          close: Command({ id: 'dialog-close' })
+        }
+      })
+    ).toEqual([]);
+    expect(
+      Popover.validate({
+        root: { id: 'popover-root' },
+        slots: {
+          trigger: Command({ id: 'popover-trigger' }),
+          content: Stack({ id: 'popover-content' }),
+          arrow: View({ id: 'popover-arrow' })
+        }
+      })
+    ).toEqual([]);
     expect(
       Tabs.validate({
         root: { id: 'tabs-root' },

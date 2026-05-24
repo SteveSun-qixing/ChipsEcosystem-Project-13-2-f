@@ -1211,6 +1211,57 @@ function resolveIconContent(content, fallbackType) {
     : null;
 }
 
+function createCompoundContext(scope) {
+  const Context = React.createContext(null);
+  Context.displayName = `${scope}-compound-context`;
+
+  const usePartContext = (part) => {
+    const value = React.useContext(Context);
+    if (!value) {
+      throw new Error(`${scope.toUpperCase()}_COMPOUND_CONTEXT_MISSING:${part}`);
+    }
+    return value;
+  };
+
+  return [Context, usePartContext];
+}
+
+function mergeEventHandlers(ownHandler, contextHandler) {
+  return (event) => {
+    if (typeof ownHandler === "function") {
+      ownHandler(event);
+    }
+    if (!event.defaultPrevented && typeof contextHandler === "function") {
+      contextHandler(event);
+    }
+  };
+}
+
+function normalizeDomIdSegment(value, fallback = "item") {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+function hasReactElementType(children, expectedTypes) {
+  let matched = false;
+  React.Children.forEach(children, (child) => {
+    if (matched || !React.isValidElement(child)) {
+      return;
+    }
+    if (expectedTypes.includes(child.type)) {
+      matched = true;
+      return;
+    }
+    if (child.type === React.Fragment) {
+      matched = hasReactElementType(child.props.children, expectedTypes);
+    }
+  });
+  return matched;
+}
+
 export const InteractiveEventType = {
   POINTER_ENTER: "pointer-enter",
   POINTER_LEAVE: "pointer-leave",
@@ -1655,7 +1706,10 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.dialog.backdrop.surface",
     "chips.comp.dialog.content.radius",
     "chips.comp.dialog.content.surface",
-    "chips.comp.dialog.title.color",
+    "chips.comp.dialog.header.color",
+    "chips.comp.dialog.body.color",
+    "chips.comp.dialog.footer.gap",
+    "chips.comp.dialog.actions.gap",
     "chips.comp.dialog.close.color",
     "chips.comp.dialog.focus.outline"
   ],
@@ -2128,8 +2182,10 @@ export function buildComponentContract(component) {
         "trigger",
         "backdrop",
         "content",
-        "title",
-        "description",
+        "header",
+        "body",
+        "footer",
+        "actions",
         "close",
         "status"
       ],
@@ -2138,7 +2194,7 @@ export function buildComponentContract(component) {
     popover: {
       component: "popover",
       scope: "popover",
-      parts: ["root", "trigger", "positioner", "content", "arrow", "status"],
+      parts: ["root", "trigger", "content", "arrow", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     tabs: {
@@ -8318,7 +8374,9 @@ export const ChipsTimePicker = React.forwardRef((props, ref) => {
 
 ChipsTimePicker.displayName = "ChipsTimePicker";
 
-export const ChipsDialog = React.forwardRef((props, ref) => {
+const [DialogCompoundContext, useDialogCompoundContext] = createCompoundContext("dialog");
+
+const DialogRoot = React.forwardRef((props, ref) => {
   const {
     open,
     defaultOpen = false,
@@ -8334,9 +8392,13 @@ export const ChipsDialog = React.forwardRef((props, ref) => {
     closeOnBackdrop = true,
     closeOnEscape = true,
     modal = true,
+    labelledBy,
+    describedBy,
+    contentId: contentIdProp,
     onOpenChange,
     onStateChange,
-    onCloseReason
+    onCloseReason,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
@@ -8361,10 +8423,6 @@ export const ChipsDialog = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const contentId = React.useId();
-  const titleId = title ? `${contentId}-title` : undefined;
-  const descriptionId = description ? `${contentId}-description` : undefined;
-
   const closeDialog = (reason) => {
     if (disabledByState) {
       return;
@@ -8375,8 +8433,9 @@ export const ChipsDialog = React.forwardRef((props, ref) => {
     }
   };
 
-  const openDialog = () => {
+  const openDialog = (event) => {
     if (disabledByState) {
+      event?.preventDefault?.();
       return;
     }
     setCurrentOpen(true);
@@ -8389,100 +8448,215 @@ export const ChipsDialog = React.forwardRef((props, ref) => {
     }
   };
 
+  const generatedId = React.useId();
+  const contentId = contentIdProp || (props.id ? `${props.id}-content` : `${generatedId}-content`);
+  const fallbackLabelId = `${contentId}-header`;
+  const fallbackDescriptionId = `${contentId}-body`;
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open: Boolean(currentOpen),
+      disabled: disabledByState,
+      modal,
+      contentId,
+      fallbackLabelId,
+      fallbackDescriptionId,
+      labelledBy,
+      describedBy,
+      closeOnEscape,
+      openDialog,
+      closeDialog,
+      handleDialogKeyDown
+    }),
+    [
+      state,
+      currentOpen,
+      disabledByState,
+      modal,
+      contentId,
+      fallbackLabelId,
+      fallbackDescriptionId,
+      labelledBy,
+      describedBy,
+      closeOnEscape
+    ]
+  );
+  const shouldRenderDialogFallback = triggerContent !== undefined
+    || title !== undefined
+    || description !== undefined
+    || closeButtonLabel !== undefined
+    || closeButtonContent !== undefined;
+
   return React.createElement(
-    "div",
-    {
-      ...createScopeAttributes("dialog", "root", state),
-      ...handlers,
-      ref,
-      "data-open": String(Boolean(currentOpen)),
-      "aria-disabled": disabledByState ? "true" : undefined
-    },
+    DialogCompoundContext.Provider,
+    { value: contextValue },
     React.createElement(
-      "button",
+      "div",
       {
-        ...createScopeAttributes("dialog", "trigger", state),
-        type: "button",
-        disabled: disabledByState,
-        role: "button",
-        "aria-haspopup": "dialog",
-        "aria-expanded": String(Boolean(currentOpen)),
-        "aria-controls": contentId,
-        onClick: openDialog
+        ...rest,
+        ...createScopeAttributes("dialog", "root", state),
+        ...handlers,
+        ref,
+        "data-open": String(Boolean(currentOpen)),
+        "aria-disabled": disabledByState ? "true" : undefined
       },
-      triggerContent
-    ),
-    currentOpen
-      ? React.createElement(
-          React.Fragment,
-          null,
-          React.createElement("div", {
+      shouldRenderDialogFallback && triggerContent !== undefined
+        ? React.createElement(DialogTrigger, { "aria-label": rest["aria-label"] }, triggerContent)
+        : null,
+      currentOpen
+        ? React.createElement("div", {
             ...createScopeAttributes("dialog", "backdrop", state),
             "aria-hidden": "true",
             onClick: closeOnBackdrop ? () => closeDialog("backdrop") : undefined
-          }),
-          React.createElement(
-            "div",
+          })
+        : null,
+      shouldRenderDialogFallback
+        ? React.createElement(
+            DialogContent,
             {
-              ...createScopeAttributes("dialog", "content", state),
-              id: contentId,
-              role: "dialog",
-              "aria-modal": modal ? "true" : "false",
-              "aria-labelledby": titleId,
-              "aria-describedby": descriptionId,
-              tabIndex: -1,
-              onKeyDown: handleDialogKeyDown
+              "aria-labelledby": title !== undefined ? fallbackLabelId : undefined,
+              "aria-describedby": description !== undefined ? fallbackDescriptionId : undefined
             },
-            title
-              ? React.createElement(
-                  "h2",
-                  {
-                    ...createScopeAttributes("dialog", "title", state),
-                    id: titleId
-                  },
-                  title
-                )
-              : null,
-            description
-              ? React.createElement(
-                  "p",
-                  {
-                    ...createScopeAttributes("dialog", "description", state),
-                    id: descriptionId
-                  },
-                  description
-                )
-              : null,
+            title !== undefined ? React.createElement(DialogHeader, null, title) : null,
+            description !== undefined ? React.createElement(DialogBody, null, description) : null,
             children,
-            React.createElement(
-              "button",
-              {
-                ...createScopeAttributes("dialog", "close", state),
-                type: "button",
-                "aria-label": closeButtonLabel,
-                onClick: () => closeDialog("close-button")
-              },
-              resolveIconContent(closeButtonContent, "close")
-            )
+            closeButtonLabel !== undefined || closeButtonContent !== undefined
+              ? React.createElement(DialogClose, { "aria-label": closeButtonLabel }, resolveIconContent(closeButtonContent, "close"))
+              : null
           )
-        )
-      : null,
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("dialog", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+        : children,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("dialog", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
   );
+});
+
+DialogRoot.displayName = "ChipsDialog.Root";
+
+const DialogTrigger = React.forwardRef((props, ref) => {
+  const { children, onClick, ...rest } = props;
+  const context = useDialogCompoundContext("trigger");
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("dialog", "trigger", context.state),
+      ref,
+      type: rest.type || "button",
+      disabled: context.disabled,
+      role: "button",
+      "aria-haspopup": "dialog",
+      "aria-expanded": String(context.open),
+      "aria-controls": context.contentId,
+      onClick: mergeEventHandlers(onClick, context.openDialog)
+    },
+    children
+  );
+});
+
+DialogTrigger.displayName = "ChipsDialog.Trigger";
+
+const DialogContent = React.forwardRef((props, ref) => {
+  const { children, onKeyDown, ...rest } = props;
+  const context = useDialogCompoundContext("content");
+  const hasHeader = hasReactElementType(children, [DialogHeader]);
+  const hasBody = hasReactElementType(children, [DialogBody]);
+  const labelledBy = rest["aria-labelledby"] || context.labelledBy || (hasHeader ? context.fallbackLabelId : undefined);
+  const describedBy = rest["aria-describedby"] || context.describedBy || (hasBody ? context.fallbackDescriptionId : undefined);
+  if (!context.open) {
+    return null;
+  }
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("dialog", "content", context.state),
+      ref,
+      id: rest.id || context.contentId,
+      role: rest.role || "dialog",
+      "aria-modal": context.modal ? "true" : "false",
+      "aria-labelledby": labelledBy,
+      "aria-describedby": describedBy,
+      tabIndex: rest.tabIndex ?? -1,
+      onKeyDown: mergeEventHandlers(onKeyDown, context.handleDialogKeyDown)
+    },
+    children
+  );
+});
+
+DialogContent.displayName = "ChipsDialog.Content";
+
+function createDialogSection(part, tag = "div") {
+  const Component = React.forwardRef((props, ref) => {
+    const { as: Element = tag, children, ...rest } = props;
+    const context = useDialogCompoundContext(part);
+    const fallbackId = part === "header"
+      ? context.fallbackLabelId
+      : part === "body"
+        ? context.fallbackDescriptionId
+        : undefined;
+    return React.createElement(
+      Element,
+      {
+        ...rest,
+        ...createScopeAttributes("dialog", part, context.state),
+        ref,
+        id: rest.id || fallbackId
+      },
+      children
+    );
+  });
+  Component.displayName = `ChipsDialog.${part}`;
+  return Component;
+}
+
+const DialogHeader = createDialogSection("header", "header");
+const DialogBody = createDialogSection("body", "section");
+const DialogFooter = createDialogSection("footer", "footer");
+const DialogActions = createDialogSection("actions", "div");
+
+const DialogClose = React.forwardRef((props, ref) => {
+  const { children, onClick, ...rest } = props;
+  const context = useDialogCompoundContext("close");
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("dialog", "close", context.state),
+      ref,
+      type: rest.type || "button",
+      onClick: mergeEventHandlers(onClick, () => context.closeDialog("close-button"))
+    },
+    children
+  );
+});
+
+DialogClose.displayName = "ChipsDialog.Close";
+
+export const ChipsDialog = Object.assign(DialogRoot, {
+  Root: DialogRoot,
+  Trigger: DialogTrigger,
+  Content: DialogContent,
+  Header: DialogHeader,
+  Body: DialogBody,
+  Footer: DialogFooter,
+  Actions: DialogActions,
+  Close: DialogClose
 });
 
 ChipsDialog.displayName = "ChipsDialog";
 
-export const ChipsPopover = React.forwardRef((props, ref) => {
+const [PopoverCompoundContext, usePopoverCompoundContext] = createCompoundContext("popover");
+
+const PopoverRoot = React.forwardRef((props, ref) => {
   const {
     open,
     defaultOpen = false,
@@ -8492,8 +8666,10 @@ export const ChipsPopover = React.forwardRef((props, ref) => {
     triggerContent,
     children,
     closeOnEscape = true,
+    contentId: contentIdProp,
     onOpenChange,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
@@ -8518,84 +8694,150 @@ export const ChipsPopover = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const contentId = React.useId();
-
   const toggle = (event) => {
     if (disabledByState) {
-      event.preventDefault();
+      event?.preventDefault?.();
       return;
     }
     setCurrentOpen(!currentOpen);
   };
 
+  const closePopover = () => {
+    if (disabledByState) {
+      return;
+    }
+    setCurrentOpen(false);
+  };
+
   const handleContentKeyDown = (event) => {
     if (event.key === "Escape" && closeOnEscape) {
       event.preventDefault();
-      setCurrentOpen(false);
+      closePopover();
     }
   };
 
+  const generatedId = React.useId();
+  const contentId = contentIdProp || (props.id ? `${props.id}-content` : `${generatedId}-content`);
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open: Boolean(currentOpen),
+      disabled: disabledByState,
+      contentId,
+      toggle,
+      closePopover,
+      handleContentKeyDown
+    }),
+    [state, currentOpen, disabledByState, contentId]
+  );
+  const shouldRenderPopoverFallback = triggerContent !== undefined;
+
+  return React.createElement(
+    PopoverCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("popover", "root", state),
+        ...handlers,
+        ref,
+        "data-open": String(Boolean(currentOpen)),
+        "aria-disabled": disabledByState ? "true" : undefined
+      },
+      shouldRenderPopoverFallback
+        ? React.createElement(PopoverTrigger, null, triggerContent)
+        : null,
+      shouldRenderPopoverFallback
+        ? React.createElement(PopoverContent, null, React.createElement(PopoverArrow, null), children)
+        : children,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("popover", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
+  );
+});
+
+PopoverRoot.displayName = "ChipsPopover.Root";
+
+const PopoverTrigger = React.forwardRef((props, ref) => {
+  const { children, onClick, ...rest } = props;
+  const context = usePopoverCompoundContext("trigger");
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("popover", "trigger", context.state),
+      ref,
+      type: rest.type || "button",
+      role: "button",
+      disabled: context.disabled,
+      "aria-haspopup": "dialog",
+      "aria-expanded": String(context.open),
+      "aria-controls": context.contentId,
+      onClick: mergeEventHandlers(onClick, context.toggle)
+    },
+    children
+  );
+});
+
+PopoverTrigger.displayName = "ChipsPopover.Trigger";
+
+const PopoverContent = React.forwardRef((props, ref) => {
+  const { children, onKeyDown, ...rest } = props;
+  const context = usePopoverCompoundContext("content");
+  if (!context.open) {
+    return null;
+  }
   return React.createElement(
     "div",
     {
-      ...createScopeAttributes("popover", "root", state),
-      ...handlers,
+      ...rest,
+      ...createScopeAttributes("popover", "content", context.state),
       ref,
-      "data-open": String(Boolean(currentOpen)),
-      "aria-disabled": disabledByState ? "true" : undefined
+      id: rest.id || context.contentId,
+      role: rest.role || "dialog",
+      "aria-modal": "false",
+      tabIndex: rest.tabIndex ?? -1,
+      onKeyDown: mergeEventHandlers(onKeyDown, context.handleContentKeyDown)
     },
-    React.createElement(
-      "button",
-      {
-        ...createScopeAttributes("popover", "trigger", state),
-        type: "button",
-        role: "button",
-        disabled: disabledByState,
-        "aria-haspopup": "dialog",
-        "aria-expanded": String(Boolean(currentOpen)),
-        "aria-controls": contentId,
-        onClick: toggle
-      },
-      triggerContent
-    ),
-    currentOpen
-      ? React.createElement(
-          "div",
-          createScopeAttributes("popover", "positioner", state),
-          React.createElement(
-            "div",
-            {
-              ...createScopeAttributes("popover", "content", state),
-              id: contentId,
-              role: "dialog",
-              "aria-modal": "false",
-              tabIndex: -1,
-              onKeyDown: handleContentKeyDown
-            },
-            React.createElement("span", {
-              ...createScopeAttributes("popover", "arrow", state),
-              "aria-hidden": "true"
-            }),
-            children
-          )
-        )
-      : null,
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("popover", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+    children
   );
+});
+
+PopoverContent.displayName = "ChipsPopover.Content";
+
+const PopoverArrow = React.forwardRef((props, ref) => {
+  const context = usePopoverCompoundContext("arrow");
+  return React.createElement("span", {
+    ...props,
+    ...createScopeAttributes("popover", "arrow", context.state),
+    ref,
+    "aria-hidden": "true"
+  });
+});
+
+PopoverArrow.displayName = "ChipsPopover.Arrow";
+
+export const ChipsPopover = Object.assign(PopoverRoot, {
+  Root: PopoverRoot,
+  Trigger: PopoverTrigger,
+  Content: PopoverContent,
+  Arrow: PopoverArrow
 });
 
 ChipsPopover.displayName = "ChipsPopover";
 
-export const ChipsTabs = React.forwardRef((props, ref) => {
+const [TabsCompoundContext, useTabsCompoundContext] = createCompoundContext("tabs");
+
+const TabsRoot = React.forwardRef((props, ref) => {
   const {
     value,
     defaultValue,
@@ -8604,8 +8846,10 @@ export const ChipsTabs = React.forwardRef((props, ref) => {
     error = null,
     items = [],
     orientation = "horizontal",
+    children,
     onValueChange,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
@@ -8657,6 +8901,63 @@ export const ChipsTabs = React.forwardRef((props, ref) => {
   }, [state, onStateChange]);
 
   const baseId = React.useId();
+  const triggerRegistryRef = React.useRef([]);
+
+  const registerTrigger = React.useCallback((entry) => {
+    triggerRegistryRef.current = [
+      ...triggerRegistryRef.current.filter((item) => item.value !== entry.value),
+      entry
+    ];
+    return () => {
+      triggerRegistryRef.current = triggerRegistryRef.current.filter((item) => item.value !== entry.value);
+    };
+  }, []);
+
+  const selectValue = React.useCallback(
+    (nextValue) => {
+      if (!disabledByState) {
+        setCurrentValue(String(nextValue));
+      }
+    },
+    [disabledByState, setCurrentValue]
+  );
+
+  const moveFocus = React.useCallback(
+    (currentTriggerValue, direction) => {
+      if (disabledByState) {
+        return;
+      }
+      const registry = triggerRegistryRef.current;
+      if (registry.length === 0) {
+        return;
+      }
+      const currentIndex = registry.findIndex((item) => item.value === currentTriggerValue);
+      const nextIndex = getNextEnabledIndex(registry, currentIndex, direction, true);
+      const nextEntry = registry[nextIndex];
+      if (!nextEntry) {
+        return;
+      }
+      setCurrentValue(nextEntry.value);
+      if (nextEntry.ref?.current && typeof nextEntry.ref.current.focus === "function") {
+        nextEntry.ref.current.focus();
+      }
+    },
+    [disabledByState, setCurrentValue]
+  );
+
+  const baseValue = React.useMemo(
+    () => ({
+      state,
+      value: currentValue,
+      orientation,
+      disabled: disabledByState,
+      baseId,
+      selectValue,
+      registerTrigger,
+      moveFocus
+    }),
+    [state, currentValue, orientation, disabledByState, baseId, selectValue, registerTrigger, moveFocus]
+  );
 
   const selectIndex = (index) => {
     const item = normalizedItems[index];
@@ -8703,80 +9004,215 @@ export const ChipsTabs = React.forwardRef((props, ref) => {
   };
 
   return React.createElement(
-    "div",
-    {
-      ...createScopeAttributes("tabs", "root", state),
-      ...handlers,
-      ref,
-      "aria-disabled": disabledByState ? "true" : undefined
-    },
+    TabsCompoundContext.Provider,
+    { value: baseValue },
     React.createElement(
       "div",
       {
-        ...createScopeAttributes("tabs", "list", state),
-        role: "tablist",
-        "aria-orientation": orientation,
-        onKeyDown: handleListKeyDown
+        ...rest,
+        ...createScopeAttributes("tabs", "root", state),
+        ...handlers,
+        ref,
+        "aria-disabled": disabledByState ? "true" : undefined
       },
-      normalizedItems.map((item, index) => {
-        const selected = index === selectedIndex;
-        const tabId = `${baseId}-tab-${index}`;
-        const panelId = `${baseId}-panel-${index}`;
-
-        return React.createElement(
-          "button",
-          {
-            ...createScopeAttributes("tabs", "trigger", state),
-            key: `${item.value}-${index}`,
-            id: tabId,
-            role: "tab",
-            type: "button",
-            tabIndex: selected ? 0 : -1,
-            "aria-selected": String(selected),
-            "aria-controls": panelId,
-            "aria-disabled": item.disabled ? "true" : undefined,
-            disabled: disabledByState || item.disabled,
-            onClick: () => selectIndex(index),
-            onKeyDown: (event) => {
-              if (isKeyboardActivationKey(event.key)) {
-                event.preventDefault();
-                selectIndex(index);
-              }
-            }
-          },
-          item.label
-        );
-      })
-    ),
-    normalizedItems.map((item, index) => {
-      const selected = index === selectedIndex;
-      const tabId = `${baseId}-tab-${index}`;
-      const panelId = `${baseId}-panel-${index}`;
-
-      return React.createElement(
-        "div",
-        {
-          ...createScopeAttributes("tabs", "panel", state),
-          key: panelId,
-          id: panelId,
-          role: "tabpanel",
-          "aria-labelledby": tabId,
-          hidden: !selected
-        },
-        selected ? item.content : null
-      );
-    }),
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("tabs", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+      children !== undefined
+        ? children
+        : React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+              TabsList,
+              { onKeyDown: handleListKeyDown },
+              normalizedItems.map((item, index) =>
+                React.createElement(
+                  TabsTrigger,
+                  {
+                    key: `${item.value}-${index}`,
+                    value: item.value,
+                    disabled: item.disabled,
+                    index
+                  },
+                  item.label
+                )
+              )
+            ),
+            normalizedItems.map((item, index) =>
+              React.createElement(
+                TabsPanel,
+                {
+                  key: `${item.value}-${index}`,
+                  value: item.value,
+                  index
+                },
+                item.content
+              )
+            )
+          ),
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("tabs", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
   );
+});
+
+TabsRoot.displayName = "ChipsTabs.Root";
+
+const TabsList = React.forwardRef((props, ref) => {
+  const { children, onKeyDown, ...rest } = props;
+  const context = useTabsCompoundContext("list");
+  const handleKeyDown = (event) => {
+    if (!event.defaultPrevented && typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("tabs", "list", context.state),
+      ref,
+      role: "tablist",
+      "aria-orientation": context.orientation,
+      onKeyDown: handleKeyDown
+    },
+    children
+  );
+});
+
+TabsList.displayName = "ChipsTabs.List";
+
+const TabsTrigger = React.forwardRef((props, ref) => {
+  const { children, value, disabled = false, index = 0, onClick, onKeyDown, ...rest } = props;
+  const context = useTabsCompoundContext("trigger");
+  const tabValue = String(value);
+  const selected = context.value === tabValue;
+  const idSegment = normalizeDomIdSegment(tabValue, String(index));
+  const tabId = rest.id || `${context.baseId}-tab-${idSegment}`;
+  const panelId = rest["aria-controls"] || `${context.baseId}-panel-${idSegment}`;
+  const disabledByState = context.disabled || disabled;
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  React.useEffect(
+    () => context.registerTrigger({
+      value: tabValue,
+      disabled: disabledByState,
+      ref: localRef
+    }),
+    [context, tabValue, disabledByState]
+  );
+  const selectCurrent = (event) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    context.selectValue(tabValue);
+  };
+  const handleKeyDown = (event) => {
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    if (context.disabled) {
+      return;
+    }
+
+    const isHorizontal = context.orientation !== "vertical";
+    const nextKey = isHorizontal ? "ArrowRight" : "ArrowDown";
+    const prevKey = isHorizontal ? "ArrowLeft" : "ArrowUp";
+
+    if (event.key === nextKey) {
+      event.preventDefault();
+      context.moveFocus(tabValue, "next");
+      return;
+    }
+
+    if (event.key === prevKey) {
+      event.preventDefault();
+      context.moveFocus(tabValue, "prev");
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      context.moveFocus("", "next");
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      context.moveFocus("", "prev");
+      return;
+    }
+
+    if (isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      selectCurrent(event);
+    }
+  };
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("tabs", "trigger", selected ? "active" : context.state),
+      ref: localRef,
+      id: tabId,
+      role: "tab",
+      type: rest.type || "button",
+      tabIndex: selected ? 0 : -1,
+      "aria-selected": String(selected),
+      "aria-controls": panelId,
+      "aria-disabled": disabled ? "true" : undefined,
+      disabled: disabledByState,
+      onClick: mergeEventHandlers(onClick, selectCurrent),
+      onKeyDown: handleKeyDown
+    },
+    children
+  );
+});
+
+TabsTrigger.displayName = "ChipsTabs.Trigger";
+
+const TabsPanel = React.forwardRef((props, ref) => {
+  const { children, value, index = 0, ...rest } = props;
+  const context = useTabsCompoundContext("panel");
+  const panelValue = String(value);
+  const selected = context.value === panelValue;
+  const idSegment = normalizeDomIdSegment(panelValue, String(index));
+  const panelId = rest.id || `${context.baseId}-panel-${idSegment}`;
+  const tabId = rest["aria-labelledby"] || `${context.baseId}-tab-${idSegment}`;
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("tabs", "panel", selected ? "active" : context.state),
+      ref,
+      id: panelId,
+      role: "tabpanel",
+      "aria-labelledby": tabId,
+      hidden: !selected
+    },
+    selected ? children : null
+  );
+});
+
+TabsPanel.displayName = "ChipsTabs.Panel";
+
+export const ChipsTabs = Object.assign(TabsRoot, {
+  Root: TabsRoot,
+  List: TabsList,
+  Trigger: TabsTrigger,
+  Panel: TabsPanel
 });
 
 ChipsTabs.displayName = "ChipsTabs";
@@ -13660,8 +14096,10 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
       "trigger",
       "backdrop",
       "content",
-      "title",
-      "description",
+      "header",
+      "body",
+      "footer",
+      "actions",
       "close",
       "status"
     ],
@@ -13670,7 +14108,7 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
   createComponentMeta({
     name: "ChipsPopover",
     scope: "popover",
-    parts: ["root", "trigger", "positioner", "content", "arrow", "status"],
+    parts: ["root", "trigger", "content", "arrow", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({

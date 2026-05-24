@@ -6,8 +6,10 @@
     "trigger",
     "backdrop",
     "content",
-    "title",
-    "description",
+    "header",
+    "body",
+    "footer",
+    "actions",
     "close",
     "status"
   ],
@@ -24,7 +26,10 @@
     "chips.comp.dialog.backdrop.surface",
     "chips.comp.dialog.content.radius",
     "chips.comp.dialog.content.surface",
-    "chips.comp.dialog.title.color",
+    "chips.comp.dialog.header.color",
+    "chips.comp.dialog.body.color",
+    "chips.comp.dialog.footer.gap",
+    "chips.comp.dialog.actions.gap",
     "chips.comp.dialog.close.color",
     "chips.comp.dialog.focus.outline"
   ]

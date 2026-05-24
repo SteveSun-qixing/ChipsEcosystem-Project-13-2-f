@@ -164,6 +164,14 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 第七批最小 required token 数量以组件库 contract 为准：`image` 9 个、`media` 11 个、`error-state` 12 个。主题包本地 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json` 必须同时包含 `image / media / error-state`，默认主题和暗色主题的组件基线为 70 个 component。
 
+任务016第一批复杂组件 Compound API token 是 Dialog、Popover、Tabs 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.dialog.*`
+- `chips.comp.popover.*`
+- `chips.comp.tabs.*`
+
+`Dialog` 的 `backdrop/content/header/body/footer/actions/close/focus` token 分别表达遮罩、对话框内容容器、标题区、正文区、页脚区、动作区、关闭入口和焦点视觉；`Popover` 的 `trigger/content/arrow/focus` token 只表达触发器、浮层内容、装饰箭头和焦点视觉，内部定位容器不是公开 token 或公开 part；`Tabs` 的 `list/trigger/panel/focus` token 只表达页签列表、页签触发器、面板和焦点视觉。主题包不得继续依赖 Dialog 旧 `title/description` part 或 Popover 旧 `positioner` part 作为正式样式入口。
+
 ### 3.1 布局 token 基线
 
 `chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。

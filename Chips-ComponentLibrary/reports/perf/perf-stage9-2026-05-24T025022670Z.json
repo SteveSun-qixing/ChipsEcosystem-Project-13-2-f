@@ -1,47 +1,47 @@
 {
-  "generatedAt": "2026-05-24T02:54:51.041Z",
+  "generatedAt": "2026-05-24T02:50:22.670Z",
   "thresholds": {
     "renderSubmitP95MaxMs": 32,
     "themeSwitchVisibleP95Ms": 150,
     "longTaskRatioMax": 0.05
   },
   "summary": {
-    "renderSubmitP95MaxMs": 1.828,
-    "themeSwitchVisibleP95Ms": 30.0806,
-    "longTaskRatio": 0.0013,
+    "renderSubmitP95MaxMs": 0.5943,
+    "themeSwitchVisibleP95Ms": 9.7752,
+    "longTaskRatio": 0,
     "passed": true
   },
   "results": [
     {
       "name": "render-submit:data-grid-sort",
       "iterations": 200,
-      "averageMs": 0.0831,
-      "p95Ms": 0.1517,
-      "maxMs": 0.3652,
+      "averageMs": 0.0734,
+      "p95Ms": 0.1256,
+      "maxMs": 0.1906,
       "longTaskRatio": 0
     },
     {
       "name": "render-submit:command-filter",
       "iterations": 200,
-      "averageMs": 1.3059,
-      "p95Ms": 1.828,
-      "maxMs": 66.835,
-      "longTaskRatio": 0.005
+      "averageMs": 0.5109,
+      "p95Ms": 0.5943,
+      "maxMs": 0.6579,
+      "longTaskRatio": 0
     },
     {
       "name": "render-submit:virtual-window",
       "iterations": 200,
-      "averageMs": 0.0006,
-      "p95Ms": 0.0006,
-      "maxMs": 0.0228,
+      "averageMs": 0.0005,
+      "p95Ms": 0.0005,
+      "maxMs": 0.0006,
       "longTaskRatio": 0
     },
     {
       "name": "theme-switch-visible",
       "iterations": 20,
-      "averageMs": 10.1781,
-      "p95Ms": 30.0806,
-      "maxMs": 30.0806,
+      "averageMs": 8.9348,
+      "p95Ms": 9.7752,
+      "maxMs": 9.7752,
       "longTaskRatio": 0
     }
   ]

@@ -93,6 +93,8 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(sw, "chips.comp.switch.track.surface.on"));
   assert.ok(getPath(select, "chips.comp.select.option.text.color"));
   assert.ok(getPath(dialog, "chips.comp.dialog.content.surface"));
+  assert.ok(getPath(dialog, "chips.comp.dialog.header.color"));
+  assert.ok(getPath(dialog, "chips.comp.dialog.actions.gap"));
   assert.ok(getPath(popover, "chips.comp.popover.content.border"));
   assert.ok(getPath(tabs, "chips.comp.tabs.trigger.surface.active"));
   assert.ok(getPath(menu, "chips.comp.menu.item.surface.active"));

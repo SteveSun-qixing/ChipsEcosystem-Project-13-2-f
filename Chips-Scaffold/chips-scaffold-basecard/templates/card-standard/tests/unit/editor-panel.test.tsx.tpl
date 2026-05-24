@@ -22,14 +22,24 @@ describe("createBasecardEditorRoot", () => {
     });
 
     const titleInput = root.querySelector(
-      ".chips-basecard-editor__input"
+      '[data-scope="text-field"][data-part="control"]'
     ) as HTMLInputElement | null;
 
     if (!titleInput) {
       throw new Error("找不到标题输入框");
     }
 
-    titleInput.value = "New Title";
+    expect(root.querySelector('[data-scope="form"][data-part="root"]')).toBeTruthy();
+    expect(root.querySelector('[data-scope="text-area"][data-part="control"]')).toBeTruthy();
+    expect(root.innerHTML).not.toContain("chips-basecard-editor__input");
+    expect(root.innerHTML).not.toContain("box-shadow");
+    expect(root.innerHTML).not.toContain("radial-gradient");
+
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    valueSetter?.call(titleInput, "New Title");
     titleInput.dispatchEvent(new Event("input", { bubbles: true }));
 
     expect(lastConfig?.title).toBe("New Title");

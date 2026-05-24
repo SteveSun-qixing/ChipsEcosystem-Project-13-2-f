@@ -75,6 +75,7 @@ describe("template-engine", () => {
       await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
       expect(pkg.dependencies.react).toBe("^18.2.0");
       expect(pkg.dependencies["react-dom"]).toBe("^18.2.0");
+      expect(pkg.dependencies["@chips/component-library"]).toBe("^0.1.0");
       expect(pkg.devDependencies["@types/react"]).toBe("^18.2.66");
       expect(pkg.devDependencies.eslint).toBe("^8.57.1");
       expect(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
@@ -90,6 +91,7 @@ describe("template-engine", () => {
       );
       expect(readme).toMatch(/Standard Basecard Plugin/);
       expect(readme).toMatch(/basecardDefinition/);
+      expect(readme).toMatch(/@chips\/component-library/);
       expect(readme).not.toMatch(/chips-scaffold-basecard/);
       expect(indexTs).toMatch(/export const basecardDefinition/);
       expect(indexTs).toMatch(/export function renderBasecardView/);
@@ -101,6 +103,34 @@ describe("template-engine", () => {
       expect(indexTs).toMatch(/convertTiffToPng\?:/);
       expect(indexTs).toMatch(/collectResourcePaths/);
       expect(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
+
+      const templateMeta = JSON.parse(
+        await fs.readFile(path.join(targetDir, "template.json"), "utf8")
+      );
+      expect(templateMeta.supports.componentLibrary).toBe(true);
+
+      const renderView = await fs.readFile(
+        path.join(targetDir, "src", "render", "view.tsx"),
+        "utf8"
+      );
+      expect(renderView).toMatch(/@chips\/component-library/);
+      expect(renderView).not.toMatch(/chips-basecard__surface/);
+      expect(renderView).not.toMatch(/box-shadow/);
+      expect(renderView).not.toMatch(/radial-gradient/);
+      expect(renderView).not.toMatch(/rgba\(/);
+
+      const editorPanel = await fs.readFile(
+        path.join(targetDir, "src", "editor", "panel.tsx"),
+        "utf8"
+      );
+      expect(editorPanel).toMatch(/ChipsTextField/);
+      expect(editorPanel).toMatch(/ChipsTextArea/);
+      expect(editorPanel).toMatch(/ChipsForm/);
+      expect(editorPanel).not.toMatch(/<input/);
+      expect(editorPanel).not.toMatch(/<textarea/);
+      expect(editorPanel).not.toMatch(/box-shadow/);
+      expect(editorPanel).not.toMatch(/radial-gradient/);
+      expect(editorPanel).not.toMatch(/rgba\(/);
 
       const schemaTs = await fs.readFile(
         path.join(targetDir, "src", "schema", "card-config.ts"),

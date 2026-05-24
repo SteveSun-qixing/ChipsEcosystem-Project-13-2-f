@@ -53,8 +53,8 @@ describe("basecard schema", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors.title).toBeTruthy();
-    expect(result.errors.body).toBeTruthy();
+    expect(result.errors.title).toBe("basecard.validation.titleRequired");
+    expect(result.errors.body).toBe("basecard.validation.bodyRequired");
   });
 
   it("rejects non card-root resource paths", () => {
@@ -81,7 +81,7 @@ describe("basecard schema", () => {
       );
 
       expect(result.valid).toBe(false);
-      expect(result.errors.resource_path).toBeTruthy();
+      expect(result.errors.resource_path).toBe("basecard.validation.resourcePathInvalid");
       expect(collectBasecardResourcePaths({ resource_path: resourcePath })).toEqual([]);
     }
   });

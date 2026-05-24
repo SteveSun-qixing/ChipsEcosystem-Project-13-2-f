@@ -1,15 +1,18 @@
+import {
+  createChipsI18nText,
+  type ChipsI18nText,
+} from "@chips/component-library";
 import enUS from "../../i18n/en-US.json";
 import zhCN from "../../i18n/zh-CN.json";
 
-type Dictionary = Record<string, string>;
-type Locale = "zh-CN" | "en-US";
+export type BasecardLocale = "zh-CN" | "en-US";
 
-const dictionaries: Record<Locale, Dictionary> = {
-  "zh-CN": zhCN as Dictionary,
-  "en-US": enUS as Dictionary,
+export const localeBundles: Record<BasecardLocale, Record<string, unknown>> = {
+  "zh-CN": zhCN as Record<string, unknown>,
+  "en-US": enUS as Record<string, unknown>,
 };
 
-function normalizeLocale(locale: string | undefined): Locale {
+export function normalizeBasecardLocale(locale: string | undefined): BasecardLocale {
   const normalized = (locale ?? "").toLowerCase();
   if (normalized === "en" || normalized === "en-us" || normalized.startsWith("en-")) {
     return "en-US";
@@ -22,19 +25,12 @@ function normalizeLocale(locale: string | undefined): Locale {
   return "zh-CN";
 }
 
-function interpolate(template: string, params?: Record<string, string | number>): string {
-  if (!params) {
-    return template;
-  }
-
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => String(params[key] ?? ""));
-}
-
-export function createTranslator(locale?: string) {
-  const dictionary = dictionaries[normalizeLocale(locale)];
-
-  return (key: string, params?: Record<string, string | number>): string => {
-    const template = dictionary[key] ?? key;
-    return interpolate(template, params);
-  };
+export function createBasecardText(locale?: string): ChipsI18nText {
+  return createChipsI18nText({
+    bundles: localeBundles,
+    locale: normalizeBasecardLocale(locale),
+    defaultLocale: "zh-CN",
+    fallbackLocale: "en-US",
+    fallbackLocales: ["zh-CN"],
+  });
 }

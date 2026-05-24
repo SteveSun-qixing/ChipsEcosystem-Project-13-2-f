@@ -1,11 +1,15 @@
 import React from "react";
+import {
+  ChipsBox,
+  ChipsStack,
+  ChipsText,
+} from "@chips/component-library";
 import type { BasecardConfig } from "../schema/card-config";
+import { createBasecardText } from "../shared/i18n";
 
 export const VIEW_STYLE_TEXT = `
 .chips-basecard {
   width: 100%;
-  color: var(--chips-sys-color-on-surface, #111827);
-  font: 14px/1.6 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif);
 }
 
 .chips-basecard,
@@ -13,25 +17,13 @@ export const VIEW_STYLE_TEXT = `
   box-sizing: border-box;
 }
 
-.chips-basecard__surface {
-  width: 100%;
-  padding: 20px 24px;
-  border-radius: 22px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  background: var(--chips-comp-card-shell-root-surface, var(--chips-sys-color-surface, #ffffff));
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-}
-
 .chips-basecard__title {
-  margin: 0 0 10px;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.35;
+  margin: 0;
 }
 
 .chips-basecard__body {
   white-space: pre-wrap;
-  color: var(--chips-sys-color-on-surface-variant, #475467);
+  overflow-wrap: anywhere;
 }
 `;
 
@@ -40,12 +32,34 @@ export interface BasecardViewProps {
 }
 
 export function BasecardView({ config }: BasecardViewProps) {
+  const t = createBasecardText(config.locale);
+
   return (
-    <div className="chips-basecard" data-card-type={config.card_type}>
-      <div className="chips-basecard__surface">
-        <h2 className="chips-basecard__title">{config.title}</h2>
-        <div className="chips-basecard__body">{config.body}</div>
-      </div>
-    </div>
+    <ChipsBox
+      as="article"
+      className="chips-basecard"
+      data-card-type={config.card_type}
+      aria-label={t("basecard.view.ariaLabel", { title: config.title })}
+    >
+      <ChipsStack
+        className="chips-basecard__content"
+        gap="var(--chips-comp-basecard-content-gap, var(--chips-sys-space-2))"
+      >
+        <ChipsText
+          as="div"
+          className="chips-basecard__title"
+          role="heading"
+          aria-level={2}
+          text={config.title}
+          emphasis="strong"
+        />
+        <ChipsText
+          as="div"
+          className="chips-basecard__body"
+          text={config.body}
+          tone="muted"
+        />
+      </ChipsStack>
+    </ChipsBox>
   );
 }

@@ -90,19 +90,19 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
   const errors: Record<string, string> = {};
 
   if (config.card_type !== "{{ CARD_TYPE }}") {
-    errors.card_type = "card_type 必须与插件声明一致";
+    errors.card_type = "basecard.validation.cardTypeMismatch";
   }
 
   if (!isNonEmptyString(config.title)) {
-    errors.title = "标题不能为空。";
+    errors.title = "basecard.validation.titleRequired";
   }
 
   if (!isNonEmptyString(config.body)) {
-    errors.body = "内容不能为空。";
+    errors.body = "basecard.validation.bodyRequired";
   }
 
   if (config.resource_path && !isCardRootResourcePath(config.resource_path)) {
-    errors.resource_path = "资源路径必须是卡片根目录内的相对路径。";
+    errors.resource_path = "basecard.validation.resourcePathInvalid";
   }
 
   return {

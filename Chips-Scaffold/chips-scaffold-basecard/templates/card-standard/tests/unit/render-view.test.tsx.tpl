@@ -23,6 +23,12 @@ describe("mountBasecardView", () => {
 
     expect(titleEl?.textContent).toBe("Hello");
     expect(bodyEl?.textContent).toBe("World");
+    expect(container.querySelector(".chips-basecard__surface")).toBeNull();
+    expect(container.querySelector('[data-scope="box"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="text"][data-part="root"]')).toBeTruthy();
+    expect(container.innerHTML).not.toContain("box-shadow");
+    expect(container.innerHTML).not.toContain("radial-gradient");
+    expect(container.innerHTML).not.toContain("rgba(");
 
     dispose();
   });

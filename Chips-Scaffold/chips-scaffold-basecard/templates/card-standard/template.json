@@ -5,7 +5,6 @@
   "version": "1.0.0",
   "supports": {
     "sdk": true,
-    "componentLibrary": false
+    "componentLibrary": true
   }
 }
-

@@ -10,7 +10,7 @@
 - 在编辑引擎中提供编辑面板，编辑基础卡片配置；
 - 通过 `basecardDefinition` 同时对接 Host 通用链路与官方编辑引擎运行时；
 - 使用 YAML 配置文件保存基础卡片数据；
-- 使用多语言文案与基础错误处理。
+- 使用 `@chips/component-library`、主题 token、多语言文案与基础错误处理。
 
 ## 项目结构
 
@@ -77,6 +77,7 @@ npm run dev
 本工程默认内置：
 
 - React 渲染与编辑运行时
+- `@chips/component-library` 查看态、表单控件、错误态与布局原语
 - `normalizeBasecardConfig()` / `validateBasecardConfig()` 统一归一与校验基线
 - `collectBasecardResourcePaths()` 卡片根目录资源路径收集
 - `renderBasecardView()` / `renderBasecardEditor()` / `basecardDefinition` 正式入口
@@ -101,4 +102,12 @@ npm run dev
 ## 主题接入约束
 
 - Host 会在渲染阶段向基础卡片插件注入 `themeCssText`，模板默认会把该样式挂载到渲染容器中；
-- 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包。
+- 查看态不默认添加额外边框、阴影、圆角壳层，基础卡片外观由宿主装配层与主题包共同决定；
+- 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包与组件库公开 contract。
+
+## 多语言与组件库
+
+- React 渲染期文案通过组件库 `createChipsI18nText()` 同步 adapter 读取本地语言包；
+- 编辑态表单默认使用 `ChipsForm`、`ChipsTextField`、`ChipsTextArea` 和 `ChipsErrorState`；
+- 查看态默认使用 `ChipsBox`、`ChipsStack` 和 `ChipsText`；
+- 用户可见文案应写入 `i18n/zh-CN.json` 与 `i18n/en-US.json`，源码中只保存稳定 key。

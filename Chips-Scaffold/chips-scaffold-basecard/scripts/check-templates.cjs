@@ -21,6 +21,10 @@ function main() {
     if (!fs.existsSync(metaPath)) {
       throw new Error(`模板 ${templateId} 缺少 template.json 元数据文件。`);
     }
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    if (meta.supports?.componentLibrary !== true) {
+      throw new Error(`模板 ${templateId} 必须声明支持组件库。`);
+    }
     const required = [
       "manifest.yaml.tpl",
       "package.json.tpl",
@@ -47,6 +51,14 @@ function main() {
     if (readme.includes("chips-scaffold-basecard")) {
       throw new Error(`模板 ${templateId} 的 README 不应泄露脚手架包名。`);
     }
+    if (!readme.includes("@chips/component-library")) {
+      throw new Error(`模板 ${templateId} 的 README 必须说明组件库接入。`);
+    }
+
+    const packageJson = JSON.parse(fs.readFileSync(path.join(dir, "package.json.tpl"), "utf8"));
+    if (packageJson.dependencies?.["@chips/component-library"] !== "^0.1.0") {
+      throw new Error(`模板 ${templateId} 必须依赖 @chips/component-library 正式 semver。`);
+    }
 
     const indexTs = fs.readFileSync(path.join(dir, "src", "index.ts.tpl"), "utf8");
     for (const requiredText of [
@@ -69,6 +81,37 @@ function main() {
     ]) {
       if (!schemaTs.includes(requiredText)) {
         throw new Error(`模板 ${templateId} Schema 缺少：${requiredText}`);
+      }
+    }
+
+    const renderView = fs.readFileSync(path.join(dir, "src", "render", "view.tsx.tpl"), "utf8");
+    const editorPanel = fs.readFileSync(path.join(dir, "src", "editor", "panel.tsx.tpl"), "utf8");
+    for (const [fileName, source] of [
+      ["src/render/view.tsx.tpl", renderView],
+      ["src/editor/panel.tsx.tpl", editorPanel],
+    ]) {
+      for (const forbiddenText of [
+        "chips-basecard__surface",
+        "box-shadow",
+        "radial-gradient",
+        "rgba(",
+      ]) {
+        if (source.includes(forbiddenText)) {
+          throw new Error(`模板 ${templateId} 的 ${fileName} 不应包含私有视觉值：${forbiddenText}`);
+        }
+      }
+    }
+    if (!renderView.includes("@chips/component-library")) {
+      throw new Error(`模板 ${templateId} 查看态必须消费 @chips/component-library。`);
+    }
+    for (const requiredText of ["ChipsForm", "ChipsTextField", "ChipsTextArea", "ChipsErrorState"]) {
+      if (!editorPanel.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 编辑态缺少组件库控件：${requiredText}`);
+      }
+    }
+    for (const forbiddenText of ["<input", "<textarea", "chips-basecard-editor__input"]) {
+      if (editorPanel.includes(forbiddenText)) {
+        throw new Error(`模板 ${templateId} 编辑态不应保留原生控件样板：${forbiddenText}`);
       }
     }
   }

@@ -37,17 +37,22 @@ describe("basecard integration flow", () => {
     });
 
     const titleInput = editorContainer.querySelector(
-      ".chips-basecard-editor__input"
+      '[data-scope="text-field"][data-part="control"]'
     ) as HTMLInputElement | null;
 
     if (!titleInput) {
       throw new Error("找不到标题输入框");
     }
 
-    titleInput.value = "Updated";
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    valueSetter?.call(titleInput, "Updated");
     titleInput.dispatchEvent(new Event("input", { bubbles: true }));
 
     const titleEl = container.querySelector(".chips-basecard__title");
     expect(titleEl?.textContent).toBe("Updated");
+    expect(container.querySelector(".chips-basecard__surface")).toBeNull();
   });
 });

@@ -1,8 +1,32 @@
 {
-  "basecard.title": "Title",
-  "basecard.body": "Content",
-  "basecard.placeholder.title": "Enter a title",
-  "basecard.placeholder.body": "Enter the main content",
-  "basecard.validation.titleRequired": "Title is required.",
-  "basecard.validation.bodyRequired": "Content is required."
+  "basecard": {
+    "editor": {
+      "ariaLabel": "Base card editor"
+    },
+    "error": {
+      "ariaLabel": "Base card configuration errors",
+      "title": "Configuration needs attention"
+    },
+    "field": {
+      "title": {
+        "ariaLabel": "Title",
+        "label": "Title",
+        "placeholder": "Enter a title"
+      },
+      "body": {
+        "ariaLabel": "Content",
+        "label": "Content",
+        "placeholder": "Enter the main content"
+      }
+    },
+    "validation": {
+      "cardTypeMismatch": "Card type must match the plugin declaration.",
+      "titleRequired": "Title is required.",
+      "bodyRequired": "Content is required.",
+      "resourcePathInvalid": "Resource path must be relative to the card root."
+    },
+    "view": {
+      "ariaLabel": "{title} base card"
+    }
+  }
 }

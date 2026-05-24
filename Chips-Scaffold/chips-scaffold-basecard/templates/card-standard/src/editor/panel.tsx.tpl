@@ -1,4 +1,13 @@
 import React, { useEffect, useState } from "react";
+import {
+  ChipsBox,
+  ChipsErrorState,
+  ChipsForm,
+  ChipsStack,
+  ChipsTextArea,
+  ChipsTextField,
+  type StandardErrorLike,
+} from "@chips/component-library";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
@@ -14,7 +23,7 @@ import {
   validateBasecardConfig,
   type BasecardConfig,
 } from "../schema/card-config";
-import { createTranslator } from "../shared/i18n";
+import { createBasecardText } from "../shared/i18n";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
@@ -44,24 +53,15 @@ html, body {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--chips-sys-color-surface, #ffffff);
 }
 
 .chips-basecard-editor {
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 16px;
-  color: var(--chips-sys-color-on-surface, #111827);
-  background:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 42%),
-    var(--chips-sys-color-surface, #ffffff);
-  font: 14px/1.6 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif);
+  padding: var(--chips-comp-basecard-editor-padding, var(--chips-sys-space-4));
 }
 
 .chips-basecard-editor,
@@ -70,69 +70,42 @@ html, body {
 }
 
 .chips-basecard-editor__form {
-  display: grid;
-  gap: 14px;
-}
-
-.chips-basecard-editor__label {
-  display: grid;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.chips-basecard-editor__input,
-.chips-basecard-editor__textarea {
   width: 100%;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
-  color: inherit;
-  font: inherit;
-  outline: none;
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
 }
 
-.chips-basecard-editor__input {
-  min-height: 44px;
-  padding: 0 14px;
-}
-
-.chips-basecard-editor__textarea {
-  min-height: 180px;
-  padding: 12px 14px;
-  resize: vertical;
-}
-
-.chips-basecard-editor__input:hover,
-.chips-basecard-editor__textarea:hover,
-.chips-basecard-editor__input:focus,
-.chips-basecard-editor__textarea:focus {
-  border-color: rgba(37, 99, 235, 0.5);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-  transform: translateY(-1px);
-}
-
-.chips-basecard-editor__errors {
-  min-height: 0;
-  color: var(--chips-sys-color-error, #d92d20);
-  font-size: 13px;
-}
-
-.chips-basecard-editor__errors-list {
-  margin: 0;
-  padding-left: 18px;
+.chips-basecard-editor__field {
+  min-width: 0;
 }
 `;
+
+function toStandardError(errorKey: string | undefined): StandardErrorLike | null {
+  if (!errorKey) {
+    return null;
+  }
+
+  return {
+    code: errorKey,
+    message: errorKey,
+  };
+}
 
 function BasecardEditor(props: BasecardEditorProps) {
   const [config, setConfig] = useState(() => normalizeBasecardConfig(props.initialConfig));
   const [errors, setErrors] = useState<Record<string, string>>(() =>
     validateBasecardConfig(normalizeBasecardConfig(props.initialConfig)).errors
   );
-  const t = createTranslator(config.locale);
+  const t = createBasecardText(config.locale);
+  const i18n = {
+    translate(
+      input: string | { key: string; params?: Record<string, string | number> },
+      params?: Record<string, string | number>,
+    ) {
+      return typeof input === "string" ? t(input, params) : t(input.key, input.params);
+    },
+  };
+  const titleError = toStandardError(errors.title);
+  const bodyError = toStandardError(errors.body);
+  const firstError = toStandardError(Object.values(errors)[0]);
 
   useEffect(() => {
     const next = normalizeBasecardConfig(props.initialConfig);
@@ -154,44 +127,91 @@ function BasecardEditor(props: BasecardEditorProps) {
   }
 
   return (
-    <div className="chips-basecard-editor chips-basecard-editor--standard">
-      <form className="chips-basecard-editor__form">
-        <label className="chips-basecard-editor__label">
-          <span>{t("basecard.title")}</span>
-          <input
-            type="text"
-            className="chips-basecard-editor__input"
-            value={config.title}
-            placeholder={t("basecard.placeholder.title")}
-            onInput={(event) => {
-              updateConfig({ title: event.currentTarget.value });
-            }}
-          />
-        </label>
+    <ChipsBox
+      as="section"
+      className="chips-basecard-editor chips-basecard-editor--standard"
+      aria-label={t("basecard.editor.ariaLabel")}
+    >
+      <ChipsForm.Root
+        className="chips-basecard-editor__form"
+        aria-label={t("basecard.editor.ariaLabel")}
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <ChipsStack gap="var(--chips-comp-form-section-gap, var(--chips-sys-space-3))">
+          <ChipsForm.Field
+            className="chips-basecard-editor__field"
+            name="title"
+            error={titleError}
+            required
+          >
+            <ChipsTextField
+              value={config.title}
+              labelKey="basecard.field.title.label"
+              ariaLabel={t("basecard.field.title.ariaLabel")}
+              ariaLabelKey="basecard.field.title.ariaLabel"
+              placeholder={t("basecard.field.title.placeholder")}
+              i18n={i18n}
+              error={titleError ? {
+                ...titleError,
+                message: t(titleError.message),
+              } : null}
+              required
+              onValueChange={(value) => {
+                updateConfig({ title: value });
+              }}
+            />
+            <ChipsForm.Error>
+              {titleError ? t(titleError.message) : null}
+            </ChipsForm.Error>
+          </ChipsForm.Field>
 
-        <label className="chips-basecard-editor__label">
-          <span>{t("basecard.body")}</span>
-          <textarea
-            className="chips-basecard-editor__textarea"
-            value={config.body}
-            placeholder={t("basecard.placeholder.body")}
-            onInput={(event) => {
-              updateConfig({ body: event.currentTarget.value });
-            }}
-          />
-        </label>
+          <ChipsForm.Field
+            className="chips-basecard-editor__field"
+            name="body"
+            error={bodyError}
+            required
+          >
+            <ChipsTextArea
+              value={config.body}
+              labelKey="basecard.field.body.label"
+              ariaLabel={t("basecard.field.body.ariaLabel")}
+              ariaLabelKey="basecard.field.body.ariaLabel"
+              placeholder={t("basecard.field.body.placeholder")}
+              i18n={i18n}
+              error={bodyError ? {
+                ...bodyError,
+                message: t(bodyError.message),
+              } : null}
+              rows={6}
+              resize="block"
+              required
+              onValueChange={(value) => {
+                updateConfig({ body: value });
+              }}
+            />
+            <ChipsForm.Error>
+              {bodyError ? t(bodyError.message) : null}
+            </ChipsForm.Error>
+          </ChipsForm.Field>
 
-        <div className="chips-basecard-editor__errors">
-          {Object.keys(errors).length > 0 ? (
-            <ul className="chips-basecard-editor__errors-list">
-              {Object.entries(errors).map(([key, message]) => (
-                <li key={key}>{message}</li>
-              ))}
-            </ul>
+          {firstError ? (
+            <ChipsErrorState
+              error={{
+                ...firstError,
+                message: t(firstError.message),
+              }}
+              titleKey="basecard.error.title"
+              descriptionKey={firstError.message}
+              ariaLabel={t("basecard.error.ariaLabel")}
+              i18n={i18n}
+            />
           ) : null}
-        </div>
-      </form>
-    </div>
+        </ChipsStack>
+      </ChipsForm.Root>
+    </ChipsBox>
   );
 }
 

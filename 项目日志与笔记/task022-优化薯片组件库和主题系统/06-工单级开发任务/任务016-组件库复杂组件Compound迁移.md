@@ -26,6 +26,15 @@
 9. CommandPalette compound。
 10. NavigationSplitView compound。
 
+## 4.1 子工单拆分
+
+任务016涉及 10 个复杂组件与 Host L8 slot 校验，按能力边界拆成以下子工单。父任务编号保持不变，子工单按顺序推进；每个子工单必须做到运行时 API、类型、contract、测试、文档与日志闭环，不留下半套 Compound API。
+
+1. [任务016.01-交互弹层与选择Compound迁移.md](./任务016.01-交互弹层与选择Compound迁移.md)
+2. [任务016.02-表单与数据视图Compound迁移.md](./任务016.02-表单与数据视图Compound迁移.md)
+3. [任务016.03-命令与导航视图Compound迁移.md](./任务016.03-命令与导航视图Compound迁移.md)
+4. [任务016.04-L8SlotSchema与公共Compound规范收口.md](./任务016.04-L8SlotSchema与公共Compound规范收口.md)
+
 ## 5. 验收标准
 
 - slot 规则明确。
@@ -38,4 +47,3 @@
 cd Chips-ComponentLibrary && npm run verify && npm run quality:gate
 cd ../Chips-Host && npm test
 ```
-

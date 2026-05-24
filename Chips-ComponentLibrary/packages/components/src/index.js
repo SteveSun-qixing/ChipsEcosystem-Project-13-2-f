@@ -1785,21 +1785,20 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.tooltip.arrow.surface",
     "chips.comp.tooltip.focus.outline"
   ],
-  "form-field": [
-    "chips.comp.form-field.label.color",
-    "chips.comp.form-field.control.surface.idle",
-    "chips.comp.form-field.control.border.idle",
-    "chips.comp.form-field.control.border.error",
-    "chips.comp.form-field.helper.color",
-    "chips.comp.form-field.error.color",
-    "chips.comp.form-field.focus.outline"
-  ],
-  "form-group": [
-    "chips.comp.form-group.root.gap",
-    "chips.comp.form-group.legend.color",
-    "chips.comp.form-group.description.color",
-    "chips.comp.form-group.divider.color",
-    "chips.comp.form-group.status.color.error"
+  form: [
+    "chips.comp.form.root.gap",
+    "chips.comp.form.section.gap",
+    "chips.comp.form.section.divider.color",
+    "chips.comp.form.field.gap",
+    "chips.comp.form.label.color",
+    "chips.comp.form.label.required.color",
+    "chips.comp.form.control.surface.idle",
+    "chips.comp.form.control.border.idle",
+    "chips.comp.form.control.border.error",
+    "chips.comp.form.hint.color",
+    "chips.comp.form.error.color",
+    "chips.comp.form.status.color.error",
+    "chips.comp.form.focus.outline"
   ],
   "virtual-list": [
     "chips.comp.virtual-list.container.surface",
@@ -2245,16 +2244,10 @@ export function buildComponentContract(component) {
       parts: ["root", "trigger", "content", "arrow", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
-    "form-field": {
-      component: "form-field",
-      scope: "form-field",
-      parts: ["root", "label", "control", "helper", "error", "status"],
-      states: [...INTERACTIVE_STATE_PRIORITY]
-    },
-    "form-group": {
-      component: "form-group",
-      scope: "form-group",
-      parts: ["root", "legend", "description", "content", "status"],
+    form: {
+      component: "form",
+      scope: "form",
+      parts: ["root", "section", "field", "label", "required", "control", "error", "hint", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     "virtual-list": {
@@ -10999,33 +10992,86 @@ export const ChipsTooltip = React.forwardRef((props, ref) => {
 
 ChipsTooltip.displayName = "ChipsTooltip";
 
-export const ChipsFormField = React.forwardRef((props, ref) => {
+const [FormCompoundContext] = createCompoundContext("form");
+const FormFieldCompoundContext = React.createContext(null);
+FormFieldCompoundContext.displayName = "form-compound-field-context";
+
+function useFormFieldCompoundContext(part) {
+  const value = React.useContext(FormFieldCompoundContext);
+  if (!value) {
+    throw new Error(`FORM_COMPOUND_FIELD_CONTEXT_MISSING:${part}`);
+  }
+  return value;
+}
+
+function mergeAriaDescribedBy(...values) {
+  return buildAriaDescribedBy(
+    values
+      .flatMap((value) => (typeof value === "string" ? value.split(/\s+/) : []))
+      .filter(Boolean)
+  );
+}
+
+function mergeRefs(...refs) {
+  return (node) => {
+    for (const ref of refs) {
+      if (!ref) {
+        continue;
+      }
+      if (typeof ref === "function") {
+        ref(node);
+      } else {
+        ref.current = node;
+      }
+    }
+  };
+}
+
+function isNativeFormControlElementType(type) {
+  return ["input", "textarea", "select", "button"].includes(type);
+}
+
+function resolveFormCustomControlProps(context, existingProps = {}) {
+  return {
+    id: existingProps.id || context.controlId,
+    required: existingProps.required ?? context.required,
+    disabled: existingProps.disabled ?? context.disabled,
+    readOnly: existingProps.readOnly ?? context.readOnly,
+    "aria-required": existingProps["aria-required"] ?? (context.required ? "true" : undefined),
+    "aria-labelledby": existingProps["aria-labelledby"] ?? context.labelId,
+    "aria-invalid": existingProps["aria-invalid"] ?? (context.invalid ? "true" : undefined),
+    "aria-describedby": mergeAriaDescribedBy(existingProps["aria-describedby"], context.describedBy)
+  };
+}
+
+function resolveFormControlProps(context, existingProps = {}, options = {}) {
+  return {
+    id: existingProps.id || context.controlId,
+    required: options.includeNativeRequired === false ? existingProps.required : (existingProps.required ?? context.required),
+    disabled: options.includeDisabled === false ? existingProps.disabled : (existingProps.disabled ?? context.disabled),
+    readOnly: options.includeReadOnly === false ? existingProps.readOnly : (existingProps.readOnly ?? context.readOnly),
+    "aria-required": existingProps["aria-required"] ?? (context.required ? "true" : undefined),
+    "aria-invalid": existingProps["aria-invalid"] ?? (context.invalid ? "true" : undefined),
+    "aria-describedby": mergeAriaDescribedBy(existingProps["aria-describedby"], context.describedBy)
+  };
+}
+
+const FormRoot = React.forwardRef((props, ref) => {
   const {
-    id,
-    label,
-    description,
-    required = false,
+    children,
     disabled = false,
     loading = false,
     error = null,
     readOnly = false,
-    value,
-    defaultValue = "",
-    placeholder = "",
-    controlProps = {},
-    onValueChange,
-    onStateChange
+    required = false,
+    onSubmit,
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
   const disabledByState = disabled || loading;
   const { interaction, handlers } = useInteractiveState(disabledByState);
-  const [currentValue, setCurrentValue] = useControllableState({
-    value,
-    defaultValue,
-    onChange: onValueChange
-  });
-
   const state = resolveInteractiveState({
     disabled: disabledByState,
     loading,
@@ -11039,106 +11085,88 @@ export const ChipsFormField = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const inputId = id || React.useId();
-  const descriptionId = description ? `${inputId}-description` : undefined;
-  const errorId = normalizedError ? `${inputId}-error` : undefined;
-  const describedByIds = [descriptionId, errorId].filter(Boolean);
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      disabled: disabledByState,
+      loading,
+      error: normalizedError,
+      readOnly,
+      required
+    }),
+    [state, disabledByState, loading, normalizedError, readOnly, required]
+  );
+
+  const handleSubmit = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+    if (typeof onSubmit === "function") {
+      onSubmit(event);
+    }
+  };
 
   return React.createElement(
-    "div",
-    {
-      ...createScopeAttributes("form-field", "root", state),
-      ...handlers,
-      ref,
-      "aria-disabled": disabledByState ? "true" : undefined
-    },
-    label
-      ? React.createElement(
-          "label",
-          {
-            ...createScopeAttributes("form-field", "label", state),
-            htmlFor: inputId
-          },
-          label,
-          required ? " *" : ""
-        )
-      : null,
-    React.createElement("input", {
-      ...createScopeAttributes("form-field", "control", state),
-      ...controlProps,
-      id: inputId,
-      value: currentValue,
-      placeholder,
-      disabled: disabledByState,
-      readOnly,
-      "aria-required": required ? "true" : undefined,
-      "aria-invalid": normalizedError ? "true" : undefined,
-      "aria-describedby": describedByIds.length > 0 ? describedByIds.join(" ") : undefined,
-      onFocus: mergeHandlers(handlers.onFocus, controlProps.onFocus),
-      onBlur: mergeHandlers(handlers.onBlur, controlProps.onBlur),
-      onChange: (event) => {
-        if (typeof controlProps.onChange === "function") {
-          controlProps.onChange(event);
-        }
-        setCurrentValue(event.target.value);
-      }
-    }),
-    description
-      ? React.createElement(
-          "p",
-          {
-            ...createScopeAttributes("form-field", "helper", state),
-            id: descriptionId
-          },
-          description
-        )
-      : null,
-    normalizedError
-      ? React.createElement(
-          "p",
-          {
-            ...createScopeAttributes("form-field", "error", state),
-            id: errorId
-          },
-          normalizedError.message
-        )
-      : null,
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("form-field", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+    FormCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "form",
+      {
+        ...rest,
+        ...createScopeAttributes("form", "root", state),
+        ...handlers,
+        ref,
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-invalid": normalizedError ? "true" : undefined,
+        "data-required": String(required === true),
+        "data-readonly": String(readOnly === true),
+        onSubmit: mergeEventHandlers(rest.onSubmit, handleSubmit)
+      },
+      children,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("form", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
   );
 });
 
-ChipsFormField.displayName = "ChipsFormField";
+FormRoot.displayName = "ChipsForm.Root";
 
-export const ChipsFormGroup = React.forwardRef((props, ref) => {
+const FormSection = React.forwardRef((props, ref) => {
   const {
-    legend,
-    description,
-    disabled = false,
-    loading = false,
-    error = null,
     children,
-    onStateChange
+    title,
+    titleId,
+    description,
+    descriptionId,
+    error = null,
+    disabled,
+    loading,
+    required,
+    readOnly,
+    onStateChange,
+    ...rest
   } = props;
-
-  const normalizedError = normalizeError(error);
-  const disabledByState = disabled || loading;
-  const { interaction, handlers } = useInteractiveState(disabledByState);
-
+  const formContext = React.useContext(FormCompoundContext) ?? {};
+  const normalizedError = normalizeError(error) || formContext.error;
+  const disabledByState = disabled ?? formContext.disabled;
+  const loadingByState = loading ?? formContext.loading;
   const state = resolveInteractiveState({
     disabled: disabledByState,
-    loading,
-    error: normalizedError,
-    interaction
+    loading: loadingByState,
+    error: normalizedError
   });
+  const generatedId = React.useId();
+  const resolvedTitleId = titleId || (title !== undefined ? `${rest.id || generatedId}-title` : undefined);
+  const resolvedDescriptionId = descriptionId || (description !== undefined ? `${rest.id || generatedId}-description` : undefined);
 
   React.useEffect(() => {
     if (typeof onStateChange === "function") {
@@ -11146,59 +11174,279 @@ export const ChipsFormGroup = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const groupId = React.useId();
-  const descriptionId = description ? `${groupId}-description` : undefined;
-  const statusId = normalizedError ? `${groupId}-status` : undefined;
-  const describedByIds = [descriptionId, statusId].filter(Boolean);
+  const sectionContext = React.useMemo(
+    () => ({
+      ...formContext,
+      state,
+      disabled: disabledByState,
+      loading: loadingByState,
+      error: normalizedError,
+      readOnly: readOnly ?? formContext.readOnly,
+      required: required ?? formContext.required
+    }),
+    [formContext, state, disabledByState, loadingByState, normalizedError, readOnly, required]
+  );
 
   return React.createElement(
-    "fieldset",
-    {
-      ...createScopeAttributes("form-group", "root", state),
-      ...handlers,
-      ref,
-      role: "group",
+    FormCompoundContext.Provider,
+    { value: sectionContext },
+    React.createElement(
+      "section",
+      {
+        ...rest,
+        ...createScopeAttributes("form", "section", state),
+        ref,
+        "aria-labelledby": rest["aria-labelledby"] || resolvedTitleId,
+        "aria-describedby": mergeAriaDescribedBy(rest["aria-describedby"], resolvedDescriptionId),
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-invalid": normalizedError ? "true" : undefined
+      },
+      title !== undefined
+        ? React.createElement(
+            "h3",
+            {
+              id: resolvedTitleId,
+              ...createScopeAttributes("form", "label", state)
+            },
+            title
+          )
+        : null,
+      description !== undefined
+        ? React.createElement(
+            "p",
+            {
+              id: resolvedDescriptionId,
+              ...createScopeAttributes("form", "hint", state)
+            },
+            description
+          )
+        : null,
+      children,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("form", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
+  );
+});
+
+FormSection.displayName = "ChipsForm.Section";
+
+const FormField = React.forwardRef((props, ref) => {
+  const {
+    children,
+    id,
+    name,
+    required,
+    disabled,
+    loading,
+    error = null,
+    readOnly,
+    onStateChange,
+    ...rest
+  } = props;
+  const formContext = React.useContext(FormCompoundContext) ?? {};
+  const generatedId = React.useId();
+  const baseId = id || name || generatedId;
+  const normalizedBaseId = normalizeDomIdSegment(baseId, "field");
+  const normalizedError = normalizeError(error) || formContext.error;
+  const disabledByState = disabled ?? formContext.disabled;
+  const loadingByState = loading ?? formContext.loading;
+  const requiredByState = required ?? formContext.required;
+  const readOnlyByState = readOnly ?? formContext.readOnly;
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading: loadingByState,
+    error: normalizedError
+  });
+  const labelId = `${normalizedBaseId}-label`;
+  const controlId = `${normalizedBaseId}-control`;
+  const hintId = `${normalizedBaseId}-hint`;
+  const errorId = `${normalizedBaseId}-error`;
+  const hasHintChild = hasReactElementType(children, [FormHint]);
+  const hasErrorChild = hasReactElementType(children, [FormError]);
+  const describedBy = mergeAriaDescribedBy(
+    hasHintChild ? hintId : undefined,
+    hasErrorChild || normalizedError ? errorId : undefined
+  );
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
       disabled: disabledByState,
-      "aria-describedby": describedByIds.length > 0 ? describedByIds.join(" ") : undefined,
-      "aria-invalid": normalizedError ? "true" : undefined
-    },
-    legend
-      ? React.createElement(
-          "legend",
-          createScopeAttributes("form-group", "legend", state),
-          legend
-        )
-      : null,
-    description
-      ? React.createElement(
-          "p",
-          {
-            ...createScopeAttributes("form-group", "description", state),
-            id: descriptionId
-          },
-          description
-        )
-      : null,
+      loading: loadingByState,
+      error: normalizedError,
+      invalid: Boolean(normalizedError),
+      readOnly: readOnlyByState,
+      required: requiredByState,
+      baseId: normalizedBaseId,
+      labelId,
+      controlId,
+      hintId,
+      errorId,
+      describedBy
+    }),
+    [
+      state,
+      disabledByState,
+      loadingByState,
+      normalizedError,
+      readOnlyByState,
+      requiredByState,
+      normalizedBaseId,
+      labelId,
+      controlId,
+      hintId,
+      errorId,
+      describedBy
+    ]
+  );
+
+  return React.createElement(
+    FormFieldCompoundContext.Provider,
+    { value: contextValue },
     React.createElement(
       "div",
-      createScopeAttributes("form-group", "content", state),
+      {
+        ...rest,
+        ...createScopeAttributes("form", "field", state),
+        ref,
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-invalid": normalizedError ? "true" : undefined,
+        "aria-describedby": mergeAriaDescribedBy(rest["aria-describedby"], describedBy),
+        "data-required": String(requiredByState === true),
+        "data-readonly": String(readOnlyByState === true)
+      },
       children
-    ),
-    normalizedError
+    )
+  );
+});
+
+FormField.displayName = "ChipsForm.Field";
+
+const FormLabel = React.forwardRef((props, ref) => {
+  const { children, requiredIndicator = "*", ...rest } = props;
+  const context = useFormFieldCompoundContext("label");
+  return React.createElement(
+    "label",
+    {
+      ...rest,
+      ...createScopeAttributes("form", "label", context.state),
+      ref,
+      id: rest.id || context.labelId,
+      htmlFor: rest.htmlFor || context.controlId
+    },
+    children,
+    context.required
       ? React.createElement(
           "span",
           {
-            ...createScopeAttributes("form-group", "status", state),
-            id: statusId,
-            ...createAriaStatusProps({ live: "assertive" })
+            ...createScopeAttributes("form", "required", context.state),
+            "aria-hidden": "true"
           },
-          normalizedError.message
+          requiredIndicator
         )
       : null
   );
 });
 
-ChipsFormGroup.displayName = "ChipsFormGroup";
+FormLabel.displayName = "ChipsForm.Label";
+
+const FormControl = React.forwardRef((props, ref) => {
+  const { children, as: Element = "input", ...rest } = props;
+  const context = useFormFieldCompoundContext("control");
+  const injectedProps = resolveFormControlProps(context, rest);
+
+  if (React.isValidElement(children)) {
+    const childProps = isNativeFormControlElementType(children.type)
+      ? resolveFormControlProps(context, children.props)
+      : resolveFormCustomControlProps(context, children.props);
+    return React.cloneElement(children, {
+      ...childProps,
+      ref: mergeRefs(children.ref, ref)
+    });
+  }
+
+  const controlProps = {
+    ...rest,
+    ...injectedProps,
+    ref
+  };
+
+  if (isNativeFormControlElementType(Element)) {
+    Object.assign(controlProps, createScopeAttributes("form", "control", context.state));
+  }
+
+  return React.createElement(Element, controlProps, children);
+});
+
+FormControl.displayName = "ChipsForm.Control";
+
+const FormError = React.forwardRef((props, ref) => {
+  const { children, live = "assertive", ...rest } = props;
+  const context = useFormFieldCompoundContext("error");
+  const content = children !== undefined ? children : context.error?.message;
+  if (content === undefined || content === null) {
+    return null;
+  }
+  return React.createElement(
+    "p",
+    {
+      ...rest,
+      ...createScopeAttributes("form", "error", context.state),
+      ...createAriaStatusProps({ live }),
+      ref,
+      id: rest.id || context.errorId
+    },
+    content
+  );
+});
+
+FormError.displayName = "ChipsForm.Error";
+
+const FormHint = React.forwardRef((props, ref) => {
+  const { children, ...rest } = props;
+  const context = useFormFieldCompoundContext("hint");
+  if (children === undefined || children === null) {
+    return null;
+  }
+  return React.createElement(
+    "p",
+    {
+      ...rest,
+      ...createScopeAttributes("form", "hint", context.state),
+      ref,
+      id: rest.id || context.hintId
+    },
+    children
+  );
+});
+
+FormHint.displayName = "ChipsForm.Hint";
+
+export const ChipsForm = Object.assign(FormRoot, {
+  Root: FormRoot,
+  Section: FormSection,
+  Field: FormField,
+  Label: FormLabel,
+  Control: FormControl,
+  Error: FormError,
+  Hint: FormHint
+});
+
+ChipsForm.displayName = "ChipsForm";
 
 export const ChipsVirtualList = React.forwardRef((props, ref) => {
   const {
@@ -14577,16 +14825,8 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
-  if (component === "form-field") {
+  if (component === "form") {
     assertAriaProps(props, {
-      requireLabel: true
-    });
-    return true;
-  }
-
-  if (component === "form-group") {
-    assertAriaProps(props, {
-      role: "group",
       requireLabel: true
     });
     return true;
@@ -15002,15 +15242,9 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
 
 export const P0_DATA_FORM_COMPONENTS = [
   createComponentMeta({
-    name: "ChipsFormField",
-    scope: "form-field",
-    parts: ["root", "label", "control", "helper", "error", "status"],
-    states: [...INTERACTIVE_STATE_PRIORITY]
-  }),
-  createComponentMeta({
-    name: "ChipsFormGroup",
-    scope: "form-group",
-    parts: ["root", "legend", "description", "content", "status"],
+    name: "ChipsForm",
+    scope: "form",
+    parts: ["root", "section", "field", "label", "required", "control", "error", "hint", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({

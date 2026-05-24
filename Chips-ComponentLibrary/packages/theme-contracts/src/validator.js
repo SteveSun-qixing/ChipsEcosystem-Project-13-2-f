@@ -17,6 +17,9 @@ function walkJsonFiles(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const target = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === "归档") {
+        continue;
+      }
       files.push(...walkJsonFiles(target));
     } else if (entry.isFile() && entry.name.endsWith(".json")) {
       files.push(target);

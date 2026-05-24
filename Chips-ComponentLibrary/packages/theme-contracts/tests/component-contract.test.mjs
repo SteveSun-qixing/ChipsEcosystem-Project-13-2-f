@@ -255,19 +255,16 @@ test("tooltip contract contains content text token", () => {
   assert.ok(contract.tokens.includes("chips.comp.tooltip.content.text.color"));
 });
 
-test("form-field contract contains control and error parts", () => {
-  const contract = readContract("form-field.contract.json");
+test("form contract contains compound field and hint parts", () => {
+  const contract = readContract("form.contract.json");
   assertCommonShape(contract);
+  assert.ok(contract.parts.includes("field"));
   assert.ok(contract.parts.includes("control"));
+  assert.ok(contract.parts.includes("hint"));
   assert.ok(contract.parts.includes("error"));
-  assert.ok(contract.tokens.includes("chips.comp.form-field.control.border.error"));
-});
-
-test("form-group contract contains content part and gap token", () => {
-  const contract = readContract("form-group.contract.json");
-  assertCommonShape(contract);
-  assert.ok(contract.parts.includes("content"));
-  assert.ok(contract.tokens.includes("chips.comp.form-group.root.gap"));
+  assert.equal(contract.parts.includes("helper"), false);
+  assert.ok(contract.tokens.includes("chips.comp.form.control.border.error"));
+  assert.ok(contract.tokens.includes("chips.comp.form.hint.color"));
 });
 
 test("virtual-list contract contains viewport and item tokens", () => {

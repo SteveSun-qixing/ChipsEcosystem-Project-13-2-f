@@ -615,14 +615,17 @@
       ]
     },
     {
-      "component": "form-field",
-      "scope": "form-field",
+      "component": "form",
+      "scope": "form",
       "parts": [
         "root",
+        "section",
+        "field",
         "label",
+        "required",
         "control",
-        "helper",
         "error",
+        "hint",
         "status"
       ],
       "states": [
@@ -635,40 +638,19 @@
         "error"
       ],
       "requiredTokens": [
-        "chips.comp.form-field.label.color",
-        "chips.comp.form-field.control.surface.idle",
-        "chips.comp.form-field.control.border.idle",
-        "chips.comp.form-field.control.border.error",
-        "chips.comp.form-field.helper.color",
-        "chips.comp.form-field.error.color",
-        "chips.comp.form-field.focus.outline"
-      ]
-    },
-    {
-      "component": "form-group",
-      "scope": "form-group",
-      "parts": [
-        "root",
-        "legend",
-        "description",
-        "content",
-        "status"
-      ],
-      "states": [
-        "idle",
-        "hover",
-        "focus",
-        "active",
-        "disabled",
-        "loading",
-        "error"
-      ],
-      "requiredTokens": [
-        "chips.comp.form-group.root.gap",
-        "chips.comp.form-group.legend.color",
-        "chips.comp.form-group.description.color",
-        "chips.comp.form-group.divider.color",
-        "chips.comp.form-group.status.color.error"
+        "chips.comp.form.root.gap",
+        "chips.comp.form.section.gap",
+        "chips.comp.form.section.divider.color",
+        "chips.comp.form.field.gap",
+        "chips.comp.form.label.color",
+        "chips.comp.form.label.required.color",
+        "chips.comp.form.control.surface.idle",
+        "chips.comp.form.control.border.idle",
+        "chips.comp.form.control.border.error",
+        "chips.comp.form.hint.color",
+        "chips.comp.form.error.color",
+        "chips.comp.form.status.color.error",
+        "chips.comp.form.focus.outline"
       ]
     },
     {

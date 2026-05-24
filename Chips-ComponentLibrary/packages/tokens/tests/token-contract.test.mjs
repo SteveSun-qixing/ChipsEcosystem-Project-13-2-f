@@ -28,8 +28,7 @@ test("card runtime component tokens exist", () => {
   const tabs = readJson(path.join(root, "comp/tabs.json"));
   const menu = readJson(path.join(root, "comp/menu.json"));
   const tooltip = readJson(path.join(root, "comp/tooltip.json"));
-  const formField = readJson(path.join(root, "comp/form-field.json"));
-  const formGroup = readJson(path.join(root, "comp/form-group.json"));
+  const form = readJson(path.join(root, "comp/form.json"));
   const virtualList = readJson(path.join(root, "comp/virtual-list.json"));
   const dataGrid = readJson(path.join(root, "comp/data-grid.json"));
   const tree = readJson(path.join(root, "comp/tree.json"));
@@ -103,8 +102,8 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(menu, "chips.comp.menu.item.surface.active"));
   assert.ok(getPath(menu, "chips.comp.menu.separator.thickness"));
   assert.ok(getPath(tooltip, "chips.comp.tooltip.content.text.color"));
-  assert.ok(getPath(formField, "chips.comp.form-field.control.border.error"));
-  assert.ok(getPath(formGroup, "chips.comp.form-group.status.color.error"));
+  assert.ok(getPath(form, "chips.comp.form.control.border.error"));
+  assert.ok(getPath(form, "chips.comp.form.hint.color"));
   assert.ok(getPath(virtualList, "chips.comp.virtual-list.item.surface.active"));
   assert.ok(getPath(dataGrid, "chips.comp.data-grid.row.surface.selected"));
   assert.ok(getPath(tree, "chips.comp.tree.node.surface.selected"));

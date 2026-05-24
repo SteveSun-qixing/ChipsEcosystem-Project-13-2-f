@@ -400,10 +400,35 @@ describe('Declarative UI', () => {
         root: { id: 'compound-form-root' },
         slots: {
           field: [Form({ id: 'form-field' })],
+          label: [Text({ id: 'form-label' })],
           control: [Command({ id: 'form-submit' })]
         }
       })
     ).toEqual([]);
+    expect(
+      CompoundForm.validate({
+        root: { id: 'bad-form-root' },
+        slots: {
+          field: [Form({ id: 'bad-form-field' })],
+          helper: Text({ id: 'legacy-helper' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.control' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.helper' })
+      ])
+    );
+    expect(
+      CompoundForm.validate({
+        root: { id: 'bad-form-hint-root' },
+        slots: {
+          field: [Form({ id: 'bad-form-hint-field' })],
+          control: [Command({ id: 'bad-form-hint-control' })],
+          hint: [View({ id: 'bad-form-hint' })]
+        }
+      })
+    ).toEqual([expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.hint' })]);
     expect(
       DataGrid.validate({
         root: { id: 'grid-root' },

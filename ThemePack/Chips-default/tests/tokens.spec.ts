@@ -53,5 +53,7 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.image?.fallback?.surface).toBeDefined();
     expect(parsed.comp.chips?.comp?.media?.control?.surface?.idle).toBeDefined();
     expect(parsed.comp.chips?.comp?.["error-state"]?.details?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.form?.control?.border?.error).toBeDefined();
+    expect(parsed.comp.chips?.comp?.form?.hint?.color).toBeDefined();
   });
 });

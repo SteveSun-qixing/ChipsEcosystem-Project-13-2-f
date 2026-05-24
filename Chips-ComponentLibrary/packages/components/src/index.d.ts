@@ -1234,33 +1234,72 @@ export interface TooltipProps {
   [key: string]: unknown;
 }
 
-export interface FormFieldProps {
-  id?: string;
-  label?: React.ReactNode;
+export interface FormProps extends React.FormHTMLAttributes<HTMLFormElement> {
+  children?: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | null;
+  readOnly?: boolean;
+  required?: boolean;
+  onStateChange?: (state: InteractiveState) => void;
+}
+
+export interface FormSectionProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  title?: React.ReactNode;
+  titleId?: string;
   description?: React.ReactNode;
+  descriptionId?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | null;
+  readOnly?: boolean;
+  required?: boolean;
+  onStateChange?: (state: InteractiveState) => void;
+}
+
+export interface FormFieldProps extends React.HTMLAttributes<HTMLDivElement> {
+  id?: string;
+  name?: string;
+  children?: React.ReactNode;
   required?: boolean;
   disabled?: boolean;
   loading?: boolean;
   error?: StandardErrorLike | null;
   readOnly?: boolean;
-  value?: string;
-  defaultValue?: string;
-  placeholder?: string;
-  controlProps?: Record<string, unknown>;
-  onValueChange?: (value: string) => void;
   onStateChange?: (state: InteractiveState) => void;
-  [key: string]: unknown;
 }
 
-export interface FormGroupProps {
-  legend?: React.ReactNode;
-  description?: React.ReactNode;
-  disabled?: boolean;
-  loading?: boolean;
-  error?: StandardErrorLike | null;
+export interface FormLabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
   children?: React.ReactNode;
-  onStateChange?: (state: InteractiveState) => void;
-  [key: string]: unknown;
+  requiredIndicator?: React.ReactNode;
+}
+
+export interface FormControlProps extends React.HTMLAttributes<HTMLElement> {
+  as?: keyof React.JSX.IntrinsicElements;
+  children?: React.ReactNode;
+  disabled?: boolean;
+  readOnly?: boolean;
+  required?: boolean;
+}
+
+export interface FormErrorProps extends React.HTMLAttributes<HTMLParagraphElement> {
+  children?: React.ReactNode;
+  live?: "polite" | "assertive" | "off";
+}
+
+export interface FormHintProps extends React.HTMLAttributes<HTMLParagraphElement> {
+  children?: React.ReactNode;
+}
+
+export interface FormCompoundComponent extends React.ForwardRefExoticComponent<FormProps & React.RefAttributes<HTMLFormElement>> {
+  Root: React.ForwardRefExoticComponent<FormProps & React.RefAttributes<HTMLFormElement>>;
+  Section: React.ForwardRefExoticComponent<FormSectionProps & React.RefAttributes<HTMLElement>>;
+  Field: React.ForwardRefExoticComponent<FormFieldProps & React.RefAttributes<HTMLDivElement>>;
+  Label: React.ForwardRefExoticComponent<FormLabelProps & React.RefAttributes<HTMLLabelElement>>;
+  Control: React.ForwardRefExoticComponent<FormControlProps & React.RefAttributes<HTMLElement>>;
+  Error: React.ForwardRefExoticComponent<FormErrorProps & React.RefAttributes<HTMLParagraphElement>>;
+  Hint: React.ForwardRefExoticComponent<FormHintProps & React.RefAttributes<HTMLParagraphElement>>;
 }
 
 export interface VirtualListProps {
@@ -1674,8 +1713,7 @@ export const ChipsToolbar: React.ForwardRefExoticComponent<ToolbarProps & React.
 export const ChipsMenuBar: React.ForwardRefExoticComponent<MenuBarProps & React.RefAttributes<HTMLElement>>;
 export const ChipsContextMenu: React.ForwardRefExoticComponent<ContextMenuProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTooltip: React.ForwardRefExoticComponent<TooltipProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsFormField: React.ForwardRefExoticComponent<FormFieldProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsFormGroup: React.ForwardRefExoticComponent<FormGroupProps & React.RefAttributes<HTMLFieldSetElement>>;
+export const ChipsForm: FormCompoundComponent;
 export const ChipsVirtualList: React.ForwardRefExoticComponent<VirtualListProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsDataGrid: React.ForwardRefExoticComponent<DataGridProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTree: React.ForwardRefExoticComponent<TreeProps & React.RefAttributes<HTMLUListElement>>;

@@ -65,16 +65,17 @@
 
 已完成（第一批，Data-Form P0）：
 
-- `FormField/FormGroup/VirtualList` 已落地：
+- `Form/VirtualList` 已落地：
   - 统一状态优先级裁决
   - 结构契约 `data-scope/data-part/data-state`
   - role/aria 语义与键盘路径
   - `VirtualList` 完整窗口计算与 overscan 渲染
 - 组件 token 映射与主题契约已落地：
-  - `chips.comp.form-field.*`
-  - `chips.comp.form-group.*`
+  - `chips.comp.form.*`
   - `chips.comp.virtual-list.*`
 - 测试与校验已通过，`npm run verify` 全量通过。
+
+任务016.03 已将早期字段与分组表单能力收口为 `ChipsForm.Root / Section / Field / Label / Control / Error / Hint` Compound API；旧字段与分组 scope、token 和 contract 只保留在归档中。
 
 已完成（第二批，Data-Form P1）：
 

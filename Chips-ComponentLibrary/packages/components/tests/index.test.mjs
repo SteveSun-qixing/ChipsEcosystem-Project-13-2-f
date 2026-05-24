@@ -20,8 +20,7 @@ import {
   ChipsIconButton,
   ChipsImage,
   ChipsErrorBoundary,
-  ChipsFormField,
-  ChipsFormGroup,
+  ChipsForm,
   ChipsInline,
   ChipsInput,
   ChipsInspector,
@@ -336,8 +335,7 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.tabs));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.menu));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.tooltip));
-  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["form-field"]));
-  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["form-group"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.form));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["virtual-list"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["data-grid"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.tree));
@@ -602,16 +600,8 @@ test("validateComponentA11y validates known components and rejects missing rule"
   );
 
   assert.equal(
-    validateComponentA11y("form-field", {
+    validateComponentA11y("form", {
       "aria-label": "card name"
-    }),
-    true
-  );
-
-  assert.equal(
-    validateComponentA11y("form-group", {
-      role: "group",
-      "aria-label": "base card group"
     }),
     true
   );
@@ -1729,10 +1719,20 @@ test("Menu and Select expose formal compound parts", () => {
 });
 
 test("all stage-seven data-form component exports exist", () => {
-  for (const component of [ChipsFormField, ChipsFormGroup, ChipsVirtualList]) {
+  for (const component of [ChipsForm, ChipsVirtualList]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
   }
+});
+
+test("Form exposes formal compound parts", () => {
+  assert.equal(ChipsForm.Root, ChipsForm);
+  assert.equal(typeof ChipsForm.Section.render, "function");
+  assert.equal(typeof ChipsForm.Field.render, "function");
+  assert.equal(typeof ChipsForm.Label.render, "function");
+  assert.equal(typeof ChipsForm.Control.render, "function");
+  assert.equal(typeof ChipsForm.Error.render, "function");
+  assert.equal(typeof ChipsForm.Hint.render, "function");
 });
 
 test("all stage-seven advanced data component exports exist", () => {
@@ -1801,12 +1801,14 @@ test("buildComponentContract includes stage-six third batch components", () => {
 });
 
 test("buildComponentContract includes stage-seven first batch components", () => {
-  const formField = buildComponentContract("form-field");
-  const formGroup = buildComponentContract("form-group");
+  const form = buildComponentContract("form");
   const virtualList = buildComponentContract("virtual-list");
 
-  assert.ok(formField.tokens.includes("chips.comp.form-field.control.border.error"));
-  assert.ok(formGroup.tokens.includes("chips.comp.form-group.root.gap"));
+  assert.ok(form.parts.includes("field"));
+  assert.ok(form.parts.includes("hint"));
+  assert.equal(form.parts.includes("helper"), false);
+  assert.ok(form.tokens.includes("chips.comp.form.control.border.error"));
+  assert.ok(form.tokens.includes("chips.comp.form.hint.color"));
   assert.ok(virtualList.tokens.includes("chips.comp.virtual-list.item.surface.active"));
 });
 
@@ -1900,10 +1902,10 @@ test("computeVirtualWindow handles empty list", () => {
 });
 
 test("P0 data-form metadata is complete", () => {
-  assert.equal(P0_DATA_FORM_COMPONENTS.length, 3);
+  assert.equal(P0_DATA_FORM_COMPONENTS.length, 2);
   assert.deepEqual(
     P0_DATA_FORM_COMPONENTS.map((item) => item.scope),
-    ["form-field", "form-group", "virtual-list"]
+    ["form", "virtual-list"]
   );
 });
 

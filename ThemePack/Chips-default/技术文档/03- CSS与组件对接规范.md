@@ -34,7 +34,7 @@
   - `styles/components/input.css`：输入框（`input`）。
   - `styles/components/form-controls.css`：选择控件（`checkbox`、`radio`、`switch`、`select`）。
   - `styles/components/overlays.css`：浮层组件（`dialog`、`popover`、`tooltip`、`command-palette`、`date-time`）。
-  - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form-field`、`form-group`、`virtual-list`、`data-grid`、`tree`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
+  - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form`、`virtual-list`、`data-grid`、`tree`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
   - `styles/components/feedback.css`：反馈与边界组件（`notification`、`toast`、`empty-state`、`skeleton`、`error-boundary`、`loading-boundary`、`card-cover-frame`、`composite-card-window`）。
 
 `src/build-css.ts` 会按以下顺序拼接 CSS：
@@ -193,4 +193,3 @@
   4. 在 `styles/components/*.css` 中实现样式；
   5. 视需要更新本文件的映射说明。
 - 主题样式不得修改组件 DOM 结构，仅通过 CSS 控制视觉。
-

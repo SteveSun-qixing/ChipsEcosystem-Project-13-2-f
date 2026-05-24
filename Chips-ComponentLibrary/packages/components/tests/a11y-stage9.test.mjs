@@ -74,8 +74,7 @@ test("stage9 a11y gate validates all component rules", () => {
       "aria-controls": "menu-content"
     }),
     validateComponentA11y("tooltip", { role: "tooltip" }),
-    validateComponentA11y("form-field", { "aria-label": "field" }),
-    validateComponentA11y("form-group", { role: "group", "aria-label": "group" }),
+    validateComponentA11y("form", { "aria-label": "field" }),
     validateComponentA11y("virtual-list", { role: "list", "aria-label": "list" }),
     validateComponentA11y("data-grid", { role: "grid", "aria-label": "grid" }),
     validateComponentA11y("tree", { role: "tree", "aria-label": "tree" }),

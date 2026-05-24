@@ -44,8 +44,7 @@ contract extension.
 - `dock-panel.contract.json`
 - `empty-state.contract.json`
 - `error-boundary.contract.json`
-- `form-field.contract.json`
-- `form-group.contract.json`
+- `form.contract.json`
 - `grid.contract.json`
 - `inline.contract.json`
 - `input.contract.json`

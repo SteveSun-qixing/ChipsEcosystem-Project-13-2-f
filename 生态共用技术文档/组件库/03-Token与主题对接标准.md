@@ -52,8 +52,7 @@
   - `chips.comp.tabs.*`
   - `chips.comp.menu.*`
   - `chips.comp.tooltip.*`
-  - `chips.comp.form-field.*`
-  - `chips.comp.form-group.*`
+  - `chips.comp.form.*`
   - `chips.comp.virtual-list.*`
   - `chips.comp.data-grid.*`
   - `chips.comp.tree.*`
@@ -162,7 +161,7 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `Image` 的 `root/media/fallback/caption/status/focus` token 只表达图片容器、实际媒体、fallback、说明文本、错误状态和焦点视觉；`Media` 的 `root/content/controls/control/caption/status/focus` token 只表达音频、视频或通用媒体内容边界和内部控制槽视觉；`ErrorState` 的 `root/icon/title/description/details/action/status/focus` token 只表达静态错误展示、详情、动作入口和错误状态视觉。主题包不得复用 `chips.comp.avatar.*`、`chips.comp.error-boundary.*`、`chips.comp.empty-state.*` 或业务私有 token 作为三者的正式样式入口。
 
-第七批最小 required token 数量以组件库 contract 为准：`image` 9 个、`media` 11 个、`error-state` 12 个。主题包本地 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json` 必须同时包含 `image / media / error-state`，默认主题和暗色主题的组件基线为 70 个 component。
+第七批最小 required token 数量以组件库 contract 为准：`image` 9 个、`media` 11 个、`error-state` 12 个。主题包本地 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json` 必须同时包含 `image / media / error-state`；默认主题和暗色主题的组件基线数量以当前组件库正式 contract 目录为准。
 
 任务016第一批复杂组件 Compound API token 是 Dialog、Popover、Tabs 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
 
@@ -178,6 +177,12 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.select.*`
 
 `Menu` 的 `content/item/group/group-label/separator/focus` token 分别表达菜单内容容器、菜单项、高亮/选中视觉、分组标题、分隔线和焦点视觉；`Select` 的 `trigger/content/option/value/icon/focus` token 分别表达触发器、listbox 内容容器、选项高亮/选中、当前值和展开图标视觉。`Select.Content` 的正式 part 是 `content`，主题包不得继续依赖 `select` scope 下的旧 `list` part。
+
+任务016第三批复杂组件 Compound API token 是 Form 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.form.*`
+
+`Form` 的 `root/section/field/label/required/control/hint/error/status/focus` token 分别表达表单容器、分区、字段间距、标签、必填标记、原生控件外观、说明文本、错误文本、状态文本和焦点视觉。正式说明文本 part 为 `hint`；`chips.comp.form-field.*`、`chips.comp.form-group.*` 与 `helper` 口径已归档，不再作为主题包公开 contract。
 
 ### 3.1 布局 token 基线
 

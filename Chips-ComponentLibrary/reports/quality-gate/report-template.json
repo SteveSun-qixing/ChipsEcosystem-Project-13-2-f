@@ -1,7 +1,15 @@
 {
+  "schemaVersion": "1.0.0",
   "generatedAt": "<ISO-8601>",
   "totalDurationMs": 0,
   "status": "passed",
+  "summary": {
+    "stepCount": 9,
+    "passedCount": 9,
+    "failedCount": 0,
+    "skippedCount": 0,
+    "blockingStep": null
+  },
   "steps": [
     {
       "name": "lint",
@@ -41,6 +49,13 @@
     {
       "name": "test:perf",
       "command": "node scripts/run-perf-tests.mjs",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 0
+    },
+    {
+      "name": "quality:coverage",
+      "command": "node scripts/run-quality-coverage.mjs",
       "status": "passed",
       "exitCode": 0,
       "durationMs": 0

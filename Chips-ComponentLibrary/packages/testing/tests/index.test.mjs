@@ -3,18 +3,27 @@ import assert from "node:assert/strict";
 import {
   assertActiveDescendant,
   assertAriaRole,
+  assertA11yFixtureCoverage,
+  assertComponentContractCoverage,
+  assertComponentStatePriorityCoverage,
   assertFocusRestored,
   assertHasContractAttrs,
   assertRovingTabIndex,
   createKeyboardEventFixture,
   assertStatePriority,
+  CHIPS_COMPONENT_QUALITY_MATRIX,
   createComponentFixture,
+  createComponentMatrixReport,
+  createComponentQualityMatrix,
   createFocusTrapFixture,
   createMockChipsClient,
   createMockChipsEnvironment,
   createThemeFallbackFixture,
+  getComponentQualityMatrixEntry,
   injectFault,
   runKeyboardSequence,
+  assertContractAttrMatrixCoverage,
+  assertThemeFallbackChain,
   resolveFallbackScopeValue
 } from "../src/index.js";
 
@@ -108,6 +117,100 @@ test("resolveFallbackScopeValue follows high-to-low chain", () => {
     scope: "app",
     value: "a"
   });
+  assert.equal(assertThemeFallbackChain(fixture, {
+    "chips.sys.color.surface": {
+      scope: "app",
+      value: "a"
+    }
+  }), true);
+});
+
+test("component quality matrix helpers validate contract attr, state and a11y coverage", () => {
+  const contracts = [
+    {
+      component: "button",
+      scope: "button",
+      parts: ["root", "label"],
+      states: ["idle", "focus", "disabled"],
+      tokens: ["chips.comp.button.root.surface.idle"]
+    },
+    {
+      component: "dialog",
+      scope: "dialog",
+      parts: ["root", "trigger", "content"],
+      states: ["idle", "focus", "disabled"],
+      tokens: ["chips.comp.dialog.content.surface"]
+    }
+  ];
+  const matrix = [
+    {
+      component: "button",
+      packageName: "@chips/components",
+      contractAttrs: { part: "root", state: "idle" },
+      statePriority: ["disabled", "focus", "idle"],
+      a11yFixtures: [
+        {
+          attrs: { role: "button", "aria-label": "button" },
+          rules: { role: "button", requireLabel: true }
+        }
+      ],
+      perfSmokeScenarios: []
+    },
+    {
+      component: "dialog",
+      packageName: "@chips/components",
+      contractAttrs: { part: "trigger", state: "idle" },
+      statePriority: ["disabled", "focus", "idle"],
+      a11yFixtures: [
+        {
+          attrs: {
+            role: "button",
+            "aria-label": "dialog",
+            "aria-expanded": "true",
+            "aria-controls": "dialog-content"
+          },
+          rules: {
+            role: "button",
+            requireLabel: true,
+            requireControlsWhenExpanded: true
+          }
+        }
+      ],
+      perfSmokeScenarios: ["dialog-open"]
+    }
+  ];
+
+  assert.equal(assertComponentContractCoverage(contracts, matrix), true);
+  assert.equal(assertContractAttrMatrixCoverage(contracts, matrix), true);
+  assert.equal(assertA11yFixtureCoverage(contracts, matrix), true);
+  assert.equal(assertComponentStatePriorityCoverage(contracts, matrix), true);
+  assert.equal(getComponentQualityMatrixEntry("dialog", matrix).component, "dialog");
+
+  const report = createComponentMatrixReport(contracts, matrix, {
+    generatedAt: "2026-05-24T00:00:00.000Z"
+  });
+  assert.equal(report.status, "passed");
+  assert.equal(report.totals.contractComponentCount, 2);
+  assert.equal(report.totals.a11yFixtureCount, 2);
+  assert.equal(report.totals.perfSmokeScenarioCount, 1);
+  assert.equal(createComponentQualityMatrix([{ component: "button", packageName: "override" }])
+    .find((item) => item.component === "button").packageName, "override");
+});
+
+test("component quality matrix detects missing components", () => {
+  assert.ok(CHIPS_COMPONENT_QUALITY_MATRIX.length >= 60);
+  assert.throws(
+    () => assertComponentContractCoverage([
+      {
+        component: "missing-widget",
+        scope: "missing-widget",
+        parts: ["root"],
+        states: ["idle"],
+        tokens: ["chips.comp.missing-widget.root.surface"]
+      }
+    ], CHIPS_COMPONENT_QUALITY_MATRIX),
+    /TEST_COMPONENT_MATRIX_DRIFT/
+  );
 });
 
 test("injectFault returns typed fault payload", () => {

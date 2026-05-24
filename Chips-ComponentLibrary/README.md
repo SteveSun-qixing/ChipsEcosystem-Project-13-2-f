@@ -38,6 +38,7 @@
 - 阶段九交付补齐：测试体系与门禁实施（`技术文档/27-阶段九测试体系与质量门禁实施.md`）、性能与鲁棒性基线（`技术文档/28-阶段九性能与鲁棒性基线报告.md`）
 - 阶段十交付补齐：发布规范与检查清单（`技术文档/29-阶段十发布规范与发布检查清单.md`）、生态接入验收模板（`技术文档/31-阶段十生态接入验收模板与执行指南.md`）
 - 当前质量门禁状态以最新 `npm run verify` 与 `npm run quality:gate` 输出为准；`test:a11y` 已纳入 Dialog/Menu/Select/Tabs/DataGrid 重点键盘路径
+- `quality:coverage` 已纳入 `quality:gate`，会以正式 component contract 目录和 `@chips/testing` 组件质量矩阵拦截新增组件漏补 contract attr、a11y fixture、状态优先级或 perf smoke 的情况
 - 已登记 SDK 对接阻断：`工单001-SDK-UNIFIED-CARD-DISPLAY-API`
 
 ## 工程命令
@@ -49,6 +50,7 @@
 - 全量测试：`npm test`
 - 可访问性门禁：`npm run test:a11y`
 - 性能门禁：`npm run test:perf`
+- 组件矩阵覆盖门禁：`npm run quality:coverage`
 - 阶段七性能基线：`npm run bench:stage7`
 - 阶段九质量门禁：`npm run quality:gate`
 - 发布准备校验：`npm run release:check`

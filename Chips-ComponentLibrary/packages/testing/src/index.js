@@ -1,3 +1,9 @@
+export {
+  CHIPS_COMPONENT_QUALITY_MATRIX,
+  createComponentQualityMatrix,
+  getComponentQualityMatrixEntry
+} from "./component-quality-matrix.js";
+
 export function assertHasContractAttrs(nodeAttrs) {
   const required = ["data-scope", "data-part", "data-state"];
   for (const key of required) {
@@ -5,6 +11,59 @@ export function assertHasContractAttrs(nodeAttrs) {
       throw new Error(`TEST_CONTRACT_ATTR_MISSING:${key}`);
     }
   }
+  return true;
+}
+
+function toSortedUniqueStrings(values = []) {
+  return [...new Set(values.filter((value) => typeof value === "string" && value.length > 0))].sort();
+}
+
+function toSet(values = []) {
+  return new Set(toSortedUniqueStrings(values));
+}
+
+function getContractTokens(contract) {
+  return toSortedUniqueStrings(contract.requiredTokens || contract.tokens || []);
+}
+
+function getMatrixComponents(matrix = []) {
+  return toSortedUniqueStrings(matrix.map((item) => item.component));
+}
+
+function getContractComponents(contracts = []) {
+  return toSortedUniqueStrings(contracts.map((item) => item.component || item.scope));
+}
+
+function compareStringSets(label, expectedValues, actualValues) {
+  const expected = toSortedUniqueStrings(expectedValues);
+  const actual = toSortedUniqueStrings(actualValues);
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+  const missing = expected.filter((item) => !actualSet.has(item));
+  const extra = actual.filter((item) => !expectedSet.has(item));
+
+  return {
+    label,
+    expectedCount: expected.length,
+    actualCount: actual.length,
+    missing,
+    extra,
+    passed: missing.length === 0 && extra.length === 0
+  };
+}
+
+export function assertAriaRequiredProps(nodeAttrs, requiredProps = []) {
+  if (!nodeAttrs || typeof nodeAttrs !== "object") {
+    throw new Error("TEST_ARIA_NODE_INVALID");
+  }
+
+  for (const propName of requiredProps) {
+    const value = nodeAttrs[propName];
+    if (value === undefined || value === null || value === "") {
+      throw new Error(`TEST_ARIA_REQUIRED_PROP_MISSING:${propName}`);
+    }
+  }
+
   return true;
 }
 
@@ -33,6 +92,68 @@ export function assertAriaRole(nodeAttrs, expectedRole) {
 
   if (nodeAttrs.role !== expectedRole) {
     throw new Error(`TEST_ARIA_ROLE_MISMATCH:${expectedRole}`);
+  }
+
+  return true;
+}
+
+export function assertComponentContractCoverage(contracts, matrix) {
+  if (!Array.isArray(contracts) || contracts.length === 0) {
+    throw new Error("TEST_COMPONENT_CONTRACTS_INVALID");
+  }
+  if (!Array.isArray(matrix) || matrix.length === 0) {
+    throw new Error("TEST_COMPONENT_MATRIX_INVALID");
+  }
+
+  const comparison = compareStringSets(
+    "components",
+    getContractComponents(contracts),
+    getMatrixComponents(matrix)
+  );
+  if (!comparison.passed) {
+    throw new Error(
+      `TEST_COMPONENT_MATRIX_DRIFT:missing=${comparison.missing.join(",")}:extra=${comparison.extra.join(",")}`
+    );
+  }
+
+  return true;
+}
+
+export function assertContractAttrMatrixCoverage(contracts, matrix) {
+  assertComponentContractCoverage(contracts, matrix);
+  const contractByComponent = new Map(contracts.map((contract) => [contract.component || contract.scope, contract]));
+  const failures = [];
+
+  for (const entry of matrix) {
+    const contract = contractByComponent.get(entry.component);
+    const attrs = createComponentFixture({
+      scope: contract.scope || entry.component,
+      part: entry.contractAttrs?.part || "root",
+      state: entry.contractAttrs?.state || "idle"
+    });
+
+    try {
+      assertHasContractAttrs(attrs);
+    } catch (error) {
+      failures.push(`${entry.component}:${error.message}`);
+      continue;
+    }
+
+    const parts = toSet(contract.parts);
+    const states = toSet(contract.states);
+    if (!parts.has(attrs["data-part"])) {
+      failures.push(`${entry.component}:TEST_CONTRACT_PART_NOT_PUBLIC:${attrs["data-part"]}`);
+    }
+    if (!states.has(attrs["data-state"])) {
+      failures.push(`${entry.component}:TEST_CONTRACT_STATE_NOT_PUBLIC:${attrs["data-state"]}`);
+    }
+    if (attrs["data-scope"] !== contract.scope) {
+      failures.push(`${entry.component}:TEST_CONTRACT_SCOPE_MISMATCH:${contract.scope}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`TEST_CONTRACT_ATTR_MATRIX_INVALID:${failures.join("|")}`);
   }
 
   return true;
@@ -125,6 +246,53 @@ export function assertActiveDescendant(containerAttrs, expectedId) {
   return true;
 }
 
+export function assertA11yFixtureCoverage(contracts, matrix) {
+  assertComponentContractCoverage(contracts, matrix);
+  const failures = [];
+
+  for (const entry of matrix) {
+    if (!Array.isArray(entry.a11yFixtures) || entry.a11yFixtures.length === 0) {
+      failures.push(`${entry.component}:TEST_A11Y_FIXTURE_MISSING`);
+      continue;
+    }
+    for (const fixture of entry.a11yFixtures) {
+      const attrs = fixture?.attrs;
+      const rules = fixture?.rules || {};
+      if (!attrs || typeof attrs !== "object") {
+        failures.push(`${entry.component}:TEST_A11Y_FIXTURE_ATTRS_INVALID`);
+        continue;
+      }
+      try {
+        if (rules.role !== undefined) {
+          const allowedRoles = Array.isArray(rules.role) ? rules.role : [rules.role];
+          if (!allowedRoles.includes(attrs.role)) {
+            throw new Error(`TEST_ARIA_ROLE_MISMATCH:${allowedRoles.join("|")}`);
+          }
+        }
+        if (rules.requireLabel) {
+          const hasLabel = typeof attrs["aria-label"] === "string" && attrs["aria-label"].length > 0;
+          const hasLabelledBy = typeof attrs["aria-labelledby"] === "string" && attrs["aria-labelledby"].length > 0;
+          if (!hasLabel && !hasLabelledBy) {
+            throw new Error("TEST_ARIA_LABEL_MISSING");
+          }
+        }
+        if (rules.requireControlsWhenExpanded && attrs["aria-expanded"] === "true" && !attrs["aria-controls"]) {
+          throw new Error("TEST_ARIA_CONTROLS_MISSING");
+        }
+        assertAriaRequiredProps(attrs, rules.requiredProps || []);
+      } catch (error) {
+        failures.push(`${entry.component}:${error.message}`);
+      }
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`TEST_A11Y_FIXTURE_MATRIX_INVALID:${failures.join("|")}`);
+  }
+
+  return true;
+}
+
 export function assertFocusRestored(history, expectedId) {
   if (!Array.isArray(history) || history.length === 0) {
     throw new Error("TEST_FOCUS_HISTORY_EMPTY");
@@ -176,6 +344,30 @@ export function assertStatePriority(state, priorityList) {
   return true;
 }
 
+export function assertComponentStatePriorityCoverage(contracts, matrix) {
+  assertComponentContractCoverage(contracts, matrix);
+  const failures = [];
+  const matrixByComponent = new Map(matrix.map((item) => [item.component, item]));
+
+  for (const contract of contracts) {
+    const component = contract.component || contract.scope;
+    const entry = matrixByComponent.get(component);
+    const priority = entry?.statePriority || [];
+    const prioritySet = toSet(priority);
+    const states = toSortedUniqueStrings(contract.states || []);
+    const missingStates = states.filter((state) => !prioritySet.has(state));
+    if (missingStates.length > 0) {
+      failures.push(`${component}:TEST_STATE_PRIORITY_MISSING:${missingStates.join(",")}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`TEST_STATE_PRIORITY_MATRIX_INVALID:${failures.join("|")}`);
+  }
+
+  return true;
+}
+
 export function createThemeFallbackFixture(overrides = {}) {
   return {
     global: {},
@@ -201,6 +393,70 @@ export function resolveFallbackScopeValue(fixture, key) {
     }
   }
   return null;
+}
+
+export function assertThemeFallbackChain(fixture, expectations = {}) {
+  for (const [tokenKey, expected] of Object.entries(expectations)) {
+    const resolved = resolveFallbackScopeValue(fixture, tokenKey);
+    if (!resolved) {
+      throw new Error(`TEST_THEME_FALLBACK_MISSING:${tokenKey}`);
+    }
+    if (expected.scope !== undefined && resolved.scope !== expected.scope) {
+      throw new Error(`TEST_THEME_FALLBACK_SCOPE_MISMATCH:${tokenKey}:${expected.scope}`);
+    }
+    if (expected.value !== undefined && resolved.value !== expected.value) {
+      throw new Error(`TEST_THEME_FALLBACK_VALUE_MISMATCH:${tokenKey}`);
+    }
+  }
+
+  return true;
+}
+
+export function createComponentMatrixReport(contracts, matrix, options = {}) {
+  if (!Array.isArray(contracts)) {
+    throw new Error("TEST_COMPONENT_CONTRACTS_INVALID");
+  }
+  if (!Array.isArray(matrix)) {
+    throw new Error("TEST_COMPONENT_MATRIX_INVALID");
+  }
+
+  const contractComponents = getContractComponents(contracts);
+  const matrixComponents = getMatrixComponents(matrix);
+  const componentComparison = compareStringSets("components", contractComponents, matrixComponents);
+  const matrixByComponent = new Map(matrix.map((item) => [item.component, item]));
+  const contractCoverage = contracts.map((contract) => {
+    const component = contract.component || contract.scope;
+    const matrixEntry = matrixByComponent.get(component);
+    const requiredTokens = getContractTokens(contract);
+    return {
+      component,
+      packageName: matrixEntry?.packageName || "unknown",
+      partCount: Array.isArray(contract.parts) ? contract.parts.length : 0,
+      stateCount: Array.isArray(contract.states) ? contract.states.length : 0,
+      requiredTokenCount: requiredTokens.length,
+      hasContractAttrFixture: Boolean(matrixEntry?.contractAttrs),
+      a11yFixtureCount: Array.isArray(matrixEntry?.a11yFixtures) ? matrixEntry.a11yFixtures.length : 0,
+      statePriorityCount: Array.isArray(matrixEntry?.statePriority) ? matrixEntry.statePriority.length : 0,
+      perfSmokeScenarios: [...(matrixEntry?.perfSmokeScenarios || [])]
+    };
+  }).sort((left, right) => left.component.localeCompare(right.component));
+  const totals = {
+    contractComponentCount: contractComponents.length,
+    matrixComponentCount: matrixComponents.length,
+    requiredTokenCount: contractCoverage.reduce((sum, item) => sum + item.requiredTokenCount, 0),
+    a11yFixtureCount: contractCoverage.reduce((sum, item) => sum + item.a11yFixtureCount, 0),
+    contractAttrFixtureCount: contractCoverage.filter((item) => item.hasContractAttrFixture).length,
+    perfSmokeScenarioCount: contractCoverage.reduce((sum, item) => sum + item.perfSmokeScenarios.length, 0)
+  };
+
+  return {
+    schemaVersion: "1.0.0",
+    generatedAt: options.generatedAt || new Date().toISOString(),
+    status: componentComparison.passed ? "passed" : "failed",
+    comparison: componentComparison,
+    totals,
+    components: contractCoverage
+  };
 }
 
 export function injectFault(type, payload = {}) {

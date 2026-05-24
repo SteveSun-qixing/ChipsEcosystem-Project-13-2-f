@@ -13,9 +13,19 @@ shape for component hooks and Provider tests.
 - `assertHasContractAttrs(nodeAttrs)`
 - `createComponentFixture(options)`
 - `assertAriaRole(nodeAttrs, expectedRole)`
+- `assertAriaRequiredProps(nodeAttrs, requiredProps)`
+- `CHIPS_COMPONENT_QUALITY_MATRIX`
+- `createComponentQualityMatrix(overrides)`
+- `getComponentQualityMatrixEntry(component, matrix)`
+- `assertComponentContractCoverage(contracts, matrix)`
+- `assertContractAttrMatrixCoverage(contracts, matrix)`
+- `assertA11yFixtureCoverage(contracts, matrix)`
+- `assertComponentStatePriorityCoverage(contracts, matrix)`
+- `createComponentMatrixReport(contracts, matrix, options)`
 - `assertStatePriority(state, priorityList)`
 - `createThemeFallbackFixture(overrides)`
 - `resolveFallbackScopeValue(fixture, key)`
+- `assertThemeFallbackChain(fixture, expectations)`
 - `createKeyboardEventFixture(key, options)`
 - `runKeyboardSequence(target, keys, options)`
 - `assertRovingTabIndex(items, expectedActiveId)`
@@ -54,6 +64,21 @@ const fault = injectFault("config-source-exception", {
   key: "systemUx.toast.maxStack"
 });
 ```
+
+## Component Quality Matrix
+
+`CHIPS_COMPONENT_QUALITY_MATRIX` is the reusable component matrix consumed by
+`npm run quality:coverage`. It maps every public component contract to:
+
+- contract attr fixture (`data-scope/data-part/data-state`)
+- ARIA fixture and required rules
+- state priority list
+- perf smoke scenario names when the component owns a perf budget
+- owning package (`@chips/components` or `@chips/card-runtime`)
+
+New public components must be added to the matrix in the same change as their
+contract, token and a11y tests. Otherwise `quality:coverage` fails with
+`TEST_COMPONENT_MATRIX_DRIFT`.
 
 ## Mock Chips Environment
 

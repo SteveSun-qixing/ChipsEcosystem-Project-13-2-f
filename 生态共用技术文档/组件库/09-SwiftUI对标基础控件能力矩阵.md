@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；`DatePicker / TimePicker` 已作为任务015第六批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -35,8 +35,8 @@
 | 数值控件 | Slider | `ChipsSlider` | 已落地 | `slider` | 维持 min/max/step、键盘增减、指针拖拽和值文本闭环 |
 | 数值控件 | Stepper | `ChipsStepper` | 已落地 | `stepper` | 维持增减按钮、边界禁用和数值事件闭环 |
 | 数值控件 | NumberInput | `ChipsNumberInput` | 已落地 | `number-input` | 维持解析、夹取、错误和内置步进按钮协作 |
-| 日期时间 | DatePicker | `ChipsDateTime` 相邻能力 | 待补齐 | `date-picker` | 需要独立日期输入或选择器契约 |
-| 日期时间 | TimePicker | `ChipsDateTime` 相邻能力 | 待补齐 | `time-picker` | 需要独立时间输入或选择器契约 |
+| 日期时间 | DatePicker | `ChipsDatePicker` | 已落地 | `date-picker` | 维持日期输入、日历网格、月份导航、键盘和 a11y 闭环 |
+| 日期时间 | TimePicker | `ChipsTimePicker` | 已落地 | `time-picker` | 维持时间输入、选项列表、键盘和 a11y 闭环 |
 | 展示控件 | Badge | `ChipsBadge` | 已落地 | `badge` | 需要状态色、计数/文本和装饰语义 |
 | 展示控件 | Tag | `ChipsTag` | 已落地 | `tag` | 需要标签文本、可关闭变体和列表语义 |
 | 展示控件 | Avatar | `ChipsAvatar` | 已落地 | `avatar` | 需要图像、缩写、fallback 与 alt 语义 |
@@ -192,13 +192,31 @@
 - 主题 token：`chips.comp.slider.root.*`、`label.color`、`track.*`、`range.surface.*`、`thumb.*`、`value.color`、`status.color.error`、`focus.outline`。
 - `thumb` 使用 `role="slider"` 并必须有可访问名称；支持 `min / max / step / largeStep`、小数 step 对齐、方向键/PageUp/PageDown/Home/End、指针点按轨道、拖拽滑块与 `aria-valuetext`。
 
-## 8. 后续批次建议
+## 8. 第六批已冻结控件
+
+### `ChipsDatePicker`
+
+- `data-scope="date-picker"`，公开 part：`root / label / control / input / trigger / calendar / header / previous / next / title / grid / week-header / cell / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.date-picker.root.*`、`label/control/placeholder`、`trigger.color.*`、`calendar.*`、`header.color`、`nav.color.*`、`grid.gap`、`week-header.color`、`cell.surface.*`、`cell.text.*`、`description.color`、`status.color.error`、`focus.outline`。
+- 值模型使用 `YYYY-MM-DD` 字符串，日历计算按纯日期处理，不把值隐式转换为时区相关 `Date` 对象；支持 `min / max / defaultMonth / weekStartsOn / isDateDisabled`、月份导航、方向键/PageUp/PageDown/Home/End、Enter 和 Escape。
+- 输入控件使用 `role="combobox"` 并必须有可访问名称；展开状态通过 `aria-expanded`、`aria-controls`、`aria-activedescendant` 关联日历网格，日期格使用 `role="gridcell"` 与 `aria-selected`。
+
+### `ChipsTimePicker`
+
+- `data-scope="time-picker"`，公开 part：`root / label / control / input / trigger / list / option / description / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.time-picker.root.*`、`label/control/placeholder`、`trigger.color.*`、`list.*`、`option.surface.*`、`option.text.color`、`description.color`、`status.color.error`、`focus.outline`。
+- 值模型使用 `HH:mm` 字符串，显式秒级场景使用 `HH:mm:ss`，不隐式绑定日期或时区；支持 `min / max / step / optionStep / showSeconds / options / isTimeDisabled`，默认列表按 `optionStep` 生成，键盘增减按 `step` 执行。
+- 输入控件使用 `role="combobox"` 并必须有可访问名称；展开状态通过 `aria-expanded`、`aria-controls`、`aria-activedescendant` 关联 listbox，选项使用 `role="option"` 与 `aria-selected`。
+
+## 9. 后续批次建议
 
 - 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
 - 批次 D：`SegmentedControl / ComboBox`（已落地）。
 - 批次 E：`NumberInput / Stepper / Slider`（已落地）。
-- 批次 F：`DatePicker / TimePicker`。
+- 批次 F：`DatePicker / TimePicker`（已落地）。
 - 批次 G：`Image / Media / ErrorState`。
 
 每一批都必须同步组件库、组件 contract、组件 token、默认主题、暗色主题、公共文档和测试；不得只新增空壳导出。

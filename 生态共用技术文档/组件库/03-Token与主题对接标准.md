@@ -36,6 +36,8 @@
   - `chips.comp.number-input.*`
   - `chips.comp.stepper.*`
   - `chips.comp.slider.*`
+  - `chips.comp.date-picker.*`
+  - `chips.comp.time-picker.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -141,6 +143,13 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.slider.*`
 
 `NumberInput` 的 `root/control/decrement/increment/description/status/focus` token 只表达可编辑数值输入、步进按钮、描述和错误视觉；`Stepper` 的 `root/label/value/decrement/increment/status/focus` token 只表达离散增减结构和边界状态视觉；`Slider` 的 `root/label/track/range/thumb/value/status/focus` token 只表达滑轨、选中范围、滑块和值文本视觉。主题包不得复用旧 `chips.comp.input.*`、按钮族 token、`chips.comp.progress.*` 或业务私有 token 作为这些数值控件的正式样式入口。
+
+任务015第六批日期时间控件 token 是日期选择与时间选择的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.date-picker.*`
+- `chips.comp.time-picker.*`
+
+`DatePicker` 的 `root/control/input/trigger/calendar/header/nav/grid/week-header/cell/description/status/focus` token 只表达日历日期输入、月份导航、日期格状态、描述和错误视觉；`TimePicker` 的 `root/control/input/trigger/list/option/description/status/focus` token 只表达本地墙钟时间输入、选项列表、描述和错误视觉。主题包不得复用旧 `chips.comp.date-time.*`、`chips.comp.input.*`、选择控件 token 或业务私有 token 作为这两个控件的正式样式入口。
 
 ### 3.1 布局 token 基线
 

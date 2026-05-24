@@ -7,6 +7,7 @@ import {
   ChipsBox,
   ChipsCheckbox,
   ChipsCommandPalette,
+  ChipsDatePicker,
   ChipsDataGrid,
   ChipsDateTime,
   ChipsDivider,
@@ -53,6 +54,7 @@ import {
   ChipsTextField,
   ChipsToggleButton,
   ChipsComboBox,
+  ChipsTimePicker,
   ChipsToolbar,
   ChipsToolbarItem,
   ChipsContextMenu,
@@ -92,11 +94,13 @@ import {
   resolveCommandPaletteItems,
   resolveCommandToolbarItems,
   resolveDockPanelStateMap,
+  resolveDatePickerModel,
   resolveI18nText,
   resolveSystemMessageQueue,
   resolveInteractiveState,
   resolveNumericControlModel,
   resolveSliderModel,
+  resolveTimePickerModel,
   resolveTextInputDescriptor,
   STAGE7_DATA_ADVANCED_COMPONENTS,
   STAGE7_WORKBENCH_COMPONENTS,
@@ -211,6 +215,8 @@ test("buildComponentContract returns task015 base control component contracts", 
   const numberInput = buildComponentContract("number-input");
   const stepper = buildComponentContract("stepper");
   const slider = buildComponentContract("slider");
+  const datePicker = buildComponentContract("date-picker");
+  const timePicker = buildComponentContract("time-picker");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -248,6 +254,12 @@ test("buildComponentContract returns task015 base control component contracts", 
   assert.equal(slider.scope, "slider");
   assert.ok(slider.parts.includes("thumb"));
   assert.ok(slider.tokens.includes("chips.comp.slider.thumb.surface.active"));
+  assert.equal(datePicker.scope, "date-picker");
+  assert.ok(datePicker.parts.includes("calendar"));
+  assert.ok(datePicker.tokens.includes("chips.comp.date-picker.cell.surface.selected"));
+  assert.equal(timePicker.scope, "time-picker");
+  assert.ok(timePicker.parts.includes("option"));
+  assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -290,6 +302,8 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["number-input"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.stepper));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.slider));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["date-picker"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["time-picker"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -878,7 +892,7 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
 });
 
 test("task015 base control metadata includes second through fifth batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 16);
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 18);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -897,7 +911,9 @@ test("task015 base control metadata includes second through fifth batches", () =
       "combo-box",
       "number-input",
       "stepper",
-      "slider"
+      "slider",
+      "date-picker",
+      "time-picker"
     ]
   );
 });
@@ -919,7 +935,9 @@ test("task015 base control component exports exist", () => {
     ChipsComboBox,
     ChipsNumberInput,
     ChipsStepper,
-    ChipsSlider
+    ChipsSlider,
+    ChipsDatePicker,
+    ChipsTimePicker
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -1206,6 +1224,108 @@ test("resolveSliderModel clamps value and computes orientation ratio", () => {
   assert.equal(vertical.value, 0);
   assert.equal(vertical.ratio, 0);
   assert.equal(vertical.orientation, "vertical");
+});
+
+test("task015 sixth batch date and time picker models normalize calendar and time options", () => {
+  const dateModel = resolveDatePickerModel({
+    value: "2026-05-24",
+    month: "2026-02-01",
+    min: "2026-02-03",
+    max: "2026-02-20",
+    weekStartsOn: 1
+  });
+  const invalidDate = resolveDatePickerModel({
+    text: "2026-02-31"
+  });
+  const timeModel = resolveTimePickerModel({
+    value: "09:29",
+    min: "09:00",
+    max: "10:00",
+    step: 60,
+    optionStep: 900
+  });
+  const invalidTime = resolveTimePickerModel({
+    text: "25:00"
+  });
+
+  assert.equal(dateModel.title, "February 2026");
+  assert.equal(dateModel.cells.length, 42);
+  assert.deepEqual(dateModel.weekDayLabels.slice(0, 2), ["Mon", "Tue"]);
+  assert.equal(dateModel.cells.find((cell) => cell.value === "2026-02-02").disabled, true);
+  assert.equal(dateModel.cells.find((cell) => cell.value === "2026-02-03").disabled, false);
+  assert.equal(invalidDate.invalid, true);
+  assert.equal(timeModel.value, "09:29");
+  assert.deepEqual(
+    timeModel.options.map((option) => option.value),
+    ["09:00", "09:15", "09:30", "09:45", "10:00"]
+  );
+  assert.equal(invalidTime.invalid, true);
+});
+
+test("task015 sixth batch picker controls publish contract and a11y semantics", () => {
+  const datePicker = buildComponentContract("date-picker");
+  const timePicker = buildComponentContract("time-picker");
+
+  assert.deepEqual(datePicker.parts, [
+    "root",
+    "label",
+    "control",
+    "input",
+    "trigger",
+    "calendar",
+    "header",
+    "previous",
+    "next",
+    "title",
+    "grid",
+    "week-header",
+    "cell",
+    "description",
+    "status"
+  ]);
+  assert.ok(datePicker.tokens.includes("chips.comp.date-picker.cell.surface.selected"));
+  assert.ok(datePicker.states.includes("focus"));
+  assert.deepEqual(timePicker.parts, ["root", "label", "control", "input", "trigger", "list", "option", "description", "status"]);
+  assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
+  assert.ok(timePicker.states.includes("active"));
+  assert.equal(
+    validateComponentA11y("date-picker", {
+      role: "combobox",
+      "aria-label": "Due date",
+      "aria-expanded": "true",
+      "aria-controls": "due-date-calendar"
+    }),
+    true
+  );
+  assert.equal(
+    validateComponentA11y("time-picker", {
+      role: "combobox",
+      "aria-label": "Start time",
+      "aria-expanded": "true",
+      "aria-controls": "start-time-list"
+    }),
+    true
+  );
+});
+
+test("task015 sixth batch picker controls reject missing a11y relationships", () => {
+  assert.throws(
+    () => validateComponentA11y("date-picker", { role: "combobox", "aria-expanded": "true" }),
+    /Either aria-label or aria-labelledby is required/
+  );
+  assert.throws(
+    () => validateComponentA11y("time-picker", { role: "combobox", "aria-label": "Time", "aria-expanded": "true" }),
+    /aria-controls is required when aria-expanded is true/
+  );
+});
+
+test("ChipsDatePicker and ChipsTimePicker expose forwardRef render entries", () => {
+  assert.equal(typeof ChipsDatePicker, "object");
+  assert.equal(typeof ChipsDatePicker.render, "function");
+  assert.equal(typeof ChipsTimePicker, "object");
+  assert.equal(typeof ChipsTimePicker.render, "function");
+  assert.throws(() => ChipsDatePicker.render({}, null), /DATE_PICKER_A11Y_LABEL_REQUIRED/);
+  assert.throws(() => ChipsTimePicker.render({}, null), /TIME_PICKER_A11Y_LABEL_REQUIRED/);
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

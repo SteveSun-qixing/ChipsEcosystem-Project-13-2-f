@@ -647,6 +647,61 @@ export interface SliderModel extends NumericControlModel {
   ratio: number;
 }
 
+export interface DatePickerMonth {
+  year: number;
+  month: number;
+}
+
+export interface DatePickerCell {
+  value: string;
+  label: string;
+  selected: boolean;
+  today: boolean;
+  outsideMonth: boolean;
+  disabled: boolean;
+}
+
+export interface DatePickerModel {
+  value: string;
+  text: string;
+  textValue: string;
+  invalid: boolean;
+  min?: string;
+  max?: string;
+  month: DatePickerMonth;
+  title: string;
+  weekDayLabels: string[];
+  cells: DatePickerCell[];
+  weekStartsOn: number;
+}
+
+export interface TimePickerOption {
+  value: string;
+  label?: React.ReactNode;
+  disabled?: boolean;
+}
+
+export interface TimePickerModel {
+  value: string;
+  text: string;
+  textValue: string;
+  invalid: boolean;
+  min?: string;
+  max?: string;
+  step: number;
+  optionStep: number;
+  showSeconds: boolean;
+  options: Array<Required<Pick<TimePickerOption, "value">> & Pick<TimePickerOption, "label" | "disabled">>;
+}
+
+export interface PickerChangeDetails {
+  source: string;
+  previousValue?: string;
+  value: string;
+  text: string;
+  invalid: boolean;
+}
+
 export interface NumberInputProps extends Omit<BaseTextInputProps, "value" | "defaultValue" | "onValueChange" | "onEnterPress"> {
   value?: number | null;
   defaultValue?: number | null;
@@ -753,6 +808,78 @@ export interface SliderProps extends ChipsDisplayTextProps {
   onStateChange?: (state: InteractiveState) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   [key: string]: unknown;
+}
+
+export interface DatePickerProps extends Omit<BaseTextInputProps, "onValueChange" | "onEnterPress"> {
+  textValue?: string;
+  defaultTextValue?: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  min?: string;
+  max?: string;
+  defaultMonth?: string;
+  weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  weekDayLabels?: string[];
+  monthLabels?: string[];
+  triggerLabel?: string;
+  triggerLabelKey?: string;
+  fallbackTriggerLabel?: string;
+  previousLabel?: string;
+  previousLabelKey?: string;
+  fallbackPreviousLabel?: string;
+  nextLabel?: string;
+  nextLabelKey?: string;
+  fallbackNextLabel?: string;
+  invalidMessage?: string;
+  invalidMessageKey?: string;
+  fallbackInvalidMessage?: string;
+  triggerContent?: React.ReactNode;
+  isDateDisabled?: (value: string) => boolean;
+  onValueChange?: (
+    value: string,
+    details: PickerChangeDetails,
+    event?: React.SyntheticEvent,
+  ) => void;
+  onInputChange?: (value: string, event?: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenChange?: (open: boolean, event?: React.SyntheticEvent) => void;
+  onMonthChange?: (
+    month: DatePickerMonth,
+    details: { source: string },
+    event?: React.SyntheticEvent,
+  ) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+}
+
+export interface TimePickerProps extends Omit<BaseTextInputProps, "onValueChange" | "onEnterPress"> {
+  textValue?: string;
+  defaultTextValue?: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  min?: string;
+  max?: string;
+  step?: number;
+  optionStep?: number;
+  showSeconds?: boolean;
+  options?: TimePickerOption[] | string[];
+  limitOptionsToRange?: boolean;
+  triggerLabel?: string;
+  triggerLabelKey?: string;
+  fallbackTriggerLabel?: string;
+  invalidMessage?: string;
+  invalidMessageKey?: string;
+  fallbackInvalidMessage?: string;
+  triggerContent?: React.ReactNode;
+  isTimeDisabled?: (value: string) => boolean;
+  onValueChange?: (
+    value: string,
+    details: PickerChangeDetails,
+    event?: React.SyntheticEvent,
+  ) => void;
+  onInputChange?: (value: string, event?: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenChange?: (open: boolean, event?: React.SyntheticEvent) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
 }
 
 export interface DialogProps {
@@ -1286,6 +1413,8 @@ export const ChipsComboBox: React.ForwardRefExoticComponent<ComboBoxProps & Reac
 export const ChipsNumberInput: React.ForwardRefExoticComponent<NumberInputProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsStepper: React.ForwardRefExoticComponent<StepperProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsSlider: React.ForwardRefExoticComponent<SliderProps & React.RefAttributes<HTMLButtonElement>>;
+export const ChipsDatePicker: React.ForwardRefExoticComponent<DatePickerProps & React.RefAttributes<HTMLInputElement>>;
+export const ChipsTimePicker: React.ForwardRefExoticComponent<TimePickerProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
@@ -1338,6 +1467,8 @@ export function validateComponentA11y(component: string, props: Record<string, u
 export function resolveTextInputDescriptor(params?: Record<string, unknown>): TextInputDescriptor;
 export function resolveNumericControlModel(params?: Record<string, unknown>): NumericControlModel;
 export function resolveSliderModel(params?: Record<string, unknown>): SliderModel;
+export function resolveDatePickerModel(params?: Record<string, unknown>): DatePickerModel;
+export function resolveTimePickerModel(params?: Record<string, unknown>): TimePickerModel;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];

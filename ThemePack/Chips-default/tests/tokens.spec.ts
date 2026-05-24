@@ -44,5 +44,7 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.["number-input"]?.root?.border?.error).toBeDefined();
     expect(parsed.comp.chips?.comp?.stepper?.increment?.surface?.active).toBeDefined();
     expect(parsed.comp.chips?.comp?.slider?.thumb?.surface?.active).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["date-picker"]?.cell?.surface?.selected).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["time-picker"]?.option?.surface?.selected).toBeDefined();
   });
 });

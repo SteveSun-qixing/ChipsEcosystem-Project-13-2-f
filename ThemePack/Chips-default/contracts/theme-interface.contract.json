@@ -358,6 +358,68 @@
       ]
     },
     {
+      "component": "date-picker",
+      "scope": "date-picker",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "input",
+        "trigger",
+        "calendar",
+        "header",
+        "previous",
+        "next",
+        "title",
+        "grid",
+        "week-header",
+        "cell",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.date-picker.root.radius",
+        "chips.comp.date-picker.root.surface.idle",
+        "chips.comp.date-picker.root.surface.focus",
+        "chips.comp.date-picker.root.surface.disabled",
+        "chips.comp.date-picker.root.border.idle",
+        "chips.comp.date-picker.root.border.focus",
+        "chips.comp.date-picker.root.border.error",
+        "chips.comp.date-picker.label.color",
+        "chips.comp.date-picker.control.color",
+        "chips.comp.date-picker.placeholder.color",
+        "chips.comp.date-picker.trigger.color.idle",
+        "chips.comp.date-picker.trigger.color.hover",
+        "chips.comp.date-picker.calendar.surface",
+        "chips.comp.date-picker.calendar.border",
+        "chips.comp.date-picker.header.color",
+        "chips.comp.date-picker.nav.color.idle",
+        "chips.comp.date-picker.nav.color.hover",
+        "chips.comp.date-picker.grid.gap",
+        "chips.comp.date-picker.week-header.color",
+        "chips.comp.date-picker.cell.surface.idle",
+        "chips.comp.date-picker.cell.surface.hover",
+        "chips.comp.date-picker.cell.surface.selected",
+        "chips.comp.date-picker.cell.surface.today",
+        "chips.comp.date-picker.cell.surface.disabled",
+        "chips.comp.date-picker.cell.text.idle",
+        "chips.comp.date-picker.cell.text.selected",
+        "chips.comp.date-picker.cell.text.muted",
+        "chips.comp.date-picker.description.color",
+        "chips.comp.date-picker.status.color.error",
+        "chips.comp.date-picker.focus.outline"
+      ]
+    },
+    {
       "component": "date-time",
       "scope": "date-time",
       "parts": [
@@ -1275,6 +1337,49 @@
       ]
     },
     {
+      "component": "slider",
+      "scope": "slider",
+      "parts": [
+        "root",
+        "label",
+        "track",
+        "range",
+        "thumb",
+        "value",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.slider.root.gap",
+        "chips.comp.slider.label.color",
+        "chips.comp.slider.track.height",
+        "chips.comp.slider.track.radius",
+        "chips.comp.slider.track.surface.idle",
+        "chips.comp.slider.track.surface.disabled",
+        "chips.comp.slider.range.surface.idle",
+        "chips.comp.slider.range.surface.disabled",
+        "chips.comp.slider.thumb.size",
+        "chips.comp.slider.thumb.radius",
+        "chips.comp.slider.thumb.surface.idle",
+        "chips.comp.slider.thumb.surface.hover",
+        "chips.comp.slider.thumb.surface.active",
+        "chips.comp.slider.thumb.surface.disabled",
+        "chips.comp.slider.thumb.border.idle",
+        "chips.comp.slider.thumb.border.focus",
+        "chips.comp.slider.value.color",
+        "chips.comp.slider.status.color.error",
+        "chips.comp.slider.focus.outline"
+      ]
+    },
+    {
       "component": "spacer",
       "scope": "spacer",
       "parts": [
@@ -1432,49 +1537,6 @@
         "chips.comp.stepper.increment.icon.color.disabled",
         "chips.comp.stepper.status.color.error",
         "chips.comp.stepper.focus.outline"
-      ]
-    },
-    {
-      "component": "slider",
-      "scope": "slider",
-      "parts": [
-        "root",
-        "label",
-        "track",
-        "range",
-        "thumb",
-        "value",
-        "status"
-      ],
-      "states": [
-        "idle",
-        "hover",
-        "focus",
-        "active",
-        "disabled",
-        "loading",
-        "error"
-      ],
-      "requiredTokens": [
-        "chips.comp.slider.root.gap",
-        "chips.comp.slider.label.color",
-        "chips.comp.slider.track.height",
-        "chips.comp.slider.track.radius",
-        "chips.comp.slider.track.surface.idle",
-        "chips.comp.slider.track.surface.disabled",
-        "chips.comp.slider.range.surface.idle",
-        "chips.comp.slider.range.surface.disabled",
-        "chips.comp.slider.thumb.size",
-        "chips.comp.slider.thumb.radius",
-        "chips.comp.slider.thumb.surface.idle",
-        "chips.comp.slider.thumb.surface.hover",
-        "chips.comp.slider.thumb.surface.active",
-        "chips.comp.slider.thumb.surface.disabled",
-        "chips.comp.slider.thumb.border.idle",
-        "chips.comp.slider.thumb.border.focus",
-        "chips.comp.slider.value.color",
-        "chips.comp.slider.status.color.error",
-        "chips.comp.slider.focus.outline"
       ]
     },
     {
@@ -1661,6 +1723,54 @@
         "chips.comp.text-field.description.color",
         "chips.comp.text-field.status.color.error",
         "chips.comp.text-field.focus.outline"
+      ]
+    },
+    {
+      "component": "time-picker",
+      "scope": "time-picker",
+      "parts": [
+        "root",
+        "label",
+        "control",
+        "input",
+        "trigger",
+        "list",
+        "option",
+        "description",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.time-picker.root.radius",
+        "chips.comp.time-picker.root.surface.idle",
+        "chips.comp.time-picker.root.surface.focus",
+        "chips.comp.time-picker.root.surface.disabled",
+        "chips.comp.time-picker.root.border.idle",
+        "chips.comp.time-picker.root.border.focus",
+        "chips.comp.time-picker.root.border.error",
+        "chips.comp.time-picker.label.color",
+        "chips.comp.time-picker.control.color",
+        "chips.comp.time-picker.placeholder.color",
+        "chips.comp.time-picker.trigger.color.idle",
+        "chips.comp.time-picker.trigger.color.hover",
+        "chips.comp.time-picker.list.surface",
+        "chips.comp.time-picker.list.border",
+        "chips.comp.time-picker.option.surface.idle",
+        "chips.comp.time-picker.option.surface.highlighted",
+        "chips.comp.time-picker.option.surface.selected",
+        "chips.comp.time-picker.option.surface.disabled",
+        "chips.comp.time-picker.option.text.color",
+        "chips.comp.time-picker.description.color",
+        "chips.comp.time-picker.status.color.error",
+        "chips.comp.time-picker.focus.outline"
       ]
     },
     {

@@ -98,6 +98,7 @@ const DEFAULT_ICON_DESCRIPTOR_MAP = Object.freeze({
   expand: Object.freeze({ name: "add" }),
   collapse: Object.freeze({ name: "remove" }),
   calendar: Object.freeze({ name: "calendar_month" }),
+  time: Object.freeze({ name: "schedule" }),
   search: Object.freeze({ name: "search" }),
   visibility: Object.freeze({ name: "visibility" }),
   "visibility-off": Object.freeze({ name: "visibility_off" })
@@ -439,6 +440,404 @@ export function resolveSliderModel(params = {}) {
     ...model,
     orientation,
     ratio: getNumericRatio(model.value, model)
+  };
+}
+
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_TIME_PATTERN = /^(\d{2}):(\d{2})(?::(\d{2}))?$/;
+const DEFAULT_WEEK_DAY_LABELS = Object.freeze(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]);
+const DEFAULT_MONTH_LABELS = Object.freeze([
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+]);
+
+function padNumber(value, length = 2) {
+  return String(value).padStart(length, "0");
+}
+
+function parseIsoDateParts(value) {
+  if (!isNonEmptyString(value)) {
+    return null;
+  }
+
+  const match = value.trim().match(ISO_DATE_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) {
+    return null;
+  }
+
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > daysInMonth) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+function formatIsoDate(parts) {
+  if (!parts) {
+    return "";
+  }
+
+  return `${padNumber(parts.year, 4)}-${padNumber(parts.month)}-${padNumber(parts.day)}`;
+}
+
+function compareIsoDates(left, right) {
+  const leftParts = parseIsoDateParts(left);
+  const rightParts = parseIsoDateParts(right);
+  if (!leftParts || !rightParts) {
+    return 0;
+  }
+
+  return formatIsoDate(leftParts).localeCompare(formatIsoDate(rightParts));
+}
+
+function addCalendarMonths(month, delta) {
+  const parts = parseIsoDateParts(`${padNumber(month.year, 4)}-${padNumber(month.month)}-01`) ?? {
+    year: 1970,
+    month: 1,
+    day: 1
+  };
+  const date = new Date(Date.UTC(parts.year, parts.month - 1 + delta, 1));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1
+  };
+}
+
+function addIsoDateDays(value, delta) {
+  const parts = parseIsoDateParts(value);
+  if (!parts) {
+    return "";
+  }
+
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + delta));
+  return formatIsoDate({
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate()
+  });
+}
+
+function clampIsoDate(value, min, max) {
+  const parts = parseIsoDateParts(value);
+  if (!parts) {
+    return "";
+  }
+
+  const normalized = formatIsoDate(parts);
+  if (parseIsoDateParts(min) && compareIsoDates(normalized, min) < 0) {
+    return formatIsoDate(parseIsoDateParts(min));
+  }
+  if (parseIsoDateParts(max) && compareIsoDates(normalized, max) > 0) {
+    return formatIsoDate(parseIsoDateParts(max));
+  }
+
+  return normalized;
+}
+
+function isIsoDateDisabled(value, min, max, isDateDisabled) {
+  const normalized = clampIsoDate(value);
+  if (!normalized) {
+    return true;
+  }
+
+  if (parseIsoDateParts(min) && compareIsoDates(normalized, min) < 0) {
+    return true;
+  }
+  if (parseIsoDateParts(max) && compareIsoDates(normalized, max) > 0) {
+    return true;
+  }
+  if (typeof isDateDisabled === "function") {
+    return isDateDisabled(normalized) === true;
+  }
+
+  return false;
+}
+
+function getTodayIsoDate() {
+  const date = new Date();
+  return formatIsoDate({
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate()
+  });
+}
+
+function resolveCalendarMonth(value, defaultMonth, min, max) {
+  const candidate = parseIsoDateParts(value)
+    ?? parseIsoDateParts(defaultMonth)
+    ?? parseIsoDateParts(clampIsoDate(getTodayIsoDate(), min, max))
+    ?? parseIsoDateParts(min)
+    ?? parseIsoDateParts(max)
+    ?? { year: 1970, month: 1, day: 1 };
+
+  return {
+    year: candidate.year,
+    month: candidate.month
+  };
+}
+
+function normalizeWeekStartsOn(weekStartsOn) {
+  const numeric = Number(weekStartsOn);
+  return Number.isInteger(numeric) && numeric >= 0 && numeric <= 6 ? numeric : 0;
+}
+
+function getWeekDayLabels(labels, weekStartsOn) {
+  const source = Array.isArray(labels) && labels.length === 7
+    ? labels.map((item) => String(item))
+    : DEFAULT_WEEK_DAY_LABELS;
+  return source.map((_, index) => source[(index + weekStartsOn) % 7]);
+}
+
+function formatCalendarTitle(month, monthLabels) {
+  const labels = Array.isArray(monthLabels) && monthLabels.length === 12
+    ? monthLabels
+    : DEFAULT_MONTH_LABELS;
+  return `${labels[month.month - 1] ?? padNumber(month.month)} ${month.year}`;
+}
+
+export function resolveDatePickerModel(params = {}) {
+  const weekStartsOn = normalizeWeekStartsOn(params.weekStartsOn);
+  const min = clampIsoDate(params.min);
+  const max = clampIsoDate(params.max);
+  const value = clampIsoDate(params.value, min, max);
+  const text = params.text !== undefined ? String(params.text) : value;
+  const parsedText = parseIsoDateParts(text);
+  const textValue = parsedText ? formatIsoDate(parsedText) : "";
+  const textInvalid = isNonEmptyString(text) && !parsedText;
+  const explicitMonth = parseIsoDateParts(params.month);
+  const month = explicitMonth
+    ? { year: explicitMonth.year, month: explicitMonth.month }
+    : resolveCalendarMonth(value || textValue, params.defaultMonth, min, max);
+  const firstOfMonth = new Date(Date.UTC(month.year, month.month - 1, 1));
+  const firstDay = firstOfMonth.getUTCDay();
+  const leadingDays = (firstDay - weekStartsOn + 7) % 7;
+  const gridStart = new Date(Date.UTC(month.year, month.month - 1, 1 - leadingDays));
+  const today = getTodayIsoDate();
+  const selected = value || textValue;
+  const cells = [];
+
+  for (let index = 0; index < 42; index += 1) {
+    const cellDate = new Date(gridStart.getTime());
+    cellDate.setUTCDate(gridStart.getUTCDate() + index);
+    const cellValue = formatIsoDate({
+      year: cellDate.getUTCFullYear(),
+      month: cellDate.getUTCMonth() + 1,
+      day: cellDate.getUTCDate()
+    });
+    const outsideMonth = cellDate.getUTCMonth() + 1 !== month.month;
+    cells.push({
+      value: cellValue,
+      label: String(cellDate.getUTCDate()),
+      selected: selected === cellValue,
+      today: today === cellValue,
+      outsideMonth,
+      disabled: isIsoDateDisabled(cellValue, min, max, params.isDateDisabled)
+    });
+  }
+
+  const disabledTextValue = textValue
+    ? isIsoDateDisabled(textValue, min, max, params.isDateDisabled)
+    : false;
+
+  return {
+    value,
+    text,
+    textValue,
+    invalid: textInvalid || disabledTextValue || (Boolean(value) && isIsoDateDisabled(value, min, max, params.isDateDisabled)),
+    min: min || undefined,
+    max: max || undefined,
+    month,
+    title: formatCalendarTitle(month, params.monthLabels),
+    weekDayLabels: getWeekDayLabels(params.weekDayLabels, weekStartsOn),
+    cells,
+    weekStartsOn
+  };
+}
+
+function parseIsoTimeParts(value) {
+  if (!isNonEmptyString(value)) {
+    return null;
+  }
+
+  const match = value.trim().match(ISO_TIME_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = match[3] === undefined ? 0 : Number(match[3]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+    return null;
+  }
+
+  return { hour, minute, second, hasSeconds: match[3] !== undefined };
+}
+
+function formatIsoTime(parts, includeSeconds = false) {
+  if (!parts) {
+    return "";
+  }
+
+  const base = `${padNumber(parts.hour)}:${padNumber(parts.minute)}`;
+  return includeSeconds || parts.hasSeconds ? `${base}:${padNumber(parts.second)}` : base;
+}
+
+function timeToSeconds(value) {
+  const parts = parseIsoTimeParts(value);
+  return parts ? (parts.hour * 3600) + (parts.minute * 60) + parts.second : null;
+}
+
+function secondsToTime(totalSeconds, includeSeconds = false) {
+  const normalized = ((totalSeconds % 86400) + 86400) % 86400;
+  const hour = Math.floor(normalized / 3600);
+  const minute = Math.floor((normalized % 3600) / 60);
+  const second = normalized % 60;
+  return formatIsoTime({ hour, minute, second }, includeSeconds);
+}
+
+function normalizeTimeStep(step) {
+  const numeric = Number(step);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.max(1, Math.floor(numeric)) : 60;
+}
+
+function normalizeIsoTime(value, options = {}) {
+  const parts = parseIsoTimeParts(value);
+  if (!parts) {
+    return "";
+  }
+
+  const step = normalizeTimeStep(options.step);
+  const includeSeconds = options.showSeconds === true || parts.hasSeconds || step < 60;
+  const seconds = timeToSeconds(formatIsoTime(parts, true));
+  const aligned = options.align === false
+    ? seconds
+    : Math.round(seconds / step) * step;
+  return secondsToTime(aligned, includeSeconds);
+}
+
+function compareIsoTimes(left, right) {
+  const leftSeconds = timeToSeconds(left);
+  const rightSeconds = timeToSeconds(right);
+  if (leftSeconds === null || rightSeconds === null) {
+    return 0;
+  }
+
+  return leftSeconds - rightSeconds;
+}
+
+function clampIsoTime(value, options = {}) {
+  const normalized = normalizeIsoTime(value, options);
+  if (!normalized) {
+    return "";
+  }
+
+  const min = normalizeIsoTime(options.min, { ...options, align: false });
+  const max = normalizeIsoTime(options.max, { ...options, align: false });
+  if (min && compareIsoTimes(normalized, min) < 0) {
+    return min;
+  }
+  if (max && compareIsoTimes(normalized, max) > 0) {
+    return max;
+  }
+
+  return normalized;
+}
+
+function getNextIsoTime(value, deltaSeconds, options = {}) {
+  const step = normalizeTimeStep(options.step);
+  const includeSeconds = options.showSeconds === true || step < 60;
+  const currentSeconds = timeToSeconds(value) ?? timeToSeconds(options.min) ?? 0;
+  return clampIsoTime(secondsToTime(currentSeconds + deltaSeconds, includeSeconds), options);
+}
+
+function isIsoTimeDisabled(value, options = {}) {
+  const normalized = normalizeIsoTime(value, options);
+  if (!normalized) {
+    return true;
+  }
+
+  const min = normalizeIsoTime(options.min, { ...options, align: false });
+  const max = normalizeIsoTime(options.max, { ...options, align: false });
+  if (min && compareIsoTimes(normalized, min) < 0) {
+    return true;
+  }
+  if (max && compareIsoTimes(normalized, max) > 0) {
+    return true;
+  }
+  if (typeof options.isTimeDisabled === "function") {
+    return options.isTimeDisabled(normalized) === true;
+  }
+
+  return false;
+}
+
+export function resolveTimePickerModel(params = {}) {
+  const step = normalizeTimeStep(params.step);
+  const optionStep = normalizeTimeStep(params.optionStep ?? Math.max(step, 1800));
+  const value = clampIsoTime(params.value, params);
+  const text = params.text !== undefined ? String(params.text) : value;
+  const textValue = normalizeIsoTime(text, { ...params, align: false });
+  const invalid = isNonEmptyString(text) && !textValue;
+  const min = normalizeIsoTime(params.min, { ...params, align: false });
+  const max = normalizeIsoTime(params.max, { ...params, align: false });
+  const includeSeconds = params.showSeconds === true;
+  const generatedOptionStep = optionStep;
+  const options = Array.isArray(params.options)
+    ? params.options
+        .map((option) => {
+          const optionValue = typeof option === "string" ? option : option?.value;
+          const normalizedValue = normalizeIsoTime(optionValue, { ...params, align: false });
+          if (!normalizedValue) {
+            return null;
+          }
+          return {
+            value: normalizedValue,
+            label: typeof option === "string" ? normalizedValue : (option.label ?? normalizedValue),
+            disabled: option?.disabled === true || isIsoTimeDisabled(normalizedValue, params)
+          };
+        })
+        .filter(Boolean)
+    : Array.from({ length: Math.ceil(86400 / generatedOptionStep) }, (_, index) => {
+        const optionValue = secondsToTime(index * generatedOptionStep, includeSeconds);
+        return {
+          value: optionValue,
+          label: optionValue,
+          disabled: isIsoTimeDisabled(optionValue, params)
+        };
+      }).filter((option) => params.limitOptionsToRange === false || !option.disabled);
+
+  const disabledTextValue = textValue ? isIsoTimeDisabled(textValue, params) : false;
+
+  return {
+    value,
+    text,
+    textValue,
+    invalid: invalid || disabledTextValue || (Boolean(value) && isIsoTimeDisabled(value, params)),
+    min: min || undefined,
+    max: max || undefined,
+    step,
+    optionStep,
+    showSeconds: includeSeconds,
+    options
   };
 }
 
@@ -976,6 +1375,62 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.slider.status.color.error",
     "chips.comp.slider.focus.outline"
   ],
+  "date-picker": [
+    "chips.comp.date-picker.root.radius",
+    "chips.comp.date-picker.root.surface.idle",
+    "chips.comp.date-picker.root.surface.focus",
+    "chips.comp.date-picker.root.surface.disabled",
+    "chips.comp.date-picker.root.border.idle",
+    "chips.comp.date-picker.root.border.focus",
+    "chips.comp.date-picker.root.border.error",
+    "chips.comp.date-picker.label.color",
+    "chips.comp.date-picker.control.color",
+    "chips.comp.date-picker.placeholder.color",
+    "chips.comp.date-picker.trigger.color.idle",
+    "chips.comp.date-picker.trigger.color.hover",
+    "chips.comp.date-picker.calendar.surface",
+    "chips.comp.date-picker.calendar.border",
+    "chips.comp.date-picker.header.color",
+    "chips.comp.date-picker.nav.color.idle",
+    "chips.comp.date-picker.nav.color.hover",
+    "chips.comp.date-picker.grid.gap",
+    "chips.comp.date-picker.week-header.color",
+    "chips.comp.date-picker.cell.surface.idle",
+    "chips.comp.date-picker.cell.surface.hover",
+    "chips.comp.date-picker.cell.surface.selected",
+    "chips.comp.date-picker.cell.surface.today",
+    "chips.comp.date-picker.cell.surface.disabled",
+    "chips.comp.date-picker.cell.text.idle",
+    "chips.comp.date-picker.cell.text.selected",
+    "chips.comp.date-picker.cell.text.muted",
+    "chips.comp.date-picker.description.color",
+    "chips.comp.date-picker.status.color.error",
+    "chips.comp.date-picker.focus.outline"
+  ],
+  "time-picker": [
+    "chips.comp.time-picker.root.radius",
+    "chips.comp.time-picker.root.surface.idle",
+    "chips.comp.time-picker.root.surface.focus",
+    "chips.comp.time-picker.root.surface.disabled",
+    "chips.comp.time-picker.root.border.idle",
+    "chips.comp.time-picker.root.border.focus",
+    "chips.comp.time-picker.root.border.error",
+    "chips.comp.time-picker.label.color",
+    "chips.comp.time-picker.control.color",
+    "chips.comp.time-picker.placeholder.color",
+    "chips.comp.time-picker.trigger.color.idle",
+    "chips.comp.time-picker.trigger.color.hover",
+    "chips.comp.time-picker.list.surface",
+    "chips.comp.time-picker.list.border",
+    "chips.comp.time-picker.option.surface.idle",
+    "chips.comp.time-picker.option.surface.highlighted",
+    "chips.comp.time-picker.option.surface.selected",
+    "chips.comp.time-picker.option.surface.disabled",
+    "chips.comp.time-picker.option.text.color",
+    "chips.comp.time-picker.description.color",
+    "chips.comp.time-picker.status.color.error",
+    "chips.comp.time-picker.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -1412,6 +1867,34 @@ export function buildComponentContract(component) {
       component: "slider",
       scope: "slider",
       parts: ["root", "label", "track", "range", "thumb", "value", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "date-picker": {
+      component: "date-picker",
+      scope: "date-picker",
+      parts: [
+        "root",
+        "label",
+        "control",
+        "input",
+        "trigger",
+        "calendar",
+        "header",
+        "previous",
+        "next",
+        "title",
+        "grid",
+        "week-header",
+        "cell",
+        "description",
+        "status"
+      ],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "time-picker": {
+      component: "time-picker",
+      scope: "time-picker",
+      parts: ["root", "label", "control", "input", "trigger", "list", "option", "description", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     button: {
@@ -6369,6 +6852,927 @@ export const ChipsSlider = React.forwardRef((props, ref) => {
 
 ChipsSlider.displayName = "ChipsSlider";
 
+function createPickerChangeDetails(params) {
+  return {
+    source: params.source,
+    previousValue: params.previousValue,
+    value: params.value,
+    text: params.text,
+    invalid: params.invalid === true
+  };
+}
+
+function getDateKeyTarget(currentValue, key, model) {
+  const base = parseIsoDateParts(currentValue)
+    ? currentValue
+    : model.value || model.textValue || formatIsoDate({ ...model.month, day: 1 });
+
+  if (key === "ArrowRight") {
+    return addIsoDateDays(base, 1);
+  }
+  if (key === "ArrowLeft") {
+    return addIsoDateDays(base, -1);
+  }
+  if (key === "ArrowDown") {
+    return addIsoDateDays(base, 7);
+  }
+  if (key === "ArrowUp") {
+    return addIsoDateDays(base, -7);
+  }
+  if (key === "Home") {
+    const parts = parseIsoDateParts(base);
+    return parts ? formatIsoDate({ ...parts, day: 1 }) : base;
+  }
+  if (key === "End") {
+    const parts = parseIsoDateParts(base);
+    return parts
+      ? formatIsoDate({
+          ...parts,
+          day: new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate()
+        })
+      : base;
+  }
+  if (key === "PageUp" || key === "PageDown") {
+    const parts = parseIsoDateParts(base);
+    if (!parts) {
+      return base;
+    }
+    const nextMonth = addCalendarMonths(parts, key === "PageUp" ? -1 : 1);
+    const maxDay = new Date(Date.UTC(nextMonth.year, nextMonth.month, 0)).getUTCDate();
+    return formatIsoDate({ ...nextMonth, day: Math.min(parts.day, maxDay) });
+  }
+
+  return "";
+}
+
+export const ChipsDatePicker = React.forwardRef((props, ref) => {
+  const {
+    id,
+    value,
+    defaultValue = "",
+    textValue,
+    defaultTextValue,
+    open,
+    defaultOpen = false,
+    min,
+    max,
+    defaultMonth,
+    weekStartsOn = 0,
+    weekDayLabels,
+    monthLabels,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    triggerLabel,
+    triggerLabelKey,
+    fallbackTriggerLabel = "Open calendar",
+    invalidMessage,
+    invalidMessageKey = "component.datePicker.invalid",
+    fallbackInvalidMessage = "Invalid date",
+    previousLabel,
+    previousLabelKey,
+    fallbackPreviousLabel = "Previous month",
+    nextLabel,
+    nextLabelKey,
+    fallbackNextLabel = "Next month",
+    triggerContent,
+    isDateDisabled,
+    i18n,
+    onValueChange,
+    onInputChange,
+    onOpenChange,
+    onMonthChange,
+    onStateChange,
+    onKeyDown,
+    onChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "date-picker",
+    value: textValue,
+    defaultValue: defaultTextValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "DATE_PICKER_A11Y_LABEL_REQUIRED"
+  );
+
+  const controlledValue = value !== undefined;
+  const controlledText = textValue !== undefined;
+  const controlledOpen = open !== undefined;
+  const [internalValue, setInternalValue] = React.useState(() => clampIsoDate(defaultValue, min, max));
+  const [internalText, setInternalText] = React.useState(() => {
+    if (defaultTextValue !== undefined) {
+      return String(defaultTextValue);
+    }
+    return clampIsoDate(defaultValue, min, max);
+  });
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen === true);
+  const [visibleMonth, setVisibleMonth] = React.useState(() =>
+    resolveCalendarMonth(clampIsoDate(defaultValue, min, max), defaultMonth, min, max)
+  );
+  const currentValue = controlledValue ? clampIsoDate(value, min, max) : internalValue;
+  const currentText = controlledText ? String(textValue) : internalText;
+  const currentOpen = controlledOpen ? open === true : internalOpen;
+  const baseModel = resolveDatePickerModel({
+    value: currentValue,
+    text: currentText,
+    min,
+    max,
+    month: formatIsoDate({ ...visibleMonth, day: 1 }),
+    weekStartsOn,
+    weekDayLabels,
+    monthLabels,
+    isDateDisabled
+  });
+  const resolvedInvalidMessage = resolveAccessibleText({
+    value: invalidMessage,
+    key: invalidMessageKey,
+    fallback: fallbackInvalidMessage,
+    i18n,
+    onDiagnostic
+  });
+  const effectiveError = normalizeError(error) || (
+    baseModel.invalid
+      ? { code: "DATE_PICKER_VALUE_INVALID", message: resolvedInvalidMessage }
+      : null
+  );
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    value: currentText,
+    defaultValue: undefined,
+    error: effectiveError,
+    interaction
+  });
+  const model = resolveDatePickerModel({
+    value: currentValue,
+    text: currentText,
+    min,
+    max,
+    month: formatIsoDate({ ...visibleMonth, day: 1 }),
+    weekStartsOn,
+    weekDayLabels,
+    monthLabels,
+    isDateDisabled
+  });
+  const generatedInputId = React.useId();
+  const inputId = id || generatedInputId;
+  const calendarId = `${inputId}-calendar`;
+  const gridId = `${calendarId}-grid`;
+  const activeCell = model.cells.find((cell) => cell.selected && !cell.disabled)
+    ?? model.cells.find((cell) => cell.today && !cell.disabled)
+    ?? model.cells.find((cell) => !cell.outsideMonth && !cell.disabled)
+    ?? model.cells.find((cell) => !cell.disabled);
+  const activeCellValue = activeCell?.value ?? "";
+  const activeCellId = activeCellValue ? `${calendarId}-cell-${activeCellValue}` : undefined;
+  const resolvedTriggerLabel = resolveAccessibleText({
+    value: triggerLabel,
+    key: triggerLabelKey,
+    fallback: fallbackTriggerLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedPreviousLabel = resolveAccessibleText({
+    value: previousLabel,
+    key: previousLabelKey,
+    fallback: fallbackPreviousLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedNextLabel = resolveAccessibleText({
+    value: nextLabel,
+    key: nextLabelKey,
+    fallback: fallbackNextLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const updateOpen = (nextOpen, event) => {
+    if (!controlledOpen) {
+      setInternalOpen(nextOpen);
+    }
+    if (typeof onOpenChange === "function") {
+      onOpenChange(nextOpen, event);
+    }
+  };
+
+  const updateMonth = (nextMonth, event, source) => {
+    setVisibleMonth(nextMonth);
+    if (typeof onMonthChange === "function") {
+      onMonthChange(nextMonth, { source }, event);
+    }
+  };
+
+  const commitDate = (nextValue, event, source) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      event?.preventDefault?.();
+      return false;
+    }
+
+    const normalized = clampIsoDate(nextValue, min, max);
+    const invalid = !normalized || isIsoDateDisabled(normalized, min, max, isDateDisabled);
+    if (invalid) {
+      return false;
+    }
+
+    if (!controlledValue) {
+      setInternalValue(normalized);
+    }
+    if (!controlledText) {
+      setInternalText(normalized);
+    }
+    const parts = parseIsoDateParts(normalized);
+    if (parts) {
+      updateMonth({ year: parts.year, month: parts.month }, event, source);
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange(
+        normalized,
+        createPickerChangeDetails({
+          source,
+          previousValue: currentValue,
+          value: normalized,
+          text: normalized,
+          invalid: false
+        }),
+        event
+      );
+    }
+    return true;
+  };
+
+  const commitText = (event, source) => {
+    const normalized = clampIsoDate(currentText, min, max);
+    if (!normalized) {
+      return false;
+    }
+    return commitDate(normalized, event, source);
+  };
+
+  const handleTextChange = (event) => {
+    if (typeof onChange === "function") {
+      onChange(event);
+    }
+    if (!controlledText) {
+      setInternalText(event.target.value);
+    }
+    if (typeof onInputChange === "function") {
+      onInputChange(event.target.value, event);
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      if (currentOpen && activeCellValue) {
+        event.preventDefault();
+        if (commitDate(activeCellValue, event, "calendar")) {
+          updateOpen(false, event);
+        }
+      } else if (commitText(event, "commit")) {
+        updateOpen(false, event);
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      updateOpen(false, event);
+      if (!controlledText) {
+        setInternalText(currentValue);
+      }
+    } else if (event.key === "ArrowDown" && !currentOpen) {
+      event.preventDefault();
+      updateOpen(true, event);
+    } else {
+      const target = getDateKeyTarget(model.value || model.textValue || activeCellValue || currentText || currentValue, event.key, model);
+      if (target) {
+        event.preventDefault();
+        const parts = parseIsoDateParts(target);
+        if (parts) {
+          updateMonth({ year: parts.year, month: parts.month }, event, "keyboard");
+          if (!isIsoDateDisabled(target, min, max, isDateDisabled)) {
+            commitDate(target, event, "keyboard");
+          }
+        }
+      }
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("date-picker", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": model.invalid ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-open": String(currentOpen),
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": model.invalid ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "label",
+          {
+            ...createScopeAttributes("date-picker", "label", descriptor.state),
+            htmlFor: inputId
+          },
+          descriptor.label
+        )
+      : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("date-picker", "control", descriptor.state),
+      React.createElement("input", {
+        ...createScopeAttributes("date-picker", "input", descriptor.state),
+        ref,
+        id: inputId,
+        role: "combobox",
+        type: "text",
+        name,
+        placeholder,
+        inputMode: "numeric",
+        autoComplete: "off",
+        disabled: descriptor.disabledByState,
+        readOnly: descriptor.readOnly,
+        required: descriptor.required,
+        value: currentText,
+        "aria-label": descriptor.ariaLabel,
+        "aria-labelledby": descriptor.ariaLabelledBy,
+        "aria-describedby": descriptor.describedBy,
+        "aria-invalid": model.invalid ? "true" : undefined,
+        "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+        "aria-required": descriptor.required ? "true" : undefined,
+        "aria-readonly": descriptor.readOnly ? "true" : undefined,
+        "aria-expanded": String(currentOpen),
+        "aria-controls": calendarId,
+        "aria-activedescendant": currentOpen ? activeCellId : undefined,
+        onChange: handleTextChange,
+        onFocus: handlers.onFocus,
+        onBlur: handlers.onBlur,
+        onKeyDown: handleKeyDown
+      }),
+      React.createElement(
+        "button",
+        {
+          ...createScopeAttributes("date-picker", "trigger", descriptor.state),
+          type: "button",
+          disabled: descriptor.disabledByState || descriptor.readOnly,
+          "aria-label": resolvedTriggerLabel,
+          "aria-haspopup": "grid",
+          "aria-expanded": String(currentOpen),
+          "aria-controls": calendarId,
+          onClick: (event) => updateOpen(!currentOpen, event)
+        },
+        resolveIconContent(triggerContent, "calendar")
+      )
+    ),
+    currentOpen
+      ? React.createElement(
+          "div",
+          {
+            ...createScopeAttributes("date-picker", "calendar", descriptor.state),
+            id: calendarId,
+            role: "dialog",
+            "aria-modal": "false"
+          },
+          React.createElement(
+            "div",
+            createScopeAttributes("date-picker", "header", descriptor.state),
+            React.createElement(
+              "button",
+              {
+                ...createScopeAttributes("date-picker", "previous", descriptor.state),
+                type: "button",
+                "aria-label": resolvedPreviousLabel,
+                onClick: (event) => updateMonth(addCalendarMonths(model.month, -1), event, "previous")
+              },
+              resolveIconContent(undefined, "collapse")
+            ),
+            React.createElement(
+              "span",
+              createScopeAttributes("date-picker", "title", descriptor.state),
+              model.title
+            ),
+            React.createElement(
+              "button",
+              {
+                ...createScopeAttributes("date-picker", "next", descriptor.state),
+                type: "button",
+                "aria-label": resolvedNextLabel,
+                onClick: (event) => updateMonth(addCalendarMonths(model.month, 1), event, "next")
+              },
+              resolveIconContent(undefined, "expand")
+            )
+          ),
+          React.createElement(
+            "div",
+            {
+              ...createScopeAttributes("date-picker", "grid", descriptor.state),
+              id: gridId,
+              role: "grid",
+              "aria-label": model.title
+            },
+            model.weekDayLabels.map((dayLabel, index) =>
+              React.createElement(
+                "span",
+                {
+                  ...createScopeAttributes("date-picker", "week-header", descriptor.state),
+                  key: `${dayLabel}-${index}`,
+                  role: "columnheader"
+                },
+                dayLabel
+              )
+            ),
+            model.cells.map((cell) => {
+              const cellState = cell.disabled
+                ? "disabled"
+                : cell.selected
+                  ? "active"
+                  : descriptor.state;
+              return React.createElement(
+                "button",
+                {
+                  ...createScopeAttributes("date-picker", "cell", cellState),
+                  id: `${calendarId}-cell-${cell.value}`,
+                  key: cell.value,
+                  type: "button",
+                  role: "gridcell",
+                  disabled: cell.disabled,
+                  tabIndex: cell.selected ? 0 : -1,
+                  "aria-selected": String(cell.selected),
+                  "aria-disabled": cell.disabled ? "true" : undefined,
+                  "data-date": cell.value,
+                  "data-selected": String(cell.selected),
+                  "data-today": String(cell.today),
+                  "data-outside-month": String(cell.outsideMonth),
+                  onClick: (event) => {
+                    if (commitDate(cell.value, event, "calendar")) {
+                      updateOpen(false, event);
+                    }
+                  }
+                },
+                cell.label
+              );
+            })
+          )
+        )
+      : null,
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsDatePicker.displayName = "ChipsDatePicker";
+
+function getTimeKeyTarget(currentValue, key, model) {
+  if (key === "ArrowUp" || key === "ArrowRight") {
+    return getNextIsoTime(currentValue || model.value || model.min || "00:00", model.step, model);
+  }
+  if (key === "ArrowDown" || key === "ArrowLeft") {
+    return getNextIsoTime(currentValue || model.value || model.min || "00:00", -model.step, model);
+  }
+  if (key === "PageUp") {
+    return getNextIsoTime(currentValue || model.value || model.min || "00:00", model.step * 10, model);
+  }
+  if (key === "PageDown") {
+    return getNextIsoTime(currentValue || model.value || model.min || "00:00", -model.step * 10, model);
+  }
+  if (key === "Home") {
+    return model.min || model.options.find((option) => !option.disabled)?.value || "00:00";
+  }
+  if (key === "End") {
+    return model.max || [...model.options].reverse().find((option) => !option.disabled)?.value || "23:59";
+  }
+  return "";
+}
+
+export const ChipsTimePicker = React.forwardRef((props, ref) => {
+  const {
+    id,
+    value,
+    defaultValue = "",
+    textValue,
+    defaultTextValue,
+    open,
+    defaultOpen = false,
+    min,
+    max,
+    step = 60,
+    optionStep,
+    showSeconds = false,
+    options,
+    limitOptionsToRange = true,
+    disabled = false,
+    loading = false,
+    error = null,
+    readOnly = false,
+    required = false,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    placeholder,
+    name,
+    triggerLabel,
+    triggerLabelKey,
+    fallbackTriggerLabel = "Open time list",
+    invalidMessage,
+    invalidMessageKey = "component.timePicker.invalid",
+    fallbackInvalidMessage = "Invalid time",
+    triggerContent,
+    isTimeDisabled,
+    i18n,
+    onValueChange,
+    onInputChange,
+    onOpenChange,
+    onStateChange,
+    onKeyDown,
+    onChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const descriptorParams = {
+    scope: "time-picker",
+    value: textValue,
+    defaultValue: defaultTextValue,
+    disabled,
+    loading,
+    error,
+    readOnly,
+    required,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    description,
+    descriptionKey,
+    descriptionParams,
+    fallbackDescription,
+    ariaLabel: ariaLabel || rest["aria-label"],
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy: rest["aria-labelledby"],
+    ariaDescribedBy: rest["aria-describedby"],
+    i18n,
+    onDiagnostic
+  };
+  assertInputAccessibleName(
+    resolveInputDescriptor(descriptorParams),
+    "TIME_PICKER_A11Y_LABEL_REQUIRED"
+  );
+
+  const controlledValue = value !== undefined;
+  const controlledText = textValue !== undefined;
+  const controlledOpen = open !== undefined;
+  const [internalValue, setInternalValue] = React.useState(() => clampIsoTime(defaultValue, { min, max, step, showSeconds, isTimeDisabled }));
+  const [internalText, setInternalText] = React.useState(() => {
+    if (defaultTextValue !== undefined) {
+      return String(defaultTextValue);
+    }
+    return clampIsoTime(defaultValue, { min, max, step, showSeconds, isTimeDisabled });
+  });
+  const [internalOpen, setInternalOpen] = React.useState(defaultOpen === true);
+  const currentValue = controlledValue
+    ? clampIsoTime(value, { min, max, step, showSeconds, isTimeDisabled })
+    : internalValue;
+  const currentText = controlledText ? String(textValue) : internalText;
+  const currentOpen = controlledOpen ? open === true : internalOpen;
+  const baseModel = resolveTimePickerModel({
+    value: currentValue,
+    text: currentText,
+    min,
+    max,
+    step,
+    optionStep,
+    showSeconds,
+    options,
+    limitOptionsToRange,
+    isTimeDisabled
+  });
+  const resolvedInvalidMessage = resolveAccessibleText({
+    value: invalidMessage,
+    key: invalidMessageKey,
+    fallback: fallbackInvalidMessage,
+    i18n,
+    onDiagnostic
+  });
+  const effectiveError = normalizeError(error) || (
+    baseModel.invalid
+      ? { code: "TIME_PICKER_VALUE_INVALID", message: resolvedInvalidMessage }
+      : null
+  );
+  const disabledForInteraction = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledForInteraction);
+  const descriptor = resolveInputDescriptor({
+    ...descriptorParams,
+    value: currentText,
+    defaultValue: undefined,
+    error: effectiveError,
+    interaction
+  });
+  const model = resolveTimePickerModel({
+    value: currentValue,
+    text: currentText,
+    min,
+    max,
+    step,
+    optionStep,
+    showSeconds,
+    options,
+    limitOptionsToRange,
+    isTimeDisabled
+  });
+  const generatedInputId = React.useId();
+  const inputId = id || generatedInputId;
+  const listId = `${inputId}-list`;
+  const activeOption = model.options.find((option) => option.value === model.value && !option.disabled)
+    ?? model.options.find((option) => option.value === model.textValue && !option.disabled)
+    ?? model.options.find((option) => !option.disabled);
+  const activeOptionValue = activeOption?.value ?? "";
+  const activeOptionId = activeOptionValue ? `${listId}-option-${activeOptionValue}` : undefined;
+  const resolvedTriggerLabel = resolveAccessibleText({
+    value: triggerLabel,
+    key: triggerLabelKey,
+    fallback: fallbackTriggerLabel,
+    i18n,
+    onDiagnostic
+  });
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(descriptor.state);
+    }
+  }, [descriptor.state, onStateChange]);
+
+  const updateOpen = (nextOpen, event) => {
+    if (!controlledOpen) {
+      setInternalOpen(nextOpen);
+    }
+    if (typeof onOpenChange === "function") {
+      onOpenChange(nextOpen, event);
+    }
+  };
+
+  const commitTime = (nextValue, event, source) => {
+    if (descriptor.disabledByState || descriptor.readOnly) {
+      event?.preventDefault?.();
+      return false;
+    }
+
+    const normalized = clampIsoTime(nextValue, { min, max, step, showSeconds, isTimeDisabled });
+    const invalid = !normalized || isIsoTimeDisabled(normalized, { min, max, step, showSeconds, isTimeDisabled });
+    if (invalid) {
+      return false;
+    }
+
+    if (!controlledValue) {
+      setInternalValue(normalized);
+    }
+    if (!controlledText) {
+      setInternalText(normalized);
+    }
+    if (typeof onValueChange === "function") {
+      onValueChange(
+        normalized,
+        createPickerChangeDetails({
+          source,
+          previousValue: currentValue,
+          value: normalized,
+          text: normalized,
+          invalid: false
+        }),
+        event
+      );
+    }
+    return true;
+  };
+
+  const commitText = (event, source) => {
+    const normalized = clampIsoTime(currentText, { min, max, step, showSeconds, isTimeDisabled });
+    if (!normalized) {
+      return false;
+    }
+    return commitTime(normalized, event, source);
+  };
+
+  const handleTextChange = (event) => {
+    if (typeof onChange === "function") {
+      onChange(event);
+    }
+    if (!controlledText) {
+      setInternalText(event.target.value);
+    }
+    if (typeof onInputChange === "function") {
+      onInputChange(event.target.value, event);
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      if (commitText(event, "commit")) {
+        updateOpen(false, event);
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      updateOpen(false, event);
+      if (!controlledText) {
+        setInternalText(currentValue);
+      }
+    } else if (event.key === "ArrowDown" && !currentOpen) {
+      event.preventDefault();
+      updateOpen(true, event);
+    } else {
+      const target = getTimeKeyTarget(activeOptionValue || currentText || currentValue, event.key, model);
+      if (target) {
+        event.preventDefault();
+        commitTime(target, event, "keyboard");
+      }
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("time-picker", "root", descriptor.state),
+      ...handlers,
+      "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+      "aria-invalid": model.invalid ? "true" : undefined,
+      "aria-required": descriptor.required ? "true" : undefined,
+      "data-open": String(currentOpen),
+      "data-required": String(descriptor.required),
+      "data-readonly": String(descriptor.readOnly),
+      "data-invalid": model.invalid ? "true" : "false"
+    },
+    descriptor.label
+      ? React.createElement(
+          "label",
+          {
+            ...createScopeAttributes("time-picker", "label", descriptor.state),
+            htmlFor: inputId
+          },
+          descriptor.label
+        )
+      : null,
+    React.createElement(
+      "span",
+      createScopeAttributes("time-picker", "control", descriptor.state),
+      React.createElement("input", {
+        ...createScopeAttributes("time-picker", "input", descriptor.state),
+        ref,
+        id: inputId,
+        role: "combobox",
+        type: "text",
+        name,
+        placeholder,
+        inputMode: "numeric",
+        autoComplete: "off",
+        disabled: descriptor.disabledByState,
+        readOnly: descriptor.readOnly,
+        required: descriptor.required,
+        value: currentText,
+        "aria-label": descriptor.ariaLabel,
+        "aria-labelledby": descriptor.ariaLabelledBy,
+        "aria-describedby": descriptor.describedBy,
+        "aria-invalid": model.invalid ? "true" : undefined,
+        "aria-disabled": descriptor.disabledByState ? "true" : undefined,
+        "aria-required": descriptor.required ? "true" : undefined,
+        "aria-readonly": descriptor.readOnly ? "true" : undefined,
+        "aria-expanded": String(currentOpen),
+        "aria-controls": listId,
+        "aria-activedescendant": currentOpen ? activeOptionId : undefined,
+        onChange: handleTextChange,
+        onFocus: handlers.onFocus,
+        onBlur: handlers.onBlur,
+        onKeyDown: handleKeyDown
+      }),
+      React.createElement(
+        "button",
+        {
+          ...createScopeAttributes("time-picker", "trigger", descriptor.state),
+          type: "button",
+          disabled: descriptor.disabledByState || descriptor.readOnly,
+          "aria-label": resolvedTriggerLabel,
+          "aria-haspopup": "listbox",
+          "aria-expanded": String(currentOpen),
+          "aria-controls": listId,
+          onClick: (event) => updateOpen(!currentOpen, event)
+        },
+        resolveIconContent(triggerContent, "time")
+      )
+    ),
+    currentOpen
+      ? React.createElement(
+          "ul",
+          {
+            ...createScopeAttributes("time-picker", "list", descriptor.state),
+            id: listId,
+            role: "listbox"
+          },
+          model.options.map((option) => {
+            const selected = option.value === currentValue;
+            const highlighted = option.value === activeOptionValue;
+            const optionState = option.disabled
+              ? "disabled"
+              : highlighted
+                ? "active"
+                : descriptor.state;
+            return React.createElement(
+              "li",
+              {
+                ...createScopeAttributes("time-picker", "option", optionState),
+                id: `${listId}-option-${option.value}`,
+                key: option.value,
+                role: "option",
+                "aria-selected": String(selected),
+                "aria-disabled": option.disabled ? "true" : undefined,
+                "data-selected": String(selected),
+                "data-highlighted": String(highlighted),
+                "data-value": option.value,
+                onMouseDown: (event) => {
+                  event.preventDefault();
+                  if (!option.disabled && commitTime(option.value, event, "list")) {
+                    updateOpen(false, event);
+                  }
+                }
+              },
+              option.label
+            );
+          })
+        )
+      : null,
+    renderInputDescription(descriptor),
+    renderInputStatus(descriptor)
+  );
+});
+
+ChipsTimePicker.displayName = "ChipsTimePicker";
+
 export const ChipsDialog = React.forwardRef((props, ref) => {
   const {
     open,
@@ -11049,6 +12453,34 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "date-picker") {
+    assertAriaProps(props, {
+      role: "combobox",
+      requireLabel: true,
+      requireControlsWhenExpanded: true
+    });
+    if (props["aria-expanded"] !== "true" && props["aria-expanded"] !== "false") {
+      const error = new Error("Date picker input must expose aria-expanded.");
+      error.code = "A11Y_DATE_PICKER_EXPANDED_MISSING";
+      throw error;
+    }
+    return true;
+  }
+
+  if (component === "time-picker") {
+    assertAriaProps(props, {
+      role: "combobox",
+      requireLabel: true,
+      requireControlsWhenExpanded: true
+    });
+    if (props["aria-expanded"] !== "true" && props["aria-expanded"] !== "false") {
+      const error = new Error("Time picker input must expose aria-expanded.");
+      error.code = "A11Y_TIME_PICKER_EXPANDED_MISSING";
+      throw error;
+    }
+    return true;
+  }
+
   if (component === "dialog") {
     assertAriaProps(props, {
       role: "button",
@@ -11392,6 +12824,34 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     name: "ChipsSlider",
     scope: "slider",
     parts: ["root", "label", "track", "range", "thumb", "value", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsDatePicker",
+    scope: "date-picker",
+    parts: [
+      "root",
+      "label",
+      "control",
+      "input",
+      "trigger",
+      "calendar",
+      "header",
+      "previous",
+      "next",
+      "title",
+      "grid",
+      "week-header",
+      "cell",
+      "description",
+      "status"
+    ],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsTimePicker",
+    scope: "time-picker",
+    parts: ["root", "label", "control", "input", "trigger", "list", "option", "description", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

@@ -79,6 +79,8 @@ test("task015 base control contracts expose button display feedback and input sc
   const numberInput = readContract("number-input.contract.json");
   const stepper = readContract("stepper.contract.json");
   const slider = readContract("slider.contract.json");
+  const datePicker = readContract("date-picker.contract.json");
+  const timePicker = readContract("time-picker.contract.json");
 
   for (const contract of [
     iconButton,
@@ -96,7 +98,9 @@ test("task015 base control contracts expose button display feedback and input sc
     comboBox,
     numberInput,
     stepper,
-    slider
+    slider,
+    datePicker,
+    timePicker
   ]) {
     assertCommonShape(contract);
   }
@@ -134,6 +138,10 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(stepper.tokens.includes("chips.comp.stepper.increment.surface.active"));
   assert.ok(slider.parts.includes("thumb"));
   assert.ok(slider.tokens.includes("chips.comp.slider.thumb.surface.active"));
+  assert.ok(datePicker.parts.includes("calendar"));
+  assert.ok(datePicker.tokens.includes("chips.comp.date-picker.cell.surface.selected"));
+  assert.ok(timePicker.parts.includes("option"));
+  assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
 });
 
 test("only advanced iframe components expose iframe contract extension", () => {
@@ -290,6 +298,21 @@ test("date-time contract contains input border error token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("input"));
   assert.ok(contract.tokens.includes("chips.comp.date-time.input.border.error"));
+});
+
+test("date and time picker contracts contain picker structure tokens", () => {
+  const datePicker = readContract("date-picker.contract.json");
+  const timePicker = readContract("time-picker.contract.json");
+  assertCommonShape(datePicker);
+  assertCommonShape(timePicker);
+  assert.ok(datePicker.parts.includes("calendar"));
+  assert.ok(datePicker.parts.includes("cell"));
+  assert.ok(datePicker.tokens.includes("chips.comp.date-picker.calendar.surface"));
+  assert.ok(datePicker.tokens.includes("chips.comp.date-picker.cell.surface.selected"));
+  assert.ok(timePicker.parts.includes("list"));
+  assert.ok(timePicker.parts.includes("option"));
+  assert.ok(timePicker.tokens.includes("chips.comp.time-picker.list.surface"));
+  assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
 });
 
 test("command-palette contract contains shortcut token", () => {

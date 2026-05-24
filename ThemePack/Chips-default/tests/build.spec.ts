@@ -34,6 +34,10 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain('data-scope="number-input"');
     expect(themeCss).toContain('data-scope="stepper"');
     expect(themeCss).toContain('data-scope="slider"');
+    expect(themeCss).toContain('data-scope="date-picker"');
+    expect(themeCss).toContain('data-scope="time-picker"');
+    expect(themeCss).toContain("--chips-comp-date-picker-cell-surface-selected");
+    expect(themeCss).toContain("--chips-comp-time-picker-option-surface-selected");
     expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');

@@ -47,6 +47,8 @@ ensureRequiredTokenPrefixes(resolved, [
   "chips.comp.number-input.",
   "chips.comp.stepper.",
   "chips.comp.slider.",
+  "chips.comp.date-picker.",
+  "chips.comp.time-picker.",
   "chips.comp.button.",
   "chips.comp.input.",
   "chips.comp.checkbox.",

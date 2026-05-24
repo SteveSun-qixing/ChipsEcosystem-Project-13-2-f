@@ -187,6 +187,14 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       );
     }
     assert.ok(
+      packageContent.scripts["preview:smoke"].includes("reports/preview/app-preview-smoke.json"),
+      "preview:smoke 应把报告归档到 reports/preview/app-preview-smoke.json",
+    );
+    assert.ok(
+      packageContent.scripts["quality:gate"].includes("reports/quality/quality-gate.json"),
+      "quality:gate 应把报告归档到 reports/quality/quality-gate.json",
+    );
+    assert.ok(
       packageContent.scripts.verify.includes("npm run preview:smoke") &&
         packageContent.scripts.verify.includes("npm run quality:gate"),
       "verify 脚本应串联预览 smoke 与质量门禁",

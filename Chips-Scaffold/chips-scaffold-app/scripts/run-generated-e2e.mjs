@@ -16,6 +16,36 @@ async function symlinkDir(sourceDir, targetDir) {
   await symlink(sourceDir, targetDir, linkType);
 }
 
+async function readJsonReport(projectDir, relativePath, expectedKind) {
+  const reportPath = path.join(projectDir, relativePath);
+  let report;
+  try {
+    report = JSON.parse(await readFile(reportPath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `E2E: 无法读取报告 ${relativePath}：${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (report.kind !== expectedKind) {
+    throw new Error(`E2E: 报告 ${relativePath} kind 应为 ${expectedKind}`);
+  }
+  return report;
+}
+
+function requireReportCheck(report, reportName, checkName, allowedStatuses = ["passed"]) {
+  const checks = Array.isArray(report.checks) ? report.checks : [];
+  const check = checks.find((entry) => entry.name === checkName);
+  if (!check) {
+    throw new Error(`E2E: ${reportName} 缺少检查项 ${checkName}`);
+  }
+  if (!allowedStatuses.includes(check.status)) {
+    throw new Error(
+      `E2E: ${reportName} 检查项 ${checkName} 状态应为 ${allowedStatuses.join("/")}，实际为 ${check.status}`,
+    );
+  }
+  return check;
+}
+
 async function createWorkspaceSandbox(sandboxRoot) {
   await writeFile(
     path.join(sandboxRoot, "package.json"),
@@ -279,6 +309,60 @@ async function main() {
       if (!zhCnText.includes(key) || !enUsText.includes(key)) {
         throw new Error(`E2E: i18n 文件缺少 key：${key}`);
       }
+    }
+
+    const previewReport = await readJsonReport(
+      projectDir,
+      path.join("reports", "preview", "app-preview-smoke.json"),
+      "chipsdev.preview",
+    );
+    if (previewReport.previewPlan?.mode !== "mock" || previewReport.previewPlan?.target !== "app") {
+      throw new Error("E2E: preview smoke 报告必须记录 mock/app 预览计划");
+    }
+    if (previewReport.previewPlan?.reportOnly !== true) {
+      throw new Error("E2E: preview smoke 当前必须保持 reportOnly 报告边界");
+    }
+    if (previewReport.summary?.blockingCheckCount !== 0) {
+      throw new Error("E2E: preview smoke 报告不得存在阻断检查");
+    }
+    for (const checkName of [
+      "project.config",
+      "manifest",
+      "manifest.runtimeTargets",
+      "manifest.surface",
+      "manifest.entryAsset",
+      "host.mock",
+    ]) {
+      requireReportCheck(previewReport, "preview smoke 报告", checkName);
+    }
+    requireReportCheck(previewReport, "preview smoke 报告", "host.realWorkspace", ["passed", "warning"]);
+
+    const qualityReport = await readJsonReport(
+      projectDir,
+      path.join("reports", "quality", "quality-gate.json"),
+      "chipsdev.quality.gate",
+    );
+    if (qualityReport.project?.manifestType !== "app") {
+      throw new Error("E2E: quality gate 报告必须识别生成工程为 app 插件");
+    }
+    if (qualityReport.summary?.failedCheckCount !== 0) {
+      throw new Error("E2E: quality gate 报告不得存在 failed 检查");
+    }
+    for (const check of Array.isArray(qualityReport.checks) ? qualityReport.checks : []) {
+      if (check.status === "failed") {
+        throw new Error(`E2E: quality gate 检查项 ${check.name} 不得失败`);
+      }
+    }
+    for (const checkName of [
+      "project.package",
+      "project.chipsConfig",
+      "project.manifest",
+      "sdk.routeManifest",
+      "componentLibrary.qualityGateLatest",
+      "componentLibrary.perfLatest",
+      "theme.inspect",
+    ]) {
+      requireReportCheck(qualityReport, "quality gate 报告", checkName, ["passed", "warning"]);
     }
   } finally {
     await rm(sandboxRoot, { recursive: true, force: true });

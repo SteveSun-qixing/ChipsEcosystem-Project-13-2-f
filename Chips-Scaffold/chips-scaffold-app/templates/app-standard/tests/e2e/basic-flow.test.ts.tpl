@@ -15,7 +15,9 @@ describe("应用插件预览与质量脚本 smoke", () => {
     const pkg = JSON.parse(readProjectFile("package.json"));
     expect(pkg.scripts.typecheck).toBe("tsc -p tsconfig.json --noEmit");
     expect(pkg.scripts["preview:smoke"]).toContain("chipsdev preview --mode mock --target app");
+    expect(pkg.scripts["preview:smoke"]).toContain("reports/preview/app-preview-smoke.json");
     expect(pkg.scripts["quality:gate"]).toContain("chipsdev quality gate");
+    expect(pkg.scripts["quality:gate"]).toContain("reports/quality/quality-gate.json");
     expect(pkg.scripts.verify).toContain("npm run preview:smoke");
     expect(pkg.scripts.verify).toContain("npm run quality:gate");
   });
@@ -40,6 +42,7 @@ describe("应用插件预览与质量脚本 smoke", () => {
     expect(manifest).toContain("type: app");
     expect(manifest).not.toMatch(/^commands\s*:/m);
     expect(previewSmoke).toContain("chipsdev.preview");
+    expect(previewSmoke).toContain("reportOnly");
     expect(previewSmoke).toContain("manifest.runtimeTargets");
     expect(previewSmoke).toContain("manifest.surface");
     expect(sourceBundle).toContain("ChipsNavigationSplitView.Sidebar");

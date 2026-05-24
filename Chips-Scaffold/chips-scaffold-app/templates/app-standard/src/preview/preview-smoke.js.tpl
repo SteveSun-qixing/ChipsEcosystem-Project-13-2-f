@@ -35,6 +35,9 @@ if (report) {
   if (report.previewPlan?.mode !== "mock" || report.previewPlan?.target !== "app") {
     fail("预览计划必须使用 mock/app");
   }
+  if (report.previewPlan?.reportOnly !== true) {
+    fail("预览 smoke 当前必须保持报告级边界");
+  }
 
   const checks = Array.isArray(report.checks) ? report.checks : [];
   for (const requiredCheck of [

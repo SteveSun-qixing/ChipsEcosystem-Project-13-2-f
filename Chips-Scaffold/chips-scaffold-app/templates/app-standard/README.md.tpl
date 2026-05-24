@@ -23,9 +23,11 @@ npm run dev
 - `npm test`：运行单元测试与 e2e smoke。
 - `npm run build`：构建应用插件产物。
 - `npm run validate`：校验 manifest 与构建产物。
-- `npm run preview:smoke`：生成 Host mock 预览链路报告并校验报告。
-- `npm run quality:gate`：生成生态质量门禁摘要报告。
+- `npm run preview:smoke`：生成 Host mock 预览链路报告并校验报告，报告写入 `reports/preview/app-preview-smoke.json`。
+- `npm run quality:gate`：生成生态质量门禁摘要报告，报告写入 `reports/quality/quality-gate.json`。
 - `npm run verify`：串联执行完整本地验证。
+
+`reports/` 是本地验证产物目录，默认不纳入版本管理。`preview:smoke` 是报告级 smoke，用于确认 mock 预览、manifest、surface 与入口资产状态；真实 Host 窗口联调仍使用 `chipsdev run`。`quality:gate` 是生态态势摘要，失败检查会阻断本地验证，warning 需要开发者按报告判断。
 
 ## 目录结构
 

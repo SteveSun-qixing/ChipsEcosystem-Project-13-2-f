@@ -178,6 +178,18 @@ async function main() {
         );
         hasError = true;
       }
+      if (!packageJson.scripts?.["preview:smoke"]?.includes("reports/preview/app-preview-smoke.json")) {
+        console.error(
+          `[check-templates] 模板 ${dir} preview:smoke 必须归档报告到 reports/preview/app-preview-smoke.json`,
+        );
+        hasError = true;
+      }
+      if (!packageJson.scripts?.["quality:gate"]?.includes("reports/quality/quality-gate.json")) {
+        console.error(
+          `[check-templates] 模板 ${dir} quality:gate 必须归档报告到 reports/quality/quality-gate.json`,
+        );
+        hasError = true;
+      }
 
       const manifestText = await readFile(path.join(base, "manifest.yaml.tpl"), "utf8");
       for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
@@ -325,6 +337,21 @@ async function main() {
         if (!appTestText.includes(requiredText)) {
           console.error(
             `[check-templates] 模板 ${dir} app 单元测试缺少同步 i18n adapter 覆盖：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const previewSmokeText = await readFile(path.join(base, "src/preview/preview-smoke.js.tpl"), "utf8");
+      for (const requiredText of [
+        "reports/preview/app-preview-smoke.json",
+        "chipsdev.preview",
+        "reportOnly",
+        "blockingCheckCount",
+      ]) {
+        if (!previewSmokeText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} preview smoke 校验缺少：${requiredText}`,
           );
           hasError = true;
         }

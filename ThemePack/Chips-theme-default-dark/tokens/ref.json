@@ -18,8 +18,18 @@
         "blue-500": "#4e99ff",
         "blue-600": "#367fe0",
         "blue-700": "#2968ba",
+        "green-300": "#86efac",
+        "green-400": "#4ade80",
+        "green-700": "#15803d",
+        "yellow-300": "#fde68a",
+        "yellow-400": "#fcd34d",
+        "yellow-700": "#b45309",
+        "cyan-300": "#67e8f9",
+        "cyan-400": "#22d3ee",
+        "cyan-700": "#0e7490",
         "red-400": "#ff7f8d",
-        "red-500": "#e35d6a"
+        "red-500": "#e35d6a",
+        "red-700": "#b91c1c"
       },
       "radius": {
         "sm": "6px",

@@ -3,16 +3,16 @@
     "comp": {
       "shortcut": {
         "root": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.sys.color.surface-raised}"
         },
         "key": {
-          "surface": "{chips.sys.color.surface}",
+          "surface": "{chips.sys.color.surface-elevated}",
           "text": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.sys.color.on-surface-muted}"
           }
         },
         "separator": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.sys.color.on-surface-soft}"
         }
       }
     }

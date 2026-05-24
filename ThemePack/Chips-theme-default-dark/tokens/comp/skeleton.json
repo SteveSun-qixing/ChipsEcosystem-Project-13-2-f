@@ -13,7 +13,7 @@
         },
         "status": {
           "color": {
-            "info": "{chips.sys.color.primary}"
+            "info": "{chips.sys.color.info}"
           }
         },
         "focus": {

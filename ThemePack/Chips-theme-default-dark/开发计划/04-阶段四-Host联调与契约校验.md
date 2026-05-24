@@ -75,11 +75,11 @@
     - `schemaVersion: "1.0.0"`；
     - `publisher: "薯片官方"`；
     - `entry.tokens: "dist/tokens.json"`（五层 token JSON 入口）；
-    - `entry.themeCss: "theme.css"`（聚合 CSS 入口）；
+    - `entry.themeCss: "dist/theme.css"`（聚合 CSS 入口）；
     - 保持 `id: "theme.theme.chips-official-default-dark-theme"`、`type: "theme"` 不变。
 - 工作空间：
   - 通过 `chips workspace set` 将工作空间指向本仓内测试目录：
-    - `/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/.chips-workspace/theme-default-demo`。
+    - `.chips-workspace/theme-default-demo`。
 - 安装与启用：
   - 安装（按当前 CLI 口径）：
     - `chips plugin install /Users/.../ThemePack/Chips-theme-default-dark/chips-default-dark-theme.cpk`

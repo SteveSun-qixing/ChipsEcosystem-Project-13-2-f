@@ -174,6 +174,11 @@ test("system token layer exists", () => {
 
   assert.ok(getPath(sys, "chips.sys.color.surface"));
   assert.ok(getPath(sys, "chips.sys.color.error"));
+  for (const tone of ["success", "warning", "info", "danger", "error"]) {
+    assert.ok(getPath(sys, `chips.sys.color.${tone}`));
+    assert.ok(getPath(sys, `chips.sys.color.${tone}-surface`));
+    assert.ok(getPath(sys, `chips.sys.color.${tone}-contrast`));
+  }
   assert.equal(getPath(sys, "chips.sys.icon.color"), "{chips.ref.color.gray-1000}");
   assert.equal(getPath(sys, "chips.sys.icon.size"), "1em");
   assert.equal(getPath(sys, "chips.sys.icon.fill"), 0);

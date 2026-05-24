@@ -15,7 +15,7 @@
         },
         "item": {
           "surface": {
-            "active": "{chips.sys.color.surface-accent}"
+            "active": "{chips.sys.color.info-surface}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
@@ -27,7 +27,7 @@
           }
         },
         "shortcut": {
-          "color": "{chips.sys.color.on-surface-soft}"
+          "color": "{chips.sys.color.info}"
         },
         "focus": {
           "outline": "{chips.sys.color.focus-ring}"

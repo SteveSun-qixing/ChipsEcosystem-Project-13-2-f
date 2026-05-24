@@ -114,6 +114,8 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `chips.sys.icon.color/size/fill/wght/grad/opsz` 属于 `@chips/tokens` 的 public sys token source。主题包可以覆盖这些 token 的具体值，但不得只在主题包内私自新增公共图标 sys key；新增或改名必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
 
+`chips.sys.color.success / warning / info / danger / error` 以及对应 `*-surface`、`*-contrast` 是生态公开状态色语义基线，适用于 Badge、Tag、加载/空态/错误态、命令反馈、表单状态和应用通知等跨项目场景。主题包可以按外观校准这些 token 的具体色值，但不得在单个主题包中私自新增另一套公共状态色 key；新增、改名或删除状态色 key 必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
+
 任务015第二批基础控件 token 是按钮派生、轻量展示和反馈控件的正式契约，默认主题和暗色主题必须覆盖：
 
 - `chips.comp.icon-button.*`

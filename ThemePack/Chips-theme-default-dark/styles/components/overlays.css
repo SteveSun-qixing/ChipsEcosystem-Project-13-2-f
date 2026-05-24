@@ -151,6 +151,248 @@
   outline-offset: 2px;
 }
 
+/* Command consumers */
+
+[data-scope="toolbar"][data-part="root"] {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-comp-toolbar-group-gap, var(--chips-base-space-2));
+  min-block-size: var(--chips-layout-density-compact, 32cpx);
+  padding-inline: var(--chips-base-space-2);
+  background-color: var(--chips-comp-toolbar-root-surface);
+  color: var(--chips-sys-color-on-surface, #f5f7fb);
+  border-block-end: 1px solid var(--chips-sys-color-border-subtle, #2a3242);
+}
+
+[data-scope="toolbar"][data-part="group"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--chips-comp-toolbar-group-gap, var(--chips-base-space-2));
+}
+
+[data-scope="toolbar"][data-part="item"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--chips-base-space-2);
+  min-block-size: var(--chips-layout-density-compact, 32cpx);
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-toolbar-item-surface-idle);
+  color: var(--chips-comp-toolbar-item-text-color);
+  padding-inline: var(--chips-base-space-2);
+  font: inherit;
+}
+
+[data-scope="toolbar"][data-part="item"][data-state="hover"],
+[data-scope="toolbar"][data-part="item"]:hover {
+  background-color: var(--chips-comp-toolbar-item-surface-hover);
+}
+
+[data-scope="toolbar"][data-part="item"][data-state="active"],
+[data-scope="toolbar"][data-part="item"][data-checked="true"] {
+  background-color: var(--chips-comp-toolbar-item-surface-active);
+}
+
+[data-scope="toolbar"][data-part="item"][data-state="disabled"],
+[data-scope="toolbar"][data-part="item"]:disabled {
+  background-color: var(--chips-comp-toolbar-item-surface-disabled);
+  color: var(--chips-sys-color-on-surface-soft, #8f99ad);
+  opacity: 0.55;
+}
+
+[data-scope="toolbar"][data-part="icon"] {
+  color: var(--chips-comp-toolbar-item-icon-color);
+}
+
+[data-scope="toolbar"][data-part="shortcut"],
+[data-scope="menu-bar"][data-part="shortcut"],
+[data-scope="context-menu"][data-part="shortcut"] {
+  margin-inline-start: auto;
+  color: var(--chips-comp-toolbar-item-text-color);
+  font-size: 12px;
+}
+
+[data-scope="menu-bar"][data-part="shortcut"] {
+  color: var(--chips-comp-menu-bar-shortcut-color);
+}
+
+[data-scope="context-menu"][data-part="shortcut"] {
+  color: var(--chips-comp-context-menu-shortcut-color);
+}
+
+[data-scope="toolbar"][data-part="root"][data-state="focus"],
+[data-scope="toolbar"][data-part="item"]:focus-visible {
+  outline: var(--chips-layout-focus-outline-width, 1px) solid var(--chips-comp-toolbar-focus-outline);
+  outline-offset: var(--chips-layout-focus-outline-offset, 2px);
+}
+
+[data-scope="toolbar"][data-part="status"],
+[data-scope="menu-bar"][data-part="status"],
+[data-scope="context-menu"][data-part="status"] {
+  color: var(--chips-sys-color-error);
+  font-size: 12px;
+}
+
+[data-scope="menu-bar"][data-part="root"] {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-base-space-1, 4px);
+  min-block-size: var(--chips-layout-density-compact, 32cpx);
+  background-color: var(--chips-comp-menu-bar-root-surface);
+  color: var(--chips-sys-color-on-surface, #f5f7fb);
+  border-block-end: 1px solid var(--chips-sys-color-border-subtle, #2a3242);
+}
+
+[data-scope="menu-bar"][data-part="menu"] {
+  position: relative;
+  display: inline-flex;
+}
+
+button[data-scope="menu-bar"][data-part="menu"] {
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-menu-bar-menu-surface-idle);
+  color: inherit;
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  font: inherit;
+}
+
+button[data-scope="menu-bar"][data-part="menu"][data-state="hover"],
+button[data-scope="menu-bar"][data-part="menu"]:hover,
+button[data-scope="menu-bar"][data-part="menu"][aria-expanded="true"] {
+  background-color: var(--chips-comp-menu-bar-menu-surface-hover);
+}
+
+[data-scope="menu-bar"][data-part="content"],
+[data-scope="context-menu"][data-part="content"] {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 180px;
+  margin: 0;
+  padding: var(--chips-base-space-2);
+  list-style: none;
+  border: 1px solid var(--chips-sys-color-border-subtle, #2a3242);
+  border-radius: var(--chips-base-radius-md);
+  background-color: var(--chips-comp-menu-bar-root-surface);
+  box-shadow: 0 18px 42px var(--chips-base-shadow-color);
+}
+
+[data-scope="context-menu"][data-part="content"] {
+  background-color: var(--chips-comp-context-menu-content-surface);
+}
+
+[data-scope="menu-bar"][data-part="group"],
+[data-scope="context-menu"][data-part="group"] {
+  list-style: none;
+}
+
+[data-scope="menu-bar"][data-part="group"] > ul,
+[data-scope="context-menu"][data-part="group"] > ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-scope="menu-bar"][data-part="item"],
+[data-scope="context-menu"][data-part="item"] {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-base-space-2);
+  inline-size: 100%;
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: transparent;
+  color: var(--chips-comp-menu-bar-item-text-color);
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  font: inherit;
+  text-align: start;
+}
+
+[data-scope="context-menu"][data-part="item"] {
+  color: var(--chips-comp-context-menu-item-text-color);
+}
+
+[data-scope="menu-bar"][data-part="item"][data-state="hover"],
+[data-scope="menu-bar"][data-part="item"]:hover {
+  background-color: var(--chips-comp-menu-bar-item-surface-hover);
+}
+
+[data-scope="context-menu"][data-part="item"][data-state="hover"],
+[data-scope="context-menu"][data-part="item"]:hover {
+  background-color: var(--chips-comp-context-menu-item-surface-hover);
+}
+
+[data-scope="menu-bar"][data-part="root"][data-state="focus"],
+[data-scope="menu-bar"][data-part="menu"]:focus-visible,
+[data-scope="menu-bar"][data-part="item"]:focus-visible {
+  outline: var(--chips-layout-focus-outline-width, 1px) solid var(--chips-comp-menu-bar-focus-outline);
+  outline-offset: var(--chips-layout-focus-outline-offset, 2px);
+}
+
+[data-scope="context-menu"][data-part="root"] {
+  position: relative;
+  display: inline-block;
+  background-color: var(--chips-comp-context-menu-root-surface);
+  color: var(--chips-sys-color-on-surface, #f5f7fb);
+}
+
+[data-scope="context-menu"][data-part="trigger"] {
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-context-menu-trigger-surface-idle);
+  color: inherit;
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  font: inherit;
+}
+
+[data-scope="context-menu"][data-part="root"][data-open="true"] [data-part="content"] {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  z-index: var(--chips-layout-z-index-overlay, 1000);
+}
+
+[data-scope="context-menu"][data-part="root"][data-state="focus"],
+[data-scope="context-menu"][data-part="trigger"]:focus-visible,
+[data-scope="context-menu"][data-part="item"]:focus-visible {
+  outline: var(--chips-layout-focus-outline-width, 1px) solid var(--chips-comp-context-menu-focus-outline);
+  outline-offset: var(--chips-layout-focus-outline-offset, 2px);
+}
+
+[data-scope="shortcut"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-shortcut-root-surface);
+  color: var(--chips-comp-shortcut-key-text-color);
+  padding: 2px 4px;
+  font: inherit;
+}
+
+[data-scope="shortcut"][data-part="key"] {
+  min-inline-size: 1.5em;
+  border-radius: calc(var(--chips-base-radius-sm) - 2px);
+  background-color: var(--chips-comp-shortcut-key-surface);
+  color: var(--chips-comp-shortcut-key-text-color);
+  padding-inline: 4px;
+  text-align: center;
+}
+
+[data-scope="shortcut"][data-part="separator"] {
+  color: var(--chips-comp-shortcut-separator-color);
+}
+
+[data-scope="shortcut"][data-part="root"][data-state="disabled"] {
+  opacity: 0.55;
+}
+
 /* Date-time input */
 
 [data-scope="date-time"][data-part="root"] {

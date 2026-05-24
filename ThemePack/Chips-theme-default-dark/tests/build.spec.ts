@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { validateTheme } from "../src/validate-theme";
 
 const run = (cmd: string, cwd: string): void => {
   execSync(cmd, { cwd, stdio: "inherit", env: { ...process.env, CI: "true" } });
@@ -63,5 +64,23 @@ describe("theme build pipeline", () => {
     await expect(
       fs.access(path.join(projectRoot, "dist", "icons", "variablefont", "MaterialSymbolsSharp[FILL,GRAD,opsz,wght].woff2"))
     ).resolves.toBeUndefined();
+  });
+
+  it("covers every component contract scope with theme CSS selectors", async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const [themeCss, validation] = await Promise.all([
+      fs.readFile(path.join(projectRoot, "dist", "theme.css"), "utf-8"),
+      validateTheme(projectRoot)
+    ]);
+    const missingScopes = validation.contract.components
+      .map((component) => component.scope)
+      .filter((scope) => !themeCss.includes(`data-scope="${scope}"`))
+      .sort();
+
+    expect(missingScopes).toEqual([]);
+    expect(themeCss).toContain('data-scope="toolbar"');
+    expect(themeCss).toContain('data-scope="menu-bar"');
+    expect(themeCss).toContain('data-scope="context-menu"');
+    expect(themeCss).toContain('data-scope="shortcut"');
   });
 });

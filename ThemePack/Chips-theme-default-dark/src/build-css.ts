@@ -72,7 +72,7 @@ const main = async (): Promise<void> => {
   let componentsCss = "";
   try {
     const componentsDir = path.join(stylesDir, "components");
-    const entries = await fs.readdir(componentsDir);
+    const entries = (await fs.readdir(componentsDir)).sort((left, right) => left.localeCompare(right));
     for (const name of entries) {
       if (!name.endsWith(".css")) {
         continue;

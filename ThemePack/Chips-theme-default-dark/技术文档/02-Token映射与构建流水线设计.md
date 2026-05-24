@@ -144,6 +144,10 @@
   - 覆盖缺失 required token 时的 `ThemeDiagnostic` 定位字段；
 - `src/validate-theme.ts`：
   - 作为 `npm run validate:theme` 的入口；
-  - 在构建后生成 `ThemeContractView` 并输出统一 `summary/diagnostics`，便于在 CI 中使用。
+  - 在构建后生成 `ThemeContractView` 并输出统一 `summary/diagnostics`，便于在 CI 中使用；
+  - 同时通过 `@chips/theme-contracts` 对比本地 `theme-interface.contract.json`、`theme-min-functional-set.json` 与组件库正式 component contract，防止暗夜主题发布产物漂移。
+- `src/build-contracts.ts`：
+  - 使用 `@chips/theme-contracts` 从 `Chips-ComponentLibrary/packages/theme-contracts/contracts/components/*.contract.json` 生成官方主题发布 contract；
+  - 本地 `contracts/` 下的 contract 文件是 Host 安装运行时消费的发布产物，不作为人工维护源。
 
-上述三个部分与 `build-tokens.ts` 共同构成暗夜主题包的最小质量门禁。
+上述部分与 `build-tokens.ts`、`build-contracts.ts` 共同构成暗夜主题包的最小质量门禁。

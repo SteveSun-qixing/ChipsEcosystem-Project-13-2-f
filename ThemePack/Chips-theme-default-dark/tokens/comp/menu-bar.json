@@ -3,27 +3,27 @@
     "comp": {
       "menu-bar": {
         "root": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.sys.color.surface-raised}"
         },
         "menu": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.surface}"
+            "idle": "transparent",
+            "hover": "{chips.sys.color.surface-elevated}"
           }
         },
         "item": {
           "surface": {
-            "hover": "{chips.sys.color.surface}"
+            "hover": "{chips.sys.color.info-surface}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
           }
         },
         "shortcut": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.sys.color.on-surface-soft}"
         },
         "focus": {
-          "outline": "{chips.sys.color.primary}"
+          "outline": "{chips.sys.color.focus-ring}"
         }
       }
     }

@@ -33,7 +33,7 @@
   - `styles/components/button.css`：按钮（`button`）。
   - `styles/components/input.css`：输入框（`input`）。
   - `styles/components/form-controls.css`：选择控件（`checkbox`、`radio`、`switch`、`select`）。
-  - `styles/components/overlays.css`：浮层组件（`dialog`、`popover`、`tooltip`、`command-palette`、`date-time`）。
+  - `styles/components/overlays.css`：浮层组件与命令消费组件（`dialog`、`popover`、`tooltip`、`command-palette`、`toolbar`、`menu-bar`、`context-menu`、`shortcut`、`date-time`）。
   - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form`、`virtual-list`、`data-grid`、`tree`、`navigation-split-view`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
   - `styles/components/feedback.css`：反馈与边界组件（`notification`、`toast`、`empty-state`、`skeleton`、`error-boundary`、`loading-boundary`、`card-cover-frame`、`composite-card-window`）。
 
@@ -157,6 +157,8 @@
 `tree` 在本主题中对齐任务016 Compound contract：只消费 `root / item / branch / leaf / disclosure / label / group / status` 公开 part，不依赖旧 `node / toggle / children`。树项基础视觉统一使用 `chips.comp.tree.item.*`，展开折叠入口使用 `chips.comp.tree.disclosure.color`，子树引导线使用 `chips.comp.tree.group.guide.color`。节点选中视觉必须匹配 `data-selected="true"`，层级缩进通过组件输出的 `--chips-tree-level` 与 `chips.comp.tree.branch.indent` token 计算。
 
 `navigation-split-view` 在本主题中对齐任务016.07 Compound contract：只消费 `root / sidebar / content / detail / divider / status` 公开 part，不复用 `split-view` 的 `primary / secondary` 主题入口。导航侧栏最小宽度使用 `chips.layout.size.navigation-primary-min`，中间内容栏使用 `chips.layout.size.split-secondary-min`，分割线厚度和焦点环继续消费 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
+
+`toolbar / menu-bar / context-menu / shortcut` 是命令消费组件的正式主题 scope。本主题在 `overlays.css` 中提供独立暗色样式：工具栏和菜单栏使用 `surface-raised` 层，菜单内容使用 `surface-elevated` 层，hover/active 使用低饱和 `info-surface`，焦点统一使用 `focus-ring`。这些组件只展示或消费 Host command/shortcut 链路的结果，不在主题包中实现命令注册、调度或快捷键处理。
 
 ---
 

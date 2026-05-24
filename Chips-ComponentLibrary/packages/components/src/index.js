@@ -376,6 +376,29 @@ function getNextNumericValue(currentValue, range, delta, fallbackValue = range.m
   return normalizeNumericValue(base + delta, range);
 }
 
+function getNumericRatio(value, range) {
+  const normalized = normalizeNumericValue(value, range) ?? range.min;
+  return clampNumber((normalized - range.min) / (range.max - range.min), 0, 1);
+}
+
+function getNumericValueFromPointer(event, range, orientation) {
+  return getNumericValueFromPointerTarget(event.currentTarget, event, range, orientation);
+}
+
+function getNumericValueFromPointerTarget(target, event, range, orientation) {
+  if (!target || typeof target.getBoundingClientRect !== "function") {
+    return null;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const horizontal = orientation !== "vertical";
+  const ratio = horizontal
+    ? (event.clientX - rect.left) / Math.max(rect.width, 1)
+    : 1 - ((event.clientY - rect.top) / Math.max(rect.height, 1));
+
+  return normalizeNumericValue(range.min + (clampNumber(ratio, 0, 1) * (range.max - range.min)), range);
+}
+
 export function resolveNumericControlModel(params = {}) {
   const range = normalizeNumericRange(params);
   const required = params.required === true;
@@ -405,6 +428,17 @@ export function resolveNumericControlModel(params = {}) {
     atMin: value !== null && value <= range.min,
     atMax: value !== null && value >= range.max,
     valueText: resolveNumericValueText(value, range, params.valueText, params.formatValue)
+  };
+}
+
+export function resolveSliderModel(params = {}) {
+  const model = resolveNumericControlModel(params);
+  const orientation = params.orientation === "vertical" ? "vertical" : "horizontal";
+
+  return {
+    ...model,
+    orientation,
+    ratio: getNumericRatio(model.value, model)
   };
 }
 
@@ -921,6 +955,27 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.stepper.status.color.error",
     "chips.comp.stepper.focus.outline"
   ],
+  slider: [
+    "chips.comp.slider.root.gap",
+    "chips.comp.slider.label.color",
+    "chips.comp.slider.track.height",
+    "chips.comp.slider.track.radius",
+    "chips.comp.slider.track.surface.idle",
+    "chips.comp.slider.track.surface.disabled",
+    "chips.comp.slider.range.surface.idle",
+    "chips.comp.slider.range.surface.disabled",
+    "chips.comp.slider.thumb.size",
+    "chips.comp.slider.thumb.radius",
+    "chips.comp.slider.thumb.surface.idle",
+    "chips.comp.slider.thumb.surface.hover",
+    "chips.comp.slider.thumb.surface.active",
+    "chips.comp.slider.thumb.surface.disabled",
+    "chips.comp.slider.thumb.border.idle",
+    "chips.comp.slider.thumb.border.focus",
+    "chips.comp.slider.value.color",
+    "chips.comp.slider.status.color.error",
+    "chips.comp.slider.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -1351,6 +1406,12 @@ export function buildComponentContract(component) {
       component: "stepper",
       scope: "stepper",
       parts: ["root", "label", "decrement", "value", "increment", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    slider: {
+      component: "slider",
+      scope: "slider",
+      parts: ["root", "label", "track", "range", "thumb", "value", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     button: {
@@ -6042,6 +6103,272 @@ export const ChipsStepper = React.forwardRef((props, ref) => {
 
 ChipsStepper.displayName = "ChipsStepper";
 
+export const ChipsSlider = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = 0,
+    min,
+    max,
+    step,
+    largeStep,
+    orientation = "horizontal",
+    disabled = false,
+    loading = false,
+    error = null,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    ariaLabel,
+    ariaLabelKey,
+    ariaLabelParams,
+    fallbackAriaLabel,
+    ariaLabelledBy,
+    valueText,
+    formatValue,
+    showValue = false,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onKeyDown,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const resolvedLabel = resolveAccessibleText({
+    value: label,
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabel = resolveAccessibleText({
+    value: ariaLabel || rest["aria-label"],
+    key: ariaLabelKey,
+    params: ariaLabelParams,
+    fallback: fallbackAriaLabel || resolvedLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabelledBy = isNonEmptyString(ariaLabelledBy || rest["aria-labelledby"])
+    ? String(ariaLabelledBy || rest["aria-labelledby"]).trim()
+    : undefined;
+
+  if (!resolvedAriaLabel && !resolvedAriaLabelledBy) {
+    throw new Error("SLIDER_A11Y_LABEL_REQUIRED");
+  }
+
+  const range = normalizeNumericRange({ min, max, step, largeStep });
+  const normalizedDefaultValue = normalizeNumericValue(defaultValue, range) ?? range.min;
+  const [currentValue, setCurrentValue] = useControllableState({
+    value: value === undefined ? undefined : (normalizeNumericValue(value, range) ?? range.min),
+    defaultValue: normalizedDefaultValue
+  });
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const model = resolveSliderModel({
+    value: currentValue,
+    min,
+    max,
+    step,
+    largeStep,
+    orientation,
+    valueText,
+    formatValue
+  });
+  const normalizedOrientation = orientation === "vertical" ? "vertical" : "horizontal";
+  const ratio = model.ratio;
+  const resolvedValueText = model.valueText ?? formatNumericValue(model.value, formatValue);
+  const trackRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const commitValue = (nextValue, event, source) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    const nextModel = resolveNumericControlModel({
+      value: nextValue,
+      min,
+      max,
+      step,
+      largeStep,
+      valueText,
+      formatValue
+    });
+    setCurrentValue(nextModel.value);
+    if (typeof onValueChange === "function") {
+      onValueChange(
+        nextModel.value,
+        createNumericChangeDetails({
+          model: nextModel,
+          previousValue: model.value,
+          source
+        }),
+        event
+      );
+    }
+  };
+
+  const stepValue = (delta, event, source) => {
+    const nextValue = getNextNumericValue(model.value, range, delta, range.min);
+    commitValue(nextValue, event, source);
+  };
+
+  const handleKeyDown = (event) => {
+    const delta = getNumericStepForKey(event.key, range);
+    if (delta !== 0) {
+      event.preventDefault();
+      stepValue(delta, event, "keyboard");
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      commitValue(range.min, event, "keyboard");
+    } else if (event.key === "End") {
+      event.preventDefault();
+      commitValue(range.max, event, "keyboard");
+    }
+
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+  };
+
+  const handleTrackPointerDown = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+    const nextValue = getNumericValueFromPointer(event, range, normalizedOrientation);
+    if (nextValue !== null) {
+      commitValue(nextValue, event, "pointer");
+    }
+  };
+
+  const handleThumbPointerDown = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+    const track = trackRef.current;
+    if (!track) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const move = (moveEvent) => {
+      const nextValue = getNumericValueFromPointerTarget(track, moveEvent, range, normalizedOrientation);
+      if (nextValue !== null) {
+        commitValue(nextValue, moveEvent, "pointer");
+      }
+    };
+
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("slider", "root", state),
+      ...handlers,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-orientation": normalizedOrientation,
+      "data-value": model.value !== null ? String(model.value) : "",
+      "data-ratio": String(ratio),
+      "data-at-min": model.atMin ? "true" : "false",
+      "data-at-max": model.atMax ? "true" : "false",
+      style: {
+        "--chips-slider-ratio": ratio,
+        ...rest.style
+      }
+    },
+    resolvedLabel
+      ? React.createElement(
+          "span",
+          createScopeAttributes("slider", "label", state),
+          resolvedLabel
+        )
+      : null,
+    React.createElement(
+      "span",
+      {
+        ...createScopeAttributes("slider", "track", state),
+        ref: trackRef,
+        onPointerDown: handleTrackPointerDown
+      },
+      React.createElement("span", {
+        ...createScopeAttributes("slider", "range", state),
+        "aria-hidden": "true"
+      }),
+      React.createElement("button", {
+        ...createScopeAttributes("slider", "thumb", state),
+        ref,
+        type: "button",
+        role: "slider",
+        disabled: disabledByState,
+        "aria-label": resolvedAriaLabel || undefined,
+        "aria-labelledby": resolvedAriaLabelledBy,
+        "aria-orientation": normalizedOrientation,
+        "aria-valuemin": range.min,
+        "aria-valuemax": range.max,
+        "aria-valuenow": model.value ?? range.min,
+        "aria-valuetext": resolvedValueText,
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-invalid": normalizedError ? "true" : undefined,
+        onPointerDown: handleThumbPointerDown,
+        onKeyDown: handleKeyDown
+      })
+    ),
+    showValue && resolvedValueText
+      ? React.createElement(
+          "output",
+          {
+            ...createScopeAttributes("slider", "value", state),
+            "aria-live": "polite",
+            "data-value": model.value !== null ? String(model.value) : ""
+          },
+          resolvedValueText
+        )
+      : null,
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("slider", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsSlider.displayName = "ChipsSlider";
+
 export const ChipsDialog = React.forwardRef((props, ref) => {
   const {
     open,
@@ -10714,6 +11041,14 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "slider") {
+    assertAriaProps(props, {
+      role: "slider",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "dialog") {
     assertAriaProps(props, {
       role: "button",
@@ -11051,6 +11386,12 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     name: "ChipsStepper",
     scope: "stepper",
     parts: ["root", "label", "decrement", "value", "increment", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsSlider",
+    scope: "slider",
+    parts: ["root", "label", "track", "range", "thumb", "value", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

@@ -27,6 +27,7 @@ test("stage9 a11y gate validates all component rules", () => {
     }),
     validateComponentA11y("number-input", { role: "spinbutton", "aria-label": "number input" }),
     validateComponentA11y("stepper", { role: "group", "aria-label": "stepper" }),
+    validateComponentA11y("slider", { role: "slider", "aria-label": "slider" }),
     validateComponentA11y("button", { role: "button", "aria-label": "button" }),
     validateComponentA11y("input", { "aria-label": "input" }),
     validateComponentA11y("checkbox", { role: "checkbox", "aria-label": "checkbox" }),

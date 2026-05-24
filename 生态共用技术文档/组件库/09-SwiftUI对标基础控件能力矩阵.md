@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -32,7 +32,7 @@
 | 选择控件 | SegmentedControl | `ChipsSegmentedControl` | 已落地 | `segmented-control` | 维持 radiogroup/radio 语义、roving focus 与单选口径 |
 | 选择控件 | Select | `ChipsSelect` | 已落地 | `select` | 维持 listbox 选择闭环 |
 | 选择控件 | ComboBox | `ChipsComboBox` | 已落地 | `combo-box` | 维持输入过滤、弹层和 activedescendant 语义 |
-| 数值控件 | Slider | 无 | 待补齐 | `slider` | 需要 min/max/step、键盘增减、值文本 |
+| 数值控件 | Slider | `ChipsSlider` | 已落地 | `slider` | 维持 min/max/step、键盘增减、指针拖拽和值文本闭环 |
 | 数值控件 | Stepper | `ChipsStepper` | 已落地 | `stepper` | 维持增减按钮、边界禁用和数值事件闭环 |
 | 数值控件 | NumberInput | `ChipsNumberInput` | 已落地 | `number-input` | 维持解析、夹取、错误和内置步进按钮协作 |
 | 日期时间 | DatePicker | `ChipsDateTime` 相邻能力 | 待补齐 | `date-picker` | 需要独立日期输入或选择器契约 |
@@ -169,7 +169,7 @@
 - 主题 token：`chips.comp.combo-box.root.*`、`label/control/placeholder/trigger/list/option/description/status/focus`。
 - 输入控件使用 `role="combobox"`、`aria-autocomplete="list"`、`aria-expanded`、`aria-controls` 和 `aria-activedescendant` 关联 listbox；选项使用 `role="option"` 与 `aria-selected`。
 
-## 7. 第五批 A 已冻结控件
+## 7. 第五批已冻结控件
 
 ### `ChipsNumberInput`
 
@@ -185,12 +185,19 @@
 - 主题 token：`chips.comp.stepper.root.*`、`label.color`、`value.color`、`decrement.surface.*`、`decrement.icon.color.*`、`increment.surface.*`、`increment.icon.color.*`、`status.color.error`、`focus.outline`。
 - 根节点使用 `role="group"` 并必须有可访问名称；递增和递减是真实按钮，边界禁用通过 `disabled / aria-disabled` 与 `data-at-min / data-at-max` 表达。
 
+### `ChipsSlider`
+
+- `data-scope="slider"`，公开 part：`root / label / track / range / thumb / value / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.slider.root.*`、`label.color`、`track.*`、`range.surface.*`、`thumb.*`、`value.color`、`status.color.error`、`focus.outline`。
+- `thumb` 使用 `role="slider"` 并必须有可访问名称；支持 `min / max / step / largeStep`、小数 step 对齐、方向键/PageUp/PageDown/Home/End、指针点按轨道、拖拽滑块与 `aria-valuetext`。
+
 ## 8. 后续批次建议
 
 - 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
 - 批次 D：`SegmentedControl / ComboBox`（已落地）。
-- 批次 E：`NumberInput / Stepper`（已落地）；`Slider`（待收口）。
+- 批次 E：`NumberInput / Stepper / Slider`（已落地）。
 - 批次 F：`DatePicker / TimePicker`。
 - 批次 G：`Image / Media / ErrorState`。
 

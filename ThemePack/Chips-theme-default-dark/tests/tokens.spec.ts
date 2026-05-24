@@ -43,5 +43,6 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.["combo-box"]?.option?.surface?.highlighted).toBeDefined();
     expect(parsed.comp.chips?.comp?.["number-input"]?.root?.border?.error).toBeDefined();
     expect(parsed.comp.chips?.comp?.stepper?.increment?.surface?.active).toBeDefined();
+    expect(parsed.comp.chips?.comp?.slider?.thumb?.surface?.active).toBeDefined();
   });
 });

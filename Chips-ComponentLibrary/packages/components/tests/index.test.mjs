@@ -36,6 +36,7 @@ import {
   ChipsSegmentedControl,
   ChipsNumberInput,
   ChipsStepper,
+  ChipsSlider,
   ChipsSpinner,
   ChipsSkeleton,
   ChipsSplitPane,
@@ -95,6 +96,7 @@ import {
   resolveSystemMessageQueue,
   resolveInteractiveState,
   resolveNumericControlModel,
+  resolveSliderModel,
   resolveTextInputDescriptor,
   STAGE7_DATA_ADVANCED_COMPONENTS,
   STAGE7_WORKBENCH_COMPONENTS,
@@ -208,6 +210,7 @@ test("buildComponentContract returns task015 base control component contracts", 
   const comboBox = buildComponentContract("combo-box");
   const numberInput = buildComponentContract("number-input");
   const stepper = buildComponentContract("stepper");
+  const slider = buildComponentContract("slider");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -242,6 +245,9 @@ test("buildComponentContract returns task015 base control component contracts", 
   assert.equal(stepper.scope, "stepper");
   assert.ok(stepper.parts.includes("value"));
   assert.ok(stepper.tokens.includes("chips.comp.stepper.increment.surface.active"));
+  assert.equal(slider.scope, "slider");
+  assert.ok(slider.parts.includes("thumb"));
+  assert.ok(slider.tokens.includes("chips.comp.slider.thumb.surface.active"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -283,6 +289,7 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["combo-box"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["number-input"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.stepper));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.slider));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -487,6 +494,14 @@ test("validateComponentA11y validates known components and rejects missing rule"
     validateComponentA11y("stepper", {
       role: "group",
       "aria-label": "quantity stepper"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("slider", {
+      role: "slider",
+      "aria-label": "volume"
     }),
     true
   );
@@ -863,7 +878,7 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
 });
 
 test("task015 base control metadata includes second through fifth batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 15);
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 16);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -881,7 +896,8 @@ test("task015 base control metadata includes second through fifth batches", () =
       "segmented-control",
       "combo-box",
       "number-input",
-      "stepper"
+      "stepper",
+      "slider"
     ]
   );
 });
@@ -902,7 +918,8 @@ test("task015 base control component exports exist", () => {
     ChipsSegmentedControl,
     ChipsComboBox,
     ChipsNumberInput,
-    ChipsStepper
+    ChipsStepper,
+    ChipsSlider
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -1119,6 +1136,7 @@ test("resolveNumericControlModel normalizes range step and text states", () => {
 test("task015 fifth batch numeric controls publish contract and a11y semantics", () => {
   const numberInput = buildComponentContract("number-input");
   const stepper = buildComponentContract("stepper");
+  const slider = buildComponentContract("slider");
 
   assert.deepEqual(numberInput.parts, ["root", "label", "control", "decrement", "increment", "description", "status"]);
   assert.ok(numberInput.tokens.includes("chips.comp.number-input.decrement.color.hover"));
@@ -1126,6 +1144,9 @@ test("task015 fifth batch numeric controls publish contract and a11y semantics",
   assert.deepEqual(stepper.parts, ["root", "label", "decrement", "value", "increment", "status"]);
   assert.ok(stepper.tokens.includes("chips.comp.stepper.root.gap"));
   assert.ok(stepper.states.includes("active"));
+  assert.deepEqual(slider.parts, ["root", "label", "track", "range", "thumb", "value", "status"]);
+  assert.ok(slider.tokens.includes("chips.comp.slider.thumb.surface.active"));
+  assert.ok(slider.states.includes("focus"));
   assert.equal(
     validateComponentA11y("number-input", {
       role: "spinbutton",
@@ -1140,6 +1161,13 @@ test("task015 fifth batch numeric controls publish contract and a11y semantics",
     }),
     true
   );
+  assert.equal(
+    validateComponentA11y("slider", {
+      role: "slider",
+      "aria-label": "Volume"
+    }),
+    true
+  );
 });
 
 test("task015 fifth batch numeric controls reject missing a11y semantics", () => {
@@ -1151,6 +1179,33 @@ test("task015 fifth batch numeric controls reject missing a11y semantics", () =>
     () => validateComponentA11y("stepper", { role: "group" }),
     /Either aria-label or aria-labelledby is required/
   );
+  assert.throws(
+    () => validateComponentA11y("slider", { role: "slider" }),
+    /Either aria-label or aria-labelledby is required/
+  );
+});
+
+test("resolveSliderModel clamps value and computes orientation ratio", () => {
+  const horizontal = resolveSliderModel({
+    value: 72,
+    min: 0,
+    max: 100,
+    step: 5
+  });
+  const vertical = resolveSliderModel({
+    value: -10,
+    min: 0,
+    max: 100,
+    orientation: "vertical"
+  });
+
+  assert.equal(horizontal.value, 70);
+  assert.equal(horizontal.ratio, 0.7);
+  assert.equal(horizontal.orientation, "horizontal");
+  assert.equal(horizontal.valueText, "70");
+  assert.equal(vertical.value, 0);
+  assert.equal(vertical.ratio, 0);
+  assert.equal(vertical.orientation, "vertical");
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

@@ -46,6 +46,7 @@
     "select",
     "shortcut",
     "skeleton",
+    "slider",
     "spacer",
     "spinner",
     "split-pane",

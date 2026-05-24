@@ -369,3 +369,130 @@
   font-size: 12px;
   line-height: 1.4;
 }
+
+/* Slider */
+
+[data-scope="slider"][data-part="root"] {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--chips-comp-slider-root-gap, var(--chips-layout-gap-xs));
+  min-inline-size: 180cpx;
+  color: var(--chips-sys-color-on-surface);
+}
+
+[data-scope="slider"][data-part="root"][data-orientation="vertical"] {
+  grid-template-columns: auto;
+  grid-template-rows: auto minmax(160cpx, 1fr) auto auto;
+  min-inline-size: auto;
+  min-block-size: 180cpx;
+}
+
+[data-scope="slider"][data-part="root"][data-state="disabled"] {
+  opacity: 0.6;
+}
+
+[data-scope="slider"][data-part="label"] {
+  grid-column: 1 / -1;
+  color: var(--chips-comp-slider-label-color);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+[data-scope="slider"][data-part="track"] {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  block-size: var(--chips-comp-slider-track-height);
+  border-radius: var(--chips-comp-slider-track-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-slider-track-surface-idle);
+  cursor: pointer;
+}
+
+[data-scope="slider"][data-part="root"][data-orientation="vertical"] [data-part="track"] {
+  inline-size: var(--chips-comp-slider-track-height);
+  block-size: 100%;
+  justify-self: center;
+}
+
+[data-scope="slider"][data-part="root"][data-state="disabled"] [data-part="track"] {
+  background-color: var(--chips-comp-slider-track-surface-disabled);
+  cursor: not-allowed;
+}
+
+[data-scope="slider"][data-part="range"] {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: calc(var(--chips-slider-ratio, 0) * 100%);
+  border-radius: inherit;
+  background-color: var(--chips-comp-slider-range-surface-idle);
+}
+
+[data-scope="slider"][data-part="root"][data-orientation="vertical"] [data-part="range"] {
+  inset-block-start: auto;
+  inset-block-end: 0;
+  inset-inline: 0;
+  inline-size: 100%;
+  block-size: calc(var(--chips-slider-ratio, 0) * 100%);
+}
+
+[data-scope="slider"][data-part="root"][data-state="disabled"] [data-part="range"] {
+  background-color: var(--chips-comp-slider-range-surface-disabled);
+}
+
+[data-scope="slider"][data-part="thumb"] {
+  position: absolute;
+  inset-block-start: calc(50% - (var(--chips-comp-slider-thumb-size) / 2));
+  inset-inline-start: calc((var(--chips-slider-ratio, 0) * 100%) - (var(--chips-comp-slider-thumb-size) / 2));
+  inline-size: var(--chips-comp-slider-thumb-size);
+  block-size: var(--chips-comp-slider-thumb-size);
+  border: 1px solid var(--chips-comp-slider-thumb-border-idle);
+  border-radius: var(--chips-comp-slider-thumb-radius, 9999px);
+  background-color: var(--chips-comp-slider-thumb-surface-idle);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    border-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="slider"][data-part="root"][data-orientation="vertical"] [data-part="thumb"] {
+  inset-inline-start: calc(50% - (var(--chips-comp-slider-thumb-size) / 2));
+  inset-block-start: calc((100% - (var(--chips-slider-ratio, 0) * 100%)) - (var(--chips-comp-slider-thumb-size) / 2));
+}
+
+[data-scope="slider"][data-part="thumb"]:hover {
+  background-color: var(--chips-comp-slider-thumb-surface-hover);
+}
+
+[data-scope="slider"][data-part="thumb"]:active,
+[data-scope="slider"][data-part="thumb"][data-state="active"] {
+  background-color: var(--chips-comp-slider-thumb-surface-active);
+}
+
+[data-scope="slider"][data-part="thumb"]:focus-visible {
+  outline: 0;
+  border-color: var(--chips-comp-slider-thumb-border-focus);
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-slider-focus-outline);
+}
+
+[data-scope="slider"][data-part="thumb"]:disabled {
+  background-color: var(--chips-comp-slider-thumb-surface-disabled);
+  cursor: not-allowed;
+}
+
+[data-scope="slider"][data-part="value"] {
+  color: var(--chips-comp-slider-value-color);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-scope="slider"][data-part="status"] {
+  grid-column: 1 / -1;
+  color: var(--chips-comp-slider-status-color-error);
+  font-size: 12px;
+  line-height: 1.4;
+}

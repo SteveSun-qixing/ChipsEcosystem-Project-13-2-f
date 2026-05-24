@@ -642,6 +642,11 @@ export interface NumericControlModel {
   valueText?: string;
 }
 
+export interface SliderModel extends NumericControlModel {
+  orientation: "horizontal" | "vertical";
+  ratio: number;
+}
+
 export interface NumberInputProps extends Omit<BaseTextInputProps, "value" | "defaultValue" | "onValueChange" | "onEnterPress"> {
   value?: number | null;
   defaultValue?: number | null;
@@ -714,6 +719,39 @@ export interface StepperProps extends ChipsDisplayTextProps {
   ) => void;
   onStateChange?: (state: InteractiveState) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  [key: string]: unknown;
+}
+
+export interface SliderProps extends ChipsDisplayTextProps {
+  value?: number | null;
+  defaultValue?: number | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  largeStep?: number;
+  orientation?: "horizontal" | "vertical";
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  ariaLabel?: string;
+  ariaLabelKey?: string;
+  ariaLabelParams?: Record<string, string | number>;
+  fallbackAriaLabel?: string;
+  ariaLabelledBy?: string;
+  valueText?: string;
+  formatValue?: (value: number) => string;
+  showValue?: boolean;
+  onValueChange?: (
+    value: number | null,
+    details: NumericControlDetails,
+    event?: React.SyntheticEvent,
+  ) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   [key: string]: unknown;
 }
 
@@ -1247,6 +1285,7 @@ export const ChipsSegmentedControl: React.ForwardRefExoticComponent<SegmentedCon
 export const ChipsComboBox: React.ForwardRefExoticComponent<ComboBoxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsNumberInput: React.ForwardRefExoticComponent<NumberInputProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsStepper: React.ForwardRefExoticComponent<StepperProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsSlider: React.ForwardRefExoticComponent<SliderProps & React.RefAttributes<HTMLButtonElement>>;
 export const ChipsDialog: React.ForwardRefExoticComponent<DialogProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsPopover: React.ForwardRefExoticComponent<PopoverProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTabs: React.ForwardRefExoticComponent<TabsProps & React.RefAttributes<HTMLDivElement>>;
@@ -1298,6 +1337,7 @@ export function buildComponentContract(component: string): {
 export function validateComponentA11y(component: string, props: Record<string, unknown>): boolean;
 export function resolveTextInputDescriptor(params?: Record<string, unknown>): TextInputDescriptor;
 export function resolveNumericControlModel(params?: Record<string, unknown>): NumericControlModel;
+export function resolveSliderModel(params?: Record<string, unknown>): SliderModel;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];

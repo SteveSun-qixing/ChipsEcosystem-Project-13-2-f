@@ -46,6 +46,7 @@ ensureRequiredTokenPrefixes(resolved, [
   "chips.comp.combo-box.",
   "chips.comp.number-input.",
   "chips.comp.stepper.",
+  "chips.comp.slider.",
   "chips.comp.button.",
   "chips.comp.input.",
   "chips.comp.checkbox.",

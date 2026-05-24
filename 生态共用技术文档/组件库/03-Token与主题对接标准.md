@@ -35,6 +35,7 @@
   - `chips.comp.combo-box.*`
   - `chips.comp.number-input.*`
   - `chips.comp.stepper.*`
+  - `chips.comp.slider.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -133,12 +134,13 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `SegmentedControl` 的 `root/item/label/indicator/status/focus` token 只表达单选分段控件结构和状态；`ComboBox` 的 `root/control/trigger/list/option/description/status/focus` token 只表达输入过滤与 listbox 弹层视觉。主题包不得复用 `chips.comp.radio.*`、`chips.comp.select.*` 或旧 `chips.comp.input.*` 作为这两个控件的正式样式入口。
 
-任务015第五批 A 数值控件 token 是数值输入和离散增减控件的正式契约，默认主题和暗色主题必须覆盖：
+任务015第五批数值控件 token 是数值输入、离散增减和连续滑动控件的正式契约，默认主题和暗色主题必须覆盖：
 
 - `chips.comp.number-input.*`
 - `chips.comp.stepper.*`
+- `chips.comp.slider.*`
 
-`NumberInput` 的 `root/control/decrement/increment/description/status/focus` token 只表达可编辑数值输入、步进按钮、描述和错误视觉；`Stepper` 的 `root/label/value/decrement/increment/status/focus` token 只表达离散增减结构和边界状态视觉。主题包不得复用旧 `chips.comp.input.*`、按钮族 token 或业务私有 token 作为这两个控件的正式样式入口。
+`NumberInput` 的 `root/control/decrement/increment/description/status/focus` token 只表达可编辑数值输入、步进按钮、描述和错误视觉；`Stepper` 的 `root/label/value/decrement/increment/status/focus` token 只表达离散增减结构和边界状态视觉；`Slider` 的 `root/label/track/range/thumb/value/status/focus` token 只表达滑轨、选中范围、滑块和值文本视觉。主题包不得复用旧 `chips.comp.input.*`、按钮族 token、`chips.comp.progress.*` 或业务私有 token 作为这些数值控件的正式样式入口。
 
 ### 3.1 布局 token 基线
 

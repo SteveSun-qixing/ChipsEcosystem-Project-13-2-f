@@ -5,6 +5,7 @@ import {
   createDefaultLayoutConfig,
   normalizeLayoutConfig,
   validateLayoutConfig,
+  validateLayoutConfigInput,
 } from "./schema/layout-config";
 import type { LayoutConfig } from "./schema/layout-config";
 import type {
@@ -80,9 +81,7 @@ export const layoutDefinition: BoxLayoutDefinition = {
     return normalizeLayoutConfig(input) as unknown as Record<string, unknown>;
   },
   validateConfig(config) {
-    return validateLayoutConfig(
-      normalizeLayoutConfig(config)
-    );
+    return validateLayoutConfigInput(config);
   },
   getInitialQuery(config) {
     const normalized = normalizeLayoutConfig(config);

@@ -37,21 +37,35 @@ function normalizeSortMode(value: unknown): SortMode {
   return "manual";
 }
 
-function isSafeBoxAssetPath(value: string): boolean {
-  if (!value.startsWith("assets/")) {
+const BOX_ASSET_PATH_PATTERN = /^assets\/[^\\:?#/]+(?:\/[^\\:?#/]+)*$/;
+
+export function isSafeBoxAssetPath(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed !== value || !BOX_ASSET_PATH_PATTERN.test(trimmed)) {
     return false;
   }
-  if (value.startsWith("/") || value.includes("\\") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) {
+  if (trimmed.startsWith("/") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
     return false;
   }
 
-  return value.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+  return trimmed.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+}
+
+function collectFrameRegionAssetRefs(config: LayoutConfig): string[] {
+  const nextAssetRefs = [
+    config.props.background.mode === "image" ? config.props.background.assetPath : undefined,
+    config.props.topRegion.mode === "image" ? config.props.topRegion.assetPath : undefined,
+  ].filter((value): value is string =>
+    typeof value === "string" && value.length > 0 && isSafeBoxAssetPath(value)
+  );
+
+  return [...new Set(nextAssetRefs)];
 }
 
 function normalizeFrameRegion(value: unknown): FrameRegionConfig {
   const raw = typeof value === "object" && value ? value as Record<string, unknown> : {};
   const mode = raw.mode === "image" || raw.mode === "html" ? raw.mode : "none";
-  const rawAssetPath = typeof raw.assetPath === "string" ? raw.assetPath.trim() : "";
+  const rawAssetPath = typeof raw.assetPath === "string" ? raw.assetPath : "";
   const assetPath = rawAssetPath.length > 0 && isSafeBoxAssetPath(rawAssetPath) ? rawAssetPath : undefined;
   const html = typeof raw.html === "string" && raw.html.trim().length > 0
     ? raw.html
@@ -90,14 +104,9 @@ function normalizeFrameRegion(value: unknown): FrameRegionConfig {
 }
 
 function syncAssetRefs(config: LayoutConfig): LayoutConfig {
-  const nextAssetRefs = [
-    config.props.background.mode === "image" ? config.props.background.assetPath : undefined,
-    config.props.topRegion.mode === "image" ? config.props.topRegion.assetPath : undefined,
-  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
-
   return {
     ...config,
-    assetRefs: [...new Set(nextAssetRefs)],
+    assetRefs: collectFrameRegionAssetRefs(config),
   };
 }
 
@@ -125,7 +134,7 @@ export function createDefaultLayoutConfig(): LayoutConfig {
   };
 }
 
-export function normalizeLayoutConfig(input: Record<string, unknown> | undefined): LayoutConfig {
+export function normalizeLayoutConfig(input: LayoutConfig | Record<string, unknown> | undefined): LayoutConfig {
   const props = typeof input?.props === "object" && input?.props ? input.props as Record<string, unknown> : {};
   return syncAssetRefs({
     schemaVersion:
@@ -174,6 +183,34 @@ export function validateLayoutConfig(config: LayoutConfig): {
   }
   if (config.props.topRegion.mode === "html" && !config.props.topRegion.html) {
     errors["props.topRegion.html"] = "topRegion html is required when mode is html.";
+  }
+
+  config.assetRefs.forEach((assetPath, index) => {
+    if (!isSafeBoxAssetPath(assetPath)) {
+      errors[`assetRefs[${index}]`] = "assetRefs item must be a box assets/ relative path.";
+    }
+  });
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validateLayoutConfigInput(input: LayoutConfig | Record<string, unknown> | undefined): {
+  valid: boolean;
+  errors: Record<string, string>;
+} {
+  const normalized = normalizeLayoutConfig(input);
+  const result = validateLayoutConfig(normalized);
+  const errors = { ...result.errors };
+
+  if (Array.isArray(input?.assetRefs)) {
+    input.assetRefs.forEach((assetRef, index) => {
+      if (typeof assetRef !== "string" || !isSafeBoxAssetPath(assetRef)) {
+        errors[`assetRefs[${index}]`] = "assetRefs item must be a box assets/ relative path.";
+      }
+    });
   }
 
   return {

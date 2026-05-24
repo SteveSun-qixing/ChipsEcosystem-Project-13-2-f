@@ -71,6 +71,7 @@ describe("template-engine", () => {
       await expect(fs.stat(path.join(targetDir, "src", "index.ts"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "view", "page.tsx"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "editor", "panel.tsx"))).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(targetDir, "src", "editor", "frame-region-editor.tsx"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
       expect(pkg.dependencies.react).toBe("^18.2.0");
       expect(pkg.dependencies["react-dom"]).toBe("^18.2.0");
@@ -145,6 +146,7 @@ describe("template-engine", () => {
         path.join("src", "schema", "layout-config.ts"),
         path.join("src", "view", "page.tsx"),
         path.join("src", "editor", "panel.tsx"),
+        path.join("src", "editor", "frame-region-editor.tsx"),
       ];
       for (const relativePath of generatedTextFiles) {
         const source = await fs.readFile(path.join(targetDir, relativePath), "utf8");

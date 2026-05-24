@@ -26,7 +26,14 @@
     "assetRefs": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
       }
     }
   },
@@ -41,7 +48,13 @@
         },
         "assetPath": {
           "type": "string",
-          "pattern": "^assets/.+"
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
         },
         "html": {
           "type": "string"

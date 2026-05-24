@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { layoutDefinition } from "../../src/index";
-import type { BoxEntryPage, BoxEntrySnapshot, BoxLayoutRuntime } from "../../src/shared/types";
+import type { BoxEntryPage, BoxEntrySnapshot, BoxLayoutRuntime, ResolvedRuntimeResource } from "../../src/shared/types";
+import type { LayoutConfig } from "../../src/schema/layout-config";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -87,6 +88,61 @@ async function renderView({
     await Promise.resolve();
   });
   return cleanup ?? (() => undefined);
+}
+
+async function renderEditor({
+  container,
+  initialConfig = layoutDefinition.createDefaultConfig(),
+  onChange = vi.fn(),
+  readBoxAsset,
+  importBoxAsset,
+  deleteBoxAsset,
+}: {
+  container: HTMLElement;
+  initialConfig?: Record<string, unknown>;
+  onChange?: ReturnType<typeof vi.fn>;
+  readBoxAsset?: (assetPath: string) => Promise<ResolvedRuntimeResource>;
+  importBoxAsset?: (input: { file: File; preferredPath?: string }) => Promise<{ assetPath: string }>;
+  deleteBoxAsset?: (assetPath: string) => Promise<void>;
+}) {
+  let cleanup: (() => void) | undefined;
+  await act(async () => {
+    const maybeCleanup = layoutDefinition.renderEditor?.({
+      container,
+      entries: [
+        createEntry("entry-1", "Alpha"),
+        createEntry("entry-2", "Beta", "chips/box"),
+      ],
+      initialConfig,
+      onChange,
+      readBoxAsset,
+      importBoxAsset,
+      deleteBoxAsset,
+      locale: "zh-CN",
+    });
+    cleanup = typeof maybeCleanup === "function" ? maybeCleanup : undefined;
+    await Promise.resolve();
+  });
+  return cleanup ?? (() => undefined);
+}
+
+function clickButtonByText(container: HTMLElement, text: string): void {
+  const button = Array.from(container.querySelectorAll("button"))
+    .find((candidate) => candidate.textContent?.includes(text));
+  expect(button).toBeTruthy();
+  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+}
+
+async function uploadFile(input: HTMLInputElement, file: File): Promise<void> {
+  Object.defineProperty(input, "files", {
+    configurable: true,
+    value: [file],
+  });
+  await act(async () => {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
 }
 
 describe("layoutDefinition", () => {
@@ -279,27 +335,187 @@ describe("layoutDefinition", () => {
     expect(container.textContent ?? "").toBe("");
   });
 
-  it("renders editor and emits config changes", async () => {
+  it("renders editor and imports box assets into config snapshots", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const importBoxAsset = vi.fn().mockResolvedValue({
+      assetPath: "assets/layouts/chips.layout.grid/background/hero.png",
+    });
+    const readBoxAsset = vi.fn().mockResolvedValue({
+      resourceUrl: "chips-render://asset/hero",
+      mimeType: "image/png",
+    });
+    const deleteBoxAsset = vi.fn().mockResolvedValue(undefined);
+
+    const cleanup = await renderEditor({
+      container,
+      onChange,
+      readBoxAsset,
+      importBoxAsset,
+      deleteBoxAsset,
+    });
+
+    expect(container.querySelector('[data-scope="chips-box-layout-editor"]')).toBeTruthy();
+    expect(container.textContent).toContain("当前箱子包含 2 个条目");
+    expect(container.querySelector('[data-scope="select"]')).toBeTruthy();
+    expect(container.querySelector('input[type="number"]')).toBeNull();
+
+    await act(async () => {
+      clickButtonByText(container, "图片");
+      await Promise.resolve();
+    });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    const file = new File(["hero"], "hero.png", { type: "image/png" });
+    await uploadFile(input as HTMLInputElement, file);
+
+    expect(importBoxAsset).toHaveBeenCalledWith({
+      file,
+      preferredPath: expect.stringMatching(/^assets\/layouts\/chips\.layout\.grid\/background\/\d+-hero\.png$/),
+    });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      assetRefs: ["assets/layouts/chips.layout.grid/background/hero.png"],
+      props: expect.objectContaining({
+        background: {
+          mode: "image",
+          assetPath: "assets/layouts/chips.layout.grid/background/hero.png",
+        },
+      }),
+    }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(readBoxAsset).toHaveBeenCalledWith("assets/layouts/chips.layout.grid/background/hero.png");
+
+    await act(async () => {
+      cleanup?.();
+    });
+  });
+
+  it("deletes replaced and cleared box assets from the editor bridge", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const importBoxAsset = vi.fn().mockResolvedValue({
+      assetPath: "assets/layouts/chips.layout.grid/background/new.png",
+    });
+    const deleteBoxAsset = vi.fn().mockResolvedValue(undefined);
+    const readBoxAsset = vi.fn().mockResolvedValue({
+      resourceUrl: "chips-render://asset/current",
+      mimeType: "image/png",
+    });
+    const initialConfig = layoutDefinition.normalizeConfig({
+      schemaVersion: "1.0.0",
+      props: {
+        sortMode: "manual",
+        background: {
+          mode: "image",
+          assetPath: "assets/layouts/chips.layout.grid/background/old.png",
+        },
+        topRegion: {
+          mode: "none",
+        },
+      },
+    });
+
+    await renderEditor({
+      container,
+      initialConfig,
+      onChange,
+      readBoxAsset,
+      importBoxAsset,
+      deleteBoxAsset,
+    });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    await uploadFile(input as HTMLInputElement, new File(["new"], "new.png", { type: "image/png" }));
+    expect(deleteBoxAsset).toHaveBeenCalledWith("assets/layouts/chips.layout.grid/background/old.png");
+
+    await act(async () => {
+      clickButtonByText(container, "清空");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(deleteBoxAsset).toHaveBeenCalledWith("assets/layouts/chips.layout.grid/background/new.png");
+    const lastConfig = onChange.mock.calls.at(-1)?.[0] as LayoutConfig;
+    expect(lastConfig.props.background).toEqual({ mode: "none" });
+    expect(lastConfig.assetRefs).toEqual([]);
+  });
+
+  it("shows missing asset bridge errors without writing unsafe fallbacks", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const onChange = vi.fn();
 
-    let cleanup: (() => void) | void;
-    await act(async () => {
-      cleanup = layoutDefinition.renderEditor?.({
-        container,
-        entries: [],
-        initialConfig: layoutDefinition.createDefaultConfig(),
-        onChange,
-        locale: "zh-CN",
-      });
+    await renderEditor({
+      container,
+      onChange,
     });
 
-    const select = container.querySelector("select");
-    expect(select).toBeTruthy();
-    expect(container.querySelector('input[type="number"]')).toBeNull();
     await act(async () => {
-      cleanup?.();
+      clickButtonByText(container, "图片");
+      await Promise.resolve();
     });
+
+    expect(container.textContent).toContain("箱子资源桥不可用");
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      assetRefs: [],
+      props: expect.objectContaining({
+        background: {
+          mode: "image",
+        },
+      }),
+    }));
+  });
+
+  it("restores editor host styles and ignores pending asset previews after cleanup", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.style.display = "block";
+    container.style.width = "20px";
+    let resolveAsset: ((value: ResolvedRuntimeResource) => void) | undefined;
+    const readBoxAsset = vi.fn(() => new Promise<ResolvedRuntimeResource>((resolve) => {
+      resolveAsset = resolve;
+    }));
+
+    const cleanup = await renderEditor({
+      container,
+      initialConfig: layoutDefinition.normalizeConfig({
+        schemaVersion: "1.0.0",
+        props: {
+          sortMode: "manual",
+          background: {
+            mode: "image",
+            assetPath: "assets/layouts/chips.layout.grid/background/slow.png",
+          },
+          topRegion: {
+            mode: "none",
+          },
+        },
+      }),
+      readBoxAsset,
+      importBoxAsset: vi.fn(),
+      deleteBoxAsset: vi.fn(),
+    });
+
+    expect(container.style.display).toBe("flex");
+    await act(async () => {
+      cleanup();
+    });
+    expect(container.style.display).toBe("block");
+    expect(container.style.width).toBe("20px");
+    expect(container.textContent ?? "").toBe("");
+
+    await act(async () => {
+      resolveAsset?.({
+        resourceUrl: "chips-render://asset/slow",
+        mimeType: "image/png",
+      });
+      await Promise.resolve();
+    });
+    expect(container.textContent ?? "").toBe("");
   });
 });

@@ -95,6 +95,7 @@ function main() {
       path.join("src", "view", "page.tsx.tpl"),
       path.join("src", "view", "runtime.ts.tpl"),
       path.join("src", "editor", "panel.tsx.tpl"),
+      path.join("src", "editor", "frame-region-editor.tsx.tpl"),
       path.join("src", "editor", "runtime.ts.tpl"),
       path.join("src", "schema", "layout-config.ts.tpl"),
       path.join("src", "shared", "types.ts.tpl"),
@@ -181,6 +182,7 @@ function main() {
     const indexTs = fs.readFileSync(path.join(dir, "src", "index.ts.tpl"), "utf8");
     const editorRuntimeTs = fs.readFileSync(path.join(dir, "src", "editor", "runtime.ts.tpl"), "utf8");
     const editorPanelTs = fs.readFileSync(path.join(dir, "src", "editor", "panel.tsx.tpl"), "utf8");
+    const editorFrameRegionTs = fs.readFileSync(path.join(dir, "src", "editor", "frame-region-editor.tsx.tpl"), "utf8");
     for (const requiredText of [
       "layoutType: \"{{ LAYOUT_TYPE }}\"",
       "readBoxAsset: ctx.readBoxAsset",
@@ -194,6 +196,7 @@ function main() {
     for (const [fileName, source] of [
       ["src/editor/runtime.ts.tpl", editorRuntimeTs],
       ["src/editor/panel.tsx.tpl", editorPanelTs],
+      ["src/editor/frame-region-editor.tsx.tpl", editorFrameRegionTs],
     ]) {
       for (const requiredText of ["readBoxAsset?", "importBoxAsset?", "deleteBoxAsset?"]) {
         if (!source.includes(requiredText)) {
@@ -201,12 +204,65 @@ function main() {
         }
       }
     }
+    for (const requiredText of [
+      "ChipsForm",
+      "ChipsSelect",
+      "FrameRegionEditor",
+      "normalizeLayoutConfig",
+    ]) {
+      if (!editorPanelTs.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 编辑器面板缺少正式配置编辑样板：${requiredText}`);
+      }
+    }
+    for (const requiredText of [
+      "importBoxAsset({",
+      "deleteBoxAsset(assetPath)",
+      "readBoxAsset(region.assetPath)",
+      "isSafeBoxAssetPath(imported.assetPath)",
+      "ChipsToolbar",
+      "ChipsSegmentedControl",
+      "EmbeddedDocumentFrame",
+      "data-frame-region-preview",
+    ]) {
+      if (!editorFrameRegionTs.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 资产桥编辑器缺少正式行为：${requiredText}`);
+      }
+    }
+    for (const forbiddenText of ["Preview</strong>", "{entries.length} entries"]) {
+      if (editorPanelTs.includes(forbiddenText) || editorFrameRegionTs.includes(forbiddenText)) {
+        throw new Error(`模板 ${templateId} 编辑器不应包含硬编码英文文案：${forbiddenText}`);
+      }
+    }
 
     const schemaTs = fs.readFileSync(path.join(dir, "src", "schema", "layout-config.ts.tpl"), "utf8");
-    for (const requiredText of ["sortMode", "background", "topRegion", "assetRefs", "isSafeBoxAssetPath"]) {
+    for (const requiredText of [
+      "sortMode",
+      "background",
+      "topRegion",
+      "assetRefs",
+      "isSafeBoxAssetPath",
+      "validateLayoutConfigInput",
+      "BOX_ASSET_PATH_PATTERN",
+    ]) {
       if (!schemaTs.includes(requiredText)) {
         throw new Error(`模板 ${templateId} 配置 Schema 缺少：${requiredText}`);
       }
+    }
+    if (
+      !schemaTs.includes("BOX_ASSET_PATH_PATTERN = /^assets\\/") ||
+      !schemaTs.includes("[^\\\\:?#/]+") ||
+      !schemaTs.includes("(?:\\/[^\\\\:?#/]+)*")
+    ) {
+      throw new Error(`模板 ${templateId} 配置 Schema 的资源路径正则必须阻断反斜杠、冒号、查询串、片段和空路径段。`);
+    }
+    const contractSchema = fs.readFileSync(path.join(dir, "contracts", "layout-config.schema.json.tpl"), "utf8");
+    for (const requiredText of ["^assets\\\\/[^\\\\\\\\:?#\\\\/]+", "\"not\"", "(^|/)\\\\.\\\\.($|/)"]) {
+      if (!contractSchema.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} JSON Schema 资源路径约束缺少：${requiredText}`);
+      }
+    }
+    if (contractSchema.includes('"pattern": "^assets/.+"')) {
+      throw new Error(`模板 ${templateId} JSON Schema 不应使用宽松 assets 路径正则。`);
     }
 
     const viewPageTs = fs.readFileSync(path.join(dir, "src", "view", "page.tsx.tpl"), "utf8");

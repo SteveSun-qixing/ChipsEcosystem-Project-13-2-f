@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CardCoverFrame } from "@chips/component-library";
-import type { BoxEntryCoverView, BoxEntrySnapshot, BoxLayoutRuntime } from "../shared/types";
+import { EmbeddedDocumentFrame } from "@chips/component-library";
 import type { LayoutConfig } from "../schema/layout-config";
+import type { BoxEntryCoverView, BoxEntrySnapshot, BoxLayoutRuntime } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 
 export interface LayoutViewProps {
@@ -30,7 +30,7 @@ const GRID_LAYOUT_STYLE = `
   overflow: hidden;
 }
 
-[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="card-cover-frame"] {
+[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="embedded-document-frame"] {
   position: relative;
   display: block;
   width: 100%;
@@ -65,12 +65,12 @@ const GRID_LAYOUT_STYLE = `
   pointer-events: none;
 }
 
-[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="card-cover-frame"][data-state="idle"] [data-part="status"],
-[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="card-cover-frame"][data-state="ready"] [data-part="status"] {
+[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="embedded-document-frame"][data-state="idle"] [data-part="status"],
+[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="embedded-document-frame"][data-state="ready"] [data-part="status"] {
   opacity: 0;
 }
 
-[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="card-cover-frame"][data-state="loading"] [data-part="status"] {
+[data-scope="chips-box-grid-layout"] [data-grid-cover-shell] [data-scope="embedded-document-frame"][data-state="loading"] [data-part="status"] {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.78) 25%, rgba(255, 255, 255, 0.32) 50%, rgba(255, 255, 255, 0.78) 75%),
     linear-gradient(180deg, rgba(148, 163, 184, 0.24) 0%, rgba(226, 232, 240, 0.34) 100%);
@@ -109,8 +109,8 @@ const GRID_LAYOUT_STYLE = `
 }
 `;
 
-function resolveCardTitle(entry: BoxEntrySnapshot): string {
-  return entry.snapshot.title ?? entry.snapshot.cardId ?? entry.entryId;
+function resolveEntryTitle(entry: BoxEntrySnapshot): string {
+  return entry.snapshot.title ?? entry.snapshot.documentId ?? entry.entryId;
 }
 
 function toCssAspectRatio(value: string | number | undefined, fallback: number): string {
@@ -185,14 +185,8 @@ function CoverTile({
     void runtime.openEntry(entry.entryId);
   };
 
-  const aspectRatio = toCssAspectRatio(
-    coverState.view?.ratio ?? entry.layoutHints?.aspectRatio,
-    ratio,
-  );
-  const ratioToken = toRatioToken(
-    coverState.view?.ratio ?? entry.layoutHints?.aspectRatio,
-    ratio,
-  );
+  const aspectRatio = toCssAspectRatio(coverState.view?.ratio ?? entry.layoutHints?.aspectRatio, ratio);
+  const ratioToken = toRatioToken(coverState.view?.ratio ?? entry.layoutHints?.aspectRatio, ratio);
 
   if (coverState.status === "ready" && coverState.view?.coverUrl) {
     return (
@@ -202,12 +196,11 @@ function CoverTile({
           aspectRatio,
         }}
       >
-        <CardCoverFrame
-          cardId={entry.snapshot.cardId ?? entry.entryId}
-          title={coverState.view.title || resolveCardTitle(entry)}
-          coverUrl={coverState.view.coverUrl}
+        <EmbeddedDocumentFrame
+          title={coverState.view.title || resolveEntryTitle(entry)}
+          src={coverState.view.coverUrl}
           ratio={ratioToken}
-          onOpenCard={handleOpen}
+          onActivate={handleOpen}
         />
       </div>
     );
@@ -268,16 +261,40 @@ function EntryCard({
         type="button"
         data-grid-entry-title
         onClick={handleOpen}
-        title={resolveCardTitle(entry)}
+        title={resolveEntryTitle(entry)}
       >
-        {resolveCardTitle(entry)}
+        {resolveEntryTitle(entry)}
       </button>
     </div>
   );
 }
 
+function sortEntries(
+  entries: BoxEntrySnapshot[],
+  sortMode: LayoutConfig["props"]["sortMode"],
+  locale?: string
+): BoxEntrySnapshot[] {
+  if (sortMode === "manual") {
+    return entries;
+  }
+
+  const direction = sortMode === "name-desc" ? -1 : 1;
+  const compareLocale = locale === "zh-CN" ? "zh-CN" : "en-US";
+
+  return [...entries].sort((left, right) => {
+    const compared = resolveEntryTitle(left).localeCompare(resolveEntryTitle(right), compareLocale);
+    if (compared !== 0) {
+      return compared * direction;
+    }
+    return left.entryId.localeCompare(right.entryId);
+  });
+}
+
 export function LayoutViewPage({ entries, config, runtime, locale }: LayoutViewProps) {
-  const enabledEntries = useMemo(() => entries.filter((entry) => entry.enabled), [entries]);
+  const enabledEntries = useMemo(
+    () => sortEntries(entries.filter((entry) => entry.enabled), config.props.sortMode, locale),
+    [config.props.sortMode, entries, locale]
+  );
 
   useEffect(() => {
     if (enabledEntries.length === 0) {
@@ -291,31 +308,41 @@ export function LayoutViewPage({ entries, config, runtime, locale }: LayoutViewP
     ).catch(() => undefined);
   }, [enabledEntries, runtime]);
 
-  if (enabledEntries.length === 0) {
-    return <div>{getLayoutMessage(locale, "layout.empty")}</div>;
-  }
-
   return (
     <div
       data-scope="chips-box-grid-layout"
       style={{
+        minHeight: "100%",
         display: "grid",
-        gridTemplateColumns: `repeat(${config.props.columnCount}, minmax(0, 1fr))`,
-        gap: `${config.props.gap}px`,
-        padding: `${config.props.gap}px`,
-        alignItems: "start",
+        gap: "16px",
+        padding: "16px",
+        alignContent: "start",
       }}
     >
       <style>{GRID_LAYOUT_STYLE}</style>
-      {enabledEntries.map((entry) => (
-        <EntryCard
-          key={entry.entryId}
-          entry={entry}
-          runtime={runtime}
-          ratio={config.props.coverRatio}
-          locale={locale}
-        />
-      ))}
+      {enabledEntries.length === 0 ? (
+        <div data-layout-empty>{getLayoutMessage(locale, "layout.empty")}</div>
+      ) : (
+        <div
+          data-layout-grid
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: "16px",
+            alignItems: "start",
+          }}
+        >
+          {enabledEntries.map((entry) => (
+            <EntryCard
+              key={entry.entryId}
+              entry={entry}
+              runtime={runtime}
+              ratio={1.4}
+              locale={locale}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

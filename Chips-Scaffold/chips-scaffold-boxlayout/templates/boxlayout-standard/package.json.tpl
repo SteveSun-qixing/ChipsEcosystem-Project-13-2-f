@@ -8,14 +8,18 @@
     "build": "chipsdev build",
     "test": "chipsdev test",
     "lint": "chipsdev lint",
-    "validate": "chipsdev validate"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "validate": "chipsdev validate",
+    "package": "chipsdev package",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate && npm run package"
   },
   "dependencies": {
-    "@chips/component-library": "0.1.0",
+    "@chips/component-library": "^0.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/node": "^22.13.10",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "jsdom": "^28.1.0",

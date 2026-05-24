@@ -1,6 +1,6 @@
 # {{ DISPLAY_NAME }}
 
-通过 `chips-scaffold-boxlayout` 生成的标准布局插件工程。
+标准布局插件工程。
 
 ## 工程定位
 
@@ -30,13 +30,17 @@
 其中：
 
 - `layoutDefinition.icon` 是运行时正式图标描述符；
+- 查看态封面使用 `@chips/component-library` 的 `EmbeddedDocumentFrame` 承载 Host 返回的正式文档入口；
 - `assets/icons/layout-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
 
 ## 常用命令
 
 ```bash
-npm run build
-npm run test
 npm run lint
+npm run typecheck
+npm test
+npm run build
 npm run validate
+npm run package
+npm run verify
 ```

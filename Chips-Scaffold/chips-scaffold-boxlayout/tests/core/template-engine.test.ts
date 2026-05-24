@@ -66,13 +66,38 @@ describe("template-engine", () => {
       expect(manifest).toMatch(/layout:/);
       expect(manifest).toMatch(/layoutType:\s+chips\.layout\.grid/);
       expect(manifest).toMatch(/displayName:\s+Standard Box Layout Plugin/);
+      expect(manifest).not.toMatch(/ui:\s*\n\s*surface:/);
       await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "index.ts"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "view", "page.tsx"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "editor", "panel.tsx"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
       expect(pkg.dependencies.react).toBe("^18.2.0");
+      expect(pkg.dependencies["react-dom"]).toBe("^18.2.0");
+      expect(pkg.dependencies["@chips/component-library"]).toBe("^0.1.0");
+      expect(pkg.devDependencies["@types/node"]).toBe("^22.13.10");
       expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
+      for (const scriptName of [
+        "lint",
+        "typecheck",
+        "test",
+        "build",
+        "validate",
+        "package",
+        "verify",
+      ]) {
+        expect(typeof pkg.scripts[scriptName]).toBe("string");
+      }
+      for (const command of [
+        "npm run lint",
+        "npm run typecheck",
+        "npm test",
+        "npm run build",
+        "npm run validate",
+        "npm run package",
+      ]) {
+        expect(pkg.scripts.verify).toContain(command);
+      }
       await expect(fs.stat(path.join(targetDir, "template.json"))).rejects.toMatchObject({
         code: "ENOENT",
       });
@@ -81,10 +106,52 @@ describe("template-engine", () => {
       expect(indexTs).toMatch(/export const layoutDefinition/);
       expect(indexTs).toMatch(/layoutType:\s*"chips\.layout\.grid"/);
       expect(indexTs).toMatch(/pluginId:\s*"chips\.layout\.boxlayout-standard"/);
+      expect(indexTs).toMatch(/readBoxAsset:\s*ctx\.readBoxAsset/);
+      expect(indexTs).toMatch(/importBoxAsset:\s*ctx\.importBoxAsset/);
+      expect(indexTs).toMatch(/deleteBoxAsset:\s*ctx\.deleteBoxAsset/);
+
+      const sharedTypes = await fs.readFile(
+        path.join(targetDir, "src", "shared", "types.ts"),
+        "utf8"
+      );
+      expect(sharedTypes).toMatch(/documentId\?:\s*string/);
+      expect(sharedTypes).toMatch(/"documentInfo"/);
+      expect(sharedTypes).toMatch(/"documentFile"/);
+      expect(sharedTypes).toMatch(/"document-window"/);
+      expect(sharedTypes).toMatch(/documentType\?:\s*"card" \| "box"/);
+      expect(sharedTypes).not.toMatch(/\bcardId\b|\bcardInfo\b|\bcardFile\b|\bcard-window\b/);
+
+      const layoutConfig = await fs.readFile(
+        path.join(targetDir, "src", "schema", "layout-config.ts"),
+        "utf8"
+      );
+      expect(layoutConfig).toMatch(/sortMode/);
+      expect(layoutConfig).toMatch(/background/);
+      expect(layoutConfig).toMatch(/topRegion/);
+      expect(layoutConfig).not.toMatch(/\bcolumnCount\b|\binformationDensity\b/);
 
       const readme = await fs.readFile(path.join(targetDir, "README.md"), "utf8");
       expect(readme).toMatch(/Standard Box Layout Plugin/);
       expect(readme).toMatch(/layoutDefinition/);
+      expect(readme).toMatch(/@chips\/component-library/);
+      expect(readme).not.toMatch(/\bchips dev\b|chips-scaffold-boxlayout/);
+
+      const generatedTextFiles = [
+        "manifest.yaml",
+        "README.md",
+        "chips.config.mjs",
+        path.join("src", "index.ts"),
+        path.join("src", "shared", "types.ts"),
+        path.join("src", "schema", "layout-config.ts"),
+        path.join("src", "view", "page.tsx"),
+        path.join("src", "editor", "panel.tsx"),
+      ];
+      for (const relativePath of generatedTextFiles) {
+        const source = await fs.readFile(path.join(targetDir, relativePath), "utf8");
+        expect(source).not.toMatch(/\{\{\s*[A-Z0-9_]+\s*\}\}/);
+        expect(source).not.toMatch(/\bchips dev\b/);
+        expect(source).not.toMatch(/\bTODO\b|\bFIXME\b/i);
+      }
 
       for (const dirName of FORBIDDEN_PROJECT_DIRS) {
         await expect(fs.stat(path.join(targetDir, dirName))).rejects.toMatchObject({

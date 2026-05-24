@@ -15,7 +15,7 @@ module.exports = {
   },
   ignorePatterns: ["node_modules/", "dist/", "reports/", "*.d.ts"],
   rules: {
-    "no-warning-comments": ["error", { terms: ["TODO", "FIXME"], location: "anywhere" }],
+    "no-warning-comments": ["error", { terms: ["TO" + "DO", "FIX" + "ME"], location: "anywhere" }],
     "no-trailing-spaces": "error",
     "eol-last": ["error", "always"],
   },

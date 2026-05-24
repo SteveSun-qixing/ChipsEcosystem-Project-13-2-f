@@ -1,8 +1,10 @@
 export interface ResolvedRuntimeResource {
-  resourceUrl?: string;
-  mimeType?: string;
-  assetPath?: string;
-  status?: "ready" | "missing" | "forbidden" | "error";
+  resourceUrl: string;
+  mimeType: string;
+  cacheKey?: string;
+  expiresAt?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface BoxEntryCoverView {
@@ -18,6 +20,7 @@ export interface BoxSessionInfo {
   name: string;
   activeLayoutType: string;
   availableLayouts: string[];
+  coverRatio?: string;
   tags?: Array<string | string[]>;
   coverAsset?: string;
   capabilities?: {
@@ -36,7 +39,7 @@ export interface BoxEntrySnapshot {
   url: string;
   enabled: boolean;
   snapshot: {
-    cardId?: string;
+    documentId?: string;
     title?: string;
     summary?: string;
     tags?: Array<string | string[]>;
@@ -78,13 +81,13 @@ export interface BoxLayoutRuntime {
   listEntries(query?: BoxEntryQuery): Promise<BoxEntryPage>;
   readEntryDetail(request: {
     entryIds: string[];
-    fields: Array<"cardInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status">;
+    fields: Array<"documentInfo" | "coverDescriptor" | "previewDescriptor" | "runtimeProps" | "status">;
   }): Promise<Array<{ entryId: string; detail: Record<string, unknown> }>>;
   renderEntryCover(entryId: string): Promise<BoxEntryCoverView>;
   resolveEntryResource(request: {
     entryId: string;
     resource: {
-      kind: "cover" | "preview" | "cardFile" | "custom";
+      kind: "cover" | "preview" | "documentFile" | "custom";
       key?: string;
       sizeHint?: { width?: number; height?: number };
     };
@@ -92,10 +95,11 @@ export interface BoxLayoutRuntime {
   readBoxAsset(assetPath: string): Promise<ResolvedRuntimeResource>;
   prefetchEntries(request: {
     entryIds: string[];
-    targets: Array<"cover" | "preview" | "cardInfo">;
+    targets: Array<"cover" | "preview" | "documentInfo">;
   }): Promise<void>;
   openEntry(entryId: string): Promise<{
-    mode: "card-window" | "external";
+    mode: "document-window" | "external";
+    documentType?: "card" | "box";
     windowId?: string;
     pluginId?: string;
     url?: string;

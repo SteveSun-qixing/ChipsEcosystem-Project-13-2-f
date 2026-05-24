@@ -1,12 +1,15 @@
 import React from "react";
-import type { BoxEntrySnapshot } from "../shared/types";
-import type { LayoutConfig, InformationDensity } from "../schema/layout-config";
+import type { BoxEntrySnapshot, ResolvedRuntimeResource } from "../shared/types";
+import type { LayoutConfig, SortMode } from "../schema/layout-config";
 import { getLayoutMessage } from "../shared/i18n";
 
 export interface LayoutEditorPanelProps {
   entries: BoxEntrySnapshot[];
   config: LayoutConfig;
   locale?: string;
+  readBoxAsset?(assetPath: string): Promise<ResolvedRuntimeResource>;
+  importBoxAsset?(input: { file: File; preferredPath?: string }): Promise<{ assetPath: string }>;
+  deleteBoxAsset?(assetPath: string): Promise<void>;
   onChange(next: LayoutConfig): void;
 }
 
@@ -34,57 +37,20 @@ export function LayoutEditorPanel({
       <section style={{ display: "grid", gap: "12px" }}>
         <strong>{getLayoutMessage(locale, "editor.section.display")}</strong>
         <label style={{ display: "grid", gap: "6px" }}>
-          <span>{getLayoutMessage(locale, "editor.column_count")}</span>
-          <input
-            type="number"
-            min={1}
-            max={12}
-            value={config.props.columnCount}
-            onChange={(event) => {
-              onChange(updateProps(config, { columnCount: Number(event.currentTarget.value) }));
-            }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: "6px" }}>
-          <span>{getLayoutMessage(locale, "editor.gap")}</span>
-          <input
-            type="number"
-            min={0}
-            max={64}
-            value={config.props.gap}
-            onChange={(event) => {
-              onChange(updateProps(config, { gap: Number(event.currentTarget.value) }));
-            }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: "6px" }}>
-          <span>{getLayoutMessage(locale, "editor.cover_ratio")}</span>
-          <input
-            type="number"
-            min={0.5}
-            max={3}
-            step={0.1}
-            value={config.props.coverRatio}
-            onChange={(event) => {
-              onChange(updateProps(config, { coverRatio: Number(event.currentTarget.value) }));
-            }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: "6px" }}>
-          <span>{getLayoutMessage(locale, "editor.information_density")}</span>
+          <span>{getLayoutMessage(locale, "editor.sort_mode")}</span>
           <select
-            value={config.props.informationDensity}
+            value={config.props.sortMode}
             onChange={(event) => {
               onChange(
                 updateProps(config, {
-                  informationDensity: event.currentTarget.value as InformationDensity,
+                  sortMode: event.currentTarget.value as SortMode,
                 })
               );
             }}
           >
-            <option value="compact">compact</option>
-            <option value="comfortable">comfortable</option>
-            <option value="expanded">expanded</option>
+            <option value="manual">{getLayoutMessage(locale, "editor.sort_manual")}</option>
+            <option value="name-asc">{getLayoutMessage(locale, "editor.sort_name_asc")}</option>
+            <option value="name-desc">{getLayoutMessage(locale, "editor.sort_name_desc")}</option>
           </select>
         </label>
       </section>

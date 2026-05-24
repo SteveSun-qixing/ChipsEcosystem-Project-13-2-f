@@ -19,7 +19,8 @@ describe("layoutDefinition", () => {
       mimeType: "image/png",
     });
     const openEntry = vi.fn().mockResolvedValue({
-      mode: "card-window",
+      mode: "document-window",
+      documentType: "card",
       windowId: "window-1",
     });
 
@@ -70,7 +71,7 @@ describe("layoutDefinition", () => {
     expect(container.textContent).toContain("Demo Card");
     const tile = container.querySelector('[data-entry-id="entry-1"]');
     expect(tile).toBeTruthy();
-    expect(container.querySelector('[data-scope="card-cover-frame"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="embedded-document-frame"]')).toBeTruthy();
     expect(container.textContent).not.toContain("Summary");
     expect(renderEntryCover).toHaveBeenCalledWith("entry-1");
     tile?.querySelector('[data-grid-entry-title]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -97,8 +98,9 @@ describe("layoutDefinition", () => {
       });
     });
 
-    const input = container.querySelector('input[type="number"]');
-    expect(input).toBeTruthy();
+    const select = container.querySelector("select");
+    expect(select).toBeTruthy();
+    expect(container.querySelector('input[type="number"]')).toBeNull();
     await act(async () => {
       cleanup?.();
     });

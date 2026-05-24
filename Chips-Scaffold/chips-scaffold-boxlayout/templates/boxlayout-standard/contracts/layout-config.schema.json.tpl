@@ -9,26 +9,17 @@
     },
     "props": {
       "type": "object",
-      "required": ["columnCount", "gap", "coverRatio", "informationDensity"],
+      "required": ["sortMode", "background", "topRegion"],
       "properties": {
-        "columnCount": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 12
-        },
-        "gap": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 64
-        },
-        "coverRatio": {
-          "type": "number",
-          "minimum": 0.5,
-          "maximum": 3
-        },
-        "informationDensity": {
+        "sortMode": {
           "type": "string",
-          "enum": ["compact", "comfortable", "expanded"]
+          "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
         }
       }
     },
@@ -36,6 +27,25 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets/.+"
+        },
+        "html": {
+          "type": "string"
+        }
       }
     }
   }

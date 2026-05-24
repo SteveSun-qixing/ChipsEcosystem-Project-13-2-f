@@ -100,6 +100,14 @@ export const StandardCompoundSlotSchemas = {
     row: { type: 'Table', required: true, multiple: true, part: 'row' },
     cell: { type: 'Table', required: true, multiple: true, part: 'cell' },
     pagination: { type: 'Toolbar', required: false, multiple: false, part: 'pagination' }
+  },
+  Tree: {
+    item: { type: ['View', 'Section'], required: false, multiple: true, part: 'item', role: 'treeitem' },
+    branch: { type: ['View', 'Section'], required: false, multiple: true, part: 'branch', role: 'treeitem' },
+    leaf: { type: ['View', 'Text', 'Section'], required: false, multiple: true, part: 'leaf', role: 'treeitem' },
+    disclosure: { type: 'Command', required: false, multiple: true, part: 'disclosure' },
+    label: { type: 'Text', required: false, multiple: true, part: 'label' },
+    group: { type: ['List', 'Section'], required: false, multiple: true, part: 'group', role: 'group' }
   }
 } as const satisfies Record<string, SlotSchema>;
 

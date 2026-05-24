@@ -1826,11 +1826,16 @@ export const COMPONENT_TOKEN_MAP = {
   ],
   tree: [
     "chips.comp.tree.root.surface",
-    "chips.comp.tree.node.surface.idle",
-    "chips.comp.tree.node.surface.selected",
-    "chips.comp.tree.node.text.color",
-    "chips.comp.tree.toggle.color",
-    "chips.comp.tree.guide.color",
+    "chips.comp.tree.item.surface.idle",
+    "chips.comp.tree.item.surface.hover",
+    "chips.comp.tree.item.surface.selected",
+    "chips.comp.tree.item.surface.disabled",
+    "chips.comp.tree.item.text.color",
+    "chips.comp.tree.branch.indent",
+    "chips.comp.tree.leaf.indent",
+    "chips.comp.tree.disclosure.color",
+    "chips.comp.tree.group.guide.color",
+    "chips.comp.tree.status.color.error",
     "chips.comp.tree.focus.outline"
   ],
   "date-time": [
@@ -2271,7 +2276,7 @@ export function buildComponentContract(component) {
     tree: {
       component: "tree",
       scope: "tree",
-      parts: ["root", "node", "toggle", "label", "children", "status"],
+      parts: ["root", "item", "branch", "leaf", "disclosure", "label", "group", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     "date-time": {
@@ -3183,23 +3188,26 @@ export function flattenTreeNodes(nodes, expandedIds) {
   const expandedSet = new Set(Array.isArray(expandedIds) ? expandedIds.map((id) => String(id)) : []);
 
   const walk = (source, depth, parentId) => {
-    for (const item of source) {
-      if (!item || typeof item !== "object") {
-        continue;
-      }
-
+    const entries = source.filter((item) => item && typeof item === "object");
+    const setSize = entries.length;
+    for (const [index, item] of entries.entries()) {
       const id = String(item.id);
       const children = Array.isArray(item.children) ? item.children : [];
       const isExpanded = children.length > 0 && expandedSet.has(id);
+      const label = item.label !== undefined && item.label !== null ? item.label : id;
 
       list.push({
         id,
-        label: typeof item.label === "string" ? item.label : id,
+        label,
+        labelText: getTreeLabelText(label, id),
         depth,
+        level: depth + 1,
         parentId,
         disabled: item.disabled === true,
         hasChildren: children.length > 0,
         expanded: isExpanded,
+        setSize,
+        posInSet: index + 1,
         raw: item
       });
 
@@ -3239,6 +3247,30 @@ export function findTreeParentId(nodes, targetId) {
   };
 
   return walk(normalizedNodes, null);
+}
+
+function getTreeLabelText(label, fallback) {
+  if (typeof label === "string" || typeof label === "number") {
+    return String(label);
+  }
+  return String(fallback);
+}
+
+function getTreeItemPart(item) {
+  if (!item || typeof item !== "object") {
+    return "item";
+  }
+  if (item.part === "branch" || item.part === "leaf" || item.part === "item") {
+    return item.part;
+  }
+  return item.hasChildren ? "branch" : "leaf";
+}
+
+function getTreeItemState(rootState, item) {
+  if (item?.disabled) {
+    return "disabled";
+  }
+  return rootState;
 }
 
 export function filterCommandPaletteItems(items, query) {
@@ -12108,8 +12140,73 @@ export const ChipsDataGrid = Object.assign(DataGridRoot, {
 
 ChipsDataGrid.displayName = "ChipsDataGrid";
 
-export const ChipsTree = React.forwardRef((props, ref) => {
+const [TreeCompoundContext, useTreeCompoundContext] = createCompoundContext("tree");
+const TreeItemCompoundContext = React.createContext(null);
+TreeItemCompoundContext.displayName = "tree-compound-item-context";
+
+function useTreeItemCompoundContext(part) {
+  const value = React.useContext(TreeItemCompoundContext);
+  if (!value) {
+    throw new Error(`TREE_COMPOUND_ITEM_CONTEXT_MISSING:${part}`);
+  }
+  return value;
+}
+
+function sortRegisteredTreeItems(items) {
+  return [...items].sort((left, right) => {
+    const leftNode = left.ref?.current;
+    const rightNode = right.ref?.current;
+    if (leftNode && rightNode && leftNode !== rightNode && typeof leftNode.compareDocumentPosition === "function") {
+      const position = leftNode.compareDocumentPosition(rightNode);
+      if ((position & 4) !== 0) {
+        return -1;
+      }
+      if ((position & 2) !== 0) {
+        return 1;
+      }
+    }
+    return left.order - right.order;
+  });
+}
+
+function getFirstVisibleTreeItem(items) {
+  const firstIndex = getFirstEnabledIndex(items);
+  return firstIndex >= 0 ? items[firstIndex] : null;
+}
+
+function renderTreeDataNodes(nodes, depth = 0, parentId = null) {
+  const entries = (Array.isArray(nodes) ? nodes : []).filter((node) => node && typeof node === "object");
+  const setSize = entries.length;
+  return entries.map((node, index) => {
+    const id = String(node.id);
+    const children = Array.isArray(node.children) ? node.children : [];
+    const label = node.label !== undefined && node.label !== null ? node.label : id;
+    const sharedProps = {
+      key: id,
+      id,
+      label,
+      disabled: node.disabled === true,
+      level: depth + 1,
+      parentId,
+      posInSet: index + 1,
+      setSize
+    };
+
+    if (children.length > 0) {
+      return React.createElement(
+        TreeBranch,
+        sharedProps,
+        renderTreeDataNodes(children, depth + 1, id)
+      );
+    }
+
+    return React.createElement(TreeLeaf, sharedProps);
+  });
+}
+
+const TreeRoot = React.forwardRef((props, ref) => {
   const {
+    children,
     nodes = [],
     expandedIds,
     defaultExpandedIds = [],
@@ -12123,12 +12220,17 @@ export const ChipsTree = React.forwardRef((props, ref) => {
     collapseIconContent,
     onExpandedIdsChange,
     onSelectedIdChange,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
   const disabledByState = disabled || loading;
   const { interaction, handlers } = useInteractiveState(disabledByState);
+  const rootRef = React.useRef(null);
+  const registryRef = React.useRef(new Map());
+  const registryOrderRef = React.useRef(0);
+  const [registryVersion, setRegistryVersion] = React.useState(0);
   const [currentExpandedIds, setCurrentExpandedIds] = useControllableState({
     value: expandedIds,
     defaultValue: defaultExpandedIds,
@@ -12140,27 +12242,25 @@ export const ChipsTree = React.forwardRef((props, ref) => {
     onChange: onSelectedIdChange
   });
 
-  const visibleNodes = React.useMemo(
-    () => flattenTreeNodes(nodes, currentExpandedIds),
-    [nodes, currentExpandedIds]
+  const hasDataNodes = Array.isArray(nodes) && nodes.length > 0;
+  const hasCustomChildren = children !== undefined && children !== null;
+  const renderedChildren = hasCustomChildren ? children : renderTreeDataNodes(nodes);
+
+  const visibleDataItems = React.useMemo(
+    () => (hasCustomChildren ? [] : flattenTreeNodes(nodes, currentExpandedIds)),
+    [hasCustomChildren, nodes, currentExpandedIds]
   );
+
+  const registeredItems = React.useMemo(
+    () => sortRegisteredTreeItems([...registryRef.current.values()]),
+    [registryVersion]
+  );
+
+  const visibleItems = hasDataNodes && !hasCustomChildren ? visibleDataItems : registeredItems;
 
   const [activeNodeId, setActiveNodeId] = React.useState(
-    () => currentSelectedId || visibleNodes[0]?.id || null
+    () => currentSelectedId || visibleItems[0]?.id || null
   );
-
-  React.useEffect(() => {
-    if (visibleNodes.length === 0) {
-      setActiveNodeId(null);
-      return;
-    }
-
-    const targetId = activeNodeId || currentSelectedId;
-    const exists = visibleNodes.some((node) => node.id === targetId);
-    if (!exists) {
-      setActiveNodeId(visibleNodes[0].id);
-    }
-  }, [activeNodeId, currentSelectedId, visibleNodes]);
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
@@ -12180,7 +12280,27 @@ export const ChipsTree = React.forwardRef((props, ref) => {
     [currentExpandedIds]
   );
 
-  const updateExpanded = (nodeId, shouldExpand) => {
+  const registerItem = React.useCallback((item) => {
+    const id = String(item.id);
+    const previous = registryRef.current.get(id);
+    const order = previous?.order ?? registryOrderRef.current;
+    if (!previous) {
+      registryOrderRef.current += 1;
+    }
+    registryRef.current.set(id, {
+      ...item,
+      id,
+      order
+    });
+    setRegistryVersion((version) => version + 1);
+
+    return () => {
+      registryRef.current.delete(id);
+      setRegistryVersion((version) => version + 1);
+    };
+  }, []);
+
+  const updateExpanded = React.useCallback((nodeId, shouldExpand) => {
     const id = String(nodeId);
     const next = new Set(expandedSet);
     if (shouldExpand) {
@@ -12189,34 +12309,61 @@ export const ChipsTree = React.forwardRef((props, ref) => {
       next.delete(id);
     }
     setCurrentExpandedIds([...next]);
-  };
+  }, [expandedSet, setCurrentExpandedIds]);
 
-  const selectNode = (nodeId) => {
-    const candidate = visibleNodes.find((item) => item.id === String(nodeId));
+  const selectNode = React.useCallback((nodeId) => {
+    const candidate = visibleItems.find((item) => item.id === String(nodeId));
     if (!candidate || candidate.disabled || disabledByState) {
       return;
     }
     setCurrentSelectedId(candidate.id);
     setActiveNodeId(candidate.id);
-  };
+  }, [disabledByState, setCurrentSelectedId, visibleItems]);
 
-  const moveActiveBy = (direction) => {
-    const focusable = visibleNodes.map((node) => ({ disabled: node.disabled }));
-    const activeIndex = visibleNodes.findIndex((node) => node.id === activeNodeId);
-    const nextIndex = getNextEnabledIndex(focusable, activeIndex, direction, true);
-    if (nextIndex >= 0 && visibleNodes[nextIndex]) {
-      setActiveNodeId(visibleNodes[nextIndex].id);
-    }
-  };
-
-  const handleKeyDown = (event) => {
-    if (disabledByState || visibleNodes.length === 0) {
+  React.useEffect(() => {
+    if (visibleItems.length === 0) {
+      setActiveNodeId(null);
       return;
     }
 
-    const currentIndex = visibleNodes.findIndex((node) => node.id === activeNodeId);
-    const currentNode = currentIndex >= 0 ? visibleNodes[currentIndex] : null;
-    if (!currentNode) {
+    const targetId = activeNodeId || currentSelectedId;
+    const exists = visibleItems.some((item) => item.id === targetId && item.disabled !== true);
+    if (!exists) {
+      setActiveNodeId(getFirstVisibleTreeItem(visibleItems)?.id ?? null);
+    }
+  }, [activeNodeId, currentSelectedId, visibleItems]);
+
+  React.useEffect(() => {
+    if (!activeNodeId || !rootRef.current || typeof document === "undefined") {
+      return;
+    }
+    const rootElement = rootRef.current;
+    const activeElement = document.activeElement;
+    const activeItem = registryRef.current.get(activeNodeId);
+    if (!activeItem?.ref?.current || !activeElement || !rootElement.contains(activeElement)) {
+      return;
+    }
+    if (activeElement !== activeItem.ref.current) {
+      activeItem.ref.current.focus();
+    }
+  }, [activeNodeId, registryVersion]);
+
+  const moveActiveBy = React.useCallback((direction) => {
+    const activeIndex = visibleItems.findIndex((item) => item.id === activeNodeId);
+    const nextIndex = getNextEnabledIndex(visibleItems, activeIndex, direction, true);
+    if (nextIndex >= 0 && visibleItems[nextIndex]) {
+      setActiveNodeId(visibleItems[nextIndex].id);
+    }
+  }, [activeNodeId, visibleItems]);
+
+  const handleKeyDown = React.useCallback((event) => {
+    if (disabledByState || visibleItems.length === 0) {
+      return;
+    }
+
+    const currentIndex = visibleItems.findIndex((item) => item.id === activeNodeId);
+    const currentItem = currentIndex >= 0 ? visibleItems[currentIndex] : getFirstVisibleTreeItem(visibleItems);
+    if (!currentItem) {
       return;
     }
 
@@ -12234,122 +12381,445 @@ export const ChipsTree = React.forwardRef((props, ref) => {
 
     if (event.key === "Home") {
       event.preventDefault();
-      const firstIndex = getFirstEnabledIndex(visibleNodes.map((node) => ({ disabled: node.disabled })));
-      if (firstIndex >= 0) {
-        setActiveNodeId(visibleNodes[firstIndex].id);
-      }
+      setActiveNodeId(getFirstVisibleTreeItem(visibleItems)?.id ?? null);
       return;
     }
 
     if (event.key === "End") {
       event.preventDefault();
-      const lastIndex = getNextEnabledIndex(
-        visibleNodes.map((node) => ({ disabled: node.disabled })),
-        0,
-        "prev",
-        true
-      );
+      const lastIndex = getNextEnabledIndex(visibleItems, 0, "prev", true);
       if (lastIndex >= 0) {
-        setActiveNodeId(visibleNodes[lastIndex].id);
+        setActiveNodeId(visibleItems[lastIndex].id);
       }
       return;
     }
 
-    if (event.key === "ArrowRight" && currentNode.hasChildren) {
+    if (event.key === "ArrowRight" && currentItem.hasChildren) {
       event.preventDefault();
-      updateExpanded(currentNode.id, true);
+      if (!expandedSet.has(currentItem.id)) {
+        updateExpanded(currentItem.id, true);
+      } else if (visibleItems[currentIndex + 1]) {
+        setActiveNodeId(visibleItems[currentIndex + 1].id);
+      }
       return;
     }
 
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      if (currentNode.hasChildren && currentNode.expanded) {
-        updateExpanded(currentNode.id, false);
+      if (currentItem.hasChildren && expandedSet.has(currentItem.id)) {
+        updateExpanded(currentItem.id, false);
         return;
       }
-      if (currentNode.parentId) {
-        setActiveNodeId(currentNode.parentId);
+      if (currentItem.parentId) {
+        setActiveNodeId(currentItem.parentId);
       }
       return;
     }
 
     if (isKeyboardActivationKey(event.key)) {
       event.preventDefault();
-      selectNode(currentNode.id);
+      selectNode(currentItem.id);
     }
-  };
+  }, [activeNodeId, disabledByState, expandedSet, moveActiveBy, selectNode, updateExpanded, visibleItems]);
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      disabled: disabledByState,
+      selectedId: currentSelectedId === null || currentSelectedId === undefined ? null : String(currentSelectedId),
+      activeId: activeNodeId,
+      expandedSet,
+      registerItem,
+      setActiveId: setActiveNodeId,
+      selectItem: selectNode,
+      updateExpanded,
+      expandIconContent,
+      collapseIconContent
+    }),
+    [
+      activeNodeId,
+      collapseIconContent,
+      currentSelectedId,
+      disabledByState,
+      expandIconContent,
+      expandedSet,
+      registerItem,
+      selectNode,
+      state,
+      updateExpanded
+    ]
+  );
 
   return React.createElement(
-    "ul",
-    {
-      ...createScopeAttributes("tree", "root", state),
-      ...handlers,
-      ref,
-      role: "tree",
-      tabIndex: 0,
-      "aria-label": ariaLabel,
-      "aria-disabled": disabledByState ? "true" : undefined,
-      onKeyDown: handleKeyDown
-    },
-    visibleNodes.map((node) =>
-      React.createElement(
-        "li",
-        {
-          ...createScopeAttributes("tree", "node", state),
-          key: node.id,
-          role: "treeitem",
-          tabIndex: node.id === activeNodeId ? 0 : -1,
-          "aria-level": node.depth + 1,
-          "aria-expanded": node.hasChildren ? String(node.expanded) : undefined,
-          "aria-selected": String(node.id === currentSelectedId),
-          "aria-disabled": node.disabled ? "true" : undefined,
-          "data-active": String(node.id === activeNodeId),
-          "data-selected": String(node.id === currentSelectedId),
-          style: { paddingLeft: `${node.depth * 16}px` },
-          onMouseDown: () => setActiveNodeId(node.id),
-          onClick: () => selectNode(node.id)
-        },
-        node.hasChildren
-          ? React.createElement(
-              "button",
-              {
-                ...createScopeAttributes("tree", "toggle", state),
-                type: "button",
-                tabIndex: -1,
-                "aria-label": node.label,
-                onClick: (event) => {
-                  event.stopPropagation();
-                  updateExpanded(node.id, !node.expanded);
-                }
-              },
-              node.expanded
-                ? resolveIconContent(collapseIconContent, "collapse")
-                : resolveIconContent(expandIconContent, "expand")
-            )
-          : null,
-        React.createElement(
-          "span",
-          createScopeAttributes("tree", "label", state),
-          node.label
-        ),
-        React.createElement("span", {
-          ...createScopeAttributes("tree", "children", state),
-          "aria-hidden": "true",
-          hidden: !node.hasChildren
-        })
-      )
-    ),
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("tree", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+    TreeCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("tree", "root", state),
+        ref: mergeRefs(ref, rootRef),
+        role: "tree",
+        tabIndex: visibleItems.length === 0 ? 0 : undefined,
+        "aria-label": rest["aria-label"] || ariaLabel,
+        "aria-labelledby": rest["aria-labelledby"],
+        "aria-disabled": disabledByState ? "true" : undefined,
+        onPointerEnter: mergeEventHandlers(rest.onPointerEnter, handlers.onPointerEnter),
+        onPointerLeave: mergeEventHandlers(rest.onPointerLeave, handlers.onPointerLeave),
+        onFocus: mergeEventHandlers(rest.onFocus, handlers.onFocus),
+        onBlur: mergeEventHandlers(rest.onBlur, handlers.onBlur),
+        onMouseDown: mergeEventHandlers(rest.onMouseDown, handlers.onMouseDown),
+        onMouseUp: mergeEventHandlers(rest.onMouseUp, handlers.onMouseUp),
+        onKeyDown: mergeEventHandlers(rest.onKeyDown, handleKeyDown)
+      },
+      renderedChildren,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("tree", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
   );
+});
+
+TreeRoot.displayName = "ChipsTree.Root";
+
+const TreeItemBase = React.forwardRef((props, ref) => {
+  const {
+    as: Element = "div",
+    children,
+    id,
+    label,
+    textValue,
+    disabled = false,
+    level,
+    parentId,
+    posInSet,
+    setSize,
+    part = "item",
+    hasChildren = false,
+    controlsId,
+    onClick,
+    onMouseDown,
+    style,
+    ...rest
+  } = props;
+  const treeContext = useTreeCompoundContext(part);
+  const parentContext = React.useContext(TreeItemCompoundContext);
+  const generatedId = React.useId();
+  const itemId = String(id ?? rest.id ?? generatedId);
+  const itemLevel = typeof level === "number" ? level : (parentContext?.level ?? 0) + 1;
+  const itemParentId = parentId === undefined ? parentContext?.id ?? null : parentId;
+  const disabledByState = disabled || treeContext.disabled;
+  const expanded = treeContext.expandedSet.has(itemId);
+  const selected = treeContext.selectedId === itemId;
+  const active = treeContext.activeId === itemId;
+  const labelContent = children !== undefined && children !== null ? children : label;
+  const labelText = isNonEmptyString(textValue) ? textValue.trim() : getTreeLabelText(labelContent, itemId);
+  const localRef = React.useRef(null);
+  const itemPart = part === "branch" || part === "leaf" || part === "item" ? part : getTreeItemPart({ part, hasChildren });
+  const itemState = getTreeItemState(treeContext.state, { disabled: disabledByState });
+  const itemStyle = {
+    ...style,
+    "--chips-tree-level": String(Math.max(1, itemLevel))
+  };
+
+  React.useEffect(
+    () =>
+      treeContext.registerItem({
+        id: itemId,
+        parentId: itemParentId,
+        disabled: disabledByState,
+        hasChildren,
+        expanded,
+        level: itemLevel,
+        setSize,
+        posInSet,
+        part: itemPart,
+        labelText,
+        ref: localRef
+      }),
+    [
+      disabledByState,
+      expanded,
+      hasChildren,
+      itemId,
+      itemLevel,
+      itemParentId,
+      itemPart,
+      labelText,
+      posInSet,
+      setSize,
+      treeContext.registerItem
+    ]
+  );
+
+  const itemContextValue = React.useMemo(
+    () => ({
+      id: itemId,
+      level: itemLevel,
+      parentId: itemParentId,
+      disabled: disabledByState,
+      hasChildren,
+      expanded,
+      labelText,
+      state: itemState
+    }),
+    [disabledByState, expanded, hasChildren, itemId, itemLevel, itemParentId, itemState, labelText]
+  );
+
+  return React.createElement(
+    TreeItemCompoundContext.Provider,
+    { value: itemContextValue },
+    React.createElement(
+      Element,
+      {
+        ...rest,
+        ...createScopeAttributes("tree", itemPart, itemState),
+        ref: mergeRefs(ref, localRef),
+        id: rest.id || itemId,
+        role: "treeitem",
+        tabIndex: active && !disabledByState ? 0 : -1,
+        "aria-level": itemLevel,
+        "aria-setsize": setSize,
+        "aria-posinset": posInSet,
+        "aria-expanded": hasChildren ? String(expanded) : undefined,
+        "aria-selected": String(selected),
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-controls": hasChildren && controlsId ? controlsId : undefined,
+        "data-active": String(active),
+        "data-selected": String(selected),
+        "data-expanded": hasChildren ? String(expanded) : undefined,
+        "data-level": String(itemLevel),
+        style: itemStyle,
+        onMouseDown: mergeEventHandlers(onMouseDown, () => {
+          if (!disabledByState) {
+            treeContext.setActiveId(itemId);
+          }
+        }),
+        onClick: mergeEventHandlers(onClick, () => treeContext.selectItem(itemId))
+      },
+      React.createElement(
+        "span",
+        createScopeAttributes("tree", "label", itemState),
+        labelContent
+      )
+    )
+  );
+});
+
+TreeItemBase.displayName = "ChipsTree.ItemBase";
+
+const TreeItem = React.forwardRef((props, ref) =>
+  React.createElement(TreeItemBase, {
+    ...props,
+    ref,
+    part: "item",
+    hasChildren: false
+  })
+);
+
+TreeItem.displayName = "ChipsTree.Item";
+
+const TreeDisclosure = React.forwardRef((props, ref) => {
+  const { children, onClick, ...rest } = props;
+  const treeContext = useTreeCompoundContext("disclosure");
+  const itemContext = useTreeItemCompoundContext("disclosure");
+  const expanded = treeContext.expandedSet.has(itemContext.id);
+  const disabledByState = itemContext.disabled || treeContext.disabled;
+  const state = getTreeItemState(treeContext.state, { disabled: disabledByState });
+
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("tree", "disclosure", state),
+      ref,
+      type: "button",
+      tabIndex: -1,
+      disabled: disabledByState,
+      "aria-label": rest["aria-label"] || itemContext.labelText,
+      "aria-expanded": String(expanded),
+      "aria-controls": rest["aria-controls"],
+      "data-expanded": String(expanded),
+      onClick: mergeEventHandlers(onClick, (event) => {
+        event.stopPropagation();
+        treeContext.updateExpanded(itemContext.id, !expanded);
+      })
+    },
+    children !== undefined
+      ? children
+      : expanded
+        ? resolveIconContent(treeContext.collapseIconContent, "collapse")
+        : resolveIconContent(treeContext.expandIconContent, "expand")
+  );
+});
+
+TreeDisclosure.displayName = "ChipsTree.Disclosure";
+
+const TreeBranch = React.forwardRef((props, ref) => {
+  const {
+    children,
+    id,
+    label,
+    textValue,
+    groupId,
+    as: Element = "div",
+    disabled = false,
+    level,
+    parentId,
+    posInSet,
+    setSize,
+    onClick,
+    onMouseDown,
+    style,
+    ...rest
+  } = props;
+  const treeContext = useTreeCompoundContext("branch");
+  const parentContext = React.useContext(TreeItemCompoundContext);
+  const generatedId = React.useId();
+  const itemId = String(id ?? rest.id ?? generatedId);
+  const itemLevel = typeof level === "number" ? level : (parentContext?.level ?? 0) + 1;
+  const itemParentId = parentId === undefined ? parentContext?.id ?? null : parentId;
+  const normalizedItemId = normalizeDomIdSegment(itemId, "branch");
+  const resolvedGroupId = groupId || `${normalizedItemId}-group`;
+  const expanded = treeContext.expandedSet.has(itemId);
+  const selected = treeContext.selectedId === itemId;
+  const active = treeContext.activeId === itemId;
+  const childArray = React.Children.toArray(children);
+  const disclosure = childArray.find((child) => React.isValidElement(child) && child.type === TreeDisclosure);
+  const groupChildren = childArray.filter((child) => !(React.isValidElement(child) && child.type === TreeDisclosure));
+  const labelContent = label !== undefined && label !== null ? label : itemId;
+  const labelText = isNonEmptyString(textValue) ? textValue.trim() : getTreeLabelText(labelContent, itemId);
+  const disabledByState = disabled || treeContext.disabled;
+  const branchState = getTreeItemState(treeContext.state, { disabled: disabledByState });
+  const localRef = React.useRef(null);
+  const itemStyle = {
+    ...style,
+    "--chips-tree-level": String(Math.max(1, itemLevel))
+  };
+
+  React.useEffect(
+    () =>
+      treeContext.registerItem({
+        id: itemId,
+        parentId: itemParentId,
+        disabled: disabledByState,
+        hasChildren: true,
+        expanded,
+        level: itemLevel,
+        setSize,
+        posInSet,
+        part: "branch",
+        labelText,
+        ref: localRef
+      }),
+    [
+      disabledByState,
+      expanded,
+      itemId,
+      itemLevel,
+      itemParentId,
+      labelText,
+      posInSet,
+      setSize,
+      treeContext.registerItem
+    ]
+  );
+
+  return React.createElement(
+    TreeItemCompoundContext.Provider,
+    {
+      value: {
+        id: itemId,
+        level: itemLevel,
+        parentId: itemParentId,
+        disabled: disabledByState,
+        hasChildren: true,
+        expanded,
+        labelText,
+        state: branchState
+      }
+    },
+    React.createElement(
+      Element,
+      {
+        ...rest,
+        ...createScopeAttributes("tree", "branch", branchState),
+        ref: mergeRefs(ref, localRef),
+        id: rest.id || itemId,
+        role: "treeitem",
+        tabIndex: active && !disabledByState ? 0 : -1,
+        "aria-level": itemLevel,
+        "aria-setsize": setSize,
+        "aria-posinset": posInSet,
+        "aria-expanded": String(expanded),
+        "aria-selected": String(selected),
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "aria-controls": resolvedGroupId,
+        "data-active": String(active),
+        "data-selected": String(selected),
+        "data-expanded": String(expanded),
+        "data-level": String(itemLevel),
+        style: itemStyle,
+        onMouseDown: mergeEventHandlers(onMouseDown, () => {
+          if (!disabledByState) {
+            treeContext.setActiveId(itemId);
+          }
+        }),
+        onClick: mergeEventHandlers(onClick, () => treeContext.selectItem(itemId))
+      },
+      React.createElement(
+        "span",
+        createScopeAttributes("tree", "label", branchState),
+        disclosure || React.createElement(TreeDisclosure, {
+          "aria-controls": resolvedGroupId
+        }),
+        labelContent
+      ),
+      expanded && groupChildren.length > 0
+        ? React.createElement(
+            "div",
+            {
+              ...createScopeAttributes("tree", "group", branchState),
+              id: resolvedGroupId,
+              role: "group",
+              "data-level": String(itemLevel + 1)
+            },
+            groupChildren
+          )
+        : null
+    )
+  );
+});
+
+TreeBranch.displayName = "ChipsTree.Branch";
+
+const TreeLeaf = React.forwardRef((props, ref) => {
+  const { children, label, textValue, ...rest } = props;
+  return React.createElement(TreeItemBase, {
+    ...rest,
+    ref,
+    label: label !== undefined && label !== null ? label : children,
+    textValue,
+    part: "leaf",
+    hasChildren: false
+  });
+});
+
+TreeLeaf.displayName = "ChipsTree.Leaf";
+
+export const ChipsTree = Object.assign(TreeRoot, {
+  Root: TreeRoot,
+  Item: TreeItem,
+  Branch: TreeBranch,
+  Leaf: TreeLeaf,
+  Disclosure: TreeDisclosure
 });
 
 ChipsTree.displayName = "ChipsTree";
@@ -15492,7 +15962,7 @@ export const STAGE7_DATA_ADVANCED_COMPONENTS = [
   createComponentMeta({
     name: "ChipsTree",
     scope: "tree",
-    parts: ["root", "node", "toggle", "label", "children", "status"],
+    parts: ["root", "item", "branch", "leaf", "disclosure", "label", "group", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({

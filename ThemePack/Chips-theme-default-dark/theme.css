@@ -2691,29 +2691,56 @@ body {
   padding: var(--chips-base-space-2);
 }
 
-[data-scope="tree"][data-part="node"] {
+[data-scope="tree"][data-part="item"],
+[data-scope="tree"][data-part="branch"],
+[data-scope="tree"][data-part="leaf"] {
   padding-inline: var(--chips-base-space-2);
   padding-block: 2px;
   border-radius: var(--chips-base-radius-sm);
-  background-color: var(--chips-comp-tree-node-surface-idle);
-  color: var(--chips-comp-tree-node-text-color);
+  background-color: var(--chips-comp-tree-item-surface-idle);
+  color: var(--chips-comp-tree-item-text-color);
+  padding-inline-start: calc((var(--chips-tree-level, 1) - 1) * var(--chips-comp-tree-branch-indent, var(--chips-base-space-4)) + var(--chips-base-space-2));
 }
 
-[data-scope="tree"][data-part="node"][data-state="active"] {
-  background-color: var(--chips-comp-tree-node-surface-selected);
+[data-scope="tree"][data-part="item"]:hover,
+[data-scope="tree"][data-part="branch"]:hover,
+[data-scope="tree"][data-part="leaf"]:hover,
+[data-scope="tree"][data-part="item"][data-active="true"],
+[data-scope="tree"][data-part="branch"][data-active="true"],
+[data-scope="tree"][data-part="leaf"][data-active="true"] {
+  background-color: var(--chips-comp-tree-item-surface-hover);
 }
 
-[data-scope="tree"][data-part="toggle"] {
-  color: var(--chips-comp-tree-toggle-color);
+[data-scope="tree"][data-part="item"][data-selected="true"],
+[data-scope="tree"][data-part="branch"][data-selected="true"],
+[data-scope="tree"][data-part="leaf"][data-selected="true"] {
+  background-color: var(--chips-comp-tree-item-surface-selected);
 }
 
-[data-scope="tree"][data-part="children"] {
-  border-left: 1px solid var(--chips-comp-tree-guide-color);
+[data-scope="tree"][data-part="item"][data-state="disabled"],
+[data-scope="tree"][data-part="branch"][data-state="disabled"],
+[data-scope="tree"][data-part="leaf"][data-state="disabled"] {
+  background-color: var(--chips-comp-tree-item-surface-disabled);
+}
+
+[data-scope="tree"][data-part="disclosure"] {
+  color: var(--chips-comp-tree-disclosure-color);
+}
+
+[data-scope="tree"][data-part="group"] {
+  border-left: 1px solid var(--chips-comp-tree-group-guide-color);
   margin-left: var(--chips-base-space-2);
   padding-left: var(--chips-base-space-2);
 }
 
-[data-scope="tree"][data-part="root"][data-state="focus"] {
+[data-scope="tree"][data-part="status"] {
+  color: var(--chips-comp-tree-status-color-error);
+}
+
+[data-scope="tree"][data-part="root"][data-state="focus"],
+[data-scope="tree"][data-part="item"]:focus-visible,
+[data-scope="tree"][data-part="branch"]:focus-visible,
+[data-scope="tree"][data-part="leaf"]:focus-visible {
   outline: 1px solid var(--chips-comp-tree-focus-outline);
   outline-offset: 2px;
 }

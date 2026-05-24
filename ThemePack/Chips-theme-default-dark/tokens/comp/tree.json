@@ -5,20 +5,35 @@
         "root": {
           "surface": "{chips.sys.color.surface}"
         },
-        "node": {
+        "item": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "selected": "{chips.sys.color.surface-accent}"
+            "hover": "{chips.sys.color.surface-raised}",
+            "selected": "{chips.sys.color.surface-accent}",
+            "disabled": "{chips.sys.color.surface}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
           }
         },
-        "toggle": {
+        "branch": {
+          "indent": "{chips.layout.gap.md}"
+        },
+        "leaf": {
+          "indent": "{chips.layout.gap.md}"
+        },
+        "disclosure": {
           "color": "{chips.sys.color.on-surface-muted}"
         },
-        "guide": {
-          "color": "{chips.sys.color.border-strong}"
+        "group": {
+          "guide": {
+            "color": "{chips.sys.color.border-strong}"
+          }
+        },
+        "status": {
+          "color": {
+            "error": "{chips.sys.color.error}"
+          }
         },
         "focus": {
           "outline": "{chips.sys.color.focus-ring}"

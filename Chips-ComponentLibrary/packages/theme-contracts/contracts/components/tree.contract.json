@@ -3,10 +3,12 @@
   "scope": "tree",
   "parts": [
     "root",
-    "node",
-    "toggle",
+    "item",
+    "branch",
+    "leaf",
+    "disclosure",
     "label",
-    "children",
+    "group",
     "status"
   ],
   "states": [
@@ -20,11 +22,16 @@
   ],
   "tokens": [
     "chips.comp.tree.root.surface",
-    "chips.comp.tree.node.surface.idle",
-    "chips.comp.tree.node.surface.selected",
-    "chips.comp.tree.node.text.color",
-    "chips.comp.tree.toggle.color",
-    "chips.comp.tree.guide.color",
+    "chips.comp.tree.item.surface.idle",
+    "chips.comp.tree.item.surface.hover",
+    "chips.comp.tree.item.surface.selected",
+    "chips.comp.tree.item.surface.disabled",
+    "chips.comp.tree.item.text.color",
+    "chips.comp.tree.branch.indent",
+    "chips.comp.tree.leaf.indent",
+    "chips.comp.tree.disclosure.color",
+    "chips.comp.tree.group.guide.color",
+    "chips.comp.tree.status.color.error",
     "chips.comp.tree.focus.outline"
   ]
 }

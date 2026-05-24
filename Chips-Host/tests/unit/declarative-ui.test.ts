@@ -5,6 +5,7 @@ import {
   Form,
   Image,
   Media,
+  List,
   Navigation,
   ScrollView,
   Section,
@@ -329,6 +330,11 @@ describe('Declarative UI', () => {
       rootType: 'Table',
       slots: StandardCompoundSlotSchemas.DataGrid
     });
+    const Tree = createCompoundComponent({
+      name: 'Tree',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.Tree
+    });
 
     expect(
       Dialog.validate({
@@ -481,6 +487,47 @@ describe('Declarative UI', () => {
       expect.arrayContaining([
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_MULTIPLE_FORBIDDEN', path: 'slots.header' }),
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.table' })
+      ])
+    );
+    expect(
+      Tree.validate({
+        root: { id: 'tree-root' },
+        slots: {
+          branch: [Section({ id: 'tree-branch' })],
+          disclosure: [Command({ id: 'tree-disclosure' })],
+          label: [Text({ id: 'tree-label' })],
+          group: [List({ id: 'tree-group' })],
+          leaf: [Text({ id: 'tree-leaf' })],
+          item: [View({ id: 'tree-item' })]
+        }
+      })
+    ).toEqual([]);
+    expect(
+      Tree.validate({
+        root: { id: 'bad-tree-slot-root' },
+        slots: {
+          node: View({ id: 'legacy-node' }),
+          toggle: Command({ id: 'legacy-toggle' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.node' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.toggle' })
+      ])
+    );
+    expect(
+      Tree.validate({
+        root: { id: 'bad-tree-type-root' },
+        slots: {
+          disclosure: [View({ id: 'bad-tree-disclosure' })],
+          group: [Command({ id: 'bad-tree-group' })]
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.disclosure' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.group' })
       ])
     );
   });

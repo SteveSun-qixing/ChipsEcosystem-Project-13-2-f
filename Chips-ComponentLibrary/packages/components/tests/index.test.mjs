@@ -1760,6 +1760,45 @@ test("DataGrid exposes formal compound parts", () => {
   assert.equal(typeof ChipsDataGrid.Pagination.render, "function");
 });
 
+test("Tree exposes formal compound parts", () => {
+  assert.equal(ChipsTree.Root, ChipsTree);
+  assert.equal(typeof ChipsTree.Item.render, "function");
+  assert.equal(typeof ChipsTree.Branch.render, "function");
+  assert.equal(typeof ChipsTree.Leaf.render, "function");
+  assert.equal(typeof ChipsTree.Disclosure.render, "function");
+});
+
+test("Tree data-driven rendering uses compound parts and aria tree metadata", () => {
+  const flatOpen = flattenTreeNodes(
+    [
+      {
+        id: "src",
+        label: "Source",
+        children: [
+          { id: "index", label: "index.ts" },
+          { id: "test", label: "index.test.ts", disabled: true }
+        ]
+      }
+    ],
+    ["src"]
+  );
+
+  assert.deepEqual(
+    flatOpen.map((item) => ({
+      id: item.id,
+      level: item.level,
+      setSize: item.setSize,
+      posInSet: item.posInSet,
+      parentId: item.parentId
+    })),
+    [
+      { id: "src", level: 1, setSize: 1, posInSet: 1, parentId: null },
+      { id: "index", level: 2, setSize: 2, posInSet: 1, parentId: "src" },
+      { id: "test", level: 2, setSize: 2, posInSet: 2, parentId: "src" }
+    ]
+  );
+});
+
 test("all stage-seven workbench component exports exist", () => {
   for (const component of [
     ChipsSplitPane,
@@ -1843,7 +1882,17 @@ test("buildComponentContract includes stage-seven second batch components", () =
   assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.pagination.gap"));
   assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.row.surface.hover"));
   assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.row.surface.selected"));
-  assert.ok(tree.tokens.includes("chips.comp.tree.node.surface.selected"));
+  assert.ok(tree.parts.includes("item"));
+  assert.ok(tree.parts.includes("branch"));
+  assert.ok(tree.parts.includes("leaf"));
+  assert.ok(tree.parts.includes("disclosure"));
+  assert.ok(tree.parts.includes("group"));
+  assert.equal(tree.parts.includes("node"), false);
+  assert.equal(tree.parts.includes("toggle"), false);
+  assert.equal(tree.parts.includes("children"), false);
+  assert.ok(tree.tokens.includes("chips.comp.tree.item.surface.selected"));
+  assert.ok(tree.tokens.includes("chips.comp.tree.disclosure.color"));
+  assert.ok(tree.tokens.includes("chips.comp.tree.group.guide.color"));
   assert.ok(dateTime.tokens.includes("chips.comp.date-time.input.border.error"));
   assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.result.surface.active"));
 });

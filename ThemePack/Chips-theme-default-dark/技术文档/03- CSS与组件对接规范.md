@@ -154,6 +154,8 @@
 
 `data-grid` 在本主题中对齐任务016 Compound contract：只消费 `root / toolbar / header / row / cell / pagination / status` 公开 part，不依赖内部 `table` DOM。工具栏和分页分别使用 `chips.comp.data-grid.toolbar.*` 与 `chips.comp.data-grid.pagination.*`；列头排序态使用 `data-part="cell"`、`data-header="true"` 和 `data-sort="ascending|descending"`；行选中视觉必须匹配 `data-selected="true"`。
 
+`tree` 在本主题中对齐任务016 Compound contract：只消费 `root / item / branch / leaf / disclosure / label / group / status` 公开 part，不依赖旧 `node / toggle / children`。树项基础视觉统一使用 `chips.comp.tree.item.*`，展开折叠入口使用 `chips.comp.tree.disclosure.color`，子树引导线使用 `chips.comp.tree.group.guide.color`。节点选中视觉必须匹配 `data-selected="true"`，层级缩进通过组件输出的 `--chips-tree-level` 与 `chips.comp.tree.branch.indent` token 计算。
+
 ---
 
 ## 5. 动效与布局

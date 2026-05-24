@@ -42,15 +42,19 @@
 ### 3.2 ChipsTree
 
 - `data-scope="tree"`
-- `data-part="root|node|toggle|label|children|status"`
+- Compound API：`ChipsTree.Root / Item / Branch / Leaf / Disclosure`
+- 公开 `data-part="root|item|branch|leaf|disclosure|label|group|status"`
 - 语义：
   - root：`role="tree"`
-  - node：`role="treeitem"` + `aria-level`
+  - item/branch/leaf：`role="treeitem"` + `aria-level` + `aria-setsize` + `aria-posinset`
+  - branch：通过 `aria-expanded` 表达展开状态，子节点容器使用 `group role="group"`
+  - disclosure：分支内展开折叠控制，默认不进入 Tab 顺序
 - 能力：
   - 展开折叠（受控/非受控）
   - 节点选择（受控/非受控）
   - 键盘导航（`Arrow/Home/End/Enter/Space`）
   - 图标槽位：`expandIconContent`、`collapseIconContent`（避免内置硬编码文案）
+  - 旧 `node/toggle/children` 已收口，不再是公开 part；选中视觉使用 `data-selected="true"`，层级缩进使用 `--chips-tree-level` 与 Tree token，不在运行时硬编码像素。
 
 ### 3.3 ChipsDateTime
 
@@ -87,6 +91,8 @@
 - `chips.comp.command-palette.*`
 
 `ChipsDataGrid` 当前 required token 覆盖 `root.surface`、`toolbar.surface/gap`、`header.surface/text.color/sort.color`、`row.surface.idle/hover/selected`、`cell.text.color`、`pagination.surface/gap`、`border.color` 与 `focus.outline`。选中行视觉以 `data-selected="true"` 为正式选择器，不使用 `data-state="active"` 表达选择。
+
+`ChipsTree` 当前 required token 覆盖 `root.surface`、`item.surface.idle/hover/selected/disabled`、`item.text.color`、`branch.indent`、`leaf.indent`、`disclosure.color`、`group.guide.color`、`status.color.error` 与 `focus.outline`。选中节点视觉以 `data-selected="true"` 为正式选择器，不使用 `data-state="active"` 表达选择。
 
 对应源文件：
 

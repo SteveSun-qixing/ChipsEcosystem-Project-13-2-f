@@ -1380,7 +1380,8 @@ export interface DataGridCompoundComponent extends React.ForwardRefExoticCompone
   Pagination: React.ForwardRefExoticComponent<DataGridPaginationProps & React.RefAttributes<HTMLElement>>;
 }
 
-export interface TreeProps {
+export interface TreeProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode;
   nodes?: TreeNode[];
   expandedIds?: string[];
   defaultExpandedIds?: string[];
@@ -1396,6 +1397,37 @@ export interface TreeProps {
   onSelectedIdChange?: (selectedId: string | null) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface TreeItemProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  as?: keyof React.JSX.IntrinsicElements;
+  id?: string | number;
+  label?: React.ReactNode;
+  textValue?: string;
+  disabled?: boolean;
+  level?: number;
+  parentId?: string | null;
+  posInSet?: number;
+  setSize?: number;
+}
+
+export interface TreeBranchProps extends TreeItemProps {
+  groupId?: string;
+}
+
+export interface TreeLeafProps extends TreeItemProps {}
+
+export interface TreeDisclosureProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children?: React.ReactNode;
+}
+
+export interface TreeCompoundComponent extends React.ForwardRefExoticComponent<TreeProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<TreeProps & React.RefAttributes<HTMLDivElement>>;
+  Item: React.ForwardRefExoticComponent<TreeItemProps & React.RefAttributes<HTMLElement>>;
+  Branch: React.ForwardRefExoticComponent<TreeBranchProps & React.RefAttributes<HTMLElement>>;
+  Leaf: React.ForwardRefExoticComponent<TreeLeafProps & React.RefAttributes<HTMLElement>>;
+  Disclosure: React.ForwardRefExoticComponent<TreeDisclosureProps & React.RefAttributes<HTMLButtonElement>>;
 }
 
 export interface DateTimeProps {
@@ -1760,7 +1792,7 @@ export const ChipsTooltip: React.ForwardRefExoticComponent<TooltipProps & React.
 export const ChipsForm: FormCompoundComponent;
 export const ChipsVirtualList: React.ForwardRefExoticComponent<VirtualListProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsDataGrid: DataGridCompoundComponent;
-export const ChipsTree: React.ForwardRefExoticComponent<TreeProps & React.RefAttributes<HTMLUListElement>>;
+export const ChipsTree: TreeCompoundComponent;
 export const ChipsDateTime: React.ForwardRefExoticComponent<DateTimeProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsCommandPalette: React.ForwardRefExoticComponent<CommandPaletteProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsSplitPane: React.ForwardRefExoticComponent<SplitPaneProps & React.RefAttributes<HTMLDivElement>>;

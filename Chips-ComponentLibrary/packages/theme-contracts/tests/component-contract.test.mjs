@@ -288,11 +288,20 @@ test("data-grid contract contains header and cell tokens", () => {
   assert.ok(contract.tokens.includes("chips.comp.data-grid.row.surface.selected"));
 });
 
-test("tree contract contains node and children parts", () => {
+test("tree contract contains compound item and disclosure parts", () => {
   const contract = readContract("tree.contract.json");
   assertCommonShape(contract);
-  assert.ok(contract.parts.includes("children"));
-  assert.ok(contract.tokens.includes("chips.comp.tree.node.surface.selected"));
+  assert.ok(contract.parts.includes("item"));
+  assert.ok(contract.parts.includes("branch"));
+  assert.ok(contract.parts.includes("leaf"));
+  assert.ok(contract.parts.includes("disclosure"));
+  assert.ok(contract.parts.includes("group"));
+  assert.equal(contract.parts.includes("node"), false);
+  assert.equal(contract.parts.includes("toggle"), false);
+  assert.equal(contract.parts.includes("children"), false);
+  assert.ok(contract.tokens.includes("chips.comp.tree.item.surface.selected"));
+  assert.ok(contract.tokens.includes("chips.comp.tree.disclosure.color"));
+  assert.ok(contract.tokens.includes("chips.comp.tree.group.guide.color"));
 });
 
 test("date-time contract contains input error token", () => {
@@ -316,11 +325,11 @@ test("data-grid contract contains row selected token", () => {
   assert.ok(contract.tokens.includes("chips.comp.data-grid.row.surface.selected"));
 });
 
-test("tree contract contains node selected token", () => {
+test("tree contract contains item selected token", () => {
   const contract = readContract("tree.contract.json");
   assertCommonShape(contract);
-  assert.ok(contract.parts.includes("children"));
-  assert.ok(contract.tokens.includes("chips.comp.tree.node.surface.selected"));
+  assert.ok(contract.parts.includes("item"));
+  assert.ok(contract.tokens.includes("chips.comp.tree.item.surface.selected"));
 });
 
 test("date-time contract contains input border error token", () => {

@@ -335,6 +335,20 @@ chipsdev plugin enable chips.layout.my-grid-layout
 - `module`
 - `theme`
 
+`chipsdev create card <targetDir>` 会创建标准基础卡片插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`src/render`、`src/editor`、`src/schema`、`src/shared`、`i18n`、`templates`、`tests` 与必要静态资源，并预置以下脚本：
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run package
+npm run verify
+```
+
+其中 `verify` 串联 `lint/typecheck/test/build/validate/package`，可作为生成工程的默认本地质量门禁。
+
 ## 构建、打包与校验
 
 正式发布链路如下：

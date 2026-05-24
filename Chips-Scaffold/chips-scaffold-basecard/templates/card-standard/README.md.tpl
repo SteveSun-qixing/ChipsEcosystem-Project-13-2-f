@@ -20,6 +20,7 @@
 ├─ manifest.yaml          # 插件清单（type: card）
 ├─ package.json           # NPM 配置
 ├─ tsconfig.json          # TypeScript 配置
+├─ vitest.config.mts      # 生成工程测试配置
 ├─ chips.config.mjs       # chipsdev 构建配置
 ├─ src/
 │  ├─ index.ts            # 插件入口（注册渲染与编辑模块）
@@ -45,6 +46,7 @@
 │  └─ parameters.md       # 参数表与填写说明
 ├─ tests/
 │  ├─ unit/
+│  │  ├─ schema.test.ts
 │  │  ├─ render-view.test.tsx
 │  │  └─ editor-panel.test.tsx
 │  └─ integration/
@@ -116,6 +118,17 @@ npm run dev
 - Host 会在渲染阶段向基础卡片插件注入 `themeCssText`，模板默认会把该样式挂载到渲染容器中；
 - 查看态不默认添加额外边框、阴影、圆角壳层，基础卡片外观由宿主装配层与主题包共同决定；
 - 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包与组件库公开 contract。
+
+## 资源与生命周期
+
+- `resource_path` 只保存卡片根目录相对路径，不保存绝对路径、`file://`、`blob:` 或 `data:` 运行时地址；
+- 查看态通过 `resolveResourceUrl()` 获取临时预览 URL，并在 cleanup 中通过 `releaseResourceUrl()` 释放；
+- 查看态通过 `openResource()` 表达资源打开意图，业务上下文放入 `payload`，不在基础卡片内部直接启动应用；
+- 编辑态通过 `importResource()` 导入文件，只把宿主返回的 `path` 写回配置；
+- 编辑态通过 `deleteResource()` 删除当前引用资源，成功后清空 `resource_path`；
+- `importArchiveBundle()` 与 `convertTiffToPng()` 是可选宿主能力，适合网页包、图片序列、TIFF 封面转换等资源型卡片扩展；
+- 查看态和编辑态都支持重复挂载，新挂载前会清理同一容器上的旧 React root；
+- 编辑态 cleanup 会恢复 `html/body/container` 被本次挂载修改过的内联样式。
 
 ## 多语言与组件库
 

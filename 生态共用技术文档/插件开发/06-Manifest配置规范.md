@@ -44,7 +44,7 @@
 
 `entry` 规则：
 
-- `app/card/layout/module` 通常为字符串，如 `dist/index.html` 或 `dist/index.js`
+- `app/card/layout/module` 通常为字符串，如 `dist/index.html`、`dist/index.mjs` 或 `dist/index.js`
 - `theme` 必须为对象，并显式声明 `tokens` 与 `themeCss`
 
 ## 3. 运行目标矩阵：`runtime.targets`
@@ -187,10 +187,37 @@ capabilityFallbacks:
 
 - 应声明 `runtime.targets`
 - 正式解析依据仍是 `capabilities.cardTypes`
+- 不得声明 `ui.surface`
 - 一般推荐：
   - `desktop: true`
   - `headless: true`
   - `web/mobile: false`（直到对应宿主就绪）
+
+标准基础卡片插件示例：
+
+```yaml
+id: chips.basecard.example
+name: 示例基础卡片插件
+version: 0.1.0
+type: card
+entry: dist/index.mjs
+capabilities:
+  cardTypes:
+    - base.example
+permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+```
+
+`basecardDefinition.pluginId` 应与 `manifest.id` 对齐，`basecardDefinition.cardType` 应与 `manifest.capabilities.cardTypes[0]` 对齐。
 
 ### 7.2 `layout`
 

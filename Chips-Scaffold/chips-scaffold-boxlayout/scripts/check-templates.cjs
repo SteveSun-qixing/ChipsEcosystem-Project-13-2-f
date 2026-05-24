@@ -208,6 +208,37 @@ function main() {
         throw new Error(`模板 ${templateId} 配置 Schema 缺少：${requiredText}`);
       }
     }
+
+    const viewPageTs = fs.readFileSync(path.join(dir, "src", "view", "page.tsx.tpl"), "utf8");
+    const viewRuntimeTs = fs.readFileSync(path.join(dir, "src", "view", "runtime.ts.tpl"), "utf8");
+    for (const requiredText of [
+      "initialView: BoxEntryPage",
+      "runtime.listEntries",
+      "nextCursor",
+      "EmbeddedDocumentFrame",
+      ".readBoxAsset(region.assetPath)",
+      ".prefetchEntries({",
+      "runtime.openEntry",
+      "data-layout-retry",
+    ]) {
+      if (!viewPageTs.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 查看态 Runtime 样板缺少：${requiredText}`);
+      }
+    }
+    if (!viewRuntimeTs.includes("initialView: options.initialView")) {
+      throw new Error(`模板 ${templateId} 查看态 runtime 必须向页面传入完整 initialView。`);
+    }
+    for (const [pattern, message] of [
+      [/\bCardCoverFrame\b/, "查看态不应默认使用卡片专用封面包装"],
+      [/#[0-9A-Fa-f]{3,8}\b/, "查看态不应包含硬编码颜色"],
+      [/\brgba\s*\(/, "查看态不应包含硬编码 rgba 颜色"],
+      [/\blinear-gradient\s*\(/, "查看态不应包含硬编码渐变"],
+      [/\bbox-shadow\s*:/, "查看态不应包含硬编码阴影"],
+    ]) {
+      if (pattern.test(viewPageTs)) {
+        throw new Error(`模板 ${templateId} ${message}：${pattern}`);
+      }
+    }
   }
 
   console.log("templates 检查通过。");

@@ -20,7 +20,7 @@
 ├─ manifest.yaml          # 插件清单（type: card）
 ├─ package.json           # NPM 配置
 ├─ tsconfig.json          # TypeScript 配置
-├─ chips.config.mjs       # chips dev 构建配置
+├─ chips.config.mjs       # chipsdev 构建配置
 ├─ src/
 │  ├─ index.ts            # 插件入口（注册渲染与编辑模块）
 │  │                      # 同时导出 basecardDefinition 正式契约
@@ -66,7 +66,7 @@ npm run dev
 
 基础卡片工程中的 `chips-sdk` 与 `chipsdev` 统一依赖生态根工作区解析；请通过 `chipsdev create` 将工程接入工作区，不再单独在项目目录执行首次依赖安装。
 
-在开发模式下，使用 `chips dev server` 启动本地开发环境，根据 `chips dev` 工具文档在 Host 工作区中加载插件进行调试。
+在开发模式下，使用 `chipsdev server` 启动本地开发环境，并根据 chipsdev 开发者命令行手册在 Host 开发工作区中加载插件进行调试。
 
 ## 配置结构
 
@@ -82,6 +82,18 @@ npm run dev
 - `collectBasecardResourcePaths()` 卡片根目录资源路径收集
 - `renderBasecardView()` / `renderBasecardEditor()` / `basecardDefinition` 正式入口
 - `card_type/theme/title/body/locale/resource_path` 正式配置模型
+
+## 验证链路
+
+生成工程默认提供以下正式脚本：
+
+- `npm run lint`：通过 chipsdev 调用 ESLint；
+- `npm run typecheck`：执行 TypeScript 严格类型检查；
+- `npm test`：通过 chipsdev 调用 Vitest；
+- `npm run build`：通过 chipsdev 生成插件构建产物；
+- `npm run validate`：校验 Manifest、构建产物和正式资源；
+- `npm run package`：按 Manifest 与构建产物生成 `.cpk` 插件包；
+- `npm run verify`：串联上述所有默认门禁。
 
 ## 正式入口契约
 

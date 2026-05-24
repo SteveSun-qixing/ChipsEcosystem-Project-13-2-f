@@ -66,11 +66,14 @@ describe("template-engine", () => {
       );
       expect(manifest).toMatch(/type:\s+card/);
       expect(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
+      expect(manifest).toMatch(/web:\n      supported:\s+false/);
+      expect(manifest).toMatch(/mobile:\n      supported:\s+false/);
       expect(manifest).toMatch(/headless:\n      supported:\s+true/);
-      expect(manifest).toMatch(/capabilities:/);
+      expect(manifest).toMatch(/capabilities:\n  cardTypes:\n    - base\.text/);
       expect(manifest).not.toMatch(/chips-scaffold-basecard/);
       expect(manifest).not.toMatch(/ui:\s*\n\s*surface:/);
       await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(targetDir, "vitest.config.mts"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
       expect(pkg.dependencies.react).toBe("^18.2.0");
@@ -80,9 +83,38 @@ describe("template-engine", () => {
       expect(pkg.devDependencies.eslint).toBe("^8.57.1");
       expect(pkg.devDependencies["@typescript-eslint/parser"]).toBe("^7.18.0");
       expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
+      for (const scriptName of [
+        "lint",
+        "typecheck",
+        "test",
+        "build",
+        "validate",
+        "package",
+        "verify",
+      ]) {
+        expect(typeof pkg.scripts[scriptName]).toBe("string");
+      }
+      for (const command of [
+        "npm run lint",
+        "npm run typecheck",
+        "npm test",
+        "npm run build",
+        "npm run validate",
+        "npm run package",
+      ]) {
+        expect(pkg.scripts.verify).toContain(command);
+      }
 
       const readme = await fs.readFile(
         path.join(targetDir, "README.md"),
+        "utf8"
+      );
+      const chipsConfig = await fs.readFile(
+        path.join(targetDir, "chips.config.mjs"),
+        "utf8"
+      );
+      const vitestConfig = await fs.readFile(
+        path.join(targetDir, "vitest.config.mts"),
         "utf8"
       );
       const indexTs = await fs.readFile(
@@ -93,6 +125,12 @@ describe("template-engine", () => {
       expect(readme).toMatch(/basecardDefinition/);
       expect(readme).toMatch(/@chips\/component-library/);
       expect(readme).not.toMatch(/chips-scaffold-basecard/);
+      expect(readme).not.toMatch(/\bchips dev\b/);
+      expect(chipsConfig).toMatch(/chipsdev/);
+      expect(chipsConfig).not.toMatch(/\bchips dev\b|最小可用结构/);
+      expect(vitestConfig).toMatch(/react\/jsx-runtime/);
+      expect(vitestConfig).toMatch(/react-dom\/client/);
+      expect(vitestConfig).toMatch(/dedupe:\s*\["react", "react-dom"\]/);
       expect(indexTs).toMatch(/export const basecardDefinition/);
       expect(indexTs).toMatch(/export function renderBasecardView/);
       expect(indexTs).toMatch(/export function renderBasecardEditor/);
@@ -103,6 +141,7 @@ describe("template-engine", () => {
       expect(indexTs).toMatch(/convertTiffToPng\?:/);
       expect(indexTs).toMatch(/collectResourcePaths/);
       expect(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
+      expect(indexTs).not.toMatch(/window\.chips|from\s+["']node:fs["']|from\s+["']fs["']/);
 
       const templateMeta = JSON.parse(
         await fs.readFile(path.join(targetDir, "template.json"), "utf8")
@@ -114,10 +153,14 @@ describe("template-engine", () => {
         "utf8"
       );
       expect(renderView).toMatch(/@chips\/component-library/);
+      expect(renderView).toMatch(/resolveResourceUrl/);
+      expect(renderView).toMatch(/releaseResourceUrl/);
+      expect(renderView).toMatch(/openResource/);
       expect(renderView).not.toMatch(/chips-basecard__surface/);
       expect(renderView).not.toMatch(/box-shadow/);
       expect(renderView).not.toMatch(/radial-gradient/);
       expect(renderView).not.toMatch(/rgba\(/);
+      expect(renderView).not.toMatch(/>[^<{]*[\u4e00-\u9fff][^<{]*</);
 
       const editorPanel = await fs.readFile(
         path.join(targetDir, "src", "editor", "panel.tsx"),
@@ -126,11 +169,15 @@ describe("template-engine", () => {
       expect(editorPanel).toMatch(/ChipsTextField/);
       expect(editorPanel).toMatch(/ChipsTextArea/);
       expect(editorPanel).toMatch(/ChipsForm/);
+      expect(editorPanel).toMatch(/importResource/);
+      expect(editorPanel).toMatch(/deleteResource/);
+      expect(editorPanel).toMatch(/resource_path/);
       expect(editorPanel).not.toMatch(/<input/);
       expect(editorPanel).not.toMatch(/<textarea/);
       expect(editorPanel).not.toMatch(/box-shadow/);
       expect(editorPanel).not.toMatch(/radial-gradient/);
       expect(editorPanel).not.toMatch(/rgba\(/);
+      expect(editorPanel).not.toMatch(/>[^<{]*[\u4e00-\u9fff][^<{]*</);
 
       const schemaTs = await fs.readFile(
         path.join(targetDir, "src", "schema", "card-config.ts"),
@@ -145,6 +192,48 @@ describe("template-engine", () => {
         "utf8"
       );
       expect(defaultConfig).toMatch(/resource_path:\s*""/);
+
+      const parameters = await fs.readFile(
+        path.join(targetDir, "templates", "parameters.md"),
+        "utf8"
+      );
+      expect(parameters).toMatch(/resource_path/);
+
+      const renderViewTest = await fs.readFile(
+        path.join(targetDir, "tests", "unit", "render-view.test.tsx"),
+        "utf8"
+      );
+      const editorPanelTest = await fs.readFile(
+        path.join(targetDir, "tests", "unit", "editor-panel.test.tsx"),
+        "utf8"
+      );
+      const integrationTest = await fs.readFile(
+        path.join(targetDir, "tests", "integration", "card-flow.test.ts"),
+        "utf8"
+      );
+      expect(renderViewTest).toMatch(/resolveResourceUrl/);
+      expect(renderViewTest).toMatch(/releaseResourceUrl/);
+      expect(renderViewTest).toMatch(/openResource/);
+      expect(editorPanelTest).toMatch(/importResource/);
+      expect(editorPanelTest).toMatch(/deleteResource/);
+      expect(integrationTest).toMatch(/cleans editor container styles after unmount/);
+
+      const generatedTextFiles = [
+        "manifest.yaml",
+        "README.md",
+        "chips.config.mjs",
+        path.join("src", "index.ts"),
+        path.join("src", "render", "view.tsx"),
+        path.join("src", "editor", "panel.tsx"),
+        path.join("templates", "parameters.md"),
+      ];
+      for (const relativePath of generatedTextFiles) {
+        const source = await fs.readFile(path.join(targetDir, relativePath), "utf8");
+        expect(source).not.toMatch(/\{\{\s*[A-Z0-9_]+\s*\}\}/);
+        expect(source).not.toMatch(/\bchips dev\b/);
+        expect(source).not.toMatch(/chips-scaffold-basecard/);
+        expect(source).not.toMatch(/\bTODO\b|\bFIXME\b/i);
+      }
 
       for (const dirName of FORBIDDEN_PROJECT_DIRS) {
         await expect(fs.stat(path.join(targetDir, dirName))).rejects.toMatchObject({

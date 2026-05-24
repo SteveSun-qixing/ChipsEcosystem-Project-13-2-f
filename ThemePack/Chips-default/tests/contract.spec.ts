@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildContractTokenTree, validateTheme } from "../src/validate-theme";
+import { buildContracts } from "../src/build-contracts";
 
 interface ComponentContract {
   component: string;
@@ -11,6 +12,7 @@ interface ComponentContract {
   tokens?: string[];
   requiredTokens?: string[];
   optionalTokens?: string[];
+  iframe?: Record<string, unknown>;
 }
 
 const sortedUnique = (values: string[] = []): string[] => [...new Set(values)].sort();
@@ -41,15 +43,22 @@ const loadComponentLibraryContracts = (projectRoot: string): Map<string, Compone
 const normalizeRequiredTokens = (contract: ComponentContract): string[] =>
   sortedUnique(contract.requiredTokens ?? contract.tokens ?? []);
 
+const loadMinFunctionalSet = (projectRoot: string): { requiredComponents: string[] } => {
+  return readJson<{ requiredComponents: string[] }>(
+    path.join(projectRoot, "contracts", "theme-min-functional-set.json")
+  );
+};
+
 describe("theme contract", () => {
   it("passes the full component-library contract baseline", async () => {
     const projectRoot = path.resolve(__dirname, "..");
     const result = await validateTheme(projectRoot);
+    const expectedContracts = loadComponentLibraryContracts(projectRoot);
 
-    expect(result.contract.components).toHaveLength(70);
+    expect(result.contract.components).toHaveLength(expectedContracts.size);
     expect(result.view.summary.status).toBe("complete");
     expect(result.view.summary.blocking).toBe(0);
-    expect(result.view.summary.coverage?.componentCount).toBe(70);
+    expect(result.view.summary.coverage?.componentCount).toBe(expectedContracts.size);
     expect(result.view.summary.coverage?.requiredCoverage).toBe(1);
     expect(result.contract.components.some((component) => component.component === "image")).toBe(true);
     expect(result.contract.components.some((component) => component.component === "media")).toBe(true);
@@ -78,7 +87,31 @@ describe("theme contract", () => {
       expect(sortedUnique(themeComponent.states)).toEqual(sortedUnique(expected?.states));
       expect(normalizeRequiredTokens(themeComponent)).toEqual(normalizeRequiredTokens(expected as ComponentContract));
       expect(sortedUnique(themeComponent.optionalTokens)).toEqual(sortedUnique(expected?.optionalTokens));
+      expect(themeComponent.iframe).toEqual(expected?.iframe);
     }
+  });
+
+  it("keeps min functional set generated from component-library contracts", async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const expectedContracts = loadComponentLibraryContracts(projectRoot);
+    const minFunctionalSet = loadMinFunctionalSet(projectRoot);
+
+    expect(sortedUnique(minFunctionalSet.requiredComponents)).toEqual([...expectedContracts.keys()].sort());
+  });
+
+  it("generates contract artifacts from component-library source of truth", async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const expectedContracts = loadComponentLibraryContracts(projectRoot);
+    const { interfaceContract, minFunctionalSet } = await buildContracts(projectRoot);
+
+    expect(interfaceContract.components).toHaveLength(expectedContracts.size);
+    expect(interfaceContract.components.map((component) => component.component).sort()).toEqual(
+      [...expectedContracts.keys()].sort()
+    );
+    expect(interfaceContract.components.find((component) => component.component === "card-cover-frame")?.iframe).toEqual(
+      expectedContracts.get("card-cover-frame")?.iframe
+    );
+    expect(minFunctionalSet.requiredComponents).toEqual([...expectedContracts.keys()].sort());
   });
 
   it("emits the frozen diagnostic schema for missing required tokens", async () => {
@@ -94,9 +127,7 @@ describe("theme contract", () => {
       motion: {},
       layout: {}
     });
-    const { buildThemeContractView } = await import(
-      "../../../Chips-ComponentLibrary/packages/theme-contracts/src/validator.js"
-    );
+    const { buildThemeContractView } = await import("@chips/theme-contracts");
     const view = buildThemeContractView(
       { schemaVersion: "1.0.0", contractVersion: "1.0.0", components: [button] },
       tokenTree,

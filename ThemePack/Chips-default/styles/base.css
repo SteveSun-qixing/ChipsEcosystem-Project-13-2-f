@@ -8,6 +8,7 @@
   /* 便于 CSS 使用的常用派生变量（基于 ref/sys 层） */
   --chips-base-radius-sm: var(--chips-ref-radius-sm, 6px);
   --chips-base-radius-md: var(--chips-ref-radius-md, 10px);
+  --chips-base-space-1: var(--chips-layout-gap-xs, 4cpx);
   --chips-base-space-2: var(--chips-ref-space-2, 8px);
   --chips-base-space-3: var(--chips-ref-space-3, 12px);
   --chips-base-space-4: var(--chips-ref-space-4, 16px);

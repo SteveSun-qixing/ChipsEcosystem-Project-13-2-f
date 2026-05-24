@@ -1,104 +1,43 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  compareThemeInterfaceContract,
+  compareThemeMinFunctionalSet,
+  loadComponentContracts
+} from "../packages/theme-contracts/src/validator.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = path.resolve(root, "..");
 const componentContractDir = path.join(root, "packages", "theme-contracts", "contracts", "components");
-const officialThemeContracts = [
-  path.join(workspaceRoot, "ThemePack", "Chips-default", "contracts", "theme-interface.contract.json"),
-  path.join(workspaceRoot, "ThemePack", "Chips-theme-default-dark", "contracts", "theme-interface.contract.json")
+const officialThemeRoots = [
+  path.join(workspaceRoot, "ThemePack", "Chips-default"),
+  path.join(workspaceRoot, "ThemePack", "Chips-theme-default-dark")
 ];
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-function sortedUnique(values = []) {
-  return [...new Set(values)].sort();
+function validateThemeRoot(themeRoot, expectedContracts) {
+  const interfacePath = path.join(themeRoot, "contracts", "theme-interface.contract.json");
+  const minFunctionalSetPath = path.join(themeRoot, "contracts", "theme-min-functional-set.json");
+  const interfaceFailures = compareThemeInterfaceContract(readJson(interfacePath), expectedContracts);
+  const minFunctionalSetFailures = compareThemeMinFunctionalSet(readJson(minFunctionalSetPath), expectedContracts);
+  return {
+    interfaceFailures,
+    minFunctionalSetFailures
+  };
 }
 
-function compareSets(label, expected, actual) {
-  const expectedSet = sortedUnique(expected);
-  const actualSet = sortedUnique(actual);
-  const missing = expectedSet.filter((item) => !actualSet.includes(item));
-  const extra = actualSet.filter((item) => !expectedSet.includes(item));
-  if (missing.length === 0 && extra.length === 0) {
-    return [];
-  }
-  return [{ label, missing, extra }];
-}
-
-function loadComponentContracts() {
-  const contracts = new Map();
-  for (const fileName of fs.readdirSync(componentContractDir).sort()) {
-    if (!fileName.endsWith(".contract.json")) {
-      continue;
-    }
-    const contract = readJson(path.join(componentContractDir, fileName));
-    contracts.set(contract.component, {
-      component: contract.component,
-      scope: contract.scope,
-      parts: sortedUnique(contract.parts),
-      states: sortedUnique(contract.states),
-      requiredTokens: sortedUnique(contract.tokens || contract.requiredTokens || []),
-      optionalTokens: sortedUnique(contract.optionalTokens || [])
-    });
-  }
-  return contracts;
-}
-
-function validateThemeContract(themePath, expectedContracts) {
-  const theme = readJson(themePath);
-  const themeByComponent = new Map(
-    (theme.components || []).map((component) => [
-      component.component || component.scope,
-      {
-        component: component.component || component.scope,
-        scope: component.scope,
-        parts: sortedUnique(component.parts),
-        states: sortedUnique(component.states),
-        requiredTokens: sortedUnique(component.requiredTokens || component.tokens || []),
-        optionalTokens: sortedUnique(component.optionalTokens || [])
-      }
-    ])
-  );
-  const failures = [];
-  const expectedNames = [...expectedContracts.keys()].sort();
-  const actualNames = [...themeByComponent.keys()].sort();
-
-  failures.push(...compareSets("components", expectedNames, actualNames));
-
-  for (const componentName of expectedNames) {
-    const expected = expectedContracts.get(componentName);
-    const actual = themeByComponent.get(componentName);
-    if (!actual) {
-      continue;
-    }
-    if (actual.scope !== expected.scope) {
-      failures.push({
-        label: `${componentName}.scope`,
-        expected: expected.scope,
-        actual: actual.scope
-      });
-    }
-    failures.push(...compareSets(`${componentName}.parts`, expected.parts, actual.parts));
-    failures.push(...compareSets(`${componentName}.states`, expected.states, actual.states));
-    failures.push(...compareSets(`${componentName}.requiredTokens`, expected.requiredTokens, actual.requiredTokens));
-    failures.push(...compareSets(`${componentName}.optionalTokens`, expected.optionalTokens, actual.optionalTokens));
-  }
-
-  return failures;
-}
-
-const expectedContracts = loadComponentContracts();
+const expectedContracts = loadComponentContracts(componentContractDir);
 const allFailures = [];
 
-for (const themePath of officialThemeContracts) {
-  const failures = validateThemeContract(themePath, expectedContracts);
-  if (failures.length > 0) {
+for (const themeRoot of officialThemeRoots) {
+  const failures = validateThemeRoot(themeRoot, expectedContracts);
+  if (failures.interfaceFailures.length > 0 || failures.minFunctionalSetFailures.length > 0) {
     allFailures.push({
-      theme: path.relative(workspaceRoot, themePath),
+      theme: path.relative(workspaceRoot, themeRoot),
       failures
     });
   }
@@ -118,4 +57,4 @@ if (allFailures.length > 0) {
   process.exit(1);
 }
 
-console.log(`[theme-contracts] official ThemePack contracts match ${expectedContracts.size} component contracts`);
+console.log(`[theme-contracts] official ThemePack contracts match ${expectedContracts.length} component contracts`);

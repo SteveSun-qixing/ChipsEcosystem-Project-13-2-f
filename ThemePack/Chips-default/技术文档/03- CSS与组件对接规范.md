@@ -33,7 +33,7 @@
   - `styles/components/button.css`：按钮（`button`）。
   - `styles/components/input.css`：输入框（`input`）。
   - `styles/components/form-controls.css`：选择控件（`checkbox`、`radio`、`switch`、`select`）。
-  - `styles/components/overlays.css`：浮层组件（`dialog`、`popover`、`tooltip`、`command-palette`、`date-time`）。
+  - `styles/components/overlays.css`：浮层与命令消费组件（`dialog`、`popover`、`tooltip`、`command-palette`、`toolbar`、`menu-bar`、`context-menu`、`shortcut`、`date-time`）。
   - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form`、`virtual-list`、`data-grid`、`tree`、`navigation-split-view`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
   - `styles/components/feedback.css`：反馈与边界组件（`notification`、`toast`、`empty-state`、`skeleton`、`error-boundary`、`loading-boundary`、`card-cover-frame`、`composite-card-window`）。
 
@@ -158,6 +158,8 @@
 
 `navigation-split-view` 在本主题中对齐任务016.07 Compound contract：只消费 `root / sidebar / content / detail / divider / status` 公开 part，不复用 `split-view` 的 `primary / secondary` 主题入口。导航侧栏最小宽度使用 `chips.layout.size.navigation-primary-min`，中间内容栏使用 `chips.layout.size.split-secondary-min`，分割线厚度和焦点环继续消费 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
 
+命令消费组件在本主题中作为正式组件覆盖：`toolbar` 消费 `root / group / item / icon / label / shortcut / status`，`menu-bar` 消费 `root / menu / content / group / item / shortcut / status`，`context-menu` 消费 `root / trigger / content / group / item / shortcut / status`，`shortcut` 消费 `root / key / separator`。这些组件不能只依赖 `command-palette` 或浏览器默认按钮样式，主题 CSS 必须显式命中对应 `data-scope`。
+
 ---
 
 ## 5. 动效与布局
@@ -195,7 +197,8 @@
 - 如需新增组件样式：
   1. 在 `Chips-ComponentLibrary/packages/theme-contracts` 中补充组件契约；
   2. 在 `@chips/tokens` 中补充对应 `chips.comp.*` token；
-  3. 在本主题包的 `tokens/comp/*.json` 中对齐；
-  4. 在 `styles/components/*.css` 中实现样式；
-  5. 视需要更新本文件的映射说明。
+  3. 运行 `npm run build:contracts` 从组件库正式 contract 生成本主题包 contract 产物；
+  4. 在本主题包的 `tokens/comp/*.json` 中对齐；
+  5. 在 `styles/components/*.css` 中实现样式，并保证 CSS scope 覆盖测试通过；
+  6. 视需要更新本文件的映射说明。
 - 主题样式不得修改组件 DOM 结构，仅通过 CSS 控制视觉。

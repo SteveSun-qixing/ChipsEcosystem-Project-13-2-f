@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 import {
   buildComponentContractView,
   buildThemeContractView,
+  buildThemeInterfaceContract,
+  buildThemeMinFunctionalSet,
+  compareThemeInterfaceContract,
+  compareThemeMinFunctionalSet,
   flattenTokens,
+  loadComponentContracts,
   validateComponentContract
 } from "../src/validator.js";
 
@@ -200,4 +205,101 @@ test("buildComponentContractView accepts requiredTokens alias", () => {
 
   assert.deepEqual(view.requiredTokens, ["chips.comp.button.root.surface.idle"]);
   assert.equal(view.coverage.status, "complete");
+});
+
+test("component-library contracts generate official theme artifacts", () => {
+  const contractDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../contracts/components");
+  const contracts = loadComponentContracts(contractDir);
+  const interfaceContract = buildThemeInterfaceContract(contracts);
+  const minFunctionalSet = buildThemeMinFunctionalSet(contracts);
+
+  assert.equal(interfaceContract.schemaVersion, "1.0.0");
+  assert.equal(interfaceContract.contractVersion, "1.0.0");
+  assert.equal(interfaceContract.components.length, contracts.length);
+  assert.deepEqual(
+    interfaceContract.components.map((component) => component.component),
+    contracts.map((component) => component.component).sort()
+  );
+  assert.equal(interfaceContract.components[0].tokens, undefined);
+  assert.ok(interfaceContract.components.every((component) => Array.isArray(component.requiredTokens)));
+  assert.equal(
+    interfaceContract.components.find((component) => component.component === "card-cover-frame").iframe.requiredSandbox,
+    true
+  );
+  assert.deepEqual(minFunctionalSet.requiredComponents, contracts.map((component) => component.component).sort());
+});
+
+test("official theme artifact comparators catch drift", () => {
+  const contracts = [
+    {
+      component: "button",
+      scope: "button",
+      parts: ["root"],
+      states: ["idle"],
+      tokens: ["chips.comp.button.root.surface.idle"],
+      iframe: {
+        requiredSandbox: true
+      }
+    }
+  ];
+  const interfaceContract = buildThemeInterfaceContract(contracts);
+  const minFunctionalSet = buildThemeMinFunctionalSet(contracts);
+
+  assert.deepEqual(compareThemeInterfaceContract(interfaceContract, contracts), []);
+  assert.deepEqual(compareThemeMinFunctionalSet(minFunctionalSet, contracts), []);
+
+  const drifted = {
+    ...interfaceContract,
+    components: [
+      {
+        ...interfaceContract.components[0],
+        parts: ["root", "ghost"],
+        iframe: {
+          requiredSandbox: false
+        }
+      }
+    ]
+  };
+  const interfaceFailures = compareThemeInterfaceContract(drifted, contracts);
+  const minFunctionalSetFailures = compareThemeMinFunctionalSet(
+    { ...minFunctionalSet, schemaVersion: "0.9.0", contractVersion: "0.9.0", requiredComponents: ["button", "ghost"] },
+    contracts
+  );
+
+  assert.equal(interfaceFailures[0].label, "button.parts");
+  assert.deepEqual(interfaceFailures[0].extra, ["ghost"]);
+  assert.equal(interfaceFailures[1].label, "button.iframe");
+  assert.deepEqual(interfaceFailures[1].expected, { requiredSandbox: true });
+  assert.deepEqual(interfaceFailures[1].actual, { requiredSandbox: false });
+  assert.equal(minFunctionalSetFailures[0].label, "schemaVersion");
+  assert.equal(minFunctionalSetFailures[0].actual, "0.9.0");
+  assert.equal(minFunctionalSetFailures[1].label, "contractVersion");
+  assert.equal(minFunctionalSetFailures[1].actual, "0.9.0");
+  assert.equal(minFunctionalSetFailures[2].label, "requiredComponents");
+  assert.deepEqual(minFunctionalSetFailures[2].extra, ["ghost"]);
+});
+
+test("official theme artifact comparators catch version drift", () => {
+  const contracts = [
+    {
+      component: "button",
+      scope: "button",
+      parts: ["root"],
+      states: ["idle"],
+      requiredTokens: ["chips.comp.button.root.surface.idle"]
+    }
+  ];
+  const interfaceContract = {
+    ...buildThemeInterfaceContract(contracts),
+    schemaVersion: "0.9.0",
+    contractVersion: "0.9.0"
+  };
+  const failures = compareThemeInterfaceContract(interfaceContract, contracts);
+
+  assert.equal(failures[0].label, "schemaVersion");
+  assert.equal(failures[0].expected, "1.0.0");
+  assert.equal(failures[0].actual, "0.9.0");
+  assert.equal(failures[1].label, "contractVersion");
+  assert.equal(failures[1].expected, "1.0.0");
+  assert.equal(failures[1].actual, "0.9.0");
 });

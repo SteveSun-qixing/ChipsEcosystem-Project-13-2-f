@@ -22,10 +22,19 @@ contract extension.
 
 - `buildThemeContractView(contract, tokenTree, options)`
 - `buildComponentContractView(contract, flatTokenMap, options)`
+- `loadComponentContracts(contractDir?)`
+- `buildThemeInterfaceContract(componentContracts, options?)`
+- `buildThemeMinFunctionalSet(componentContracts, options?)`
+- `compareThemeInterfaceContract(themeContract, componentContracts)`
+- `compareThemeMinFunctionalSet(minFunctionalSet, componentContracts)`
 - `buildThemeDiagnosticSummary(diagnostics, coverageSummary)`
 - `validateComponentContract(contract, flatTokenMap)`
 - `validateContractDirectory(contractDir, tokenTree)`
 - `flattenTokens(tokenTree)`
+
+Official ThemePack contract files are generated release artifacts. Their
+source of truth is always `contracts/components/*.contract.json`; theme packs
+must not hand-maintain a parallel component or token whitelist.
 
 ## Current Contracts
 

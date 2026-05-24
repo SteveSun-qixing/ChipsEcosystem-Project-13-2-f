@@ -112,6 +112,8 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `chips.comp.icon.root.*` 是运行时 UI 图标的组件层 token，组件内部和主题 CSS 的解析顺序为 `chips.comp.icon.* -> chips.sys.icon.* -> currentColor / 默认轴值`。`chips.sys.icon.*` 仍是主题系统图标语义基线，`chips.comp.icon.*` 负责组件级覆盖。
 
+`chips.sys.icon.color/size/fill/wght/grad/opsz` 属于 `@chips/tokens` 的 public sys token source。主题包可以覆盖这些 token 的具体值，但不得只在主题包内私自新增公共图标 sys key；新增或改名必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
+
 任务015第二批基础控件 token 是按钮派生、轻量展示和反馈控件的正式契约，默认主题和暗色主题必须覆盖：
 
 - `chips.comp.icon-button.*`
@@ -273,6 +275,9 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - 缺失 optional token 必须产生 `THEME_OPTIONAL_TOKEN_MISSING`，但 `blocking=false`。
 - `theme.changed` 事件必须携带 `diagnosticsSummary`，用于设置面板、组件库刷新工具和 CLI 快速判断主题健康状态。
 - 主题包本地校验不得维护独立硬编码 token 白名单；必须读取 `contracts/theme-interface.contract.json` 并通过组件库正式 contract validator 生成同一 `ThemeContractView`。
+- 官方主题包的 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json` 必须由 `@chips/theme-contracts` 的组件库正式 contract 生成；本地文件是 Host 安装运行时消费的发布产物，不是 contract 源头。
 - 组件库质量门禁必须把官方 ThemePack contract 与组件库 component contract 的等值校验纳入 `test:contracts`。新增、重命名或归档组件 part/token 时，必须同一提交内同步官方主题包 contract、token、CSS、主题包测试和公共文档，避免 Host、SDK、组件库与设置面板读取到互相矛盾的公开接口点。
+
+主题 CSS 覆盖门禁至少必须确认每个正式 component contract 的 `scope` 在主题 CSS 中存在对应 `data-scope="<scope>"` 选择器。`toolbar / menu-bar / context-menu / shortcut` 属于命令消费组件，与 `command-palette` 一样必须有正式主题样式；不能只靠 token 覆盖通过 contract 校验。
 
 设置面板、CLI 与主题包测试只消费该公共 schema，不直接解析 Host 内部错误对象或主题包私有字段。

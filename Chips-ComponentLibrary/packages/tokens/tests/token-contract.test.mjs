@@ -174,6 +174,12 @@ test("system token layer exists", () => {
 
   assert.ok(getPath(sys, "chips.sys.color.surface"));
   assert.ok(getPath(sys, "chips.sys.color.error"));
+  assert.equal(getPath(sys, "chips.sys.icon.color"), "{chips.ref.color.gray-1000}");
+  assert.equal(getPath(sys, "chips.sys.icon.size"), "1em");
+  assert.equal(getPath(sys, "chips.sys.icon.fill"), 0);
+  assert.equal(getPath(sys, "chips.sys.icon.wght"), 400);
+  assert.equal(getPath(sys, "chips.sys.icon.grad"), 0);
+  assert.equal(getPath(sys, "chips.sys.icon.opsz"), 24);
 });
 
 test("layout token layer covers primitive layout constants", () => {

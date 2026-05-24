@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const THEME_CONTRACT_SCHEMA_VERSION = "1.0.0";
 const IFRAME_CONTRACT_COMPONENTS = new Set(["card-cover-frame", "composite-card-window"]);
+const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_COMPONENT_CONTRACT_DIR = path.resolve(CURRENT_DIR, "..", "contracts", "components");
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -70,6 +73,85 @@ function getRequiredTokens(contract) {
 function getOptionalTokens(contract) {
   const component = getComponentName(contract);
   return uniqueStrings((contract.optionalTokens ?? []).map((token) => normalizeTokenKey(component, token)));
+}
+
+function cloneJson(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function normalizeComponentContractForArtifact(contract) {
+  if (!isObject(contract)) {
+    throw new Error("THEME_CONTRACT_INVALID:object");
+  }
+
+  const component = getComponentName(contract);
+  if (typeof component !== "string" || component.length === 0) {
+    throw new Error("THEME_CONTRACT_INVALID:component");
+  }
+  if (typeof contract.scope !== "string" || contract.scope.length === 0) {
+    throw new Error("THEME_CONTRACT_INVALID:scope");
+  }
+
+  const normalized = {
+    component,
+    scope: contract.scope,
+    parts: uniqueStrings(contract.parts),
+    states: uniqueStrings(contract.states),
+    requiredTokens: getRequiredTokens(contract)
+  };
+
+  const optionalTokens = getOptionalTokens(contract);
+  if (optionalTokens.length > 0) {
+    normalized.optionalTokens = optionalTokens;
+  }
+  if (Array.isArray(contract.a11yConstraints) && contract.a11yConstraints.length > 0) {
+    normalized.a11yConstraints = cloneJson(contract.a11yConstraints);
+  }
+  if (Array.isArray(contract.motionConstraints) && contract.motionConstraints.length > 0) {
+    normalized.motionConstraints = cloneJson(contract.motionConstraints);
+  }
+  if (isObject(contract.iframe)) {
+    normalized.iframe = cloneJson(contract.iframe);
+  }
+
+  return normalized;
+}
+
+function normalizeComponentContractMap(componentContracts) {
+  const source = componentContracts instanceof Map ? [...componentContracts.values()] : componentContracts;
+  if (!Array.isArray(source)) {
+    throw new Error("THEME_CONTRACT_INVALID:componentContracts");
+  }
+
+  return new Map(
+    source
+      .map((contract) => normalizeComponentContractForArtifact(contract))
+      .sort((left, right) => left.component.localeCompare(right.component))
+      .map((contract) => [contract.component, contract])
+  );
+}
+
+function compareStringSets(label, expected, actual) {
+  const expectedSet = [...new Set(expected ?? [])].sort();
+  const actualSet = [...new Set(actual ?? [])].sort();
+  const missing = expectedSet.filter((item) => !actualSet.includes(item));
+  const extra = actualSet.filter((item) => !expectedSet.includes(item));
+
+  if (missing.length === 0 && extra.length === 0) {
+    return [];
+  }
+
+  return [{ label, missing, extra }];
+}
+
+function compareJsonField(label, expected, actual) {
+  const expectedJson = JSON.stringify(expected ?? []);
+  const actualJson = JSON.stringify(actual ?? []);
+  return expectedJson === actualJson ? [] : [{ label, expected, actual }];
+}
+
+function compareScalarField(label, expected, actual) {
+  return expected === actual ? [] : [{ label, expected, actual }];
 }
 
 function inferLayer(tokenKey) {
@@ -240,6 +322,81 @@ export function buildThemeContractView(contract, tokenTree, options = {}) {
     components,
     summary: buildThemeDiagnosticSummary(diagnostics, coverageSummary)
   };
+}
+
+export function loadComponentContracts(contractDir = DEFAULT_COMPONENT_CONTRACT_DIR) {
+  const files = walkJsonFiles(contractDir).filter((filePath) => filePath.endsWith(".contract.json"));
+  return files
+    .map((filePath) => readJson(filePath))
+    .sort((left, right) => getComponentName(left).localeCompare(getComponentName(right)));
+}
+
+export function buildThemeInterfaceContract(componentContracts, options = {}) {
+  const contractMap = normalizeComponentContractMap(componentContracts);
+  return {
+    schemaVersion: options.schemaVersion ?? THEME_CONTRACT_SCHEMA_VERSION,
+    contractVersion: options.contractVersion ?? THEME_CONTRACT_SCHEMA_VERSION,
+    components: [...contractMap.values()]
+  };
+}
+
+export function buildThemeMinFunctionalSet(componentContracts, options = {}) {
+  const contractMap = normalizeComponentContractMap(componentContracts);
+  return {
+    schemaVersion: options.schemaVersion ?? THEME_CONTRACT_SCHEMA_VERSION,
+    contractVersion: options.contractVersion ?? THEME_CONTRACT_SCHEMA_VERSION,
+    requiredComponents: [...contractMap.keys()].sort()
+  };
+}
+
+export function compareThemeInterfaceContract(themeContract, componentContracts) {
+  if (!isObject(themeContract) || !Array.isArray(themeContract.components)) {
+    return [{ label: "themeInterface", expected: "components[]", actual: themeContract }];
+  }
+
+  const expectedByComponent = normalizeComponentContractMap(componentContracts);
+  const actualByComponent = normalizeComponentContractMap(themeContract.components);
+  const failures = [
+    ...compareScalarField("schemaVersion", THEME_CONTRACT_SCHEMA_VERSION, themeContract.schemaVersion),
+    ...compareScalarField("contractVersion", THEME_CONTRACT_SCHEMA_VERSION, themeContract.contractVersion),
+    ...compareStringSets("components", [...expectedByComponent.keys()], [...actualByComponent.keys()])
+  ];
+
+  for (const [componentName, expected] of expectedByComponent.entries()) {
+    const actual = actualByComponent.get(componentName);
+    if (!actual) {
+      continue;
+    }
+    if (actual.scope !== expected.scope) {
+      failures.push({
+        label: `${componentName}.scope`,
+        expected: expected.scope,
+        actual: actual.scope
+      });
+    }
+    failures.push(...compareStringSets(`${componentName}.parts`, expected.parts, actual.parts));
+    failures.push(...compareStringSets(`${componentName}.states`, expected.states, actual.states));
+    failures.push(...compareStringSets(`${componentName}.requiredTokens`, expected.requiredTokens, actual.requiredTokens));
+    failures.push(...compareStringSets(`${componentName}.optionalTokens`, expected.optionalTokens, actual.optionalTokens));
+    failures.push(...compareJsonField(`${componentName}.a11yConstraints`, expected.a11yConstraints, actual.a11yConstraints));
+    failures.push(...compareJsonField(`${componentName}.motionConstraints`, expected.motionConstraints, actual.motionConstraints));
+    failures.push(...compareJsonField(`${componentName}.iframe`, expected.iframe, actual.iframe));
+  }
+
+  return failures;
+}
+
+export function compareThemeMinFunctionalSet(minFunctionalSet, componentContracts) {
+  if (!isObject(minFunctionalSet) || !Array.isArray(minFunctionalSet.requiredComponents)) {
+    return [{ label: "minFunctionalSet", expected: "requiredComponents[]", actual: minFunctionalSet }];
+  }
+
+  const expectedByComponent = normalizeComponentContractMap(componentContracts);
+  return [
+    ...compareScalarField("schemaVersion", THEME_CONTRACT_SCHEMA_VERSION, minFunctionalSet.schemaVersion),
+    ...compareScalarField("contractVersion", THEME_CONTRACT_SCHEMA_VERSION, minFunctionalSet.contractVersion),
+    ...compareStringSets("requiredComponents", [...expectedByComponent.keys()], minFunctionalSet.requiredComponents)
+  ];
 }
 
 export function validateComponentContract(contract, flatTokenMap) {

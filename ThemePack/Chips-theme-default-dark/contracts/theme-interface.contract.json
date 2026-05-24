@@ -135,7 +135,14 @@
         "chips.comp.card-cover-frame.name.color",
         "chips.comp.card-cover-frame.status.color.normal",
         "chips.comp.card-cover-frame.status.color.error"
-      ]
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
     },
     {
       "component": "card-shell",
@@ -295,7 +302,14 @@
         "chips.comp.composite-card-window.overlay.text",
         "chips.comp.composite-card-window.status.color.normal",
         "chips.comp.composite-card-window.status.color.error"
-      ]
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
     },
     {
       "component": "context-menu",
@@ -951,10 +965,10 @@
       "requiredTokens": [
         "chips.comp.menu.content.radius",
         "chips.comp.menu.content.surface",
+        "chips.comp.menu.group.label.color",
         "chips.comp.menu.item.surface.hover",
         "chips.comp.menu.item.surface.active",
         "chips.comp.menu.item.text.color",
-        "chips.comp.menu.group.label.color",
         "chips.comp.menu.separator.color",
         "chips.comp.menu.separator.thickness",
         "chips.comp.menu.focus.outline"

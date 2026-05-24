@@ -8,7 +8,7 @@ import { cards } from '../db/schema/cards.js';
 import { unpackCard } from './card-unpack.js';
 import { uploadResourcesToCdn } from './cdn-upload.js';
 import { replaceContentUrls, replaceCoverHtmlUrls } from './url-replace.js';
-import { Bucket, type BucketName } from '../storage/buckets.js';
+import { Bucket, type PublicBucketName } from '../storage/buckets.js';
 import { buildObjectUrl, uploadFile } from '../storage/s3.js';
 import { hostIntegration } from '../services/host-integration.js';
 import { inlineFileBackedRichTextContent } from './richtext-inline.js';
@@ -181,7 +181,7 @@ function writeHtmlFile(filePath: string, html: string): void {
 async function uploadDirectoryFiles(params: {
   rootDir: string;
   relativePaths: string[];
-  bucket: BucketName;
+  bucket: PublicBucketName;
   keyPrefix: string;
 }): Promise<Map<string, string>> {
   const uploadedUrls = new Map<string, string>();
@@ -359,6 +359,9 @@ export async function runCardPipeline(params: {
         title: String(repackedMetadata.name ?? unpackResult.metadata.name),
         htmlUrl: indexHtmlUrl,
         coverUrl,
+        coverRatio: typeof repackedMetadata.cover_ratio === 'string'
+          ? repackedMetadata.cover_ratio
+          : null,
         cardMetadata: repackedMetadata,
         cardStructure: repackedStructure,
         status: 'ready',

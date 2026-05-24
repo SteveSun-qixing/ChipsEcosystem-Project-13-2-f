@@ -201,4 +201,31 @@ describe('storage url and bucket mapping', () => {
       },
     });
   });
+
+  it('keeps card pipeline input objects in their private physical bucket', async () => {
+    const { storage, sentCommands } = await loadStorage({
+      S3_PUBLIC_URL: 'https://file.chipscard.space',
+      S3_BUCKET_NAME: 'chipscardspace',
+    });
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccps-s3-test-'));
+    const cardPath = path.join(tempDir, 'source.card');
+
+    try {
+      fs.writeFileSync(cardPath, 'card-package-bytes');
+
+      const url = await storage.uploadFile({
+        bucket: 'chips-card-pipeline-inputs',
+        key: 'user-1/card-1/source.card',
+        filePath: cardPath,
+      });
+
+      expect(url).toBe('');
+      expect(sentCommands[0]?.input).toMatchObject({
+        Bucket: 'chips-card-pipeline-inputs',
+        Key: 'user-1/card-1/source.card',
+      });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

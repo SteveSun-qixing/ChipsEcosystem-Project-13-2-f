@@ -5,11 +5,14 @@ import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { pipeline } from 'stream/promises';
 import { env } from '../config/env';
+import { PRIVATE_BUCKETS, PUBLIC_BUCKETS, type BucketName, type PublicBucketName } from './buckets';
 
 let s3Instance: S3Client | null = null;
 
@@ -18,7 +21,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 function toStorageTarget(bucket: string, key: string): { bucket: string; key: string } {
-  if (!env.S3_BUCKET_NAME) {
+  if (!env.S3_BUCKET_NAME || (PRIVATE_BUCKETS as readonly string[]).includes(bucket)) {
     return { bucket, key };
   }
 
@@ -28,7 +31,7 @@ function toStorageTarget(bucket: string, key: string): { bucket: string; key: st
   };
 }
 
-export function getPublicBucketBaseUrl(bucket: string): string {
+export function getPublicBucketBaseUrl(bucket: PublicBucketName): string {
   if (env.S3_PUBLIC_URL) {
     return `${trimTrailingSlash(env.S3_PUBLIC_URL)}/${bucket}`;
   }
@@ -39,6 +42,10 @@ export function getPublicBucketBaseUrl(bucket: string): string {
   }
 
   return `${trimTrailingSlash(env.BASE_URL)}/cdn/${bucket}`;
+}
+
+function isPublicBucket(bucket: string): bucket is PublicBucketName {
+  return (PUBLIC_BUCKETS as readonly string[]).includes(bucket);
 }
 
 export function getS3Client(): S3Client {
@@ -65,7 +72,7 @@ export function getS3Client(): S3Client {
  * @returns 对象的公开访问 URL
  */
 export async function uploadFile(params: {
-  bucket: string;
+  bucket: BucketName | string;
   key: string;
   filePath: string;
   contentType?: string;
@@ -89,7 +96,36 @@ export async function uploadFile(params: {
     }),
   );
 
+  if (!isPublicBucket(bucket)) {
+    return '';
+  }
+
   return buildObjectUrl(bucket, key);
+}
+
+/**
+ * 下载对象存储文件到本地路径
+ */
+export async function downloadFile(params: {
+  bucket: string;
+  key: string;
+  filePath: string;
+}): Promise<void> {
+  const s3 = getS3Client();
+  const target = toStorageTarget(params.bucket, params.key);
+  const response = await s3.send(
+    new GetObjectCommand({
+      Bucket: target.bucket,
+      Key: target.key,
+    }),
+  );
+
+  if (!response.Body) {
+    throw new Error(`Storage object has no body: ${params.bucket}/${params.key}`);
+  }
+
+  fs.mkdirSync(path.dirname(params.filePath), { recursive: true });
+  await pipeline(response.Body as NodeJS.ReadableStream, fs.createWriteStream(params.filePath));
 }
 
 /**
@@ -97,7 +133,7 @@ export async function uploadFile(params: {
  * @returns 对象的公开访问 URL
  */
 export async function uploadBuffer(params: {
-  bucket: string;
+  bucket: PublicBucketName;
   key: string;
   body: Buffer | string;
   contentType: string;
@@ -184,7 +220,7 @@ export async function objectExists(bucket: string, key: string): Promise<boolean
  * 构造对象公开访问 URL
  * 生产环境优先使用对象存储自定义 HTTPS 域名。
  */
-export function buildObjectUrl(bucket: string, key: string): string {
+export function buildObjectUrl(bucket: PublicBucketName, key: string): string {
   return `${getPublicBucketBaseUrl(bucket)}/${key}`;
 }
 

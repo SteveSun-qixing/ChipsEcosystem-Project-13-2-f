@@ -4,3 +4,4 @@ export * from './users';
 export * from './rooms';
 export * from './cards';
 export * from './boxes';
+export * from './card-pipeline-jobs';

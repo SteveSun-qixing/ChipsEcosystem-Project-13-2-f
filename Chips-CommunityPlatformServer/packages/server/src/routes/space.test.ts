@@ -20,6 +20,7 @@ const cardServiceMock = {
 const boxServiceMock = {
   listRootByUser: vi.fn(),
   toDTO: vi.fn((box: Record<string, unknown>) => box),
+  toSummaryDTO: vi.fn((box: Record<string, unknown>) => box),
 };
 
 vi.mock('../services/user.service', () => ({

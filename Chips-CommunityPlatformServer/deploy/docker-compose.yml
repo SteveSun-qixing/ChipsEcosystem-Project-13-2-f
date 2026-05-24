@@ -81,6 +81,31 @@ services:
     networks:
       - ccps_net
 
+  # ─── 卡片转换 Worker ───────────────────────────────────────────
+  worker:
+    build:
+      context: ../..
+      dockerfile: Chips-CommunityPlatformServer/deploy/Dockerfile.server
+    container_name: ccps_worker
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://ccps_user:ccps_password@postgres:5432/ccps_db
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${S3_RUNTIME_ENDPOINT:-http://minio:9000}
+      CARD_PIPELINE_WORKER_CONCURRENCY: ${CARD_PIPELINE_WORKER_CONCURRENCY:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+    networks:
+      - ccps_net
+
   # ─── Web 前端（生产构建）──────────────────────────────────────
   web:
     build:

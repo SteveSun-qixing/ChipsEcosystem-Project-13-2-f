@@ -69,7 +69,7 @@ const boxRoutes: FastifyPluginAsync = async (fastify) => {
         request.user!.userId,
         qs,
       );
-      return { data: result.items.map(BoxService.toDTO), pagination: result.pagination };
+      return { data: result.items.map(BoxService.toSummaryDTO), pagination: result.pagination };
     },
   );
 
@@ -91,7 +91,7 @@ const boxRoutes: FastifyPluginAsync = async (fastify) => {
         visibility: 'public',
       });
       return {
-        data: result.items.map(BoxService.toDTO),
+        data: result.items.map(BoxService.toSummaryDTO),
         pagination: result.pagination,
       };
     },

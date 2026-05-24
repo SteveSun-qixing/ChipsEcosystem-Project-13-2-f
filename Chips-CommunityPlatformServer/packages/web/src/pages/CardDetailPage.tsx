@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { cardsApi, type CardDetail } from '../api/content';
+import { cardsApi, type CardOpenView } from '../api/content';
 import { DocumentPluginRoutePage, type DocumentRouteSource } from './DocumentPluginRoutePage';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
+import { prefetchCardOpenView, readPrefetchedCardOpenView } from '../lib/card-open-view-prefetch';
 import { getErrorMessage } from '../lib/ui';
 
 const CARD_STATUS_POLL_MS = 2000;
@@ -10,7 +11,7 @@ const CARD_STATUS_POLL_MS = 2000;
 export default function CardDetailPage() {
   const { t } = useAppPreferences();
   const { cardId } = useParams<{ cardId: string }>();
-  const [card, setCard] = useState<CardDetail | null>(null);
+  const [card, setCard] = useState<CardOpenView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -23,8 +24,7 @@ export default function CardDetailPage() {
     setLoading(true);
     setError('');
 
-    cardsApi
-      .getCard(cardId)
+    (readPrefetchedCardOpenView(cardId) ?? prefetchCardOpenView(cardId))
       .then((response) => {
         if (active) {
           setCard(response);

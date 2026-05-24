@@ -225,7 +225,8 @@ export class HostIntegrationService {
   } as const;
 
   private constructor() {
-    this.workspacePath = path.resolve(process.cwd(), '.chips-server-host');
+    const role = path.basename(process.argv[1] ?? '').includes('worker') ? 'worker' : 'server';
+    this.workspacePath = path.resolve(process.cwd(), `.chips-server-host-${role}`);
   }
 
   public static getInstance(): HostIntegrationService {

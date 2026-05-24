@@ -659,6 +659,19 @@ export function HostedPluginSurface({
       return;
     }
 
+    if (surfaceMode === 'document') {
+      const viewportHeight = Number.isFinite(window.innerHeight) ? Math.ceil(window.innerHeight) : DOCUMENT_SURFACE_INITIAL_HEIGHT;
+      const resetHeight = Math.max(DOCUMENT_SURFACE_MIN_HEIGHT, viewportHeight);
+      embeddedHeightRef.current = resetHeight;
+      setEmbeddedHeight(resetHeight);
+    }
+
+    iframeRef.current?.scrollIntoView({
+      block: 'start',
+      inline: 'nearest',
+      behavior: 'auto',
+    });
+
     frameWindow.postMessage(
       {
         type: 'chips.web-shell:event',

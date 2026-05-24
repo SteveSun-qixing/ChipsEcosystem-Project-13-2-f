@@ -2,7 +2,7 @@
 
 **文档编号**：协议与契约 / 09  
 **文档版本**：v1.1  
-**最后核对时间**：2026-03-25  
+**最后核对时间**：2026-05-23
 **适用范围**：所有需要与薯片社区平台服务器交互的客户端、工具与生态内其他系统。
 
 ## 1. 基础约定
@@ -212,6 +212,7 @@ Authorization: Bearer <access_token>
 ### 5.5 卡片
 
 - `GET /api/v1/cards/:cardId`
+- `GET /api/v1/cards/:cardId/open-view`
 - `GET /api/v1/cards/:cardId/status`
 - `PATCH /api/v1/cards/:cardId`
 - `DELETE /api/v1/cards/:cardId`
@@ -262,11 +263,14 @@ Authorization: Bearer <access_token>
 
 ### 6.2 Card Summary
 
+卡片列表、房间内容与发现/搜索中的卡片项使用 summary DTO。`coverRatio` 来自卡片表普通列，列表热路径不读取 `cardMetadata` 或 `cardStructure` JSONB。
+
 ```json
 {
   "id": "uuid",
   "title": "卡片标题",
   "coverUrl": "https://...",
+  "coverRatio": "3:4",
   "htmlUrl": "https://.../index.html",
   "status": "ready",
   "visibility": "public",
@@ -329,6 +333,50 @@ Authorization: Bearer <access_token>
 }
 ```
 
+### 6.4.1 Box Summary
+
+箱子列表、房间内容与发现/搜索中的箱子项使用 summary DTO。`coverRatio` 来自箱子表普通列，列表热路径不读取 `metadata` 或 `structure` JSONB。
+
+```json
+{
+  "id": "uuid",
+  "title": "箱子标题",
+  "coverUrl": "https://...",
+  "coverRatio": "3:4",
+  "documentUrl": "https://...",
+  "layoutPlugin": "chips-official.grid-layout",
+  "visibility": "public",
+  "createdAt": "2026-03-25T00:00:00.000Z"
+}
+```
+
+### 6.5 Card Open View
+
+`GET /api/v1/cards/:cardId/open-view` 用于社区前台卡片打开页的轻量读取。访问权限与 `GET /api/v1/cards/:cardId` 一致，私有卡片对非所有者仍按 404 处理。
+
+该接口只读取打开页所需列；`coverRatio` 来自卡片表普通列，不从 `cardMetadata` JSONB 取值。接口不返回 `cardMetadata`、`cardStructure`、`fileSizeBytes` 等详情字段。
+
+```json
+{
+  "id": "uuid",
+  "title": "卡片标题",
+  "coverUrl": "https://...",
+  "coverRatio": "3:4",
+  "htmlUrl": "https://.../index.html",
+  "status": "ready",
+  "visibility": "public",
+  "user": {
+    "username": "alice",
+    "displayName": "Alice",
+    "bio": null,
+    "avatarUrl": null,
+    "createdAt": "2026-03-25T00:00:00.000Z"
+  },
+  "createdAt": "2026-03-25T00:00:00.000Z",
+  "updatedAt": "2026-03-25T00:00:00.000Z"
+}
+```
+
 ## 7. 上传与查看行为
 
 ### 7.1 卡片上传
@@ -346,15 +394,15 @@ Authorization: Bearer <access_token>
 
 服务端后续会异步完成：
 
-1. 资源上传 CDN
-2. URL 替换
-3. 重新打包 `.card`
-4. 调用 Host 已安装的正式转换插件输出 HTML
-5. 上传 HTML 目录到 CDN
+1. 将上传原始 `.card` 写入服务端内部对象存储任务输入区；
+2. 创建 `card_pipeline_jobs` 队列任务；
+3. 由独立 worker 进程执行资源上传 CDN、URL 替换、重新打包 `.card`；
+4. worker 调用 Host 已安装的正式转换插件输出 HTML；
+5. worker 上传 HTML 目录到 CDN，并更新卡片状态。
 
 ### 7.2 卡片查看
 
-当前平台查看卡片时，最终呈现的是转换插件导出的 HTML 页面本身，而不是社区平台额外包装的一层查看器 UI。
+当前平台查看卡片时，前台先读取 `GET /api/v1/cards/:cardId/open-view`，再沿正式 Web 插件宿主创建 `com.chips.card-viewer` 会话。最终呈现的是转换插件导出的 HTML 页面本身，而不是社区平台额外包装的一层查看器 UI。
 
 ## 8. 兼容与范围说明
 

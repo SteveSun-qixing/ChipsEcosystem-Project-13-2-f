@@ -16,6 +16,7 @@ const cardServiceMock = {
 const boxServiceMock = {
   listByRoom: vi.fn(),
   toDTO: vi.fn((box: Record<string, unknown>) => box),
+  toSummaryDTO: vi.fn((box: Record<string, unknown>) => box),
 };
 
 const userServiceMock = {

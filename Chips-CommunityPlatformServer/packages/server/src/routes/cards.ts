@@ -24,6 +24,24 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  // ─── GET /api/v1/cards/:cardId/open-view ─────────────────────────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/open-view',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request) => {
+      const { cardId } = request.params as { cardId: string };
+      const card = await CardService.getOpenViewAccessible(cardId, request.user?.userId ?? null);
+      const owner = await UserService.findById(card.userId);
+      return {
+        data: {
+          ...CardService.toOpenViewDTO(card),
+          user: owner ? UserService.toPublicProfile(owner) : null,
+        },
+      };
+    },
+  );
+
   // ─── GET /api/v1/cards/:cardId/status ─────────────────────────────
 
   fastify.get(
@@ -82,7 +100,7 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
         request.user!.userId,
         qs,
       );
-      return { data: result.items.map(CardService.toDTO), pagination: result.pagination };
+      return { data: result.items.map(CardService.toSummaryDTO), pagination: result.pagination };
     },
   );
 

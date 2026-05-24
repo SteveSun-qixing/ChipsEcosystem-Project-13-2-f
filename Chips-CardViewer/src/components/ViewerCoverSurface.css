@@ -184,6 +184,11 @@
   align-content: center;
 }
 
+.card-viewer-shell--document .viewer-cover-surface {
+  min-height: 0;
+  align-items: start;
+}
+
 .viewer-cover-surface__state-panel {
   width: min(520px, 100%);
   min-height: 180px;

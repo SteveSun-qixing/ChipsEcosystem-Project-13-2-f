@@ -154,7 +154,7 @@ const roomRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         data: {
           cards: cardResult.items.map(CardService.toSummaryDTO),
-          boxes: boxResult.items.map(BoxService.toDTO),
+          boxes: boxResult.items.map(BoxService.toSummaryDTO),
         },
         pagination: { cardsPagination: cardResult.pagination, boxesPagination: boxResult.pagination },
       };

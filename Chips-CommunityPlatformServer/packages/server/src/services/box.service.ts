@@ -4,7 +4,7 @@ import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import * as yaml from 'js-yaml';
 import * as unzipper from 'unzipper';
-import { eq, and, isNull, desc } from 'drizzle-orm';
+import { eq, and, isNull, desc, count, inArray, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { boxes, type Box, type NewBox } from '../db/schema/boxes';
 import { cards } from '../db/schema/cards';
@@ -14,6 +14,17 @@ import type { BoxMetadata, BoxStructure, BoxUnpackResult, BoxCardRef } from '../
 import type { PaginationInput, UpdateBoxInput } from '../schemas/content.schemas';
 import type { PagedResult } from './card.service';
 
+interface BoxSummaryRecord {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  coverRatio: string | null;
+  documentUrl: string | null;
+  layoutPlugin: string | null;
+  visibility: Box['visibility'];
+  createdAt: Date;
+}
+
 function getCoverRatioFromMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') {
     return null;
@@ -21,6 +32,68 @@ function getCoverRatioFromMetadata(metadata: unknown): string | null {
 
   const rawRatio = (metadata as { cover_ratio?: unknown }).cover_ratio;
   return typeof rawRatio === 'string' && rawRatio.trim() ? rawRatio.trim() : null;
+}
+
+async function paginateBoxes(
+  where: SQL | undefined,
+  pagination: PaginationInput,
+): Promise<PagedResult<Box>> {
+  const { page, pageSize } = pagination;
+  const offset = (page - 1) * pageSize;
+
+  const [items, totalRows] = await Promise.all([
+    db.query.boxes.findMany({
+      where,
+      orderBy: [desc(boxes.createdAt)],
+      limit: pageSize,
+      offset,
+    }),
+    where
+      ? db.select({ count: count() }).from(boxes).where(where)
+      : db.select({ count: count() }).from(boxes),
+  ]);
+
+  const total = Number(totalRows[0]?.count ?? 0);
+  return {
+    items,
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+  };
+}
+
+async function paginateBoxSummaries(
+  where: SQL | undefined,
+  pagination: PaginationInput,
+): Promise<PagedResult<BoxSummaryRecord>> {
+  const { page, pageSize } = pagination;
+  const offset = (page - 1) * pageSize;
+
+  const [items, totalRows] = await Promise.all([
+    db.query.boxes.findMany({
+      where,
+      columns: {
+        id: true,
+        title: true,
+        coverUrl: true,
+        coverRatio: true,
+        documentUrl: true,
+        layoutPlugin: true,
+        visibility: true,
+        createdAt: true,
+      },
+      orderBy: [desc(boxes.createdAt)],
+      limit: pageSize,
+      offset,
+    }),
+    where
+      ? db.select({ count: count() }).from(boxes).where(where)
+      : db.select({ count: count() }).from(boxes),
+  ]);
+
+  const total = Number(totalRows[0]?.count ?? 0);
+  return {
+    items,
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+  };
 }
 
 /** ZIP 魔数 */
@@ -111,6 +184,7 @@ export const BoxService = {
           roomId: roomId ?? null,
           boxFileId: unpackResult.metadata.id,
           title: unpackResult.metadata.name,
+          coverRatio: getCoverRatioFromMetadata(unpackResult.metadata),
           layoutPlugin: unpackResult.metadata.layout_plugin ?? null,
           metadata: unpackResult.metadata as unknown as Record<string, unknown>,
           structure: unpackResult.structure as unknown as Record<string, unknown>,
@@ -179,26 +253,34 @@ export const BoxService = {
     structure: BoxStructure,
   ): Promise<(BoxCardRef & { communityCardId?: string; communityHtmlUrl?: string })[]> {
     const refs = structure.cards ?? [];
-
-    return Promise.all(
-      refs.map(async (ref) => {
-        if (!ref.card_id) return ref;
-
-        const communityCard = await db.query.cards.findFirst({
+    const cardFileIds = [
+      ...new Set(refs.map((ref) => ref.card_id).filter((id): id is string => Boolean(id))),
+    ];
+    const communityCards = cardFileIds.length
+      ? await db.query.cards.findMany({
           where: and(
-            eq(cards.cardFileId, ref.card_id),
+            inArray(cards.cardFileId, cardFileIds),
             eq(cards.status, 'ready'),
             eq(cards.visibility, 'public'),
           ),
-        });
-
-        return {
-          ...ref,
-          communityCardId: communityCard?.id,
-          communityHtmlUrl: communityCard?.htmlUrl ?? undefined,
-        };
-      }),
+        })
+      : [];
+    const cardsByFileId = new Map(
+      communityCards
+        .filter((card) => card.cardFileId)
+        .map((card) => [card.cardFileId as string, card]),
     );
+
+    return refs.map((ref) => {
+      if (!ref.card_id) return ref;
+
+      const communityCard = cardsByFileId.get(ref.card_id);
+      return {
+        ...ref,
+        communityCardId: communityCard?.id,
+        communityHtmlUrl: communityCard?.htmlUrl ?? undefined,
+      };
+    });
   },
 
   async listByUser(
@@ -208,22 +290,13 @@ export const BoxService = {
     filters?: { visibility?: string },
   ): Promise<PagedResult<Box>> {
     const isOwner = userId === requesterId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allBoxes = await db.query.boxes.findMany({
-      where: and(
+    return paginateBoxes(
+      and(
         eq(boxes.userId, userId),
         filters?.visibility ? eq(boxes.visibility, filters.visibility as Box['visibility']) : isOwner ? undefined : eq(boxes.visibility, 'public'),
       ),
-      orderBy: [desc(boxes.createdAt)],
-    });
-
-    const total = allBoxes.length;
-    return {
-      items: allBoxes.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    };
+      pagination,
+    );
   },
 
   async listByRoom(
@@ -231,49 +304,31 @@ export const BoxService = {
     requesterId: string | null,
     ownerUserId: string,
     pagination: PaginationInput,
-  ): Promise<PagedResult<Box>> {
+  ): Promise<PagedResult<BoxSummaryRecord>> {
     const isOwner = requesterId === ownerUserId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allBoxes = await db.query.boxes.findMany({
-      where: and(
+    return paginateBoxSummaries(
+      and(
         eq(boxes.roomId, roomId),
         isOwner ? undefined : eq(boxes.visibility, 'public'),
       ),
-      orderBy: [desc(boxes.createdAt)],
-    });
-
-    const total = allBoxes.length;
-    return {
-      items: allBoxes.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    };
+      pagination,
+    );
   },
 
   async listRootByUser(
     userId: string,
     requesterId: string | null,
     pagination: PaginationInput,
-  ): Promise<PagedResult<Box>> {
+  ): Promise<PagedResult<BoxSummaryRecord>> {
     const isOwner = userId === requesterId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allBoxes = await db.query.boxes.findMany({
-      where: and(
+    return paginateBoxSummaries(
+      and(
         eq(boxes.userId, userId),
         isNull(boxes.roomId),
         isOwner ? undefined : eq(boxes.visibility, 'public'),
       ),
-      orderBy: [desc(boxes.createdAt)],
-    });
-
-    const total = allBoxes.length;
-    return {
-      items: allBoxes.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    };
+      pagination,
+    );
   },
 
   toDTO(box: Box) {
@@ -285,13 +340,26 @@ export const BoxService = {
       title: box.title,
       coverUrl: box.coverUrl,
       documentUrl: box.documentUrl,
-      coverRatio: getCoverRatioFromMetadata(box.metadata),
+      coverRatio: box.coverRatio ?? getCoverRatioFromMetadata(box.metadata),
       layoutPlugin: box.layoutPlugin,
       visibility: box.visibility,
       fileSizeBytes: box.fileSizeBytes,
       metadata: box.metadata,
       createdAt: box.createdAt,
       updatedAt: box.updatedAt,
+    };
+  },
+
+  toSummaryDTO(box: BoxSummaryRecord) {
+    return {
+      id: box.id,
+      title: box.title,
+      coverUrl: box.coverUrl,
+      documentUrl: box.documentUrl,
+      coverRatio: box.coverRatio,
+      layoutPlugin: box.layoutPlugin,
+      visibility: box.visibility,
+      createdAt: box.createdAt,
     };
   },
 };

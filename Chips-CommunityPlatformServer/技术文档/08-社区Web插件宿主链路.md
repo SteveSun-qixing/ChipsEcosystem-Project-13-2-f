@@ -6,6 +6,8 @@
 
 它描述的是社区服务器自己的正式实现，不额外定义生态公共协议；公共 Host / Bridge / Manifest 口径仍以 `生态共用技术文档/` 为准。
 
+最后核对时间：2026-05-23。
+
 ## 2. 当前目标
 
 社区网页当前已经支持：
@@ -13,7 +15,8 @@
 1. 在浏览器里正式承载原版 `type: app` 插件；
 2. 让 `/cards/:cardId` 直接进入原版 `com.chips.card-viewer`；
 3. 让卡片内图片点击后通过正式 `resource.open` 打开原版 `com.chips.photo-viewer`；
-4. 不再依赖临时重写的网页查看器页面。
+4. `/cards/:cardId` 打开前只读取轻量 `open-view` 数据，`coverRatio` 走普通列，不把 `cardMetadata` / `cardStructure` JSONB 放入打开热路径；
+5. 不再依赖临时重写的网页查看器页面。
 
 ## 3. 服务端入口
 
@@ -27,10 +30,16 @@
 - `GET /api/v1/host/plugin-sessions/:sessionId/bootstrap.js`
 - `GET /api/v1/host/plugin-sessions/:sessionId/assets/*`
 
+卡片打开页还使用社区内容接口：
+
+- `GET /api/v1/cards/:cardId/open-view`
+
 代码位置：
 
 - `packages/server/src/routes/host-runtime.ts`
 - `packages/server/src/services/host-integration.ts`
+- `packages/server/src/routes/cards.ts`
+- `packages/server/src/services/card.service.ts`
 
 ## 4. 服务端宿主职责
 
@@ -108,15 +117,33 @@
 
 `/cards/:cardId` 当前链路：
 
-1. 社区前台读取卡片详情；
-2. 若卡片 `status = ready` 且存在 `htmlUrl`，前台创建 `com.chips.card-viewer` Web 会话；
-3. 启动参数中写入 `webDocumentUrl`；
-4. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
-5. `CardViewer` 用 iframe 承载对象存储中的卡片 HTML 文档；
-6. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
-7. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
-8. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
-9. 用户最终滚动的是整个页面，而不是卡片查看器内部的小窗。
+1. 社区前台调用 `GET /api/v1/cards/:cardId/open-view` 读取打开所需轻量字段；
+2. 前端复用 `card-open-view-prefetch` 的内存 Promise 缓存，命中时不重复请求；
+3. 若卡片 `status = ready` 且存在 `htmlUrl`，前台创建 `com.chips.card-viewer` Web 会话；
+4. 启动参数中写入 `webDocumentUrl`；
+5. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
+6. `CardViewer` 用 iframe 承载对象存储中的卡片 HTML 文档；
+7. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
+8. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
+9. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
+10. 用户最终滚动的是整个页面，而不是卡片查看器内部的小窗。
+
+`open-view` 响应只服务打开页首屏和状态轮询前的展示决策，当前返回：
+
+- `id`
+- `title`
+- `status`
+- `htmlUrl`
+- `coverUrl`
+- `coverRatio`
+- `visibility`
+- `createdAt`
+- `updatedAt`
+- `user`
+
+该接口仍执行与卡片详情一致的可见性判断：公开卡片可匿名读取；私有卡片只允许所有者读取；无权访问时按未找到处理。它不会读取或返回 `cardMetadata`、`cardStructure`。
+
+这项优化只减少打开页首个接口的响应体和等待链路，不改变正式宿主模型：卡片正文仍由 `com.chips.card-viewer` 在社区 Web Host 会话中打开，卡片 HTML 仍作为 `webDocumentUrl` 交给原版 CardViewer。
 
 当前高度事件遵循生态公共 `DocumentSurfaceResizePayload`：
 
@@ -137,7 +164,9 @@ interface DocumentSurfaceResizePayload {
 2. 底部阅读安全区由 `--chips-document-safe-area-block-end` 驱动，社区宿主在 document surface 上提供默认 token 值；
 3. 高度发布使用 `requestAnimationFrame` 合并，连续资源加载、字体加载和窗口缩放会先发布 `stable=false`，约 160ms 稳定窗口后再发布 `stable=true`；
 4. 内容增长会即时撑开外层 iframe；内容变短时，CardViewer 与 `HostedPluginSurface` 都只在 `stable=true` 后收缩高度，避免用户阅读底部时页面突然上跳；
-5. `HostedPluginSurface(surfaceMode=document)` 只负责把稳定后的文档 surface 高度应用到插件 iframe，不承担卡片内容测量职责。
+5. `HostedPluginSurface(surfaceMode=document)` 只负责把稳定后的文档 surface 高度应用到插件 iframe，不承担卡片内容测量职责；
+6. 用户点击外层插件工具栏动作前，`HostedPluginSurface(surfaceMode=document)` 会先把插件 iframe 高度重置到当前浏览器视口并滚动到 surface 顶部，再把 `plugin.chrome.action` 投递给插件。这样从长正文切到封面时，不会让旧正文高度继续参与 CardViewer 内部 `vh` 计算；
+7. CardViewer 的封面态仍使用正式 `coverUrl` iframe 展示 `.card/cover.html`，并由 `ViewerCoverSurface` 发布自己的 `plugin.surface.resize` 高度事件；社区文档流宿主下的封面态不使用旧正文高度做垂直居中基准。
 
 ### 7.2 图片打开
 
@@ -192,6 +221,27 @@ interface DocumentSurfaceResizePayload {
 4. `/cards/:cardId` 不再提供“访问作者主页”入口；
 5. `/cards/:cardId` 的返回按钮优先走浏览器历史；无历史时回到作者主页，再无作者信息时回到首页。
 6. 卡片查看页顶部保留阅读安全区，避免悬浮控件遮挡卡片正文；卡片信息窗采用顶部居中的药丸形态，只展示卡片标题与创建日期两行信息。
+
+## 9.1 打开页预取与资源预连接
+
+社区前台当前为卡片打开页补充了两类轻量加速：
+
+1. `packages/web/src/lib/card-open-view-prefetch.ts`
+   - 以 `cardId` 为 key 维护内存 Promise 缓存；
+   - `CardDetailPage` 读取缓存命中结果，否则发起 `GET /api/v1/cards/:cardId/open-view`；
+   - 失败请求会从缓存移除，避免缓存错误状态。
+2. `packages/web/src/components/WorkTile.tsx`
+   - 对 `type = card` 且不处于管理模式的作品卡片启用预取；
+   - hover、focus 和接近视口时会调用 `prefetchCardOpenView(cardId)`；
+   - 管理模式下不触发打开页预取。
+
+前端启动时还会执行 `packages/web/src/lib/resource-hints.ts`：
+
+- 默认对 `https://file.chipscard.space` 写入 `dns-prefetch` 与 `preconnect`；
+- 若配置 `VITE_CCPS_RESOURCE_ORIGIN`，则使用该来源；
+- 若资源来源与当前页面同源，则不写入额外 hint。
+
+这些动作只预热轻量 API 与对象存储连接，不提前创建 Host 插件会话，也不绕开 `com.chips.card-viewer`。
 
 ## 10. Web 手势接管约束
 

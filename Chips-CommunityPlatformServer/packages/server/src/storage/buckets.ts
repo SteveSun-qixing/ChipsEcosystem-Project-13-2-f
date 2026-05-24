@@ -5,6 +5,7 @@
  * 路径规则：
  *   chips-card-resources/{userId}/{cardId}/{filename}
  *   chips-card-html/{userId}/{cardId}/index.html
+ *   chips-card-pipeline-inputs/{userId}/{cardId}/source.card
  *   chips-avatars/{userId}/avatar.{ext}
  *   chips-covers/rooms/{roomId}/cover.{ext}
  *   chips-covers/cards/{userId}/{cardId}/index.html
@@ -16,6 +17,9 @@ export const Bucket = {
   /** 卡片渲染后的 HTML，公开读 */
   CARD_HTML: 'chips-card-html',
 
+  /** 卡片转换队列原始输入文件，内部任务使用 */
+  CARD_PIPELINE_INPUTS: 'chips-card-pipeline-inputs',
+
   /** 用户头像，公开读 */
   AVATARS: 'chips-avatars',
 
@@ -24,11 +28,20 @@ export const Bucket = {
 } as const;
 
 export type BucketName = (typeof Bucket)[keyof typeof Bucket];
+export type PublicBucketName = Exclude<BucketName, typeof Bucket.CARD_PIPELINE_INPUTS>;
 
-/** 所有需要在启动时创建的 bucket 列表，均开放公共读 */
-export const PUBLIC_BUCKETS: BucketName[] = [
+/** 需要公开访问的 bucket 列表 */
+export const PUBLIC_BUCKETS: PublicBucketName[] = [
   Bucket.CARD_RESOURCES,
   Bucket.CARD_HTML,
   Bucket.AVATARS,
   Bucket.COVERS,
 ];
+
+/** 只供服务端/worker 内部访问的 bucket 列表 */
+export const PRIVATE_BUCKETS: BucketName[] = [
+  Bucket.CARD_PIPELINE_INPUTS,
+];
+
+/** 所有需要在启动时创建的 bucket 列表 */
+export const STORAGE_BUCKETS: BucketName[] = [...PUBLIC_BUCKETS, ...PRIVATE_BUCKETS];

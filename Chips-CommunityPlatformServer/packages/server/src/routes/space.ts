@@ -48,7 +48,7 @@ const spaceRoutes: FastifyPluginAsync = async (fastify) => {
           isOwner,
           rooms: roomsWithCounts,
           rootCards: rootCards.items.map(CardService.toSummaryDTO),
-          rootBoxes: rootBoxes.items.map(BoxService.toDTO),
+          rootBoxes: rootBoxes.items.map(BoxService.toSummaryDTO),
         },
       };
     },

@@ -1,4 +1,4 @@
-import { eq, and, isNull, desc } from 'drizzle-orm';
+import { eq, and, isNull, desc, count, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { cards, type Card, type NewCard } from '../db/schema/cards';
 import { deleteObjectsByPrefix } from '../storage/s3';
@@ -17,6 +17,31 @@ export interface PagedResult<T> {
   };
 }
 
+export interface CardOpenViewRecord {
+  id: string;
+  userId: string;
+  title: string;
+  coverUrl: string | null;
+  coverRatio: string | null;
+  htmlUrl: string | null;
+  cardStructure?: never;
+  status: Card['status'];
+  visibility: Card['visibility'];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CardSummaryRecord {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  coverRatio: string | null;
+  htmlUrl: string | null;
+  status: Card['status'];
+  visibility: Card['visibility'];
+  createdAt: Date;
+}
+
 function getCoverRatioFromMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') {
     return null;
@@ -24,6 +49,47 @@ function getCoverRatioFromMetadata(metadata: unknown): string | null {
 
   const rawRatio = (metadata as { cover_ratio?: unknown }).cover_ratio;
   return typeof rawRatio === 'string' && rawRatio.trim() ? rawRatio.trim() : null;
+}
+
+async function paginateCardSummaries(
+  where: SQL | undefined,
+  pagination: PaginationInput,
+): Promise<PagedResult<CardSummaryRecord>> {
+  const { page, pageSize } = pagination;
+  const offset = (page - 1) * pageSize;
+
+  const [items, totalRows] = await Promise.all([
+    db.query.cards.findMany({
+      where,
+      columns: {
+        id: true,
+        title: true,
+        coverUrl: true,
+        coverRatio: true,
+        htmlUrl: true,
+        status: true,
+        visibility: true,
+        createdAt: true,
+      },
+      orderBy: [desc(cards.createdAt)],
+      limit: pageSize,
+      offset,
+    }),
+    where
+      ? db.select({ count: count() }).from(cards).where(where)
+      : db.select({ count: count() }).from(cards),
+  ]);
+
+  const total = Number(totalRows[0]?.count ?? 0);
+  return {
+    items,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
 }
 
 export const CardService = {
@@ -98,37 +164,34 @@ export const CardService = {
     await db.delete(cards).where(eq(cards.id, cardId));
   },
 
+  async markPipelineError(cardId: string, errorMessage: string): Promise<Card> {
+    const [updated] = await db
+      .update(cards)
+      .set({
+        status: 'error',
+        errorMessage,
+        updatedAt: new Date(),
+      })
+      .where(eq(cards.id, cardId))
+      .returning();
+    return updated;
+  },
+
   async listByUser(
     userId: string,
     requesterId: string | null,
     pagination: PaginationInput,
     filters?: { roomId?: string; status?: string; visibility?: string },
-  ): Promise<PagedResult<Card>> {
+  ): Promise<PagedResult<CardSummaryRecord>> {
     const isOwner = userId === requesterId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allCards = await db.query.cards.findMany({
-      where: and(
+    return paginateCardSummaries(
+      and(
         eq(cards.userId, userId),
         filters?.visibility ? eq(cards.visibility, filters.visibility as Card['visibility']) : isOwner ? undefined : eq(cards.visibility, 'public'),
         filters?.status ? eq(cards.status, filters.status as Card['status']) : undefined,
       ),
-      orderBy: [desc(cards.createdAt)],
-    });
-
-    const total = allCards.length;
-    const items = allCards.slice(offset, offset + pageSize);
-
-    return {
-      items,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+      pagination,
+    );
   },
 
   async listByRoom(
@@ -136,51 +199,33 @@ export const CardService = {
     requesterId: string | null,
     ownerUserId: string,
     pagination: PaginationInput,
-  ): Promise<PagedResult<Card>> {
+  ): Promise<PagedResult<CardSummaryRecord>> {
     const isOwner = requesterId === ownerUserId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allCards = await db.query.cards.findMany({
-      where: and(
+    return paginateCardSummaries(
+      and(
         eq(cards.roomId, roomId),
         isOwner ? undefined : eq(cards.visibility, 'public'),
         eq(cards.status, 'ready'),
       ),
-      orderBy: [desc(cards.createdAt)],
-    });
-
-    const total = allCards.length;
-    return {
-      items: allCards.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    };
+      pagination,
+    );
   },
 
   async listRootByUser(
     userId: string,
     requesterId: string | null,
     pagination: PaginationInput,
-  ): Promise<PagedResult<Card>> {
+  ): Promise<PagedResult<CardSummaryRecord>> {
     const isOwner = userId === requesterId;
-    const { page, pageSize } = pagination;
-    const offset = (page - 1) * pageSize;
-
-    const allCards = await db.query.cards.findMany({
-      where: and(
+    return paginateCardSummaries(
+      and(
         eq(cards.userId, userId),
         isNull(cards.roomId),
         isOwner ? undefined : eq(cards.visibility, 'public'),
         eq(cards.status, 'ready'),
       ),
-      orderBy: [desc(cards.createdAt)],
-    });
-
-    const total = allCards.length;
-    return {
-      items: allCards.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    };
+      pagination,
+    );
   },
 
   toDTO(card: Card) {
@@ -191,7 +236,7 @@ export const CardService = {
       roomId: card.roomId,
       title: card.title,
       coverUrl: card.coverUrl,
-      coverRatio: getCoverRatioFromMetadata(card.cardMetadata),
+      coverRatio: card.coverRatio ?? getCoverRatioFromMetadata(card.cardMetadata),
       htmlUrl: card.htmlUrl,
       status: card.status,
       visibility: card.visibility,
@@ -203,16 +248,59 @@ export const CardService = {
     };
   },
 
-  toSummaryDTO(card: Card) {
+  toSummaryDTO(card: CardSummaryRecord) {
     return {
       id: card.id,
       title: card.title,
       coverUrl: card.coverUrl,
-      coverRatio: getCoverRatioFromMetadata(card.cardMetadata),
+      coverRatio: card.coverRatio,
       htmlUrl: card.htmlUrl,
       status: card.status,
       visibility: card.visibility,
       createdAt: card.createdAt,
+    };
+  },
+
+  async getOpenViewAccessible(
+    cardId: string,
+    requesterId: string | null,
+  ): Promise<CardOpenViewRecord> {
+    const card = await db.query.cards.findFirst({
+      where: eq(cards.id, cardId),
+      columns: {
+        id: true,
+        userId: true,
+        title: true,
+        coverUrl: true,
+        coverRatio: true,
+        htmlUrl: true,
+        cardStructure: false,
+        status: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!card) {
+      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
+    }
+    if (card.visibility === 'private' && card.userId !== requesterId) {
+      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
+    }
+    return card;
+  },
+
+  toOpenViewDTO(card: CardOpenViewRecord) {
+    return {
+      id: card.id,
+      title: card.title,
+      coverUrl: card.coverUrl,
+      coverRatio: card.coverRatio,
+      htmlUrl: card.htmlUrl,
+      status: card.status,
+      visibility: card.visibility,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
     };
   },
 };

@@ -5,6 +5,8 @@ export interface CardSummary {
   id: string;
   title: string;
   coverUrl: string | null;
+  coverFragmentUrl?: string | null;
+  coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
   htmlUrl: string | null;
   status: 'pending' | 'processing' | 'ready' | 'error';
@@ -16,6 +18,8 @@ export interface BoxSummary {
   id: string;
   title: string;
   coverUrl: string | null;
+  coverFragmentUrl?: string | null;
+  coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
   documentUrl: string | null;
   layoutPlugin: string | null;
@@ -30,6 +34,8 @@ export interface CardDetail {
   roomId: string | null;
   title: string;
   coverUrl: string | null;
+  coverFragmentUrl?: string | null;
+  coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
   htmlUrl: string | null;
   status: 'pending' | 'processing' | 'ready' | 'error';
@@ -37,6 +43,21 @@ export interface CardDetail {
   fileSizeBytes: number | null;
   cardMetadata: unknown;
   cardStructure: unknown;
+  user?: PublicUserProfile | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CardOpenView {
+  id: string;
+  title: string;
+  coverUrl: string | null;
+  coverFragmentUrl?: string | null;
+  coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
+  coverRatio: string | null;
+  htmlUrl: string | null;
+  status: 'pending' | 'processing' | 'ready' | 'error';
+  visibility: 'public' | 'private';
   user?: PublicUserProfile | null;
   createdAt: string;
   updatedAt: string;
@@ -57,6 +78,8 @@ export interface BoxDetail {
   roomId: string | null;
   title: string;
   coverUrl: string | null;
+  coverFragmentUrl?: string | null;
+  coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
   documentUrl: string | null;
   layoutPlugin: string | null;
@@ -145,6 +168,11 @@ export const cardsApi = {
     return res.data;
   },
 
+  async getCardOpenView(cardId: string) {
+    const res = await apiClient.get<{ data: CardOpenView }>(`/cards/${cardId}/open-view`);
+    return res.data;
+  },
+
   async getCardStatus(cardId: string) {
     const res = await apiClient.get<{ data: CardStatus }>(`/cards/${cardId}/status`);
     return res.data;
@@ -163,7 +191,7 @@ export const cardsApi = {
   },
 
   async getMyCards(params?: { page?: number; pageSize?: number }) {
-    const res = await apiClient.get<PaginatedEnvelope<CardDetail>>(
+    const res = await apiClient.get<PaginatedEnvelope<CardSummary>>(
       '/users/me/cards',
       params as Record<string, number>,
     );
@@ -220,7 +248,7 @@ export const boxesApi = {
   },
 
   async getMyBoxes(params?: { page?: number; pageSize?: number }) {
-    const res = await apiClient.get<PaginatedEnvelope<BoxDetail>>(
+    const res = await apiClient.get<PaginatedEnvelope<BoxSummary>>(
       '/users/me/boxes',
       params as Record<string, number>,
     );

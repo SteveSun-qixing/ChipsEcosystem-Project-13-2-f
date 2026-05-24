@@ -53,6 +53,10 @@ const EnvSchema = z.object({
   MAX_AVATAR_SIZE_MB: z.coerce.number().int().positive().default(5),
   CARD_PIPELINE_ASSET_UPLOAD_CONCURRENCY: z.coerce.number().int().positive().default(5),
   CARD_PIPELINE_HTML_UPLOAD_CONCURRENCY: z.coerce.number().int().positive().default(8),
+  CARD_PIPELINE_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
+  CARD_PIPELINE_JOB_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
+  CARD_PIPELINE_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(5000),
+  CARD_PIPELINE_QUEUE_POLL_TIMEOUT_SEC: z.coerce.number().int().min(1).default(5),
 
   // Admin bootstrap
   ADMIN_USERNAME: z.string().min(3).max(32).optional(),

@@ -10,9 +10,9 @@ import { BoxService } from '../services/box.service';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
 import { UploadCardSchema, UploadBoxSchema } from '../schemas/content.schemas';
-import { runCardPipeline } from '../pipeline/card-pipeline';
 import { env } from '../config/env';
 import { RoomService } from '../services/room.service';
+import { CardPipelineQueueService } from '../services/card-pipeline-queue.service';
 
 const MAX_CARD_SIZE = env.MAX_CARD_SIZE_MB * 1024 * 1024;
 const MAX_BOX_SIZE = env.MAX_BOX_SIZE_MB * 1024 * 1024;
@@ -115,26 +115,32 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // 创建卡片数据库记录
-        const card = await CardService.create({
+        let card = await CardService.create({
           userId: request.user!.userId,
           roomId: opts.roomId,
           visibility: opts.visibility,
           fileSizeBytes,
         });
 
-        const pipelineFilePath = tempFilePath;
-        tempFilePath = null;
-
-        // 异步触发流水线（不阻塞响应）
-        setImmediate(() => {
-          runCardPipeline({
-            cardFilePath: pipelineFilePath,
-            cardDbId: card.id,
+        try {
+          await CardPipelineQueueService.enqueue({
+            cardId: card.id,
             userId: request.user!.userId,
-          }).catch((err) => {
-            console.error(`Card pipeline failed for card ${card.id}:`, err);
+            sourceFilePath: tempFilePath,
           });
-        });
+        } catch (queueError) {
+          card = await CardService.markPipelineError(
+            card.id,
+            queueError instanceof Error ? queueError.message : 'Failed to enqueue card pipeline job',
+          );
+          throw new AppError(
+            ErrorCode.CARD_PIPELINE_ERROR,
+            `Failed to enqueue card pipeline job for card ${card.id}`,
+            500,
+          );
+        }
+        fs.rmSync(tempFilePath, { force: true });
+        tempFilePath = null;
 
         return reply.status(202).send({
           data: {

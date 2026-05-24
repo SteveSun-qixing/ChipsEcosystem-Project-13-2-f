@@ -1,6 +1,8 @@
 node_modules/
 dist/
 packages/server/.chips-server-host/
+packages/server/.chips-server-host-server/
+packages/server/.chips-server-host-worker/
 .env
 .env.local
 *.log

@@ -4,8 +4,6 @@ import { db } from '../db/client';
 import { users } from '../db/schema/users';
 import { cards } from '../db/schema/cards';
 import { boxes } from '../db/schema/boxes';
-import { CardService } from '../services/card.service';
-import { BoxService } from '../services/box.service';
 import { deleteObjectsByPrefix } from '../storage/s3';
 import { Bucket } from '../storage/buckets';
 import { AppError } from '../errors/AppError';
@@ -69,16 +67,22 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const pageSize = Math.min(100, Math.max(1, parseInt(qs.pageSize ?? '20', 10)));
     const q = qs.q ?? '';
 
-    const allUsers = await db.query.users.findMany({
-      where: q
-        ? or(ilike(users.username, `%${q}%`), ilike(users.displayName, `%${q}%`))
-        : undefined,
-      orderBy: [desc(users.createdAt)],
-    });
-
-    const total = allUsers.length;
     const offset = (page - 1) * pageSize;
-    const pagedUsers = allUsers.slice(offset, offset + pageSize);
+    const where = q
+      ? or(ilike(users.username, `%${q}%`), ilike(users.displayName, `%${q}%`))
+      : undefined;
+    const [pagedUsers, totalRows] = await Promise.all([
+      db.query.users.findMany({
+        where,
+        orderBy: [desc(users.createdAt)],
+        limit: pageSize,
+        offset,
+      }),
+      where
+        ? db.select({ count: count() }).from(users).where(where)
+        : db.select({ count: count() }).from(users),
+    ]);
+    const total = Number(totalRows[0]?.count ?? 0);
     const userIds = pagedUsers.map((user) => user.id);
 
     const cardStorageRows = userIds.length
@@ -166,23 +170,63 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const offset = (page - 1) * pageSize;
 
     if (type === 'card') {
-      const allCards = await db.query.cards.findMany({
-        where: q ? ilike(cards.title, `%${q}%`) : undefined,
-        orderBy: [desc(cards.createdAt)],
-      });
+      const where = q ? ilike(cards.title, `%${q}%`) : undefined;
+      const [pagedCards, totalRows] = await Promise.all([
+        db.query.cards.findMany({
+          where,
+          columns: {
+            id: true,
+            userId: true,
+            roomId: true,
+            title: true,
+            visibility: true,
+            fileSizeBytes: true,
+            createdAt: true,
+            updatedAt: true,
+            status: true,
+          },
+          orderBy: [desc(cards.createdAt)],
+          limit: pageSize,
+          offset,
+        }),
+        where
+          ? db.select({ count: count() }).from(cards).where(where)
+          : db.select({ count: count() }).from(cards),
+      ]);
+      const total = Number(totalRows[0]?.count ?? 0);
       return {
-        data: allCards.slice(offset, offset + pageSize).map(CardService.toDTO),
-        pagination: { page, pageSize, total: allCards.length, totalPages: Math.ceil(allCards.length / pageSize) },
+        data: pagedCards,
+        pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
       };
     }
 
-    const allBoxes = await db.query.boxes.findMany({
-      where: q ? ilike(boxes.title, `%${q}%`) : undefined,
-      orderBy: [desc(boxes.createdAt)],
-    });
+    const where = q ? ilike(boxes.title, `%${q}%`) : undefined;
+    const [pagedBoxes, totalRows] = await Promise.all([
+      db.query.boxes.findMany({
+        where,
+        columns: {
+          id: true,
+          userId: true,
+          roomId: true,
+          title: true,
+          visibility: true,
+          fileSizeBytes: true,
+          createdAt: true,
+          updatedAt: true,
+          layoutPlugin: true,
+        },
+        orderBy: [desc(boxes.createdAt)],
+        limit: pageSize,
+        offset,
+      }),
+      where
+        ? db.select({ count: count() }).from(boxes).where(where)
+        : db.select({ count: count() }).from(boxes),
+    ]);
+    const total = Number(totalRows[0]?.count ?? 0);
     return {
-      data: allBoxes.slice(offset, offset + pageSize).map(BoxService.toDTO),
-      pagination: { page, pageSize, total: allBoxes.length, totalPages: Math.ceil(allBoxes.length / pageSize) },
+      data: pagedBoxes,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     };
   });
 

@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { getInitial, getWorkCoverStyle } from '../lib/ui';
+import { prefetchCardOpenView } from '../lib/card-open-view-prefetch';
 import { Icon } from '../runtime/icons/Icon';
 import type { CommunityWorkItem } from '../types/community';
 
@@ -17,6 +18,41 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
   const isCard = item.type === 'card';
   const selectable = manageMode;
   const coverStyle = getWorkCoverStyle(item.coverRatio) as CSSProperties;
+  const rootRef = useRef<HTMLAnchorElement | HTMLButtonElement | null>(null);
+  const setRootRef = (node: HTMLAnchorElement | HTMLButtonElement | null) => {
+    rootRef.current = node;
+  };
+
+  const prefetchCard = () => {
+    if (!manageMode && isCard) {
+      void prefetchCardOpenView(item.id).catch(() => undefined);
+    }
+  };
+
+  useEffect(() => {
+    if (manageMode || !isCard || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const element = rootRef.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          prefetchCard();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '360px 0px' },
+    );
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [item.id, isCard, manageMode]);
 
   const content = (
     <article className="work-tile__surface">
@@ -61,6 +97,7 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
   if (manageMode) {
     return (
       <button
+        ref={setRootRef}
         type="button"
         className={`work-tile work-tile--${item.type} work-tile--manage${selected ? ' is-selected' : ''}`}
         style={coverStyle}
@@ -78,10 +115,13 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
 
   return (
     <Link
+      ref={setRootRef}
       to={item.href}
       className={`work-tile work-tile--${item.type}`}
       style={coverStyle}
       aria-label={`${item.title} · ${item.type === 'card' ? t('common.card') : t('common.box')}`}
+      onMouseEnter={prefetchCard}
+      onFocus={prefetchCard}
     >
       {content}
     </Link>

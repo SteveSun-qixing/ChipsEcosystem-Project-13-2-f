@@ -1,4 +1,4 @@
-import { desc, eq, and, or, ilike } from 'drizzle-orm';
+import { desc, eq, and, or, ilike, count } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
 import { cards } from '../db/schema/cards';
@@ -9,6 +9,10 @@ import { CardService } from '../services/card.service';
 import { BoxService } from '../services/box.service';
 import { UserService } from '../services/user.service';
 
+function toTotal(rows: Array<{ count: number }>): number {
+  return Number(rows[0]?.count ?? 0);
+}
+
 const discoverRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── GET /api/v1/discover/cards ───────────────────────────────────
 
@@ -17,13 +21,19 @@ const discoverRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, pageSize } = qs;
     const offset = (page - 1) * pageSize;
 
-    const allCards = await db.query.cards.findMany({
-      where: and(eq(cards.visibility, 'public'), eq(cards.status, 'ready')),
-      orderBy: [desc(cards.createdAt)],
-    });
+    const where = and(eq(cards.visibility, 'public'), eq(cards.status, 'ready'));
+    const [pagedCards, totalRows] = await Promise.all([
+      db.query.cards.findMany({
+        where,
+        orderBy: [desc(cards.createdAt)],
+        limit: pageSize,
+        offset,
+      }),
+      db.select({ count: count() }).from(cards).where(where),
+    ]);
 
-    const total = allCards.length;
-    const items = allCards.slice(offset, offset + pageSize).map(CardService.toSummaryDTO);
+    const total = toTotal(totalRows);
+    const items = pagedCards.map(CardService.toSummaryDTO);
 
     return {
       data: items,
@@ -38,13 +48,29 @@ const discoverRoutes: FastifyPluginAsync = async (fastify) => {
     const { page, pageSize } = qs;
     const offset = (page - 1) * pageSize;
 
-    const allBoxes = await db.query.boxes.findMany({
-      where: eq(boxes.visibility, 'public'),
-      orderBy: [desc(boxes.createdAt)],
-    });
+    const where = eq(boxes.visibility, 'public');
+    const [pagedBoxes, totalRows] = await Promise.all([
+      db.query.boxes.findMany({
+        where,
+        columns: {
+          id: true,
+          title: true,
+          coverUrl: true,
+          coverRatio: true,
+          documentUrl: true,
+          layoutPlugin: true,
+          visibility: true,
+          createdAt: true,
+        },
+        orderBy: [desc(boxes.createdAt)],
+        limit: pageSize,
+        offset,
+      }),
+      db.select({ count: count() }).from(boxes).where(where),
+    ]);
 
-    const total = allBoxes.length;
-    const items = allBoxes.slice(offset, offset + pageSize).map(BoxService.toDTO);
+    const total = toTotal(totalRows);
+    const items = pagedBoxes.map(BoxService.toSummaryDTO);
 
     return {
       data: items,
@@ -62,7 +88,7 @@ const discoverRoutes: FastifyPluginAsync = async (fastify) => {
 
     const result: {
       cards?: ReturnType<typeof CardService.toSummaryDTO>[];
-      boxes?: ReturnType<typeof BoxService.toDTO>[];
+      boxes?: ReturnType<typeof BoxService.toSummaryDTO>[];
       users?: ReturnType<typeof UserService.toPublicProfile>[];
     } = {};
 
@@ -74,16 +100,30 @@ const discoverRoutes: FastifyPluginAsync = async (fastify) => {
           ilike(cards.title, pattern),
         ),
         orderBy: [desc(cards.createdAt)],
+        limit: pageSize,
+        offset,
       });
-      result.cards = matched.slice(offset, offset + pageSize).map(CardService.toSummaryDTO);
+      result.cards = matched.map(CardService.toSummaryDTO);
     }
 
     if (type.includes('box')) {
       const matched = await db.query.boxes.findMany({
         where: and(eq(boxes.visibility, 'public'), ilike(boxes.title, pattern)),
+        columns: {
+          id: true,
+          title: true,
+          coverUrl: true,
+          coverRatio: true,
+          documentUrl: true,
+          layoutPlugin: true,
+          visibility: true,
+          createdAt: true,
+        },
         orderBy: [desc(boxes.createdAt)],
+        limit: pageSize,
+        offset,
       });
-      result.boxes = matched.slice(offset, offset + pageSize).map(BoxService.toDTO);
+      result.boxes = matched.map(BoxService.toSummaryDTO);
     }
 
     if (type.includes('user')) {
@@ -93,10 +133,10 @@ const discoverRoutes: FastifyPluginAsync = async (fastify) => {
           or(ilike(users.username, pattern), ilike(users.displayName, pattern)),
         ),
         orderBy: [desc(users.createdAt)],
+        limit: pageSize,
+        offset,
       });
-      result.users = matched
-        .slice(offset, offset + pageSize)
-        .map(UserService.toPublicProfile);
+      result.users = matched.map(UserService.toPublicProfile);
     }
 
     return { data: result, pagination: { page, pageSize } };

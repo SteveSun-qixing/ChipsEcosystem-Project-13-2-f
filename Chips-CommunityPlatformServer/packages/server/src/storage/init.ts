@@ -4,7 +4,7 @@ import {
   PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import { getS3Client } from './s3';
-import { PUBLIC_BUCKETS, BucketName } from './buckets';
+import { PRIVATE_BUCKETS, PUBLIC_BUCKETS, STORAGE_BUCKETS, BucketName } from './buckets';
 import { env } from '../config/env';
 
 /**
@@ -26,7 +26,7 @@ function buildPublicReadPolicy(bucketName: string): string {
 }
 
 /**
- * 确保 bucket 存在，若不存在则创建并设置公开读策略
+ * 确保 bucket 存在；公开读策略由调用方按 bucket 类型单独设置。
  */
 async function ensureBucket(bucketName: BucketName | string): Promise<void> {
   const s3 = getS3Client();
@@ -46,16 +46,18 @@ async function ensureBucket(bucketName: BucketName | string): Promise<void> {
     // 创建 bucket
     await s3.send(new CreateBucketCommand({ Bucket: bucketName }));
 
-    // 设置公开读策略
-    await s3.send(
-      new PutBucketPolicyCommand({
-        Bucket: bucketName,
-        Policy: buildPublicReadPolicy(bucketName),
-      }),
-    );
-
     console.info(`Storage bucket created: ${bucketName}`);
   }
+}
+
+async function ensurePublicReadPolicy(bucketName: BucketName | string): Promise<void> {
+  const s3 = getS3Client();
+  await s3.send(
+    new PutBucketPolicyCommand({
+      Bucket: bucketName,
+      Policy: buildPublicReadPolicy(bucketName),
+    }),
+  );
 }
 
 /**
@@ -63,7 +65,9 @@ async function ensureBucket(bucketName: BucketName | string): Promise<void> {
  */
 export async function initStorageBuckets(): Promise<void> {
   console.info('Initializing storage buckets...');
-  const bucketNames = env.S3_BUCKET_NAME ? [env.S3_BUCKET_NAME] : PUBLIC_BUCKETS;
+  const bucketNames = env.S3_BUCKET_NAME ? [env.S3_BUCKET_NAME, ...PRIVATE_BUCKETS] : STORAGE_BUCKETS;
   await Promise.all(bucketNames.map(ensureBucket));
+  const publicBucketNames = env.S3_BUCKET_NAME ? [env.S3_BUCKET_NAME] : PUBLIC_BUCKETS;
+  await Promise.all(publicBucketNames.map(ensurePublicReadPolicy));
   console.info(`Storage buckets ready: ${bucketNames.join(', ')}`);
 }

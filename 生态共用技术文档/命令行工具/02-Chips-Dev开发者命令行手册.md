@@ -260,7 +260,7 @@ chipsdev diagnostics [--json] [--out report.json]
 正式联调链路是：
 
 1. 使用 `chipsdev create layout <targetDir>` 创建工程；
-2. 在布局工程内执行 `chipsdev build/test/lint/validate/package`；
+2. 在布局工程内优先执行 `npm run verify`，或分步执行 `chipsdev lint/test/build/validate/package`；
 3. 使用 `chipsdev plugin install /绝对路径/布局插件.cpk` 安装到开发工作区；
 4. 使用 `chipsdev plugin enable <layoutPluginId>` 启用插件；
 5. 由箱子查看器、编辑器或其他消费箱子布局的正式应用打开 `.box` 文件，让 Host 按 `layout.layoutType` 加载已安装布局插件。
@@ -295,11 +295,8 @@ chipsdev module invoke \
 
 ```bash
 chipsdev create layout my-grid-layout
-chipsdev build
-chipsdev test
-chipsdev lint
-chipsdev validate
-chipsdev package
+cd my-grid-layout
+npm run verify
 chipsdev plugin install /绝对路径/my-grid-layout/dist/my-grid-layout.cpk
 chipsdev plugin enable chips.layout.my-grid-layout
 ```
@@ -348,6 +345,20 @@ npm run verify
 ```
 
 其中 `verify` 串联 `lint/typecheck/test/build/validate/package`，可作为生成工程的默认本地质量门禁。
+
+`chipsdev create layout <targetDir>` 会创建标准箱子布局插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`src/view`、`src/editor`、`src/schema`、`src/shared`、`contracts`、`i18n`、`tests` 与 README，并预置同样的质量脚本：
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run package
+npm run verify
+```
+
+其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。生成工程的 `package` 脚本会输出 `.cpk`，布局插件没有独立的 `chipsdev run` 窗口入口；正式联调必须安装并启用该 `.cpk`，再由箱子查看器、编辑器或其他正式 `.box` 消费应用通过 Host 加载。重新构建并重新打包同一 `pluginId` 后，需要再次执行 `chipsdev plugin install`，让开发工作区替换旧安装副本。
 
 ## 构建、打包与校验
 

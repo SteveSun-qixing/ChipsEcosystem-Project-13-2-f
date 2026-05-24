@@ -68,6 +68,8 @@ describe("template-engine", () => {
       expect(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
       expect(manifest).toMatch(/headless:\n      supported:\s+true/);
       expect(manifest).toMatch(/capabilities:/);
+      expect(manifest).not.toMatch(/chips-scaffold-basecard/);
+      expect(manifest).not.toMatch(/ui:\s*\n\s*surface:/);
       await expect(fs.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();
       await expect(fs.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
@@ -88,11 +90,31 @@ describe("template-engine", () => {
       );
       expect(readme).toMatch(/Standard Basecard Plugin/);
       expect(readme).toMatch(/basecardDefinition/);
+      expect(readme).not.toMatch(/chips-scaffold-basecard/);
       expect(indexTs).toMatch(/export const basecardDefinition/);
       expect(indexTs).toMatch(/export function renderBasecardView/);
       expect(indexTs).toMatch(/export function renderBasecardEditor/);
       expect(indexTs).toMatch(/cardType:\s*"base\.text"/);
       expect(indexTs).toMatch(/pluginId:\s*"com\.example\.card-standard"/);
+      expect(indexTs).toMatch(/openResource\?:/);
+      expect(indexTs).toMatch(/importArchiveBundle\?:/);
+      expect(indexTs).toMatch(/convertTiffToPng\?:/);
+      expect(indexTs).toMatch(/collectResourcePaths/);
+      expect(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
+
+      const schemaTs = await fs.readFile(
+        path.join(targetDir, "src", "schema", "card-config.ts"),
+        "utf8"
+      );
+      expect(schemaTs).toMatch(/resource_path\?:\s*string/);
+      expect(schemaTs).toMatch(/isCardRootResourcePath/);
+      expect(schemaTs).toMatch(/collectBasecardResourcePaths/);
+
+      const defaultConfig = await fs.readFile(
+        path.join(targetDir, "templates", "default-card-config.yaml"),
+        "utf8"
+      );
+      expect(defaultConfig).toMatch(/resource_path:\s*""/);
 
       for (const dirName of FORBIDDEN_PROJECT_DIRS) {
         await expect(fs.stat(path.join(targetDir, dirName))).rejects.toMatchObject({

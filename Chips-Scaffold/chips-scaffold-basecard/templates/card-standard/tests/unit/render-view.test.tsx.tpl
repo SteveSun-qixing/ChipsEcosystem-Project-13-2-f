@@ -11,6 +11,7 @@ describe("mountBasecardView", () => {
       body: "World",
       locale: "zh-CN",
       theme: "",
+      resource_path: "assets/cover.png",
     };
 
     const dispose = mountBasecardView({

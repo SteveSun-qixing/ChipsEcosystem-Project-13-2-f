@@ -1,6 +1,6 @@
 # {{ DISPLAY_NAME }}
 
-> 通过 `chips-scaffold-basecard` 生成的标准基础卡片插件工程。
+> 标准基础卡片插件工程。
 
 ## 简介
 
@@ -74,16 +74,17 @@ npm run dev
 
 参数表与填写说明见 `templates/parameters.md`。
 
-当前模板默认内置：
+本工程默认内置：
 
 - React 渲染与编辑运行时
 - `normalizeBasecardConfig()` / `validateBasecardConfig()` 统一归一与校验基线
+- `collectBasecardResourcePaths()` 卡片根目录资源路径收集
 - `renderBasecardView()` / `renderBasecardEditor()` / `basecardDefinition` 正式入口
-- `card_type/theme/title/body/locale` 正式配置模型
+- `card_type/theme/title/body/locale/resource_path` 正式配置模型
 
 ## 正式入口契约
 
-模板生成工程默认在 `src/index.ts` 中导出：
+本工程默认在 `src/index.ts` 中导出：
 
 - `renderBasecardView(ctx)`：供 Host 通用查看链路与编辑引擎单卡 iframe 复用；
 - `renderBasecardEditor(ctx)`：供 Host 托管编辑器与编辑引擎本地编辑面板复用；

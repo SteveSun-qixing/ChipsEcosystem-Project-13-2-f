@@ -3,6 +3,7 @@ import type { BasecardConfig } from "./schema/card-config";
 import { mountBasecardView } from "./render/runtime";
 import { mountBasecardEditor } from "./editor/runtime";
 import {
+  collectBasecardResourcePaths,
   defaultBasecardConfig,
   normalizeBasecardConfig,
   validateBasecardConfig,
@@ -17,12 +18,78 @@ export interface BasecardResourceImportResult {
   path: string;
 }
 
+export interface BasecardArchiveImportFilter {
+  mimeTypes?: string[];
+  extensions?: string[];
+}
+
+export interface BasecardArchiveImportRequest {
+  file: File;
+  preferredRootDir?: string;
+  entryFile?: string;
+  include?: BasecardArchiveImportFilter;
+  stripSingleRootDir?: boolean;
+  excludeSystemArtifacts?: boolean;
+}
+
+export interface BasecardArchiveImportedEntry {
+  sourcePath: string;
+  resourcePath: string;
+  fileName: string;
+  mimeType?: string;
+  size: number;
+  compressedSize: number;
+  crc32: number;
+  offset: number;
+  isDirectory: boolean;
+  compressionMethod: number;
+  modifiedTime?: number;
+}
+
+export interface BasecardArchiveDiscardedEntry {
+  sourcePath: string;
+  reason: "directory" | "system-artifact" | "filter-mismatch" | "unsafe-path";
+  fileName?: string;
+  mimeType?: string;
+}
+
+export interface BasecardArchiveImportResult {
+  rootDir: string;
+  entryFile?: string;
+  resourcePaths: string[];
+  entries: BasecardArchiveImportedEntry[];
+  discardedEntries: BasecardArchiveDiscardedEntry[];
+}
+
+export interface BasecardTiffToPngRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+}
+
+export interface BasecardTiffToPngResult {
+  path: string;
+  mimeType: "image/png";
+  sourceMimeType: "image/tiff";
+  width?: number;
+  height?: number;
+}
+
+export interface BasecardOpenResourceInput {
+  resourceId: string;
+  mimeType?: string;
+  title?: string;
+  fileName?: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface BasecardRenderContext {
   container: HTMLElement;
   config: BasecardConfig;
   themeCssText?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: BasecardOpenResourceInput) => void;
 }
 
 export interface BasecardEditorContext {
@@ -32,7 +99,9 @@ export interface BasecardEditorContext {
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
+  importArchiveBundle?: (input: BasecardArchiveImportRequest) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
 }
 
 export function renderBasecardView(ctx: BasecardRenderContext): () => void {
@@ -52,8 +121,10 @@ export const basecardDefinition = {
   pluginId: "{{ PLUGIN_ID }}",
   cardType: "{{ CARD_TYPE }}",
   displayName: "{{ DISPLAY_NAME }}",
+  description: "{{ DISPLAY_NAME }}",
   icon: basecardIcon,
   commitDebounceMs: 260,
+  previewPointerEvents: "native",
   createInitialConfig(_baseCardId: string) {
     return normalizeBasecardConfig(
       defaultBasecardConfig as unknown as Record<string, unknown>,
@@ -67,12 +138,16 @@ export const basecardDefinition = {
       normalizeBasecardConfig(config),
     );
   },
+  collectResourcePaths(config: Record<string, unknown>) {
+    return collectBasecardResourcePaths(config);
+  },
   renderView(ctx: {
     container: HTMLElement;
     config: Record<string, unknown>;
     themeCssText?: string;
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    openResource?: (input: BasecardOpenResourceInput) => void;
   }) {
     return renderBasecardView({
       container: ctx.container,
@@ -80,6 +155,7 @@ export const basecardDefinition = {
       themeCssText: ctx.themeCssText,
       resolveResourceUrl: ctx.resolveResourceUrl,
       releaseResourceUrl: ctx.releaseResourceUrl,
+      openResource: ctx.openResource,
     });
   },
   renderEditor(ctx: {
@@ -89,7 +165,9 @@ export const basecardDefinition = {
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
     importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
+    importArchiveBundle?: (input: BasecardArchiveImportRequest) => Promise<BasecardArchiveImportResult>;
     deleteResource?: (resourcePath: string) => Promise<void>;
+    convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
   }) {
     return renderBasecardEditor({
       container: ctx.container,
@@ -100,7 +178,9 @@ export const basecardDefinition = {
       resolveResourceUrl: ctx.resolveResourceUrl,
       releaseResourceUrl: ctx.releaseResourceUrl,
       importResource: ctx.importResource,
+      importArchiveBundle: ctx.importArchiveBundle,
       deleteResource: ctx.deleteResource,
+      convertTiffToPng: ctx.convertTiffToPng,
     });
   },
 } as const;

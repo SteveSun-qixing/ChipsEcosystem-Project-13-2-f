@@ -34,6 +34,43 @@ function main() {
         throw new Error(`模板 ${templateId} 缺少必要文件：${fileName}`);
       }
     }
+
+    const manifest = fs.readFileSync(path.join(dir, "manifest.yaml.tpl"), "utf8");
+    if (/ui:\s*\n\s*surface:/.test(manifest)) {
+      throw new Error(`模板 ${templateId} 的 card manifest 不应声明 ui.surface。`);
+    }
+    if (manifest.includes("chips-scaffold-basecard")) {
+      throw new Error(`模板 ${templateId} 的 manifest 不应泄露脚手架包名。`);
+    }
+
+    const readme = fs.readFileSync(path.join(dir, "README.md.tpl"), "utf8");
+    if (readme.includes("chips-scaffold-basecard")) {
+      throw new Error(`模板 ${templateId} 的 README 不应泄露脚手架包名。`);
+    }
+
+    const indexTs = fs.readFileSync(path.join(dir, "src", "index.ts.tpl"), "utf8");
+    for (const requiredText of [
+      "openResource?:",
+      "importArchiveBundle?:",
+      "convertTiffToPng?:",
+      "collectResourcePaths",
+      'previewPointerEvents: "native"',
+    ]) {
+      if (!indexTs.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 入口契约缺少：${requiredText}`);
+      }
+    }
+
+    const schemaTs = fs.readFileSync(path.join(dir, "src", "schema", "card-config.ts.tpl"), "utf8");
+    for (const requiredText of [
+      "resource_path?: string",
+      "isCardRootResourcePath",
+      "collectBasecardResourcePaths",
+    ]) {
+      if (!schemaTs.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} Schema 缺少：${requiredText}`);
+      }
+    }
   }
 
   // eslint-disable-next-line no-console

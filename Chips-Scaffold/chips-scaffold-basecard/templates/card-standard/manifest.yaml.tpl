@@ -3,7 +3,7 @@ name: {{ DISPLAY_NAME }}
 version: {{ VERSION }}
 type: card
 entry: dist/index.mjs
-description: 基于 chips-scaffold-basecard 生成的标准基础卡片插件。
+description: {{ DISPLAY_NAME }} 的基础卡片渲染与编辑插件。
 author:
   name: {{ AUTHOR_NAME }}
   email: {{ AUTHOR_EMAIL }}

@@ -10,6 +10,7 @@ describe("createBasecardEditorRoot", () => {
       body: "Body",
       locale: "zh-CN",
       theme: "",
+      resource_path: "assets/cover.png",
     };
 
     let lastConfig: BasecardConfig | undefined;
@@ -33,5 +34,6 @@ describe("createBasecardEditorRoot", () => {
 
     expect(lastConfig?.title).toBe("New Title");
     expect(lastConfig?.card_type).toBe("{{ CARD_TYPE }}");
+    expect(lastConfig?.resource_path).toBe("assets/cover.png");
   });
 });

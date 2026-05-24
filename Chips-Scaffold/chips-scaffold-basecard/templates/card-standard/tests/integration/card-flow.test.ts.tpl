@@ -14,6 +14,7 @@ describe("basecard integration flow", () => {
       body: "Body",
       locale: "zh-CN",
       theme: "",
+      resource_path: "assets/cover.png",
     };
 
     let currentConfig: BasecardConfig = initialConfig;

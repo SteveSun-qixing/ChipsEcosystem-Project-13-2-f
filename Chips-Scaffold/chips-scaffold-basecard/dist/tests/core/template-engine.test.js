@@ -83,7 +83,11 @@ async function removeDirIfExists(dir) {
             const manifest = await node_fs_1.promises.readFile(path.join(targetDir, "manifest.yaml"), "utf8");
             const pkg = JSON.parse(await node_fs_1.promises.readFile(path.join(targetDir, "package.json"), "utf8"));
             (0, vitest_1.expect)(manifest).toMatch(/type:\s+card/);
+            (0, vitest_1.expect)(manifest).toMatch(/runtime:\n  targets:\n    desktop:\n      supported:\s+true/);
+            (0, vitest_1.expect)(manifest).toMatch(/headless:\n      supported:\s+true/);
             (0, vitest_1.expect)(manifest).toMatch(/capabilities:/);
+            (0, vitest_1.expect)(manifest).not.toMatch(/chips-scaffold-basecard/);
+            (0, vitest_1.expect)(manifest).not.toMatch(/ui:\s*\n\s*surface:/);
             await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, ".eslintrc.cjs"))).resolves.toBeTruthy();
             await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, "src", "shared", "i18n.ts"))).resolves.toBeTruthy();
             await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, "tests", "unit", "schema.test.ts"))).resolves.toBeTruthy();
@@ -97,11 +101,23 @@ async function removeDirIfExists(dir) {
             const indexTs = await node_fs_1.promises.readFile(path.join(targetDir, "src", "index.ts"), "utf8");
             (0, vitest_1.expect)(readme).toMatch(/Standard Basecard Plugin/);
             (0, vitest_1.expect)(readme).toMatch(/basecardDefinition/);
+            (0, vitest_1.expect)(readme).not.toMatch(/chips-scaffold-basecard/);
             (0, vitest_1.expect)(indexTs).toMatch(/export const basecardDefinition/);
             (0, vitest_1.expect)(indexTs).toMatch(/export function renderBasecardView/);
             (0, vitest_1.expect)(indexTs).toMatch(/export function renderBasecardEditor/);
             (0, vitest_1.expect)(indexTs).toMatch(/cardType:\s*"base\.text"/);
             (0, vitest_1.expect)(indexTs).toMatch(/pluginId:\s*"com\.example\.card-standard"/);
+            (0, vitest_1.expect)(indexTs).toMatch(/openResource\?:/);
+            (0, vitest_1.expect)(indexTs).toMatch(/importArchiveBundle\?:/);
+            (0, vitest_1.expect)(indexTs).toMatch(/convertTiffToPng\?:/);
+            (0, vitest_1.expect)(indexTs).toMatch(/collectResourcePaths/);
+            (0, vitest_1.expect)(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
+            const schemaTs = await node_fs_1.promises.readFile(path.join(targetDir, "src", "schema", "card-config.ts"), "utf8");
+            (0, vitest_1.expect)(schemaTs).toMatch(/resource_path\?:\s*string/);
+            (0, vitest_1.expect)(schemaTs).toMatch(/isCardRootResourcePath/);
+            (0, vitest_1.expect)(schemaTs).toMatch(/collectBasecardResourcePaths/);
+            const defaultConfig = await node_fs_1.promises.readFile(path.join(targetDir, "templates", "default-card-config.yaml"), "utf8");
+            (0, vitest_1.expect)(defaultConfig).toMatch(/resource_path:\s*""/);
             for (const dirName of FORBIDDEN_PROJECT_DIRS) {
                 await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, dirName))).rejects.toMatchObject({
                     code: "ENOENT",

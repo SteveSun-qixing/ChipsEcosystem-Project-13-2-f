@@ -2,8 +2,12 @@ import React, { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
+  BasecardArchiveImportRequest,
+  BasecardArchiveImportResult,
   BasecardResourceImportRequest,
   BasecardResourceImportResult,
+  BasecardTiffToPngRequest,
+  BasecardTiffToPngResult,
 } from "../index";
 import {
   normalizeBasecardConfig,
@@ -20,7 +24,13 @@ export interface BasecardEditorProps {
   importResource?: (
     input: BasecardResourceImportRequest,
   ) => Promise<BasecardResourceImportResult>;
+  importArchiveBundle?: (
+    input: BasecardArchiveImportRequest,
+  ) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (
+    input: BasecardTiffToPngRequest,
+  ) => Promise<BasecardTiffToPngResult>;
 }
 
 type EditorRoot = HTMLElement & {

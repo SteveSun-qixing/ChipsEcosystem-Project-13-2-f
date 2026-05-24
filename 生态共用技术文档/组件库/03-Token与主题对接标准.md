@@ -184,6 +184,12 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `Form` 的 `root/section/field/label/required/control/hint/error/status/focus` token 分别表达表单容器、分区、字段间距、标签、必填标记、原生控件外观、说明文本、错误文本、状态文本和焦点视觉。正式说明文本 part 为 `hint`；`chips.comp.form-field.*`、`chips.comp.form-group.*` 与 `helper` 口径已归档，不再作为主题包公开 contract。
 
+任务016第四批复杂组件 Compound API token 是 DataGrid 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.data-grid.*`
+
+`DataGrid` 的 `root/toolbar/header/row/cell/pagination/status/focus` token 分别表达数据网格外层容器、工具栏、表头、行、单元格、分页区、状态信息和焦点视觉。正式公开 part 为 `root / toolbar / header / row / cell / pagination / status`；`table` 只允许作为数据驱动 fallback 的内部 DOM，不是公开主题 contract。行悬停和选中分别使用 `chips.comp.data-grid.row.surface.hover` 与 `chips.comp.data-grid.row.surface.selected`，主题 CSS 必须用 `data-selected="true"` 匹配选中行，不得继续把选中视觉绑定到 `data-state="active"`。
+
 ### 3.1 布局 token 基线
 
 `chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。

@@ -22,15 +22,22 @@
 ### 3.1 ChipsDataGrid
 
 - `data-scope="data-grid"`
-- `data-part="root|table|header|row|cell|status"`
+- Compound API：`ChipsDataGrid.Root / Toolbar / Header / Row / Cell / Pagination`
+- 公开 `data-part="root|toolbar|header|row|cell|pagination|status"`
+- `table` 只作为默认数据驱动渲染的内部 DOM 结构，不再是公开 part。
 - 语义：
-  - root：`role="grid"`
-  - 行：`aria-selected`
-  - 列头：`aria-sort`
+  - root：默认 `role="group"`，承载外层状态和上下文。
+  - 内部网格区域：`role="grid"`；默认 fallback 使用真实 `table role="grid"`。
+  - toolbar：`role="toolbar"`
+  - pagination：`role="navigation"`
+  - header：表头行语义。
+  - row：`role="row"`，通过 `aria-selected`、`data-selected`、`data-active` 表达选择和活动行。
+  - cell：普通单元格 `role="gridcell"`；`header=true` 时为列头 `role="columnheader"` 并输出 `aria-sort`、`data-sort`、`data-sortable`。
 - 能力：
   - 列排序（`asc/desc`）
   - 行选择（受控/非受控）
   - 键盘导航（`Arrow/Home/End/Enter/Space`）
+  - 工具栏与分页 slot 结构对齐 Host L8 `DataGrid` schema。
 
 ### 3.2 ChipsTree
 
@@ -78,6 +85,8 @@
 - `chips.comp.tree.*`
 - `chips.comp.date-time.*`
 - `chips.comp.command-palette.*`
+
+`ChipsDataGrid` 当前 required token 覆盖 `root.surface`、`toolbar.surface/gap`、`header.surface/text.color/sort.color`、`row.surface.idle/hover/selected`、`cell.text.color`、`pagination.surface/gap`、`border.color` 与 `focus.outline`。选中行视觉以 `data-selected="true"` 为正式选择器，不使用 `data-state="active"` 表达选择。
 
 对应源文件：
 

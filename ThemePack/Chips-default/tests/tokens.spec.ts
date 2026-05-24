@@ -55,5 +55,8 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.["error-state"]?.details?.color).toBeDefined();
     expect(parsed.comp.chips?.comp?.form?.control?.border?.error).toBeDefined();
     expect(parsed.comp.chips?.comp?.form?.hint?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["data-grid"]?.toolbar?.surface).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["data-grid"]?.header?.sort?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["data-grid"]?.pagination?.gap).toBeDefined();
   });
 });

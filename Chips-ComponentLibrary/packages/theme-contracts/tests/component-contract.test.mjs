@@ -277,8 +277,14 @@ test("virtual-list contract contains viewport and item tokens", () => {
 test("data-grid contract contains header and cell tokens", () => {
   const contract = readContract("data-grid.contract.json");
   assertCommonShape(contract);
+  assert.ok(contract.parts.includes("toolbar"));
   assert.ok(contract.parts.includes("header"));
   assert.ok(contract.parts.includes("cell"));
+  assert.ok(contract.parts.includes("pagination"));
+  assert.equal(contract.parts.includes("table"), false);
+  assert.ok(contract.tokens.includes("chips.comp.data-grid.toolbar.surface"));
+  assert.ok(contract.tokens.includes("chips.comp.data-grid.header.sort.color"));
+  assert.ok(contract.tokens.includes("chips.comp.data-grid.pagination.gap"));
   assert.ok(contract.tokens.includes("chips.comp.data-grid.row.surface.selected"));
 });
 

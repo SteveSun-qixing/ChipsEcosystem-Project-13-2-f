@@ -433,12 +433,56 @@ describe('Declarative UI', () => {
       DataGrid.validate({
         root: { id: 'grid-root' },
         slots: {
+          toolbar: Toolbar({ id: 'grid-toolbar' }),
           header: Table({ id: 'grid-header' }),
           row: [Table({ id: 'grid-row' })],
-          cell: [Table({ id: 'grid-cell' })]
+          cell: [Table({ id: 'grid-cell' })],
+          pagination: Toolbar({ id: 'grid-pagination' })
         }
       })
     ).toEqual([]);
+    expect(
+      DataGrid.validate({
+        root: { id: 'bad-grid-required-root' },
+        slots: {
+          header: Table({ id: 'bad-grid-header' }),
+          cell: [Table({ id: 'bad-grid-cell' })]
+        }
+      })
+    ).toEqual([expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.row' })]);
+    expect(
+      DataGrid.validate({
+        root: { id: 'bad-grid-type-root' },
+        slots: {
+          toolbar: View({ id: 'bad-grid-toolbar' }),
+          header: Table({ id: 'bad-grid-header-type' }),
+          row: [Table({ id: 'bad-grid-row-type' })],
+          cell: [Table({ id: 'bad-grid-cell-type' })],
+          pagination: View({ id: 'bad-grid-pagination' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.toolbar' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.pagination' })
+      ])
+    );
+    expect(
+      DataGrid.validate({
+        root: { id: 'bad-grid-multiple-root' },
+        slots: {
+          header: [Table({ id: 'bad-grid-header-a' }), Table({ id: 'bad-grid-header-b' })],
+          row: [Table({ id: 'bad-grid-row' })],
+          cell: [Table({ id: 'bad-grid-cell' })],
+          table: Table({ id: 'bad-grid-table' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_MULTIPLE_FORBIDDEN', path: 'slots.header' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.table' })
+      ])
+    );
   });
 
   it('blocks boolean mode props in compound components', () => {

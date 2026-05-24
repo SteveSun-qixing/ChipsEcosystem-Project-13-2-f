@@ -1810,11 +1810,17 @@ export const COMPONENT_TOKEN_MAP = {
   ],
   "data-grid": [
     "chips.comp.data-grid.root.surface",
+    "chips.comp.data-grid.toolbar.surface",
+    "chips.comp.data-grid.toolbar.gap",
     "chips.comp.data-grid.header.surface",
     "chips.comp.data-grid.header.text.color",
+    "chips.comp.data-grid.header.sort.color",
     "chips.comp.data-grid.row.surface.idle",
+    "chips.comp.data-grid.row.surface.hover",
     "chips.comp.data-grid.row.surface.selected",
     "chips.comp.data-grid.cell.text.color",
+    "chips.comp.data-grid.pagination.surface",
+    "chips.comp.data-grid.pagination.gap",
     "chips.comp.data-grid.border.color",
     "chips.comp.data-grid.focus.outline"
   ],
@@ -2259,7 +2265,7 @@ export function buildComponentContract(component) {
     "data-grid": {
       component: "data-grid",
       scope: "data-grid",
-      parts: ["root", "table", "header", "row", "cell", "status"],
+      parts: ["root", "toolbar", "header", "row", "cell", "pagination", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     tree: {
@@ -11646,8 +11652,45 @@ export const ChipsVirtualList = React.forwardRef((props, ref) => {
 
 ChipsVirtualList.displayName = "ChipsVirtualList";
 
-export const ChipsDataGrid = React.forwardRef((props, ref) => {
+const [DataGridCompoundContext, useDataGridCompoundContext] = createCompoundContext("data-grid");
+
+function resolveDataGridLabelProps(props) {
+  if (props["aria-label"] || props["aria-labelledby"]) {
+    return props;
+  }
+  return {
+    ...props,
+    "aria-label": props.ariaLabel
+  };
+}
+
+function flattenReactChildren(children) {
+  const flattened = [];
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child) && child.type === React.Fragment) {
+      flattened.push(...flattenReactChildren(child.props.children));
+      return;
+    }
+    if (child !== null && child !== undefined && child !== false) {
+      flattened.push(child);
+    }
+  });
+  return flattened;
+}
+
+function resolveDataGridSortName(direction) {
+  if (direction === "desc") {
+    return "descending";
+  }
+  if (direction === "asc") {
+    return "ascending";
+  }
+  return "none";
+}
+
+const DataGridRoot = React.forwardRef((props, ref) => {
   const {
+    children,
     columns = [],
     rows = [],
     sort,
@@ -11660,7 +11703,8 @@ export const ChipsDataGrid = React.forwardRef((props, ref) => {
     ariaLabel,
     onSortChange,
     onSelectedRowIdsChange,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
@@ -11731,6 +11775,8 @@ export const ChipsDataGrid = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
+  const gridLabelProps = resolveDataGridLabelProps(rest);
+
   const toggleSort = (columnKey) => {
     if (disabledByState) {
       return;
@@ -11800,91 +11846,264 @@ export const ChipsDataGrid = React.forwardRef((props, ref) => {
     }
   };
 
+  const renderHeaderCell = (column) =>
+    React.createElement(
+      DataGridCell,
+      {
+        as: "th",
+        key: column.key,
+        header: true,
+        columnKey: column.key,
+        sortable: column.sortable,
+        sortDirection: currentSort && currentSort.key === column.key ? currentSort.direction : null,
+        onClick: column.sortable ? () => toggleSort(column.key) : undefined
+      },
+      column.label
+    );
+
+  const renderDataRow = (row, index) => {
+    const selected = selectedSet.has(row.__rowId);
+    const active = index === activeRowIndex;
+    return React.createElement(
+      DataGridRow,
+      {
+        as: "tr",
+        key: row.__rowId,
+        rowId: row.__rowId,
+        selected,
+        active,
+        onMouseDown: () => setActiveRowIndex(index),
+        onClick: () => toggleRowSelection(row.__rowId)
+      },
+      normalizedColumns.map((column) =>
+        React.createElement(
+          DataGridCell,
+          {
+            as: "td",
+            key: `${row.__rowId}-${column.key}`,
+            columnKey: column.key
+          },
+          row[column.key]
+        )
+      )
+    );
+  };
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      disabled: disabledByState,
+      loading,
+      error: normalizedError
+    }),
+    [state, disabledByState, loading, normalizedError]
+  );
+
+  const hasCustomChildren = children !== undefined && children !== null;
+  const renderGridContainer = (gridChildren) =>
+    React.createElement(
+      "div",
+      {
+        role: "grid",
+        tabIndex: 0,
+        "aria-label": gridLabelProps["aria-label"] || ariaLabel,
+        "aria-labelledby": gridLabelProps["aria-labelledby"],
+        "aria-disabled": disabledByState ? "true" : undefined,
+        onKeyDown: handleGridKeyDown
+      },
+      gridChildren
+    );
+
+  const renderCompoundChildren = () => {
+    const beforeGrid = [];
+    const gridChildren = [];
+    const afterGrid = [];
+
+    for (const child of flattenReactChildren(children)) {
+      if (React.isValidElement(child) && child.type === DataGridToolbar) {
+        beforeGrid.push(child);
+        continue;
+      }
+      if (React.isValidElement(child) && child.type === DataGridPagination) {
+        afterGrid.push(child);
+        continue;
+      }
+      gridChildren.push(child);
+    }
+
+    return [
+      ...beforeGrid,
+      gridChildren.length > 0 ? renderGridContainer(gridChildren) : null,
+      ...afterGrid
+    ];
+  };
+
+  return React.createElement(
+    DataGridCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("data-grid", "root", state),
+        ...handlers,
+        ref,
+        role: rest.role || "group",
+        "aria-label": rest["aria-label"] || ariaLabel,
+        "aria-labelledby": rest["aria-labelledby"],
+        "aria-disabled": disabledByState ? "true" : undefined
+      },
+      hasCustomChildren
+        ? renderCompoundChildren()
+        : React.createElement(
+            "table",
+            {
+              role: "grid",
+              tabIndex: 0,
+              "aria-label": gridLabelProps["aria-label"] || ariaLabel,
+              "aria-labelledby": gridLabelProps["aria-labelledby"],
+              "aria-disabled": disabledByState ? "true" : undefined,
+              onKeyDown: handleGridKeyDown
+            },
+            React.createElement(
+              "thead",
+              null,
+              React.createElement(DataGridHeader, { as: "tr" }, normalizedColumns.map(renderHeaderCell))
+            ),
+            React.createElement("tbody", null, sortedRows.map(renderDataRow))
+          ),
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("data-grid", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+      )
+  );
+});
+
+DataGridRoot.displayName = "ChipsDataGrid.Root";
+
+const DataGridToolbar = React.forwardRef((props, ref) => {
+  const { children, ariaLabel, ...rest } = props;
+  const context = useDataGridCompoundContext("toolbar");
   return React.createElement(
     "div",
     {
-      ...createScopeAttributes("data-grid", "root", state),
-      ...handlers,
+      ...rest,
+      ...createScopeAttributes("data-grid", "toolbar", context.state),
       ref,
-      role: "grid",
-      tabIndex: 0,
-      "aria-label": ariaLabel,
-      "aria-disabled": disabledByState ? "true" : undefined,
-      onKeyDown: handleGridKeyDown
+      role: rest.role || "toolbar",
+      "aria-label": rest["aria-label"] || ariaLabel,
+      "aria-labelledby": rest["aria-labelledby"]
     },
-    React.createElement(
-      "table",
-      createScopeAttributes("data-grid", "table", state),
-      React.createElement(
-        "thead",
-        null,
-        React.createElement(
-          "tr",
-          null,
-          normalizedColumns.map((column) =>
-            React.createElement(
-              "th",
-              {
-                ...createScopeAttributes("data-grid", "header", state),
-                key: column.key,
-                role: "columnheader",
-                "aria-sort":
-                  currentSort && currentSort.key === column.key
-                    ? currentSort.direction === "desc"
-                      ? "descending"
-                      : "ascending"
-                    : "none",
-                onClick: column.sortable ? () => toggleSort(column.key) : undefined
-              },
-              column.label
-            )
-          )
-        )
-      ),
-      React.createElement(
-        "tbody",
-        null,
-        sortedRows.map((row, index) => {
-          const selected = selectedSet.has(row.__rowId);
-          const active = index === activeRowIndex;
-          return React.createElement(
-            "tr",
-            {
-              ...createScopeAttributes("data-grid", "row", state),
-              key: row.__rowId,
-              role: "row",
-              "aria-selected": String(selected),
-              "data-selected": String(selected),
-              "data-active": String(active),
-              onMouseDown: () => setActiveRowIndex(index),
-              onClick: () => toggleRowSelection(row.__rowId)
-            },
-            normalizedColumns.map((column) =>
-              React.createElement(
-                "td",
-                {
-                  ...createScopeAttributes("data-grid", "cell", state),
-                  key: `${row.__rowId}-${column.key}`,
-                  role: "gridcell"
-                },
-                row[column.key]
-              )
-            )
-          );
-        })
-      )
-    ),
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("data-grid", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+    children
   );
+});
+
+DataGridToolbar.displayName = "ChipsDataGrid.Toolbar";
+
+const DataGridHeader = React.forwardRef((props, ref) => {
+  const { children, as: Element = "div", ...rest } = props;
+  const context = useDataGridCompoundContext("header");
+  return React.createElement(
+    Element,
+    {
+      ...rest,
+      ...createScopeAttributes("data-grid", "header", context.state),
+      ref,
+      role: rest.role || "row"
+    },
+    children
+  );
+});
+
+DataGridHeader.displayName = "ChipsDataGrid.Header";
+
+const DataGridRow = React.forwardRef((props, ref) => {
+  const { children, rowId, selected = false, active = false, as: Element = "div", ...rest } = props;
+  const context = useDataGridCompoundContext("row");
+  return React.createElement(
+    Element,
+    {
+      ...rest,
+      ...createScopeAttributes("data-grid", "row", context.state),
+      ref,
+      role: rest.role || "row",
+      "aria-selected": rest["aria-selected"] ?? String(selected === true),
+      "data-row-id": rowId,
+      "data-selected": String(selected === true),
+      "data-active": String(active === true)
+    },
+    children
+  );
+});
+
+DataGridRow.displayName = "ChipsDataGrid.Row";
+
+const DataGridCell = React.forwardRef((props, ref) => {
+  const {
+    children,
+    columnKey,
+    header = false,
+    sortable = false,
+    sortDirection = null,
+    as: Element = "div",
+    ...rest
+  } = props;
+  const context = useDataGridCompoundContext("cell");
+  const sortName = header ? resolveDataGridSortName(sortDirection) : undefined;
+  return React.createElement(
+    Element,
+    {
+      ...rest,
+      ...createScopeAttributes("data-grid", "cell", context.state),
+      ref,
+      role: rest.role || (header ? "columnheader" : "gridcell"),
+      "aria-sort": rest["aria-sort"] || sortName,
+      "data-column-key": columnKey,
+      "data-header": String(header === true),
+      "data-sort": sortName,
+      "data-sortable": header ? String(sortable === true) : undefined
+    },
+    children
+  );
+});
+
+DataGridCell.displayName = "ChipsDataGrid.Cell";
+
+const DataGridPagination = React.forwardRef((props, ref) => {
+  const { children, page, pageCount, ariaLabel, ...rest } = props;
+  const context = useDataGridCompoundContext("pagination");
+  return React.createElement(
+    "nav",
+    {
+      ...rest,
+      ...createScopeAttributes("data-grid", "pagination", context.state),
+      ref,
+      role: rest.role || "navigation",
+      "aria-label": rest["aria-label"] || ariaLabel,
+      "aria-labelledby": rest["aria-labelledby"],
+      "data-page": page === undefined ? undefined : String(page),
+      "data-page-count": pageCount === undefined ? undefined : String(pageCount)
+    },
+    children
+  );
+});
+
+DataGridPagination.displayName = "ChipsDataGrid.Pagination";
+
+export const ChipsDataGrid = Object.assign(DataGridRoot, {
+  Root: DataGridRoot,
+  Toolbar: DataGridToolbar,
+  Header: DataGridHeader,
+  Row: DataGridRow,
+  Cell: DataGridCell,
+  Pagination: DataGridPagination
 });
 
 ChipsDataGrid.displayName = "ChipsDataGrid";
@@ -14841,6 +15060,14 @@ export function validateComponentA11y(component, props) {
   }
 
   if (component === "data-grid") {
+    if (props.part === "root" || props["data-part"] === "root") {
+      assertAriaProps(props, {
+        role: "group",
+        requireLabel: true
+      });
+      return true;
+    }
+
     assertAriaProps(props, {
       role: "grid",
       requireLabel: true
@@ -15259,7 +15486,7 @@ export const STAGE7_DATA_ADVANCED_COMPONENTS = [
   createComponentMeta({
     name: "ChipsDataGrid",
     scope: "data-grid",
-    parts: ["root", "table", "header", "row", "cell", "status"],
+    parts: ["root", "toolbar", "header", "row", "cell", "pagination", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({

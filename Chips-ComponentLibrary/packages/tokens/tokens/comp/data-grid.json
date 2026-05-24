@@ -5,15 +5,23 @@
         "root": {
           "surface": "{chips.sys.color.surface}"
         },
+        "toolbar": {
+          "surface": "{chips.sys.color.surface}",
+          "gap": "{chips.layout.gap.sm}"
+        },
         "header": {
           "surface": "{chips.sys.color.surface}",
           "text": {
             "color": "{chips.sys.color.on-surface}"
+          },
+          "sort": {
+            "color": "{chips.sys.color.primary}"
           }
         },
         "row": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
+            "hover": "{chips.sys.color.surface}",
             "selected": "{chips.sys.color.primary}"
           }
         },
@@ -21,6 +29,10 @@
           "text": {
             "color": "{chips.sys.color.on-surface}"
           }
+        },
+        "pagination": {
+          "surface": "{chips.sys.color.surface}",
+          "gap": "{chips.layout.gap.sm}"
         },
         "border": {
           "color": "{chips.sys.color.on-surface}"

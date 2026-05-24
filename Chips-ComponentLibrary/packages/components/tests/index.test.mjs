@@ -616,6 +616,15 @@ test("validateComponentA11y validates known components and rejects missing rule"
 
   assert.equal(
     validateComponentA11y("data-grid", {
+      part: "root",
+      role: "group",
+      "aria-label": "table group"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("data-grid", {
       role: "grid",
       "aria-label": "table"
     }),
@@ -1742,6 +1751,15 @@ test("all stage-seven advanced data component exports exist", () => {
   }
 });
 
+test("DataGrid exposes formal compound parts", () => {
+  assert.equal(ChipsDataGrid.Root, ChipsDataGrid);
+  assert.equal(typeof ChipsDataGrid.Toolbar.render, "function");
+  assert.equal(typeof ChipsDataGrid.Header.render, "function");
+  assert.equal(typeof ChipsDataGrid.Row.render, "function");
+  assert.equal(typeof ChipsDataGrid.Cell.render, "function");
+  assert.equal(typeof ChipsDataGrid.Pagination.render, "function");
+});
+
 test("all stage-seven workbench component exports exist", () => {
   for (const component of [
     ChipsSplitPane,
@@ -1818,6 +1836,12 @@ test("buildComponentContract includes stage-seven second batch components", () =
   const dateTime = buildComponentContract("date-time");
   const commandPalette = buildComponentContract("command-palette");
 
+  assert.ok(dataGrid.parts.includes("toolbar"));
+  assert.ok(dataGrid.parts.includes("pagination"));
+  assert.equal(dataGrid.parts.includes("table"), false);
+  assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.toolbar.surface"));
+  assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.pagination.gap"));
+  assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.row.surface.hover"));
   assert.ok(dataGrid.tokens.includes("chips.comp.data-grid.row.surface.selected"));
   assert.ok(tree.tokens.includes("chips.comp.tree.node.surface.selected"));
   assert.ok(dateTime.tokens.includes("chips.comp.date-time.input.border.error"));

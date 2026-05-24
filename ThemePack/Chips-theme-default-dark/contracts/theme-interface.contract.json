@@ -331,10 +331,11 @@
       "scope": "data-grid",
       "parts": [
         "root",
-        "table",
+        "toolbar",
         "header",
         "row",
         "cell",
+        "pagination",
         "status"
       ],
       "states": [
@@ -348,11 +349,17 @@
       ],
       "requiredTokens": [
         "chips.comp.data-grid.root.surface",
+        "chips.comp.data-grid.toolbar.surface",
+        "chips.comp.data-grid.toolbar.gap",
         "chips.comp.data-grid.header.surface",
         "chips.comp.data-grid.header.text.color",
+        "chips.comp.data-grid.header.sort.color",
         "chips.comp.data-grid.row.surface.idle",
+        "chips.comp.data-grid.row.surface.hover",
         "chips.comp.data-grid.row.surface.selected",
         "chips.comp.data-grid.cell.text.color",
+        "chips.comp.data-grid.pagination.surface",
+        "chips.comp.data-grid.pagination.gap",
         "chips.comp.data-grid.border.color",
         "chips.comp.data-grid.focus.outline"
       ]

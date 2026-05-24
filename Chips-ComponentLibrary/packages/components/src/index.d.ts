@@ -1320,6 +1320,7 @@ export interface VirtualListProps {
 }
 
 export interface DataGridProps {
+  children?: React.ReactNode;
   columns?: DataGridColumn[];
   rows?: DataGridRow[];
   sort?: SortState | null;
@@ -1334,6 +1335,49 @@ export interface DataGridProps {
   onSelectedRowIdsChange?: (rowIds: string[]) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface DataGridToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode;
+  ariaLabel?: string;
+}
+
+export interface DataGridHeaderProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  as?: keyof React.JSX.IntrinsicElements;
+}
+
+export interface DataGridRowProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  as?: keyof React.JSX.IntrinsicElements;
+  rowId?: string | number;
+  selected?: boolean;
+  active?: boolean;
+}
+
+export interface DataGridCellProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  as?: keyof React.JSX.IntrinsicElements;
+  columnKey?: string;
+  header?: boolean;
+  sortable?: boolean;
+  sortDirection?: SortState["direction"] | null;
+}
+
+export interface DataGridPaginationProps extends React.HTMLAttributes<HTMLElement> {
+  children?: React.ReactNode;
+  page?: number;
+  pageCount?: number;
+  ariaLabel?: string;
+}
+
+export interface DataGridCompoundComponent extends React.ForwardRefExoticComponent<DataGridProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<DataGridProps & React.RefAttributes<HTMLDivElement>>;
+  Toolbar: React.ForwardRefExoticComponent<DataGridToolbarProps & React.RefAttributes<HTMLDivElement>>;
+  Header: React.ForwardRefExoticComponent<DataGridHeaderProps & React.RefAttributes<HTMLElement>>;
+  Row: React.ForwardRefExoticComponent<DataGridRowProps & React.RefAttributes<HTMLElement>>;
+  Cell: React.ForwardRefExoticComponent<DataGridCellProps & React.RefAttributes<HTMLElement>>;
+  Pagination: React.ForwardRefExoticComponent<DataGridPaginationProps & React.RefAttributes<HTMLElement>>;
 }
 
 export interface TreeProps {
@@ -1715,7 +1759,7 @@ export const ChipsContextMenu: React.ForwardRefExoticComponent<ContextMenuProps 
 export const ChipsTooltip: React.ForwardRefExoticComponent<TooltipProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsForm: FormCompoundComponent;
 export const ChipsVirtualList: React.ForwardRefExoticComponent<VirtualListProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsDataGrid: React.ForwardRefExoticComponent<DataGridProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsDataGrid: DataGridCompoundComponent;
 export const ChipsTree: React.ForwardRefExoticComponent<TreeProps & React.RefAttributes<HTMLUListElement>>;
 export const ChipsDateTime: React.ForwardRefExoticComponent<DateTimeProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsCommandPalette: React.ForwardRefExoticComponent<CommandPaletteProps & React.RefAttributes<HTMLDivElement>>;

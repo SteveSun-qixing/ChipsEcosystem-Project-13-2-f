@@ -53,6 +53,11 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.image?.fallback?.surface).toBeDefined();
     expect(parsed.comp.chips?.comp?.media?.control?.surface?.idle).toBeDefined();
     expect(parsed.comp.chips?.comp?.["error-state"]?.details?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.dialog?.header?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.dialog?.body?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.dialog?.footer?.gap).toBeDefined();
+    expect(parsed.comp.chips?.comp?.dialog?.actions?.gap).toBeDefined();
+    expect(parsed.comp.chips?.comp?.dialog?.title).toBeUndefined();
     expect(parsed.comp.chips?.comp?.form?.control?.border?.error).toBeDefined();
     expect(parsed.comp.chips?.comp?.form?.hint?.color).toBeDefined();
     expect(parsed.comp.chips?.comp?.["data-grid"]?.toolbar?.surface).toBeDefined();

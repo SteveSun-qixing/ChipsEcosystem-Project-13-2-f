@@ -3003,11 +3003,25 @@ body {
   padding: var(--chips-base-space-4);
 }
 
-[data-scope="dialog"][data-part="title"] {
+[data-scope="dialog"][data-part="header"] {
   margin: 0 0 var(--chips-base-space-2);
   font-size: 16px;
   font-weight: 600;
-  color: var(--chips-comp-dialog-title-color);
+  color: var(--chips-comp-dialog-header-color);
+}
+
+[data-scope="dialog"][data-part="body"] {
+  color: var(--chips-comp-dialog-body-color);
+}
+
+[data-scope="dialog"][data-part="footer"] {
+  display: flex;
+  gap: var(--chips-comp-dialog-footer-gap);
+}
+
+[data-scope="dialog"][data-part="actions"] {
+  display: flex;
+  gap: var(--chips-comp-dialog-actions-gap);
 }
 
 [data-scope="dialog"][data-part="close"] {

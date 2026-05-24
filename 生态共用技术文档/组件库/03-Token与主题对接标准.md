@@ -234,6 +234,7 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 - 必须完整实现所声明组件的 token 覆盖
 - 必须通过 token 完整性校验
+- 官方主题包必须通过组件库官方契约等值门禁：`component` 集合、`scope`、`parts`、`states`、`requiredTokens`、`optionalTokens` 必须逐项等同组件库正式 contract
 - 必须通过对比度与动效安全校验
 - 必须保持组件结构不变（仅改视觉）
 
@@ -272,5 +273,6 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - 缺失 optional token 必须产生 `THEME_OPTIONAL_TOKEN_MISSING`，但 `blocking=false`。
 - `theme.changed` 事件必须携带 `diagnosticsSummary`，用于设置面板、组件库刷新工具和 CLI 快速判断主题健康状态。
 - 主题包本地校验不得维护独立硬编码 token 白名单；必须读取 `contracts/theme-interface.contract.json` 并通过组件库正式 contract validator 生成同一 `ThemeContractView`。
+- 组件库质量门禁必须把官方 ThemePack contract 与组件库 component contract 的等值校验纳入 `test:contracts`。新增、重命名或归档组件 part/token 时，必须同一提交内同步官方主题包 contract、token、CSS、主题包测试和公共文档，避免 Host、SDK、组件库与设置面板读取到互相矛盾的公开接口点。
 
 设置面板、CLI 与主题包测试只消费该公共 schema，不直接解析 Host 内部错误对象或主题包私有字段。

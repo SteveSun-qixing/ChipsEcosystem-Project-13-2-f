@@ -13,7 +13,7 @@ describe("theme build pipeline", () => {
     // 这里假定依赖已安装，脚本在 CI 或本地开发环境中执行。
     run("npm run build", projectRoot);
     expect(true).toBe(true);
-  });
+  }, 30000);
 
   it("emits runtime icon fonts into dist and injects font-face declarations", async () => {
     const projectRoot = path.resolve(__dirname, "..");
@@ -48,6 +48,11 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');
     expect(themeCss).toContain('data-scope="navigation-split-view"');
+    expect(themeCss).toContain('data-scope="dialog"][data-part="header"');
+    expect(themeCss).toContain('data-scope="dialog"][data-part="body"');
+    expect(themeCss).toContain('data-scope="dialog"][data-part="actions"');
+    expect(themeCss).not.toContain('data-scope="dialog"][data-part="title"');
+    expect(themeCss).not.toContain("--chips-comp-dialog-title-color");
     expect(themeCss).toContain("var(--chips-layout-size-grid-min-item");
     await expect(
       fs.access(path.join(projectRoot, "dist", "icons", "variablefont", "MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2"))

@@ -2328,53 +2328,73 @@ const parseModuleInvokeArgs = (args) => {
     timeoutMs: 60_000
   };
 
+  const readRequiredValue = (index, optionName) => {
+    const value = args[index + 1];
+    if (typeof value !== 'string' || value.length === 0 || value.startsWith('--')) {
+      throw new Error(`${optionName} 需要提供参数值。`);
+    }
+    return value;
+  };
+
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
-    const value = args[index + 1];
+    const [optionName, inlineValue] = typeof token === 'string' && token.startsWith('--') && token.includes('=')
+      ? token.split(/=(.*)/s, 2)
+      : [token, undefined];
+    const readValue = () => inlineValue ?? readRequiredValue(index, optionName);
+    const consumedInlineValue = typeof inlineValue === 'string';
 
-    if (token === '--manifest') {
-      options.manifestPath = value;
-      index += 1;
-      continue;
-    }
-    if (token === '--capability') {
-      options.capability = value;
-      index += 1;
-      continue;
-    }
-    if (token === '--method') {
-      options.method = value;
-      index += 1;
-      continue;
-    }
-    if (token === '--input') {
-      if (!value) {
-        throw new Error('--input 需要提供 JSON 字符串。');
+    if (optionName === '--manifest') {
+      options.manifestPath = readValue();
+      if (!consumedInlineValue) {
+        index += 1;
       }
+      continue;
+    }
+    if (optionName === '--capability') {
+      options.capability = readValue();
+      if (!consumedInlineValue) {
+        index += 1;
+      }
+      continue;
+    }
+    if (optionName === '--method') {
+      options.method = readValue();
+      if (!consumedInlineValue) {
+        index += 1;
+      }
+      continue;
+    }
+    if (optionName === '--input') {
+      const value = readValue();
       options.input = JSON.parse(value);
-      index += 1;
+      if (!consumedInlineValue) {
+        index += 1;
+      }
       continue;
     }
-    if (token === '--input-file') {
-      if (!value) {
-        throw new Error('--input-file 需要提供 JSON 文件路径。');
-      }
+    if (optionName === '--input-file') {
+      const value = readValue();
       options.input = JSON.parse(fs.readFileSync(path.resolve(value), 'utf-8'));
-      index += 1;
+      if (!consumedInlineValue) {
+        index += 1;
+      }
       continue;
     }
-    if (token === '--timeout-ms') {
-      if (!value) {
-        throw new Error('--timeout-ms 需要提供正整数。');
-      }
+    if (optionName === '--timeout-ms') {
+      const value = readValue();
       const timeoutMs = Number(value);
       if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
         throw new Error('--timeout-ms 必须是正整数。');
       }
       options.timeoutMs = timeoutMs;
-      index += 1;
+      if (!consumedInlineValue) {
+        index += 1;
+      }
       continue;
     }
+
+    throw new Error(`chipsdev module invoke 不支持参数：${token}`);
   }
 
   if (typeof options.capability !== 'string' || options.capability.trim().length === 0) {
@@ -2425,10 +2445,10 @@ const resolveModuleManifestForInvoke = async (projectRoot, explicitManifestPath)
 
 const handleModuleInvoke = async (args) => {
   const projectRoot = resolveProjectRoot();
+  const options = parseModuleInvokeArgs(args);
   const workspacePath = await resolveDevWorkspace(projectRoot);
   await ensureDevWorkspaceThemeBootstrap(projectRoot, workspacePath);
 
-  const options = parseModuleInvokeArgs(args);
   const manifestPath = await resolveModuleManifestForInvoke(projectRoot, options.manifestPath);
   const { ecosystemRoot, hostPackageDir } = await resolveHostCliPath(projectRoot);
   const hostRunnerPath = path.join(hostPackageDir, 'dist', 'src', 'main', 'electron', 'dev-invoke-module.js');

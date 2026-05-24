@@ -199,6 +199,8 @@
 
 模块插件继续通过 capability + method 暴露能力，不得直接互相 `import`。
 
+Host 模块服务负责 provider 发现、默认解析、schema 校验、方法级超时、job 取消和模块间 `module.consumes` 依赖声明治理。默认 provider 选择只面向 `enabled` 或 `running` provider，并按 capability、语义化版本降序、pluginId 排序。
+
 ### 5.3 `resource`
 
 当前 `resource` 命名空间正式收口以下动作：
@@ -234,6 +236,7 @@
 - `module.runtime.stopped`
 - `module.job.completed`
 - `module.job.failed`
+- `module.job.cancelled`
 
 ## 7. 当前代码收口原则
 

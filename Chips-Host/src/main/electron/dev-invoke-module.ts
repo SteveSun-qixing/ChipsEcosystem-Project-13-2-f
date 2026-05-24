@@ -91,7 +91,8 @@ const run = async (): Promise<void> => {
     }>('module.invoke', {
       capability,
       method,
-      input
+      input,
+      timeoutMs
     });
 
     if (invocation.mode === 'sync') {

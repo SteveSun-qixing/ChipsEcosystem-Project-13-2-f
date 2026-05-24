@@ -1517,12 +1517,22 @@ describe("createClient", () => {
         input: {
           markdown: "# Async Title",
         },
+        timeoutMs: 250,
       }),
     ).resolves.toEqual(jobResult);
     await expect(client.module.job.get("job-1")).resolves.toEqual(jobSnapshot);
     await expect(client.module.job.cancel("job-1")).resolves.toBeUndefined();
     expect(calls[0]?.payload).toEqual({
       capability: "text.markdown.render",
+    });
+    expect(
+      calls.find(
+        (call) => call.action === "module.invoke" && (call.payload as { method?: string }).method === "renderAsync",
+      )?.payload,
+    ).toMatchObject({
+      capability: "text.markdown.render",
+      method: "renderAsync",
+      timeoutMs: 250,
     });
   });
 

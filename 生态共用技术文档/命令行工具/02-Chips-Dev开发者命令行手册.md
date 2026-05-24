@@ -137,6 +137,8 @@ chipsdev module invoke \
   [--timeout-ms 60000]
 ```
 
+上述参数均支持空格形式与 `--参数=值` 形式。未知参数会直接报错，不会被静默忽略。
+
 执行时会完成以下正式链路：
 
 1. 解析开发工作区 `.chips-host-dev`；
@@ -151,6 +153,7 @@ chipsdev module invoke \
 补充边界：
 
 - 第 3 步中的“正式构建”与 `chipsdev build` 保持同一语义：优先执行工程自己的正式 `build` 脚本，再按需要回退到 SDK 内置构建链路；
+- `--timeout-ms` 会同时作为 CLI 等待窗口与 Host `module.invoke.timeoutMs` 传入；sync 方法超时返回 `MODULE_TIMEOUT`，job 方法超时后 job 进入 `failed` 终态；
 - 模块调用完成后，联调用 Electron Host 会在输出结果后主动退出，不继续常驻；
 - `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
 - 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
@@ -188,7 +191,7 @@ chipsdev create module Chips-ModulePlugin/file-orchestrator \
   --consumes converter.html.to-pdf@^1.0.0
 ```
 
-这些参数只影响生成工程的 manifest、schema、源码和测试基线，不会自动安装或启用下游 provider；真实调用仍通过 Host `module.listProviders / module.resolve / module.invoke / module.job.*` 完成。
+这些参数只影响生成工程的 manifest、schema、源码和测试基线，不会自动安装或启用下游 provider；真实调用仍通过 Host `module.listProviders / module.resolve / module.invoke / module.job.*` 完成。模块插件通过 `ctx.module.invoke(...)` 调用其他模块 capability 时，Host 会校验调用方 `manifest.module.consumes` 中是否声明了该依赖。
 
 ## 开发者报告命令
 

@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createError } from '../../shared/errors';
 import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
-import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration } from '../../shared/types';
+import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration, StandardError } from '../../shared/types';
 import { loadElectronModule } from '../electron/electron-loader';
 import { rewriteThemeCssAssetUrls } from '../theme-runtime/css-assets';
 import { mergeThemeLayers, resolveThemeFromLayers } from '../theme-runtime/resolve-algorithm';
@@ -29,6 +29,7 @@ import { BoxService } from '../../../packages/box-service/src';
 import { StoreZipService } from '../../../packages/zip-service/src';
 import {
   buildModuleProviderRecords,
+  compareSemver,
   findManifestMethod,
   findManifestProvider,
   loadModuleDefinition,
@@ -125,6 +126,14 @@ interface ModuleRuntimeView {
   status: 'running' | 'error';
   activatedAt: number;
 }
+
+type ModuleInvokeRequest = {
+  capability: string;
+  method: string;
+  input: Record<string, unknown>;
+  pluginId?: string;
+  timeoutMs?: number;
+};
 
 interface ModuleJobView {
   jobId: string;
@@ -369,6 +378,22 @@ const toModuleJobView = (record: ModuleJobRecord): ModuleJobView => {
   };
 };
 
+const emitModuleJobCancelled = async (
+  ctx: HostServiceContext,
+  job: ModuleJobRecord,
+  reason: string
+): Promise<void> => {
+  await ctx.kernel.events.emit('module.job.cancelled', 'module-service', {
+    jobId: job.jobId,
+    pluginId: job.pluginId,
+    capability: job.capability,
+    method: job.method,
+    status: job.status,
+    reason,
+    error: job.error
+  });
+};
+
 const unregisterModulePluginState = async (
   ctx: HostServiceContext,
   state: RuntimeState,
@@ -390,14 +415,7 @@ const unregisterModulePluginState = async (
         code: 'MODULE_JOB_CANCELLED',
         message: 'Module job cancelled because plugin stopped'
       };
-      await ctx.kernel.events.emit('module.job.failed', 'module-service', {
-        jobId,
-        pluginId,
-        capability: job.capability,
-        method: job.method,
-        status: job.status,
-        error: job.error
-      });
+      await emitModuleJobCancelled(ctx, job, reason);
     }
   }
 
@@ -2482,6 +2500,10 @@ const flattenModuleProviders = (state: RuntimeState): ModuleProviderRecord[] => 
       return capabilityCompare;
     }
     if (left.version !== right.version) {
+      const versionCompare = compareSemver(right.version, left.version);
+      if (versionCompare !== 0) {
+        return versionCompare;
+      }
       return right.version.localeCompare(left.version);
     }
     return left.pluginId.localeCompare(right.pluginId);
@@ -2538,6 +2560,79 @@ const createModuleLogger = (
   };
 };
 
+const normalizeModuleTimeoutMs = (timeoutMs: number | undefined): number | undefined => {
+  return typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined;
+};
+
+const createModuleTimeoutError = (
+  provider: ModuleProviderRecord,
+  method: string,
+  timeoutMs: number
+) => createError(
+  'MODULE_TIMEOUT',
+  'Module method timed out',
+  {
+    pluginId: provider.pluginId,
+    capability: provider.capability,
+    method,
+    timeoutMs
+  },
+  false
+);
+
+const withModuleTimeout = async <T>(
+  taskFactory: () => Promise<T>,
+  timeoutMs: number | undefined,
+  timeoutError: StandardError
+): Promise<T> => {
+  if (!timeoutMs) {
+    return taskFactory();
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    timer = setTimeout(() => {
+      settled = true;
+      reject(timeoutError);
+    }, timeoutMs);
+
+    let task: Promise<T>;
+    try {
+      task = taskFactory();
+    } catch (error) {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      settled = true;
+      reject(error);
+      return;
+    }
+
+    task
+      .then((result) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(result);
+      })
+      .catch((error) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      });
+  });
+};
+
 const invokeKernelForModule = async <TInput, TOutput>(
   ctx: HostServiceContext,
   pluginId: string,
@@ -2549,6 +2644,118 @@ const invokeKernelForModule = async <TInput, TOutput>(
   return ctx.kernel.invoke<TInput, TOutput>(action, payload, createModuleCallerContext(pluginId, permissions, routeContext));
 };
 
+const resolveModuleInvokeForDeclaredConsume = (
+  state: RuntimeState,
+  callerPlugin: PluginRecord,
+  request: ModuleInvokeRequest
+): ModuleInvokeRequest => {
+  if (request.pluginId) {
+    const provider = resolveProviderSelection(state, {
+      capability: request.capability,
+      pluginId: request.pluginId
+    });
+    if (provider.pluginId === callerPlugin.manifest.id) {
+      return request;
+    }
+
+    const matchingConsumes = (callerPlugin.manifest.module?.consumes ?? []).filter((consume) => {
+      return consume.capability === provider.capability;
+    });
+    const declared = matchingConsumes.some((consume) => {
+      return consume.capability === provider.capability && matchesVersionRange(provider.version, consume.versionRange);
+    });
+    if (declared) {
+      return request;
+    }
+
+    if (matchingConsumes.length > 0) {
+      throw createError(
+        'MODULE_PROVIDER_NOT_FOUND',
+        'No matching module provider was found for declared module.consumes range',
+        {
+          callerPluginId: callerPlugin.manifest.id,
+          capability: provider.capability,
+          pluginId: provider.pluginId,
+          version: provider.version,
+          consumes: matchingConsumes
+        }
+      );
+    }
+
+    throw createError(
+      'MODULE_CONSUME_UNDECLARED',
+      'Module capability dependency must be declared in manifest module.consumes',
+      {
+        callerPluginId: callerPlugin.manifest.id,
+        providerPluginId: provider.pluginId,
+        capability: provider.capability,
+        version: provider.version
+      }
+    );
+  }
+
+  const matchingConsumes = (callerPlugin.manifest.module?.consumes ?? []).filter((consume) => {
+    return consume.capability === request.capability;
+  });
+
+  const ownProvider = state.moduleProviders.get(callerPlugin.manifest.id)?.find((provider) => {
+    return provider.capability === request.capability && (provider.status === 'enabled' || provider.status === 'running');
+  });
+  if (ownProvider) {
+    return {
+      ...request,
+      pluginId: ownProvider.pluginId
+    };
+  }
+
+  for (const consume of matchingConsumes) {
+    const provider = findProviderSelection(state, {
+      capability: request.capability,
+      versionRange: consume.versionRange
+    });
+    if (!provider) {
+      continue;
+    }
+    return {
+      ...request,
+      pluginId: provider.pluginId
+    };
+  }
+
+  if (matchingConsumes.length > 0) {
+    throw createError(
+      'MODULE_PROVIDER_NOT_FOUND',
+      'No matching module provider was found for declared module.consumes range',
+      {
+        callerPluginId: callerPlugin.manifest.id,
+        capability: request.capability,
+        consumes: matchingConsumes
+      }
+    );
+  }
+
+  const provider = resolveProviderSelection(state, {
+    capability: request.capability
+  });
+  if (provider.pluginId === callerPlugin.manifest.id) {
+    return {
+      ...request,
+      pluginId: provider.pluginId
+    };
+  }
+
+  throw createError(
+    'MODULE_CONSUME_UNDECLARED',
+    'Module capability dependency must be declared in manifest module.consumes',
+    {
+      callerPluginId: callerPlugin.manifest.id,
+      providerPluginId: provider.pluginId,
+      capability: provider.capability,
+      version: provider.version
+    }
+  );
+};
+
 const buildModuleBaseContext = (
   ctx: HostServiceContext,
   state: RuntimeState,
@@ -2557,7 +2764,7 @@ const buildModuleBaseContext = (
   routeContext: RouteInvocationContext | undefined,
   invokeModule: (
     pluginId: string,
-    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    request: ModuleInvokeRequest,
     routeContext: RouteInvocationContext | undefined
   ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
 ) => {
@@ -2590,8 +2797,10 @@ const buildModuleBaseContext = (
       }
     },
     module: {
-      invoke: (request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number }) =>
-        invokeModule(pluginId, request, routeContext),
+      invoke: (request: ModuleInvokeRequest) => {
+        const resolvedRequest = resolveModuleInvokeForDeclaredConsume(state, plugin, request);
+        return invokeModule(pluginId, resolvedRequest, routeContext);
+      },
       job: {
         get: (jobId: string) =>
           invokeKernelForModule<{ jobId: string }, unknown>(ctx, pluginId, permissions, 'module.job.get', { jobId }, routeContext).then(
@@ -2619,7 +2828,7 @@ const resolveProviderSelection = (
     if (!matchesVersionRange(provider.version, request.versionRange)) {
       return false;
     }
-    return provider.status !== 'disabled';
+    return provider.status === 'enabled' || provider.status === 'running';
   });
 
   if (providers.length === 0) {
@@ -2629,13 +2838,27 @@ const resolveProviderSelection = (
   return providers[0]!;
 };
 
+const findProviderSelection = (
+  state: RuntimeState,
+  request: { capability: string; pluginId?: string; versionRange?: string }
+): ModuleProviderRecord | undefined => {
+  try {
+    return resolveProviderSelection(state, request);
+  } catch (error) {
+    if ((error as { code?: string }).code === 'MODULE_PROVIDER_NOT_FOUND') {
+      return undefined;
+    }
+    throw error;
+  }
+};
+
 const ensureModuleRuntime = async (
   ctx: HostServiceContext,
   state: RuntimeState,
   pluginId: string,
   invokeModule: (
     pluginId: string,
-    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    request: ModuleInvokeRequest,
     routeContext: RouteInvocationContext | undefined
   ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
 ): Promise<ModuleRuntimeRecord> => {
@@ -2694,7 +2917,7 @@ const stopModuleRuntime = async (
   pluginId: string,
   invokeModule: (
     pluginId: string,
-    request: { capability: string; method: string; input: Record<string, unknown>; pluginId?: string; timeoutMs?: number },
+    request: ModuleInvokeRequest,
     routeContext: RouteInvocationContext | undefined
   ) => Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }>
 ): Promise<void> => {
@@ -3190,13 +3413,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
 
   const invokeModuleInternal = async (
     callerPluginId: string,
-    request: {
-      capability: string;
-      method: string;
-      input: Record<string, unknown>;
-      pluginId?: string;
-      timeoutMs?: number;
-    },
+    request: ModuleInvokeRequest,
     routeContext?: RouteInvocationContext
   ): Promise<{ mode: 'sync'; output: unknown } | { mode: 'job'; jobId: string }> => {
     const provider = resolveProviderSelection(state, {
@@ -3268,10 +3485,20 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     });
 
     await validateContractSchema(inputSchemaPath, request.input, 'MODULE_SCHEMA_INVALID');
+    const timeoutMs = normalizeModuleTimeoutMs(request.timeoutMs);
+    const timeoutError = timeoutMs ? createModuleTimeoutError(provider, request.method, timeoutMs) : undefined;
 
     if (manifestMethod.mode === 'sync') {
-      const output = await implementationMethod(baseContext, request.input);
-      await validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID');
+      const output = await withModuleTimeout(
+        () => Promise.resolve(implementationMethod(baseContext, request.input)),
+        timeoutMs,
+        timeoutError ?? createError('MODULE_TIMEOUT', 'Module method timed out')
+      );
+      await withModuleTimeout(
+        () => validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID'),
+        timeoutMs,
+        timeoutError ?? createError('MODULE_TIMEOUT', 'Module method timed out')
+      );
       return { mode: 'sync', output };
     }
 
@@ -3295,6 +3522,31 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     state.moduleJobs.set(jobId, jobRecord);
     state.moduleJobControllers.set(jobId, controller);
 
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    if (timeoutMs && timeoutError) {
+      timeoutTimer = setTimeout(() => {
+        const current = state.moduleJobs.get(jobId);
+        if (!current || current.status !== 'running') {
+          return;
+        }
+        controller.abort();
+        state.moduleJobControllers.delete(jobId);
+        current.status = 'failed';
+        current.updatedAt = Date.now();
+        current.error = timeoutError;
+        void ctx.kernel.events
+          .emit('module.job.failed', 'module-service', {
+            jobId,
+            pluginId: current.pluginId,
+            capability: current.capability,
+            method: current.method,
+            error: current.error
+          })
+          .catch(() => undefined);
+      }, timeoutMs);
+      timeoutTimer.unref?.();
+    }
+
     const jobContext = {
       ...baseContext,
       job: {
@@ -3303,6 +3555,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         reportProgress: async (payload: Record<string, unknown>) => {
           const current = state.moduleJobs.get(jobId);
           if (!current) {
+            return;
+          }
+          if (current.status !== 'running') {
             return;
           }
           current.progress = deepClone(payload);
@@ -3322,9 +3577,12 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     void (async () => {
       try {
         const output = await implementationMethod(jobContext, request.input);
-        await validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID');
         const current = state.moduleJobs.get(jobId);
-        if (!current) {
+        if (!current || current.status !== 'running') {
+          return;
+        }
+        await validateContractSchema(outputSchemaPath, output, 'MODULE_SCHEMA_INVALID');
+        if (current.status !== 'running') {
           return;
         }
         current.status = controller.signal.aborted ? 'cancelled' : 'completed';
@@ -3338,10 +3596,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             method: current.method,
             output: current.output
           });
+        } else {
+          current.error = {
+            code: 'MODULE_JOB_CANCELLED',
+            message: 'Module job was cancelled'
+          };
+          await emitModuleJobCancelled(ctx, current, 'abort');
         }
       } catch (error) {
         const current = state.moduleJobs.get(jobId);
-        if (!current) {
+        if (!current || current.status !== 'running') {
           return;
         }
         current.status = controller.signal.aborted ? 'cancelled' : 'failed';
@@ -3351,14 +3615,21 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           (error as { message?: string }).message ?? 'Module job failed',
           error
         );
-        await ctx.kernel.events.emit('module.job.failed', 'module-service', {
-          jobId,
-          pluginId: current.pluginId,
-          capability: current.capability,
-          method: current.method,
-          error: current.error
-        });
+        if (current.status === 'cancelled') {
+          await emitModuleJobCancelled(ctx, current, 'abort');
+        } else {
+          await ctx.kernel.events.emit('module.job.failed', 'module-service', {
+            jobId,
+            pluginId: current.pluginId,
+            capability: current.capability,
+            method: current.method,
+            error: current.error
+          });
+        }
       } finally {
+        if (timeoutTimer) {
+          clearTimeout(timeoutTimer);
+        }
         state.moduleJobControllers.delete(jobId);
       }
     })();
@@ -4939,13 +5210,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
                 code: 'MODULE_JOB_CANCELLED',
                 message: 'Module job was cancelled'
               };
-              await ctx.kernel.events.emit('module.job.failed', 'module-service', {
-                jobId: input.jobId,
-                pluginId: job.pluginId,
-                capability: job.capability,
-                method: job.method,
-                error: job.error
-              });
+              await emitModuleJobCancelled(ctx, job, 'requested');
             }
             return { ack: true };
           })

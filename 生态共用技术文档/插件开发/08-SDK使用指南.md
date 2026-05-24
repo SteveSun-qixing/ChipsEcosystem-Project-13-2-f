@@ -1031,7 +1031,8 @@ SDK 提供模块能力调用封装，直接映射 Host 正式模块服务动作�
 client.module.listProviders(options?: {
   capability?: string;
   pluginId?: string;
-  status?: "enabled" | "running";
+  status?: "enabled" | "running" | "disabled" | "error";
+  versionRange?: string;
 }): Promise<ModuleProviderInfo[]>
 ```
 
@@ -1098,6 +1099,13 @@ if (started.mode === "job") {
   console.log(snapshot.status);
 }
 ```
+
+补充语义：
+
+- `timeoutMs` 会作为 Host 模块服务的方法级超时传入。sync 方法超时抛出 `MODULE_TIMEOUT`；
+- job 方法返回 `jobId` 后继续由 Host 按该值治理，超时后 job 状态为 `failed`，错误码为 `MODULE_TIMEOUT`；
+- `client.module.job.cancel(jobId)` 取消运行中 job 后，job 状态为 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`，Host 会发出 `module.job.cancelled` 事件；
+- 未指定 `pluginId` 时，Host 默认选择同一 capability 下 `enabled` 或 `running` 且版本范围匹配的最高语义化版本 provider。
 
 ### 使用边界
 

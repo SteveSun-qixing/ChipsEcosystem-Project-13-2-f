@@ -443,8 +443,18 @@ const main = async () => {
       NODE_OPTIONS: [process.env.NODE_OPTIONS, '--require', fakeElectronLoader].filter(Boolean).join(' ')
     };
 
+    await assert.rejects(
+      () =>
+        runCapture(
+          ['module', 'invoke', '--capability', 'module.dev.invoke.test', '--method', 'run', '--unknown'],
+          moduleProject,
+          env
+        ),
+      /chipsdev module invoke 不支持参数：--unknown/
+    );
+
     const sync = await runCapture(
-      ['module', 'invoke', '--capability', 'module.dev.invoke.test', '--method', 'run', '--input', '{"value":"sync"}'],
+      ['module', 'invoke', '--capability=module.dev.invoke.test', '--method=run', '--input={"value":"sync"}', '--timeout-ms=60000'],
       moduleProject,
       env
     );

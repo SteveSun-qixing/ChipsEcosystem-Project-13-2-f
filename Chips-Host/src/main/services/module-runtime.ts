@@ -101,24 +101,38 @@ const dynamicImport = async (specifier: string): Promise<unknown> => {
   return await (0, eval)(`import(${JSON.stringify(specifier)})`);
 };
 
-const parseSemver = (value: string): [number, number, number] => {
-  const match = value.match(/^(\d+)\.(\d+)\.(\d+)/);
+const parseSemver = (value: string): { major: number; minor: number; patch: number; prerelease?: string } => {
+  const match = value.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
   if (!match) {
-    return [0, 0, 0];
+    return { major: 0, minor: 0, patch: 0 };
   }
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4]
+  };
 };
 
-const compareSemver = (left: string, right: string): number => {
-  const [leftMajor, leftMinor, leftPatch] = parseSemver(left);
-  const [rightMajor, rightMinor, rightPatch] = parseSemver(right);
-  if (leftMajor !== rightMajor) {
-    return leftMajor - rightMajor;
+export const compareSemver = (left: string, right: string): number => {
+  const parsedLeft = parseSemver(left);
+  const parsedRight = parseSemver(right);
+  if (parsedLeft.major !== parsedRight.major) {
+    return parsedLeft.major - parsedRight.major;
   }
-  if (leftMinor !== rightMinor) {
-    return leftMinor - rightMinor;
+  if (parsedLeft.minor !== parsedRight.minor) {
+    return parsedLeft.minor - parsedRight.minor;
   }
-  return leftPatch - rightPatch;
+  if (parsedLeft.patch !== parsedRight.patch) {
+    return parsedLeft.patch - parsedRight.patch;
+  }
+  if (parsedLeft.prerelease && !parsedRight.prerelease) {
+    return -1;
+  }
+  if (!parsedLeft.prerelease && parsedRight.prerelease) {
+    return 1;
+  }
+  return (parsedLeft.prerelease ?? '').localeCompare(parsedRight.prerelease ?? '');
 };
 
 export const matchesVersionRange = (version: string, versionRange?: string): boolean => {
@@ -129,9 +143,9 @@ export const matchesVersionRange = (version: string, versionRange?: string): boo
   const trimmed = versionRange.trim();
   if (trimmed.startsWith('^')) {
     const baseline = trimmed.slice(1);
-    const [versionMajor] = parseSemver(version);
-    const [baselineMajor] = parseSemver(baseline);
-    return versionMajor === baselineMajor && compareSemver(version, baseline) >= 0;
+    const versionSemver = parseSemver(version);
+    const baselineSemver = parseSemver(baseline);
+    return versionSemver.major === baselineSemver.major && compareSemver(version, baseline) >= 0;
   }
 
   return version === trimmed;

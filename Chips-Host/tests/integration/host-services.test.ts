@@ -9,6 +9,7 @@ import { openAssociatedFile } from '../../src/main/core/file-association';
 import { StoreZipService } from '../../packages/zip-service/src';
 import { RuntimeClient } from '../../src/renderer/runtime-client';
 import { PluginRuntime } from '../../src/runtime';
+import type { EventPayload } from '../../src/shared/types';
 
 let workspace: string;
 let app: HostApplication;
@@ -146,6 +147,96 @@ const createRichTextCardPluginFixture = async (rootDir: string): Promise<string>
     ].join('\n'),
   );
   return path.join(pluginDir, 'manifest.yaml');
+};
+
+const moduleContractJsonSchema = {
+  type: 'object',
+  additionalProperties: true
+};
+
+const writeModuleContractSchemas = async (
+  pluginDir: string,
+  methodNames: string[]
+): Promise<void> => {
+  for (const methodName of methodNames) {
+    await writeText(
+      path.join(pluginDir, 'contracts', `${methodName}.input.schema.json`),
+      JSON.stringify(moduleContractJsonSchema, null, 2)
+    );
+    await writeText(
+      path.join(pluginDir, 'contracts', `${methodName}.output.schema.json`),
+      JSON.stringify(moduleContractJsonSchema, null, 2)
+    );
+  }
+};
+
+const createModulePluginFixture = async (
+  rootDir: string,
+  options: {
+    pluginId: string;
+    capability: string;
+    version: string;
+    methods: Array<{ name: string; mode?: 'sync' | 'job' }>;
+    entryLines: string[];
+    permissions?: string[];
+    consumes?: Array<{ capability: string; versionRange?: string }>;
+  }
+): Promise<string> => {
+  const pluginDir = path.join(rootDir, options.pluginId);
+  const permissions = options.permissions ?? [];
+  const consumes = options.consumes ?? [];
+  const manifestLines = [
+    `id: ${options.pluginId}`,
+    `name: ${options.pluginId}`,
+    'type: module',
+    'version: "0.1.0"',
+    'entry: dist/index.cjs',
+    'runtime:',
+    '  targets:',
+    '    desktop:',
+    '      supported: true',
+    '    web:',
+    '      supported: false',
+    '    mobile:',
+    '      supported: false',
+    '    headless:',
+    '      supported: true',
+    ...(permissions.length > 0 ? ['permissions:', ...permissions.map((permission) => `  - ${permission}`)] : ['permissions: []']),
+    'module:',
+    '  apiVersion: 1',
+    '  runtime: worker',
+    '  activation: onDemand',
+    '  provides:',
+    `    - capability: ${options.capability}`,
+    `      version: "${options.version}"`,
+    '      methods:',
+    ...options.methods.flatMap((method) => [
+      `        - name: ${method.name}`,
+      `          mode: ${method.mode ?? 'sync'}`,
+      `          inputSchema: contracts/${method.name}.input.schema.json`,
+      `          outputSchema: contracts/${method.name}.output.schema.json`
+    ]),
+    ...(consumes.length > 0
+      ? [
+          '  consumes:',
+          ...consumes.flatMap((consume) => [
+            `    - capability: ${consume.capability}`,
+            ...(consume.versionRange ? [`      versionRange: "${consume.versionRange}"`] : [])
+          ])
+        ]
+      : ['  consumes: []'])
+  ];
+
+  await writeText(path.join(pluginDir, 'manifest.yaml'), manifestLines.join('\n'));
+  await writeText(path.join(pluginDir, 'dist/index.cjs'), options.entryLines.join('\n'));
+  await writeModuleContractSchemas(pluginDir, options.methods.map((method) => method.name));
+  return path.join(pluginDir, 'manifest.yaml');
+};
+
+const installAndEnablePlugin = async (manifestPath: string): Promise<string> => {
+  const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', { manifestPath });
+  await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+  return installed.pluginId;
 };
 
 beforeEach(async () => {
@@ -1180,6 +1271,20 @@ describe('Host services integration', () => {
         }
       });
       expect(syncResult.mode).toBe('sync');
+      const runningListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render'
+      });
+      expect(runningListed.providers).toContainEqual(
+        expect.objectContaining({
+          pluginId: 'chips.module.markdown-renderer',
+          status: 'running'
+        })
+      );
       expect(syncResult.output).toMatchObject({
         html: '<article># Hello Markdown</article>',
         provider: 'chips.module.markdown-renderer'
@@ -1255,9 +1360,315 @@ describe('Host services integration', () => {
         html: '<article>## Async Markdown</article>'
       });
       expect(completedJob?.job.progress?.percent).toBe(100);
+
+      await expect(
+        runtime.invoke('module.invoke', {
+          capability: 'text.markdown.render',
+          method: 'renderAsync',
+          input: {
+            markdown: 'invalid',
+            extra: true
+          }
+        })
+      ).rejects.toMatchObject({
+        code: 'MODULE_SCHEMA_INVALID'
+      });
     } catch (error) {
       throw error;
     }
+  });
+
+  it('orders module providers by semantic version', async () => {
+    const lowerManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.versioned.lower',
+      capability: 'test.versioned.echo',
+      version: '1.9.0',
+      methods: [{ name: 'run' }],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.versioned.echo',",
+        '    methods: {',
+        '      async run() { return { version: "1.9.0" }; }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    const higherManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.versioned.higher',
+      capability: 'test.versioned.echo',
+      version: '1.10.0',
+      methods: [{ name: 'run' }],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.versioned.echo',",
+        '    methods: {',
+        '      async run() { return { version: "1.10.0" }; }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    const prereleaseManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.versioned.prerelease',
+      capability: 'test.versioned.echo',
+      version: '1.10.0-beta.1',
+      methods: [{ name: 'run' }],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.versioned.echo',",
+        '    methods: {',
+        '      async run() { return { version: "1.10.0-beta.1" }; }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+
+    await installAndEnablePlugin(lowerManifest);
+    await installAndEnablePlugin(higherManifest);
+    await installAndEnablePlugin(prereleaseManifest);
+
+    const resolved = await runtime.invoke<{
+      provider: { pluginId: string; version: string };
+    }>('module.resolve', {
+      capability: 'test.versioned.echo'
+    });
+    expect(resolved.provider).toMatchObject({
+      pluginId: 'chips.module.versioned.higher',
+      version: '1.10.0'
+    });
+  });
+
+  it('enforces timeout, cancellation and consumes contracts for module invocations', async () => {
+    const workerManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.contract.worker',
+      capability: 'test.contract.worker',
+      version: '1.0.0',
+      methods: [
+        { name: 'slowSync' },
+        { name: 'slowJob', mode: 'job' },
+        { name: 'echo' }
+      ],
+      entryLines: [
+        'const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));',
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.contract.worker',",
+        '    methods: {',
+        '      async echo(_ctx, input) { return { ok: true, value: input.value ?? null }; },',
+        '      async slowSync(_ctx, input) {',
+        '        await sleep(typeof input.delayMs === "number" ? input.delayMs : 50);',
+        '        return { ok: true };',
+        '      },',
+        '      async slowJob(ctx, input) {',
+        '        await ctx.job?.reportProgress({ stage: "started", percent: 1 });',
+        '        const delayMs = typeof input.delayMs === "number" ? input.delayMs : 80;',
+        '        const stepMs = 5;',
+        '        for (let elapsed = 0; elapsed < delayMs; elapsed += stepMs) {',
+        '          if (ctx.job?.isCancelled()) { throw { code: "MODULE_JOB_CANCELLED", message: "cancelled by test" }; }',
+        '          await sleep(stepMs);',
+        '        }',
+        '        return { ok: true };',
+        '      }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    await installAndEnablePlugin(workerManifest);
+
+    await expect(
+      runtime.invokeWithTimeout(
+        'module.invoke',
+        {
+          capability: 'test.contract.worker',
+          method: 'slowSync',
+          input: {
+            delayMs: 60
+          },
+          timeoutMs: 5
+        },
+        5000
+      )
+    ).rejects.toMatchObject({
+      code: 'MODULE_TIMEOUT'
+    });
+
+    const timedJobStarted = await runtime.invokeWithTimeout<{ mode: 'job'; jobId: string }>(
+      'module.invoke',
+      {
+        capability: 'test.contract.worker',
+        method: 'slowJob',
+        input: {
+          delayMs: 80
+        },
+        timeoutMs: 5
+      },
+      5000
+    );
+    let timedJob:
+      | {
+          status: string;
+          error?: { code: string };
+        }
+      | undefined;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const snapshot = await runtime.invoke<{
+        job: {
+          status: string;
+          error?: { code: string };
+        };
+      }>('module.job.get', { jobId: timedJobStarted.jobId });
+      if (snapshot.job.status === 'failed') {
+        timedJob = snapshot.job;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(timedJob?.status).toBe('failed');
+    expect(timedJob?.error?.code).toBe('MODULE_TIMEOUT');
+
+    const cancellableJob = await runtime.invoke<{ mode: 'job'; jobId: string }>('module.invoke', {
+      capability: 'test.contract.worker',
+      method: 'slowJob',
+      input: {
+        delayMs: 100
+      }
+    });
+    const cancelledEvent = new Promise<unknown>((resolve) => {
+      app.kernel.events.once('module.job.cancelled', (event) => resolve(event.data), {
+        filter: (event: EventPayload) => {
+          const data = event.data as { jobId?: string };
+          return data.jobId === cancellableJob.jobId;
+        }
+      });
+    });
+    await runtime.invoke('module.job.cancel', { jobId: cancellableJob.jobId });
+    const cancelledSnapshot = await runtime.invoke<{
+      job: {
+        status: string;
+        error?: { code: string };
+      };
+    }>('module.job.get', { jobId: cancellableJob.jobId });
+    expect(cancelledSnapshot.job.status).toBe('cancelled');
+    expect(cancelledSnapshot.job.error?.code).toBe('MODULE_JOB_CANCELLED');
+    const cancelledPayload = await Promise.race([
+      cancelledEvent,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('module.job.cancelled event timeout')), 200))
+    ]);
+    expect(cancelledPayload).toMatchObject({
+      jobId: cancellableJob.jobId,
+      status: 'cancelled',
+      error: expect.objectContaining({ code: 'MODULE_JOB_CANCELLED' })
+    });
+
+    const undeclaredCallerManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.contract.undeclared-caller',
+      capability: 'test.contract.undeclaredCaller',
+      version: '1.0.0',
+      methods: [{ name: 'callWorker' }],
+      consumes: [],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.contract.undeclaredCaller',",
+        '    methods: {',
+        '      async callWorker(ctx) {',
+        "        return await ctx.module.invoke({ capability: 'test.contract.worker', method: 'echo', input: { value: 'blocked' } });",
+        '      }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    await installAndEnablePlugin(undeclaredCallerManifest);
+    await expect(
+      runtime.invoke('module.invoke', {
+        capability: 'test.contract.undeclaredCaller',
+        method: 'callWorker',
+        input: {}
+      })
+    ).rejects.toMatchObject({
+      code: 'MODULE_CONSUME_UNDECLARED'
+    });
+
+    const declaredCallerManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.contract.declared-caller',
+      capability: 'test.contract.declaredCaller',
+      version: '1.0.0',
+      methods: [{ name: 'callWorker' }],
+      consumes: [
+        {
+          capability: 'test.contract.worker',
+          versionRange: '^1.0.0'
+        }
+      ],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.contract.declaredCaller',",
+        '    methods: {',
+        '      async callWorker(ctx) {',
+        "        const result = await ctx.module.invoke({ capability: 'test.contract.worker', method: 'echo', input: { value: 'allowed' } });",
+        '        return result.mode === "sync" ? result.output : result;',
+        '      }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    await installAndEnablePlugin(declaredCallerManifest);
+    const declaredResult = await runtime.invoke<{
+      mode: 'sync';
+      output: { ok: boolean; value: string };
+    }>('module.invoke', {
+      capability: 'test.contract.declaredCaller',
+      method: 'callWorker',
+      input: {}
+    });
+    expect(declaredResult.output).toMatchObject({
+      ok: true,
+      value: 'allowed'
+    });
+
+    const mismatchedCallerManifest = await createModulePluginFixture(workspace, {
+      pluginId: 'chips.module.contract.mismatched-caller',
+      capability: 'test.contract.mismatchedCaller',
+      version: '1.0.0',
+      methods: [{ name: 'callWorker' }],
+      consumes: [
+        {
+          capability: 'test.contract.worker',
+          versionRange: '^2.0.0'
+        }
+      ],
+      entryLines: [
+        'module.exports = {',
+        '  providers: [{',
+        "    capability: 'test.contract.mismatchedCaller',",
+        '    methods: {',
+        '      async callWorker(ctx) {',
+        "        return await ctx.module.invoke({ capability: 'test.contract.worker', method: 'echo', input: { value: 'blocked' } });",
+        '      }',
+        '    }',
+        '  }]',
+        '};'
+      ]
+    });
+    await installAndEnablePlugin(mismatchedCallerManifest);
+    await expect(
+      runtime.invoke('module.invoke', {
+        capability: 'test.contract.mismatchedCaller',
+        method: 'callWorker',
+        input: {}
+      })
+    ).rejects.toMatchObject({
+      code: 'MODULE_PROVIDER_NOT_FOUND'
+    });
   });
 
   it('installs plugin from .cpk package', async () => {

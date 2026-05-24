@@ -1,23 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import React, { act } from "react";
+import { JSDOM } from "jsdom";
+import { createRoot } from "react-dom/client";
 import {
   applyThemeVariablesInBatches,
   applyThemeVariables,
   ChipsEnvironmentProvider,
   ChipsThemeProvider,
   ChipsTokenProvider,
+  createBinding,
   createChipsI18nText,
   subscribeThemeChanged,
+  useBinding,
+  useChipsBinding,
+  useChipsAsyncState,
   useChipsClient,
   useChipsCommand,
   useChipsDiagnostics,
   useChipsEnvironment,
+  useChipsFormState,
   useChipsI18n,
   useChipsI18nText,
   useChipsPermission,
   useChipsSurface,
+  useChipsState,
   useChipsTheme,
   useComponentTokens,
+  useFieldBinding,
   useThemeRuntime,
   useToken,
   useTokenResolver
@@ -46,6 +56,201 @@ test("hooks package exports expected APIs", () => {
   assert.equal(typeof useComponentTokens, "function");
   assert.equal(typeof useThemeRuntime, "function");
   assert.equal(typeof applyThemeVariablesInBatches, "function");
+  assert.equal(typeof createBinding, "function");
+  assert.equal(typeof useBinding, "function");
+  assert.equal(typeof useChipsBinding, "function");
+  assert.equal(typeof useChipsState, "function");
+  assert.equal(typeof useChipsAsyncState, "function");
+  assert.equal(typeof useChipsFormState, "function");
+  assert.equal(typeof useFieldBinding, "function");
+});
+
+async function renderHook(useHook) {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>");
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousHTMLElement = globalThis.HTMLElement;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+
+  const result = { current: null };
+  function Probe() {
+    result.current = useHook();
+    return null;
+  }
+
+  const root = createRoot(dom.window.document.getElementById("root"));
+  await act(async () => {
+    root.render(React.createElement(Probe));
+  });
+
+  return {
+    result,
+    async update(callback) {
+      await act(async () => {
+        await callback(result.current);
+      });
+    },
+    cleanup() {
+      act(() => {
+        root.unmount();
+      });
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.HTMLElement = previousHTMLElement;
+      dom.window.close();
+    }
+  };
+}
+
+test("createBinding adapts values to component control props", () => {
+  const changes = [];
+  const binding = createBinding({
+    defaultValue: "draft",
+    name: "title",
+    onChange(value, event) {
+      changes.push({ value, previousValue: event.previousValue, reason: event.reason });
+    }
+  });
+
+  assert.equal(binding.get(), "draft");
+  binding.set("published");
+  assert.equal(binding.value, "published");
+
+  const valueProps = binding.valueProps();
+  valueProps.onValueChange("final");
+  assert.equal(valueProps.value, "published");
+  assert.equal(binding.value, "final");
+
+  const inputProps = binding.inputProps();
+  inputProps.onChange({ target: { value: "typed" } });
+  assert.equal(binding.value, "typed");
+
+  const checkedBinding = createBinding({ defaultValue: false });
+  const checkedProps = checkedBinding.checkedProps();
+  assert.equal(checkedProps.checked, false);
+  checkedProps.onCheckedChange(true);
+  assert.equal(checkedBinding.value, true);
+
+  const openBinding = createBinding({ defaultValue: false });
+  openBinding.openProps().onOpenChange(true);
+  assert.equal(openBinding.value, true);
+  assert.deepEqual(changes.map((change) => change.value), ["published", "final", "typed"]);
+});
+
+test("useBinding keeps latest value for sequential updater writes", async () => {
+  const hook = await renderHook(() => useBinding({ defaultValue: 0 }));
+
+  try {
+    await hook.update((binding) => {
+      binding.set((value) => value + 1);
+      binding.set((value) => value + 1);
+    });
+    assert.equal(hook.result.current.value, 2);
+  } finally {
+    hook.cleanup();
+  }
+});
+
+test("useChipsState exposes local state and binding transitions", async () => {
+  const changes = [];
+  const hook = await renderHook(() =>
+    useChipsState(1, {
+      name: "counter",
+      onChange(value, event) {
+        changes.push({ value, previousValue: event.previousValue });
+      }
+    })
+  );
+
+  try {
+    assert.equal(hook.result.current.value, 1);
+    await hook.update((state) => state.setValue((value) => value + 1));
+    assert.equal(hook.result.current.value, 2);
+    await hook.update((state) => state.binding.set(7));
+    assert.equal(hook.result.current.value, 7);
+    await hook.update((state) => state.reset());
+    assert.equal(hook.result.current.value, 1);
+    assert.deepEqual(changes.map((change) => change.value), [2, 7, 1]);
+  } finally {
+    hook.cleanup();
+  }
+});
+
+test("useChipsAsyncState tracks idle loading success and error", async () => {
+  let shouldFail = false;
+  const hook = await renderHook(() =>
+    useChipsAsyncState(async (value) => {
+      if (shouldFail) {
+        throw new Error("boom");
+      }
+      return `ok:${value}`;
+    })
+  );
+
+  try {
+    assert.equal(hook.result.current.status, "idle");
+    await hook.update((state) => state.run("first"));
+    assert.equal(hook.result.current.status, "success");
+    assert.equal(hook.result.current.data, "ok:first");
+
+    shouldFail = true;
+    await hook.update(async (state) => {
+      await assert.rejects(() => state.run("second"), /boom/);
+    });
+    assert.equal(hook.result.current.status, "error");
+    assert.equal(hook.result.current.error.message, "boom");
+
+    await hook.update((state) => state.reset());
+    assert.equal(hook.result.current.status, "idle");
+    assert.equal(hook.result.current.error, null);
+  } finally {
+    hook.cleanup();
+  }
+});
+
+test("useChipsFormState creates field bindings and tracks dirty error reset state", async () => {
+  const hook = await renderHook(() =>
+    useChipsFormState({
+      title: "Draft",
+      settings: {
+        enabled: false
+      }
+    })
+  );
+
+  try {
+    assert.equal(hook.result.current.dirty, false);
+    assert.equal(hook.result.current.valid, true);
+
+    await hook.update((form) => form.getFieldBinding("title").valueProps().onValueChange("Published"));
+    assert.equal(hook.result.current.values.title, "Published");
+    assert.equal(hook.result.current.getFieldTouched("title"), true);
+    assert.equal(hook.result.current.dirty, true);
+
+    await hook.update((form) => form.getFieldBinding("settings.enabled").checkedProps().onCheckedChange(true));
+    assert.equal(hook.result.current.values.settings.enabled, true);
+
+    await hook.update((form) => {
+      form.setFieldValue("title", (value) => `${value}!`);
+      form.setFieldValue("title", (value) => `${value}!`);
+    });
+    assert.equal(hook.result.current.values.title, "Published!!");
+
+    await hook.update((form) => form.setFieldError("title", "Title is required"));
+    assert.equal(hook.result.current.getFieldMeta("title").invalid, true);
+    assert.equal(hook.result.current.valid, false);
+
+    await hook.update((form) => form.reset());
+    assert.equal(hook.result.current.values.title, "Draft");
+    assert.equal(hook.result.current.values.settings.enabled, false);
+    assert.equal(hook.result.current.dirty, false);
+    assert.equal(hook.result.current.valid, true);
+  } finally {
+    hook.cleanup();
+  }
 });
 
 test("subscribeThemeChanged supports on/off event source", () => {

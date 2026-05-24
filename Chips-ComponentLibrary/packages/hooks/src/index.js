@@ -15,8 +15,131 @@ const STATUS_IDLE = "idle";
 const STATUS_LOADING = "loading";
 const STATUS_READY = "ready";
 const STATUS_ERROR = "error";
+const ASYNC_STATUS_SUCCESS = "success";
 const DEFAULT_LOCALE = "zh-CN";
 const DEFAULT_FALLBACK_LOCALE = "en-US";
+const EMPTY_OBJECT = Object.freeze({});
+const DEFAULT_INPUT_EVENT_VALUE = (event) => event?.target?.value;
+const IDENTITY_VALUE = (value) => value;
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function defaultEquals(a, b) {
+  return Object.is(a, b);
+}
+
+function deepEqual(a, b) {
+  if (Object.is(a, b)) {
+    return true;
+  }
+  if (typeof a !== typeof b) {
+    return false;
+  }
+  if (!a || !b || typeof a !== "object") {
+    return false;
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) {
+    return false;
+  }
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  for (const key of aKeys) {
+    if (!hasOwn(b, key) || !deepEqual(a[key], b[key])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveStateValue(nextValue, previousValue) {
+  return typeof nextValue === "function" ? nextValue(previousValue) : nextValue;
+}
+
+function resolveInitialValue(initialValue) {
+  return typeof initialValue === "function" ? initialValue() : initialValue;
+}
+
+function normalizeFieldPath(field) {
+  if (Array.isArray(field)) {
+    if (field.length === 0) {
+      throw createChipsHookError("CHIPS_FIELD_PATH_EMPTY", "Field path must not be empty.");
+    }
+    return field.map((part) => {
+      if (typeof part !== "string" && typeof part !== "number") {
+        throw createChipsHookError("CHIPS_FIELD_PATH_INVALID", "Field path segments must be strings or numbers.");
+      }
+      return part;
+    });
+  }
+  if (typeof field === "string" || typeof field === "number") {
+    const path = String(field)
+      .split(".")
+      .filter((part) => part.length > 0);
+    if (path.length === 0) {
+      throw createChipsHookError("CHIPS_FIELD_PATH_EMPTY", "Field path must not be empty.");
+    }
+    return path;
+  }
+  throw createChipsHookError("CHIPS_FIELD_PATH_INVALID", "Field path must be a string, number or path array.");
+}
+
+function fieldPathToName(field) {
+  return normalizeFieldPath(field).join(".");
+}
+
+function getValueAtPath(source, field) {
+  const path = normalizeFieldPath(field);
+  return path.reduce((current, segment) => {
+    if (current == null) {
+      return undefined;
+    }
+    return current[segment];
+  }, source);
+}
+
+function setValueAtPath(source, field, value) {
+  const path = normalizeFieldPath(field);
+  const write = (node, index) => {
+    if (index >= path.length) {
+      return value;
+    }
+    const segment = path[index];
+    const nextNode = node && typeof node === "object" ? node : typeof path[index + 1] === "number" ? [] : {};
+    const clone = Array.isArray(nextNode) ? [...nextNode] : { ...nextNode };
+    clone[segment] = write(nextNode[segment], index + 1);
+    return clone;
+  };
+  return write(source, 0);
+}
+
+function cloneStateValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneStateValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneStateValue(item)]));
+  }
+  return value;
+}
+
+function useLatestRef(value) {
+  const ref = React.useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+function isBindingLike(value) {
+  return Boolean(value)
+    && typeof value === "object"
+    && value.kind === "chips.binding"
+    && typeof value.get === "function"
+    && typeof value.set === "function";
+}
 
 function toThemeCacheKey(themeId, version) {
   const safeThemeId = typeof themeId === "string" && themeId.length > 0 ? themeId : "default";
@@ -194,6 +317,613 @@ export function createChipsI18nText(options = {}) {
     }
     return key;
   };
+}
+
+export function createBinding(options = {}) {
+  if (isBindingLike(options)) {
+    return options;
+  }
+
+  const {
+    value,
+    defaultValue,
+    get,
+    set,
+    onChange,
+    equals = defaultEquals,
+    name,
+    meta = {},
+    readOnly = false
+  } = options;
+
+  let internalValue = value !== undefined ? value : resolveInitialValue(defaultValue);
+  const controlledByValue = value !== undefined;
+  const hasGetter = typeof get === "function";
+
+  const read = () => {
+    if (hasGetter) {
+      return get();
+    }
+    if (controlledByValue) {
+      return value;
+    }
+    return internalValue;
+  };
+
+  const write = (nextValue, changeMeta = {}) => {
+    const previousValue = read();
+    const resolvedValue = resolveStateValue(nextValue, previousValue);
+    if (typeof equals === "function" && equals(previousValue, resolvedValue)) {
+      return resolvedValue;
+    }
+    if (readOnly) {
+      throw createChipsHookError("CHIPS_BINDING_READONLY", "Cannot write to a readonly Chips binding.", {
+        name,
+        previousValue,
+        value: resolvedValue
+      });
+    }
+    const event = {
+      name,
+      previousValue,
+      value: resolvedValue,
+      meta,
+      ...changeMeta
+    };
+    if (typeof set === "function") {
+      set(resolvedValue, event);
+    } else if (!controlledByValue && !hasGetter) {
+      internalValue = resolvedValue;
+    }
+    if (typeof onChange === "function") {
+      onChange(resolvedValue, event);
+    }
+    return resolvedValue;
+  };
+
+  const reset = (nextValue = defaultValue, changeMeta = {}) => {
+    const resolvedDefault = resolveInitialValue(nextValue);
+    return write(resolvedDefault, {
+      reason: "reset",
+      ...changeMeta
+    });
+  };
+
+  const binding = {
+    kind: "chips.binding",
+    name,
+    meta,
+    get value() {
+      return read();
+    },
+    get: read,
+    set: write,
+    update(updater, changeMeta) {
+      return write((previousValue) => resolveStateValue(updater, previousValue), {
+        reason: "update",
+        ...changeMeta
+      });
+    },
+    reset,
+    toProps(propsOptions = {}) {
+      const {
+        valueProp = "value",
+        changeProp = "onValueChange",
+        mapValue = IDENTITY_VALUE,
+        mapChange = IDENTITY_VALUE
+      } = propsOptions;
+      return {
+        [valueProp]: mapValue(read()),
+        [changeProp]: (nextValue, eventMeta) => write(mapChange(nextValue), eventMeta)
+      };
+    },
+    valueProps(propsOptions = {}) {
+      return binding.toProps({
+        valueProp: "value",
+        changeProp: "onValueChange",
+        ...propsOptions
+      });
+    },
+    checkedProps(propsOptions = {}) {
+      return binding.toProps({
+        valueProp: "checked",
+        changeProp: "onCheckedChange",
+        mapValue: Boolean,
+        mapChange: Boolean,
+        ...propsOptions
+      });
+    },
+    openProps(propsOptions = {}) {
+      return binding.toProps({
+        valueProp: "open",
+        changeProp: "onOpenChange",
+        mapValue: Boolean,
+        mapChange: Boolean,
+        ...propsOptions
+      });
+    },
+    inputProps(propsOptions = {}) {
+      const {
+        valueProp = "value",
+        changeProp = "onChange",
+        eventValue = DEFAULT_INPUT_EVENT_VALUE,
+        ...rest
+      } = propsOptions;
+      return binding.toProps({
+        valueProp,
+        changeProp,
+        mapValue: (nextValue) => (nextValue == null ? "" : nextValue),
+        mapChange: eventValue,
+        ...rest
+      });
+    }
+  };
+
+  return binding;
+}
+
+export function useBinding(options = {}) {
+  if (isBindingLike(options)) {
+    return options;
+  }
+
+  const {
+    value,
+    defaultValue,
+    get,
+    set,
+    onChange,
+    equals = defaultEquals,
+    name,
+    meta = EMPTY_OBJECT,
+    readOnly = false
+  } = options;
+  const [internalValue, setInternalValue] = React.useState(() => resolveInitialValue(defaultValue));
+  const controlled = value !== undefined || typeof get === "function";
+  const currentValue = typeof get === "function" ? get() : value !== undefined ? value : internalValue;
+  const currentValueRef = useLatestRef(currentValue);
+
+  const write = React.useCallback(
+    (nextValue, changeMeta = {}) => {
+      const previousValue = typeof get === "function" ? get() : currentValueRef.current;
+      const resolvedValue = resolveStateValue(nextValue, previousValue);
+      if (typeof equals === "function" && equals(previousValue, resolvedValue)) {
+        return resolvedValue;
+      }
+      currentValueRef.current = resolvedValue;
+      const event = {
+        name,
+        previousValue,
+        value: resolvedValue,
+        meta,
+        ...changeMeta
+      };
+      if (typeof set === "function") {
+        set(resolvedValue, event);
+      }
+      if (!controlled) {
+        setInternalValue(resolvedValue);
+      }
+      if (typeof onChange === "function") {
+        onChange(resolvedValue, event);
+      }
+      return resolvedValue;
+    },
+    [controlled, currentValueRef, equals, get, meta, name, onChange, set]
+  );
+
+  return React.useMemo(
+    () => createBinding({
+      get: () => currentValueRef.current,
+      set: write,
+      defaultValue,
+      equals,
+      name,
+      meta,
+      readOnly
+    }),
+    [currentValueRef, defaultValue, equals, meta, name, readOnly, write]
+  );
+}
+
+export const useChipsBinding = useBinding;
+
+export function useChipsState(initialValue, options = {}) {
+  const {
+    equals = defaultEquals,
+    name,
+    meta: stateMeta,
+    onChange
+  } = options;
+  const initialRef = React.useRef({
+    initialized: false,
+    value: undefined
+  });
+  if (!initialRef.current.initialized) {
+    initialRef.current = {
+      initialized: true,
+      value: resolveInitialValue(initialValue)
+    };
+  }
+  const [value, setReactValue] = React.useState(() => cloneStateValue(initialRef.current.value));
+  const valueRef = useLatestRef(value);
+  const onChangeRef = useLatestRef(onChange);
+
+  const setValue = React.useCallback(
+    (nextValue, changeMeta = {}) => {
+      const previousValue = valueRef.current;
+      const resolvedValue = resolveStateValue(nextValue, previousValue);
+      if (typeof equals === "function" && equals(previousValue, resolvedValue)) {
+        return resolvedValue;
+      }
+      valueRef.current = resolvedValue;
+      setReactValue((previousValue) => {
+        if (typeof equals === "function" && equals(previousValue, resolvedValue)) {
+          return previousValue;
+        }
+        return resolvedValue;
+      });
+      if (typeof onChangeRef.current === "function") {
+        onChangeRef.current(resolvedValue, {
+          previousValue,
+          value: resolvedValue,
+          name,
+          meta: stateMeta || EMPTY_OBJECT,
+          ...changeMeta
+        });
+      }
+      return resolvedValue;
+    },
+    [equals, name, onChangeRef, stateMeta, valueRef]
+  );
+
+  const reset = React.useCallback(
+    (nextValue = initialRef.current.value, meta = {}) => setValue(cloneStateValue(resolveInitialValue(nextValue)), {
+      reason: "reset",
+      ...meta
+    }),
+    [setValue]
+  );
+
+  const binding = useBinding({
+    value,
+    set: setValue,
+    defaultValue: initialRef.current.value,
+    equals,
+    name,
+    meta: stateMeta
+  });
+
+  return React.useMemo(
+    () => ({
+      value,
+      setValue,
+      update: setValue,
+      reset,
+      binding
+    }),
+    [binding, reset, setValue, value]
+  );
+}
+
+export function useChipsAsyncState(action, options = {}) {
+  const {
+    action: optionsAction,
+    initialStatus = STATUS_IDLE,
+    initialData,
+    onSuccess,
+    onError,
+    onSettled
+  } = options;
+  const asyncAction = typeof action === "function" ? action : optionsAction;
+  const callbacksRef = useLatestRef({
+    onSuccess,
+    onError,
+    onSettled
+  });
+  const [state, setState] = React.useState(() => ({
+    status: initialStatus,
+    data: initialData,
+    error: null,
+    requestId: 0
+  }));
+  const requestRef = React.useRef(0);
+
+  const reset = React.useCallback(() => {
+    requestRef.current += 1;
+    setState({
+      status: initialStatus,
+      data: initialData,
+      error: null,
+      requestId: requestRef.current
+    });
+  }, [initialData, initialStatus]);
+
+  const run = React.useCallback(
+    async (...args) => {
+      if (typeof asyncAction !== "function") {
+        throw createChipsHookError("CHIPS_ASYNC_ACTION_MISSING", "useChipsAsyncState requires an async action.");
+      }
+      const requestId = requestRef.current + 1;
+      requestRef.current = requestId;
+      setState((current) => ({
+        ...current,
+        status: STATUS_LOADING,
+        error: null,
+        requestId
+      }));
+      try {
+        const data = await asyncAction(...args);
+        if (requestRef.current === requestId) {
+          setState({
+            status: ASYNC_STATUS_SUCCESS,
+            data,
+            error: null,
+            requestId
+          });
+        }
+        if (typeof callbacksRef.current.onSuccess === "function") {
+          callbacksRef.current.onSuccess(data, { requestId, args });
+        }
+        return data;
+      } catch (error) {
+        if (requestRef.current === requestId) {
+          setState((current) => ({
+            ...current,
+            status: STATUS_ERROR,
+            error,
+            requestId
+          }));
+        }
+        if (typeof callbacksRef.current.onError === "function") {
+          callbacksRef.current.onError(error, { requestId, args });
+        }
+        throw error;
+      } finally {
+        if (typeof callbacksRef.current.onSettled === "function") {
+          callbacksRef.current.onSettled({ requestId, args });
+        }
+      }
+    },
+    [asyncAction, callbacksRef]
+  );
+
+  return React.useMemo(
+    () => ({
+      ...state,
+      value: state.data,
+      loading: state.status === STATUS_LOADING,
+      success: state.status === ASYNC_STATUS_SUCCESS,
+      idle: state.status === STATUS_IDLE,
+      run,
+      reset,
+      setData(data) {
+        setState((current) => ({
+          ...current,
+          status: ASYNC_STATUS_SUCCESS,
+          data,
+          error: null
+        }));
+      },
+      setError(error) {
+        setState((current) => ({
+          ...current,
+          status: STATUS_ERROR,
+          error
+        }));
+      }
+    }),
+    [reset, run, state]
+  );
+}
+
+export function useChipsFormState(initialValues = {}, options = {}) {
+  const {
+    equals = deepEqual,
+    name: formName = "form",
+    initialErrors,
+    initialTouched,
+    onFieldChange
+  } = options;
+  const onFieldChangeRef = useLatestRef(onFieldChange);
+  const initialValuesRef = React.useRef(cloneStateValue(resolveInitialValue(initialValues) || {}));
+  const [values, setValuesState] = React.useState(() => cloneStateValue(initialValuesRef.current));
+  const valuesRef = useLatestRef(values);
+  const [errors, setErrors] = React.useState(() => cloneStateValue(initialErrors || {}));
+  const [touched, setTouched] = React.useState(() => cloneStateValue(initialTouched || {}));
+  const [submitted, setSubmitted] = React.useState(false);
+
+  const setValues = React.useCallback(
+    (nextValues) => {
+      const resolvedValues = cloneStateValue(resolveStateValue(nextValues, valuesRef.current) || {});
+      valuesRef.current = resolvedValues;
+      setValuesState(resolvedValues);
+      return resolvedValues;
+    },
+    [valuesRef]
+  );
+
+  const setFieldTouched = React.useCallback((field, touchedValue = true) => {
+    setTouched((current) => setValueAtPath(current, field, Boolean(touchedValue)));
+  }, []);
+
+  const setFieldValue = React.useCallback(
+    (field, nextValue, meta = {}) => {
+      const previousValue = getValueAtPath(valuesRef.current, field);
+      const resolvedValue = resolveStateValue(nextValue, previousValue);
+      if (typeof equals !== "function" || !equals(previousValue, resolvedValue)) {
+        const nextValues = setValueAtPath(valuesRef.current, field, resolvedValue);
+        valuesRef.current = nextValues;
+        setValuesState(nextValues);
+      }
+      if (meta.touch !== false) {
+        setFieldTouched(field, true);
+      }
+      if (typeof onFieldChangeRef.current === "function") {
+        onFieldChangeRef.current(fieldPathToName(field), resolvedValue, meta);
+      }
+      return resolvedValue;
+    },
+    [equals, onFieldChangeRef, setFieldTouched, valuesRef]
+  );
+
+  const setFieldError = React.useCallback((field, error) => {
+    setErrors((current) => setValueAtPath(current, field, error));
+  }, []);
+
+  const clearFieldError = React.useCallback((field) => {
+    setErrors((current) => setValueAtPath(current, field, undefined));
+  }, []);
+
+  const reset = React.useCallback((nextValues) => {
+    const nextInitialValues = typeof nextValues === "undefined"
+      ? initialValuesRef.current
+      : cloneStateValue(resolveInitialValue(nextValues) || {});
+    if (typeof nextValues !== "undefined") {
+      initialValuesRef.current = cloneStateValue(nextInitialValues);
+    }
+    valuesRef.current = cloneStateValue(nextInitialValues);
+    setValuesState(cloneStateValue(nextInitialValues));
+    setErrors({});
+    setTouched({});
+    setSubmitted(false);
+    return nextInitialValues;
+  }, [valuesRef]);
+
+  const getFieldValue = React.useCallback((field) => getValueAtPath(valuesRef.current, field), [valuesRef]);
+  const getFieldError = React.useCallback((field) => getValueAtPath(errors, field), [errors]);
+  const getFieldTouched = React.useCallback((field) => Boolean(getValueAtPath(touched, field)), [touched]);
+  const getFieldMeta = React.useCallback(
+    (field) => {
+      const name = fieldPathToName(field);
+      const value = getValueAtPath(valuesRef.current, field);
+      const initialValue = getValueAtPath(initialValuesRef.current, field);
+      const error = getValueAtPath(errors, field);
+      const touchedValue = Boolean(getValueAtPath(touched, field));
+      return {
+        name,
+        value,
+        initialValue,
+        error,
+        touched: touchedValue,
+        dirty: !equals(initialValue, value),
+        invalid: Boolean(error)
+      };
+    },
+    [equals, errors, touched, valuesRef]
+  );
+
+  const getFieldBinding = React.useCallback(
+    (field, bindingOptions = {}) => {
+      const name = bindingOptions.name || fieldPathToName(field);
+      return createBinding({
+        get: () => getValueAtPath(valuesRef.current, field),
+        set: (nextValue, meta) => setFieldValue(field, nextValue, meta),
+        defaultValue: getValueAtPath(initialValuesRef.current, field),
+        equals,
+        name,
+        meta: {
+          ...getFieldMeta(field),
+          ...(bindingOptions.meta || {})
+        }
+      });
+    },
+    [equals, getFieldMeta, setFieldValue, valuesRef]
+  );
+
+  const binding = React.useMemo(
+    () => createBinding({
+      get: () => valuesRef.current,
+      set: setValues,
+      defaultValue: initialValuesRef.current,
+      equals,
+      name: formName
+    }),
+    [equals, formName, setValues, valuesRef]
+  );
+
+  const dirty = React.useMemo(() => !equals(initialValuesRef.current, values), [equals, values]);
+  const valid = React.useMemo(() => {
+    const hasError = (node) => {
+      if (node == null || node === false || node === "") {
+        return false;
+      }
+      if (Array.isArray(node)) {
+        return node.some(hasError);
+      }
+      if (typeof node === "object") {
+        return Object.values(node).some(hasError);
+      }
+      return true;
+    };
+    return !hasError(errors);
+  }, [errors]);
+
+  return React.useMemo(
+    () => ({
+      values,
+      initialValues: initialValuesRef.current,
+      errors,
+      touched,
+      dirty,
+      valid,
+      submitted,
+      binding,
+      setValues,
+      setSubmitted,
+      reset,
+      getFieldValue,
+      setFieldValue,
+      getFieldError,
+      setFieldError,
+      clearFieldError,
+      getFieldTouched,
+      setFieldTouched,
+      getFieldMeta,
+      getFieldBinding,
+      field: getFieldBinding
+    }),
+    [
+      binding,
+      clearFieldError,
+      dirty,
+      errors,
+      getFieldBinding,
+      getFieldError,
+      getFieldMeta,
+      getFieldTouched,
+      getFieldValue,
+      reset,
+      setFieldError,
+      setFieldTouched,
+      setFieldValue,
+      submitted,
+      touched,
+      valid,
+      values
+    ]
+  );
+}
+
+export function useFieldBinding(formState, field, options = {}) {
+  return React.useMemo(() => {
+    if (formState && typeof formState.getFieldBinding === "function") {
+      return formState.getFieldBinding(field, options);
+    }
+    if (isBindingLike(formState)) {
+      return createBinding({
+        get: () => getValueAtPath(formState.get(), field),
+        set: (nextValue, meta) => formState.set((current) => setValueAtPath(current, field, nextValue), meta),
+        defaultValue: getValueAtPath(formState.get(), field),
+        name: options.name || fieldPathToName(field),
+        meta: options.meta || {}
+      });
+    }
+    throw createChipsHookError(
+      "CHIPS_FORM_STATE_INVALID",
+      "useFieldBinding requires a Chips form state or binding."
+    );
+  }, [field, formState, options]);
 }
 
 export function ChipsTokenProvider({ resolver, children }) {

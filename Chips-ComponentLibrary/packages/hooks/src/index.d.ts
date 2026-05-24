@@ -239,6 +239,171 @@ export interface ChipsI18nTextOptions {
   missingText?: (key: string, context: { locale: string; params?: ChipsI18nTextParams }) => string;
 }
 
+export type ChipsStateUpdater<T> = T | ((previousValue: T) => T);
+export type ChipsBindingPath = string | number | Array<string | number>;
+export type ChipsBindingStatus = "idle" | "loading" | "success" | "error";
+export type ChipsBindingProps<
+  TValueProp extends string,
+  TChangeProp extends string,
+  TValue,
+  TChangeValue = TValue,
+  TResult = unknown,
+> = Record<TValueProp, TValue> & Record<TChangeProp, (value: TChangeValue, meta?: Record<string, unknown>) => TResult>;
+
+export interface ChipsBindingChange<T = unknown> {
+  name?: string;
+  previousValue: T;
+  value: T;
+  reason?: string;
+  meta?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ChipsBinding<T = unknown> {
+  readonly kind: "chips.binding";
+  readonly name?: string;
+  readonly meta: Record<string, unknown>;
+  readonly value: T;
+  get(): T;
+  set(nextValue: ChipsStateUpdater<T>, meta?: Record<string, unknown>): T;
+  update(updater: (previousValue: T) => T, meta?: Record<string, unknown>): T;
+  reset(nextValue?: T, meta?: Record<string, unknown>): T;
+  toProps<
+    TValueProp extends string = "value",
+    TChangeProp extends string = "onValueChange",
+    TComponentValue = T,
+    TChangeValue = TComponentValue,
+  >(options?: {
+    valueProp?: TValueProp;
+    changeProp?: TChangeProp;
+    mapValue?: (value: T) => TComponentValue;
+    mapChange?: (value: TChangeValue) => T;
+  }): ChipsBindingProps<TValueProp, TChangeProp, TComponentValue, TChangeValue, T>;
+  valueProps<TComponentValue = T, TChangeValue = TComponentValue>(options?: {
+    mapValue?: (value: T) => TComponentValue;
+    mapChange?: (value: TChangeValue) => T;
+  }): ChipsBindingProps<"value", "onValueChange", TComponentValue, TChangeValue, T>;
+  checkedProps(options?: {
+    mapValue?: (value: T) => boolean;
+    mapChange?: (value: boolean) => T;
+  }): ChipsBindingProps<"checked", "onCheckedChange", boolean, boolean, T>;
+  openProps(options?: {
+    mapValue?: (value: T) => boolean;
+    mapChange?: (value: boolean) => T;
+  }): ChipsBindingProps<"open", "onOpenChange", boolean, boolean, T>;
+  inputProps<TInputValue = T extends null | undefined ? "" : T>(options?: {
+    eventValue?: (event: unknown) => T;
+    mapValue?: (value: T) => TInputValue;
+    mapChange?: (value: unknown) => T;
+  }): ChipsBindingProps<"value", "onChange", TInputValue, unknown, T>;
+  inputProps<TValueProp extends string, TChangeProp extends string, TInputValue = T extends null | undefined ? "" : T>(options: {
+    valueProp: TValueProp;
+    changeProp: TChangeProp;
+    eventValue?: (event: unknown) => T;
+    mapValue?: (value: T) => TInputValue;
+    mapChange?: (value: unknown) => T;
+  }): ChipsBindingProps<TValueProp, TChangeProp, TInputValue, unknown, T>;
+}
+
+export interface CreateBindingOptions<T = unknown> {
+  value?: T;
+  defaultValue?: T | (() => T);
+  get?: () => T;
+  set?: (value: T, event: ChipsBindingChange<T>) => void;
+  onChange?: (value: T, event: ChipsBindingChange<T>) => void;
+  equals?: (a: T, b: T) => boolean;
+  name?: string;
+  meta?: Record<string, unknown>;
+  readOnly?: boolean;
+}
+
+export interface UseBindingOptions<T = unknown> extends CreateBindingOptions<T> {}
+
+export interface UseChipsStateOptions<T = unknown> {
+  name?: string;
+  meta?: Record<string, unknown>;
+  equals?: (a: T, b: T) => boolean;
+  onChange?: (value: T, event: ChipsBindingChange<T>) => void;
+}
+
+export interface UseChipsStateResult<T = unknown> {
+  value: T;
+  setValue(nextValue: ChipsStateUpdater<T>, meta?: Record<string, unknown>): T;
+  update(nextValue: ChipsStateUpdater<T>, meta?: Record<string, unknown>): T;
+  reset(nextValue?: T, meta?: Record<string, unknown>): T;
+  binding: ChipsBinding<T>;
+}
+
+export interface UseChipsAsyncStateOptions<TResult = unknown> {
+  action?: (...args: unknown[]) => Promise<TResult> | TResult;
+  initialStatus?: ChipsBindingStatus;
+  initialData?: TResult;
+  onSuccess?: (data: TResult, context: { requestId: number; args: unknown[] }) => void;
+  onError?: (error: unknown, context: { requestId: number; args: unknown[] }) => void;
+  onSettled?: (context: { requestId: number; args: unknown[] }) => void;
+}
+
+export interface UseChipsAsyncStateResult<TResult = unknown> {
+  status: ChipsBindingStatus;
+  data: TResult | undefined;
+  value: TResult | undefined;
+  error: unknown;
+  requestId: number;
+  loading: boolean;
+  success: boolean;
+  idle: boolean;
+  run(...args: unknown[]): Promise<TResult>;
+  reset(): void;
+  setData(data: TResult): void;
+  setError(error: unknown): void;
+}
+
+export interface ChipsFieldMeta<T = unknown> {
+  name: string;
+  value: T;
+  initialValue: T;
+  error: unknown;
+  touched: boolean;
+  dirty: boolean;
+  invalid: boolean;
+}
+
+export interface UseChipsFormStateOptions<TValues extends Record<string, unknown> = Record<string, unknown>> {
+  name?: string;
+  initialErrors?: Record<string, unknown>;
+  initialTouched?: Record<string, unknown>;
+  equals?: (a: unknown, b: unknown) => boolean;
+  onFieldChange?: (field: string, value: unknown, meta?: Record<string, unknown>) => void;
+}
+
+export interface UseChipsFormStateResult<TValues extends Record<string, unknown> = Record<string, unknown>> {
+  values: TValues;
+  initialValues: TValues;
+  errors: Record<string, unknown>;
+  touched: Record<string, unknown>;
+  dirty: boolean;
+  valid: boolean;
+  submitted: boolean;
+  binding: ChipsBinding<TValues>;
+  setValues(values: TValues | ((previousValues: TValues) => TValues)): TValues;
+  setSubmitted(submitted: boolean): void;
+  reset(values?: TValues): TValues;
+  getFieldValue<T = unknown>(field: ChipsBindingPath): T;
+  setFieldValue<T = unknown>(field: ChipsBindingPath, value: ChipsStateUpdater<T>, meta?: Record<string, unknown>): T;
+  getFieldError(field: ChipsBindingPath): unknown;
+  setFieldError(field: ChipsBindingPath, error: unknown): void;
+  clearFieldError(field: ChipsBindingPath): void;
+  getFieldTouched(field: ChipsBindingPath): boolean;
+  setFieldTouched(field: ChipsBindingPath, touched?: boolean): void;
+  getFieldMeta<T = unknown>(field: ChipsBindingPath): ChipsFieldMeta<T>;
+  getFieldBinding<T = unknown>(field: ChipsBindingPath, options?: { name?: string; meta?: Record<string, unknown> }): ChipsBinding<T>;
+  field<T = unknown>(field: ChipsBindingPath, options?: { name?: string; meta?: Record<string, unknown> }): ChipsBinding<T>;
+}
+
+export interface ChipsFieldBindingSource {
+  getFieldBinding<T = unknown>(field: ChipsBindingPath, options?: { name?: string; meta?: Record<string, unknown> }): ChipsBinding<T>;
+}
+
 export interface UseChipsSurfaceResult {
   surface: ChipsSurfaceContext | null;
   launchContext: ChipsLaunchContext | null;
@@ -316,6 +481,28 @@ export function useTokenResolver(): TokenResolver;
 export function useToken<T = unknown>(tokenKey: string): T;
 export function useComponentTokens(componentScope: string): Record<string, unknown>;
 export function useThemeRuntime(): ThemeRuntimeState;
+export function createBinding<T = unknown>(options?: CreateBindingOptions<T> | ChipsBinding<T>): ChipsBinding<T>;
+export function useBinding<T = unknown>(options?: UseBindingOptions<T> | ChipsBinding<T>): ChipsBinding<T>;
+export function useChipsBinding<T = unknown>(options?: UseBindingOptions<T> | ChipsBinding<T>): ChipsBinding<T>;
+export function useChipsState<T = unknown>(initialValue: T | (() => T), options?: UseChipsStateOptions<T>): UseChipsStateResult<T>;
+export function useChipsAsyncState<TResult = unknown>(
+  action?: ((...args: unknown[]) => Promise<TResult> | TResult) | null,
+  options?: UseChipsAsyncStateOptions<TResult>,
+): UseChipsAsyncStateResult<TResult>;
+export function useChipsFormState<TValues extends Record<string, unknown> = Record<string, unknown>>(
+  initialValues?: TValues | (() => TValues),
+  options?: UseChipsFormStateOptions<TValues>,
+): UseChipsFormStateResult<TValues>;
+export function useFieldBinding<T = unknown, TValues extends Record<string, unknown> = Record<string, unknown>>(
+  formState: UseChipsFormStateResult<TValues> | ChipsBinding<TValues>,
+  field: ChipsBindingPath,
+  options?: { name?: string; meta?: Record<string, unknown> },
+): ChipsBinding<T>;
+export function useFieldBinding<T = unknown>(
+  formState: ChipsFieldBindingSource | ChipsBinding<unknown>,
+  field: ChipsBindingPath,
+  options?: { name?: string; meta?: Record<string, unknown> },
+): ChipsBinding<T>;
 export function ChipsEnvironmentProvider(props: ChipsEnvironmentProviderProps): React.ReactElement;
 export function useChipsEnvironment(): ChipsEnvironmentValue;
 export function useChipsClient<T extends ChipsClientLike = ChipsClientLike>(): T;

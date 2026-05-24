@@ -5,20 +5,28 @@ import {
   ChipsThemeProvider,
   ChipsView,
   CompositeWindowMode,
+  createBinding,
   type CardDisplayAdapter,
+  type ChipsBinding,
   type ChipsClientLike,
   type ChipsEnvironmentValue,
   loadCompositeWindowData,
   toCardRuntimeStandardError,
   toComponentStandardError,
+  useBinding,
+  useChipsAsyncState,
+  useChipsBinding,
   useChipsI18nText,
   useChipsClient,
   useChipsDiagnostics,
   useChipsEnvironment,
+  useChipsFormState,
   useChipsI18n,
   useChipsPermission,
+  useChipsState,
   useChipsSurface,
-  useChipsTheme
+  useChipsTheme,
+  useFieldBinding
 } from "@chips/component-library";
 
 const adapter: CardDisplayAdapter = {
@@ -52,6 +60,18 @@ void loadCompositeWindowData(adapter, {
 
 const componentError = toComponentStandardError(new Error("component"));
 const runtimeError = toCardRuntimeStandardError(new Error("runtime"), "CARD_RUNTIME_SMOKE");
+const titleBinding: ChipsBinding<string> = createBinding({
+  defaultValue: "Draft",
+  name: "title"
+});
+const titleProps = titleBinding.valueProps();
+titleProps.onValueChange("Published");
+const inputProps = titleBinding.inputProps();
+inputProps.onChange({ target: { value: "Typed" } });
+const checkedBinding = createBinding({ defaultValue: false });
+checkedBinding.checkedProps().onCheckedChange(true);
+createBinding({ defaultValue: false }).openProps().onOpenChange(true);
+
 const mockClient: ChipsClientLike = {
   events: {
     on() {
@@ -109,12 +129,42 @@ function EnvironmentSmoke(): null {
   return null;
 }
 
+function BindingSmoke(): null {
+  const localState = useChipsState(0, {
+    name: "counter",
+    onChange(value, event) {
+      const previous: number = event.previousValue;
+      void previous;
+      void value;
+    }
+  });
+  const directBinding = useBinding({ defaultValue: "draft" });
+  const chipsBinding = useChipsBinding(directBinding);
+  const asyncState = useChipsAsyncState(async (id: unknown) => `item:${String(id)}`);
+  const form = useChipsFormState({
+    title: "Draft",
+    enabled: false
+  });
+  const fieldBinding = useFieldBinding<string>(form, "title");
+
+  localState.setValue((value) => value + 1);
+  localState.binding.valueProps().onValueChange(2);
+  directBinding.valueProps().onValueChange("value");
+  chipsBinding.inputProps().onChange({ target: { value: "typed" } });
+  form.getFieldBinding<string>("title").valueProps().onValueChange("Published");
+  form.getFieldBinding<boolean>("enabled").checkedProps().onCheckedChange(true);
+  fieldBinding.valueProps().onValueChange("Final");
+  void asyncState.run("42");
+  return null;
+}
+
 export const smokeTree = (
   <ChipsEnvironmentProvider client={mockClient}>
     <ChipsThemeProvider themeId="chips-official.default-theme" version="1.0.0">
       <ChipsView title="Demo" aria-label="Demo view">
         <ChipsStack gap="8px">
           <EnvironmentSmoke />
+          <BindingSmoke />
           <ChipsButton
             variant="primary"
             onPress={() => {

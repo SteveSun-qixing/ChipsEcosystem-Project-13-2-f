@@ -8,6 +8,7 @@ import {
 } from "@chips/component-library";
 import { appMockLaunchContext, appMockSurfaceContext, createAppMockClient } from "./mock-environment";
 import { defaultThemeState } from "../theme/theme-runtime";
+import { AppRuntimeProvider } from "../app/AppRuntimeProvider";
 
 export interface RenderWithChipsResult {
   client: ReturnType<typeof createAppMockClient>;
@@ -31,7 +32,7 @@ export function renderWithChips(children: ReactNode): RenderWithChipsResult {
           themeId={defaultThemeState.themeId}
           version={defaultThemeState.version}
         >
-          {children}
+          <AppRuntimeProvider>{children}</AppRuntimeProvider>
         </ChipsThemeProvider>
       </ChipsEnvironmentProvider>
     ),

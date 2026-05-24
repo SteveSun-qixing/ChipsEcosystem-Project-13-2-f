@@ -54,6 +54,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const appSourcePath = path.join(targetDir, "src/App.tsx");
     const appRootPath = path.join(targetDir, "src/app/AppRoot.tsx");
     const appProvidersPath = path.join(targetDir, "src/app/AppProviders.tsx");
+    const appRuntimeProviderPath = path.join(targetDir, "src/app/AppRuntimeProvider.tsx");
     const appShellPath = path.join(targetDir, "src/app/AppShell.tsx");
     const appShellCssPath = path.join(targetDir, "src/app/app-shell.css");
     const sceneRegistryPath = path.join(targetDir, "src/app/scene-registry.ts");
@@ -75,6 +76,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     await stat(appSourcePath);
     await stat(appRootPath);
     await stat(appProvidersPath);
+    await stat(appRuntimeProviderPath);
     await stat(appShellPath);
     await stat(appShellCssPath);
     await stat(sceneRegistryPath);
@@ -100,6 +102,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
           appSourcePath,
           appRootPath,
           appProvidersPath,
+          appRuntimeProviderPath,
           appShellPath,
           sceneRegistryPath,
           useAppCommandsPath,
@@ -214,6 +217,8 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "useChipsSurface",
       "useChipsPermission",
       "useChipsDiagnostics",
+      "useAppRuntime",
+      "AppRuntimeProvider",
       "setLocale",
       "supportedLocales",
     ]) {

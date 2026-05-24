@@ -4,29 +4,28 @@ import {
   ChipsSection,
   ChipsText,
   ChipsTextField,
-  useChipsDiagnostics,
   useChipsState,
 } from "@chips/component-library";
+import { createRuntimeDiagnostic, useAppRuntime } from "../app/AppRuntimeProvider";
 import { useAppText } from "../i18n/useAppText";
 
 export function StateBindingView() {
   const { text } = useAppText();
-  const diagnostics = useChipsDiagnostics();
+  const runtime = useAppRuntime();
   const titleState = useChipsState(text("app.identity.displayName"), {
     name: "app.workspace.title",
   });
   const titleProps = titleState.binding.valueProps<string>();
 
   function handleSubmit() {
-    diagnostics.push({
-      code: "APP_STATE_BINDING_UPDATED",
-      message: "App state binding updated.",
-      messageKey: "app.workspace.formAction",
-      details: {
+    runtime.pushDiagnostic(createRuntimeDiagnostic(
+      "APP_STATE_BINDING_UPDATED",
+      "App state binding updated.",
+      "app",
+      {
         title: titleState.value,
       },
-      source: "app",
-    });
+    ));
   }
 
   return (

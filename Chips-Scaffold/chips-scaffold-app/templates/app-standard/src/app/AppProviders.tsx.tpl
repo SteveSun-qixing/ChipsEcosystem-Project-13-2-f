@@ -11,6 +11,8 @@ import {
 import { chipsClient } from "../runtime/chips-client";
 import { readLaunchContext } from "../runtime/launch-context";
 import { defaultThemeState } from "../theme/theme-runtime";
+import { createScopedLogger } from "../../config/logging";
+import { AppRuntimeProvider } from "./AppRuntimeProvider";
 
 const DEFAULT_PERMISSIONS = [
   "theme.read",
@@ -20,6 +22,8 @@ const DEFAULT_PERMISSIONS = [
   "command.write",
   "command.invoke",
 ];
+
+const runtimeLogger = createScopedLogger({ scope: "app-runtime" });
 
 export interface AppProvidersProps {
   children: ReactNode;
@@ -31,9 +35,13 @@ function RuntimeThemeProvider({ children }: AppProvidersProps) {
 
   return (
     <ChipsThemeProvider themeId={activeTheme.themeId} version={activeTheme.version}>
-      {children}
+      <AppRuntimeProvider>{children}</AppRuntimeProvider>
     </ChipsThemeProvider>
   );
+}
+
+function reportRuntimeDiagnostic(diagnostic: unknown) {
+  runtimeLogger.warn("Runtime diagnostic received.", diagnostic);
 }
 
 export function AppProviders({ children }: AppProvidersProps) {
@@ -49,6 +57,8 @@ export function AppProviders({ children }: AppProvidersProps) {
       initialLaunchContext={launchContext as unknown as ChipsLaunchContext}
       initialSurface={surfaceContext as unknown as ChipsSurfaceContext | null}
       initialPermissions={DEFAULT_PERMISSIONS}
+      initialDiagnostics={[]}
+      onDiagnostic={reportRuntimeDiagnostic}
     >
       <RuntimeThemeProvider>{children}</RuntimeThemeProvider>
     </ChipsEnvironmentProvider>

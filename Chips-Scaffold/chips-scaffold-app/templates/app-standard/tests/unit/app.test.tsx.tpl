@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { createChipsI18nText } from "@chips/component-library";
+import { createChipsI18nText, type ChipsLaunchContext, type ChipsSurfaceContext } from "@chips/component-library";
 import { App } from "../../src/App";
 import { AppRoot } from "../../src/app/AppRoot";
+import {
+  createRuntimeDiagnostic,
+  resolveRuntimeSceneId,
+} from "../../src/app/AppRuntimeProvider";
 import { sceneDefinitions } from "../../src/app/scene-registry";
 import { localeBundles, supportedLocales, translateLocalKey } from "../../src/i18n/locales";
 import { createAppMockClient } from "../../src/testing/mock-environment";
@@ -47,5 +51,28 @@ describe("App (标准应用插件根组件)", () => {
     expect(rendered.element).toBeTruthy();
     expect(rendered.client.state.launchContext.surfaceContext?.sceneId).toBe("main");
     rendered.client.restoreBridge();
+  });
+
+  it("应从 surface / launch context 解析运行时场景和诊断对象", () => {
+    const client = createAppMockClient();
+    expect(
+      resolveRuntimeSceneId(
+        (client.state.launchContext.surfaceContext ?? null) as unknown as ChipsSurfaceContext | null,
+        client.state.launchContext as unknown as ChipsLaunchContext,
+      ),
+    ).toBe("main");
+
+    const diagnostic = createRuntimeDiagnostic(
+      "APP_RUNTIME_TEST",
+      "Runtime test diagnostic.",
+      "test",
+      { sceneId: "main" },
+    );
+    expect(diagnostic).toMatchObject({
+      code: "APP_RUNTIME_TEST",
+      source: "test",
+      details: { sceneId: "main" },
+    });
+    client.restoreBridge();
   });
 });

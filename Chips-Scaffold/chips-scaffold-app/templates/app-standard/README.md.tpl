@@ -49,6 +49,7 @@ npm run dev
 │  ├─ app/
 │  │  ├─ AppRoot.tsx
 │  │  ├─ AppProviders.tsx
+│  │  ├─ AppRuntimeProvider.tsx
 │  │  ├─ AppShell.tsx
 │  │  ├─ app-shell.css
 │  │  └─ scene-registry.ts

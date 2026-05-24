@@ -26,6 +26,7 @@ describe("应用插件预览与质量脚本 smoke", () => {
     const sourceBundle = [
       readProjectFile("src/App.tsx"),
       readProjectFile("src/app/AppRoot.tsx"),
+      readProjectFile("src/app/AppRuntimeProvider.tsx"),
       readProjectFile("src/app/AppShell.tsx"),
       readProjectFile("src/app/scene-registry.ts"),
       readProjectFile("src/i18n/locales.ts"),

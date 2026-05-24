@@ -66,6 +66,7 @@ async function main() {
     "src/App.tsx.tpl",
     "src/app/AppRoot.tsx.tpl",
     "src/app/AppProviders.tsx.tpl",
+    "src/app/AppRuntimeProvider.tsx.tpl",
     "src/app/AppShell.tsx.tpl",
     "src/app/app-shell.css.tpl",
     "src/app/scene-registry.ts.tpl",
@@ -222,6 +223,8 @@ async function main() {
         "useChipsSurface",
         "useChipsPermission",
         "useChipsDiagnostics",
+        "useAppRuntime",
+        "AppRuntimeProvider",
         "setLocale",
         "supportedLocales",
       ]) {

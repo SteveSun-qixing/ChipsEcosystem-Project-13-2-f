@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   ChipsBadge,
   ChipsButton,
@@ -12,11 +12,6 @@ import {
   ChipsStack,
   ChipsText,
   ChipsToolbar,
-  useChipsDiagnostics,
-  useChipsI18n,
-  useChipsPermission,
-  useChipsSurface,
-  useChipsTheme,
 } from "@chips/component-library";
 import type { CommandSource } from "chips-sdk";
 import { appConfig } from "../../config/app-config";
@@ -30,31 +25,24 @@ import { useAppCommands } from "../commands/useAppCommands";
 import { useAppText } from "../i18n/useAppText";
 import { MainScene } from "../scenes/MainScene";
 import { SettingsScene } from "../scenes/SettingsScene";
-import { getSceneDefinition, type AppSceneId } from "./scene-registry";
+import { useAppRuntime } from "./AppRuntimeProvider";
 
 function nextLocale(locale: string) {
   return locale === "zh-CN" ? "en-US" : "zh-CN";
 }
 
 export function AppShell() {
-  const [activeSceneId, setActiveSceneId] = useState<AppSceneId>(
-    getSceneDefinition(appConfig.defaultSceneId).id,
-  );
+  const runtime = useAppRuntime();
+  const { activeSceneId, activeScene, setActiveSceneId } = runtime;
   const handledInvocationRef = useRef<string | null>(null);
   const { locale, text } = useAppText();
-  const i18n = useChipsI18n();
-  const theme = useChipsTheme();
-  const surface = useChipsSurface();
-  const permission = useChipsPermission();
-  const diagnostics = useChipsDiagnostics();
   const commands = useAppCommands();
-  const activeScene = getSceneDefinition(activeSceneId);
   const commandStatusKey = `app.commands.status.${commands.phase}`;
   const menuDescriptors = useMemo(
     () => [{ menuId: "app", label: text("app.commands.menu.app") }],
     [text],
   );
-  const canInvokeCommand = permission.hasPermission("command.invoke");
+  const canInvokeCommand = runtime.permissions.canInvokeCommand;
 
   useEffect(() => {
     if (!commands.lastInvoked) {
@@ -73,12 +61,12 @@ export function AppShell() {
       setActiveSceneId("main");
     }
     if (commands.lastInvoked.handlerId === APP_COMMAND_HANDLER_IDS.refreshTheme) {
-      void theme.refresh();
+      void runtime.refreshTheme();
     }
-  }, [commands.lastInvoked, theme]);
+  }, [commands.lastInvoked, runtime]);
 
   function handleLanguageSwitch() {
-    void i18n.setLocale(nextLocale(locale));
+    void runtime.setLocale(nextLocale(locale));
   }
 
   function invokeCommand(commandId: string, source: CommandSource) {
@@ -99,7 +87,7 @@ export function AppShell() {
         showErrorMessage
       >
         <ChipsLoadingBoundary
-          loading={commands.phase === "registering" || surface.status === "loading"}
+          loading={commands.phase === "registering" || !runtime.status.ready}
           loadingText={text("app.shell.loading")}
         >
           <div className="app-shell" data-app-id={appConfig.appId}>
@@ -227,13 +215,13 @@ export function AppShell() {
                         })
                       : text(commandStatusKey)}
                   </ChipsText>
-                  {commands.errorCode ? (
+                    {commands.errorCode ? (
                     <ChipsText>
                       {text("app.commands.status.errorWithCode", { code: commands.errorCode })}
                     </ChipsText>
                   ) : null}
                   <ChipsText>
-                    {diagnostics.diagnostics.length === 0
+                    {runtime.diagnostics.length === 0
                       ? text("app.workspace.emptyTitle")
                       : text("app.workspace.diagnosticsLabel")}
                   </ChipsText>

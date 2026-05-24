@@ -986,6 +986,36 @@
       ]
     },
     {
+      "component": "navigation-split-view",
+      "scope": "navigation-split-view",
+      "parts": [
+        "root",
+        "sidebar",
+        "content",
+        "detail",
+        "divider",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.navigation-split-view.root.surface",
+        "chips.comp.navigation-split-view.sidebar.surface",
+        "chips.comp.navigation-split-view.content.surface",
+        "chips.comp.navigation-split-view.detail.surface",
+        "chips.comp.navigation-split-view.divider.color",
+        "chips.comp.navigation-split-view.status.color.error",
+        "chips.comp.navigation-split-view.focus.outline"
+      ]
+    },
+    {
       "component": "notification",
       "scope": "notification",
       "parts": [

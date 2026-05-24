@@ -52,6 +52,7 @@ contract extension.
 - `loading-boundary.contract.json`
 - `menu-bar.contract.json`
 - `menu.contract.json`
+- `navigation-split-view.contract.json`
 - `notification.contract.json`
 - `panel-header.contract.json`
 - `popover.contract.json`

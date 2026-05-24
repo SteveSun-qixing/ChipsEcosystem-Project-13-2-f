@@ -58,6 +58,7 @@
   - `chips.comp.tree.*`
   - `chips.comp.date-time.*`
   - `chips.comp.command-palette.*`
+  - `chips.comp.navigation-split-view.*`
   - `chips.comp.split-pane.*`
   - `chips.comp.dock-panel.*`
   - `chips.comp.inspector.*`
@@ -80,6 +81,7 @@
       - `chips.comp.spacer.*`
       - `chips.comp.divider.*`
       - `chips.comp.split-view.*`
+      - `chips.comp.navigation-split-view.*`
       - `chips.comp.card-cover-frame.*`
       - `chips.comp.composite-card-window.*`
 - 后续组件保持同一命名形态：`chips.comp.<component-name>.*`
@@ -201,6 +203,12 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.command-palette.*`
 
 `CommandPalette` 的 `root/input/list/group/group-label/item/shortcut/status/focus` token 分别表达命令面板容器、查询输入、结果列表、分组、分组标题、命令条目、快捷键提示、状态信息和焦点视觉。正式公开 part 为 `root / input / list / group / group-label / item / shortcut / status`；旧 `search / result` 不再是公开主题 contract。输入 token 使用 `chips.comp.command-palette.input.*`，条目 token 使用 `chips.comp.command-palette.item.*`，主题 CSS 不得继续依赖 `chips.comp.command-palette.search.*` 或 `chips.comp.command-palette.result.*`。
+
+任务016第七批复杂组件 Compound API token 是 NavigationSplitView 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.navigation-split-view.*`
+
+`NavigationSplitView` 的 `root/sidebar/content/detail/divider/status/focus` token 分别表达导航分栏容器、导航侧栏、内容栏、详情栏、分割线、状态信息和焦点视觉。正式公开 part 为 `root / sidebar / content / detail / divider / status`；`primary / secondary` 只属于 `chips.comp.split-view.*` 布局原语 contract，不得被主题包复用为 `navigation-split-view` 的正式样式入口。导航侧栏宽度应使用 `chips.layout.size.navigation-primary-min`，内容栏和详情栏可复用 `chips.layout.size.split-secondary-min` 与弹性列，分割线和焦点环继续使用 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
 
 ### 3.1 布局 token 基线
 

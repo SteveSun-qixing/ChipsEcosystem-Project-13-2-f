@@ -27,9 +27,10 @@ describe("layout primitive theme styles", () => {
     const primitiveCss = getPrimitiveCssBlock(layoutCss);
 
     for (const scope of LAYOUT_SCOPES) {
-      expect(primitiveCss).toContain(`[data-scope="${scope}"]`);
+    expect(primitiveCss).toContain(`[data-scope="${scope}"]`);
     }
 
+    expect(primitiveCss).toContain('[data-scope="navigation-split-view"]');
     expect(primitiveCss).toContain("var(--chips-layout-focus-outline-width");
     expect(primitiveCss).toContain("var(--chips-layout-focus-outline-offset");
     expect(primitiveCss).toContain("var(--chips-layout-size-grid-min-item");

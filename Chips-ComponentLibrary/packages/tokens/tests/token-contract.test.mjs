@@ -34,6 +34,7 @@ test("card runtime component tokens exist", () => {
   const tree = readJson(path.join(root, "comp/tree.json"));
   const dateTime = readJson(path.join(root, "comp/date-time.json"));
   const commandPalette = readJson(path.join(root, "comp/command-palette.json"));
+  const navigationSplitView = readJson(path.join(root, "comp/navigation-split-view.json"));
   const splitPane = readJson(path.join(root, "comp/split-pane.json"));
   const dockPanel = readJson(path.join(root, "comp/dock-panel.json"));
   const inspector = readJson(path.join(root, "comp/inspector.json"));
@@ -117,6 +118,9 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(commandPalette, "chips.comp.command-palette.input.surface.idle"));
   assert.ok(getPath(commandPalette, "chips.comp.command-palette.item.surface.active"));
   assert.ok(getPath(commandPalette, "chips.comp.command-palette.group.label.color"));
+  assert.ok(getPath(navigationSplitView, "chips.comp.navigation-split-view.sidebar.surface"));
+  assert.ok(getPath(navigationSplitView, "chips.comp.navigation-split-view.detail.surface"));
+  assert.ok(getPath(navigationSplitView, "chips.comp.navigation-split-view.divider.color"));
   assert.ok(getPath(splitPane, "chips.comp.split-pane.handle.surface.active"));
   assert.ok(getPath(dockPanel, "chips.comp.dock-panel.tab.surface.active"));
   assert.ok(getPath(inspector, "chips.comp.inspector.section.header.surface.active"));

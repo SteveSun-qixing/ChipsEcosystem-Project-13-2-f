@@ -58,5 +58,8 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.["data-grid"]?.toolbar?.surface).toBeDefined();
     expect(parsed.comp.chips?.comp?.["data-grid"]?.header?.sort?.color).toBeDefined();
     expect(parsed.comp.chips?.comp?.["data-grid"]?.pagination?.gap).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["navigation-split-view"]?.sidebar?.surface).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["navigation-split-view"]?.detail?.surface).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["navigation-split-view"]?.divider?.color).toBeDefined();
   });
 });

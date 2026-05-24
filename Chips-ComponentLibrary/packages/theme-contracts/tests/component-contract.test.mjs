@@ -326,6 +326,20 @@ test("command-palette contract contains compound input item and group tokens", (
   assert.equal(contract.tokens.includes("chips.comp.command-palette.result.surface.active"), false);
 });
 
+test("navigation-split-view contract keeps navigation parts separate from split-view layout parts", () => {
+  const contract = readContract("navigation-split-view.contract.json");
+  assertCommonShape(contract);
+  assert.ok(contract.parts.includes("sidebar"));
+  assert.ok(contract.parts.includes("content"));
+  assert.ok(contract.parts.includes("detail"));
+  assert.ok(contract.parts.includes("divider"));
+  assert.equal(contract.parts.includes("primary"), false);
+  assert.equal(contract.parts.includes("secondary"), false);
+  assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.sidebar.surface"));
+  assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.detail.surface"));
+  assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.divider.color"));
+});
+
 test("data-grid contract contains row selected token", () => {
   const contract = readContract("data-grid.contract.json");
   assertCommonShape(contract);

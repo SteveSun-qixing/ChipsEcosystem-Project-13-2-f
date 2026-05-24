@@ -63,6 +63,7 @@ function buildTokenTree() {
     "tree.json",
     "date-time.json",
     "command-palette.json",
+    "navigation-split-view.json",
     "split-pane.json",
     "dock-panel.json",
     "inspector.json",

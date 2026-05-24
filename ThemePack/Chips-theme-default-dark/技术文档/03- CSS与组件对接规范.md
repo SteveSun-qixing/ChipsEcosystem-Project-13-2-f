@@ -34,7 +34,7 @@
   - `styles/components/input.css`：输入框（`input`）。
   - `styles/components/form-controls.css`：选择控件（`checkbox`、`radio`、`switch`、`select`）。
   - `styles/components/overlays.css`：浮层组件（`dialog`、`popover`、`tooltip`、`command-palette`、`date-time`）。
-  - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form`、`virtual-list`、`data-grid`、`tree`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
+  - `styles/components/layout-containers.css`：布局与容器组件（`tabs`、`menu`、`form`、`virtual-list`、`data-grid`、`tree`、`navigation-split-view`、`split-pane`、`dock-panel`、`inspector`、`panel-header`、`card-shell`、`tool-window`）。
   - `styles/components/feedback.css`：反馈与边界组件（`notification`、`toast`、`empty-state`、`skeleton`、`error-boundary`、`loading-boundary`、`card-cover-frame`、`composite-card-window`）。
 
 `src/build-css.ts` 会按以下顺序拼接 CSS：
@@ -155,6 +155,8 @@
 `data-grid` 在本主题中对齐任务016 Compound contract：只消费 `root / toolbar / header / row / cell / pagination / status` 公开 part，不依赖内部 `table` DOM。工具栏和分页分别使用 `chips.comp.data-grid.toolbar.*` 与 `chips.comp.data-grid.pagination.*`；列头排序态使用 `data-part="cell"`、`data-header="true"` 和 `data-sort="ascending|descending"`；行选中视觉必须匹配 `data-selected="true"`。
 
 `tree` 在本主题中对齐任务016 Compound contract：只消费 `root / item / branch / leaf / disclosure / label / group / status` 公开 part，不依赖旧 `node / toggle / children`。树项基础视觉统一使用 `chips.comp.tree.item.*`，展开折叠入口使用 `chips.comp.tree.disclosure.color`，子树引导线使用 `chips.comp.tree.group.guide.color`。节点选中视觉必须匹配 `data-selected="true"`，层级缩进通过组件输出的 `--chips-tree-level` 与 `chips.comp.tree.branch.indent` token 计算。
+
+`navigation-split-view` 在本主题中对齐任务016.07 Compound contract：只消费 `root / sidebar / content / detail / divider / status` 公开 part，不复用 `split-view` 的 `primary / secondary` 主题入口。导航侧栏最小宽度使用 `chips.layout.size.navigation-primary-min`，中间内容栏使用 `chips.layout.size.split-secondary-min`，分割线厚度和焦点环继续消费 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
 
 ---
 

@@ -86,6 +86,10 @@ test("stage9 a11y gate validates all component rules", () => {
       "aria-expanded": "true",
       "aria-controls": "command-list"
     }),
+    validateComponentA11y("navigation-split-view", { role: "group", "aria-label": "workspace navigation" }),
+    validateComponentA11y("navigation-split-view", { part: "sidebar", role: "navigation", "aria-label": "sources" }),
+    validateComponentA11y("navigation-split-view", { part: "content", role: "region", "aria-label": "items" }),
+    validateComponentA11y("navigation-split-view", { part: "detail", role: "region", "aria-label": "detail" }),
     validateComponentA11y("split-pane", { role: "group", "aria-label": "split pane" }),
     validateComponentA11y("dock-panel", { role: "tablist", "aria-label": "dock panel" }),
     validateComponentA11y("inspector", { role: "complementary", "aria-label": "inspector" }),

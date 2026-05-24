@@ -1507,6 +1507,32 @@ export interface CommandPaletteCompoundComponent extends React.ForwardRefExoticC
   Group: React.ForwardRefExoticComponent<CommandPaletteGroupProps & React.RefAttributes<HTMLLIElement>>;
 }
 
+export interface NavigationSplitViewProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | null;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface NavigationSplitViewRegionProps extends React.HTMLAttributes<HTMLElement> {
+  as?: keyof React.JSX.IntrinsicElements;
+  children?: React.ReactNode;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  [key: string]: unknown;
+}
+
+export interface NavigationSplitViewCompoundComponent extends React.ForwardRefExoticComponent<NavigationSplitViewProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<NavigationSplitViewProps & React.RefAttributes<HTMLDivElement>>;
+  Sidebar: React.ForwardRefExoticComponent<NavigationSplitViewRegionProps & React.RefAttributes<HTMLElement>>;
+  Content: React.ForwardRefExoticComponent<NavigationSplitViewRegionProps & React.RefAttributes<HTMLElement>>;
+  Detail: React.ForwardRefExoticComponent<NavigationSplitViewRegionProps & React.RefAttributes<HTMLElement>>;
+}
+
 export interface SplitPaneProps {
   orientation?: "horizontal" | "vertical";
   ratio?: number;
@@ -1828,6 +1854,7 @@ export const ChipsDataGrid: DataGridCompoundComponent;
 export const ChipsTree: TreeCompoundComponent;
 export const ChipsDateTime: React.ForwardRefExoticComponent<DateTimeProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsCommandPalette: CommandPaletteCompoundComponent;
+export const ChipsNavigationSplitView: NavigationSplitViewCompoundComponent;
 export const ChipsSplitPane: React.ForwardRefExoticComponent<SplitPaneProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsDockPanel: React.ForwardRefExoticComponent<DockPanelProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsInspector: React.ForwardRefExoticComponent<InspectorProps & React.RefAttributes<HTMLDivElement>>;

@@ -1856,6 +1856,15 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.command-palette.shortcut.color",
     "chips.comp.command-palette.focus.outline"
   ],
+  "navigation-split-view": [
+    "chips.comp.navigation-split-view.root.surface",
+    "chips.comp.navigation-split-view.sidebar.surface",
+    "chips.comp.navigation-split-view.content.surface",
+    "chips.comp.navigation-split-view.detail.surface",
+    "chips.comp.navigation-split-view.divider.color",
+    "chips.comp.navigation-split-view.status.color.error",
+    "chips.comp.navigation-split-view.focus.outline"
+  ],
   "split-pane": [
     "chips.comp.split-pane.root.surface",
     "chips.comp.split-pane.pane.surface",
@@ -2290,6 +2299,12 @@ export function buildComponentContract(component) {
       component: "command-palette",
       scope: "command-palette",
       parts: ["root", "input", "list", "group", "group-label", "item", "shortcut", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    "navigation-split-view": {
+      component: "navigation-split-view",
+      scope: "navigation-split-view",
+      parts: ["root", "sidebar", "content", "detail", "divider", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     "split-pane": {
@@ -13454,6 +13469,191 @@ export const ChipsCommandPalette = Object.assign(CommandPaletteRoot, {
 
 ChipsCommandPalette.displayName = "ChipsCommandPalette";
 
+const [NavigationSplitViewCompoundContext, useNavigationSplitViewCompoundContext] = createCompoundContext("navigation-split-view");
+
+function getNavigationSplitViewChildPart(child) {
+  if (!React.isValidElement(child)) {
+    return null;
+  }
+  if (child.type === NavigationSplitViewSidebar) {
+    return "sidebar";
+  }
+  if (child.type === NavigationSplitViewContent) {
+    return "content";
+  }
+  if (child.type === NavigationSplitViewDetail) {
+    return "detail";
+  }
+  return null;
+}
+
+function renderNavigationSplitViewDivider(state, key) {
+  return React.createElement("div", {
+    key,
+    ...createScopeAttributes("navigation-split-view", "divider", state),
+    "aria-hidden": "true"
+  });
+}
+
+function flattenNavigationSplitViewChildren(children) {
+  const flattened = [];
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child) && child.type === React.Fragment) {
+      flattened.push(...flattenNavigationSplitViewChildren(child.props.children));
+      return;
+    }
+    flattened.push(child);
+  });
+  return flattened;
+}
+
+function renderNavigationSplitViewChildren(children, state) {
+  const childArray = flattenNavigationSplitViewChildren(children);
+  const rendered = [];
+  let previousPart = null;
+
+  for (const child of childArray) {
+    const part = getNavigationSplitViewChildPart(child);
+    if (previousPart && part && previousPart !== part) {
+      rendered.push(renderNavigationSplitViewDivider(state, `divider-${previousPart}-${part}-${rendered.length}`));
+    }
+    rendered.push(child);
+    if (part) {
+      previousPart = part;
+    }
+  }
+
+  return rendered;
+}
+
+const NavigationSplitViewRoot = React.forwardRef((props, ref) => {
+  const {
+    children,
+    disabled = false,
+    loading = false,
+    error = null,
+    active = false,
+    ariaLabel,
+    ariaLabelledBy,
+    role,
+    onStateChange,
+    onFocus,
+    onBlur,
+    ...rest
+  } = props;
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction: active ? { active: true } : null
+  });
+  const resolvedAriaLabel = rest["aria-label"] || ariaLabel;
+  const resolvedAriaLabelledBy = rest["aria-labelledby"] || ariaLabelledBy;
+  const renderedChildren = renderNavigationSplitViewChildren(children, state);
+  const contextValue = {
+    state,
+    disabled: disabledByState
+  };
+
+  return React.createElement(
+    NavigationSplitViewCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("navigation-split-view", "root", state),
+        ref,
+        role: role || "group",
+        "aria-label": resolvedAriaLabel,
+        "aria-labelledby": resolvedAriaLabelledBy,
+        "aria-disabled": disabledByState ? "true" : undefined,
+        onFocus: mergeEventHandlers(onFocus, () => {
+          if (typeof onStateChange === "function") {
+            onStateChange("focus");
+          }
+        }),
+        onBlur: mergeEventHandlers(onBlur, () => {
+          if (typeof onStateChange === "function") {
+            onStateChange(state);
+          }
+        })
+      },
+      renderedChildren,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("navigation-split-view", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
+  );
+});
+
+NavigationSplitViewRoot.displayName = "ChipsNavigationSplitView.Root";
+
+function renderNavigationSplitViewRegion(part, defaultElement, defaultRole, props, ref) {
+  const {
+    as,
+    children,
+    ariaLabel,
+    ariaLabelledBy,
+    role,
+    ...rest
+  } = props;
+  const context = useNavigationSplitViewCompoundContext(part);
+  const Element = as || defaultElement;
+  const resolvedAriaLabel = rest["aria-label"] || ariaLabel;
+  const resolvedAriaLabelledBy = rest["aria-labelledby"] || ariaLabelledBy;
+
+  return React.createElement(
+    Element,
+    {
+      ...rest,
+      ...createScopeAttributes("navigation-split-view", part, context.state),
+      ref,
+      role: role || defaultRole,
+      "aria-label": resolvedAriaLabel,
+      "aria-labelledby": resolvedAriaLabelledBy,
+      "aria-disabled": context.disabled ? "true" : undefined
+    },
+    children
+  );
+}
+
+const NavigationSplitViewSidebar = React.forwardRef((props, ref) =>
+  renderNavigationSplitViewRegion("sidebar", "nav", "navigation", props, ref)
+);
+
+NavigationSplitViewSidebar.displayName = "ChipsNavigationSplitView.Sidebar";
+
+const NavigationSplitViewContent = React.forwardRef((props, ref) =>
+  renderNavigationSplitViewRegion("content", "section", "region", props, ref)
+);
+
+NavigationSplitViewContent.displayName = "ChipsNavigationSplitView.Content";
+
+const NavigationSplitViewDetail = React.forwardRef((props, ref) =>
+  renderNavigationSplitViewRegion("detail", "section", "region", props, ref)
+);
+
+NavigationSplitViewDetail.displayName = "ChipsNavigationSplitView.Detail";
+
+export const ChipsNavigationSplitView = Object.assign(NavigationSplitViewRoot, {
+  Root: NavigationSplitViewRoot,
+  Sidebar: NavigationSplitViewSidebar,
+  Content: NavigationSplitViewContent,
+  Detail: NavigationSplitViewDetail
+});
+
+ChipsNavigationSplitView.displayName = "ChipsNavigationSplitView";
+
 export const ChipsSplitPane = React.forwardRef((props, ref) => {
   const {
     orientation = "horizontal",
@@ -15864,6 +16064,29 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "navigation-split-view") {
+    const part = props.part || props["data-part"];
+    if (part === "sidebar") {
+      assertAriaProps(props, {
+        role: "navigation",
+        requireLabel: true
+      });
+      return true;
+    }
+    if (part === "content" || part === "detail") {
+      assertAriaProps(props, {
+        role: "region",
+        requireLabel: true
+      });
+      return true;
+    }
+    assertAriaProps(props, {
+      role: "group",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "split-pane") {
     assertAriaProps(props, {
       role: "group",
@@ -16270,6 +16493,12 @@ export const STAGE7_DATA_ADVANCED_COMPONENTS = [
     name: "ChipsCommandPalette",
     scope: "command-palette",
     parts: ["root", "input", "list", "group", "group-label", "item", "shortcut", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsNavigationSplitView",
+    scope: "navigation-split-view",
+    parts: ["root", "sidebar", "content", "detail", "divider", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

@@ -7,15 +7,16 @@ describe("theme contract", () => {
     const projectRoot = path.resolve(__dirname, "..");
     const result = await validateTheme(projectRoot);
 
-    expect(result.contract.components).toHaveLength(69);
+    expect(result.contract.components).toHaveLength(70);
     expect(result.view.summary.status).toBe("complete");
     expect(result.view.summary.blocking).toBe(0);
-    expect(result.view.summary.coverage?.componentCount).toBe(69);
+    expect(result.view.summary.coverage?.componentCount).toBe(70);
     expect(result.view.summary.coverage?.requiredCoverage).toBe(1);
     expect(result.contract.components.some((component) => component.component === "image")).toBe(true);
     expect(result.contract.components.some((component) => component.component === "media")).toBe(true);
     expect(result.contract.components.some((component) => component.component === "error-state")).toBe(true);
     expect(result.contract.components.some((component) => component.component === "form")).toBe(true);
+    expect(result.contract.components.some((component) => component.component === "navigation-split-view")).toBe(true);
     expect(result.contract.components.some((component) => component.component === "form-field")).toBe(false);
     expect(result.contract.components.some((component) => component.component === "form-group")).toBe(false);
     expect(result.view.components.every((component) => component.coverage.status === "complete")).toBe(true);

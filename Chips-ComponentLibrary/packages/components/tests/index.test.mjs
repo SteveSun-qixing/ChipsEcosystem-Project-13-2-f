@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import React from "react";
 import {
   buildComponentContract,
   buildLayoutComponentContract,
@@ -29,6 +30,7 @@ import {
   ChipsMedia,
   ChipsMenu,
   ChipsMenuBar,
+  ChipsNavigationSplitView,
   ChipsNotification,
   ChipsPanelHeader,
   ChipsPopover,
@@ -341,6 +343,7 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.tree));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["date-time"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["command-palette"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["navigation-split-view"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["split-pane"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["dock-panel"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.inspector));
@@ -652,6 +655,32 @@ test("validateComponentA11y validates known components and rejects missing rule"
       "aria-label": "search command",
       "aria-expanded": "true",
       "aria-controls": "palette-list"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("navigation-split-view", {
+      role: "group",
+      "aria-label": "workspace navigation"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("navigation-split-view", {
+      part: "sidebar",
+      role: "navigation",
+      "aria-label": "sources"
+    }),
+    true
+  );
+
+  assert.equal(
+    validateComponentA11y("navigation-split-view", {
+      part: "detail",
+      role: "region",
+      "aria-label": "detail"
     }),
     true
   );
@@ -1745,7 +1774,7 @@ test("Form exposes formal compound parts", () => {
 });
 
 test("all stage-seven advanced data component exports exist", () => {
-  for (const component of [ChipsDataGrid, ChipsTree, ChipsDateTime, ChipsCommandPalette]) {
+  for (const component of [ChipsDataGrid, ChipsTree, ChipsDateTime, ChipsCommandPalette, ChipsNavigationSplitView]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
   }
@@ -1776,6 +1805,13 @@ test("CommandPalette exposes formal compound parts", () => {
   assert.equal(typeof ChipsCommandPalette.Group.render, "function");
 });
 
+test("NavigationSplitView exposes formal compound parts", () => {
+  assert.equal(ChipsNavigationSplitView.Root, ChipsNavigationSplitView);
+  assert.equal(typeof ChipsNavigationSplitView.Sidebar.render, "function");
+  assert.equal(typeof ChipsNavigationSplitView.Content.render, "function");
+  assert.equal(typeof ChipsNavigationSplitView.Detail.render, "function");
+});
+
 test("CommandPalette component metadata uses formal compound parts", () => {
   const commandPalette = STAGE7_DATA_ADVANCED_COMPONENTS.find(
     (component) => component.scope === "command-palette"
@@ -1793,6 +1829,60 @@ test("CommandPalette component metadata uses formal compound parts", () => {
   ]);
   assert.equal(commandPalette.parts.includes("trigger"), false);
   assert.equal(commandPalette.parts.includes("search"), false);
+});
+
+test("NavigationSplitView component metadata uses navigation semantic compound parts", () => {
+  const navigationSplitView = STAGE7_DATA_ADVANCED_COMPONENTS.find(
+    (component) => component.scope === "navigation-split-view"
+  );
+
+  assert.deepEqual(navigationSplitView.parts, [
+    "root",
+    "sidebar",
+    "content",
+    "detail",
+    "divider",
+    "status"
+  ]);
+  assert.equal(navigationSplitView.parts.includes("primary"), false);
+  assert.equal(navigationSplitView.parts.includes("secondary"), false);
+});
+
+test("NavigationSplitView renders navigation regions and dividers with formal parts", () => {
+  const rendered = ChipsNavigationSplitView.render(
+    {
+      "aria-label": "Workspace navigation",
+      children: [
+        React.createElement(ChipsNavigationSplitView.Sidebar, {
+          key: "sidebar",
+          "aria-label": "Sources"
+        }, "Projects"),
+        React.createElement(ChipsNavigationSplitView.Content, {
+          key: "content",
+          "aria-label": "Items"
+        }, "Cards"),
+        React.createElement(ChipsNavigationSplitView.Detail, {
+          key: "detail",
+          "aria-label": "Detail"
+        }, "Card detail")
+      ]
+    },
+    null
+  );
+
+  const root = rendered.props.children;
+  const children = root.props.children[0];
+  assert.equal(root.props["data-scope"], "navigation-split-view");
+  assert.equal(root.props["data-part"], "root");
+  assert.equal(root.props.role, "group");
+  assert.equal(root.props["aria-label"], "Workspace navigation");
+  assert.equal(children[0].type, ChipsNavigationSplitView.Sidebar);
+  assert.equal(children[0].props["aria-label"], "Sources");
+  assert.equal(children[1].props["data-part"], "divider");
+  assert.equal(children[1].props["aria-hidden"], "true");
+  assert.equal(children[2].type, ChipsNavigationSplitView.Content);
+  assert.equal(children[3].props["data-part"], "divider");
+  assert.equal(children[4].type, ChipsNavigationSplitView.Detail);
 });
 
 test("Tree data-driven rendering uses compound parts and aria tree metadata", () => {
@@ -1901,6 +1991,7 @@ test("buildComponentContract includes stage-seven second batch components", () =
   const tree = buildComponentContract("tree");
   const dateTime = buildComponentContract("date-time");
   const commandPalette = buildComponentContract("command-palette");
+  const navigationSplitView = buildComponentContract("navigation-split-view");
 
   assert.ok(dataGrid.parts.includes("toolbar"));
   assert.ok(dataGrid.parts.includes("pagination"));
@@ -1930,6 +2021,15 @@ test("buildComponentContract includes stage-seven second batch components", () =
   assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.item.surface.active"));
   assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.group.label.color"));
   assert.equal(commandPalette.tokens.includes("chips.comp.command-palette.result.surface.active"), false);
+  assert.ok(navigationSplitView.parts.includes("sidebar"));
+  assert.ok(navigationSplitView.parts.includes("content"));
+  assert.ok(navigationSplitView.parts.includes("detail"));
+  assert.ok(navigationSplitView.parts.includes("divider"));
+  assert.equal(navigationSplitView.parts.includes("primary"), false);
+  assert.equal(navigationSplitView.parts.includes("secondary"), false);
+  assert.ok(navigationSplitView.tokens.includes("chips.comp.navigation-split-view.sidebar.surface"));
+  assert.ok(navigationSplitView.tokens.includes("chips.comp.navigation-split-view.detail.surface"));
+  assert.ok(navigationSplitView.tokens.includes("chips.comp.navigation-split-view.divider.color"));
 });
 
 test("buildComponentContract includes stage-seven workbench components", () => {
@@ -2018,10 +2118,10 @@ test("P0 data-form metadata is complete", () => {
 });
 
 test("stage-seven advanced data metadata is complete", () => {
-  assert.equal(STAGE7_DATA_ADVANCED_COMPONENTS.length, 4);
+  assert.equal(STAGE7_DATA_ADVANCED_COMPONENTS.length, 5);
   assert.deepEqual(
     STAGE7_DATA_ADVANCED_COMPONENTS.map((item) => item.scope),
-    ["data-grid", "tree", "date-time", "command-palette"]
+    ["data-grid", "tree", "date-time", "command-palette", "navigation-split-view"]
   );
 });
 

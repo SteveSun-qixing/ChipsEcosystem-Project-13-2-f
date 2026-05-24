@@ -116,6 +116,11 @@ export const StandardCompoundSlotSchemas = {
     item: { type: 'Command', required: false, multiple: true, part: 'item', role: 'option' },
     shortcut: { type: 'Text', required: false, multiple: true, part: 'shortcut' },
     status: { type: 'Text', required: false, multiple: false, part: 'status' }
+  },
+  NavigationSplitView: {
+    sidebar: { type: 'Navigation', required: true, multiple: false, part: 'sidebar', role: 'navigation' },
+    content: { type: ['View', 'Stack', 'Section', 'List'], required: false, multiple: false, part: 'content', role: 'region' },
+    detail: { type: ['View', 'Stack', 'Section'], required: true, multiple: false, part: 'detail', role: 'region' }
   }
 } as const satisfies Record<string, SlotSchema>;
 

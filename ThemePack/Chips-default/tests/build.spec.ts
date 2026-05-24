@@ -47,6 +47,7 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain("--chips-comp-icon-root-color");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');
+    expect(themeCss).toContain('data-scope="navigation-split-view"');
     expect(themeCss).toContain("var(--chips-layout-size-grid-min-item");
     await expect(
       fs.access(path.join(projectRoot, "dist", "icons", "variablefont", "MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2"))

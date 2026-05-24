@@ -340,6 +340,11 @@ describe('Declarative UI', () => {
       rootType: 'View',
       slots: StandardCompoundSlotSchemas.CommandPalette
     });
+    const NavigationSplitView = createCompoundComponent({
+      name: 'NavigationSplitView',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.NavigationSplitView
+    });
 
     expect(
       Dialog.validate({
@@ -576,6 +581,72 @@ describe('Declarative UI', () => {
       expect.arrayContaining([
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.input' }),
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.list' })
+      ])
+    );
+    expect(
+      NavigationSplitView.validate({
+        root: { id: 'navigation-split-view-root' },
+        slots: {
+          sidebar: Navigation({ id: 'navigation-split-view-sidebar' }),
+          content: List({ id: 'navigation-split-view-content' }),
+          detail: Section({ id: 'navigation-split-view-detail' })
+        }
+      })
+    ).toEqual([]);
+    expect(
+      NavigationSplitView.validate({
+        root: { id: 'bad-navigation-split-view-required-root' },
+        slots: {
+          content: View({ id: 'bad-navigation-split-view-content' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.sidebar' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.detail' })
+      ])
+    );
+    expect(
+      NavigationSplitView.validate({
+        root: { id: 'bad-navigation-split-view-slot-root' },
+        slots: {
+          primary: Navigation({ id: 'legacy-primary' }),
+          secondary: Section({ id: 'legacy-secondary' }),
+          sidebar: Navigation({ id: 'navigation-sidebar' }),
+          detail: Section({ id: 'navigation-detail' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.primary' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.secondary' })
+      ])
+    );
+    expect(
+      NavigationSplitView.validate({
+        root: { id: 'bad-navigation-split-view-type-root' },
+        slots: {
+          sidebar: View({ id: 'bad-navigation-split-view-sidebar' }),
+          detail: Command({ id: 'bad-navigation-split-view-detail' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.sidebar' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.detail' })
+      ])
+    );
+    expect(
+      NavigationSplitView.validate({
+        root: { id: 'bad-navigation-split-view-multiple-root' },
+        slots: {
+          sidebar: [Navigation({ id: 'navigation-sidebar-a' }), Navigation({ id: 'navigation-sidebar-b' })],
+          detail: Section({ id: 'navigation-detail-single' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_MULTIPLE_FORBIDDEN', path: 'slots.sidebar' })
       ])
     );
   });

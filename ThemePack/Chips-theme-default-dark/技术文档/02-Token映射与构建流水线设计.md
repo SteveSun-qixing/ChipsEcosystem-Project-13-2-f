@@ -139,9 +139,10 @@
 
 - `tests/tokens.spec.ts`：
   - 验证 `dist/tokens.json` 中存在 `ref/sys/comp/motion/layout` 五个对象；
+  - 验证图标 tone、工具栏密度和 reduced motion 所需公共 token 已进入暗夜主题 token 源；
 - `tests/contract.spec.ts`：
   - 读取 `contracts/theme-interface.contract.json`，验证当前组件库正式 contract 基线全部覆盖；
-  - 覆盖缺失 required token 时的 `ThemeDiagnostic` 定位字段；
+  - 覆盖缺失 required token 与 `motionConstraints[].tokenKeys` 时的 `ThemeDiagnostic` 定位字段；
 - `src/validate-theme.ts`：
   - 作为 `npm run validate:theme` 的入口；
   - 在构建后生成 `ThemeContractView` 并输出统一 `summary/diagnostics`，便于在 CI 中使用；
@@ -151,3 +152,13 @@
   - 本地 `contracts/` 下的 contract 文件是 Host 安装运行时消费的发布产物，不作为人工维护源。
 
 上述部分与 `build-tokens.ts`、`build-contracts.ts` 共同构成暗夜主题包的最小质量门禁。
+
+## 6. 图标与 Motion Token 同步边界
+
+暗夜主题包同步消费 `@chips/tokens` 中的公共图标与 motion 基线：
+
+- `tokens/sys.json` 覆盖 `chips.sys.icon.color-*`、`size-*`、`fill-emphasis`、`wght-*`、`grad-*` 与 `opsz`；
+- `tokens/motion.json` 覆盖 `duration/easing/delay/stagger/distance/opacity/scale/reduced/scene/overlay/menu/list/drag/theme`；
+- `tokens/comp/icon.json`、`toolbar.json`、`menu-bar.json`、`context-menu.json`、`progress.json`、`skeleton.json`、`loading-boundary.json` 提供组件级映射。
+
+这些 token 是公共主题契约的暗夜外观取值，不在本主题包内定义新的公共 key。新增或改名必须先回到 `Chips-ComponentLibrary/packages/tokens` 与 `生态共用技术文档/`。

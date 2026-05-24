@@ -23,5 +23,18 @@
     "chips.comp.tooltip.content.text.color",
     "chips.comp.tooltip.arrow.surface",
     "chips.comp.tooltip.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "overlay-transition",
+      "tokenKeys": [
+        "chips.motion.overlay.enter-duration",
+        "chips.motion.overlay.exit-duration",
+        "chips.motion.overlay.easing",
+        "chips.motion.overlay.distance",
+        "chips.motion.overlay.scale"
+      ],
+      "reducedMotion": "opacity-only"
+    }
   ]
 }

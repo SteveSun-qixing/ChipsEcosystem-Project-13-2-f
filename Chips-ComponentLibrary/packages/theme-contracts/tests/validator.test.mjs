@@ -156,7 +156,12 @@ test("buildThemeContractView returns frozen diagnostics schema and coverage", ()
         ],
         optionalTokens: ["chips.comp.button.root.surface.hover"],
         a11yConstraints: [{ key: "button.accessible-name" }],
-        motionConstraints: [{ key: "button.focus-visible" }]
+        motionConstraints: [
+          {
+            key: "button.focus-visible",
+            tokenKeys: ["chips.motion.duration.fast"]
+          }
+        ]
       }
     ]
   };
@@ -172,11 +177,12 @@ test("buildThemeContractView returns frozen diagnostics schema and coverage", ()
   assert.equal(view.components.length, 1);
   assert.deepEqual(view.components[0].requiredTokens, [
     "chips.comp.button.root.surface.idle",
-    "chips.comp.button.label.color.missing"
+    "chips.comp.button.label.color.missing",
+    "chips.motion.duration.fast"
   ]);
   assert.deepEqual(view.components[0].optionalTokens, ["chips.comp.button.root.surface.hover"]);
-  assert.equal(view.components[0].coverage.requiredTokenCount, 2);
-  assert.equal(view.components[0].coverage.coveredRequiredTokenCount, 1);
+  assert.equal(view.components[0].coverage.requiredTokenCount, 3);
+  assert.equal(view.components[0].coverage.coveredRequiredTokenCount, 2);
   assert.equal(view.components[0].coverage.missingRequiredTokenCount, 1);
   assert.equal(view.summary.blocking, 1);
   assert.equal(view.summary.status, "blocked");
@@ -186,6 +192,40 @@ test("buildThemeContractView returns frozen diagnostics schema and coverage", ()
   assert.equal(view.components[0].diagnostics[0].part, "label");
   assert.equal(view.components[0].diagnostics[0].state, undefined);
   assert.equal(view.components[0].diagnostics[0].blocking, true);
+});
+
+test("motion constraint token keys are enforced as required contract tokens", () => {
+  const tokenTree = buildTokenTree();
+  const flat = flattenTokens(tokenTree);
+  const view = buildComponentContractView(
+    {
+      component: "dialog",
+      scope: "dialog",
+      parts: ["content"],
+      states: ["idle"],
+      requiredTokens: ["chips.comp.dialog.content.surface"],
+      motionConstraints: [
+        {
+          type: "overlay-transition",
+          tokenKeys: [
+            "chips.motion.overlay.enter-duration",
+            "chips.motion.overlay.missing-duration"
+          ]
+        }
+      ]
+    },
+    flat,
+    { themeId: "chips.test.theme" }
+  );
+
+  assert.deepEqual(view.requiredTokens, [
+    "chips.comp.dialog.content.surface",
+    "chips.motion.overlay.enter-duration",
+    "chips.motion.overlay.missing-duration"
+  ]);
+  assert.equal(view.coverage.status, "blocked");
+  assert.equal(view.diagnostics[0].tokenKey, "chips.motion.overlay.missing-duration");
+  assert.equal(view.diagnostics[0].layer, "motion");
 });
 
 test("buildComponentContractView accepts requiredTokens alias", () => {

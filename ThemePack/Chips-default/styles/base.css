@@ -22,6 +22,11 @@
   --chips-base-icon-wght: var(--chips-comp-icon-root-wght, var(--chips-sys-icon-wght, 400));
   --chips-base-icon-grad: var(--chips-comp-icon-root-grad, var(--chips-sys-icon-grad, 0));
   --chips-base-icon-opsz: var(--chips-comp-icon-root-opsz, var(--chips-sys-icon-opsz, 24));
+  --chips-base-state-transition: background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    border-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    transform var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
 }
 
 body {
@@ -61,10 +66,52 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+[data-scope="icon"][data-part="root"][data-tone="muted"] {
+  color: var(--chips-comp-icon-root-color-muted, var(--chips-sys-icon-color-muted, var(--chips-base-icon-color)));
+  font-variation-settings:
+    "FILL" var(--chips-icon-fill, var(--chips-base-icon-fill)),
+    "wght" var(--chips-icon-wght, var(--chips-comp-icon-root-wght-muted, var(--chips-sys-icon-wght-muted, var(--chips-base-icon-wght)))),
+    "GRAD" var(--chips-icon-grad, var(--chips-comp-icon-root-grad-muted, var(--chips-sys-icon-grad-muted, var(--chips-base-icon-grad)))),
+    "opsz" var(--chips-icon-opsz, var(--chips-base-icon-opsz));
+}
+
+[data-scope="icon"][data-part="root"][data-tone="accent"] {
+  color: var(--chips-comp-icon-root-color-accent, var(--chips-sys-icon-color-accent, var(--chips-base-icon-color)));
+  font-variation-settings:
+    "FILL" var(--chips-icon-fill, var(--chips-comp-icon-root-fill-emphasis, var(--chips-sys-icon-fill-emphasis, var(--chips-base-icon-fill)))),
+    "wght" var(--chips-icon-wght, var(--chips-comp-icon-root-wght-strong, var(--chips-sys-icon-wght-strong, var(--chips-base-icon-wght)))),
+    "GRAD" var(--chips-icon-grad, var(--chips-comp-icon-root-grad-emphasis, var(--chips-sys-icon-grad-emphasis, var(--chips-base-icon-grad)))),
+    "opsz" var(--chips-icon-opsz, var(--chips-base-icon-opsz));
+}
+
+[data-scope="icon"][data-part="root"][data-tone="danger"] {
+  color: var(--chips-comp-icon-root-color-danger, var(--chips-sys-icon-color-danger, var(--chips-base-icon-color)));
+}
+
+[data-scope="icon"][data-part="root"][data-tone="disabled"],
+[data-scope][data-state="disabled"] [data-scope="icon"][data-part="root"] {
+  color: var(--chips-comp-icon-root-color-disabled, var(--chips-sys-icon-color-disabled, var(--chips-base-icon-color)));
+}
+
+[data-scope="toolbar"] [data-scope="icon"][data-part="root"] {
+  font-size: var(--chips-comp-toolbar-item-icon-size, var(--chips-comp-icon-root-size-toolbar, var(--chips-sys-icon-size-toolbar, var(--chips-base-icon-size))));
+  font-variation-settings:
+    "FILL" var(--chips-icon-fill, var(--chips-base-icon-fill)),
+    "wght" var(--chips-icon-wght, var(--chips-comp-toolbar-item-icon-wght, var(--chips-base-icon-wght))),
+    "GRAD" var(--chips-icon-grad, var(--chips-base-icon-grad)),
+    "opsz" var(--chips-icon-opsz, var(--chips-base-icon-opsz));
+}
+
 [data-scope="icon"][data-part="root"][data-icon-style="rounded"] {
   font-family: "Material Symbols Rounded";
 }
 
 [data-scope="icon"][data-part="root"][data-icon-style="sharp"] {
   font-family: "Material Symbols Sharp";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --chips-base-state-transition: none;
+  }
 }

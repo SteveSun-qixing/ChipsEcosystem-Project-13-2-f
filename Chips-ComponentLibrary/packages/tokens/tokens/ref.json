@@ -4,6 +4,8 @@
       "color": {
         "gray-0": "#ffffff",
         "gray-1000": "#111111",
+        "gray-400": "#9ca3af",
+        "gray-600": "#4b5563",
         "blue-500": "#2563eb",
         "green-500": "#16a34a",
         "yellow-500": "#d97706",

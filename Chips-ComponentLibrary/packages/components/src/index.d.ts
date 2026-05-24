@@ -200,10 +200,12 @@ export interface InspectorSection {
 }
 
 export type ChipsIconStyle = "outlined" | "rounded" | "sharp";
+export type ChipsIconTone = "default" | "muted" | "accent" | "danger" | "disabled";
 
 export interface ChipsIconDescriptor {
   name: string;
   style?: ChipsIconStyle;
+  tone?: ChipsIconTone;
   fill?: 0 | 1;
   wght?: number;
   grad?: number;
@@ -216,6 +218,7 @@ export interface ChipsIconProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
   descriptor: ChipsIconDescriptor;
   size?: number | string;
   color?: string;
+  tone?: ChipsIconTone;
 }
 
 export type ChipsTextTone = "default" | "muted" | "accent" | "error";

@@ -83,6 +83,12 @@ function normalizeIconAxis(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+const ICON_TONES = new Set(["default", "muted", "accent", "danger", "disabled"]);
+
+function normalizeIconTone(tone) {
+  return ICON_TONES.has(tone) ? tone : "default";
+}
+
 function normalizeIconDescriptor(descriptor = {}) {
   return {
     name: normalizeIconName(descriptor.name),
@@ -91,6 +97,13 @@ function normalizeIconDescriptor(descriptor = {}) {
     wght: normalizeIconAxis(descriptor.wght, 400),
     grad: normalizeIconAxis(descriptor.grad, 0),
     opsz: normalizeIconAxis(descriptor.opsz, 24),
+    tone: normalizeIconTone(descriptor.tone),
+    explicitAxes: {
+      fill: descriptor.fill === 0 || descriptor.fill === 1,
+      wght: typeof descriptor.wght === "number" && Number.isFinite(descriptor.wght),
+      grad: typeof descriptor.grad === "number" && Number.isFinite(descriptor.grad),
+      opsz: typeof descriptor.opsz === "number" && Number.isFinite(descriptor.opsz)
+    },
     decorative: descriptor.label ? false : descriptor.decorative !== false,
     label: isNonEmptyString(descriptor.label) ? descriptor.label.trim() : undefined
   };
@@ -1135,12 +1148,14 @@ export const ChipsIcon = React.forwardRef((props, ref) => {
     descriptor,
     size,
     color,
+    tone,
     style,
     title,
     ...rest
   } = props;
 
   const normalized = normalizeIconDescriptor(descriptor);
+  const iconTone = normalizeIconTone(tone ?? normalized.tone);
   const ariaLabel = normalized.label
     || (isNonEmptyString(rest["aria-label"]) ? rest["aria-label"].trim() : undefined);
   const ariaLabelledBy = isNonEmptyString(rest["aria-labelledby"])
@@ -1176,10 +1191,18 @@ export const ChipsIcon = React.forwardRef((props, ref) => {
   if (color !== undefined) {
     rootStyle["--chips-icon-color"] = color;
   }
-  rootStyle["--chips-icon-fill"] = String(normalized.fill);
-  rootStyle["--chips-icon-wght"] = String(normalized.wght);
-  rootStyle["--chips-icon-grad"] = String(normalized.grad);
-  rootStyle["--chips-icon-opsz"] = String(normalized.opsz);
+  if (normalized.explicitAxes.fill) {
+    rootStyle["--chips-icon-fill"] = String(normalized.fill);
+  }
+  if (normalized.explicitAxes.wght) {
+    rootStyle["--chips-icon-wght"] = String(normalized.wght);
+  }
+  if (normalized.explicitAxes.grad) {
+    rootStyle["--chips-icon-grad"] = String(normalized.grad);
+  }
+  if (normalized.explicitAxes.opsz) {
+    rootStyle["--chips-icon-opsz"] = String(normalized.opsz);
+  }
 
   return React.createElement(
     "span",
@@ -1191,6 +1214,7 @@ export const ChipsIcon = React.forwardRef((props, ref) => {
       title: isNonEmptyString(title) ? title.trim() : title,
       "data-icon-name": normalized.name,
       "data-icon-style": normalized.style,
+      "data-tone": iconTone,
       role: normalized.decorative ? undefined : "img",
       "aria-hidden": normalized.decorative ? "true" : undefined,
       "aria-label": normalized.decorative ? undefined : ariaLabel,

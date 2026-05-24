@@ -180,11 +180,36 @@ test("system token layer exists", () => {
     assert.ok(getPath(sys, `chips.sys.color.${tone}-contrast`));
   }
   assert.equal(getPath(sys, "chips.sys.icon.color"), "{chips.ref.color.gray-1000}");
+  assert.equal(getPath(sys, "chips.sys.icon.color-accent"), "{chips.ref.color.blue-500}");
+  assert.equal(getPath(sys, "chips.sys.icon.color-danger"), "{chips.ref.color.red-500}");
+  assert.equal(getPath(sys, "chips.sys.icon.color-disabled"), "{chips.ref.color.gray-1000}");
   assert.equal(getPath(sys, "chips.sys.icon.size"), "1em");
+  assert.equal(getPath(sys, "chips.sys.icon.size-toolbar"), "20px");
+  assert.equal(getPath(sys, "chips.sys.icon.size-compact"), "16px");
   assert.equal(getPath(sys, "chips.sys.icon.fill"), 0);
+  assert.equal(getPath(sys, "chips.sys.icon.fill-emphasis"), 1);
   assert.equal(getPath(sys, "chips.sys.icon.wght"), 400);
+  assert.equal(getPath(sys, "chips.sys.icon.wght-strong"), 500);
   assert.equal(getPath(sys, "chips.sys.icon.grad"), 0);
+  assert.equal(getPath(sys, "chips.sys.icon.grad-emphasis"), 25);
   assert.equal(getPath(sys, "chips.sys.icon.opsz"), 24);
+});
+
+test("motion token layer covers transition scenarios and reduced motion", () => {
+  const motion = readJson(path.join(root, "motion.json"));
+
+  assert.equal(getPath(motion, "chips.motion.duration.instant"), "0ms");
+  assert.equal(getPath(motion, "chips.motion.duration.fast"), "150ms");
+  assert.equal(getPath(motion, "chips.motion.duration.slow"), "360ms");
+  assert.equal(getPath(motion, "chips.motion.easing.entrance"), "cubic-bezier(0, 0, 0.2, 1)");
+  assert.equal(getPath(motion, "chips.motion.delay.short"), "50ms");
+  assert.equal(getPath(motion, "chips.motion.stagger.item"), "32ms");
+  assert.equal(getPath(motion, "chips.motion.distance.md"), "8px");
+  assert.equal(getPath(motion, "chips.motion.reduced.duration"), "0ms");
+  assert.equal(getPath(motion, "chips.motion.overlay.enter-duration"), "{chips.motion.duration.normal}");
+  assert.equal(getPath(motion, "chips.motion.menu.distance"), "{chips.motion.distance.sm}");
+  assert.equal(getPath(motion, "chips.motion.list.stagger"), "{chips.motion.stagger.item}");
+  assert.equal(getPath(motion, "chips.motion.drag.scale"), "{chips.motion.scale.drag}");
 });
 
 test("layout token layer covers primitive layout constants", () => {

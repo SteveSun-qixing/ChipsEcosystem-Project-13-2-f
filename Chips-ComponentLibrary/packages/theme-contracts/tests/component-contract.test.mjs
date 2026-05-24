@@ -60,6 +60,9 @@ test("display primitive contracts contain text label and icon tokens", () => {
   assert.ok(text.tokens.includes("chips.comp.text.root.color.default"));
   assert.ok(label.tokens.includes("chips.comp.label.required-indicator.color"));
   assert.ok(icon.tokens.includes("chips.comp.icon.root.opsz"));
+  assert.ok(icon.tokens.includes("chips.comp.icon.root.color-accent"));
+  assert.ok(icon.tokens.includes("chips.comp.icon.root.wght-strong"));
+  assert.ok(icon.a11yConstraints.some((constraint) => constraint.type === "functional-icon-label"));
 });
 
 test("task015 base control contracts expose button display feedback and input scopes", () => {
@@ -112,6 +115,8 @@ test("task015 base control contracts expose button display feedback and input sc
   }
   assert.ok(iconButton.parts.includes("icon"));
   assert.ok(iconButton.tokens.includes("chips.comp.icon-button.root.size"));
+  assert.ok(iconButton.tokens.includes("chips.comp.icon-button.icon.color.hover"));
+  assert.ok(iconButton.motionConstraints.some((constraint) => constraint.type === "state-transition"));
   assert.ok(toggleButton.parts.includes("label"));
   assert.ok(toggleButton.tokens.includes("chips.comp.toggle-button.root.surface.pressed"));
   assert.ok(badge.tokens.includes("chips.comp.badge.root.surface.warning"));
@@ -123,6 +128,7 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(spinner.tokens.includes("chips.comp.spinner.motion.duration"));
   assert.ok(progress.parts.includes("range"));
   assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
+  assert.ok(progress.tokens.includes("chips.comp.progress.range.motion.duration"));
   assert.ok(textField.parts.includes("control"));
   assert.ok(textField.tokens.includes("chips.comp.text-field.root.border.error"));
   assert.ok(textArea.parts.includes("description"));
@@ -153,6 +159,7 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(image.tokens.includes("chips.comp.image.fallback.surface"));
   assert.ok(media.parts.includes("controls"));
   assert.ok(media.tokens.includes("chips.comp.media.control.surface.active"));
+  assert.ok(media.motionConstraints.some((constraint) => constraint.type === "media-control-feedback"));
   assert.ok(errorState.parts.includes("details"));
   assert.ok(errorState.tokens.includes("chips.comp.error-state.root.border.error"));
 });
@@ -218,6 +225,7 @@ test("dialog contract contains compound content section and close parts", () => 
   assert.ok(contract.parts.includes("close"));
   assert.ok(contract.tokens.includes("chips.comp.dialog.content.surface"));
   assert.ok(contract.tokens.includes("chips.comp.dialog.header.color"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "overlay-transition"));
 });
 
 test("popover contract contains public content and arrow parts", () => {
@@ -227,6 +235,7 @@ test("popover contract contains public content and arrow parts", () => {
   assert.ok(contract.parts.includes("content"));
   assert.ok(contract.parts.includes("arrow"));
   assert.ok(contract.tokens.includes("chips.comp.popover.content.border"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "overlay-transition"));
 });
 
 test("tabs contract contains panel part and active token", () => {
@@ -234,6 +243,7 @@ test("tabs contract contains panel part and active token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("panel"));
   assert.ok(contract.tokens.includes("chips.comp.tabs.trigger.surface.active"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "scene-transition"));
 });
 
 test("menu contract contains menu item tokens", () => {
@@ -246,6 +256,7 @@ test("menu contract contains menu item tokens", () => {
   assert.ok(contract.tokens.includes("chips.comp.menu.item.surface.active"));
   assert.ok(contract.tokens.includes("chips.comp.menu.group.label.color"));
   assert.ok(contract.tokens.includes("chips.comp.menu.separator.thickness"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "menu-transition"));
 });
 
 test("tooltip contract contains content text token", () => {
@@ -253,6 +264,7 @@ test("tooltip contract contains content text token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("arrow"));
   assert.ok(contract.tokens.includes("chips.comp.tooltip.content.text.color"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "overlay-transition"));
 });
 
 test("form contract contains compound field and hint parts", () => {
@@ -286,6 +298,7 @@ test("data-grid contract contains header and cell tokens", () => {
   assert.ok(contract.tokens.includes("chips.comp.data-grid.header.sort.color"));
   assert.ok(contract.tokens.includes("chips.comp.data-grid.pagination.gap"));
   assert.ok(contract.tokens.includes("chips.comp.data-grid.row.surface.selected"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "list-reorder"));
 });
 
 test("tree contract contains compound item and disclosure parts", () => {
@@ -302,6 +315,7 @@ test("tree contract contains compound item and disclosure parts", () => {
   assert.ok(contract.tokens.includes("chips.comp.tree.item.surface.selected"));
   assert.ok(contract.tokens.includes("chips.comp.tree.disclosure.color"));
   assert.ok(contract.tokens.includes("chips.comp.tree.group.guide.color"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "list-reorder"));
 });
 
 test("date-time contract contains input error token", () => {
@@ -338,6 +352,7 @@ test("navigation-split-view contract keeps navigation parts separate from split-
   assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.sidebar.surface"));
   assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.detail.surface"));
   assert.ok(contract.tokens.includes("chips.comp.navigation-split-view.divider.color"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "scene-transition"));
 });
 
 test("data-grid contract contains row selected token", () => {
@@ -395,10 +410,18 @@ test("command consumer contracts expose command parts and tokens", () => {
   assertCommonShape(shortcut);
   assert.ok(toolbar.parts.includes("icon"));
   assert.ok(toolbar.tokens.includes("chips.comp.toolbar.item.icon.color"));
+  assert.ok(toolbar.tokens.includes("chips.comp.toolbar.item.icon.size"));
+  assert.ok(toolbar.motionConstraints.some((constraint) => constraint.type === "command-state-transition"));
+  assert.ok(menuBar.parts.includes("icon"));
+  assert.ok(menuBar.tokens.includes("chips.comp.menu-bar.item.icon.color"));
   assert.ok(menuBar.parts.includes("shortcut"));
   assert.ok(menuBar.tokens.includes("chips.comp.menu-bar.shortcut.color"));
+  assert.ok(menuBar.motionConstraints.some((constraint) => constraint.type === "menu-transition"));
   assert.ok(contextMenu.parts.includes("group"));
   assert.ok(contextMenu.tokens.includes("chips.comp.context-menu.content.surface"));
+  assert.ok(contextMenu.parts.includes("icon"));
+  assert.ok(contextMenu.tokens.includes("chips.comp.context-menu.item.icon.color"));
+  assert.ok(contextMenu.motionConstraints.some((constraint) => constraint.type === "menu-transition"));
   assert.ok(shortcut.parts.includes("key"));
   assert.ok(shortcut.tokens.includes("chips.comp.shortcut.key.text.color"));
 });
@@ -458,6 +481,8 @@ test("loading-boundary contract contains fallback token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("fallback"));
   assert.ok(contract.tokens.includes("chips.comp.loading-boundary.skeleton.surface.active"));
+  assert.ok(contract.tokens.includes("chips.comp.loading-boundary.skeleton.motion.duration"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "loading-feedback"));
 });
 
 test("notification contract contains list and close tokens", () => {
@@ -486,6 +511,8 @@ test("skeleton contract contains item token", () => {
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("item"));
   assert.ok(contract.tokens.includes("chips.comp.skeleton.item.surface.active"));
+  assert.ok(contract.tokens.includes("chips.comp.skeleton.item.motion.duration"));
+  assert.ok(contract.motionConstraints.some((constraint) => constraint.type === "skeleton-feedback"));
 });
 
 test("layout primitive contracts do not require iframe contract", () => {

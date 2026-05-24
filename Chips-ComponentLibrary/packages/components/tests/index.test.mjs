@@ -906,6 +906,7 @@ test("ChipsIcon normalizes ligature name and axis variables", () => {
       descriptor: {
         name: "calendar-month",
         style: "rounded",
+        tone: "accent",
         fill: 1,
         wght: 500,
         grad: 25,
@@ -919,9 +920,31 @@ test("ChipsIcon normalizes ligature name and axis variables", () => {
 
   assert.equal(rendered.props["data-icon-name"], "calendar_month");
   assert.equal(rendered.props["data-icon-style"], "rounded");
+  assert.equal(rendered.props["data-tone"], "accent");
   assert.equal(rendered.props.style["--chips-icon-fill"], "1");
+  assert.equal(rendered.props.style["--chips-icon-wght"], "500");
+  assert.equal(rendered.props.style["--chips-icon-grad"], "25");
+  assert.equal(rendered.props.style["--chips-icon-opsz"], "20");
   assert.equal(rendered.props.style["--chips-icon-size"], "20px");
   assert.equal(rendered.props.children, "calendar_month");
+});
+
+test("ChipsIcon leaves theme axes in control when descriptor does not override them", () => {
+  const rendered = ChipsIcon.render(
+    {
+      descriptor: {
+        name: "warning"
+      },
+      tone: "danger"
+    },
+    null
+  );
+
+  assert.equal(rendered.props["data-tone"], "danger");
+  assert.equal(rendered.props.style["--chips-icon-fill"], undefined);
+  assert.equal(rendered.props.style["--chips-icon-wght"], undefined);
+  assert.equal(rendered.props.style["--chips-icon-grad"], undefined);
+  assert.equal(rendered.props.style["--chips-icon-opsz"], undefined);
 });
 
 test("ChipsIcon requires a label for non-decorative icons", () => {

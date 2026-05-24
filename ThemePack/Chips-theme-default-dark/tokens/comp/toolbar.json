@@ -19,7 +19,11 @@
             "color": "{chips.sys.color.on-surface-muted}"
           },
           "icon": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.sys.color.on-surface}",
+            "color-active": "{chips.sys.icon.color-accent}",
+            "color-disabled": "{chips.sys.icon.color-disabled}",
+            "size": "{chips.sys.icon.size-toolbar}",
+            "wght": "{chips.sys.icon.wght-strong}"
           }
         },
         "focus": {

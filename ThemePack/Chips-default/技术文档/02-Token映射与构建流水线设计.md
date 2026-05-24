@@ -139,10 +139,11 @@
 
 - `tests/tokens.spec.ts`：
   - 验证 `dist/tokens.json` 中存在 `ref/sys/comp/motion/layout` 五个对象；
+  - 验证图标 tone、工具栏密度和 reduced motion 所需公共 token 已进入默认主题 token 源；
 - `tests/contract.spec.ts`：
   - 通过 `src/build-contracts.ts` 从组件库正式 contract 生成 `theme-interface.contract.json` 与 `theme-min-functional-set.json`；
   - 验证主题包 contract 产物与组件库正式 contract 基线全部等值；
-  - 覆盖缺失 required token 时的 `ThemeDiagnostic` 定位字段；
+  - 覆盖缺失 required token 与 `motionConstraints[].tokenKeys` 时的 `ThemeDiagnostic` 定位字段；
 - `src/validate-theme.ts`：
   - 作为 `npm run validate:theme` 的入口；
   - 在构建后先校验本包 contract 产物未偏离组件库来源，再生成 `ThemeContractView` 并输出统一 `summary/diagnostics`，便于在 CI 中使用。
@@ -154,3 +155,13 @@
 默认主题包必须随包携带 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json`，供 Host 安装后读取；但这两个文件不是人工维护源。`src/build-contracts.ts` 通过 `@chips/theme-contracts` 读取 `Chips-ComponentLibrary/packages/theme-contracts/contracts/components/*.contract.json`，生成本包 contract 产物。
 
 生成链路保留 iframe 附加契约、a11y/motion constraints、required/optional token 等公开字段。若组件库新增、重命名或归档 component contract，本主题包必须重新运行 `npm run build:contracts` 并通过 `npm run validate:theme` 与 `npm test`。
+
+## 7. 图标与 Motion Token 同步边界
+
+默认主题包同步消费 `@chips/tokens` 中的公共图标与 motion 基线：
+
+- `tokens/sys.json` 覆盖 `chips.sys.icon.color-*`、`size-*`、`fill-emphasis`、`wght-*`、`grad-*` 与 `opsz`；
+- `tokens/motion.json` 覆盖 `duration/easing/delay/stagger/distance/opacity/scale/reduced/scene/overlay/menu/list/drag/theme`；
+- `tokens/comp/icon.json`、`toolbar.json`、`menu-bar.json`、`context-menu.json`、`progress.json`、`skeleton.json`、`loading-boundary.json` 提供组件级映射。
+
+这些 token 是公共主题契约的默认外观取值，不在本主题包内定义新的公共 key。新增或改名必须先回到 `Chips-ComponentLibrary/packages/tokens` 与 `生态共用技术文档/`。

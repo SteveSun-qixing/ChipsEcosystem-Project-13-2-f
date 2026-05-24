@@ -75,6 +75,22 @@ function getOptionalTokens(contract) {
   return uniqueStrings((contract.optionalTokens ?? []).map((token) => normalizeTokenKey(component, token)));
 }
 
+function getMotionConstraintTokens(contract) {
+  if (!Array.isArray(contract.motionConstraints)) {
+    return [];
+  }
+
+  return uniqueStrings(
+    contract.motionConstraints.flatMap((constraint) =>
+      isObject(constraint) && Array.isArray(constraint.tokenKeys) ? constraint.tokenKeys : []
+    )
+  );
+}
+
+function getRequiredContractTokens(contract) {
+  return uniqueStrings([...getRequiredTokens(contract), ...getMotionConstraintTokens(contract)]);
+}
+
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -97,7 +113,7 @@ function normalizeComponentContractForArtifact(contract) {
     scope: contract.scope,
     parts: uniqueStrings(contract.parts),
     states: uniqueStrings(contract.states),
-    requiredTokens: getRequiredTokens(contract)
+    requiredTokens: getRequiredContractTokens(contract)
   };
 
   const optionalTokens = getOptionalTokens(contract);
@@ -229,7 +245,7 @@ export function buildComponentContractView(contract, flatTokenMap, options = {})
   const component = getComponentName(contract);
   const parts = uniqueStrings(contract.parts);
   const states = uniqueStrings(contract.states);
-  const requiredTokens = getRequiredTokens(contract);
+  const requiredTokens = getRequiredContractTokens(contract);
   const optionalTokens = getOptionalTokens(contract);
   const missingRequired = requiredTokens.filter((tokenKey) => !Object.hasOwn(flatTokenMap, tokenKey));
   const missingOptional = optionalTokens.filter((tokenKey) => !Object.hasOwn(flatTokenMap, tokenKey));
@@ -419,7 +435,7 @@ export function validateComponentContract(contract, flatTokenMap) {
     }
   }
 
-  const requiredTokens = getRequiredTokens(contract);
+  const requiredTokens = getRequiredContractTokens(contract);
   if (requiredTokens.length === 0) {
     throw new Error("THEME_CONTRACT_INVALID:requiredTokens");
   }

@@ -12,6 +12,8 @@ interface ComponentContract {
   tokens?: string[];
   requiredTokens?: string[];
   optionalTokens?: string[];
+  a11yConstraints?: Array<Record<string, unknown>>;
+  motionConstraints?: Array<{ tokenKeys?: string[] } & Record<string, unknown>>;
   iframe?: Record<string, unknown>;
 }
 
@@ -40,8 +42,11 @@ const loadComponentLibraryContracts = (projectRoot: string): Map<string, Compone
   return contracts;
 };
 
+const motionConstraintTokens = (contract: ComponentContract): string[] =>
+  (contract.motionConstraints ?? []).flatMap((constraint) => constraint.tokenKeys ?? []);
+
 const normalizeRequiredTokens = (contract: ComponentContract): string[] =>
-  sortedUnique(contract.requiredTokens ?? contract.tokens ?? []);
+  sortedUnique([...(contract.requiredTokens ?? contract.tokens ?? []), ...motionConstraintTokens(contract)]);
 
 const loadMinFunctionalSet = (projectRoot: string): { requiredComponents: string[] } => {
   return readJson<{ requiredComponents: string[] }>(
@@ -87,6 +92,8 @@ describe("theme contract", () => {
       expect(sortedUnique(themeComponent.states)).toEqual(sortedUnique(expected?.states));
       expect(normalizeRequiredTokens(themeComponent)).toEqual(normalizeRequiredTokens(expected as ComponentContract));
       expect(sortedUnique(themeComponent.optionalTokens)).toEqual(sortedUnique(expected?.optionalTokens));
+      expect(themeComponent.a11yConstraints ?? []).toEqual(expected?.a11yConstraints ?? []);
+      expect(themeComponent.motionConstraints ?? []).toEqual(expected?.motionConstraints ?? []);
       expect(themeComponent.iframe).toEqual(expected?.iframe);
     }
   });

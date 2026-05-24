@@ -46,6 +46,9 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain("--chips-comp-media-control-surface-idle");
     expect(themeCss).toContain("--chips-comp-error-state-status-color-error");
     expect(themeCss).toContain("--chips-comp-icon-root-color");
+    expect(themeCss).toContain("data-tone=\"accent\"");
+    expect(themeCss).toContain("--chips-comp-icon-root-color-accent");
+    expect(themeCss).toContain("--chips-comp-toolbar-item-icon-size");
     expect(themeCss).toContain('data-scope="view"');
     expect(themeCss).toContain('data-scope="split-view"');
     expect(themeCss).toContain('data-scope="navigation-split-view"');
@@ -82,5 +85,9 @@ describe("theme build pipeline", () => {
     expect(themeCss).toContain('data-scope="menu-bar"');
     expect(themeCss).toContain('data-scope="context-menu"');
     expect(themeCss).toContain('data-scope="shortcut"');
+    expect(themeCss).toContain('data-motion="overlay-enter"');
+    expect(themeCss).toContain('data-motion="menu-enter"');
+    expect(themeCss).toContain('data-motion="list-reorder"');
+    expect(themeCss).toContain('prefers-reduced-motion: reduce');
   });
 });

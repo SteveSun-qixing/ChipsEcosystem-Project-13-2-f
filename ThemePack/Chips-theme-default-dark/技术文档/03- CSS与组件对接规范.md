@@ -160,6 +160,8 @@
 
 `toolbar / menu-bar / context-menu / shortcut` 是命令消费组件的正式主题 scope。本主题在 `overlays.css` 中提供独立暗色样式：工具栏和菜单栏使用 `surface-raised` 层，菜单内容使用 `surface-elevated` 层，hover/active 使用低饱和 `info-surface`，焦点统一使用 `focus-ring`。这些组件只展示或消费 Host command/shortcut 链路的结果，不在主题包中实现命令注册、调度或快捷键处理。
 
+`ChipsIcon` 的 tone 由 `data-tone="default|muted|accent|danger|disabled"` 暴露。暗夜主题在 `styles/base.css` 中以 `chips.comp.icon.root.* -> chips.sys.icon.*` 的顺序解析色彩、强调填充、权重和 grade；工具栏、菜单栏、上下文菜单和图标按钮的图标状态继续通过自身 `chips.comp.*.icon.*` token 覆盖，不硬编码私有尺寸或颜色。
+
 ---
 
 ## 5. 动效与布局
@@ -167,8 +169,15 @@
 ### 5.1 动效
 
 - Token：
-  - `chips.motion.duration.fast|normal`
-  - `chips.motion.easing.standard`
+  - `chips.motion.duration.instant|fast|normal|slow|emphasized`
+  - `chips.motion.easing.standard|entrance|exit|emphasized`
+  - `chips.motion.overlay.*`
+  - `chips.motion.menu.*`
+  - `chips.motion.scene.*`
+  - `chips.motion.list.*`
+  - `chips.motion.drag.*`
+  - `chips.motion.theme.*`
+  - `chips.motion.reduced.*`
 - CSS 使用方式：
 
 ```css
@@ -180,7 +189,7 @@
 }
 ```
 
-仅提供轻量渐变，不包含复杂 keyframes 动画。
+`styles/motions.css` 提供 `fade / overlay / menu / scene / list / drag / theme` 公共 motion class 和等价 `data-motion` 入口。`prefers-reduced-motion: reduce` 下关闭非必要动画、位移和缩放，只保留焦点、颜色和状态反馈。
 
 ### 5.2 布局密度
 

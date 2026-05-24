@@ -24,8 +24,20 @@
     "chips.comp.icon-button.root.surface.active",
     "chips.comp.icon-button.root.surface.disabled",
     "chips.comp.icon-button.icon.color.idle",
+    "chips.comp.icon-button.icon.color.hover",
+    "chips.comp.icon-button.icon.color.active",
     "chips.comp.icon-button.icon.color.disabled",
     "chips.comp.icon-button.focus.outline",
     "chips.comp.icon-button.status.color.error"
+  ],
+  "motionConstraints": [
+    {
+      "type": "state-transition",
+      "tokenKeys": [
+        "chips.motion.duration.fast",
+        "chips.motion.easing.standard"
+      ],
+      "reducedMotion": "state-only"
+    }
   ]
 }

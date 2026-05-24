@@ -19,6 +19,10 @@
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
+          },
+          "icon": {
+            "color": "{chips.sys.icon.color}",
+            "color-disabled": "{chips.sys.icon.color-disabled}"
           }
         },
         "shortcut": {

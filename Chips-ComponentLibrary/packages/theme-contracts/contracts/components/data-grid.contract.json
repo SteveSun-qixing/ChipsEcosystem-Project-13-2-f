@@ -34,5 +34,16 @@
     "chips.comp.data-grid.pagination.gap",
     "chips.comp.data-grid.border.color",
     "chips.comp.data-grid.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "list-reorder",
+      "tokenKeys": [
+        "chips.motion.list.reorder-duration",
+        "chips.motion.list.reorder-easing",
+        "chips.motion.list.stagger"
+      ],
+      "reducedMotion": "state-only"
+    }
   ]
 }

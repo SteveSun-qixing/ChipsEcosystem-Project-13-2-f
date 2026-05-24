@@ -30,5 +30,17 @@
     "chips.comp.menu.separator.color",
     "chips.comp.menu.separator.thickness",
     "chips.comp.menu.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "menu-transition",
+      "tokenKeys": [
+        "chips.motion.menu.enter-duration",
+        "chips.motion.menu.exit-duration",
+        "chips.motion.menu.easing",
+        "chips.motion.menu.distance"
+      ],
+      "reducedMotion": "opacity-only"
+    }
   ]
 }

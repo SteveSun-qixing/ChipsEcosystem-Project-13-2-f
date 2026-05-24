@@ -24,5 +24,16 @@
     "chips.comp.tabs.trigger.text.color",
     "chips.comp.tabs.panel.surface",
     "chips.comp.tabs.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "scene-transition",
+      "tokenKeys": [
+        "chips.motion.scene.transition-duration",
+        "chips.motion.scene.transition-easing",
+        "chips.motion.scene.distance"
+      ],
+      "reducedMotion": "state-only"
+    }
   ]
 }

@@ -32,5 +32,18 @@
     "chips.comp.dialog.actions.gap",
     "chips.comp.dialog.close.color",
     "chips.comp.dialog.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "overlay-transition",
+      "tokenKeys": [
+        "chips.motion.overlay.enter-duration",
+        "chips.motion.overlay.exit-duration",
+        "chips.motion.overlay.easing",
+        "chips.motion.overlay.distance",
+        "chips.motion.overlay.scale"
+      ],
+      "reducedMotion": "opacity-only"
+    }
   ]
 }

@@ -181,6 +181,7 @@
   color: var(--chips-comp-toolbar-item-text-color);
   padding-inline: var(--chips-base-space-2);
   font: inherit;
+  transition: var(--chips-base-state-transition);
 }
 
 [data-scope="toolbar"][data-part="item"][data-state="hover"],
@@ -191,16 +192,30 @@
 [data-scope="toolbar"][data-part="item"][data-state="active"],
 [data-scope="toolbar"][data-part="item"][data-checked="true"] {
   background-color: var(--chips-comp-toolbar-item-surface-active);
+  color: var(--chips-comp-toolbar-item-icon-color-active, var(--chips-comp-toolbar-item-text-color));
 }
 
 [data-scope="toolbar"][data-part="item"][data-state="disabled"],
 [data-scope="toolbar"][data-part="item"]:disabled {
   background-color: var(--chips-comp-toolbar-item-surface-disabled);
+  color: var(--chips-comp-toolbar-item-icon-color-disabled, var(--chips-comp-toolbar-item-text-color));
   opacity: 0.55;
 }
 
 [data-scope="toolbar"][data-part="icon"] {
   color: var(--chips-comp-toolbar-item-icon-color);
+  inline-size: var(--chips-comp-toolbar-item-icon-size, var(--chips-sys-icon-size-toolbar, 20px));
+  block-size: var(--chips-comp-toolbar-item-icon-size, var(--chips-sys-icon-size-toolbar, 20px));
+}
+
+[data-scope="toolbar"][data-part="item"][data-state="active"] [data-part="icon"],
+[data-scope="toolbar"][data-part="item"][data-checked="true"] [data-part="icon"] {
+  color: var(--chips-comp-toolbar-item-icon-color-active, var(--chips-comp-toolbar-item-icon-color));
+}
+
+[data-scope="toolbar"][data-part="item"][data-state="disabled"] [data-part="icon"],
+[data-scope="toolbar"][data-part="item"]:disabled [data-part="icon"] {
+  color: var(--chips-comp-toolbar-item-icon-color-disabled, var(--chips-comp-toolbar-item-icon-color));
 }
 
 [data-scope="toolbar"][data-part="shortcut"],
@@ -307,10 +322,29 @@ button[data-scope="menu-bar"][data-part="menu"][aria-expanded="true"] {
   padding-block: var(--chips-base-space-2);
   font: inherit;
   text-align: start;
+  transition: var(--chips-base-state-transition);
 }
 
 [data-scope="context-menu"][data-part="item"] {
   color: var(--chips-comp-context-menu-item-text-color);
+}
+
+[data-scope="menu-bar"][data-part="icon"] {
+  color: var(--chips-comp-menu-bar-item-icon-color);
+}
+
+[data-scope="context-menu"][data-part="icon"] {
+  color: var(--chips-comp-context-menu-item-icon-color);
+}
+
+[data-scope="menu-bar"][data-part="item"][data-state="disabled"] [data-part="icon"],
+[data-scope="menu-bar"][data-part="item"]:disabled [data-part="icon"] {
+  color: var(--chips-comp-menu-bar-item-icon-color-disabled);
+}
+
+[data-scope="context-menu"][data-part="item"][data-state="disabled"] [data-part="icon"],
+[data-scope="context-menu"][data-part="item"]:disabled [data-part="icon"] {
+  color: var(--chips-comp-context-menu-item-icon-color-disabled);
 }
 
 [data-scope="menu-bar"][data-part="item"][data-state="hover"],

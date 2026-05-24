@@ -9,6 +9,12 @@
           "surface": {
             "idle": "{chips.sys.color.surface}",
             "active": "{chips.sys.color.primary}"
+          },
+          "motion": {
+            "duration": "{chips.motion.duration.slow}",
+            "easing": "{chips.motion.easing.standard}",
+            "stagger": "{chips.motion.stagger.item}",
+            "reduced-duration": "{chips.motion.reduced.duration}"
           }
         },
         "status": {

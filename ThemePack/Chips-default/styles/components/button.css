@@ -75,19 +75,19 @@
   color: var(--chips-comp-icon-button-icon-color-idle);
   cursor: pointer;
   padding: 0;
-  transition:
-    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
-    color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+  transition: var(--chips-base-state-transition);
 }
 
 [data-scope="icon-button"][data-part="root"][data-state="hover"],
 [data-scope="icon-button"][data-part="root"]:hover {
   background-color: var(--chips-comp-icon-button-root-surface-hover, var(--chips-comp-icon-button-root-surface-idle));
+  color: var(--chips-comp-icon-button-icon-color-hover, var(--chips-comp-icon-button-icon-color-idle));
 }
 
 [data-scope="icon-button"][data-part="root"][data-state="active"],
 [data-scope="icon-button"][data-part="root"]:active {
   background-color: var(--chips-comp-icon-button-root-surface-active, var(--chips-comp-icon-button-root-surface-idle));
+  color: var(--chips-comp-icon-button-icon-color-active, var(--chips-comp-icon-button-icon-color-idle));
 }
 
 [data-scope="icon-button"][data-part="root"][data-state="disabled"],

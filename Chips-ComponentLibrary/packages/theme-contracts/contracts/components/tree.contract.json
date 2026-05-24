@@ -33,5 +33,16 @@
     "chips.comp.tree.group.guide.color",
     "chips.comp.tree.status.color.error",
     "chips.comp.tree.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "list-reorder",
+      "tokenKeys": [
+        "chips.motion.list.reorder-duration",
+        "chips.motion.list.reorder-easing",
+        "chips.motion.list.stagger"
+      ],
+      "reducedMotion": "state-only"
+    }
   ]
 }

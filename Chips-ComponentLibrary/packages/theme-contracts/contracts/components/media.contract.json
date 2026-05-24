@@ -27,5 +27,16 @@
     "chips.comp.media.caption.color",
     "chips.comp.media.status.color.error",
     "chips.comp.media.focus.outline"
+  ],
+  "motionConstraints": [
+    {
+      "type": "media-control-feedback",
+      "tokenKeys": [
+        "chips.motion.duration.fast",
+        "chips.motion.easing.standard",
+        "chips.motion.reduced.duration"
+      ],
+      "reducedMotion": "state-only"
+    }
   ]
 }

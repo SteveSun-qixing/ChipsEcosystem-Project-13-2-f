@@ -51,6 +51,9 @@
   - `chips.comp.popover.*`
   - `chips.comp.tabs.*`
   - `chips.comp.menu.*`
+  - `chips.comp.toolbar.*`
+  - `chips.comp.menu-bar.*`
+  - `chips.comp.context-menu.*`
   - `chips.comp.tooltip.*`
   - `chips.comp.form.*`
   - `chips.comp.virtual-list.*`
@@ -67,23 +70,22 @@
   - `chips.comp.tool-window.*`
   - `chips.comp.error-boundary.*`
   - `chips.comp.loading-boundary.*`
-      - `chips.comp.notification.*`
-      - `chips.comp.toast.*`
-      - `chips.comp.empty-state.*`
-      - `chips.comp.skeleton.*`
-      - `chips.comp.view.*`
-      - `chips.comp.box.*`
-      - `chips.comp.stack.*`
-      - `chips.comp.inline.*`
-      - `chips.comp.grid.*`
-      - `chips.comp.section.*`
-      - `chips.comp.scroll-view.*`
-      - `chips.comp.spacer.*`
-      - `chips.comp.divider.*`
-      - `chips.comp.split-view.*`
-      - `chips.comp.navigation-split-view.*`
-      - `chips.comp.card-cover-frame.*`
-      - `chips.comp.composite-card-window.*`
+  - `chips.comp.notification.*`
+  - `chips.comp.toast.*`
+  - `chips.comp.empty-state.*`
+  - `chips.comp.skeleton.*`
+  - `chips.comp.view.*`
+  - `chips.comp.box.*`
+  - `chips.comp.stack.*`
+  - `chips.comp.inline.*`
+  - `chips.comp.grid.*`
+  - `chips.comp.section.*`
+  - `chips.comp.scroll-view.*`
+  - `chips.comp.spacer.*`
+  - `chips.comp.divider.*`
+  - `chips.comp.split-view.*`
+  - `chips.comp.card-cover-frame.*`
+  - `chips.comp.composite-card-window.*`
 - 后续组件保持同一命名形态：`chips.comp.<component-name>.*`
 
 组件 token 必须可追溯到 `sys`、`motion` 或 `layout` 层语义 token，不允许直接绑定业务名。
@@ -112,7 +114,9 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `chips.comp.icon.root.*` 是运行时 UI 图标的组件层 token，组件内部和主题 CSS 的解析顺序为 `chips.comp.icon.* -> chips.sys.icon.* -> currentColor / 默认轴值`。`chips.sys.icon.*` 仍是主题系统图标语义基线，`chips.comp.icon.*` 负责组件级覆盖。
 
-`chips.sys.icon.color/size/fill/wght/grad/opsz` 属于 `@chips/tokens` 的 public sys token source。主题包可以覆盖这些 token 的具体值，但不得只在主题包内私自新增公共图标 sys key；新增或改名必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
+`chips.sys.icon.color / color-muted / color-accent / color-danger / color-disabled / size / size-dense / size-toolbar / size-compact / fill / fill-emphasis / wght / wght-strong / wght-muted / grad / grad-emphasis / grad-muted / opsz` 属于 `@chips/tokens` 的 public sys token source。主题包可以覆盖这些 token 的具体值，但不得只在主题包内私自新增公共图标 sys key；新增或改名必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
+
+`ChipsIcon` 的正式 tone 集合为 `default | muted | accent | danger | disabled`。组件运行时输出 `data-tone`，主题 CSS 必须通过 `chips.comp.icon.root.color-*` 与 `chips.sys.icon.color-*` 表达状态语义；强调 tone 可以使用 `fill-emphasis / wght-strong / grad-emphasis`，弱化 tone 可以使用 `wght-muted / grad-muted`。组件只在 `IconDescriptor` 显式传入 `fill / wght / grad / opsz` 时写入对应 CSS 变量，未显式传入时必须完全由主题 token 控制。
 
 `chips.sys.color.success / warning / info / danger / error` 以及对应 `*-surface`、`*-contrast` 是生态公开状态色语义基线，适用于 Badge、Tag、加载/空态/错误态、命令反馈、表单状态和应用通知等跨项目场景。主题包可以按外观校准这些 token 的具体色值，但不得在单个主题包中私自新增另一套公共状态色 key；新增、改名或删除状态色 key 必须先同步 `Chips-ComponentLibrary/packages/tokens/tokens/sys.json`、token 测试和本文档。
 
@@ -184,6 +188,16 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `Menu` 的 `content/item/group/group-label/separator/focus` token 分别表达菜单内容容器、菜单项、高亮/选中视觉、分组标题、分隔线和焦点视觉；`Select` 的 `trigger/content/option/value/icon/focus` token 分别表达触发器、listbox 内容容器、选项高亮/选中、当前值和展开图标视觉。`Select.Content` 的正式 part 是 `content`，主题包不得继续依赖 `select` scope 下的旧 `list` part。
 
+命令消费组件 token 是 Host command registry、应用工具栏和上下文菜单共同消费的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.toolbar.*`
+- `chips.comp.menu-bar.*`
+- `chips.comp.context-menu.*`
+
+`Toolbar` 的 `root/group/item/icon/label/shortcut/status/focus` token 分别表达工具栏容器、按钮分组、命令项、图标、文本、快捷键、状态信息和焦点视觉；`MenuBar` 的 `root/menu/content/group/item/icon/shortcut/status/focus` token 分别表达菜单栏、一级菜单触发器、菜单内容、分组、菜单项、图标、快捷键和焦点视觉；`ContextMenu` 的 `root/trigger/content/group/item/icon/shortcut/status/focus` token 分别表达上下文菜单宿主、触发器、菜单内容、分组、菜单项、图标、快捷键和焦点视觉。这些组件只消费命令状态和主题 token，不在主题包或组件样式层实现命令注册、调度或快捷键处理。
+
+`Toolbar` 的状态过渡必须通过 `motionConstraints` 引用 `chips.motion.duration.fast` 与 `chips.motion.easing.standard`；`MenuBar` 与 `ContextMenu` 的弹出过渡必须通过 `chips.motion.menu.*` 表达。主题包不得只提供静态 token 而遗漏这些 motion token。
+
 任务016第三批复杂组件 Compound API token 是 Form 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
 
 - `chips.comp.form.*`
@@ -214,6 +228,21 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `NavigationSplitView` 的 `root/sidebar/content/detail/divider/status/focus` token 分别表达导航分栏容器、导航侧栏、内容栏、详情栏、分割线、状态信息和焦点视觉。正式公开 part 为 `root / sidebar / content / detail / divider / status`；`primary / secondary` 只属于 `chips.comp.split-view.*` 布局原语 contract，不得被主题包复用为 `navigation-split-view` 的正式样式入口。导航侧栏宽度应使用 `chips.layout.size.navigation-primary-min`，内容栏和详情栏可复用 `chips.layout.size.split-secondary-min` 与弹性列，分割线和焦点环继续使用 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
 
+反馈类 motion token 是 `Progress / Skeleton / LoadingBoundary` 的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.progress.range.motion.duration`
+- `chips.comp.progress.range.motion.easing`
+- `chips.comp.progress.range.motion.reduced-duration`
+- `chips.comp.skeleton.item.motion.duration`
+- `chips.comp.skeleton.item.motion.easing`
+- `chips.comp.skeleton.item.motion.stagger`
+- `chips.comp.skeleton.item.motion.reduced-duration`
+- `chips.comp.loading-boundary.skeleton.motion.duration`
+- `chips.comp.loading-boundary.skeleton.motion.easing`
+- `chips.comp.loading-boundary.skeleton.motion.reduced-duration`
+
+这些 token 通过 component contract 的 `motionConstraints[].tokenKeys` 进入 required token 集合；主题缺失时必须阻断主题应用。`prefers-reduced-motion: reduce` 下不允许保留无限位移或闪烁动画，应降级为静态状态或低强度状态反馈。
+
 ### 3.1 布局 token 基线
 
 `chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。
@@ -239,6 +268,7 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - 必须完整实现所声明组件的 token 覆盖
 - 必须通过 token 完整性校验
 - 官方主题包必须通过组件库官方契约等值门禁：`component` 集合、`scope`、`parts`、`states`、`requiredTokens`、`optionalTokens` 必须逐项等同组件库正式 contract
+- component contract 中 `motionConstraints[].tokenKeys` 必须并入 required token 覆盖集合；缺失时输出阻断级 `THEME_REQUIRED_TOKEN_MISSING`
 - 必须通过对比度与动效安全校验
 - 必须保持组件结构不变（仅改视觉）
 

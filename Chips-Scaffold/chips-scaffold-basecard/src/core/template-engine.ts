@@ -172,6 +172,10 @@ function targetRelativePath(relativePath: string): string {
   return relativePath;
 }
 
+function shouldRenderTemplateFile(relativePath: string): boolean {
+  return relativePath !== "template.json";
+}
+
 export async function renderTemplateToTarget(
   options: CreateBasecardProjectOptions
 ): Promise<CreateBasecardProjectResult> {
@@ -232,6 +236,10 @@ export async function renderTemplateToTarget(
   let filesCreated = 0;
   for (const file of templateFiles) {
     const rel = file.relativePath;
+    if (!shouldRenderTemplateFile(rel)) {
+      continue;
+    }
+
     const targetRel = targetRelativePath(rel);
     const targetPath = path.join(options.targetDir, targetRel);
 

@@ -143,10 +143,9 @@ describe("template-engine", () => {
       expect(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
       expect(indexTs).not.toMatch(/window\.chips|from\s+["']node:fs["']|from\s+["']fs["']/);
 
-      const templateMeta = JSON.parse(
-        await fs.readFile(path.join(targetDir, "template.json"), "utf8")
-      );
-      expect(templateMeta.supports.componentLibrary).toBe(true);
+      await expect(fs.stat(path.join(targetDir, "template.json"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
 
       const renderView = await fs.readFile(
         path.join(targetDir, "src", "render", "view.tsx"),

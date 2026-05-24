@@ -171,6 +171,9 @@ async function main() {
         throw new Error(`E2E: 生成工程缺少 ${relativePath}`);
       }
     }
+    if (fs.existsSync(path.join(targetDir, "template.json"))) {
+      throw new Error("E2E: 生成工程不应包含脚手架模板元数据 template.json。");
+    }
 
     const rootPackage = JSON.parse(await fsp.readFile(path.join(tmpRoot, "package.json"), "utf8"));
     if (!rootPackage.workspaces.includes("validation-projects/card-e2e")) {

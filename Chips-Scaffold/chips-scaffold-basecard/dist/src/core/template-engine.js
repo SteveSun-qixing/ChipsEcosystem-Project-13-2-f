@@ -162,6 +162,9 @@ function targetRelativePath(relativePath) {
     }
     return relativePath;
 }
+function shouldRenderTemplateFile(relativePath) {
+    return relativePath !== "template.json";
+}
 async function renderTemplateToTarget(options) {
     if (!options.projectName || !options.targetDir || !options.templateId) {
         throw (0, errors_1.createStandardError)("INVALID_ARGUMENT", "创建工程参数不完整：projectName、targetDir、templateId 不能为空", { options });
@@ -192,6 +195,9 @@ async function renderTemplateToTarget(options) {
     let filesCreated = 0;
     for (const file of templateFiles) {
         const rel = file.relativePath;
+        if (!shouldRenderTemplateFile(rel)) {
+            continue;
+        }
         const targetRel = targetRelativePath(rel);
         const targetPath = path.join(options.targetDir, targetRel);
         if (isTextFile(rel)) {

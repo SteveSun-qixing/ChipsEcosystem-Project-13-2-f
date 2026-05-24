@@ -147,8 +147,9 @@ async function removeDirIfExists(dir) {
             (0, vitest_1.expect)(indexTs).toMatch(/collectResourcePaths/);
             (0, vitest_1.expect)(indexTs).toMatch(/previewPointerEvents:\s*"native"/);
             (0, vitest_1.expect)(indexTs).not.toMatch(/window\.chips|from\s+["']node:fs["']|from\s+["']fs["']/);
-            const templateMeta = JSON.parse(await node_fs_1.promises.readFile(path.join(targetDir, "template.json"), "utf8"));
-            (0, vitest_1.expect)(templateMeta.supports.componentLibrary).toBe(true);
+            await (0, vitest_1.expect)(node_fs_1.promises.stat(path.join(targetDir, "template.json"))).rejects.toMatchObject({
+                code: "ENOENT",
+            });
             const renderView = await node_fs_1.promises.readFile(path.join(targetDir, "src", "render", "view.tsx"), "utf8");
             (0, vitest_1.expect)(renderView).toMatch(/@chips\/component-library/);
             (0, vitest_1.expect)(renderView).toMatch(/resolveResourceUrl/);

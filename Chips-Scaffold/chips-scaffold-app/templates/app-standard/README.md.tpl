@@ -61,6 +61,7 @@ npm run dev
 │  ├─ testing/
 │  ├─ theme/
 │  └─ views/
+│     └─ RuntimeDiagnosticsView.tsx
 └─ tests/
    ├─ unit/
    └─ e2e/

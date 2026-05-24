@@ -157,6 +157,7 @@ async function main() {
           "src/views/StateBindingView.tsx",
           "src/views/SceneListView.tsx",
           "src/views/EnvironmentStatusView.tsx",
+          "src/views/RuntimeDiagnosticsView.tsx",
           "src/i18n/useAppText.ts",
           "src/runtime/launch-context.ts",
           "src/theme/theme-runtime.ts",
@@ -217,6 +218,11 @@ async function main() {
       "useChipsDiagnostics",
       "useAppRuntime",
       "AppRuntimeProvider",
+      "ChipsView",
+      "ChipsGrid",
+      "ChipsDialog",
+      "ChipsErrorState",
+      "ChipsIcon",
       "setLocale",
       "supportedLocales",
     ]) {
@@ -237,7 +243,16 @@ async function main() {
         throw new Error(`E2E: app 单元测试缺少同步 i18n adapter 覆盖 ${requiredText}`);
       }
     }
-    for (const requiredText of ["chips-sdk/testing", "createMockChipsClient", "client.calls", "command.onInvoked"]) {
+    for (const requiredText of [
+      "chips-sdk/testing",
+      "createMockChipsClient",
+      "client.calls",
+      "command.onInvoked",
+      "command.setState",
+      "resolveAppToolbarCommands",
+      "resolveAppMenuGroups",
+      "resolveAppPaletteItems",
+    ]) {
       if (!commandTestSource.includes(requiredText)) {
         throw new Error(`E2E: command 单元测试缺少 SDK testing mock 覆盖 ${requiredText}`);
       }
@@ -251,13 +266,16 @@ async function main() {
     if (/style=\{\{/.test(sourceBundle)) {
       throw new Error("E2E: 应用模板源码不得使用 inline style");
     }
+    if (/#[0-9A-Fa-f]{3,8}\b|box-shadow\s*:|background(?:-color)?\s*:\s*#|color\s*:\s*#/.test(sourceBundle)) {
+      throw new Error("E2E: 应用模板源码不得使用硬编码颜色或阴影");
+    }
     if (/\bapp-standard\b|\bchips-scaffold-app\b|\bExamplePanel\b/.test(sourceBundle)) {
       throw new Error("E2E: 应用模板源码不得泄漏模板身份或旧示例面板");
     }
 
     const zhCnText = await readFile(path.join(projectDir, "i18n", "zh-CN.json"), "utf8");
     const enUsText = await readFile(path.join(projectDir, "i18n", "en-US.json"), "utf8");
-    for (const key of ["openWorkspace", "refreshTheme", "lastInvoked", "palette", "languageSwitch"]) {
+    for (const key of ["openWorkspace", "refreshTheme", "lastInvoked", "palette", "languageSwitch", "runtime", "dialog"]) {
       if (!zhCnText.includes(key) || !enUsText.includes(key)) {
         throw new Error(`E2E: i18n 文件缺少 key：${key}`);
       }

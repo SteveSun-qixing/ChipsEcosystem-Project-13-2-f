@@ -29,6 +29,11 @@ describe("应用插件预览与质量脚本 smoke", () => {
       readProjectFile("src/app/AppRuntimeProvider.tsx"),
       readProjectFile("src/app/AppShell.tsx"),
       readProjectFile("src/app/scene-registry.ts"),
+      readProjectFile("src/scenes/MainScene.tsx"),
+      readProjectFile("src/views/WorkspaceOverviewView.tsx"),
+      readProjectFile("src/views/EnvironmentStatusView.tsx"),
+      readProjectFile("src/views/RuntimeDiagnosticsView.tsx"),
+      readProjectFile("src/commands/app-commands.ts"),
       readProjectFile("src/i18n/locales.ts"),
     ].join("\n");
 
@@ -37,6 +42,17 @@ describe("应用插件预览与质量脚本 smoke", () => {
     expect(previewSmoke).toContain("chipsdev.preview");
     expect(previewSmoke).toContain("manifest.runtimeTargets");
     expect(previewSmoke).toContain("manifest.surface");
+    expect(sourceBundle).toContain("ChipsNavigationSplitView.Sidebar");
+    expect(sourceBundle).toContain("ChipsNavigationSplitView.Content");
+    expect(sourceBundle).toContain("ChipsNavigationSplitView.Detail");
+    expect(sourceBundle).toContain("ChipsDialog");
+    expect(sourceBundle).toContain("ChipsErrorState");
+    expect(sourceBundle).toContain("ChipsIcon");
+    expect(sourceBundle).toContain("ChipsView");
+    expect(sourceBundle).toContain("ChipsGrid");
+    expect(sourceBundle).toContain("resolveAppToolbarCommands");
+    expect(sourceBundle).toContain("resolveAppMenuGroups");
+    expect(sourceBundle).toContain("resolveAppPaletteItems");
     const forbiddenIdentityPattern = new RegExp([
       "app-" + "standard",
       "chips-" + "scaffold-app",

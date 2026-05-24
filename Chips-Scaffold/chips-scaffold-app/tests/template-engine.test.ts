@@ -66,6 +66,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     const previewSmokePath = path.join(targetDir, "src/preview/preview-smoke.js");
     const mockEnvironmentPath = path.join(targetDir, "src/testing/mock-environment.ts");
     const renderWithChipsPath = path.join(targetDir, "src/testing/render-with-chips.tsx");
+    const runtimeDiagnosticsPath = path.join(targetDir, "src/views/RuntimeDiagnosticsView.tsx");
     const commandTestPath = path.join(targetDir, "tests/unit/commands.test.ts");
     const appTestPath = path.join(targetDir, "tests/unit/app.test.tsx");
 
@@ -90,6 +91,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     await stat(previewSmokePath);
     await stat(mockEnvironmentPath);
     await stat(renderWithChipsPath);
+    await stat(runtimeDiagnosticsPath);
     await stat(commandTestPath);
     await stat(appTestPath);
 
@@ -112,6 +114,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
           path.join(targetDir, "src/views/StateBindingView.tsx"),
           path.join(targetDir, "src/views/SceneListView.tsx"),
           path.join(targetDir, "src/views/EnvironmentStatusView.tsx"),
+          runtimeDiagnosticsPath,
           appTextPath,
           launchContextPath,
           themeRuntimePath,
@@ -219,6 +222,11 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "useChipsDiagnostics",
       "useAppRuntime",
       "AppRuntimeProvider",
+      "ChipsView",
+      "ChipsGrid",
+      "ChipsDialog",
+      "ChipsErrorState",
+      "ChipsIcon",
       "setLocale",
       "supportedLocales",
     ]) {
@@ -259,8 +267,12 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       commandTestContent.includes("chips-sdk/testing") &&
         commandTestContent.includes("createMockChipsClient") &&
         commandTestContent.includes("client.calls") &&
-        commandTestContent.includes("command.onInvoked"),
-      "Command 单元测试应复用 SDK testing mock host 覆盖命令 action 与事件链路",
+        commandTestContent.includes("command.onInvoked") &&
+        commandTestContent.includes("command.setState") &&
+        commandTestContent.includes("resolveAppToolbarCommands") &&
+        commandTestContent.includes("resolveAppMenuGroups") &&
+        commandTestContent.includes("resolveAppPaletteItems"),
+      "Command 单元测试应复用 SDK testing mock host 覆盖命令 action、状态与三入口派生链路",
     );
     await assert.rejects(
       stat(path.join(targetDir, "src/hooks/useChipsBridge.ts")),
@@ -277,6 +289,10 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       "初始化工程源码不应使用 inline style",
     );
     assert.ok(
+      !/#[0-9A-Fa-f]{3,8}\b|box-shadow\s*:|background(?:-color)?\s*:\s*#|color\s*:\s*#/.test(appRuntimeContent),
+      "初始化工程源码不应使用硬编码颜色或阴影",
+    );
+    assert.ok(
       !/\bapp-standard\b|\bchips-scaffold-app\b|\bExamplePanel\b/.test(appRuntimeContent),
       "初始化工程源码不应泄漏模板身份或旧示例面板",
     );
@@ -290,7 +306,7 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       assert.ok(zhCnContent.includes(key), `中文 i18n 应包含 command key：${key}`);
       assert.ok(enUsContent.includes(key), `英文 i18n 应包含 command key：${key}`);
     }
-    for (const key of ["languageSwitch"]) {
+    for (const key of ["languageSwitch", "runtime", "dialog", "disabledReason"]) {
       assert.ok(zhCnContent.includes(key), `中文 i18n 应包含语言切换 key：${key}`);
       assert.ok(enUsContent.includes(key), `英文 i18n 应包含语言切换 key：${key}`);
     }

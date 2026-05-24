@@ -1,4 +1,4 @@
-import { ChipsStack } from "@chips/component-library";
+import { ChipsGrid, ChipsStack } from "@chips/component-library";
 import { SceneListView } from "../views/SceneListView";
 import { StateBindingView } from "../views/StateBindingView";
 import { WorkspaceOverviewView } from "../views/WorkspaceOverviewView";
@@ -13,10 +13,10 @@ export function MainScene({ activeSceneId, onSelectScene }: MainSceneProps) {
   return (
     <ChipsStack gap="lg">
       <WorkspaceOverviewView />
-      <div className="app-view-grid">
+      <ChipsGrid className="app-view-grid" minItemSize="16rem" gap="md">
         <StateBindingView />
         <SceneListView activeSceneId={activeSceneId} onSelectScene={onSelectScene} />
-      </div>
+      </ChipsGrid>
     </ChipsStack>
   );
 }

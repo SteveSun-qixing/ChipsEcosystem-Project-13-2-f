@@ -32,7 +32,8 @@
       "refreshTheme": {
         "title": "Refresh theme status",
         "description": "Read the current Host theme state again",
-        "ariaLabel": "Refresh theme status"
+        "ariaLabel": "Refresh theme status",
+        "disabledReason": "The current runtime cannot read theme status"
       },
       "menu": {
         "app": "App",
@@ -77,6 +78,29 @@
       "permissionMissing": "Missing command.invoke",
       "unknown": "Unknown",
       "error": "Environment read error: {code}"
+    },
+    "runtime": {
+      "sectionTitle": "Runtime diagnostics",
+      "sectionDescription": "Current scene, surface, command, and diagnostic state.",
+      "iconLabel": "Runtime status",
+      "commandErrorDescription": "Command runtime error: {code}",
+      "errorTitle": "Runtime needs attention",
+      "errorDescription": "The app runtime reported diagnostics that need attention.",
+      "refreshAction": "Refresh environment",
+      "status": {
+        "ready": "Runtime is ready",
+        "error": "Runtime has diagnostics"
+      },
+      "dialog": {
+        "open": "View runtime context",
+        "title": "Runtime context",
+        "description": "Scene and surface information from Host.",
+        "sceneId": "Scene: {value}",
+        "surfaceId": "Surface: {value}",
+        "sessionId": "Session: {value}",
+        "diagnostics": "Diagnostics: {count}",
+        "close": "Close"
+      }
     },
     "errors": {
       "boundaryTitle": "App runtime error",

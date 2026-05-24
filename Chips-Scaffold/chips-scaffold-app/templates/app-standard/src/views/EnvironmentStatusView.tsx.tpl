@@ -1,9 +1,11 @@
 import {
   ChipsButton,
   ChipsEmptyState,
+  ChipsGrid,
   ChipsSection,
   ChipsStack,
   ChipsText,
+  ChipsView,
 } from "@chips/component-library";
 import { useAppRuntime } from "../app/AppRuntimeProvider";
 import { useAppText } from "../i18n/useAppText";
@@ -23,32 +25,32 @@ export function EnvironmentStatusView() {
       description={text("app.scenes.settings.description")}
     >
       <ChipsStack gap="md">
-        <div className="app-status-grid">
-          <div className="app-status-item">
+        <ChipsGrid className="app-status-grid" minItemSize="12rem" gap="md">
+          <ChipsView className="app-status-item">
             <ChipsText>{text("app.workspace.themeLabel")}</ChipsText>
             <ChipsText className="app-status-item__value">
               {resolveThemeLabel(runtime.theme)}
             </ChipsText>
-          </div>
-          <div className="app-status-item">
+          </ChipsView>
+          <ChipsView className="app-status-item">
             <ChipsText>{text("app.workspace.localeLabel")}</ChipsText>
             <ChipsText className="app-status-item__value">{runtime.locale}</ChipsText>
-          </div>
-          <div className="app-status-item">
+          </ChipsView>
+          <ChipsView className="app-status-item">
             <ChipsText>{text("app.workspace.surfaceLabel")}</ChipsText>
             <ChipsText className="app-status-item__value">
               {runtime.environment.surfaceId ?? runtime.environment.surfaceKind ?? text("app.workspace.unknown")}
             </ChipsText>
-          </div>
-          <div className="app-status-item">
+          </ChipsView>
+          <ChipsView className="app-status-item">
             <ChipsText>{text("app.workspace.permissionLabel")}</ChipsText>
             <ChipsText className="app-status-item__value">
               {runtime.permissions.canInvokeCommand
                 ? text("app.workspace.permissionReady")
                 : text("app.workspace.permissionMissing")}
             </ChipsText>
-          </div>
-        </div>
+          </ChipsView>
+        </ChipsGrid>
         {runtime.diagnostics.length === 0 ? (
           <ChipsEmptyState
             title={text("app.workspace.emptyTitle")}

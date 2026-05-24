@@ -32,7 +32,8 @@
       "refreshTheme": {
         "title": "刷新主题状态",
         "description": "重新读取 Host 当前主题状态",
-        "ariaLabel": "刷新主题状态"
+        "ariaLabel": "刷新主题状态",
+        "disabledReason": "当前运行环境不允许读取主题状态"
       },
       "menu": {
         "app": "应用",
@@ -77,6 +78,29 @@
       "permissionMissing": "缺少 command.invoke",
       "unknown": "未知",
       "error": "环境读取错误：{code}"
+    },
+    "runtime": {
+      "sectionTitle": "运行时诊断",
+      "sectionDescription": "当前 scene、surface、命令与诊断状态。",
+      "iconLabel": "运行状态",
+      "commandErrorDescription": "命令运行时错误：{code}",
+      "errorTitle": "运行时需要检查",
+      "errorDescription": "应用运行时报告了需要处理的诊断。",
+      "refreshAction": "重新读取环境",
+      "status": {
+        "ready": "运行时已就绪",
+        "error": "运行时存在诊断"
+      },
+      "dialog": {
+        "open": "查看运行上下文",
+        "title": "运行上下文",
+        "description": "Host 提供的 scene 与 surface 信息。",
+        "sceneId": "场景：{value}",
+        "surfaceId": "容器：{value}",
+        "sessionId": "会话：{value}",
+        "diagnostics": "诊断数量：{count}",
+        "close": "关闭"
+      }
     },
     "errors": {
       "boundaryTitle": "应用运行异常",

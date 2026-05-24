@@ -107,6 +107,17 @@
   color: var(--chips-sys-color-text-secondary, var(--chips-base-color-neutral-600));
 }
 
+.app-runtime-status,
+.app-icon-line {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-base-space-2);
+}
+
+.app-runtime-status {
+  justify-content: space-between;
+}
+
 .app-scene-list__item {
   display: flex;
   align-items: center;

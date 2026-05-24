@@ -6,10 +6,15 @@ import {
   APP_COMMAND_IDS,
   APP_PLUGIN_ID,
   appCommandDefinitions,
+  appCommandViews,
   createAppCommandStatus,
   getAppCommandHandlerId,
   isAppCommandInvokedEvent,
+  resolveAppMenuGroups,
+  resolveAppPaletteItems,
+  resolveAppToolbarCommands,
 } from "../../src/commands/app-commands";
+import { translateLocalKey } from "../../src/i18n/locales";
 
 describe("app command registry contract", () => {
   it("declares serializable command metadata with i18n keys", () => {
@@ -26,6 +31,16 @@ describe("app command registry contract", () => {
       expect(definition.menuPlacement?.length).toBeGreaterThan(0);
       expect(definition.toolbarPlacement?.length).toBeGreaterThan(0);
       expect(definition.paletteKeywords?.length).toBeGreaterThan(0);
+      expect(translateLocalKey(definition.titleKey, "zh-CN")).not.toBe(definition.titleKey);
+      expect(translateLocalKey(definition.titleKey, "en-US")).not.toBe(definition.titleKey);
+      if (definition.descriptionKey) {
+        expect(translateLocalKey(definition.descriptionKey, "zh-CN")).not.toBe(definition.descriptionKey);
+        expect(translateLocalKey(definition.descriptionKey, "en-US")).not.toBe(definition.descriptionKey);
+      }
+      if (definition.ariaLabelKey) {
+        expect(translateLocalKey(definition.ariaLabelKey, "zh-CN")).not.toBe(definition.ariaLabelKey);
+        expect(translateLocalKey(definition.ariaLabelKey, "en-US")).not.toBe(definition.ariaLabelKey);
+      }
       expect(record.title).toBeUndefined();
       expect(record.description).toBeUndefined();
       expect(record.ariaLabel).toBeUndefined();
@@ -33,23 +48,64 @@ describe("app command registry contract", () => {
     }
   });
 
-  it("uses SDK testing mock host for register/list/invoke", async () => {
+  it("derives menu, toolbar, and palette entries from one command view registry", () => {
+    const i18n = (key: string) => translateLocalKey(key, "en-US");
+    const toolbarItems = resolveAppToolbarCommands(i18n);
+    const menuGroups = resolveAppMenuGroups(i18n);
+    const paletteItems = resolveAppPaletteItems(i18n);
+    const toolbarIds = toolbarItems.map((item) => item.commandId);
+    const menuIds = menuGroups.flatMap((group) => group.items.map((item) => item.commandId));
+    const paletteIds = paletteItems.map((item) => item.commandId);
+
+    for (const command of appCommandViews) {
+      expect(toolbarIds).toContain(command.commandId);
+      expect(menuIds).toContain(command.commandId);
+      expect(paletteIds).toContain(command.commandId);
+    }
+    expect(toolbarItems[0].label).toBe("Open workspace");
+    expect(menuGroups.map((group) => group.groupId)).toEqual(["primary", "view"]);
+    expect(paletteItems.some((item) => item.commandId === APP_COMMAND_IDS.refreshTheme)).toBe(true);
+  });
+
+  it("uses SDK testing mock host for register/list/setState/invoke", async () => {
     const client = createMockChipsClient();
     const invoked: string[] = [];
     client.command.onInvoked((event) => {
       invoked.push(event.commandId);
     });
 
-    await client.command.register(appCommandDefinitions[0]);
-    await client.command.list({ source: "toolbar" });
+    for (const definition of appCommandDefinitions) {
+      await client.command.register(definition);
+    }
+    const menuCommands = await client.command.list({ source: "menu" });
+    const toolbarCommands = await client.command.list({ source: "toolbar" });
+    const paletteCommands = await client.command.list({ source: "palette" });
+    const disabledCommand = await client.command.setState(
+      APP_COMMAND_IDS.refreshTheme,
+      {
+        enabled: false,
+        disabledReasonKey: "app.commands.refreshTheme.disabledReason",
+      },
+      { context: { source: "toolbar" } },
+    );
+    const visibleCommands = await client.command.list({ source: "toolbar" });
+    const allCommands = await client.command.list({ source: "toolbar", includeDisabled: true });
     await client.command.invoke(APP_COMMAND_IDS.openWorkspace, {}, { source: "toolbar" });
 
-    expect(client.calls.map((call) => call.action)).toEqual([
+    expect(client.calls.map((call) => call.action)).toContain("command.setState");
+    expect(client.calls.slice(0, 4).map((call) => call.action)).toEqual([
+      "command.register",
       "command.register",
       "command.list",
-      "command.invoke",
+      "command.list",
     ]);
-    expect(client.calls[2].payload).toMatchObject({
+    expect(menuCommands.map((command) => command.commandId)).toEqual(Object.values(APP_COMMAND_IDS));
+    expect(toolbarCommands.map((command) => command.commandId)).toEqual(Object.values(APP_COMMAND_IDS));
+    expect(paletteCommands.map((command) => command.commandId)).toEqual(Object.values(APP_COMMAND_IDS));
+    expect(disabledCommand?.diagnostic.enabled).toBe(false);
+    expect(visibleCommands.map((command) => command.commandId)).toEqual([APP_COMMAND_IDS.openWorkspace]);
+    expect(allCommands.map((command) => command.commandId)).toEqual(Object.values(APP_COMMAND_IDS));
+    expect(client.calls.at(-1)?.payload).toMatchObject({
       commandId: APP_COMMAND_IDS.openWorkspace,
       source: "toolbar",
       payload: {},

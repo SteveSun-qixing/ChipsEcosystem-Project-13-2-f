@@ -3,6 +3,7 @@ import {
   ChipsBadge,
   ChipsButton,
   ChipsSection,
+  ChipsStack,
   ChipsText,
   ChipsVirtualList,
   type VirtualItem,
@@ -49,13 +50,16 @@ export function SceneListView({ activeSceneId, onSelectScene }: SceneListViewPro
           const selected = sceneItem.scene.id === activeSceneId;
           return (
             <div className="app-scene-list__item">
-              <ChipsButton
-                type="button"
-                pressed={selected}
-                onPress={() => onSelectScene(sceneItem.scene.id)}
-              >
-                {text(sceneItem.scene.titleKey)}
-              </ChipsButton>
+              <ChipsStack gap="sm">
+                <ChipsButton
+                  type="button"
+                  pressed={selected}
+                  onPress={() => onSelectScene(sceneItem.scene.id)}
+                >
+                  {text(sceneItem.scene.titleKey)}
+                </ChipsButton>
+                <ChipsText>{text(sceneItem.scene.descriptionKey)}</ChipsText>
+              </ChipsStack>
               {selected ? <ChipsBadge tone="success" label={text("app.shell.ready")} /> : null}
             </div>
           );

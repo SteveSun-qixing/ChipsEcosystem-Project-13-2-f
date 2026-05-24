@@ -43,6 +43,25 @@ async function collectTextTemplateFiles(dir) {
   return files;
 }
 
+function readPath(source, key) {
+  return key.split(".").reduce((current, segment) => {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return undefined;
+    }
+    return current[segment];
+  }, source);
+}
+
+function collectRegexGroupValues(text, pattern) {
+  const values = new Set();
+  for (const match of text.matchAll(pattern)) {
+    if (match[1]) {
+      values.add(match[1]);
+    }
+  }
+  return values;
+}
+
 async function main() {
   const entries = await readdir(TEMPLATES_ROOT, { withFileTypes: true });
   const templateDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
@@ -85,6 +104,7 @@ async function main() {
     "src/views/StateBindingView.tsx.tpl",
     "src/views/SceneListView.tsx.tpl",
     "src/views/EnvironmentStatusView.tsx.tpl",
+    "src/views/RuntimeDiagnosticsView.tsx.tpl",
     "src/commands/app-commands.ts.tpl",
     "src/commands/useAppCommands.ts.tpl",
     "src/testing/mock-environment.ts.tpl",
@@ -225,6 +245,11 @@ async function main() {
         "useChipsDiagnostics",
         "useAppRuntime",
         "AppRuntimeProvider",
+        "ChipsView",
+        "ChipsGrid",
+        "ChipsDialog",
+        "ChipsErrorState",
+        "ChipsIcon",
         "setLocale",
         "supportedLocales",
       ]) {
@@ -248,6 +273,21 @@ async function main() {
         if (forbiddenPattern.test(sourceText)) {
           console.error(
             `[check-templates] 模板 ${dir} 源码包含禁止的 Host/Node 直连模式：${forbiddenPattern}`,
+          );
+          hasError = true;
+        }
+      }
+
+      const appShellCss = await readFile(path.join(base, "src/app/app-shell.css.tpl"), "utf8");
+      for (const forbiddenPattern of [
+        /#[0-9A-Fa-f]{3,8}\b/,
+        /\bbox-shadow\s*:/,
+        /\bbackground(?:-color)?\s*:\s*#/,
+        /\bcolor\s*:\s*#/,
+      ]) {
+        if (forbiddenPattern.test(`${sourceText}\n${appShellCss}`)) {
+          console.error(
+            `[check-templates] 模板 ${dir} 源码或样式包含硬编码视觉值：${forbiddenPattern}`,
           );
           hasError = true;
         }
@@ -291,7 +331,16 @@ async function main() {
       }
 
       const commandTestText = await readFile(path.join(base, "tests/unit/commands.test.ts.tpl"), "utf8");
-      for (const requiredText of ["chips-sdk/testing", "createMockChipsClient", "client.calls", "command.onInvoked"]) {
+      for (const requiredText of [
+        "chips-sdk/testing",
+        "createMockChipsClient",
+        "client.calls",
+        "command.onInvoked",
+        "command.setState",
+        "resolveAppToolbarCommands",
+        "resolveAppMenuGroups",
+        "resolveAppPaletteItems",
+      ]) {
         if (!commandTestText.includes(requiredText)) {
           console.error(
             `[check-templates] 模板 ${dir} command 单元测试缺少 SDK testing mock 覆盖：${requiredText}`,
@@ -302,10 +351,33 @@ async function main() {
 
       const zhCnText = await readFile(path.join(base, "i18n/zh-CN.json.tpl"), "utf8");
       const enUsText = await readFile(path.join(base, "i18n/en-US.json.tpl"), "utf8");
+      const zhCnBundle = JSON.parse(zhCnText);
+      const enUsBundle = JSON.parse(enUsText);
       for (const key of ["languageSwitch", "openWorkspace", "refreshTheme"]) {
         if (!zhCnText.includes(key) || !enUsText.includes(key)) {
           console.error(
             `[check-templates] 模板 ${dir} i18n 资源缺少关键 key：${key}`,
+          );
+          hasError = true;
+        }
+      }
+      const i18nKeys = new Set([
+        ...collectRegexGroupValues(sourceText, /text\(\s*["']([^"']+)["']/g),
+        ...collectRegexGroupValues(commandText, /(?:titleKey|descriptionKey|ariaLabelKey|disabledReasonKey)\s*:\s*["']([^"']+)["']/g),
+      ]);
+      for (const key of i18nKeys) {
+        if (!key.startsWith("app.")) {
+          continue;
+        }
+        if (typeof readPath(zhCnBundle, key) !== "string") {
+          console.error(
+            `[check-templates] 模板 ${dir} zh-CN 缺少源码引用的 i18n key：${key}`,
+          );
+          hasError = true;
+        }
+        if (typeof readPath(enUsBundle, key) !== "string") {
+          console.error(
+            `[check-templates] 模板 ${dir} en-US 缺少源码引用的 i18n key：${key}`,
           );
           hasError = true;
         }

@@ -12,6 +12,7 @@ import {
   ChipsStack,
   ChipsText,
   ChipsToolbar,
+  ChipsView,
 } from "@chips/component-library";
 import type { CommandSource } from "chips-sdk";
 import { appConfig } from "../../config/app-config";
@@ -25,6 +26,7 @@ import { useAppCommands } from "../commands/useAppCommands";
 import { useAppText } from "../i18n/useAppText";
 import { MainScene } from "../scenes/MainScene";
 import { SettingsScene } from "../scenes/SettingsScene";
+import { RuntimeDiagnosticsView } from "../views/RuntimeDiagnosticsView";
 import { useAppRuntime } from "./AppRuntimeProvider";
 
 function nextLocale(locale: string) {
@@ -90,7 +92,7 @@ export function AppShell() {
           loading={commands.phase === "registering" || !runtime.status.ready}
           loadingText={text("app.shell.loading")}
         >
-          <div className="app-shell" data-app-id={appConfig.appId}>
+          <ChipsView as="div" className="app-shell" data-app-id={appConfig.appId}>
             <header className="app-shell__header">
               <ChipsStack gap="sm" className="app-shell__title-group">
                 <ChipsText as="div" role="heading" aria-level={1} className="app-shell__title">
@@ -169,7 +171,11 @@ export function AppShell() {
               >
                 <ChipsScrollView axis="vertical" className="app-shell__scroll">
                   <ChipsStack gap="lg">
-                    <section className="app-shell__scene-heading" aria-labelledby="app-scene-title">
+                    <ChipsView
+                      as="section"
+                      className="app-shell__scene-heading"
+                      aria-labelledby="app-scene-title"
+                    >
                       <ChipsText
                         as="div"
                         role="heading"
@@ -180,7 +186,7 @@ export function AppShell() {
                         {text(activeScene.titleKey)}
                       </ChipsText>
                       <ChipsText>{text(activeScene.descriptionKey)}</ChipsText>
-                    </section>
+                    </ChipsView>
                     {activeSceneId === "main" ? (
                       <MainScene
                         activeSceneId={activeSceneId}
@@ -207,28 +213,14 @@ export function AppShell() {
                     inputPlaceholder={text("app.commands.palette.searchPlaceholder")}
                     ariaLabel={text("app.commands.palette.ariaLabel")}
                   />
-                  <ChipsText>
-                    {commands.lastInvoked
-                      ? text("app.commands.status.lastInvoked", {
-                          commandId: commands.lastInvoked.commandId,
-                          source: commands.lastInvoked.source,
-                        })
-                      : text(commandStatusKey)}
-                  </ChipsText>
-                    {commands.errorCode ? (
-                    <ChipsText>
-                      {text("app.commands.status.errorWithCode", { code: commands.errorCode })}
-                    </ChipsText>
-                  ) : null}
-                  <ChipsText>
-                    {runtime.diagnostics.length === 0
-                      ? text("app.workspace.emptyTitle")
-                      : text("app.workspace.diagnosticsLabel")}
-                  </ChipsText>
+                  <RuntimeDiagnosticsView
+                    commandErrorCode={commands.errorCode}
+                    commandPhase={commands.phase}
+                  />
                 </ChipsStack>
               </ChipsNavigationSplitView.Detail>
             </ChipsNavigationSplitView>
-          </div>
+          </ChipsView>
         </ChipsLoadingBoundary>
       </ChipsErrorBoundary>
     </ChipsCommandProvider>

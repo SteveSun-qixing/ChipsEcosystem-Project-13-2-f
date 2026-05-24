@@ -3,7 +3,13 @@ import type {
   CommandInvokedEvent,
   CommandSource,
 } from "chips-sdk";
-import type { ChipsCommandView } from "@chips/component-library";
+import {
+  resolveCommandMenuGroups,
+  resolveCommandPaletteItems,
+  resolveCommandToolbarItems,
+  type ChipsCommandProviderProps,
+  type ChipsCommandView,
+} from "@chips/component-library";
 
 export const APP_PLUGIN_ID = "{{ PLUGIN_ID }}";
 
@@ -40,15 +46,43 @@ export const appCommandDefinitions: CommandDefinitionInput[] = [
     ariaLabelKey: "app.commands.refreshTheme.ariaLabel",
     icon: { name: "palette", style: "rounded" },
     scope: { kind: "app", appId: APP_PLUGIN_ID },
+    permission: "theme.read",
     handlerId: APP_COMMAND_HANDLER_IDS.refreshTheme,
     menuPlacement: [{ menuId: "app", groupId: "view", order: 20 }],
     toolbarPlacement: [{ toolbarId: "main", groupId: "secondary", order: 20 }],
     paletteKeywords: ["theme", "appearance", "refresh"],
-    state: { enabled: true, visible: true },
+    state: {
+      enabled: true,
+      visible: true,
+      disabledReasonKey: "app.commands.refreshTheme.disabledReason",
+    },
   },
 ];
 
 export const appCommandViews = appCommandDefinitions as unknown as ChipsCommandView[];
+
+export function resolveAppToolbarCommands(i18n?: ChipsCommandProviderProps["i18n"]) {
+  return resolveCommandToolbarItems(appCommandViews, {
+    toolbarId: "main",
+    i18n,
+    includeHidden: false,
+  });
+}
+
+export function resolveAppMenuGroups(i18n?: ChipsCommandProviderProps["i18n"]) {
+  return resolveCommandMenuGroups(appCommandViews, {
+    menuId: "app",
+    i18n,
+    includeHidden: false,
+  });
+}
+
+export function resolveAppPaletteItems(i18n?: ChipsCommandProviderProps["i18n"]) {
+  return resolveCommandPaletteItems(appCommandViews, {
+    i18n,
+    includeHidden: false,
+  });
+}
 
 export type AppCommandId = (typeof APP_COMMAND_IDS)[keyof typeof APP_COMMAND_IDS];
 export type AppCommandHandlerId = (typeof APP_COMMAND_HANDLER_IDS)[keyof typeof APP_COMMAND_HANDLER_IDS];

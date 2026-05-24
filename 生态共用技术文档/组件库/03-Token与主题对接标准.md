@@ -38,6 +38,9 @@
   - `chips.comp.slider.*`
   - `chips.comp.date-picker.*`
   - `chips.comp.time-picker.*`
+  - `chips.comp.image.*`
+  - `chips.comp.media.*`
+  - `chips.comp.error-state.*`
   - `chips.comp.button.*`
   - `chips.comp.input.*`
   - `chips.comp.checkbox.*`
@@ -150,6 +153,16 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.time-picker.*`
 
 `DatePicker` 的 `root/control/input/trigger/calendar/header/nav/grid/week-header/cell/description/status/focus` token 只表达日历日期输入、月份导航、日期格状态、描述和错误视觉；`TimePicker` 的 `root/control/input/trigger/list/option/description/status/focus` token 只表达本地墙钟时间输入、选项列表、描述和错误视觉。主题包不得复用旧 `chips.comp.date-time.*`、`chips.comp.input.*`、选择控件 token 或业务私有 token 作为这两个控件的正式样式入口。
+
+任务015第七批图像、媒体和错误状态控件 token 是静态图片、媒体边界和错误展示的正式契约，默认主题和暗色主题必须覆盖：
+
+- `chips.comp.image.*`
+- `chips.comp.media.*`
+- `chips.comp.error-state.*`
+
+`Image` 的 `root/media/fallback/caption/status/focus` token 只表达图片容器、实际媒体、fallback、说明文本、错误状态和焦点视觉；`Media` 的 `root/content/controls/control/caption/status/focus` token 只表达音频、视频或通用媒体内容边界和内部控制槽视觉；`ErrorState` 的 `root/icon/title/description/details/action/status/focus` token 只表达静态错误展示、详情、动作入口和错误状态视觉。主题包不得复用 `chips.comp.avatar.*`、`chips.comp.error-boundary.*`、`chips.comp.empty-state.*` 或业务私有 token 作为三者的正式样式入口。
+
+第七批最小 required token 数量以组件库 contract 为准：`image` 9 个、`media` 11 个、`error-state` 12 个。主题包本地 `contracts/theme-interface.contract.json` 与 `contracts/theme-min-functional-set.json` 必须同时包含 `image / media / error-state`，默认主题和暗色主题的组件基线为 70 个 component。
 
 ### 3.1 布局 token 基线
 

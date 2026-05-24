@@ -14,9 +14,11 @@ import {
   ChipsDockPanel,
   ChipsDialog,
   ChipsEmptyState,
+  ChipsErrorState,
   ChipsGrid,
   ChipsIcon,
   ChipsIconButton,
+  ChipsImage,
   ChipsErrorBoundary,
   ChipsFormField,
   ChipsFormGroup,
@@ -25,6 +27,7 @@ import {
   ChipsInspector,
   ChipsLabel,
   ChipsLoadingBoundary,
+  ChipsMedia,
   ChipsMenu,
   ChipsMenuBar,
   ChipsNotification,
@@ -95,7 +98,10 @@ import {
   resolveCommandToolbarItems,
   resolveDockPanelStateMap,
   resolveDatePickerModel,
+  resolveErrorStateModel,
   resolveI18nText,
+  resolveImageModel,
+  resolveMediaModel,
   resolveSystemMessageQueue,
   resolveInteractiveState,
   resolveNumericControlModel,
@@ -217,6 +223,9 @@ test("buildComponentContract returns task015 base control component contracts", 
   const slider = buildComponentContract("slider");
   const datePicker = buildComponentContract("date-picker");
   const timePicker = buildComponentContract("time-picker");
+  const image = buildComponentContract("image");
+  const media = buildComponentContract("media");
+  const errorState = buildComponentContract("error-state");
 
   assert.equal(iconButton.scope, "icon-button");
   assert.ok(iconButton.parts.includes("icon"));
@@ -260,6 +269,15 @@ test("buildComponentContract returns task015 base control component contracts", 
   assert.equal(timePicker.scope, "time-picker");
   assert.ok(timePicker.parts.includes("option"));
   assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
+  assert.equal(image.scope, "image");
+  assert.ok(image.parts.includes("media"));
+  assert.ok(image.tokens.includes("chips.comp.image.fallback.surface"));
+  assert.equal(media.scope, "media");
+  assert.ok(media.parts.includes("controls"));
+  assert.ok(media.tokens.includes("chips.comp.media.control.surface.active"));
+  assert.equal(errorState.scope, "error-state");
+  assert.ok(errorState.parts.includes("details"));
+  assert.ok(errorState.tokens.includes("chips.comp.error-state.root.border.error"));
 });
 
 test("layout primitive contracts are available through common contract builder", () => {
@@ -304,6 +322,9 @@ test("component token map includes complete P0 base interactive keys", () => {
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.slider));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["date-picker"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["time-picker"]));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.image));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.media));
+  assert.ok(Array.isArray(COMPONENT_TOKEN_MAP["error-state"]));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.button));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.input));
   assert.ok(Array.isArray(COMPONENT_TOKEN_MAP.checkbox));
@@ -891,8 +912,8 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
   );
 });
 
-test("task015 base control metadata includes second through fifth batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 18);
+test("task015 base control metadata includes second through seventh batches", () => {
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 21);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -913,7 +934,10 @@ test("task015 base control metadata includes second through fifth batches", () =
       "stepper",
       "slider",
       "date-picker",
-      "time-picker"
+      "time-picker",
+      "image",
+      "media",
+      "error-state"
     ]
   );
 });
@@ -937,7 +961,10 @@ test("task015 base control component exports exist", () => {
     ChipsStepper,
     ChipsSlider,
     ChipsDatePicker,
-    ChipsTimePicker
+    ChipsTimePicker,
+    ChipsImage,
+    ChipsMedia,
+    ChipsErrorState
   ]) {
     assert.equal(typeof component, "object");
     assert.equal(typeof component.render, "function");
@@ -1326,6 +1353,86 @@ test("ChipsDatePicker and ChipsTimePicker expose forwardRef render entries", () 
   assert.equal(typeof ChipsTimePicker.render, "function");
   assert.throws(() => ChipsDatePicker.render({}, null), /DATE_PICKER_A11Y_LABEL_REQUIRED/);
   assert.throws(() => ChipsTimePicker.render({}, null), /TIME_PICKER_A11Y_LABEL_REQUIRED/);
+});
+
+test("task015 seventh batch media models normalize visual and error states", () => {
+  const image = resolveImageModel({
+    src: "  cover.png  ",
+    alt: "Cover",
+    fit: "contain",
+    width: 320,
+    height: "180cpx"
+  });
+  const decorative = resolveImageModel({
+    src: "texture.png",
+    alt: "Decorative texture",
+    decorative: true
+  });
+  const media = resolveMediaModel({
+    kind: "video",
+    src: "clip.mp4",
+    title: "Clip",
+    controls: true,
+    fit: "cover",
+    poster: "clip.jpg"
+  });
+  const errorState = resolveErrorStateModel({
+    error: { code: "TEST_ERROR", message: "Failed", retryable: true },
+    showDetails: true
+  });
+
+  assert.equal(image.src, "cover.png");
+  assert.equal(image.fit, "contain");
+  assert.equal(image.width, 320);
+  assert.equal(image.height, "180cpx");
+  assert.equal(decorative.alt, "");
+  assert.equal(media.kind, "video");
+  assert.equal(media.controls, true);
+  assert.equal(media.poster, "clip.jpg");
+  assert.equal(errorState.error.code, "TEST_ERROR");
+  assert.equal(errorState.retryable, true);
+  assert.equal(errorState.showDetails, true);
+});
+
+test("task015 seventh batch image media and error state publish contract and a11y semantics", () => {
+  const image = buildComponentContract("image");
+  const media = buildComponentContract("media");
+  const errorState = buildComponentContract("error-state");
+
+  assert.deepEqual(image.parts, ["root", "media", "fallback", "caption", "status"]);
+  assert.ok(image.tokens.includes("chips.comp.image.caption.color"));
+  assert.deepEqual(media.parts, ["root", "content", "controls", "control", "caption", "status"]);
+  assert.ok(media.tokens.includes("chips.comp.media.controls.surface"));
+  assert.deepEqual(errorState.parts, ["root", "icon", "title", "description", "details", "action", "status"]);
+  assert.ok(errorState.tokens.includes("chips.comp.error-state.action.text.color"));
+  assert.equal(validateComponentA11y("image", { role: "group", "aria-label": "Cover image" }), true);
+  assert.equal(validateComponentA11y("image", { "aria-hidden": "true" }), true);
+  assert.equal(validateComponentA11y("media", { role: "group", "aria-label": "Preview media" }), true);
+  assert.equal(validateComponentA11y("error-state", { role: "alert", "aria-label": "Failed to load" }), true);
+});
+
+test("task015 seventh batch controls enforce required accessible names", () => {
+  assert.throws(() => ChipsImage.render({ src: "cover.png" }, null), /IMAGE_A11Y_ALT_REQUIRED/);
+  assert.throws(() => ChipsMedia.render({ kind: "video", src: "clip.mp4" }, null), /MEDIA_A11Y_TITLE_REQUIRED/);
+  assert.throws(() => validateComponentA11y("error-state", { role: "alert" }), /Either aria-label or aria-labelledby is required/);
+});
+
+test("ChipsImage ChipsMedia and ChipsErrorState expose forwardRef render entries", () => {
+  assert.equal(typeof ChipsImage, "object");
+  assert.equal(typeof ChipsImage.render, "function");
+  assert.equal(typeof ChipsMedia, "object");
+  assert.equal(typeof ChipsMedia.render, "function");
+  assert.equal(typeof ChipsErrorState, "object");
+  assert.equal(typeof ChipsErrorState.render, "function");
+
+  const renderedImage = ChipsImage.render({ src: "cover.png", alt: "Cover", caption: "Cover art" }, null);
+  const renderedMedia = ChipsMedia.render({ kind: "generic", title: "Media preview", children: "preview" }, null);
+  const renderedError = ChipsErrorState.render({ message: "Failed", title: "Load failed", ariaLabel: "Load failed" }, null);
+
+  assert.equal(renderedImage.props["data-scope"], "image");
+  assert.equal(renderedMedia.props["data-scope"], "media");
+  assert.equal(renderedError.props["data-scope"], "error-state");
+  assert.equal(renderedError.props.role, "alert");
 });
 
 test("toStandardError normalizes object and primitive errors", () => {

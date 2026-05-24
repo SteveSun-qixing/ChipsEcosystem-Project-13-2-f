@@ -7,11 +7,14 @@ describe("theme contract", () => {
     const projectRoot = path.resolve(__dirname, "..");
     const result = await validateTheme(projectRoot);
 
-    expect(result.contract.components).toHaveLength(67);
+    expect(result.contract.components).toHaveLength(70);
     expect(result.view.summary.status).toBe("complete");
     expect(result.view.summary.blocking).toBe(0);
-    expect(result.view.summary.coverage?.componentCount).toBe(67);
+    expect(result.view.summary.coverage?.componentCount).toBe(70);
     expect(result.view.summary.coverage?.requiredCoverage).toBe(1);
+    expect(result.contract.components.some((component) => component.component === "image")).toBe(true);
+    expect(result.contract.components.some((component) => component.component === "media")).toBe(true);
+    expect(result.contract.components.some((component) => component.component === "error-state")).toBe(true);
     expect(result.view.components.every((component) => component.coverage.status === "complete")).toBe(true);
   });
 

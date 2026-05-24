@@ -78,6 +78,9 @@ test("card runtime component tokens exist", () => {
   const slider = readJson(path.join(root, "comp/slider.json"));
   const datePicker = readJson(path.join(root, "comp/date-picker.json"));
   const timePicker = readJson(path.join(root, "comp/time-picker.json"));
+  const image = readJson(path.join(root, "comp/image.json"));
+  const media = readJson(path.join(root, "comp/media.json"));
+  const errorState = readJson(path.join(root, "comp/error-state.json"));
 
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.border.radius"));
   assert.ok(getPath(cardCover, "chips.comp.card-cover-frame.status.color.error"));
@@ -144,6 +147,9 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(slider, "chips.comp.slider.thumb.surface.active"));
   assert.ok(getPath(datePicker, "chips.comp.date-picker.cell.surface.selected"));
   assert.ok(getPath(timePicker, "chips.comp.time-picker.option.surface.selected"));
+  assert.ok(getPath(image, "chips.comp.image.fallback.surface"));
+  assert.ok(getPath(media, "chips.comp.media.control.surface.active"));
+  assert.ok(getPath(errorState, "chips.comp.error-state.root.border.error"));
 });
 
 test("system token layer exists", () => {

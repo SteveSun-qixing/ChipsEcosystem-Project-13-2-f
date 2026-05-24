@@ -46,5 +46,8 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.slider?.thumb?.surface?.active).toBeDefined();
     expect(parsed.comp.chips?.comp?.["date-picker"]?.cell?.surface?.selected).toBeDefined();
     expect(parsed.comp.chips?.comp?.["time-picker"]?.option?.surface?.selected).toBeDefined();
+    expect(parsed.comp.chips?.comp?.image?.fallback?.surface).toBeDefined();
+    expect(parsed.comp.chips?.comp?.media?.control?.surface?.idle).toBeDefined();
+    expect(parsed.comp.chips?.comp?.["error-state"]?.details?.color).toBeDefined();
   });
 });

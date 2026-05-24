@@ -116,6 +116,9 @@ const TEXT_TONES = new Set(["default", "muted", "accent", "error"]);
 const TEXT_EMPHASIS = new Set(["regular", "strong", "code"]);
 const CONTROL_TONES = new Set(["neutral", "accent", "success", "warning", "error"]);
 const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
+const IMAGE_FIT_VALUES = new Set(["cover", "contain", "fill", "none", "scale-down"]);
+const MEDIA_KINDS = new Set(["audio", "video", "generic"]);
+const MEDIA_FIT_VALUES = new Set(["cover", "contain", "fill", "none", "scale-down"]);
 const TASK015_BASE_CONTROL_STATES = ["idle", "disabled", "loading", "error"];
 
 function normalizeTextElementTag(tag, fallback = "span") {
@@ -136,6 +139,34 @@ function normalizeControlTone(tone) {
 
 function normalizeAvatarShape(shape) {
   return AVATAR_SHAPES.has(shape) ? shape : "circle";
+}
+
+function normalizeImageFit(fit) {
+  return IMAGE_FIT_VALUES.has(fit) ? fit : "cover";
+}
+
+function normalizeObjectPosition(value) {
+  return isNonEmptyString(value) ? value.trim() : "center";
+}
+
+function normalizeDimension(value) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+
+  if (isNonEmptyString(value)) {
+    return value.trim();
+  }
+
+  return undefined;
+}
+
+function normalizeMediaKind(kind) {
+  return MEDIA_KINDS.has(kind) ? kind : "generic";
+}
+
+function normalizeMediaFit(fit) {
+  return MEDIA_FIT_VALUES.has(fit) ? fit : "contain";
 }
 
 function resolveAccessibleText(params = {}) {
@@ -841,6 +872,106 @@ export function resolveTimePickerModel(params = {}) {
   };
 }
 
+export function resolveImageModel(params = {}) {
+  const src = isNonEmptyString(params.src) ? params.src.trim() : "";
+  const alt = isNonEmptyString(params.alt) ? params.alt.trim() : "";
+  const decorative = params.decorative === true;
+  const fit = normalizeImageFit(params.fit);
+  const objectPosition = normalizeObjectPosition(params.objectPosition);
+  const width = normalizeDimension(params.width);
+  const height = normalizeDimension(params.height);
+  const loading = params.loading === true;
+  const error = normalizeError(params.error);
+  const loaded = params.loaded === true;
+  const hasSource = src.length > 0;
+  const fallbackVisible = loading || Boolean(error) || !hasSource;
+
+  return {
+    src,
+    alt: decorative ? "" : alt,
+    decorative,
+    fit,
+    objectPosition,
+    width,
+    height,
+    loading,
+    loaded,
+    error,
+    hasSource,
+    fallbackVisible,
+    state: resolveInteractiveState({
+      disabled: params.disabled === true,
+      loading,
+      error
+    })
+  };
+}
+
+export function resolveMediaModel(params = {}) {
+  const kind = normalizeMediaKind(params.kind);
+  const src = isNonEmptyString(params.src) ? params.src.trim() : "";
+  const title = isNonEmptyString(params.title) ? params.title.trim() : "";
+  const caption = params.caption !== undefined && params.caption !== null
+    ? params.caption
+    : "";
+  const fit = normalizeMediaFit(params.fit);
+  const objectPosition = normalizeObjectPosition(params.objectPosition);
+  const poster = isNonEmptyString(params.poster) ? params.poster.trim() : "";
+  const width = normalizeDimension(params.width);
+  const height = normalizeDimension(params.height);
+  const muted = params.muted === true;
+  const loop = params.loop === true;
+  const autoPlay = params.autoPlay === true;
+  const controls = params.controls === true;
+  const loading = params.loading === true;
+  const error = normalizeError(params.error);
+  const hasSource = src.length > 0;
+  const fallbackVisible = loading || Boolean(error) || !hasSource;
+
+  return {
+    kind,
+    src,
+    title,
+    caption,
+    fit,
+    objectPosition,
+    poster,
+    width,
+    height,
+    muted,
+    loop,
+    autoPlay,
+    controls,
+    loading,
+    error,
+    hasSource,
+    fallbackVisible,
+    state: resolveInteractiveState({
+      disabled: params.disabled === true,
+      loading,
+      error
+    })
+  };
+}
+
+export function resolveErrorStateModel(params = {}) {
+  const error = toStandardError(params.error, params.fallbackCode || "ERROR_STATE");
+  const retryable = params.retryable === true || error.retryable === true;
+  const showDetails = params.showDetails === true;
+
+  return {
+    error,
+    retryable,
+    showDetails,
+    tone: normalizeControlTone(params.tone || "error"),
+    state: resolveInteractiveState({
+      disabled: params.disabled === true,
+      loading: params.loading === true,
+      error
+    })
+  };
+}
+
 function resolveProgressMetrics(params = {}) {
   const rawMin = toFiniteNumber(params.min, 0);
   const rawMax = toFiniteNumber(params.max, 100);
@@ -1431,6 +1562,44 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.time-picker.status.color.error",
     "chips.comp.time-picker.focus.outline"
   ],
+  image: [
+    "chips.comp.image.root.radius",
+    "chips.comp.image.root.surface",
+    "chips.comp.image.root.border",
+    "chips.comp.image.media.surface",
+    "chips.comp.image.fallback.surface",
+    "chips.comp.image.fallback.color",
+    "chips.comp.image.caption.color",
+    "chips.comp.image.status.color.error",
+    "chips.comp.image.focus.outline"
+  ],
+  media: [
+    "chips.comp.media.root.radius",
+    "chips.comp.media.root.surface",
+    "chips.comp.media.root.border",
+    "chips.comp.media.content.surface",
+    "chips.comp.media.controls.surface",
+    "chips.comp.media.control.surface.idle",
+    "chips.comp.media.control.surface.active",
+    "chips.comp.media.control.color",
+    "chips.comp.media.caption.color",
+    "chips.comp.media.status.color.error",
+    "chips.comp.media.focus.outline"
+  ],
+  "error-state": [
+    "chips.comp.error-state.root.radius",
+    "chips.comp.error-state.root.surface",
+    "chips.comp.error-state.root.border.error",
+    "chips.comp.error-state.icon.color",
+    "chips.comp.error-state.title.color",
+    "chips.comp.error-state.description.color",
+    "chips.comp.error-state.details.color",
+    "chips.comp.error-state.action.surface.idle",
+    "chips.comp.error-state.action.surface.active",
+    "chips.comp.error-state.action.text.color",
+    "chips.comp.error-state.status.color.error",
+    "chips.comp.error-state.focus.outline"
+  ],
   button: [
     "chips.comp.button.root.radius",
     "chips.comp.button.root.surface.idle",
@@ -1896,6 +2065,24 @@ export function buildComponentContract(component) {
       scope: "time-picker",
       parts: ["root", "label", "control", "input", "trigger", "list", "option", "description", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
+    },
+    image: {
+      component: "image",
+      scope: "image",
+      parts: ["root", "media", "fallback", "caption", "status"],
+      states: TASK015_BASE_CONTROL_STATES
+    },
+    media: {
+      component: "media",
+      scope: "media",
+      parts: ["root", "content", "controls", "control", "caption", "status"],
+      states: TASK015_BASE_CONTROL_STATES
+    },
+    "error-state": {
+      component: "error-state",
+      scope: "error-state",
+      parts: ["root", "icon", "title", "description", "details", "action", "status"],
+      states: TASK015_BASE_CONTROL_STATES
     },
     button: {
       component: "button",
@@ -3818,6 +4005,364 @@ export const ChipsAvatar = React.forwardRef((props, ref) => {
 });
 
 ChipsAvatar.displayName = "ChipsAvatar";
+
+export const ChipsImage = React.forwardRef((props, ref) => {
+  const {
+    src,
+    alt,
+    decorative = false,
+    caption,
+    captionKey,
+    captionParams,
+    fallbackCaption,
+    fallback,
+    fit = "cover",
+    objectPosition = "center",
+    width,
+    height,
+    loading = false,
+    loadingStrategy,
+    decoding,
+    disabled = false,
+    error = null,
+    i18n,
+    onLoad,
+    onError,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const effectiveError = normalizeError(error);
+  const model = resolveImageModel({
+    src,
+    alt,
+    decorative,
+    fit,
+    objectPosition,
+    width,
+    height,
+    loading,
+    loaded: props.loaded === true,
+    disabled,
+    error: effectiveError
+  });
+  const state = model.state;
+  const resolvedCaption = resolveDisplayContent({
+    value: caption,
+    key: captionKey,
+    params: captionParams,
+    fallback: fallbackCaption,
+    i18n,
+    onDiagnostic
+  });
+
+  if (!model.decorative && !model.alt) {
+    throw new Error("IMAGE_A11Y_ALT_REQUIRED");
+  }
+
+  if (typeof onStateChange === "function") {
+    onStateChange(state);
+  }
+
+  const mediaStyle = {
+    "--chips-image-fit": model.fit,
+    "--chips-image-position": model.objectPosition
+  };
+  if (model.width !== undefined) {
+    mediaStyle["--chips-image-width"] = typeof model.width === "number" ? `${model.width}px` : model.width;
+  }
+  if (model.height !== undefined) {
+    mediaStyle["--chips-image-height"] = typeof model.height === "number" ? `${model.height}px` : model.height;
+  }
+
+  const handleLoad = (event) => {
+    if (typeof onLoad === "function") {
+      onLoad(event);
+    }
+  };
+
+  const handleError = (event) => {
+    const nextError = {
+      code: "IMAGE_LOAD_ERROR",
+      message: model.src ? `Image failed to load: ${model.src}` : "Image source is missing"
+    };
+    if (typeof onError === "function") {
+      onError(nextError, event);
+    }
+  };
+
+  const fallbackContent = fallback !== undefined
+    ? fallback
+    : model.loading
+      ? "[[component.image.loading]]"
+      : model.error
+        ? model.error.message
+        : "[[component.image.empty]]";
+
+  return React.createElement(
+    "figure",
+    {
+      ...rest,
+      ...createScopeAttributes("image", "root", state),
+      ref,
+      role: model.decorative ? undefined : "group",
+      "aria-label": model.decorative ? undefined : model.alt,
+      "aria-hidden": model.decorative ? "true" : undefined,
+      "aria-busy": model.loading ? "true" : undefined,
+      "aria-disabled": disabled ? "true" : undefined,
+      "aria-invalid": model.error ? "true" : undefined,
+      "data-fit": model.fit,
+      "data-loaded": String(model.loaded),
+      "data-has-source": String(model.hasSource)
+    },
+    model.hasSource && !model.error
+      ? React.createElement("img", {
+          ...createScopeAttributes("image", "media", state),
+          src: model.src,
+          alt: model.alt,
+          loading: loadingStrategy,
+          decoding,
+          width: model.width,
+          height: model.height,
+          style: mediaStyle,
+          "aria-hidden": model.decorative ? "true" : undefined,
+          onLoad: handleLoad,
+          onError: handleError
+        })
+      : null,
+    model.fallbackVisible
+      ? React.createElement(
+          "div",
+          {
+            ...createScopeAttributes("image", "fallback", state),
+            ...createAriaStatusProps({ live: model.error ? "assertive" : "polite" })
+          },
+          fallbackContent
+        )
+      : null,
+    resolvedCaption
+      ? React.createElement(
+          "figcaption",
+          createScopeAttributes("image", "caption", state),
+          resolvedCaption
+        )
+      : null,
+    model.error
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("image", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          model.error.message
+        )
+      : null
+  );
+});
+
+ChipsImage.displayName = "ChipsImage";
+
+export const ChipsMedia = React.forwardRef((props, ref) => {
+  const {
+    kind = "generic",
+    src,
+    title,
+    titleKey,
+    titleParams,
+    fallbackTitle,
+    caption,
+    captionKey,
+    captionParams,
+    fallbackCaption,
+    poster,
+    fit = "contain",
+    objectPosition = "center",
+    width,
+    height,
+    controls = false,
+    controlsContent,
+    muted = false,
+    loop = false,
+    autoPlay = false,
+    preload = "metadata",
+    fallback,
+    disabled = false,
+    loading = false,
+    error = null,
+    i18n,
+    onLoadStart,
+    onLoadedMetadata,
+    onError,
+    onStateChange,
+    onDiagnostic,
+    children,
+    ...rest
+  } = props;
+
+  const resolvedTitle = resolveAccessibleText({
+    value: title,
+    key: titleKey,
+    params: titleParams,
+    fallback: fallbackTitle,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedCaption = resolveDisplayContent({
+    value: caption,
+    key: captionKey,
+    params: captionParams,
+    fallback: fallbackCaption,
+    i18n,
+    onDiagnostic
+  });
+  const effectiveError = normalizeError(error);
+  const model = resolveMediaModel({
+    kind,
+    src,
+    title: resolvedTitle,
+    caption: resolvedCaption,
+    fit,
+    objectPosition,
+    poster,
+    width,
+    height,
+    controls,
+    muted,
+    loop,
+    autoPlay,
+    disabled,
+    loading,
+    error: effectiveError
+  });
+  const state = model.state;
+  const mediaElement = model.kind === "audio"
+    ? "audio"
+    : model.kind === "video"
+      ? "video"
+      : "div";
+  const mediaStyle = {
+    "--chips-media-fit": model.fit,
+    "--chips-media-position": model.objectPosition
+  };
+  if (model.width !== undefined) {
+    mediaStyle["--chips-media-width"] = typeof model.width === "number" ? `${model.width}px` : model.width;
+  }
+  if (model.height !== undefined) {
+    mediaStyle["--chips-media-height"] = typeof model.height === "number" ? `${model.height}px` : model.height;
+  }
+
+  if (!resolvedTitle && model.kind !== "generic") {
+    throw new Error("MEDIA_A11Y_TITLE_REQUIRED");
+  }
+  if (model.kind === "generic" && !resolvedTitle && children === undefined) {
+    throw new Error("MEDIA_A11Y_TITLE_REQUIRED");
+  }
+
+  if (typeof onStateChange === "function") {
+    onStateChange(state);
+  }
+
+  const handleMediaError = (event) => {
+    const nextError = {
+      code: "MEDIA_LOAD_ERROR",
+      message: model.src ? `Media failed to load: ${model.src}` : "Media source is missing"
+    };
+    if (typeof onError === "function") {
+      onError(nextError, event);
+    }
+  };
+  const shouldShowFallback = model.kind === "generic"
+    ? model.loading || Boolean(model.error) || (children === undefined && !model.hasSource)
+    : model.fallbackVisible;
+  const fallbackContent = fallback !== undefined
+    ? fallback
+    : model.loading
+      ? "[[component.media.loading]]"
+      : model.error
+        ? model.error.message
+        : "[[component.media.empty]]";
+
+  return React.createElement(
+    "figure",
+    {
+      ...rest,
+      ...createScopeAttributes("media", "root", state),
+      ref,
+      role: "group",
+      "aria-label": resolvedTitle,
+      "aria-busy": model.loading ? "true" : undefined,
+      "aria-disabled": disabled ? "true" : undefined,
+      "aria-invalid": model.error ? "true" : undefined,
+      "data-kind": model.kind,
+      "data-fit": model.fit,
+      "data-has-source": String(model.hasSource),
+      "data-controls": String(model.controls)
+    },
+    model.kind === "generic"
+      ? React.createElement(
+          "div",
+          {
+            ...createScopeAttributes("media", "content", state),
+            style: mediaStyle
+          },
+          children
+        )
+      : model.hasSource && !model.error
+        ? React.createElement(mediaElement, {
+            ...createScopeAttributes("media", "content", state),
+            src: model.src,
+            title: resolvedTitle,
+            poster: model.kind === "video" ? model.poster || undefined : undefined,
+            controls: model.controls,
+            muted: model.muted,
+            loop: model.loop,
+            autoPlay: model.autoPlay,
+            preload,
+            style: mediaStyle,
+            onLoadStart,
+            onLoadedMetadata,
+            onError: handleMediaError
+          })
+        : null,
+    shouldShowFallback
+      ? React.createElement(
+          "div",
+          {
+            ...createScopeAttributes("media", "status", state),
+            ...createAriaStatusProps({ live: model.error ? "assertive" : "polite" })
+          },
+          fallbackContent
+        )
+      : null,
+    controlsContent
+      ? React.createElement(
+          "div",
+          createScopeAttributes("media", "controls", state),
+          controlsContent
+        )
+      : null,
+    resolvedCaption
+      ? React.createElement(
+          "figcaption",
+          createScopeAttributes("media", "caption", state),
+          resolvedCaption
+        )
+      : null,
+    model.error
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("media", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          model.error.message
+        )
+      : null
+  );
+});
+
+ChipsMedia.displayName = "ChipsMedia";
 
 export const ChipsSpinner = React.forwardRef((props, ref) => {
   const {
@@ -11781,6 +12326,175 @@ export const ChipsEmptyState = React.forwardRef((props, ref) => {
 
 ChipsEmptyState.displayName = "ChipsEmptyState";
 
+export const ChipsErrorState = React.forwardRef((props, ref) => {
+  const {
+    error,
+    code,
+    message,
+    details,
+    title,
+    titleKey = "systemUx.errorState.title",
+    description,
+    descriptionKey = "systemUx.errorState.description",
+    actionLabel,
+    actionLabelKey = "systemUx.errorState.action",
+    fallbackTitle = "Something went wrong",
+    fallbackDescription,
+    fallbackActionLabel = "Try again",
+    icon,
+    children,
+    disabled = false,
+    loading = false,
+    retryable,
+    showDetails = false,
+    ariaLabel,
+    i18n,
+    traceId,
+    onAction,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const inputError = error || {
+    code: isNonEmptyString(code) ? code.trim() : "ERROR_STATE",
+    message: isNonEmptyString(message) ? message.trim() : fallbackDescription || fallbackTitle,
+    details
+  };
+  const model = resolveErrorStateModel({
+    error: inputError,
+    retryable,
+    showDetails,
+    disabled,
+    loading
+  });
+  const disabledByState = disabled || loading;
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: model.error
+  });
+  const resolvedTitle = resolveI18nText({
+    i18n,
+    key: titleKey,
+    fallback: title || fallbackTitle,
+    onDiagnostic
+  });
+  const resolvedDescription = resolveI18nText({
+    i18n,
+    key: descriptionKey,
+    fallback: description || fallbackDescription || model.error.message,
+    onDiagnostic
+  });
+  const resolvedActionLabel = resolveI18nText({
+    i18n,
+    key: actionLabelKey,
+    fallback: actionLabel || fallbackActionLabel,
+    onDiagnostic
+  });
+  const resolvedAriaLabel = ariaLabel || resolvedTitle || model.error.message;
+  const detailContent = details !== undefined
+    ? details
+    : model.error.details !== undefined
+      ? model.error.details
+      : model.error.code;
+
+  if (typeof onStateChange === "function") {
+    onStateChange(state);
+  }
+
+  const handleAction = (event) => {
+    if (disabledByState) {
+      event.preventDefault();
+      return;
+    }
+
+    if (typeof onAction === "function") {
+      onAction(model.error, event);
+    }
+
+    if (typeof onDiagnostic === "function") {
+      onDiagnostic(
+        createObservationRecord({
+          traceId,
+          component: "error-state",
+          action: "action",
+          error: model.error,
+          durationMs: 0
+        })
+      );
+    }
+  };
+
+  return React.createElement(
+    "section",
+    {
+      ...rest,
+      ...createScopeAttributes("error-state", "root", state),
+      ref,
+      role: "alert",
+      "aria-label": resolvedAriaLabel,
+      "aria-busy": loading ? "true" : undefined,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "data-retryable": String(model.retryable),
+      "data-error-code": model.error.code
+    },
+    icon
+      ? React.createElement(
+          "div",
+          createScopeAttributes("error-state", "icon", state),
+          icon
+        )
+      : null,
+    React.createElement(
+      "h2",
+      createScopeAttributes("error-state", "title", state),
+      resolvedTitle
+    ),
+    React.createElement(
+      "p",
+      createScopeAttributes("error-state", "description", state),
+      resolvedDescription
+    ),
+    children
+      ? React.createElement(
+          "div",
+          createScopeAttributes("error-state", "description", state),
+          children
+        )
+      : null,
+    model.showDetails && detailContent !== undefined
+      ? React.createElement(
+          "pre",
+          createScopeAttributes("error-state", "details", state),
+          typeof detailContent === "string" ? detailContent : JSON.stringify(detailContent, null, 2)
+        )
+      : null,
+    typeof onAction === "function"
+      ? React.createElement(
+          "button",
+          {
+            ...createScopeAttributes("error-state", "action", state),
+            type: "button",
+            disabled: disabledByState,
+            onClick: handleAction
+          },
+          resolvedActionLabel
+        )
+      : null,
+    React.createElement(
+      "span",
+      {
+        ...createScopeAttributes("error-state", "status", state),
+        ...createAriaStatusProps({ live: "assertive" })
+      },
+      model.error.message
+    )
+  );
+});
+
+ChipsErrorState.displayName = "ChipsErrorState";
+
 export const ChipsNotification = React.forwardRef((props, ref) => {
   const {
     items,
@@ -12481,6 +13195,33 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "image") {
+    if (props["aria-hidden"] === "true") {
+      return true;
+    }
+    assertAriaProps(props, {
+      role: "group",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "media") {
+    assertAriaProps(props, {
+      role: "group",
+      requireLabel: true
+    });
+    return true;
+  }
+
+  if (component === "error-state") {
+    assertAriaProps(props, {
+      role: "alert",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "dialog") {
     assertAriaProps(props, {
       role: "button",
@@ -12853,6 +13594,24 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     scope: "time-picker",
     parts: ["root", "label", "control", "input", "trigger", "list", "option", "description", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
+  }),
+  createComponentMeta({
+    name: "ChipsImage",
+    scope: "image",
+    parts: ["root", "media", "fallback", "caption", "status"],
+    states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsMedia",
+    scope: "media",
+    parts: ["root", "content", "controls", "control", "caption", "status"],
+    states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsErrorState",
+    scope: "error-state",
+    parts: ["root", "icon", "title", "description", "details", "action", "status"],
+    states: TASK015_BASE_CONTROL_STATES
   })
 ];
 

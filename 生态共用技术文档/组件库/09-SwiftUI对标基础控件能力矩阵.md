@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；`DatePicker / TimePicker` 已作为任务015第六批收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；`DatePicker / TimePicker` 已作为任务015第六批收口；`Image / Media / ErrorState` 已作为任务015第七批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -17,8 +17,8 @@
 | 文本与图像 | Text | `ChipsText` | 已落地 | `text` | 继续补充用例到真实应用迁移场景 |
 | 文本与图像 | Label | `ChipsLabel` | 已落地 | `label` | 后续表单控件必须优先复用 Label 语义 |
 | 文本与图像 | Icon | `ChipsIcon` | 已落地 | `icon` | 所有运行时 UI 图标必须消费 `IconDescriptor` |
-| 文本与图像 | Image | 无 | 待补齐 | `image` | 需要 alt、加载、错误和尺寸契约 |
-| 文本与图像 | Media | 无 | 待补齐 | `media` | 需要音视频/通用媒体边界与模块能力协作口径 |
+| 文本与图像 | Image | `ChipsImage` | 已落地 | `image` | 维持 alt、装饰模式、加载、错误和尺寸契约 |
+| 文本与图像 | Media | `ChipsMedia` | 已落地 | `media` | 维持音频、视频、通用媒体边界和可访问标题口径 |
 | 按钮与命令 | Button | `ChipsButton` | 已落地 | `button` | 维持基础动作按钮闭环 |
 | 按钮与命令 | IconButton | `ChipsIconButton` | 已落地 | `icon-button` | 必须强制可访问名称和 44px 热区 |
 | 按钮与命令 | ToggleButton | `ChipsToggleButton` | 已落地 | `toggle-button` | 独立导出与 contract，切换态使用 `aria-pressed` |
@@ -45,7 +45,7 @@
 | 反馈控件 | Spinner | `ChipsSpinner` | 已落地 | `spinner` | 需要 status 语义与 motion token |
 | 反馈控件 | Skeleton | `ChipsSkeleton` | 已落地 | `skeleton` | 维持加载占位闭环 |
 | 反馈控件 | EmptyState | `ChipsEmptyState` | 已落地 | `empty-state` | 维持空态展示闭环 |
-| 反馈控件 | ErrorState | `ChipsErrorBoundary` 相邻能力 | 待补齐 | `error-state` | 需要静态错误展示，不能等同错误边界 |
+| 反馈控件 | ErrorState | `ChipsErrorState` | 已落地 | `error-state` | 维持静态错误展示、详情和动作入口，不能等同错误边界 |
 
 ## 3. 第一批已冻结控件
 
@@ -210,13 +210,36 @@
 - 值模型使用 `HH:mm` 字符串，显式秒级场景使用 `HH:mm:ss`，不隐式绑定日期或时区；支持 `min / max / step / optionStep / showSeconds / options / isTimeDisabled`，默认列表按 `optionStep` 生成，键盘增减按 `step` 执行。
 - 输入控件使用 `role="combobox"` 并必须有可访问名称；展开状态通过 `aria-expanded`、`aria-controls`、`aria-activedescendant` 关联 listbox，选项使用 `role="option"` 与 `aria-selected`。
 
-## 9. 后续批次建议
+## 9. 第七批已冻结控件
+
+### `ChipsImage`
+
+- `data-scope="image"`，公开 part：`root / media / fallback / caption / status`。
+- 状态：`idle / disabled / loading / error`。
+- 主题 token：`chips.comp.image.root.*`、`media.surface`、`fallback.*`、`caption.color`、`status.color.error`、`focus.outline`。
+- 非装饰图片必须提供 alt 或等价可访问名称，根节点使用 `role="group"`；装饰图片必须 `aria-hidden="true"` 且空 alt。该组件只负责静态图片结构、加载/错误 fallback 和说明文本，不承载图片处理或资源管理策略。
+
+### `ChipsMedia`
+
+- `data-scope="media"`，公开 part：`root / content / controls / control / caption / status`。
+- 状态：`idle / disabled / loading / error`。
+- 主题 token：`chips.comp.media.root.*`、`content.surface`、`controls.surface`、`control.*`、`caption.color`、`status.color.error`、`focus.outline`。
+- 音频和视频必须提供可访问标题，根节点使用 `role="group"`；通用媒体在无标题时必须提供 children 作为内容边界。该组件只提供媒体显示边界和控制槽视觉，不等同播放器应用、转码模块或资源打开链路。
+
+### `ChipsErrorState`
+
+- `data-scope="error-state"`，公开 part：`root / icon / title / description / details / action / status`。
+- 状态：`idle / disabled / loading / error`。
+- 主题 token：`chips.comp.error-state.root.*`、`icon.color`、`title.color`、`description.color`、`details.color`、`action.*`、`status.color.error`、`focus.outline`。
+- 根节点必须使用 `role="alert"` 并提供可访问名称；`details` 用于展示标准化错误详情，`action` 用于业务注入的重试、返回或恢复动作。该组件是静态错误展示，不等同 `ChipsErrorBoundary` 的运行时异常捕获边界，也不等同 `ChipsEmptyState` 的空态展示。
+
+## 10. 后续批次建议
 
 - 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
 - 批次 D：`SegmentedControl / ComboBox`（已落地）。
 - 批次 E：`NumberInput / Stepper / Slider`（已落地）。
 - 批次 F：`DatePicker / TimePicker`（已落地）。
-- 批次 G：`Image / Media / ErrorState`。
+- 批次 G：`Image / Media / ErrorState`（已落地）。
 
 每一批都必须同步组件库、组件 contract、组件 token、默认主题、暗色主题、公共文档和测试；不得只新增空壳导出。

@@ -482,6 +482,127 @@ body {
   color: var(--chips-comp-avatar-status-color-error);
 }
 
+/* Image */
+
+[data-scope="image"][data-part="root"] {
+  display: inline-grid;
+  gap: var(--chips-layout-gap-xs);
+  margin: 0;
+  max-inline-size: 100%;
+  border: 1px solid var(--chips-comp-image-root-border);
+  border-radius: var(--chips-comp-image-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-image-root-surface);
+  overflow: hidden;
+}
+
+[data-scope="image"][data-part="root"][data-state="focus"],
+[data-scope="image"][data-part="root"]:focus-visible {
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-image-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+}
+
+[data-scope="image"][data-part="media"] {
+  display: block;
+  inline-size: var(--chips-image-width, 100%);
+  block-size: var(--chips-image-height, auto);
+  max-inline-size: 100%;
+  min-block-size: var(--chips-layout-density-comfortable);
+  object-fit: var(--chips-image-fit, cover);
+  object-position: var(--chips-image-position, center);
+  background-color: var(--chips-comp-image-media-surface);
+}
+
+[data-scope="image"][data-part="fallback"] {
+  display: grid;
+  place-items: center;
+  min-block-size: var(--chips-layout-density-spacious);
+  padding: var(--chips-base-space-3);
+  background-color: var(--chips-comp-image-fallback-surface);
+  color: var(--chips-comp-image-fallback-color);
+  text-align: center;
+}
+
+[data-scope="image"][data-part="caption"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-image-caption-color);
+  font-size: 13px;
+}
+
+[data-scope="image"][data-part="status"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-image-status-color-error);
+}
+
+/* Media */
+
+[data-scope="media"][data-part="root"] {
+  display: inline-grid;
+  gap: var(--chips-layout-gap-xs);
+  margin: 0;
+  max-inline-size: 100%;
+  border: 1px solid var(--chips-comp-media-root-border);
+  border-radius: var(--chips-comp-media-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-media-root-surface);
+  overflow: hidden;
+}
+
+[data-scope="media"][data-part="root"][data-state="focus"],
+[data-scope="media"][data-part="root"]:focus-visible {
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-media-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+}
+
+[data-scope="media"][data-part="content"] {
+  display: block;
+  inline-size: var(--chips-media-width, 100%);
+  block-size: var(--chips-media-height, auto);
+  max-inline-size: 100%;
+  min-block-size: var(--chips-layout-density-comfortable);
+  object-fit: var(--chips-media-fit, contain);
+  object-position: var(--chips-media-position, center);
+  background-color: var(--chips-comp-media-content-surface);
+}
+
+[data-scope="media"][data-kind="generic"] [data-part="content"] {
+  display: grid;
+  place-items: center;
+  padding: var(--chips-base-space-3);
+}
+
+[data-scope="media"][data-part="controls"] {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-layout-gap-xs);
+  padding: var(--chips-base-space-2);
+  background-color: var(--chips-comp-media-controls-surface);
+}
+
+[data-scope="media"][data-part="control"] {
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-media-control-surface-idle);
+  color: var(--chips-comp-media-control-color);
+}
+
+[data-scope="media"][data-part="control"][data-state="active"],
+[data-scope="media"][data-part="control"]:active {
+  background-color: var(--chips-comp-media-control-surface-active);
+}
+
+[data-scope="media"][data-part="caption"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-media-caption-color);
+  font-size: 13px;
+}
+
+[data-scope="media"][data-part="status"] {
+  padding: var(--chips-base-space-3);
+  color: var(--chips-comp-media-status-color-error);
+}
+
 /* Notification */
 
 [data-scope="notification"][data-part="root"] {
@@ -766,6 +887,63 @@ body {
 [data-scope="error-boundary"][data-part="root"][data-state="focus"] {
   outline: 1px solid var(--chips-comp-error-boundary-focus-outline);
   outline-offset: 2px;
+}
+
+/* Error state */
+
+[data-scope="error-state"][data-part="root"] {
+  display: grid;
+  gap: var(--chips-layout-gap-xs);
+  border: 1px solid var(--chips-comp-error-state-root-border-error);
+  border-radius: var(--chips-comp-error-state-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-error-state-root-surface);
+  padding: var(--chips-base-space-4);
+}
+
+[data-scope="error-state"][data-part="root"][data-state="focus"],
+[data-scope="error-state"][data-part="root"]:focus-visible {
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-error-state-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+}
+
+[data-scope="error-state"][data-part="icon"] {
+  color: var(--chips-comp-error-state-icon-color);
+}
+
+[data-scope="error-state"][data-part="title"] {
+  margin: 0;
+  font-weight: 500;
+  color: var(--chips-comp-error-state-title-color);
+}
+
+[data-scope="error-state"][data-part="description"] {
+  margin: 0;
+  color: var(--chips-comp-error-state-description-color);
+}
+
+[data-scope="error-state"][data-part="details"] {
+  margin: 0;
+  overflow: auto;
+  border-radius: var(--chips-base-radius-sm);
+  padding: var(--chips-base-space-3);
+  color: var(--chips-comp-error-state-details-color);
+}
+
+[data-scope="error-state"][data-part="action"] {
+  justify-self: start;
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-error-state-action-surface-idle);
+  color: var(--chips-comp-error-state-action-text-color);
+}
+
+[data-scope="error-state"][data-part="action"][data-state="active"],
+[data-scope="error-state"][data-part="action"]:active {
+  background-color: var(--chips-comp-error-state-action-surface-active);
+}
+
+[data-scope="error-state"][data-part="status"] {
+  color: var(--chips-comp-error-state-status-color-error);
 }
 
 /* Loading boundary */
@@ -2805,6 +2983,245 @@ body {
   outline-offset: 2px;
 }
 
+/* Date picker */
+
+[data-scope="date-picker"][data-part="root"],
+[data-scope="time-picker"][data-part="root"] {
+  position: relative;
+  display: inline-grid;
+  gap: var(--chips-base-space-1);
+}
+
+[data-scope="date-picker"][data-part="label"],
+[data-scope="time-picker"][data-part="label"] {
+  color: var(--chips-comp-date-picker-label-color, var(--chips-sys-color-on-surface));
+  font-size: 13px;
+}
+
+[data-scope="time-picker"][data-part="label"] {
+  color: var(--chips-comp-time-picker-label-color, var(--chips-sys-color-on-surface));
+}
+
+[data-scope="date-picker"][data-part="control"],
+[data-scope="time-picker"][data-part="control"] {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 160px;
+  border: 1px solid var(--chips-comp-date-picker-root-border-idle);
+  border-radius: var(--chips-comp-date-picker-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-date-picker-root-surface-idle);
+  color: var(--chips-comp-date-picker-control-color);
+}
+
+[data-scope="time-picker"][data-part="control"] {
+  border-color: var(--chips-comp-time-picker-root-border-idle);
+  border-radius: var(--chips-comp-time-picker-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-time-picker-root-surface-idle);
+  color: var(--chips-comp-time-picker-control-color);
+}
+
+[data-scope="date-picker"][data-part="root"][data-state="focus"] [data-part="control"],
+[data-scope="date-picker"][data-part="input"]:focus {
+  border-color: var(--chips-comp-date-picker-root-border-focus);
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-date-picker-focus-outline);
+}
+
+[data-scope="time-picker"][data-part="root"][data-state="focus"] [data-part="control"],
+[data-scope="time-picker"][data-part="input"]:focus {
+  border-color: var(--chips-comp-time-picker-root-border-focus);
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-time-picker-focus-outline);
+}
+
+[data-scope="date-picker"][data-part="root"][data-state="error"] [data-part="control"],
+[data-scope="date-picker"][data-part="input"][aria-invalid="true"] {
+  border-color: var(--chips-comp-date-picker-root-border-error);
+}
+
+[data-scope="time-picker"][data-part="root"][data-state="error"] [data-part="control"],
+[data-scope="time-picker"][data-part="input"][aria-invalid="true"] {
+  border-color: var(--chips-comp-time-picker-root-border-error);
+}
+
+[data-scope="date-picker"][data-part="input"],
+[data-scope="time-picker"][data-part="input"] {
+  min-inline-size: 0;
+  inline-size: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  font: inherit;
+}
+
+[data-scope="date-picker"][data-part="input"]::placeholder {
+  color: var(--chips-comp-date-picker-placeholder-color);
+}
+
+[data-scope="time-picker"][data-part="input"]::placeholder {
+  color: var(--chips-comp-time-picker-placeholder-color);
+}
+
+[data-scope="date-picker"][data-part="trigger"],
+[data-scope="time-picker"][data-part="trigger"],
+[data-scope="date-picker"][data-part="previous"],
+[data-scope="date-picker"][data-part="next"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background: transparent;
+  color: var(--chips-comp-date-picker-trigger-color-idle);
+  cursor: pointer;
+  font: inherit;
+}
+
+[data-scope="time-picker"][data-part="trigger"] {
+  color: var(--chips-comp-time-picker-trigger-color-idle);
+}
+
+[data-scope="date-picker"][data-part="previous"],
+[data-scope="date-picker"][data-part="next"] {
+  color: var(--chips-comp-date-picker-nav-color-idle);
+}
+
+[data-scope="date-picker"][data-part="trigger"]:hover {
+  color: var(--chips-comp-date-picker-trigger-color-hover);
+}
+
+[data-scope="time-picker"][data-part="trigger"]:hover {
+  color: var(--chips-comp-time-picker-trigger-color-hover);
+}
+
+[data-scope="date-picker"][data-part="previous"]:hover,
+[data-scope="date-picker"][data-part="next"]:hover {
+  color: var(--chips-comp-date-picker-nav-color-hover);
+}
+
+[data-scope="date-picker"][data-part="calendar"],
+[data-scope="time-picker"][data-part="list"] {
+  position: absolute;
+  z-index: var(--chips-layout-z-index-overlay, 1000);
+  inset-block-start: calc(100% + var(--chips-base-space-1));
+  inset-inline-start: 0;
+  min-inline-size: 100%;
+  border: 1px solid var(--chips-comp-date-picker-calendar-border);
+  border-radius: var(--chips-comp-date-picker-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-date-picker-calendar-surface);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 14%, transparent);
+  padding: var(--chips-base-space-3);
+}
+
+[data-scope="time-picker"][data-part="list"] {
+  max-block-size: 220px;
+  overflow: auto;
+  margin: 0;
+  padding-block: var(--chips-base-space-1);
+  padding-inline: 0;
+  list-style: none;
+  border-color: var(--chips-comp-time-picker-list-border);
+  border-radius: var(--chips-comp-time-picker-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-time-picker-list-surface);
+}
+
+[data-scope="date-picker"][data-part="header"] {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--chips-base-space-2);
+  color: var(--chips-comp-date-picker-header-color);
+}
+
+[data-scope="date-picker"][data-part="title"] {
+  text-align: center;
+  font-weight: 600;
+}
+
+[data-scope="date-picker"][data-part="grid"] {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(32px, 1fr));
+  gap: var(--chips-comp-date-picker-grid-gap, var(--chips-layout-gap-xs));
+  margin-block-start: var(--chips-base-space-3);
+}
+
+[data-scope="date-picker"][data-part="week-header"] {
+  color: var(--chips-comp-date-picker-week-header-color);
+  font-size: 12px;
+  text-align: center;
+}
+
+[data-scope="date-picker"][data-part="cell"] {
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-date-picker-cell-surface-idle);
+  color: var(--chips-comp-date-picker-cell-text-idle);
+  cursor: pointer;
+  font: inherit;
+}
+
+[data-scope="date-picker"][data-part="cell"]:hover {
+  background-color: var(--chips-comp-date-picker-cell-surface-hover);
+}
+
+[data-scope="date-picker"][data-part="cell"][data-today="true"] {
+  background-color: var(--chips-comp-date-picker-cell-surface-today);
+}
+
+[data-scope="date-picker"][data-part="cell"][data-selected="true"] {
+  background-color: var(--chips-comp-date-picker-cell-surface-selected);
+  color: var(--chips-comp-date-picker-cell-text-selected);
+}
+
+[data-scope="date-picker"][data-part="cell"][data-outside-month="true"] {
+  color: var(--chips-comp-date-picker-cell-text-muted);
+}
+
+[data-scope="date-picker"][data-part="cell"]:disabled,
+[data-scope="time-picker"][data-part="option"][aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+[data-scope="time-picker"][data-part="option"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2);
+  background-color: var(--chips-comp-time-picker-option-surface-idle);
+  color: var(--chips-comp-time-picker-option-text-color);
+}
+
+[data-scope="time-picker"][data-part="option"][data-highlighted="true"] {
+  background-color: var(--chips-comp-time-picker-option-surface-highlighted);
+}
+
+[data-scope="time-picker"][data-part="option"][data-selected="true"] {
+  background-color: var(--chips-comp-time-picker-option-surface-selected);
+}
+
+[data-scope="date-picker"][data-part="description"],
+[data-scope="time-picker"][data-part="description"] {
+  color: var(--chips-comp-date-picker-description-color);
+  font-size: 12px;
+}
+
+[data-scope="time-picker"][data-part="description"] {
+  color: var(--chips-comp-time-picker-description-color);
+}
+
+[data-scope="date-picker"][data-part="status"],
+[data-scope="time-picker"][data-part="status"] {
+  color: var(--chips-comp-date-picker-status-color-error);
+  font-size: 12px;
+}
+
+[data-scope="time-picker"][data-part="status"] {
+  color: var(--chips-comp-time-picker-status-color-error);
+}
 
 
 /* 基础淡入淡出动效，使用 motion 层 token 控制时长与缓动 */

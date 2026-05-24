@@ -347,6 +347,9 @@ export interface TagProps extends ChipsDisplayTextProps {
 }
 
 export type AvatarShape = "circle" | "rounded" | "square";
+export type ImageFit = "cover" | "contain" | "fill" | "none" | "scale-down";
+export type MediaKind = "audio" | "video" | "generic";
+export type MediaFit = "cover" | "contain" | "fill" | "none" | "scale-down";
 
 export interface AvatarProps extends ChipsDisplayTextProps {
   name?: string;
@@ -361,6 +364,102 @@ export interface AvatarProps extends ChipsDisplayTextProps {
   loading?: boolean;
   disabled?: boolean;
   error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface ImageModel {
+  src: string;
+  alt: string;
+  decorative: boolean;
+  fit: ImageFit;
+  objectPosition: string;
+  width?: string | number;
+  height?: string | number;
+  loading: boolean;
+  loaded: boolean;
+  error: StandardErrorLike | null;
+  hasSource: boolean;
+  fallbackVisible: boolean;
+  state: InteractiveState;
+}
+
+export interface ImageProps extends ChipsDisplayTextProps {
+  src?: string;
+  alt?: string;
+  decorative?: boolean;
+  caption?: React.ReactNode;
+  captionKey?: string;
+  captionParams?: Record<string, string | number>;
+  fallbackCaption?: string;
+  fallback?: React.ReactNode;
+  fit?: ImageFit;
+  objectPosition?: string;
+  width?: string | number;
+  height?: string | number;
+  loading?: boolean;
+  loaded?: boolean;
+  loadingStrategy?: "eager" | "lazy";
+  decoding?: "sync" | "async" | "auto";
+  disabled?: boolean;
+  error?: StandardErrorLike | string | null;
+  onLoad?: React.ReactEventHandler<HTMLImageElement>;
+  onError?: (error: StandardErrorLike, event?: React.SyntheticEvent<HTMLImageElement>) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface MediaModel {
+  kind: MediaKind;
+  src: string;
+  title: string;
+  caption: React.ReactNode;
+  fit: MediaFit;
+  objectPosition: string;
+  poster: string;
+  width?: string | number;
+  height?: string | number;
+  muted: boolean;
+  loop: boolean;
+  autoPlay: boolean;
+  controls: boolean;
+  loading: boolean;
+  error: StandardErrorLike | null;
+  hasSource: boolean;
+  fallbackVisible: boolean;
+  state: InteractiveState;
+}
+
+export interface MediaProps extends ChipsDisplayTextProps {
+  kind?: MediaKind;
+  src?: string;
+  title?: string;
+  titleKey?: string;
+  titleParams?: Record<string, string | number>;
+  fallbackTitle?: string;
+  caption?: React.ReactNode;
+  captionKey?: string;
+  captionParams?: Record<string, string | number>;
+  fallbackCaption?: string;
+  poster?: string;
+  fit?: MediaFit;
+  objectPosition?: string;
+  width?: string | number;
+  height?: string | number;
+  controls?: boolean;
+  controlsContent?: React.ReactNode;
+  muted?: boolean;
+  loop?: boolean;
+  autoPlay?: boolean;
+  preload?: "none" | "metadata" | "auto" | string;
+  fallback?: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  children?: React.ReactNode;
+  onLoadStart?: React.ReactEventHandler<HTMLMediaElement>;
+  onLoadedMetadata?: React.ReactEventHandler<HTMLMediaElement>;
+  onError?: (error: StandardErrorLike, event?: React.SyntheticEvent<HTMLMediaElement>) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
 }
@@ -1362,6 +1461,43 @@ export interface EmptyStateProps {
   [key: string]: unknown;
 }
 
+export interface ErrorStateModel {
+  error: StandardErrorLike;
+  retryable: boolean;
+  showDetails: boolean;
+  tone: ChipsControlTone;
+  state: InteractiveState;
+}
+
+export interface ErrorStateProps {
+  error?: StandardErrorLike | Error | string | null;
+  code?: string;
+  message?: string;
+  details?: unknown;
+  title?: React.ReactNode;
+  titleKey?: string;
+  description?: React.ReactNode;
+  descriptionKey?: string;
+  actionLabel?: React.ReactNode;
+  actionLabelKey?: string;
+  fallbackTitle?: string;
+  fallbackDescription?: string;
+  fallbackActionLabel?: string;
+  icon?: React.ReactNode;
+  children?: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  retryable?: boolean;
+  showDetails?: boolean;
+  ariaLabel?: string;
+  i18n?: I18nTextSource;
+  traceId?: string;
+  onAction?: (error: StandardErrorLike, event?: React.MouseEvent<HTMLButtonElement>) => void;
+  onStateChange?: (state: InteractiveState) => void;
+  onDiagnostic?: (record: ObservationRecord) => void;
+  [key: string]: unknown;
+}
+
 export interface SkeletonProps {
   lines?: number;
   animated?: boolean;
@@ -1397,6 +1533,8 @@ export const ChipsToggleButton: React.ForwardRefExoticComponent<ToggleButtonProp
 export const ChipsBadge: React.ForwardRefExoticComponent<BadgeProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsTag: React.ForwardRefExoticComponent<TagProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsAvatar: React.ForwardRefExoticComponent<AvatarProps & React.RefAttributes<HTMLSpanElement>>;
+export const ChipsImage: React.ForwardRefExoticComponent<ImageProps & React.RefAttributes<HTMLElement>>;
+export const ChipsMedia: React.ForwardRefExoticComponent<MediaProps & React.RefAttributes<HTMLElement>>;
 export const ChipsSpinner: React.ForwardRefExoticComponent<SpinnerProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsProgress: React.ForwardRefExoticComponent<ProgressProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTextField: React.ForwardRefExoticComponent<TextFieldProps & React.RefAttributes<HTMLInputElement>>;
@@ -1444,6 +1582,7 @@ export const ChipsLoadingBoundary: React.ForwardRefExoticComponent<LoadingBounda
 export const ChipsNotification: React.ForwardRefExoticComponent<NotificationProps & React.RefAttributes<HTMLElement>>;
 export const ChipsToast: React.ForwardRefExoticComponent<ToastProps & React.RefAttributes<HTMLElement>>;
 export const ChipsEmptyState: React.ForwardRefExoticComponent<EmptyStateProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsErrorState: React.ForwardRefExoticComponent<ErrorStateProps & React.RefAttributes<HTMLElement>>;
 export const ChipsSkeleton: React.ForwardRefExoticComponent<SkeletonProps & React.RefAttributes<HTMLDivElement>>;
 
 export function resolveInteractiveState(params: {
@@ -1469,6 +1608,9 @@ export function resolveNumericControlModel(params?: Record<string, unknown>): Nu
 export function resolveSliderModel(params?: Record<string, unknown>): SliderModel;
 export function resolveDatePickerModel(params?: Record<string, unknown>): DatePickerModel;
 export function resolveTimePickerModel(params?: Record<string, unknown>): TimePickerModel;
+export function resolveImageModel(params?: Record<string, unknown>): ImageModel;
+export function resolveMediaModel(params?: Record<string, unknown>): MediaModel;
+export function resolveErrorStateModel(params?: Record<string, unknown>): ErrorStateModel;
 export const P0_DISPLAY_COMPONENTS: ComponentMeta[];
 export const TASK015_BASE_CONTROL_COMPONENTS: ComponentMeta[];
 export const P0_BASE_INTERACTIVE_COMPONENTS: ComponentMeta[];

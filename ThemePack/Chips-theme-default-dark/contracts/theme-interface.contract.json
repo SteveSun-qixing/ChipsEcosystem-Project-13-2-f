@@ -582,6 +582,39 @@
       ]
     },
     {
+      "component": "error-state",
+      "scope": "error-state",
+      "parts": [
+        "root",
+        "icon",
+        "title",
+        "description",
+        "details",
+        "action",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.error-state.root.radius",
+        "chips.comp.error-state.root.surface",
+        "chips.comp.error-state.root.border.error",
+        "chips.comp.error-state.icon.color",
+        "chips.comp.error-state.title.color",
+        "chips.comp.error-state.description.color",
+        "chips.comp.error-state.details.color",
+        "chips.comp.error-state.action.surface.idle",
+        "chips.comp.error-state.action.surface.active",
+        "chips.comp.error-state.action.text.color",
+        "chips.comp.error-state.status.color.error",
+        "chips.comp.error-state.focus.outline"
+      ]
+    },
+    {
       "component": "form-field",
       "scope": "form-field",
       "parts": [
@@ -712,6 +745,34 @@
       ]
     },
     {
+      "component": "image",
+      "scope": "image",
+      "parts": [
+        "root",
+        "media",
+        "fallback",
+        "caption",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.image.root.radius",
+        "chips.comp.image.root.surface",
+        "chips.comp.image.root.border",
+        "chips.comp.image.media.surface",
+        "chips.comp.image.fallback.surface",
+        "chips.comp.image.fallback.color",
+        "chips.comp.image.caption.color",
+        "chips.comp.image.status.color.error",
+        "chips.comp.image.focus.outline"
+      ]
+    },
+    {
       "component": "inline",
       "scope": "inline",
       "parts": [
@@ -836,6 +897,37 @@
         "chips.comp.loading-boundary.skeleton.surface.active",
         "chips.comp.loading-boundary.status.color.info",
         "chips.comp.loading-boundary.focus.outline"
+      ]
+    },
+    {
+      "component": "media",
+      "scope": "media",
+      "parts": [
+        "root",
+        "content",
+        "controls",
+        "control",
+        "caption",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.media.root.radius",
+        "chips.comp.media.root.surface",
+        "chips.comp.media.root.border",
+        "chips.comp.media.content.surface",
+        "chips.comp.media.controls.surface",
+        "chips.comp.media.control.surface.idle",
+        "chips.comp.media.control.surface.active",
+        "chips.comp.media.control.color",
+        "chips.comp.media.caption.color",
+        "chips.comp.media.status.color.error",
+        "chips.comp.media.focus.outline"
       ]
     },
     {

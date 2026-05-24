@@ -202,3 +202,124 @@
 [data-scope="avatar"][data-part="status"] {
   color: var(--chips-comp-avatar-status-color-error);
 }
+
+/* Image */
+
+[data-scope="image"][data-part="root"] {
+  display: inline-grid;
+  gap: var(--chips-layout-gap-xs);
+  margin: 0;
+  max-inline-size: 100%;
+  border: 1px solid var(--chips-comp-image-root-border);
+  border-radius: var(--chips-comp-image-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-image-root-surface);
+  overflow: hidden;
+}
+
+[data-scope="image"][data-part="root"][data-state="focus"],
+[data-scope="image"][data-part="root"]:focus-visible {
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-image-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+}
+
+[data-scope="image"][data-part="media"] {
+  display: block;
+  inline-size: var(--chips-image-width, 100%);
+  block-size: var(--chips-image-height, auto);
+  max-inline-size: 100%;
+  min-block-size: var(--chips-layout-density-comfortable);
+  object-fit: var(--chips-image-fit, cover);
+  object-position: var(--chips-image-position, center);
+  background-color: var(--chips-comp-image-media-surface);
+}
+
+[data-scope="image"][data-part="fallback"] {
+  display: grid;
+  place-items: center;
+  min-block-size: var(--chips-layout-density-spacious);
+  padding: var(--chips-base-space-3);
+  background-color: var(--chips-comp-image-fallback-surface);
+  color: var(--chips-comp-image-fallback-color);
+  text-align: center;
+}
+
+[data-scope="image"][data-part="caption"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-image-caption-color);
+  font-size: 13px;
+}
+
+[data-scope="image"][data-part="status"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-image-status-color-error);
+}
+
+/* Media */
+
+[data-scope="media"][data-part="root"] {
+  display: inline-grid;
+  gap: var(--chips-layout-gap-xs);
+  margin: 0;
+  max-inline-size: 100%;
+  border: 1px solid var(--chips-comp-media-root-border);
+  border-radius: var(--chips-comp-media-root-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-media-root-surface);
+  overflow: hidden;
+}
+
+[data-scope="media"][data-part="root"][data-state="focus"],
+[data-scope="media"][data-part="root"]:focus-visible {
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-media-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+}
+
+[data-scope="media"][data-part="content"] {
+  display: block;
+  inline-size: var(--chips-media-width, 100%);
+  block-size: var(--chips-media-height, auto);
+  max-inline-size: 100%;
+  min-block-size: var(--chips-layout-density-comfortable);
+  object-fit: var(--chips-media-fit, contain);
+  object-position: var(--chips-media-position, center);
+  background-color: var(--chips-comp-media-content-surface);
+}
+
+[data-scope="media"][data-kind="generic"] [data-part="content"] {
+  display: grid;
+  place-items: center;
+  padding: var(--chips-base-space-3);
+}
+
+[data-scope="media"][data-part="controls"] {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-layout-gap-xs);
+  padding: var(--chips-base-space-2);
+  background-color: var(--chips-comp-media-controls-surface);
+}
+
+[data-scope="media"][data-part="control"] {
+  border: 0;
+  border-radius: var(--chips-base-radius-sm);
+  background-color: var(--chips-comp-media-control-surface-idle);
+  color: var(--chips-comp-media-control-color);
+}
+
+[data-scope="media"][data-part="control"][data-state="active"],
+[data-scope="media"][data-part="control"]:active {
+  background-color: var(--chips-comp-media-control-surface-active);
+}
+
+[data-scope="media"][data-part="caption"] {
+  padding-inline: var(--chips-base-space-3);
+  padding-block-end: var(--chips-base-space-2);
+  color: var(--chips-comp-media-caption-color);
+  font-size: 13px;
+}
+
+[data-scope="media"][data-part="status"] {
+  padding: var(--chips-base-space-3);
+  color: var(--chips-comp-media-status-color-error);
+}

@@ -81,6 +81,9 @@ test("task015 base control contracts expose button display feedback and input sc
   const slider = readContract("slider.contract.json");
   const datePicker = readContract("date-picker.contract.json");
   const timePicker = readContract("time-picker.contract.json");
+  const image = readContract("image.contract.json");
+  const media = readContract("media.contract.json");
+  const errorState = readContract("error-state.contract.json");
 
   for (const contract of [
     iconButton,
@@ -100,7 +103,10 @@ test("task015 base control contracts expose button display feedback and input sc
     stepper,
     slider,
     datePicker,
-    timePicker
+    timePicker,
+    image,
+    media,
+    errorState
   ]) {
     assertCommonShape(contract);
   }
@@ -142,6 +148,13 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(datePicker.tokens.includes("chips.comp.date-picker.cell.surface.selected"));
   assert.ok(timePicker.parts.includes("option"));
   assert.ok(timePicker.tokens.includes("chips.comp.time-picker.option.surface.selected"));
+  assert.ok(image.parts.includes("media"));
+  assert.ok(image.parts.includes("fallback"));
+  assert.ok(image.tokens.includes("chips.comp.image.fallback.surface"));
+  assert.ok(media.parts.includes("controls"));
+  assert.ok(media.tokens.includes("chips.comp.media.control.surface.active"));
+  assert.ok(errorState.parts.includes("details"));
+  assert.ok(errorState.tokens.includes("chips.comp.error-state.root.border.error"));
 });
 
 test("only advanced iframe components expose iframe contract extension", () => {

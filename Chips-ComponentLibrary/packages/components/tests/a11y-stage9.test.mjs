@@ -40,6 +40,9 @@ test("stage9 a11y gate validates all component rules", () => {
       "aria-expanded": "true",
       "aria-controls": "time-list"
     }),
+    validateComponentA11y("image", { role: "group", "aria-label": "image" }),
+    validateComponentA11y("media", { role: "group", "aria-label": "media" }),
+    validateComponentA11y("error-state", { role: "alert", "aria-label": "error state" }),
     validateComponentA11y("button", { role: "button", "aria-label": "button" }),
     validateComponentA11y("input", { "aria-label": "input" }),
     validateComponentA11y("checkbox", { role: "checkbox", "aria-label": "checkbox" }),

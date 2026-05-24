@@ -8,7 +8,10 @@
     "build": "chipsdev build",
     "test": "chipsdev test",
     "lint": "chipsdev lint",
-    "validate": "chipsdev validate"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "validate": "chipsdev validate",
+    "package": "chipsdev package",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate && npm run package"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

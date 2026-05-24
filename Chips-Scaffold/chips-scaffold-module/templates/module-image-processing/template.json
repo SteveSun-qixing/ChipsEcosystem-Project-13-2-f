@@ -1,0 +1,20 @@
+{
+  "id": "module-image-processing",
+  "name": "图像处理模块模板",
+  "description": "面向本地图像读取、轻量分析和元数据输出的同步模块模板，默认不引入图像处理第三方依赖。",
+  "version": "1.0.0",
+  "extends": "module-standard",
+  "moduleShape": "image-processing",
+  "excludeFiles": [
+    "contracts/run.input.schema.json",
+    "contracts/run.output.schema.json",
+    "contracts/runAsync.input.schema.json",
+    "contracts/runAsync.output.schema.json"
+  ],
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

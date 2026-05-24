@@ -1623,11 +1623,99 @@ const deriveAuthorName = () => process.env.USER || process.env.USERNAME || 'Chip
 
 const deriveAuthorEmail = (slug) => `${slug}@example.invalid`;
 
+const readOptionValue = (args, index, token) => {
+  const equalsIndex = token.indexOf('=');
+  if (equalsIndex !== -1) {
+    const value = token.slice(equalsIndex + 1);
+    if (!value) {
+      throw new Error(`${token.slice(0, equalsIndex)} 需要提供参数值。`);
+    }
+    return { value, nextIndex: index };
+  }
+
+  const value = args[index + 1];
+  if (!value) {
+    throw new Error(`${token} 需要提供参数值。`);
+  }
+  return { value, nextIndex: index + 1 };
+};
+
+const parseModuleConsumeOption = (value) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error('--consumes 需要提供 capability 或 capability@versionRange。');
+  }
+
+  const separatorIndex = trimmed.indexOf('@');
+  if (separatorIndex === -1) {
+    return { capability: trimmed };
+  }
+
+  const capability = trimmed.slice(0, separatorIndex).trim();
+  const versionRange = trimmed.slice(separatorIndex + 1).trim();
+  if (!capability || !versionRange) {
+    throw new Error('--consumes 格式必须为 capability 或 capability@versionRange。');
+  }
+  return { capability, versionRange };
+};
+
+const parseCreateArgs = (args) => {
+  const positionals = [];
+  const options = {
+    template: undefined,
+    pluginId: undefined,
+    capability: undefined,
+    consumes: []
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (!token.startsWith('--')) {
+      positionals.push(token);
+      continue;
+    }
+
+    const optionName = token.slice(2).split('=')[0];
+    if (optionName === 'template') {
+      const parsed = readOptionValue(args, index, token);
+      options.template = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'plugin-id') {
+      const parsed = readOptionValue(args, index, token);
+      options.pluginId = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'capability') {
+      const parsed = readOptionValue(args, index, token);
+      options.capability = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'consumes') {
+      const parsed = readOptionValue(args, index, token);
+      options.consumes.push(parseModuleConsumeOption(parsed.value));
+      index = parsed.nextIndex;
+      continue;
+    }
+
+    throw new Error(`不支持的 create 参数：${token}`);
+  }
+
+  if (positionals.length > 2) {
+    throw new Error(`chipsdev create 参数过多：${positionals.slice(2).join(' ')}`);
+  }
+
+  const [type, targetDir = '.'] = positionals;
+  return { type, targetDir, options };
+};
+
 const handleCreate = async (args) => {
   const projectRoot = resolveProjectRoot();
 
-  // 简单参数解析：chipsdev create <type> <targetDir> [--template id] [...]
-  const [type, targetDir = '.'] = args;
+  const { type, targetDir, options: createOptions } = parseCreateArgs(args);
   if (!type) {
     throw new Error('chipsdev create 需要指定类型，例如：chipsdev create app my-app');
   }
@@ -1753,9 +1841,10 @@ const handleCreate = async (args) => {
     const options = {
       projectName,
       targetDir: path.resolve(projectRoot, targetDir),
-      templateId: 'module-standard',
-      pluginId: `chips.module.${slug.replace(/-/g, '.')}`,
-      moduleCapability: `module.${slug.replace(/-/g, '.')}`,
+      templateId: createOptions.template ?? 'module-standard',
+      pluginId: createOptions.pluginId ?? `chips.module.${slug.replace(/-/g, '.')}`,
+      moduleCapability: createOptions.capability ?? `module.${slug.replace(/-/g, '.')}`,
+      moduleConsumes: createOptions.consumes,
       displayName: toDisplayName(projectName),
       version: '0.1.0',
       authorName: deriveAuthorName(),

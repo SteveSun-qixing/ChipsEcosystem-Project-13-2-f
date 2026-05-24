@@ -40,4 +40,4 @@ module:
           mode: job
           inputSchema: contracts/runAsync.input.schema.json
           outputSchema: contracts/runAsync.output.schema.json
-  consumes: []
+  consumes:{{ MODULE_CONSUMES_YAML }}

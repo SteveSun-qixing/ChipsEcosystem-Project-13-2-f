@@ -5,6 +5,9 @@ export interface ModuleScaffoldTemplateMeta {
   name: string;
   description: string;
   version: string;
+  extends?: string;
+  excludeFiles?: string[];
+  moduleShape?: string;
   supports?: {
     sdk?: boolean;
     react?: boolean;
@@ -19,6 +22,10 @@ export interface CreateModuleProjectOptions {
   templateId: string;
   pluginId: string;
   moduleCapability: string;
+  moduleConsumes?: Array<{
+    capability: string;
+    versionRange?: string;
+  }>;
   displayName: string;
   version: string;
   authorName?: string;
@@ -31,6 +38,7 @@ export interface TemplateContext {
   TEMPLATE_ID: string;
   PLUGIN_ID: string;
   MODULE_CAPABILITY: string;
+  MODULE_CONSUMES_YAML: string;
   DISPLAY_NAME: string;
   VERSION: string;
   AUTHOR_NAME?: string;

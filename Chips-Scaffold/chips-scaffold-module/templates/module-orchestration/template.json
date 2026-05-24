@@ -1,0 +1,20 @@
+{
+  "id": "module-orchestration",
+  "name": "模块编排模板",
+  "description": "面向声明 module.consumes 并通过 ctx.module.invoke/job.* 调用子能力的 job 编排模块模板。",
+  "version": "1.0.0",
+  "extends": "module-standard",
+  "moduleShape": "orchestration",
+  "excludeFiles": [
+    "contracts/run.input.schema.json",
+    "contracts/run.output.schema.json",
+    "contracts/runAsync.input.schema.json",
+    "contracts/runAsync.output.schema.json"
+  ],
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

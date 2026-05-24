@@ -60,7 +60,7 @@ npm install
 ### 2. 工程命令
 
 - `chipsdev init`：初始化当前工程的 `chips.config.mjs`
-- `chipsdev create <app|card|layout|module|theme> <targetDir>`：创建新工程
+- `chipsdev create <app|card|layout|module|theme> <targetDir>`：创建新工程。创建模块工程时可追加 `--template`、`--plugin-id`、`--capability`、`--consumes` 参数。
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
 - `chipsdev module invoke`：在真实 Electron Host 中调用模块 capability/method
@@ -155,6 +155,40 @@ chipsdev module invoke \
 - `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
 - 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
 - 因此，依赖 `platform.renderHtmlToImage`、`platform.renderHtmlToPdf` 之类 Electron 渲染导出能力的模块，必须使用 `chipsdev module invoke` 验证。
+
+## `chipsdev create module` 的模板参数
+
+模块插件脚手架支持按模块形态选择模板：
+
+```bash
+chipsdev create module <targetDir> \
+  --template module-file-conversion \
+  --plugin-id chips.module.file.convert \
+  --capability converter.file.convert
+```
+
+正式参数：
+
+- `--template <id>` 或 `--template=<id>`：选择 `chips-scaffold-module` 中的模块模板；默认是 `module-standard`。
+- `--plugin-id <id>` 或 `--plugin-id=<id>`：覆盖默认插件 ID。
+- `--capability <capability>` 或 `--capability=<capability>`：覆盖默认 `module.provides[].capability`。
+- `--consumes <capability>` 或 `--consumes <capability>@<versionRange>`：写入一条 `manifest.module.consumes`；可重复传入。
+
+示例：
+
+```bash
+chipsdev create module Chips-ModulePlugin/html-render \
+  --template module-html-rendering \
+  --capability converter.html.render
+
+chipsdev create module Chips-ModulePlugin/file-orchestrator \
+  --template module-orchestration \
+  --capability converter.file.convert \
+  --consumes converter.card.to-html@^1.0.0 \
+  --consumes converter.html.to-pdf@^1.0.0
+```
+
+这些参数只影响生成工程的 manifest、schema、源码和测试基线，不会自动安装或启用下游 provider；真实调用仍通过 Host `module.listProviders / module.resolve / module.invoke / module.job.*` 完成。
 
 ## 开发者报告命令
 

@@ -121,13 +121,77 @@ export async function listAvailableTemplates(): Promise<ModuleScaffoldTemplateMe
   return templates;
 }
 
+function assertSafeTemplateId(templateId: string, field: string): void {
+  if (
+    templateId.trim().length === 0 ||
+    templateId.includes("/") ||
+    templateId.includes("\\") ||
+    templateId.includes("..")
+  ) {
+    throw createStandardError(
+      "TEMPLATE_INVALID",
+      `模板元数据包含非法 ${field}：${templateId}`,
+      { templateId, field }
+    );
+  }
+}
+
+async function collectTemplateChain(
+  templateId: string,
+  visited = new Set<string>()
+): Promise<Array<{ meta: ModuleScaffoldTemplateMeta; dir: string }>> {
+  assertSafeTemplateId(templateId, "id");
+  if (visited.has(templateId)) {
+    throw createStandardError(
+      "TEMPLATE_INVALID",
+      `模板继承存在循环引用：${templateId}`,
+      { templateId, chain: [...visited] }
+    );
+  }
+  visited.add(templateId);
+
+  const meta = await loadTemplateMeta(templateId);
+  const templateDir = path.join(TEMPLATE_ROOT, templateId);
+  const templateDirStat = await statPath(templateDir);
+  if (!templateDirStat || !templateDirStat.isDirectory()) {
+    throw createStandardError(
+      "TEMPLATE_NOT_FOUND",
+      `找不到模板目录：${templateId}`,
+      { templateDir }
+    );
+  }
+
+  const parentId = meta.extends;
+  if (!parentId) {
+    return [{ meta, dir: templateDir }];
+  }
+  assertSafeTemplateId(parentId, "extends");
+  const parents = await collectTemplateChain(parentId, visited);
+  return [...parents, { meta, dir: templateDir }];
+}
+
 function buildTemplateContext(options: CreateModuleProjectOptions): TemplateContext {
+  const moduleConsumes = options.moduleConsumes ?? [];
+  const moduleConsumesYaml =
+    moduleConsumes.length === 0
+      ? " []"
+      : `\n${moduleConsumes
+          .map((item) => {
+            const lines = [`    - capability: ${JSON.stringify(item.capability)}`];
+            if (item.versionRange) {
+              lines.push(`      versionRange: ${JSON.stringify(item.versionRange)}`);
+            }
+            return lines.join("\n");
+          })
+          .join("\n")}`;
+
   return {
     PROJECT_NAME: options.projectName,
     TARGET_DIR: options.targetDir,
     TEMPLATE_ID: options.templateId,
     PLUGIN_ID: options.pluginId,
     MODULE_CAPABILITY: options.moduleCapability,
+    MODULE_CONSUMES_YAML: moduleConsumesYaml,
     DISPLAY_NAME: options.displayName,
     VERSION: options.version,
     AUTHOR_NAME: options.authorName,
@@ -150,6 +214,14 @@ function renderTemplateContent(content: string, context: TemplateContext): strin
 
 function targetRelativePath(relativePath: string): string {
   return relativePath.endsWith(".tpl") ? relativePath.slice(0, -4) : relativePath;
+}
+
+function normalizeTemplatePath(relativePath: string): string {
+  return relativePath.split(path.sep).join("/");
+}
+
+function shouldRenderTemplateFile(relativePath: string): boolean {
+  return normalizeTemplatePath(relativePath) !== "template.json";
 }
 
 export async function renderTemplateToTarget(
@@ -181,35 +253,40 @@ export async function renderTemplateToTarget(
     }
   }
 
-  const templateDir = path.join(TEMPLATE_ROOT, options.templateId);
-  const templateDirStat = await statPath(templateDir);
-  if (!templateDirStat || !templateDirStat.isDirectory()) {
-    throw createStandardError(
-      "TEMPLATE_NOT_FOUND",
-      `找不到模板目录：${options.templateId}`,
-      { templateDir }
-    );
-  }
-
-  const templateFiles = await listTemplateFiles(templateDir);
-  if (templateFiles.length === 0) {
-    throw createStandardError(
-      "TEMPLATE_INVALID",
-      `模板目录为空：${options.templateId}`,
-      { templateDir }
-    );
-  }
-
+  const templateChain = await collectTemplateChain(options.templateId);
   const context = buildTemplateContext(options);
+  const filesByTarget = new Map<string, { absolutePath: string; sourceRelativePath: string }>();
+
+  for (const item of templateChain) {
+    const templateFiles = await listTemplateFiles(item.dir);
+    if (templateFiles.length === 0) {
+      throw createStandardError(
+        "TEMPLATE_INVALID",
+        `模板目录为空：${item.meta.id}`,
+        { templateDir: item.dir }
+      );
+    }
+
+    for (const excluded of item.meta.excludeFiles ?? []) {
+      filesByTarget.delete(normalizeTemplatePath(excluded));
+    }
+
+    for (const file of templateFiles) {
+      if (!shouldRenderTemplateFile(file.relativePath)) {
+        continue;
+      }
+      const targetRel = normalizeTemplatePath(targetRelativePath(file.relativePath));
+      filesByTarget.set(targetRel, {
+        absolutePath: file.absolutePath,
+        sourceRelativePath: file.relativePath,
+      });
+    }
+  }
+
   let filesCreated = 0;
-
-  for (const file of templateFiles) {
-    const targetPath = path.join(
-      options.targetDir,
-      targetRelativePath(file.relativePath)
-    );
-
-    if (isTextFile(file.relativePath)) {
+  for (const [targetRel, file] of filesByTarget) {
+    const targetPath = path.join(options.targetDir, targetRel);
+    if (isTextFile(file.sourceRelativePath)) {
       const content = await readTextFile(file.absolutePath);
       await writeTextFile(targetPath, renderTemplateContent(content, context));
     } else {

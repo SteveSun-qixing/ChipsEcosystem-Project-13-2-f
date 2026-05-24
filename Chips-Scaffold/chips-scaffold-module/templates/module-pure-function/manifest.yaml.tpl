@@ -1,0 +1,40 @@
+id: {{ PLUGIN_ID }}
+name: {{ DISPLAY_NAME }}
+version: {{ VERSION }}
+type: module
+entry: dist/index.mjs
+description: 纯函数无界面模块插件。
+author:
+  name: {{ AUTHOR_NAME }}
+  email: {{ AUTHOR_EMAIL }}
+permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: {{ MODULE_CAPABILITY }}
+      version: "1.0.0"
+      description: 同步处理输入并返回归一化结果。
+      methods:
+        - name: run
+          mode: sync
+          inputSchema: contracts/run.input.schema.json
+          outputSchema: contracts/run.output.schema.json
+  consumes:{{ MODULE_CONSUMES_YAML }}

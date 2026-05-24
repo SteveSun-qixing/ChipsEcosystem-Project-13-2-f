@@ -123,6 +123,69 @@ const linkedEntries = ['Chips-SDK', 'Chips-Scaffold', 'Chips-ComponentLibrary'];
     assert.match(source, /providers:/);
     assert.match(source, /reportProgress/);
 
+    const matrixRelativePath = path.join('validation-projects', 'module-html-render');
+    const matrixTargetDir = path.join(sandboxRoot, matrixRelativePath);
+    await run(
+      'node',
+      [
+        cliPath,
+        'create',
+        'module',
+        matrixRelativePath,
+        '--template',
+        'module-html-rendering',
+        '--plugin-id',
+        'chips.module.html.render',
+        '--capability',
+        'converter.html.render'
+      ],
+      sandboxRoot,
+      env
+    );
+
+    const matrixPackage = JSON.parse(await fsp.readFile(path.join(matrixTargetDir, 'package.json'), 'utf-8'));
+    assert.equal(matrixPackage.scripts.verify.includes('npm run package'), true);
+    const matrixManifest = await fsp.readFile(path.join(matrixTargetDir, 'manifest.yaml'), 'utf-8');
+    assert.match(matrixManifest, /id:\s+chips\.module\.html\.render/);
+    assert.match(matrixManifest, /capability:\s+converter\.html\.render/);
+    assert.match(matrixManifest, /name:\s+convert/);
+    assert.match(matrixManifest, /platform\.read/);
+    assert.match(matrixManifest, /consumes:\s+\[\]/);
+    await fsp.access(path.join(matrixTargetDir, 'contracts', 'convert.input.schema.json'));
+    await fsp.access(path.join(matrixTargetDir, 'contracts', 'convert.output.schema.json'));
+    await assert.rejects(
+      () => fsp.stat(path.join(matrixTargetDir, 'contracts', 'runAsync.input.schema.json')),
+      { code: 'ENOENT' }
+    );
+    const matrixSource = await fsp.readFile(path.join(matrixTargetDir, 'src', 'index.ts'), 'utf-8');
+    assert.match(matrixSource, /platform\.renderHtmlToPdf/);
+    assert.match(matrixSource, /platform\.renderHtmlToImage/);
+    assert.doesNotMatch(matrixSource, /mountModule|ctx\.services|template\.json/);
+
+    const orchestrationRelativePath = path.join('validation-projects', 'module-orchestrator');
+    const orchestrationTargetDir = path.join(sandboxRoot, orchestrationRelativePath);
+    await run(
+      'node',
+      [
+        cliPath,
+        'create',
+        'module',
+        orchestrationRelativePath,
+        '--template=module-orchestration',
+        '--capability=converter.file.convert',
+        '--consumes',
+        'converter.card.to-html@^1.0.0',
+        '--consumes=converter.html.to-pdf@^1.0.0'
+      ],
+      sandboxRoot,
+      env
+    );
+    const orchestrationManifest = await fsp.readFile(path.join(orchestrationTargetDir, 'manifest.yaml'), 'utf-8');
+    assert.match(orchestrationManifest, /capability:\s+converter\.file\.convert/);
+    assert.match(orchestrationManifest, /capability:\s+"converter\.card\.to-html"/);
+    assert.match(orchestrationManifest, /versionRange:\s+"\^1\.0\.0"/);
+    assert.match(orchestrationManifest, /capability:\s+"converter\.html\.to-pdf"/);
+
     await run('npm', ['install'], sandboxRoot, env);
     await run('npm', ['run', 'lint'], targetDir, env);
     await run('npm', ['run', 'build'], targetDir, env);

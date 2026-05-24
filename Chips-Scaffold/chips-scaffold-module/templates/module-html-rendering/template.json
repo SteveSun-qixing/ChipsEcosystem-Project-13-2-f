@@ -1,0 +1,20 @@
+{
+  "id": "module-html-rendering",
+  "name": "HTML 渲染导出模块模板",
+  "description": "面向目录态 HTML 到 PDF 或图片导出的 job 模块模板，默认通过 Host platform.renderHtmlToPdf/renderHtmlToImage 完成真实渲染。",
+  "version": "1.0.0",
+  "extends": "module-standard",
+  "moduleShape": "html-rendering",
+  "excludeFiles": [
+    "contracts/run.input.schema.json",
+    "contracts/run.output.schema.json",
+    "contracts/runAsync.input.schema.json",
+    "contracts/runAsync.output.schema.json"
+  ],
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

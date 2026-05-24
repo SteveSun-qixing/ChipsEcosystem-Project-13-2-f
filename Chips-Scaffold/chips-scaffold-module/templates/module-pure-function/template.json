@@ -1,0 +1,18 @@
+{
+  "id": "module-pure-function",
+  "name": "纯函数模块模板",
+  "description": "面向同步输入输出转换的无界面模块模板，适合文本、元数据、配置规范化等不依赖文件或 Electron 能力的场景。",
+  "version": "1.0.0",
+  "extends": "module-standard",
+  "moduleShape": "pure-function",
+  "excludeFiles": [
+    "contracts/runAsync.input.schema.json",
+    "contracts/runAsync.output.schema.json"
+  ],
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

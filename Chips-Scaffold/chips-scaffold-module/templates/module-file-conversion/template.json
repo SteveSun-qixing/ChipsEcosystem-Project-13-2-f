@@ -1,0 +1,20 @@
+{
+  "id": "module-file-conversion",
+  "name": "文件转换模块模板",
+  "description": "面向输入文件到输出工件转换的 job 模块模板，默认通过 Host 文件能力完成输入校验、覆盖治理、输出写入和进度汇报。",
+  "version": "1.0.0",
+  "extends": "module-standard",
+  "moduleShape": "file-conversion",
+  "excludeFiles": [
+    "contracts/run.input.schema.json",
+    "contracts/run.output.schema.json",
+    "contracts/runAsync.input.schema.json",
+    "contracts/runAsync.output.schema.json"
+  ],
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

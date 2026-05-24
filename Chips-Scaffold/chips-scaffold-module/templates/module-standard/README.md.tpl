@@ -10,7 +10,7 @@
 
 - 冻结后的 `manifest.module` 结构；
 - `capability + method` 形式的能力定义；
-- 同步方法与异步任务方法示例；
+- 同步方法与异步任务方法基线；
 - 输入输出 schema 契约文件；
 - 单元测试、构建、校验与打包脚本。
 
@@ -42,13 +42,17 @@ cd <生态根工作区>
 npm install
 cd {{ PROJECT_NAME }}
 npm run lint
-npm run build
+npm run typecheck
 npm test
+npm run build
 npm run validate
-chipsdev package
+npm run package
+npm run verify
 ```
 
 模块插件工程应通过 `chipsdev create module` 接入生态工作区，不再单独手工拼装依赖。若工程位于生态根工作区内，`chipsdev create` 会自动完成工作区注册与 `volta.extends` 写入。
+
+`npm run verify` 会依次执行 lint、typecheck、test、build、validate 和 package。发布或进入开发工作区联调前至少运行一次 `npm run verify`。
 
 ## 默认能力定义
 
@@ -59,7 +63,7 @@ chipsdev package
 并提供两个方法：
 
 - `run`：同步执行，直接返回结果；
-- `runAsync`：异步任务模式，演示 `ctx.job.reportProgress(...)` 的正式用法。
+- `runAsync`：异步任务模式，使用 `ctx.job.reportProgress(...)` 汇报进度。
 
 你应根据实际业务替换 capability、方法名与 schema 文件，但要保持：
 
@@ -74,6 +78,6 @@ chipsdev package
 - 模块正式能力契约必须写在 `module.provides` 中，而不是旧 `capabilities` 主入口；
 - 调用方统一通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 使用模块能力；
 - 模块运行时只负责能力实现，不生成任何 UI 运行时、插槽挂载入口或主题注入逻辑；
-- 模块访问 Host 服务动作应使用 `ctx.host.invoke(...)`，不得依赖 `ctx.services.*` 旧口径；
+- 模块访问 Host 服务动作应使用 `ctx.host.invoke(...)`，不得依赖手写服务封装；
 - 如果模块需要调用其他模块，只能使用 Host 注入的 `ctx.module.invoke(...)`；
 - 每次功能迭代后应同步更新 README 与测试/契约资料，避免把文档目录当作模板产物。

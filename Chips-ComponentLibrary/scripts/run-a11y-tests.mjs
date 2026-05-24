@@ -6,7 +6,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const tests = [
   path.join(root, "packages/a11y/tests/index.test.mjs"),
-  path.join(root, "packages/components/tests/a11y-stage9.test.mjs")
+  path.join(root, "packages/components/tests/a11y-stage9.test.mjs"),
+  path.join(root, "packages/components/tests/keyboard-a11y.test.mjs")
 ];
 
 const result = spawnSync(process.execPath, ["--test", ...tests], {

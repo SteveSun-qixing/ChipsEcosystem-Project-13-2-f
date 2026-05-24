@@ -1,14 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertActiveDescendant,
   assertAriaRole,
+  assertFocusRestored,
   assertHasContractAttrs,
+  assertRovingTabIndex,
+  createKeyboardEventFixture,
   assertStatePriority,
   createComponentFixture,
+  createFocusTrapFixture,
   createMockChipsClient,
   createMockChipsEnvironment,
   createThemeFallbackFixture,
   injectFault,
+  runKeyboardSequence,
   resolveFallbackScopeValue
 } from "../src/index.js";
 
@@ -46,6 +52,42 @@ test("createComponentFixture generates contract attrs", () => {
 test("assertAriaRole validates role", () => {
   assert.equal(assertAriaRole({ role: "alert" }, "alert"), true);
   assert.throws(() => assertAriaRole({ role: "status" }, "alert"), /TEST_ARIA_ROLE_MISMATCH/);
+});
+
+test("keyboard testing helpers create events and run sequences", () => {
+  const handled = [];
+  const target = {
+    onKeyDown(event) {
+      handled.push(event.key);
+      if (event.key === "Escape") {
+        event.preventDefault();
+      }
+    }
+  };
+
+  const event = createKeyboardEventFixture("Enter", { shiftKey: true });
+  assert.equal(event.key, "Enter");
+  assert.equal(event.shiftKey, true);
+
+  const events = runKeyboardSequence(target, ["ArrowDown", "Escape"]);
+  assert.deepEqual(handled, ["ArrowDown", "Escape"]);
+  assert.equal(events[1].defaultPrevented, true);
+});
+
+test("focus and roving testing helpers assert common a11y states", () => {
+  const trap = createFocusTrapFixture(["trigger", "item-a", "item-b"]);
+  trap.first.focus();
+  trap.last.focus();
+
+  assertFocusRestored(trap.focusHistory, "item-b");
+  assert.equal(assertRovingTabIndex([
+    { id: "item-a", tabIndex: -1 },
+    { id: "item-b", tabIndex: 0 },
+    { id: "item-c", tabIndex: undefined, disabled: true }
+  ], "item-b"), true);
+  assert.equal(assertActiveDescendant({
+    "aria-activedescendant": "item-b"
+  }, "item-b"), true);
 });
 
 test("assertStatePriority validates known state", () => {

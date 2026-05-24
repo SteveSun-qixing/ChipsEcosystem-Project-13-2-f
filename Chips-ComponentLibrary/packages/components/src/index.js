@@ -4,6 +4,10 @@ import {
   assertAriaProps,
   buildAriaDescribedBy,
   createAriaStatusProps,
+  createFocusRestorePoint,
+  createFocusScope,
+  createRovingTabIndex,
+  getRovingTabIndexProps,
   isKeyboardActivationKey
 } from "@chips/a11y";
 import {
@@ -6003,15 +6007,20 @@ const SelectRoot = React.forwardRef((props, ref) => {
   const baseId = rest.id || generatedId;
   const triggerId = `${baseId}-trigger`;
   const contentId = `${baseId}-content`;
-  const registeredOptions = optionRegistryRef.current;
   const selectableOptions = React.useMemo(
-    () => mergeRegisteredEntries(registeredOptions, normalizedOptions),
+    () => mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions),
     [registryVersion, normalizedOptions]
   );
   const selectedOption = selectableOptions.find((item) => item.value === String(currentValue))
     || normalizedOptions.find((item) => item.value === String(currentValue))
     || null;
   const highlightedOption = getEnabledEntryByValue(selectableOptions, highlightedValue);
+  const rovingModel = React.useMemo(
+    () => createRovingTabIndex(selectableOptions, {
+      activeId: highlightedValue || currentValue
+    }),
+    [currentValue, highlightedValue, selectableOptions]
+  );
 
   const registerOption = React.useCallback((entry) => {
     optionRegistryRef.current = upsertRegistryEntry(optionRegistryRef.current, entry);
@@ -6168,6 +6177,8 @@ const SelectRoot = React.forwardRef((props, ref) => {
       highlightedValue,
       selectedOption,
       highlightedOption,
+      selectableOptions,
+      rovingModel,
       placeholder,
       baseId,
       triggerId,
@@ -6195,6 +6206,8 @@ const SelectRoot = React.forwardRef((props, ref) => {
       highlightedValue,
       selectedOption,
       highlightedOption,
+      selectableOptions,
+      rovingModel,
       placeholder,
       baseId,
       triggerId,
@@ -6454,7 +6467,7 @@ const SelectContent = React.forwardRef((props, ref) => {
       tabIndex: rest.tabIndex ?? -1,
       onKeyDown: handleKeyDown
     },
-    label
+    children
   );
 });
 
@@ -6479,6 +6492,7 @@ const SelectOption = React.forwardRef((props, ref) => {
   const disabledByState = context.disabled || disabled;
   const selected = context.value === optionValue;
   const highlighted = context.highlightedValue === optionValue;
+  const rovingItem = getRovingItemByValue(context.rovingModel, optionValue);
   const optionState = disabledByState
     ? "disabled"
     : selected
@@ -6532,7 +6546,7 @@ const SelectOption = React.forwardRef((props, ref) => {
       ref: localRef,
       id: optionId,
       role: rest.role || "option",
-      tabIndex: disabledByState ? undefined : highlighted ? 0 : -1,
+      ...getRovingTabIndexProps(rovingItem || { active: highlighted, disabled: disabledByState }, { includeAriaDisabled: false }),
       "aria-selected": String(selected),
       "aria-disabled": disabledByState ? "true" : undefined,
       "data-selected": String(selected),
@@ -8955,6 +8969,10 @@ const DialogRoot = React.forwardRef((props, ref) => {
     defaultValue: defaultOpen === true,
     onChange: onOpenChange
   });
+  const rootRef = React.useRef(null);
+  const contentRef = React.useRef(null);
+  const triggerRef = React.useRef(null);
+  const restorePointRef = React.useRef(null);
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
@@ -8968,6 +8986,26 @@ const DialogRoot = React.forwardRef((props, ref) => {
       onStateChange(state);
     }
   }, [state, onStateChange]);
+
+  React.useEffect(() => {
+    if (currentOpen) {
+      return;
+    }
+    if (restorePointRef.current) {
+      restorePointRef.current.restore();
+      restorePointRef.current = null;
+    }
+  }, [currentOpen]);
+
+  React.useEffect(() => {
+    if (!currentOpen || !contentRef.current) {
+      return;
+    }
+    const scope = createFocusScope(contentRef.current, {
+      restorePoint: restorePointRef.current
+    });
+    scope.focusFirst() || contentRef.current.focus?.();
+  }, [currentOpen]);
 
   const closeDialog = (reason) => {
     if (disabledByState) {
@@ -8984,10 +9022,18 @@ const DialogRoot = React.forwardRef((props, ref) => {
       event?.preventDefault?.();
       return;
     }
+    restorePointRef.current = createFocusRestorePoint(event?.currentTarget || triggerRef.current || rootRef.current);
     setCurrentOpen(true);
   };
 
   const handleDialogKeyDown = (event) => {
+    if (event.key === "Tab" && modal && contentRef.current) {
+      createFocusScope(contentRef.current, {
+        restorePoint: restorePointRef.current
+      }).trap(event);
+      return;
+    }
+
     if (event.key === "Escape" && closeOnEscape) {
       event.preventDefault();
       closeDialog("escape-key");
@@ -9005,6 +9051,8 @@ const DialogRoot = React.forwardRef((props, ref) => {
       disabled: disabledByState,
       modal,
       contentId,
+      contentRef,
+      triggerRef,
       fallbackLabelId,
       fallbackDescriptionId,
       labelledBy,
@@ -9020,6 +9068,8 @@ const DialogRoot = React.forwardRef((props, ref) => {
       disabledByState,
       modal,
       contentId,
+      contentRef,
+      triggerRef,
       fallbackLabelId,
       fallbackDescriptionId,
       labelledBy,
@@ -9042,7 +9092,7 @@ const DialogRoot = React.forwardRef((props, ref) => {
         ...rest,
         ...createScopeAttributes("dialog", "root", state),
         ...handlers,
-        ref,
+        ref: mergeRefs(ref, rootRef),
         "data-open": String(Boolean(currentOpen)),
         "aria-disabled": disabledByState ? "true" : undefined
       },
@@ -9090,12 +9140,23 @@ DialogRoot.displayName = "ChipsDialog.Root";
 const DialogTrigger = React.forwardRef((props, ref) => {
   const { children, onClick, ...rest } = props;
   const context = useDialogCompoundContext("trigger");
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  React.useEffect(() => {
+    context.triggerRef.current = localRef.current;
+    return () => {
+      if (context.triggerRef.current === localRef.current) {
+        context.triggerRef.current = null;
+      }
+    };
+  }, [context.triggerRef]);
+
   return React.createElement(
     "button",
     {
       ...rest,
       ...createScopeAttributes("dialog", "trigger", context.state),
-      ref,
+      ref: localRef,
       type: rest.type || "button",
       disabled: context.disabled,
       role: "button",
@@ -9125,7 +9186,7 @@ const DialogContent = React.forwardRef((props, ref) => {
     {
       ...rest,
       ...createScopeAttributes("dialog", "content", context.state),
-      ref,
+      ref: mergeRefs(ref, context.contentRef),
       id: rest.id || context.contentId,
       role: rest.role || "dialog",
       "aria-modal": context.modal ? "true" : "false",
@@ -9383,6 +9444,10 @@ ChipsPopover.displayName = "ChipsPopover";
 
 const [TabsCompoundContext, useTabsCompoundContext] = createCompoundContext("tabs");
 
+function getRovingItemByValue(model, value) {
+  return model?.items?.find((item) => item.id === String(value)) || null;
+}
+
 const TabsRoot = React.forwardRef((props, ref) => {
   const {
     value,
@@ -9491,6 +9556,14 @@ const TabsRoot = React.forwardRef((props, ref) => {
     [disabledByState, setCurrentValue]
   );
 
+  const rovingModel = React.useMemo(
+    () => createRovingTabIndex(normalizedItems, {
+      activeId: currentValue,
+      orientation: orientation === "vertical" ? "vertical" : "horizontal"
+    }),
+    [currentValue, normalizedItems, orientation]
+  );
+
   const baseValue = React.useMemo(
     () => ({
       state,
@@ -9498,11 +9571,12 @@ const TabsRoot = React.forwardRef((props, ref) => {
       orientation,
       disabled: disabledByState,
       baseId,
+      rovingModel,
       selectValue,
       registerTrigger,
       moveFocus
     }),
-    [state, currentValue, orientation, disabledByState, baseId, selectValue, registerTrigger, moveFocus]
+    [state, currentValue, orientation, disabledByState, baseId, rovingModel, selectValue, registerTrigger, moveFocus]
   );
 
   const selectIndex = (index) => {
@@ -9715,7 +9789,10 @@ const TabsTrigger = React.forwardRef((props, ref) => {
       id: tabId,
       role: "tab",
       type: rest.type || "button",
-      tabIndex: selected ? 0 : -1,
+      ...getRovingTabIndexProps(
+        getRovingItemByValue(context.rovingModel, tabValue) || { active: selected, disabled: disabledByState },
+        { includeAriaDisabled: false }
+      ),
       "aria-selected": String(selected),
       "aria-controls": panelId,
       "aria-disabled": disabled ? "true" : undefined,
@@ -9815,9 +9892,8 @@ const MenuRoot = React.forwardRef((props, ref) => {
   const baseId = rest.id || generatedId;
   const triggerId = `${baseId}-trigger`;
   const contentId = `${baseId}-content`;
-  const registeredItems = itemRegistryRef.current;
   const selectableItems = React.useMemo(
-    () => mergeRegisteredEntries(registeredItems, normalizedItems),
+    () => mergeRegisteredEntries(itemRegistryRef.current, normalizedItems),
     [registryVersion, normalizedItems]
   );
 
@@ -9943,6 +10019,13 @@ const MenuRoot = React.forwardRef((props, ref) => {
     }
   }, [currentOpen, highlightedValue, selectableItems]);
 
+  const rovingModel = React.useMemo(
+    () => createRovingTabIndex(selectableItems, {
+      activeId: highlightedValue
+    }),
+    [highlightedValue, selectableItems]
+  );
+
   const contextValue = React.useMemo(
     () => ({
       state,
@@ -9951,6 +10034,7 @@ const MenuRoot = React.forwardRef((props, ref) => {
       loading,
       error: normalizedError,
       highlightedValue,
+      rovingModel,
       baseId,
       triggerId,
       contentId,
@@ -9973,6 +10057,7 @@ const MenuRoot = React.forwardRef((props, ref) => {
       loading,
       normalizedError,
       highlightedValue,
+      rovingModel,
       baseId,
       triggerId,
       contentId,
@@ -10195,6 +10280,7 @@ const MenuItem = React.forwardRef((props, ref) => {
   const itemId = rest.id || `${context.baseId}-item-${idSegment}`;
   const disabledByState = context.disabled || disabled;
   const highlighted = context.highlightedValue === itemValue;
+  const rovingItem = getRovingItemByValue(context.rovingModel, itemValue);
   const itemState = disabledByState
     ? "disabled"
     : highlighted
@@ -10247,7 +10333,7 @@ const MenuItem = React.forwardRef((props, ref) => {
       id: itemId,
       type: rest.type || "button",
       role: "menuitem",
-      tabIndex: disabledByState ? undefined : highlighted ? 0 : -1,
+      ...getRovingTabIndexProps(rovingItem || { active: highlighted, disabled: disabledByState }, { includeAriaDisabled: false }),
       disabled: disabledByState,
       "aria-disabled": disabledByState ? "true" : undefined,
       "data-highlighted": String(highlighted),

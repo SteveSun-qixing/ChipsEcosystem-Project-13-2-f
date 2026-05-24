@@ -28,6 +28,22 @@ import {
   useChipsTheme,
   useFieldBinding
 } from "@chips/component-library";
+import {
+  createFocusScope,
+  createKeyboardMap,
+  createRovingTabIndex,
+  getKeyboardAction,
+  trapFocus,
+  type KeyboardMap,
+  type RovingTabIndexModel
+} from "@chips/a11y";
+import {
+  assertActiveDescendant,
+  assertRovingTabIndex,
+  createFocusTrapFixture,
+  createKeyboardEventFixture,
+  runKeyboardSequence
+} from "@chips/testing";
 
 const adapter: CardDisplayAdapter = {
   async resolveCoverFrame(input) {
@@ -71,6 +87,55 @@ inputProps.onChange({ target: { value: "Typed" } });
 const checkedBinding = createBinding({ defaultValue: false });
 checkedBinding.checkedProps().onCheckedChange(true);
 createBinding({ defaultValue: false }).openProps().onOpenChange(true);
+
+const keyboardMap: KeyboardMap = createKeyboardMap({
+  submit: ["Enter", " "],
+  cancel: "Escape"
+});
+const keyboardAction: string | null = getKeyboardAction({ key: "Enter" }, keyboardMap);
+void keyboardAction;
+
+const focusTrap = createFocusTrapFixture(["first", "last"]);
+const focusScope = createFocusScope(focusTrap.root, {
+  restorePoint: {
+    element: focusTrap.first,
+    restore() {
+      focusTrap.first?.focus();
+      return focusTrap.first;
+    }
+  }
+});
+focusScope.focusFirst();
+trapFocus(createKeyboardEventFixture("Tab"), focusTrap.root, {
+  current: focusTrap.last
+});
+
+const roving: RovingTabIndexModel<{ id: string; disabled?: boolean }> = createRovingTabIndex(
+  [
+    { id: "first" },
+    { id: "disabled", disabled: true },
+    { id: "last" }
+  ],
+  { activeId: "first" }
+);
+assertRovingTabIndex(
+  roving.items.map((item) => ({
+    id: item.id,
+    disabled: item.disabled,
+    tabIndex: item.tabIndex
+  })),
+  "first"
+);
+assertActiveDescendant({ "aria-activedescendant": "first" }, "first");
+
+runKeyboardSequence(
+  {
+    onKeyDown(event: unknown) {
+      void event;
+    }
+  },
+  ["ArrowDown", "Enter"]
+);
 
 const mockClient: ChipsClientLike = {
   events: {

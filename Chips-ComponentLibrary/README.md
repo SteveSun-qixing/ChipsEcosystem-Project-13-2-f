@@ -27,7 +27,7 @@
 - 已落地 token 构建产物（CSS/JSON/TS/diff）与主题契约校验脚本
 - 已建立统一验证入口：`npm run verify`（token 校验 + 构建 + contract 校验 + 全量测试）
 - 已落地主题运行时核心能力（作用域解析器、`ChipsThemeProvider`、`useToken/useComponentTokens`、分片变量注入）
-- 已落地 Primitive 与 A11y 基建（`Box/Inline/Stack/Grid/Text/Label/HelperText` + 焦点/键盘/ARIA 工具）
+- 已落地 Primitive 与 A11y 基建（`Box/Inline/Stack/Grid/Text/Label/HelperText` + FocusScope、focus trap/restore、roving tabindex、keyboard map、ARIA 工具）
 - 已落地 Base-Interactive 组件（`ChipsButton`、`ChipsInput`、`ChipsCheckbox`、`ChipsRadioGroup`、`ChipsSwitch`、`ChipsSelect`、`ChipsDialog`、`ChipsPopover`、`ChipsTabs`、`ChipsMenu`、`ChipsTooltip`）及对应 token/contract
 - 已落地 Data-Form 第一批组件（`ChipsFormField`、`ChipsFormGroup`、`ChipsVirtualList`）及对应 token/contract
 - 已落地 Data-Form 第二批组件（`ChipsDataGrid`、`ChipsTree`、`ChipsDateTime`、`ChipsCommandPalette`）及对应 token/contract
@@ -37,7 +37,7 @@
 - 阶段八交付补齐：System-UX 组件规范（`技术文档/24-System-UX-Stage8组件规范.md`）、跨层集成与回退策略（`技术文档/25-阶段八跨层集成与回退策略.md`）、集成示例与回归记录（`技术文档/26-阶段八集成示例与回归记录.md`）
 - 阶段九交付补齐：测试体系与门禁实施（`技术文档/27-阶段九测试体系与质量门禁实施.md`）、性能与鲁棒性基线（`技术文档/28-阶段九性能与鲁棒性基线报告.md`）
 - 阶段十交付补齐：发布规范与检查清单（`技术文档/29-阶段十发布规范与发布检查清单.md`）、生态接入验收模板（`技术文档/31-阶段十生态接入验收模板与执行指南.md`）
-- 当前质量门禁状态：`219 token keys / 32 contracts / 151 tests` 全量通过，`npm run quality:gate` 全步骤通过
+- 当前质量门禁状态以最新 `npm run verify` 与 `npm run quality:gate` 输出为准；`test:a11y` 已纳入 Dialog/Menu/Select/Tabs/DataGrid 重点键盘路径
 - 已登记 SDK 对接阻断：`工单001-SDK-UNIFIED-CARD-DISPLAY-API`
 
 ## 工程命令

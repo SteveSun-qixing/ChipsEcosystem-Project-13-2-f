@@ -38,6 +38,128 @@ export function assertAriaRole(nodeAttrs, expectedRole) {
   return true;
 }
 
+export function createKeyboardEventFixture(key, options = {}) {
+  return {
+    key,
+    code: options.code || key,
+    altKey: options.altKey === true,
+    ctrlKey: options.ctrlKey === true,
+    metaKey: options.metaKey === true,
+    shiftKey: options.shiftKey === true,
+    defaultPrevented: false,
+    propagationStopped: false,
+    target: options.target,
+    currentTarget: options.currentTarget || options.target,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+    ...(options.extra || {})
+  };
+}
+
+export function runKeyboardSequence(target, keys, options = {}) {
+  if (!target || typeof target !== "object") {
+    throw new Error("TEST_KEYBOARD_TARGET_INVALID");
+  }
+  const handlerName = options.handlerName || "onKeyDown";
+  const handler = target[handlerName];
+  if (typeof handler !== "function") {
+    throw new Error(`TEST_KEYBOARD_HANDLER_MISSING:${handlerName}`);
+  }
+
+  const events = [];
+  for (const key of Array.isArray(keys) ? keys : [keys]) {
+    const event = createKeyboardEventFixture(key, {
+      target,
+      currentTarget: target,
+      ...(options.eventOptions || {})
+    });
+    handler(event);
+    events.push(event);
+  }
+  return events;
+}
+
+export function assertRovingTabIndex(items, expectedActiveId) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("TEST_ROVING_ITEMS_INVALID");
+  }
+
+  const enabledItems = items.filter((item) => item && item.disabled !== true && item["aria-disabled"] !== "true");
+  const activeItems = enabledItems.filter((item) => item.tabIndex === 0);
+  if (activeItems.length !== 1) {
+    throw new Error(`TEST_ROVING_ACTIVE_COUNT:${activeItems.length}`);
+  }
+
+  const activeItem = activeItems[0];
+  const activeId = activeItem.id || activeItem.value || activeItem["data-value"];
+  if (expectedActiveId !== undefined && String(activeId) !== String(expectedActiveId)) {
+    throw new Error(`TEST_ROVING_ACTIVE_MISMATCH:${expectedActiveId}`);
+  }
+
+  for (const item of enabledItems) {
+    if (item === activeItem) {
+      continue;
+    }
+    if (item.tabIndex !== -1) {
+      throw new Error("TEST_ROVING_INACTIVE_TABINDEX_INVALID");
+    }
+  }
+
+  return true;
+}
+
+export function assertActiveDescendant(containerAttrs, expectedId) {
+  if (!containerAttrs || typeof containerAttrs !== "object") {
+    throw new Error("TEST_ACTIVE_DESCENDANT_CONTAINER_INVALID");
+  }
+  if (!containerAttrs["aria-activedescendant"]) {
+    throw new Error("TEST_ACTIVE_DESCENDANT_MISSING");
+  }
+  if (expectedId !== undefined && containerAttrs["aria-activedescendant"] !== expectedId) {
+    throw new Error(`TEST_ACTIVE_DESCENDANT_MISMATCH:${expectedId}`);
+  }
+  return true;
+}
+
+export function assertFocusRestored(history, expectedId) {
+  if (!Array.isArray(history) || history.length === 0) {
+    throw new Error("TEST_FOCUS_HISTORY_EMPTY");
+  }
+  const latest = history[history.length - 1];
+  if (expectedId !== undefined && latest !== expectedId) {
+    throw new Error(`TEST_FOCUS_RESTORE_MISMATCH:${expectedId}`);
+  }
+  return true;
+}
+
+export function createFocusTrapFixture(ids = []) {
+  const focusHistory = [];
+  const elements = ids.map((id) => ({
+    id,
+    tabIndex: 0,
+    isConnected: true,
+    focus() {
+      focusHistory.push(id);
+    }
+  }));
+
+  return {
+    elements,
+    focusHistory,
+    get first() {
+      return elements[0] || null;
+    },
+    get last() {
+      return elements[elements.length - 1] || null;
+    },
+    root: elements
+  };
+}
+
 export function assertStatePriority(state, priorityList) {
   if (typeof state !== "string" || state.length === 0) {
     throw new Error("TEST_STATE_INVALID");

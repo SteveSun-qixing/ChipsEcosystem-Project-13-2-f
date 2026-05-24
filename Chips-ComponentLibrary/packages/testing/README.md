@@ -16,6 +16,12 @@ shape for component hooks and Provider tests.
 - `assertStatePriority(state, priorityList)`
 - `createThemeFallbackFixture(overrides)`
 - `resolveFallbackScopeValue(fixture, key)`
+- `createKeyboardEventFixture(key, options)`
+- `runKeyboardSequence(target, keys, options)`
+- `assertRovingTabIndex(items, expectedActiveId)`
+- `assertActiveDescendant(containerAttrs, expectedId)`
+- `assertFocusRestored(history, expectedId)`
+- `createFocusTrapFixture(ids)`
 - `injectFault(type, payload)`
 - `createMockSurfaceContext(overrides)`
 - `createMockLaunchContext(overrides)`
@@ -82,3 +88,7 @@ Notes:
 - `client.calls` records Host-like action calls.
 - `client.events` and domain `onChanged/onInvoked` helpers share the same local event bus.
 - Permission faults should use `createMockPermissionDeniedError` or `client.setPermissionDenied(...)` so hook tests receive standard diagnostics.
+
+## A11y Interaction Helpers
+
+Use the keyboard and focus helpers with `@chips/a11y` when testing custom compound components. The formal interaction contract is published in `生态共用技术文档/组件库/11-焦点键盘与A11y交互模型.md`.

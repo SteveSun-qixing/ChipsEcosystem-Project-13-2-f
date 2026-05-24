@@ -2,6 +2,15 @@ const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
 };
 
+class ModuleJobCancelledError extends Error {
+  code = "MODULE_JOB_CANCELLED";
+
+  constructor() {
+    super("Module job was cancelled.");
+    this.name = "ModuleJobCancelledError";
+  }
+}
+
 export interface RunInput {
   sourceText: string;
   uppercase?: boolean;
@@ -28,6 +37,20 @@ const toOutput = (sourceText: string, uppercase?: boolean, prefix?: string): Run
   };
 };
 
+type ModuleJobContext = {
+  job?: {
+    signal?: { aborted?: boolean };
+    reportProgress(payload: Record<string, unknown>): Promise<void>;
+    isCancelled?(): boolean;
+  };
+};
+
+const throwIfCancelled = (ctx: ModuleJobContext): void => {
+  if (ctx.job?.signal?.aborted || ctx.job?.isCancelled?.() === true) {
+    throw new ModuleJobCancelledError();
+  }
+};
+
 const moduleDefinition = {
   providers: [
     {
@@ -37,15 +60,17 @@ const moduleDefinition = {
           return toOutput(input.sourceText, input.uppercase, input.prefix);
         },
         async runAsync(
-          ctx: { job?: { reportProgress(payload: Record<string, unknown>): Promise<void> } },
+          ctx: ModuleJobContext,
           input: RunAsyncInput
         ): Promise<RunOutput> {
           await ctx.job?.reportProgress({
             stage: "started",
             percent: 10,
           });
+          throwIfCancelled(ctx);
 
           await sleep(typeof input.delayMs === "number" ? input.delayMs : 25);
+          throwIfCancelled(ctx);
 
           await ctx.job?.reportProgress({
             stage: "completed",

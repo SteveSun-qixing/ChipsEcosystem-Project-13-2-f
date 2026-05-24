@@ -63,7 +63,7 @@ npm run verify
 并提供两个方法：
 
 - `run`：同步执行，直接返回结果；
-- `runAsync`：异步任务模式，使用 `ctx.job.reportProgress(...)` 汇报进度。
+- `runAsync`：异步任务模式，使用 `ctx.job.reportProgress(...)` 汇报进度，并通过 `ctx.job.signal` / `ctx.job.isCancelled()` 感知 Host 取消。
 
 你应根据实际业务替换 capability、方法名与 schema 文件，但要保持：
 

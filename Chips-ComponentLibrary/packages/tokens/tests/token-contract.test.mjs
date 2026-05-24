@@ -114,7 +114,9 @@ test("card runtime component tokens exist", () => {
   assert.ok(getPath(tree, "chips.comp.tree.disclosure.color"));
   assert.ok(getPath(tree, "chips.comp.tree.group.guide.color"));
   assert.ok(getPath(dateTime, "chips.comp.date-time.input.border.error"));
-  assert.ok(getPath(commandPalette, "chips.comp.command-palette.result.surface.active"));
+  assert.ok(getPath(commandPalette, "chips.comp.command-palette.input.surface.idle"));
+  assert.ok(getPath(commandPalette, "chips.comp.command-palette.item.surface.active"));
+  assert.ok(getPath(commandPalette, "chips.comp.command-palette.group.label.color"));
   assert.ok(getPath(splitPane, "chips.comp.split-pane.handle.surface.active"));
   assert.ok(getPath(dockPanel, "chips.comp.dock-panel.tab.surface.active"));
   assert.ok(getPath(inspector, "chips.comp.inspector.section.header.surface.active"));

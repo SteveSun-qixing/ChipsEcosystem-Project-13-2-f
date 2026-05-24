@@ -311,11 +311,19 @@ test("date-time contract contains input error token", () => {
   assert.ok(contract.tokens.includes("chips.comp.date-time.input.border.error"));
 });
 
-test("command-palette contract contains search and result tokens", () => {
+test("command-palette contract contains compound input item and group tokens", () => {
   const contract = readContract("command-palette.contract.json");
   assertCommonShape(contract);
-  assert.ok(contract.parts.includes("search"));
-  assert.ok(contract.tokens.includes("chips.comp.command-palette.result.surface.active"));
+  assert.ok(contract.parts.includes("input"));
+  assert.ok(contract.parts.includes("list"));
+  assert.ok(contract.parts.includes("group"));
+  assert.ok(contract.parts.includes("group-label"));
+  assert.ok(contract.parts.includes("item"));
+  assert.equal(contract.parts.includes("search"), false);
+  assert.ok(contract.tokens.includes("chips.comp.command-palette.input.surface.idle"));
+  assert.ok(contract.tokens.includes("chips.comp.command-palette.item.surface.active"));
+  assert.ok(contract.tokens.includes("chips.comp.command-palette.group.label.color"));
+  assert.equal(contract.tokens.includes("chips.comp.command-palette.result.surface.active"), false);
 });
 
 test("data-grid contract contains row selected token", () => {

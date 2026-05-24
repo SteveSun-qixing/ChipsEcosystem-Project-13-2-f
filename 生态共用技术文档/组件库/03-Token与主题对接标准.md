@@ -196,6 +196,12 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 `Tree` 的 `root/item/branch/leaf/disclosure/group/status/focus` token 分别表达树容器、树项基础视觉、分支层级缩进、叶子层级缩进、展开折叠控制、子树引导线、状态信息和焦点视觉。正式公开 part 为 `root / item / branch / leaf / disclosure / label / group / status`；旧 `node / toggle / children` 不再是公开主题 contract。节点悬停和选中分别使用 `chips.comp.tree.item.surface.hover` 与 `chips.comp.tree.item.surface.selected`，主题 CSS 必须用 `data-selected="true"` 匹配选中节点，不得继续把选中视觉绑定到 `data-state="active"`。层级缩进由组件运行时输出的 `--chips-tree-level` 与 `chips.comp.tree.branch.indent` / `chips.comp.tree.leaf.indent` 共同决定，组件运行时不得硬编码固定缩进像素。
 
+任务016第六批复杂组件 Compound API token 是 CommandPalette 显式 slot 的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
+
+- `chips.comp.command-palette.*`
+
+`CommandPalette` 的 `root/input/list/group/group-label/item/shortcut/status/focus` token 分别表达命令面板容器、查询输入、结果列表、分组、分组标题、命令条目、快捷键提示、状态信息和焦点视觉。正式公开 part 为 `root / input / list / group / group-label / item / shortcut / status`；旧 `search / result` 不再是公开主题 contract。输入 token 使用 `chips.comp.command-palette.input.*`，条目 token 使用 `chips.comp.command-palette.item.*`，主题 CSS 不得继续依赖 `chips.comp.command-palette.search.*` 或 `chips.comp.command-palette.result.*`。
+
 ### 3.1 布局 token 基线
 
 `chips.layout.*` 是布局原语、L9 布局计算、主题包和脚手架共同消费的结构 token 层。所有页面级和组件级布局常量默认使用 `cpx`，边框与焦点线宽等可见阈值保持 `px`。

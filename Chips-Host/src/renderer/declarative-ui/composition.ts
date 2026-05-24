@@ -108,6 +108,14 @@ export const StandardCompoundSlotSchemas = {
     disclosure: { type: 'Command', required: false, multiple: true, part: 'disclosure' },
     label: { type: 'Text', required: false, multiple: true, part: 'label' },
     group: { type: ['List', 'Section'], required: false, multiple: true, part: 'group', role: 'group' }
+  },
+  CommandPalette: {
+    input: { type: 'Text', required: true, multiple: false, part: 'input', role: 'combobox' },
+    list: { type: 'List', required: true, multiple: false, part: 'list', role: 'listbox' },
+    group: { type: ['List', 'Section'], required: false, multiple: true, part: 'group', role: 'group' },
+    item: { type: 'Command', required: false, multiple: true, part: 'item', role: 'option' },
+    shortcut: { type: 'Text', required: false, multiple: true, part: 'shortcut' },
+    status: { type: 'Text', required: false, multiple: false, part: 'status' }
   }
 } as const satisfies Record<string, SlotSchema>;
 

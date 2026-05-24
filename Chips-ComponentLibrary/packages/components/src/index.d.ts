@@ -1449,7 +1449,8 @@ export interface DateTimeProps {
   [key: string]: unknown;
 }
 
-export interface CommandPaletteProps {
+export interface CommandPaletteProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   query?: string;
@@ -1464,14 +1465,46 @@ export interface CommandPaletteProps {
   disabled?: boolean;
   loading?: boolean;
   error?: StandardErrorLike | null;
-  triggerLabel?: string;
-  searchPlaceholder?: string;
+  inputPlaceholder?: string;
   ariaLabel?: string;
+  listId?: string;
   onOpenChange?: (open: boolean) => void;
   onQueryChange?: (query: string) => void;
   onSelect?: (item: CommandPaletteItem) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface CommandPaletteInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  placeholder?: string;
+}
+
+export interface CommandPaletteListProps extends React.HTMLAttributes<HTMLUListElement> {
+  children?: React.ReactNode;
+}
+
+export interface CommandPaletteItemProps extends React.LiHTMLAttributes<HTMLLIElement> {
+  children?: React.ReactNode;
+  item?: CommandPaletteItem;
+  id?: string | number;
+  label?: React.ReactNode;
+  shortcut?: React.ReactNode;
+  disabled?: boolean;
+  textValue?: string;
+}
+
+export interface CommandPaletteGroupProps extends React.LiHTMLAttributes<HTMLLIElement> {
+  children?: React.ReactNode;
+  label?: React.ReactNode;
+  labelId?: string;
+}
+
+export interface CommandPaletteCompoundComponent extends React.ForwardRefExoticComponent<CommandPaletteProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<CommandPaletteProps & React.RefAttributes<HTMLDivElement>>;
+  Input: React.ForwardRefExoticComponent<CommandPaletteInputProps & React.RefAttributes<HTMLInputElement>>;
+  List: React.ForwardRefExoticComponent<CommandPaletteListProps & React.RefAttributes<HTMLUListElement>>;
+  Item: React.ForwardRefExoticComponent<CommandPaletteItemProps & React.RefAttributes<HTMLLIElement>>;
+  Group: React.ForwardRefExoticComponent<CommandPaletteGroupProps & React.RefAttributes<HTMLLIElement>>;
 }
 
 export interface SplitPaneProps {
@@ -1794,7 +1827,7 @@ export const ChipsVirtualList: React.ForwardRefExoticComponent<VirtualListProps 
 export const ChipsDataGrid: DataGridCompoundComponent;
 export const ChipsTree: TreeCompoundComponent;
 export const ChipsDateTime: React.ForwardRefExoticComponent<DateTimeProps & React.RefAttributes<HTMLDivElement>>;
-export const ChipsCommandPalette: React.ForwardRefExoticComponent<CommandPaletteProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsCommandPalette: CommandPaletteCompoundComponent;
 export const ChipsSplitPane: React.ForwardRefExoticComponent<SplitPaneProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsDockPanel: React.ForwardRefExoticComponent<DockPanelProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsInspector: React.ForwardRefExoticComponent<InspectorProps & React.RefAttributes<HTMLDivElement>>;

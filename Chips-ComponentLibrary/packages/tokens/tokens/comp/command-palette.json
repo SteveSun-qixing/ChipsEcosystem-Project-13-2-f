@@ -5,7 +5,7 @@
         "root": {
           "surface": "{chips.sys.color.surface}"
         },
-        "search": {
+        "input": {
           "surface": {
             "idle": "{chips.sys.color.surface}"
           },
@@ -13,11 +13,16 @@
             "idle": "{chips.sys.color.on-surface}"
           }
         },
-        "result": {
+        "item": {
           "surface": {
             "active": "{chips.sys.color.primary}"
           },
           "text": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "group": {
+          "label": {
             "color": "{chips.sys.color.on-surface}"
           }
         },

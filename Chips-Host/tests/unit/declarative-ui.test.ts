@@ -335,6 +335,11 @@ describe('Declarative UI', () => {
       rootType: 'Navigation',
       slots: StandardCompoundSlotSchemas.Tree
     });
+    const CommandPalette = createCompoundComponent({
+      name: 'CommandPalette',
+      rootType: 'View',
+      slots: StandardCompoundSlotSchemas.CommandPalette
+    });
 
     expect(
       Dialog.validate({
@@ -528,6 +533,49 @@ describe('Declarative UI', () => {
       expect.arrayContaining([
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.disclosure' }),
         expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.group' })
+      ])
+    );
+    expect(
+      CommandPalette.validate({
+        root: { id: 'command-palette-root' },
+        slots: {
+          input: Text({ id: 'command-palette-input' }),
+          list: List({ id: 'command-palette-list' }),
+          group: [Section({ id: 'command-palette-group' })],
+          item: [Command({ id: 'command-palette-item' })],
+          shortcut: [Text({ id: 'command-palette-shortcut' })],
+          status: Text({ id: 'command-palette-status' })
+        }
+      })
+    ).toEqual([]);
+    expect(
+      CommandPalette.validate({
+        root: { id: 'bad-command-palette-slot-root' },
+        slots: {
+          search: Text({ id: 'legacy-search' }),
+          result: Command({ id: 'legacy-result' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.search' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_UNDEFINED', path: 'slots.result' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.input' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.list' })
+      ])
+    );
+    expect(
+      CommandPalette.validate({
+        root: { id: 'bad-command-palette-type-root' },
+        slots: {
+          input: Command({ id: 'bad-command-palette-input' }),
+          list: Text({ id: 'bad-command-palette-list' })
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.input' }),
+        expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_TYPE_MISMATCH', path: 'slots.list' })
       ])
     );
   });

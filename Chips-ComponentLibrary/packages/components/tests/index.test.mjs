@@ -1768,6 +1768,33 @@ test("Tree exposes formal compound parts", () => {
   assert.equal(typeof ChipsTree.Disclosure.render, "function");
 });
 
+test("CommandPalette exposes formal compound parts", () => {
+  assert.equal(ChipsCommandPalette.Root, ChipsCommandPalette);
+  assert.equal(typeof ChipsCommandPalette.Input.render, "function");
+  assert.equal(typeof ChipsCommandPalette.List.render, "function");
+  assert.equal(typeof ChipsCommandPalette.Item.render, "function");
+  assert.equal(typeof ChipsCommandPalette.Group.render, "function");
+});
+
+test("CommandPalette component metadata uses formal compound parts", () => {
+  const commandPalette = STAGE7_DATA_ADVANCED_COMPONENTS.find(
+    (component) => component.scope === "command-palette"
+  );
+
+  assert.deepEqual(commandPalette.parts, [
+    "root",
+    "input",
+    "list",
+    "group",
+    "group-label",
+    "item",
+    "shortcut",
+    "status"
+  ]);
+  assert.equal(commandPalette.parts.includes("trigger"), false);
+  assert.equal(commandPalette.parts.includes("search"), false);
+});
+
 test("Tree data-driven rendering uses compound parts and aria tree metadata", () => {
   const flatOpen = flattenTreeNodes(
     [
@@ -1894,7 +1921,15 @@ test("buildComponentContract includes stage-seven second batch components", () =
   assert.ok(tree.tokens.includes("chips.comp.tree.disclosure.color"));
   assert.ok(tree.tokens.includes("chips.comp.tree.group.guide.color"));
   assert.ok(dateTime.tokens.includes("chips.comp.date-time.input.border.error"));
-  assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.result.surface.active"));
+  assert.ok(commandPalette.parts.includes("input"));
+  assert.ok(commandPalette.parts.includes("group"));
+  assert.ok(commandPalette.parts.includes("group-label"));
+  assert.ok(commandPalette.parts.includes("item"));
+  assert.equal(commandPalette.parts.includes("search"), false);
+  assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.input.surface.idle"));
+  assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.item.surface.active"));
+  assert.ok(commandPalette.tokens.includes("chips.comp.command-palette.group.label.color"));
+  assert.equal(commandPalette.tokens.includes("chips.comp.command-palette.result.surface.active"), false);
 });
 
 test("buildComponentContract includes stage-seven workbench components", () => {

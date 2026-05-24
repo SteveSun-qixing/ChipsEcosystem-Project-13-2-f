@@ -1848,10 +1848,11 @@ export const COMPONENT_TOKEN_MAP = {
   ],
   "command-palette": [
     "chips.comp.command-palette.root.surface",
-    "chips.comp.command-palette.search.surface.idle",
-    "chips.comp.command-palette.search.border.idle",
-    "chips.comp.command-palette.result.surface.active",
-    "chips.comp.command-palette.result.text.color",
+    "chips.comp.command-palette.input.surface.idle",
+    "chips.comp.command-palette.input.border.idle",
+    "chips.comp.command-palette.item.surface.active",
+    "chips.comp.command-palette.item.text.color",
+    "chips.comp.command-palette.group.label.color",
     "chips.comp.command-palette.shortcut.color",
     "chips.comp.command-palette.focus.outline"
   ],
@@ -2288,7 +2289,7 @@ export function buildComponentContract(component) {
     "command-palette": {
       component: "command-palette",
       scope: "command-palette",
-      parts: ["root", "trigger", "search", "list", "item", "shortcut", "status"],
+      parts: ["root", "input", "list", "group", "group-label", "item", "shortcut", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     "split-pane": {
@@ -12924,11 +12925,82 @@ export const ChipsDateTime = React.forwardRef((props, ref) => {
 
 ChipsDateTime.displayName = "ChipsDateTime";
 
-export const ChipsCommandPalette = React.forwardRef((props, ref) => {
+const [CommandPaletteCompoundContext, useCommandPaletteCompoundContext] = createCompoundContext("command-palette");
+const EMPTY_COMMAND_PALETTE_ITEM = Object.freeze({});
+
+function normalizeCommandPaletteItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => ({
+      ...item,
+      id:
+        typeof item.id === "string" || typeof item.id === "number"
+          ? String(item.id)
+          : String(index),
+      disabled: item.disabled === true
+    }));
+}
+
+function resolveCommandPaletteItemLabel(item) {
+  if (item?.label !== undefined && item.label !== null) {
+    return item.label;
+  }
+  if (item?.title !== undefined && item.title !== null) {
+    return item.title;
+  }
+  return item?.id ?? item?.commandId ?? "";
+}
+
+function resolveCommandPaletteTextValue(item) {
+  const label = resolveCommandPaletteItemLabel(item);
+  if (typeof label === "string" || typeof label === "number") {
+    return String(label);
+  }
+  if (typeof item?.commandId === "string") {
+    return item.commandId;
+  }
+  return String(item?.id ?? "");
+}
+
+function sortRegisteredCommandPaletteItems(items) {
+  return [...items].sort((left, right) => {
+    const leftNode = left.ref?.current;
+    const rightNode = right.ref?.current;
+    if (leftNode && rightNode && leftNode !== rightNode && typeof leftNode.compareDocumentPosition === "function") {
+      const position = leftNode.compareDocumentPosition(rightNode);
+      if ((position & 4) !== 0) {
+        return -1;
+      }
+      if ((position & 2) !== 0) {
+        return 1;
+      }
+    }
+    return left.order - right.order;
+  });
+}
+
+function getFirstCommandPaletteItemId(items) {
+  const firstIndex = getFirstEnabledIndex(items);
+  return firstIndex >= 0 ? items[firstIndex]?.id ?? null : null;
+}
+
+function renderCommandPaletteDataItems(items) {
+  return items.map((item) =>
+    React.createElement(CommandPaletteItem, {
+      key: item.id,
+      item,
+      id: item.id,
+      disabled: item.disabled
+    })
+  );
+}
+
+const CommandPaletteRoot = React.forwardRef((props, ref) => {
   const context = useChipsCommandContext();
   const {
+    children,
     open,
-    defaultOpen = false,
+    defaultOpen = true,
     query,
     defaultQuery = "",
     items = [],
@@ -12941,13 +13013,15 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
     disabled = false,
     loading = false,
     error = null,
-    triggerLabel,
-    searchPlaceholder = "",
+    inputPlaceholder = "",
     ariaLabel,
+    listId: listIdProp,
+    role,
     onOpenChange,
     onQueryChange,
     onSelect,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const { commands: commandSource, loading: commandLoading, error: commandError } = useChipsCommands({
@@ -12966,6 +13040,9 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
   const normalizedError = normalizeError(error || commandError);
   const disabledByState = disabled || loading || commandLoading;
   const { interaction, handlers } = useInteractiveState(disabledByState);
+  const registryRef = React.useRef(new Map());
+  const registryOrderRef = React.useRef(0);
+  const [registryVersion, setRegistryVersion] = React.useState(0);
   const [currentOpen, setCurrentOpen] = useControllableState({
     value: open,
     defaultValue: defaultOpen === true,
@@ -12978,25 +13055,27 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
   });
 
   const filteredItems = React.useMemo(
-    () =>
-      filterCommandPaletteItems(sourceItems, currentQuery).map((item, index) => ({
-        ...item,
-        id:
-          typeof item.id === "string" || typeof item.id === "number"
-            ? String(item.id)
-            : String(index),
-        disabled: item && item.disabled === true
-      })),
+    () => normalizeCommandPaletteItems(filterCommandPaletteItems(sourceItems, currentQuery)),
     [sourceItems, currentQuery]
   );
 
-  const [highlightedIndex, setHighlightedIndex] = React.useState(
-    getFirstEnabledIndex(filteredItems)
+  const hasCustomChildren = children !== undefined && children !== null;
+  const registeredItems = React.useMemo(
+    () => sortRegisteredCommandPaletteItems([...registryRef.current.values()]),
+    [registryVersion]
+  );
+  const activeItems = hasCustomChildren ? registeredItems : filteredItems;
+
+  const [highlightedId, setHighlightedId] = React.useState(
+    () => getFirstCommandPaletteItemId(activeItems)
   );
 
   React.useEffect(() => {
-    setHighlightedIndex(getFirstEnabledIndex(filteredItems));
-  }, [filteredItems]);
+    const exists = activeItems.some((item) => item.id === highlightedId && item.disabled !== true);
+    if (!exists) {
+      setHighlightedId(getFirstCommandPaletteItemId(activeItems));
+    }
+  }, [activeItems, highlightedId]);
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
@@ -13011,10 +13090,34 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const listId = React.useId();
+  const generatedListId = React.useId();
+  const listId = listIdProp || `${generatedListId}-list`;
+  const highlightedItem = activeItems.find((item) => item.id === highlightedId) || null;
+  const activeDescendantId = highlightedItem
+    ? highlightedItem.elementId || `${listId}-item-${normalizeDomIdSegment(highlightedItem.id)}`
+    : undefined;
 
-  const selectIndex = (index) => {
-    const item = filteredItems[index];
+  const registerItem = React.useCallback((item) => {
+    const id = String(item.id);
+    const previous = registryRef.current.get(id);
+    const order = previous?.order ?? registryOrderRef.current;
+    if (!previous) {
+      registryOrderRef.current += 1;
+    }
+    registryRef.current.set(id, {
+      ...item,
+      id,
+      order
+    });
+    setRegistryVersion((version) => version + 1);
+
+    return () => {
+      registryRef.current.delete(id);
+      setRegistryVersion((version) => version + 1);
+    };
+  }, []);
+
+  const selectItem = React.useCallback((item) => {
     if (!item || item.disabled || disabledByState) {
       return;
     }
@@ -13025,10 +13128,26 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
       invokeCommand(commandAdapter, item.command, "palette", payload, invocationContext);
     }
     setCurrentOpen(false);
-  };
+  }, [commandAdapter, disabledByState, invocationContext, onSelect, payload, setCurrentOpen]);
 
-  const handleSearchKeyDown = (event) => {
-    if (!currentOpen || filteredItems.length === 0) {
+  const selectItemById = React.useCallback((itemId) => {
+    const item = activeItems.find((candidate) => candidate.id === String(itemId));
+    selectItem(item);
+  }, [activeItems, selectItem]);
+
+  const setHighlightedItemByIndex = React.useCallback((index) => {
+    const item = activeItems[index];
+    setHighlightedId(item?.id ?? null);
+  }, [activeItems]);
+
+  const moveHighlight = React.useCallback((direction) => {
+    const currentIndex = activeItems.findIndex((item) => item.id === highlightedId);
+    const nextIndex = getNextEnabledIndex(activeItems, currentIndex, direction, true);
+    setHighlightedItemByIndex(nextIndex);
+  }, [activeItems, highlightedId, setHighlightedItemByIndex]);
+
+  const handleSearchKeyDown = React.useCallback((event) => {
+    if (!currentOpen || activeItems.length === 0) {
       return;
     }
 
@@ -13040,121 +13159,297 @@ export const ChipsCommandPalette = React.forwardRef((props, ref) => {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = getNextEnabledIndex(filteredItems, highlightedIndex, "next", true);
-      setHighlightedIndex(next);
+      moveHighlight("next");
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      const next = getNextEnabledIndex(filteredItems, highlightedIndex, "prev", true);
-      setHighlightedIndex(next);
+      moveHighlight("prev");
       return;
     }
 
     if (event.key === "Home") {
       event.preventDefault();
-      setHighlightedIndex(getFirstEnabledIndex(filteredItems));
+      setHighlightedId(getFirstCommandPaletteItemId(activeItems));
       return;
     }
 
     if (event.key === "End") {
       event.preventDefault();
-      const last = getNextEnabledIndex(filteredItems, 0, "prev", true);
-      setHighlightedIndex(last);
+      const last = getNextEnabledIndex(activeItems, 0, "prev", true);
+      setHighlightedItemByIndex(last);
       return;
     }
 
     if (isKeyboardActivationKey(event.key)) {
       event.preventDefault();
-      selectIndex(highlightedIndex);
+      selectItem(highlightedItem);
     }
-  };
+  }, [
+    activeItems,
+    currentOpen,
+    highlightedItem,
+    moveHighlight,
+    selectItem,
+    setCurrentOpen,
+    setHighlightedItemByIndex
+  ]);
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open: Boolean(currentOpen),
+      disabled: disabledByState,
+      query: currentQuery,
+      listId,
+      activeDescendantId,
+      highlightedId,
+      setOpen: setCurrentOpen,
+      setQuery: setCurrentQuery,
+      setHighlightedId,
+      registerItem,
+      selectItem,
+      selectItemById,
+      handleInputKeyDown: handleSearchKeyDown,
+      ariaLabel,
+      inputPlaceholder
+    }),
+    [
+      activeDescendantId,
+      ariaLabel,
+      currentOpen,
+      currentQuery,
+      disabledByState,
+      highlightedId,
+      handleSearchKeyDown,
+      inputPlaceholder,
+      listId,
+      registerItem,
+      selectItem,
+      selectItemById,
+      setCurrentOpen,
+      setCurrentQuery,
+      state
+    ]
+  );
+
+  const renderedChildren = hasCustomChildren
+    ? children
+    : React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(CommandPaletteInput, {
+          placeholder: inputPlaceholder,
+          "aria-label": ariaLabel
+        }),
+        React.createElement(
+          CommandPaletteList,
+          null,
+          renderCommandPaletteDataItems(filteredItems)
+        )
+      );
 
   return React.createElement(
-    "div",
-    {
-      ...createScopeAttributes("command-palette", "root", state),
-      ...handlers,
-      ref,
-      "data-open": String(Boolean(currentOpen)),
-      "aria-disabled": disabledByState ? "true" : undefined
-    },
+    CommandPaletteCompoundContext.Provider,
+    { value: contextValue },
     React.createElement(
-      "button",
+      "div",
       {
-        ...createScopeAttributes("command-palette", "trigger", state),
-        type: "button",
-        role: "button",
-        disabled: disabledByState,
-        "aria-expanded": String(Boolean(currentOpen)),
-        "aria-controls": listId,
-        onClick: () => setCurrentOpen(!currentOpen)
+        ...rest,
+        ...createScopeAttributes("command-palette", "root", state),
+        ...handlers,
+        ref,
+        role: role || "group",
+        "aria-label": rest["aria-label"] || ariaLabel,
+        "data-open": String(Boolean(currentOpen)),
+        "aria-disabled": disabledByState ? "true" : undefined
       },
-      triggerLabel
-    ),
-    currentOpen
-      ? React.createElement(
-          React.Fragment,
-          null,
-          React.createElement("input", {
-            ...createScopeAttributes("command-palette", "search", state),
-            role: "combobox",
-            value: currentQuery,
-            placeholder: searchPlaceholder,
-            "aria-label": ariaLabel,
-            "aria-controls": listId,
-            "aria-expanded": "true",
-            onChange: (event) => setCurrentQuery(event.target.value),
-            onKeyDown: handleSearchKeyDown
-          }),
-          React.createElement(
-            "ul",
+      currentOpen ? renderedChildren : null,
+      normalizedError
+        ? React.createElement(
+            "span",
             {
-              ...createScopeAttributes("command-palette", "list", state),
-              id: listId,
-              role: "listbox"
+              ...createScopeAttributes("command-palette", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
             },
-            filteredItems.map((item, index) =>
-              React.createElement(
-                "li",
-                {
-                  ...createScopeAttributes("command-palette", "item", state),
-                  key: item.id,
-                  role: "option",
-                  "aria-selected": String(index === highlightedIndex),
-                  "aria-disabled": item.disabled ? "true" : undefined,
-                  "data-highlighted": String(index === highlightedIndex),
-                  onMouseEnter: () => setHighlightedIndex(index),
-                  onMouseDown: (event) => {
-                    event.preventDefault();
-                    selectIndex(index);
-                  }
-                },
-                item.label,
-                item.shortcut
-                  ? React.createElement(
-                      "span",
-                      createScopeAttributes("command-palette", "shortcut", state),
-                      item.shortcut
-                    )
-                  : null
-              )
-            )
+            normalizedError.message
           )
+        : null
+    )
+  );
+});
+
+CommandPaletteRoot.displayName = "ChipsCommandPalette.Root";
+
+const CommandPaletteInput = React.forwardRef((props, ref) => {
+  const { onChange, onKeyDown, placeholder, ...rest } = props;
+  const context = useCommandPaletteCompoundContext("input");
+
+  return React.createElement("input", {
+    ...rest,
+    ...createScopeAttributes("command-palette", "input", context.state),
+    ref,
+    role: "combobox",
+    value: context.query,
+    placeholder: placeholder ?? context.inputPlaceholder,
+    "aria-label": rest["aria-label"] || context.ariaLabel,
+    "aria-controls": rest["aria-controls"] || context.listId,
+    "aria-expanded": String(context.open),
+    "aria-activedescendant": context.activeDescendantId,
+    disabled: context.disabled || rest.disabled === true,
+    onChange: mergeEventHandlers(onChange, (event) => context.setQuery(event.target.value)),
+    onKeyDown: mergeEventHandlers(onKeyDown, context.handleInputKeyDown)
+  });
+});
+
+CommandPaletteInput.displayName = "ChipsCommandPalette.Input";
+
+const CommandPaletteList = React.forwardRef((props, ref) => {
+  const { children, ...rest } = props;
+  const context = useCommandPaletteCompoundContext("list");
+
+  return React.createElement(
+    "ul",
+    {
+      ...rest,
+      ...createScopeAttributes("command-palette", "list", context.state),
+      ref,
+      id: rest.id || context.listId,
+      role: rest.role || "listbox"
+    },
+    children
+  );
+});
+
+CommandPaletteList.displayName = "ChipsCommandPalette.List";
+
+const CommandPaletteGroup = React.forwardRef((props, ref) => {
+  const { children, label, labelId, ...rest } = props;
+  const context = useCommandPaletteCompoundContext("group");
+  const generatedId = React.useId();
+  const groupLabelId = labelId || (label !== undefined ? `${rest.id || generatedId}-label` : undefined);
+
+  return React.createElement(
+    "li",
+    {
+      ...rest,
+      ...createScopeAttributes("command-palette", "group", context.state),
+      ref,
+      role: rest.role || "group",
+      "aria-labelledby": rest["aria-labelledby"] || groupLabelId
+    },
+    label !== undefined
+      ? React.createElement(
+          "div",
+          {
+            ...createScopeAttributes("command-palette", "group-label", context.state),
+            id: groupLabelId
+          },
+          label
         )
       : null,
-    normalizedError
+    React.createElement("ul", { role: "presentation" }, children)
+  );
+});
+
+CommandPaletteGroup.displayName = "ChipsCommandPalette.Group";
+
+const CommandPaletteItem = React.forwardRef((props, ref) => {
+  const {
+    children,
+    item,
+    id,
+    label,
+    shortcut,
+    disabled = false,
+    textValue,
+    onMouseEnter,
+    onMouseDown,
+    ...rest
+  } = props;
+  const context = useCommandPaletteCompoundContext("item");
+  const generatedId = React.useId();
+  const paletteItem = item && typeof item === "object" ? item : EMPTY_COMMAND_PALETTE_ITEM;
+  const itemId = String(id ?? paletteItem.id ?? generatedId);
+  const elementId = rest.id || `${context.listId}-item-${normalizeDomIdSegment(itemId)}`;
+  const disabledByState = context.disabled || disabled || paletteItem.disabled === true;
+  const highlighted = context.highlightedId === itemId;
+  const itemState = disabledByState
+    ? "disabled"
+    : highlighted
+      ? "active"
+      : context.state === "disabled" || context.state === "loading" || context.state === "error"
+        ? context.state
+        : "idle";
+  const labelContent = children !== undefined && children !== null
+    ? children
+    : label ?? resolveCommandPaletteItemLabel(paletteItem);
+  const shortcutContent = shortcut ?? paletteItem.shortcut;
+  const itemRecord = React.useMemo(
+    () => ({
+      ...paletteItem,
+      id: itemId,
+      label: labelContent,
+      shortcut: shortcutContent,
+      disabled: disabledByState
+    }),
+    [disabledByState, itemId, labelContent, paletteItem, shortcutContent]
+  );
+  const localRef = React.useRef(null);
+
+  React.useEffect(
+    () =>
+      context.registerItem({
+        ...itemRecord,
+        id: itemId,
+        elementId,
+        textValue: textValue || resolveCommandPaletteTextValue(itemRecord),
+        ref: localRef
+      }),
+    [context.registerItem, elementId, itemId, itemRecord, textValue]
+  );
+
+  return React.createElement(
+    "li",
+    {
+      ...rest,
+      ...createScopeAttributes("command-palette", "item", itemState),
+      ref: mergeRefs(ref, localRef),
+      id: elementId,
+      role: rest.role || "option",
+      "aria-selected": String(highlighted),
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "data-highlighted": String(highlighted),
+      onMouseEnter: mergeEventHandlers(onMouseEnter, () => {
+        if (!disabledByState) {
+          context.setHighlightedId(itemId);
+        }
+      }),
+      onMouseDown: mergeEventHandlers(onMouseDown, (event) => {
+        event.preventDefault();
+        context.selectItem(itemRecord);
+      })
+    },
+    labelContent,
+    shortcutContent
       ? React.createElement(
           "span",
-          {
-            ...createScopeAttributes("command-palette", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
+          createScopeAttributes("command-palette", "shortcut", itemState),
+          shortcutContent
         )
       : null
   );
+});
+
+CommandPaletteItem.displayName = "ChipsCommandPalette.Item";
+
+export const ChipsCommandPalette = Object.assign(CommandPaletteRoot, {
+  Root: CommandPaletteRoot,
+  Input: CommandPaletteInput,
+  List: CommandPaletteList,
+  Item: CommandPaletteItem,
+  Group: CommandPaletteGroup
 });
 
 ChipsCommandPalette.displayName = "ChipsCommandPalette";
@@ -15974,7 +16269,7 @@ export const STAGE7_DATA_ADVANCED_COMPONENTS = [
   createComponentMeta({
     name: "ChipsCommandPalette",
     scope: "command-palette",
-    parts: ["root", "trigger", "search", "list", "item", "shortcut", "status"],
+    parts: ["root", "input", "list", "group", "group-label", "item", "shortcut", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   })
 ];

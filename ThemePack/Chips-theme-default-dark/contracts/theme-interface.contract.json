@@ -244,9 +244,10 @@
       "scope": "command-palette",
       "parts": [
         "root",
-        "trigger",
-        "search",
+        "input",
         "list",
+        "group",
+        "group-label",
         "item",
         "shortcut",
         "status"
@@ -262,10 +263,11 @@
       ],
       "requiredTokens": [
         "chips.comp.command-palette.root.surface",
-        "chips.comp.command-palette.search.surface.idle",
-        "chips.comp.command-palette.search.border.idle",
-        "chips.comp.command-palette.result.surface.active",
-        "chips.comp.command-palette.result.text.color",
+        "chips.comp.command-palette.input.surface.idle",
+        "chips.comp.command-palette.input.border.idle",
+        "chips.comp.command-palette.item.surface.active",
+        "chips.comp.command-palette.item.text.color",
+        "chips.comp.command-palette.group.label.color",
         "chips.comp.command-palette.shortcut.color",
         "chips.comp.command-palette.focus.outline"
       ]

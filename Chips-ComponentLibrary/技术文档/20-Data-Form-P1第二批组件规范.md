@@ -71,13 +71,15 @@
 ### 3.4 ChipsCommandPalette
 
 - `data-scope="command-palette"`
-- `data-part="root|trigger|search|list|item|shortcut|status"`
+- `data-part="root|input|list|group|group-label|item|shortcut|status"`
 - 语义：
-  - search：`role="combobox"`
+  - input：`role="combobox"`
   - list：`role="listbox"`
+  - group：`role="group"`，有标题时通过 `group-label` 关联
   - item：`role="option"`
 - 能力：
   - 查询过滤（label/shortcut/keywords）
+  - `Root / Input / List / Item / Group` Compound API
   - 高亮导航（`Arrow/Home/End`）
   - 回车选择与 Esc 关闭
 
@@ -93,6 +95,8 @@
 `ChipsDataGrid` 当前 required token 覆盖 `root.surface`、`toolbar.surface/gap`、`header.surface/text.color/sort.color`、`row.surface.idle/hover/selected`、`cell.text.color`、`pagination.surface/gap`、`border.color` 与 `focus.outline`。选中行视觉以 `data-selected="true"` 为正式选择器，不使用 `data-state="active"` 表达选择。
 
 `ChipsTree` 当前 required token 覆盖 `root.surface`、`item.surface.idle/hover/selected/disabled`、`item.text.color`、`branch.indent`、`leaf.indent`、`disclosure.color`、`group.guide.color`、`status.color.error` 与 `focus.outline`。选中节点视觉以 `data-selected="true"` 为正式选择器，不使用 `data-state="active"` 表达选择。
+
+`ChipsCommandPalette` 当前 required token 覆盖 `root.surface`、`input.surface.idle`、`input.border.idle`、`item.surface.active`、`item.text.color`、`group.label.color`、`shortcut.color` 与 `focus.outline`。正式输入 part 为 `input`，命令条目 part 为 `item`；旧 `search/result` 不再作为公开 part 或 token 口径。
 
 对应源文件：
 

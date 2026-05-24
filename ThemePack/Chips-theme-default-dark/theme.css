@@ -3029,10 +3029,10 @@ body {
   padding: var(--chips-base-space-3);
 }
 
-[data-scope="command-palette"][data-part="search"] {
+[data-scope="command-palette"][data-part="input"] {
   border-radius: var(--chips-base-radius-md);
-  background-color: var(--chips-comp-command-palette-search-surface-idle);
-  border: 1px solid var(--chips-comp-command-palette-search-border-idle);
+  background-color: var(--chips-comp-command-palette-input-surface-idle);
+  border: 1px solid var(--chips-comp-command-palette-input-border-idle);
   padding-inline: var(--chips-base-space-3);
   padding-block: var(--chips-base-space-2);
 }
@@ -3043,16 +3043,27 @@ body {
   list-style: none;
 }
 
+[data-scope="command-palette"][data-part="group"] {
+  padding: 0;
+  list-style: none;
+}
+
+[data-scope="command-palette"][data-part="group-label"] {
+  color: var(--chips-comp-command-palette-group-label-color);
+  padding-inline: var(--chips-base-space-3);
+  padding-block: var(--chips-base-space-2) var(--chips-base-space-1);
+}
+
 [data-scope="command-palette"][data-part="item"] {
   padding-inline: var(--chips-base-space-3);
   padding-block: var(--chips-base-space-2);
   border-radius: var(--chips-base-radius-sm);
   background-color: transparent;
-  color: var(--chips-comp-command-palette-result-text-color);
+  color: var(--chips-comp-command-palette-item-text-color);
 }
 
 [data-scope="command-palette"][data-part="item"][data-state="active"] {
-  background-color: var(--chips-comp-command-palette-result-surface-active);
+  background-color: var(--chips-comp-command-palette-item-surface-active);
 }
 
 [data-scope="command-palette"][data-part="shortcut"] {

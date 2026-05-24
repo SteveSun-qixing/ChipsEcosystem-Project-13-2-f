@@ -1699,6 +1699,9 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.select.trigger.surface.idle",
     "chips.comp.select.trigger.surface.focus",
     "chips.comp.select.trigger.border.idle",
+    "chips.comp.select.content.radius",
+    "chips.comp.select.content.surface",
+    "chips.comp.select.option.surface.highlighted",
     "chips.comp.select.option.surface.selected",
     "chips.comp.select.option.text.color"
   ],
@@ -1732,9 +1735,12 @@ export const COMPONENT_TOKEN_MAP = {
   menu: [
     "chips.comp.menu.content.radius",
     "chips.comp.menu.content.surface",
+    "chips.comp.menu.group.label.color",
     "chips.comp.menu.item.surface.hover",
     "chips.comp.menu.item.surface.active",
     "chips.comp.menu.item.text.color",
+    "chips.comp.menu.separator.color",
+    "chips.comp.menu.separator.thickness",
     "chips.comp.menu.focus.outline"
   ],
   toolbar: [
@@ -2171,7 +2177,7 @@ export function buildComponentContract(component) {
     select: {
       component: "select",
       scope: "select",
-      parts: ["root", "trigger", "value", "icon", "list", "option", "status"],
+      parts: ["root", "trigger", "value", "icon", "content", "option", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     dialog: {
@@ -2206,7 +2212,7 @@ export function buildComponentContract(component) {
     menu: {
       component: "menu",
       scope: "menu",
-      parts: ["root", "trigger", "content", "item", "status"],
+      parts: ["root", "trigger", "content", "item", "group", "group-label", "separator", "status"],
       states: [...INTERACTIVE_STATE_PRIORITY]
     },
     toolbar: {
@@ -5839,7 +5845,63 @@ export const ChipsSwitch = React.forwardRef((props, ref) => {
 
 ChipsSwitch.displayName = "ChipsSwitch";
 
-export const ChipsSelect = React.forwardRef((props, ref) => {
+function upsertRegistryEntry(registry, entry) {
+  const index = registry.findIndex((item) => item.value === entry.value);
+  if (index < 0) {
+    return [...registry, entry];
+  }
+  const next = [...registry];
+  next[index] = entry;
+  return next;
+}
+
+function removeRegistryEntry(registry, value) {
+  return registry.filter((item) => item.value !== value);
+}
+
+function mergeRegisteredEntries(registered, fallback) {
+  const byValue = new Map();
+  for (const item of fallback) {
+    byValue.set(item.value, item);
+  }
+  for (const item of registered) {
+    byValue.set(item.value, item);
+  }
+  return Array.from(byValue.values());
+}
+
+function getEnabledEntryByValue(items, value) {
+  return items.find((item) => item.value === value && item.disabled !== true) || null;
+}
+
+function getFirstEnabledEntry(items) {
+  return items[getFirstEnabledIndex(items)] || null;
+}
+
+function getLastEnabledEntry(items) {
+  return items[getNextEnabledIndex(items, 0, "prev", true)] || null;
+}
+
+function getNextEnabledEntry(items, currentValue, direction = "next", loop = true) {
+  const currentIndex = items.findIndex((item) => item.value === currentValue);
+  return items[getNextEnabledIndex(items, currentIndex, direction, loop)] || null;
+}
+
+function focusRegistryEntry(entry) {
+  const node = entry?.ref?.current;
+  if (node && typeof node.focus === "function") {
+    node.focus();
+  }
+}
+
+function resolveSelectableEntry(items, preferredValue) {
+  return getEnabledEntryByValue(items, preferredValue)
+    || getFirstEnabledEntry(items);
+}
+
+const [SelectCompoundContext, useSelectCompoundContext] = createCompoundContext("select");
+
+const SelectRoot = React.forwardRef((props, ref) => {
   const {
     value,
     defaultValue = "",
@@ -5851,18 +5913,31 @@ export const ChipsSelect = React.forwardRef((props, ref) => {
     placeholder = "",
     iconContent,
     options = [],
+    children,
     onValueChange,
     onOpenChange,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
   const disabledByState = disabled || loading;
   const { interaction, handlers } = useInteractiveState(disabledByState);
-  const [internalValue, setInternalValue] = React.useState(defaultValue);
-  const [internalOpen, setInternalOpen] = React.useState(defaultOpen === true);
-  const currentValue = value !== undefined ? value : internalValue;
-  const currentOpen = open !== undefined ? open : internalOpen;
+  const normalizedOptions = normalizeItems(options);
+  const [currentValue, setCurrentValue] = useControllableState({
+    value: value !== undefined ? String(value) : undefined,
+    defaultValue: defaultValue !== undefined ? String(defaultValue) : "",
+    onChange: onValueChange
+  });
+  const [currentOpen, setCurrentOpen] = useControllableState({
+    value: open,
+    defaultValue: defaultOpen === true,
+    onChange: onOpenChange
+  });
+  const [highlightedValue, setHighlightedValue] = React.useState(null);
+  const optionRegistryRef = React.useRef([]);
+  const [registryVersion, setRegistryVersion] = React.useState(0);
+  const triggerRef = React.useRef(null);
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
@@ -5877,87 +5952,227 @@ export const ChipsSelect = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const listId = React.useId();
-  const selectedOption = options.find((item) => String(item.value) === String(currentValue));
+  const generatedId = React.useId();
+  const baseId = rest.id || generatedId;
+  const triggerId = `${baseId}-trigger`;
+  const contentId = `${baseId}-content`;
+  const registeredOptions = optionRegistryRef.current;
+  const selectableOptions = React.useMemo(
+    () => mergeRegisteredEntries(registeredOptions, normalizedOptions),
+    [registryVersion, normalizedOptions]
+  );
+  const selectedOption = selectableOptions.find((item) => item.value === String(currentValue))
+    || normalizedOptions.find((item) => item.value === String(currentValue))
+    || null;
+  const highlightedOption = getEnabledEntryByValue(selectableOptions, highlightedValue);
 
-  const updateOpen = (nextOpen) => {
-    if (open === undefined) {
-      setInternalOpen(nextOpen);
-    }
-    if (typeof onOpenChange === "function") {
-      onOpenChange(nextOpen);
-    }
-  };
+  const registerOption = React.useCallback((entry) => {
+    optionRegistryRef.current = upsertRegistryEntry(optionRegistryRef.current, entry);
+    setRegistryVersion((version) => version + 1);
+    return () => {
+      optionRegistryRef.current = removeRegistryEntry(optionRegistryRef.current, entry.value);
+      setRegistryVersion((version) => version + 1);
+    };
+  }, []);
 
-  const updateValue = (nextValue) => {
-    if (value === undefined) {
-      setInternalValue(nextValue);
-    }
-    if (typeof onValueChange === "function") {
-      onValueChange(nextValue);
-    }
-  };
-
-  const toggleOpen = (event) => {
-    if (disabledByState) {
-      event.preventDefault();
-      return;
-    }
-    updateOpen(!currentOpen);
-  };
-
-  const handleTriggerKeyDown = (event) => {
-    if (isKeyboardActivationKey(event.key) || event.key === "ArrowDown") {
-      event.preventDefault();
-      if (!currentOpen) {
-        updateOpen(true);
+  const updateOpen = React.useCallback(
+    (nextOpen) => {
+      if (disabledByState) {
+        return;
       }
-      return;
-    }
-
-    if (event.key === "Escape" && currentOpen) {
-      event.preventDefault();
-      updateOpen(false);
-    }
-  };
-
-  const handleOptionSelect = (option, event) => {
-    if (option.disabled || disabledByState) {
-      event.preventDefault();
-      return;
-    }
-    updateValue(option.value);
-    updateOpen(false);
-  };
-
-  return React.createElement(
-    "div",
-    {
-      ...createScopeAttributes("select", "root", state),
-      ...handlers,
-      ref,
-      "aria-disabled": disabledByState ? "true" : undefined,
-      "data-open": String(currentOpen)
+      setCurrentOpen(Boolean(nextOpen));
     },
+    [disabledByState, setCurrentOpen]
+  );
+
+  const highlightValue = React.useCallback(
+    (nextValue, options = {}) => {
+      const entry = nextValue === null
+        ? null
+        : getEnabledEntryByValue(optionRegistryRef.current, String(nextValue))
+          || getEnabledEntryByValue(normalizedOptions, String(nextValue));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedOptions]
+  );
+
+  const highlightSelectedOrFirst = React.useCallback(
+    (options = {}) => {
+      const entry = resolveSelectableEntry(
+        mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions),
+        String(currentValue)
+      );
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [currentValue, normalizedOptions]
+  );
+
+  const highlightFirst = React.useCallback(
+    (options = {}) => {
+      const entry = getFirstEnabledEntry(mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedOptions]
+  );
+
+  const highlightLast = React.useCallback(
+    (options = {}) => {
+      const entry = getLastEnabledEntry(mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedOptions]
+  );
+
+  const highlightNext = React.useCallback(
+    (direction, options = {}) => {
+      const entries = mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions);
+      const entry = getNextEnabledEntry(entries, highlightedValue, direction, true);
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [highlightedValue, normalizedOptions]
+  );
+
+  const selectValue = React.useCallback(
+    (nextValue, details = {}) => {
+      const option = getEnabledEntryByValue(
+        mergeRegisteredEntries(optionRegistryRef.current, normalizedOptions),
+        String(nextValue)
+      );
+      if (!option || disabledByState) {
+        details.event?.preventDefault?.();
+        return;
+      }
+      setCurrentValue(option.value);
+      setCurrentOpen(false);
+      setHighlightedValue(option.value);
+      if (triggerRef.current && typeof triggerRef.current.focus === "function") {
+        triggerRef.current.focus();
+      }
+    },
+    [disabledByState, normalizedOptions, setCurrentOpen, setCurrentValue]
+  );
+
+  const openList = React.useCallback(
+    (options = {}) => {
+      if (disabledByState) {
+        return;
+      }
+      setCurrentOpen(true);
+      highlightSelectedOrFirst(options);
+    },
+    [disabledByState, highlightSelectedOrFirst, setCurrentOpen]
+  );
+
+  const closeList = React.useCallback(
+    () => {
+      if (!disabledByState) {
+        setCurrentOpen(false);
+      }
+    },
+    [disabledByState, setCurrentOpen]
+  );
+
+  const toggleOpen = React.useCallback((event) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    const nextOpen = !currentOpen;
+    setCurrentOpen(nextOpen);
+    if (nextOpen) {
+      highlightSelectedOrFirst();
+    }
+  }, [currentOpen, disabledByState, highlightSelectedOrFirst, setCurrentOpen]);
+
+  React.useEffect(() => {
+    if (!currentOpen) {
+      return;
+    }
+    const highlightedExists = getEnabledEntryByValue(selectableOptions, highlightedValue);
+    if (!highlightedExists) {
+      const fallback = resolveSelectableEntry(selectableOptions, String(currentValue));
+      setHighlightedValue(fallback ? fallback.value : null);
+    }
+  }, [currentOpen, currentValue, highlightedValue, selectableOptions]);
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open: Boolean(currentOpen),
+      disabled: disabledByState,
+      loading,
+      error: normalizedError,
+      value: String(currentValue ?? ""),
+      highlightedValue,
+      selectedOption,
+      highlightedOption,
+      placeholder,
+      baseId,
+      triggerId,
+      contentId,
+      triggerRef,
+      registerOption,
+      updateOpen,
+      openList,
+      closeList,
+      toggleOpen,
+      highlightValue,
+      highlightSelectedOrFirst,
+      highlightFirst,
+      highlightLast,
+      highlightNext,
+      selectValue
+    }),
+    [
+      state,
+      currentOpen,
+      disabledByState,
+      loading,
+      normalizedError,
+      currentValue,
+      highlightedValue,
+      selectedOption,
+      highlightedOption,
+      placeholder,
+      baseId,
+      triggerId,
+      contentId,
+      registerOption,
+      updateOpen,
+      openList,
+      closeList,
+      toggleOpen,
+      highlightValue,
+      highlightSelectedOrFirst,
+      highlightFirst,
+      highlightLast,
+      highlightNext,
+      selectValue
+    ]
+  );
+
+  const fallbackChildren = React.createElement(
+    React.Fragment,
+    null,
     React.createElement(
-      "button",
-      {
-        ...createScopeAttributes("select", "trigger", state),
-        type: "button",
-        role: "button",
-        disabled: disabledByState,
-        "aria-disabled": disabledByState ? "true" : undefined,
-        "aria-haspopup": "listbox",
-        "aria-expanded": String(currentOpen),
-        "aria-controls": listId,
-        onClick: toggleOpen,
-        onKeyDown: handleTriggerKeyDown
-      },
-      React.createElement(
-        "span",
-        createScopeAttributes("select", "value", state),
-        selectedOption ? selectedOption.label : placeholder
-      ),
+      SelectTrigger,
+      null,
+      React.createElement(SelectValue, null),
       React.createElement(
         "span",
         {
@@ -5967,46 +6182,330 @@ export const ChipsSelect = React.forwardRef((props, ref) => {
         resolveIconContent(iconContent, "chevron-down")
       )
     ),
-    currentOpen
-      ? React.createElement(
-          "ul",
+    React.createElement(
+      SelectContent,
+      null,
+      normalizedOptions.map((option, index) =>
+        React.createElement(
+          SelectOption,
           {
-            ...createScopeAttributes("select", "list", state),
-            id: listId,
-            role: "listbox"
+            key: `${option.value}-${index}`,
+            value: option.value,
+            disabled: option.disabled,
+            textValue: option.textValue,
+            index
           },
-          options.map((option, index) => {
-            const optionValue = String(option.value);
-            const selected = String(currentValue) === optionValue;
-            return React.createElement(
-              "li",
-              {
-                ...createScopeAttributes("select", "option", state),
-                key: `${optionValue}-${index}`,
-                role: "option",
-                "aria-selected": String(selected),
-                "aria-disabled": option.disabled ? "true" : undefined,
-                "data-selected": String(selected),
-                onClick: (event) => handleOptionSelect(option, event)
-              },
-              option.label
-            );
-          })
+          option.label
         )
-      : null,
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("select", "status", state),
-            ...createAriaStatusProps({
-              live: "assertive"
-            })
-          },
-          normalizedError.message
-        )
-      : null
+      )
+    )
   );
+
+  return React.createElement(
+    SelectCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("select", "root", state),
+        ...handlers,
+        ref,
+        "aria-disabled": disabledByState ? "true" : undefined,
+        "data-open": String(Boolean(currentOpen))
+      },
+      children !== undefined ? children : fallbackChildren,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("select", "status", state),
+              ...createAriaStatusProps({
+                live: "assertive"
+              })
+            },
+            normalizedError.message
+          )
+        : null
+    )
+  );
+});
+
+SelectRoot.displayName = "ChipsSelect.Root";
+
+const SelectTrigger = React.forwardRef((props, ref) => {
+  const { children, onClick, onKeyDown, ...rest } = props;
+  const context = useSelectCompoundContext("trigger");
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  React.useEffect(() => {
+    context.triggerRef.current = localRef.current;
+    return () => {
+      if (context.triggerRef.current === localRef.current) {
+        context.triggerRef.current = null;
+      }
+    };
+  }, [context.triggerRef]);
+
+  const handleKeyDown = (event) => {
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+    if (event.defaultPrevented || context.disabled) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!context.open) {
+        context.openList();
+      } else {
+        context.highlightNext("next");
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!context.open) {
+        context.updateOpen(true);
+        context.highlightLast();
+      } else {
+        context.highlightNext("prev");
+      }
+      return;
+    }
+
+    if (event.key === "Home" && context.open) {
+      event.preventDefault();
+      context.highlightFirst();
+      return;
+    }
+
+    if (event.key === "End" && context.open) {
+      event.preventDefault();
+      context.highlightLast();
+      return;
+    }
+
+    if (event.key === "Escape" && context.open) {
+      event.preventDefault();
+      context.closeList();
+      return;
+    }
+
+    if (isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      if (context.open && context.highlightedValue !== null) {
+        context.selectValue(context.highlightedValue, { source: "keyboard", event });
+      } else {
+        context.openList();
+      }
+    }
+  };
+
+  return React.createElement(
+      "button",
+      {
+        ...rest,
+        ...createScopeAttributes("select", "trigger", context.state),
+        ref: localRef,
+        id: rest.id || context.triggerId,
+        type: "button",
+        role: "button",
+        disabled: context.disabled,
+        "aria-disabled": context.disabled ? "true" : undefined,
+        "aria-haspopup": "listbox",
+        "aria-expanded": String(context.open),
+        "aria-controls": context.contentId,
+        "aria-activedescendant": context.open && context.highlightedOption
+          ? context.highlightedOption.id
+          : undefined,
+        onClick: mergeEventHandlers(onClick, context.toggleOpen),
+        onKeyDown: handleKeyDown
+      },
+      children
+    );
+});
+
+SelectTrigger.displayName = "ChipsSelect.Trigger";
+
+const SelectValue = React.forwardRef((props, ref) => {
+  const { children, placeholder, ...rest } = props;
+  const context = useSelectCompoundContext("value");
+  const fallback = placeholder !== undefined ? placeholder : context.placeholder;
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      ...createScopeAttributes("select", "value", context.state),
+      ref,
+      "data-placeholder": String(!context.selectedOption)
+    },
+    children !== undefined
+      ? children
+      : context.selectedOption
+        ? context.selectedOption.label
+        : fallback
+  );
+});
+
+SelectValue.displayName = "ChipsSelect.Value";
+
+const SelectContent = React.forwardRef((props, ref) => {
+  const { children, onKeyDown, ...rest } = props;
+  const context = useSelectCompoundContext("content");
+  const handleKeyDown = (event) => {
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+    if (event.defaultPrevented || context.disabled) {
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      context.closeList();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      context.highlightNext("next", { focus: true });
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      context.highlightNext("prev", { focus: true });
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      context.highlightFirst({ focus: true });
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      context.highlightLast({ focus: true });
+      return;
+    }
+    if (isKeyboardActivationKey(event.key) && context.highlightedValue !== null) {
+      event.preventDefault();
+      context.selectValue(context.highlightedValue, { source: "keyboard", event });
+    }
+  };
+  if (!context.open) {
+    return null;
+  }
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("select", "content", context.state),
+      ref,
+      id: rest.id || context.contentId,
+      role: rest.role || "listbox",
+      "aria-labelledby": rest["aria-labelledby"] || context.triggerId,
+      tabIndex: rest.tabIndex ?? -1,
+      onKeyDown: handleKeyDown
+    },
+    label
+  );
+});
+
+SelectContent.displayName = "ChipsSelect.Content";
+
+const SelectOption = React.forwardRef((props, ref) => {
+  const {
+    children,
+    value,
+    disabled = false,
+    textValue,
+    index = 0,
+    onClick,
+    onMouseEnter,
+    onFocus,
+    ...rest
+  } = props;
+  const context = useSelectCompoundContext("option");
+  const optionValue = String(value);
+  const idSegment = normalizeDomIdSegment(optionValue, String(index));
+  const optionId = rest.id || `${context.baseId}-option-${idSegment}`;
+  const disabledByState = context.disabled || disabled;
+  const selected = context.value === optionValue;
+  const highlighted = context.highlightedValue === optionValue;
+  const optionState = disabledByState
+    ? "disabled"
+    : selected
+      ? "active"
+      : highlighted
+        ? "hover"
+        : context.state === "disabled" || context.state === "loading" || context.state === "error"
+          ? context.state
+          : "idle";
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  const label = children !== undefined ? children : textValue ?? optionValue;
+
+  React.useEffect(
+    () => context.registerOption({
+      value: optionValue,
+      disabled: disabledByState,
+      label,
+      textValue,
+      id: optionId,
+      ref: localRef
+    }),
+    [context.registerOption, disabledByState, label, optionId, optionValue, textValue]
+  );
+
+  const selectCurrent = (event) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    context.selectValue(optionValue, { source: "pointer", event });
+  };
+
+  const highlightCurrent = (event) => {
+    if (typeof onMouseEnter === "function" && event.type === "mouseenter") {
+      onMouseEnter(event);
+    }
+    if (typeof onFocus === "function" && event.type === "focus") {
+      onFocus(event);
+    }
+    if (!event.defaultPrevented && !disabledByState) {
+      context.highlightValue(optionValue);
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("select", "option", optionState),
+      ref: localRef,
+      id: optionId,
+      role: rest.role || "option",
+      tabIndex: disabledByState ? undefined : highlighted ? 0 : -1,
+      "aria-selected": String(selected),
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "data-selected": String(selected),
+      "data-highlighted": String(highlighted),
+      onMouseEnter: highlightCurrent,
+      onFocus: highlightCurrent,
+      onClick: mergeEventHandlers(onClick, selectCurrent)
+    },
+    children
+  );
+});
+
+SelectOption.displayName = "ChipsSelect.Option";
+
+export const ChipsSelect = Object.assign(SelectRoot, {
+  Root: SelectRoot,
+  Trigger: SelectTrigger,
+  Content: SelectContent,
+  Option: SelectOption,
+  Value: SelectValue
 });
 
 ChipsSelect.displayName = "ChipsSelect";
@@ -9217,7 +9716,9 @@ export const ChipsTabs = Object.assign(TabsRoot, {
 
 ChipsTabs.displayName = "ChipsTabs";
 
-export const ChipsMenu = React.forwardRef((props, ref) => {
+const [MenuCompoundContext, useMenuCompoundContext] = createCompoundContext("menu");
+
+const MenuRoot = React.forwardRef((props, ref) => {
   const {
     open,
     defaultOpen = false,
@@ -9226,10 +9727,12 @@ export const ChipsMenu = React.forwardRef((props, ref) => {
     error = null,
     triggerContent,
     items = [],
+    children,
     closeOnSelect = true,
     onOpenChange,
     onSelect,
-    onStateChange
+    onStateChange,
+    ...rest
   } = props;
 
   const normalizedError = normalizeError(error);
@@ -9241,19 +9744,12 @@ export const ChipsMenu = React.forwardRef((props, ref) => {
     defaultValue: defaultOpen === true,
     onChange: onOpenChange
   });
-  const [highlightedIndex, setHighlightedIndex] = React.useState(
-    getFirstEnabledIndex(normalizedItems)
+  const [highlightedValue, setHighlightedValue] = React.useState(
+    normalizedItems[getFirstEnabledIndex(normalizedItems)]?.value ?? null
   );
-
-  React.useEffect(() => {
-    if (!currentOpen) {
-      return;
-    }
-    if (highlightedIndex >= 0 && normalizedItems[highlightedIndex]) {
-      return;
-    }
-    setHighlightedIndex(getFirstEnabledIndex(normalizedItems));
-  }, [currentOpen, highlightedIndex, normalizedItems]);
+  const itemRegistryRef = React.useRef([]);
+  const [registryVersion, setRegistryVersion] = React.useState(0);
+  const triggerRef = React.useRef(null);
 
   const state = resolveInteractiveState({
     disabled: disabledByState,
@@ -9268,157 +9764,506 @@ export const ChipsMenu = React.forwardRef((props, ref) => {
     }
   }, [state, onStateChange]);
 
-  const contentId = React.useId();
+  const generatedId = React.useId();
+  const baseId = rest.id || generatedId;
+  const triggerId = `${baseId}-trigger`;
+  const contentId = `${baseId}-content`;
+  const registeredItems = itemRegistryRef.current;
+  const selectableItems = React.useMemo(
+    () => mergeRegisteredEntries(registeredItems, normalizedItems),
+    [registryVersion, normalizedItems]
+  );
 
-  const openMenu = () => {
+  const registerItem = React.useCallback((entry) => {
+    itemRegistryRef.current = upsertRegistryEntry(itemRegistryRef.current, entry);
+    setRegistryVersion((version) => version + 1);
+    return () => {
+      itemRegistryRef.current = removeRegistryEntry(itemRegistryRef.current, entry.value);
+      setRegistryVersion((version) => version + 1);
+    };
+  }, []);
+
+  const openMenu = React.useCallback((options = {}) => {
     if (disabledByState) {
       return;
     }
     setCurrentOpen(true);
-  };
+    const entry = getFirstEnabledEntry(mergeRegisteredEntries(itemRegistryRef.current, normalizedItems));
+    setHighlightedValue(entry ? entry.value : null);
+    if (options.focus) {
+      focusRegistryEntry(entry);
+    }
+  }, [disabledByState, normalizedItems, setCurrentOpen]);
 
-  const closeMenu = () => {
-    setCurrentOpen(false);
-  };
+  const closeMenu = React.useCallback(() => {
+    if (!disabledByState) {
+      setCurrentOpen(false);
+      if (triggerRef.current && typeof triggerRef.current.focus === "function") {
+        triggerRef.current.focus();
+      }
+    }
+  }, [disabledByState, setCurrentOpen]);
 
-  const selectIndex = (index) => {
-    const item = normalizedItems[index];
+  const highlightValue = React.useCallback(
+    (nextValue, options = {}) => {
+      const entry = nextValue === null
+        ? null
+        : getEnabledEntryByValue(itemRegistryRef.current, String(nextValue))
+          || getEnabledEntryByValue(normalizedItems, String(nextValue));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedItems]
+  );
+
+  const highlightFirst = React.useCallback(
+    (options = {}) => {
+      const entry = getFirstEnabledEntry(mergeRegisteredEntries(itemRegistryRef.current, normalizedItems));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedItems]
+  );
+
+  const highlightLast = React.useCallback(
+    (options = {}) => {
+      const entry = getLastEnabledEntry(mergeRegisteredEntries(itemRegistryRef.current, normalizedItems));
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [normalizedItems]
+  );
+
+  const highlightNext = React.useCallback(
+    (direction, options = {}) => {
+      const entries = mergeRegisteredEntries(itemRegistryRef.current, normalizedItems);
+      const entry = getNextEnabledEntry(entries, highlightedValue, direction, true);
+      setHighlightedValue(entry ? entry.value : null);
+      if (options.focus) {
+        focusRegistryEntry(entry);
+      }
+    },
+    [highlightedValue, normalizedItems]
+  );
+
+  const selectValue = React.useCallback((nextValue, details = {}) => {
+    const item = getEnabledEntryByValue(
+      mergeRegisteredEntries(itemRegistryRef.current, normalizedItems),
+      String(nextValue)
+    );
     if (!item || item.disabled || disabledByState) {
+      details.event?.preventDefault?.();
       return;
     }
     if (typeof onSelect === "function") {
-      onSelect(item.value);
+      onSelect(item.value, {
+        source: details.source || "programmatic",
+        value: item.value
+      });
     }
     if (closeOnSelect) {
       closeMenu();
     }
-  };
+  }, [closeMenu, closeOnSelect, disabledByState, normalizedItems, onSelect]);
 
-  const handleTriggerKeyDown = (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      openMenu();
-      setHighlightedIndex(getFirstEnabledIndex(normalizedItems));
+  const toggleOpen = React.useCallback((event) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    const nextOpen = !currentOpen;
+    setCurrentOpen(nextOpen);
+    if (nextOpen) {
+      const entry = getFirstEnabledEntry(mergeRegisteredEntries(itemRegistryRef.current, normalizedItems));
+      setHighlightedValue(entry ? entry.value : null);
+    }
+  }, [currentOpen, disabledByState, normalizedItems, setCurrentOpen]);
+
+  React.useEffect(() => {
+    if (!currentOpen) {
+      return;
+    }
+    const highlightedExists = getEnabledEntryByValue(selectableItems, highlightedValue);
+    if (!highlightedExists) {
+      const fallback = getFirstEnabledEntry(selectableItems);
+      setHighlightedValue(fallback ? fallback.value : null);
+    }
+  }, [currentOpen, highlightedValue, selectableItems]);
+
+  const contextValue = React.useMemo(
+    () => ({
+      state,
+      open: Boolean(currentOpen),
+      disabled: disabledByState,
+      loading,
+      error: normalizedError,
+      highlightedValue,
+      baseId,
+      triggerId,
+      contentId,
+      triggerRef,
+      closeOnSelect,
+      registerItem,
+      openMenu,
+      closeMenu,
+      toggleOpen,
+      highlightValue,
+      highlightFirst,
+      highlightLast,
+      highlightNext,
+      selectValue
+    }),
+    [
+      state,
+      currentOpen,
+      disabledByState,
+      loading,
+      normalizedError,
+      highlightedValue,
+      baseId,
+      triggerId,
+      contentId,
+      closeOnSelect,
+      registerItem,
+      openMenu,
+      closeMenu,
+      toggleOpen,
+      highlightValue,
+      highlightFirst,
+      highlightLast,
+      highlightNext,
+      selectValue
+    ]
+  );
+
+  const fallbackChildren = React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(MenuTrigger, null, triggerContent),
+    React.createElement(
+      MenuContent,
+      null,
+      normalizedItems.map((item, index) =>
+        React.createElement(
+          MenuItem,
+          {
+            key: `${item.value}-${index}`,
+            value: item.value,
+            disabled: item.disabled,
+            index
+          },
+          item.label
+        )
+      )
+    )
+  );
+
+  return React.createElement(
+    MenuCompoundContext.Provider,
+    { value: contextValue },
+    React.createElement(
+      "div",
+      {
+        ...rest,
+        ...createScopeAttributes("menu", "root", state),
+        ...handlers,
+        ref,
+        "data-open": String(Boolean(currentOpen)),
+        "aria-disabled": disabledByState ? "true" : undefined
+      },
+      children !== undefined ? children : fallbackChildren,
+      normalizedError
+        ? React.createElement(
+            "span",
+            {
+              ...createScopeAttributes("menu", "status", state),
+              ...createAriaStatusProps({ live: "assertive" })
+            },
+            normalizedError.message
+          )
+        : null
+    )
+  );
+});
+
+MenuRoot.displayName = "ChipsMenu.Root";
+
+const MenuTrigger = React.forwardRef((props, ref) => {
+  const { children, onClick, onKeyDown, ...rest } = props;
+  const context = useMenuCompoundContext("trigger");
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  React.useEffect(() => {
+    context.triggerRef.current = localRef.current;
+    return () => {
+      if (context.triggerRef.current === localRef.current) {
+        context.triggerRef.current = null;
+      }
+    };
+  }, [context.triggerRef]);
+
+  const handleKeyDown = (event) => {
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+    if (event.defaultPrevented || context.disabled) {
       return;
     }
 
-    if (isKeyboardActivationKey(event.key)) {
-      event.preventDefault();
-      setCurrentOpen(!currentOpen);
-    }
-  };
-
-  const handleMenuKeyDown = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeMenu();
-      return;
-    }
-
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = getNextEnabledIndex(normalizedItems, highlightedIndex, "next", true);
-      setHighlightedIndex(next);
+      context.openMenu();
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      const next = getNextEnabledIndex(normalizedItems, highlightedIndex, "prev", true);
-      setHighlightedIndex(next);
-      return;
-    }
-
-    if (event.key === "Home") {
-      event.preventDefault();
-      setHighlightedIndex(getFirstEnabledIndex(normalizedItems));
-      return;
-    }
-
-    if (event.key === "End") {
-      event.preventDefault();
-      const last = getNextEnabledIndex(normalizedItems, 0, "prev", true);
-      setHighlightedIndex(last);
+      if (!context.open) {
+        context.openMenu();
+      }
+      context.highlightLast();
       return;
     }
 
     if (isKeyboardActivationKey(event.key)) {
       event.preventDefault();
-      selectIndex(highlightedIndex);
+      context.toggleOpen(event);
     }
   };
 
   return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("menu", "trigger", context.state),
+      ref: localRef,
+      id: rest.id || context.triggerId,
+      type: rest.type || "button",
+      role: "button",
+      disabled: context.disabled,
+      "aria-haspopup": "menu",
+      "aria-expanded": String(context.open),
+      "aria-controls": context.contentId,
+      onClick: mergeEventHandlers(onClick, context.toggleOpen),
+      onKeyDown: handleKeyDown
+    },
+    children
+  );
+});
+
+MenuTrigger.displayName = "ChipsMenu.Trigger";
+
+const MenuContent = React.forwardRef((props, ref) => {
+  const { children, onKeyDown, ...rest } = props;
+  const context = useMenuCompoundContext("content");
+  const handleKeyDown = (event) => {
+    if (typeof onKeyDown === "function") {
+      onKeyDown(event);
+    }
+    if (event.defaultPrevented || context.disabled) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      context.closeMenu();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      context.highlightNext("next", { focus: true });
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      context.highlightNext("prev", { focus: true });
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      context.highlightFirst({ focus: true });
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      context.highlightLast({ focus: true });
+      return;
+    }
+
+    if (isKeyboardActivationKey(event.key)) {
+      event.preventDefault();
+      if (context.highlightedValue !== null) {
+        context.selectValue(context.highlightedValue, { source: "keyboard", event });
+      }
+    }
+  };
+
+  if (!context.open) {
+    return null;
+  }
+
+  return React.createElement(
     "div",
     {
-      ...createScopeAttributes("menu", "root", state),
-      ...handlers,
+      ...rest,
+      ...createScopeAttributes("menu", "content", context.state),
       ref,
-      "data-open": String(Boolean(currentOpen)),
-      "aria-disabled": disabledByState ? "true" : undefined
+      id: rest.id || context.contentId,
+      role: rest.role || "menu",
+      "aria-labelledby": rest["aria-labelledby"] || context.triggerId,
+      tabIndex: rest.tabIndex ?? -1,
+      onKeyDown: handleKeyDown
     },
-    React.createElement(
-      "button",
-      {
-        ...createScopeAttributes("menu", "trigger", state),
-        type: "button",
-        role: "button",
-        disabled: disabledByState,
-        "aria-haspopup": "menu",
-        "aria-expanded": String(Boolean(currentOpen)),
-        "aria-controls": contentId,
-        onClick: () => setCurrentOpen(!currentOpen),
-        onKeyDown: handleTriggerKeyDown
-      },
-      triggerContent
-    ),
-    currentOpen
+    children
+  );
+});
+
+MenuContent.displayName = "ChipsMenu.Content";
+
+const MenuItem = React.forwardRef((props, ref) => {
+  const {
+    children,
+    value,
+    disabled = false,
+    textValue,
+    index = 0,
+    onClick,
+    onMouseEnter,
+    onFocus,
+    ...rest
+  } = props;
+  const context = useMenuCompoundContext("item");
+  const itemValue = String(value);
+  const idSegment = normalizeDomIdSegment(itemValue, String(index));
+  const itemId = rest.id || `${context.baseId}-item-${idSegment}`;
+  const disabledByState = context.disabled || disabled;
+  const highlighted = context.highlightedValue === itemValue;
+  const itemState = disabledByState
+    ? "disabled"
+    : highlighted
+      ? "hover"
+      : context.state === "disabled" || context.state === "loading" || context.state === "error"
+        ? context.state
+        : "idle";
+  const localRef = React.useRef(null);
+  React.useImperativeHandle(ref, () => localRef.current);
+  const label = children !== undefined ? children : textValue ?? itemValue;
+
+  React.useEffect(
+    () => context.registerItem({
+      value: itemValue,
+      disabled: disabledByState,
+      label,
+      textValue,
+      id: itemId,
+      ref: localRef
+    }),
+    [context.registerItem, disabledByState, itemId, itemValue, label, textValue]
+  );
+
+  const highlightCurrent = (event) => {
+    if (typeof onMouseEnter === "function" && event.type === "mouseenter") {
+      onMouseEnter(event);
+    }
+    if (typeof onFocus === "function" && event.type === "focus") {
+      onFocus(event);
+    }
+    if (!event.defaultPrevented && !disabledByState) {
+      context.highlightValue(itemValue);
+    }
+  };
+
+  const selectCurrent = (event) => {
+    if (disabledByState) {
+      event?.preventDefault?.();
+      return;
+    }
+    context.selectValue(itemValue, { source: "pointer", event });
+  };
+
+  return React.createElement(
+    "button",
+    {
+      ...rest,
+      ...createScopeAttributes("menu", "item", itemState),
+      ref: localRef,
+      id: itemId,
+      type: rest.type || "button",
+      role: "menuitem",
+      tabIndex: disabledByState ? undefined : highlighted ? 0 : -1,
+      disabled: disabledByState,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "data-highlighted": String(highlighted),
+      onMouseEnter: highlightCurrent,
+      onFocus: highlightCurrent,
+      onClick: mergeEventHandlers(onClick, selectCurrent)
+    },
+    label
+  );
+});
+
+MenuItem.displayName = "ChipsMenu.Item";
+
+const MenuGroup = React.forwardRef((props, ref) => {
+  const { children, label, labelId, ...rest } = props;
+  const context = useMenuCompoundContext("group");
+  const generatedId = React.useId();
+  const groupLabelId = labelId || (label !== undefined ? `${rest.id || generatedId}-label` : undefined);
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("menu", "group", context.state),
+      ref,
+      role: rest.role || "group",
+      "aria-labelledby": rest["aria-labelledby"] || groupLabelId
+    },
+    label !== undefined
       ? React.createElement(
-          "ul",
+          "div",
           {
-            ...createScopeAttributes("menu", "content", state),
-            id: contentId,
-            role: "menu",
-            onKeyDown: handleMenuKeyDown
+            ...createScopeAttributes("menu", "group-label", context.state),
+            id: groupLabelId
           },
-          normalizedItems.map((item, index) => {
-            const highlighted = index === highlightedIndex;
-            return React.createElement(
-              "li",
-              {
-                key: `${item.value}-${index}`,
-                role: "none"
-              },
-              React.createElement(
-                "button",
-                {
-                  ...createScopeAttributes("menu", "item", state),
-                  type: "button",
-                  role: "menuitem",
-                  tabIndex: highlighted ? 0 : -1,
-                  disabled: disabledByState || item.disabled,
-                  "aria-disabled": item.disabled ? "true" : undefined,
-                  "data-highlighted": String(highlighted),
-                  onMouseEnter: () => setHighlightedIndex(index),
-                  onClick: () => selectIndex(index)
-                },
-                item.label
-              )
-            );
-          })
+          label
         )
       : null,
-    normalizedError
-      ? React.createElement(
-          "span",
-          {
-            ...createScopeAttributes("menu", "status", state),
-            ...createAriaStatusProps({ live: "assertive" })
-          },
-          normalizedError.message
-        )
-      : null
+    children
   );
+});
+
+MenuGroup.displayName = "ChipsMenu.Group";
+
+const MenuSeparator = React.forwardRef((props, ref) => {
+  const context = useMenuCompoundContext("separator");
+  return React.createElement("div", {
+    ...props,
+    ...createScopeAttributes("menu", "separator", context.state),
+    ref,
+    role: props.role || "separator",
+    "aria-orientation": props["aria-orientation"] || "horizontal"
+  });
+});
+
+MenuSeparator.displayName = "ChipsMenu.Separator";
+
+export const ChipsMenu = Object.assign(MenuRoot, {
+  Root: MenuRoot,
+  Trigger: MenuTrigger,
+  Content: MenuContent,
+  Item: MenuItem,
+  Group: MenuGroup,
+  Separator: MenuSeparator
 });
 
 ChipsMenu.displayName = "ChipsMenu";
@@ -14085,7 +14930,7 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
   createComponentMeta({
     name: "ChipsSelect",
     scope: "select",
-    parts: ["root", "trigger", "value", "icon", "list", "option", "status"],
+    parts: ["root", "trigger", "value", "icon", "content", "option", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({
@@ -14120,7 +14965,7 @@ export const P0_BASE_INTERACTIVE_COMPONENTS = [
   createComponentMeta({
     name: "ChipsMenu",
     scope: "menu",
-    parts: ["root", "trigger", "content", "item", "status"],
+    parts: ["root", "trigger", "content", "item", "group", "group-label", "separator", "status"],
     states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({

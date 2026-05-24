@@ -80,6 +80,12 @@ export const StandardCompoundSlotSchemas = {
     group: { type: 'Section', required: false, multiple: true, part: 'group' },
     separator: { type: 'View', required: false, multiple: true, part: 'separator' }
   },
+  Select: {
+    trigger: { type: 'Command', required: true, multiple: false, part: 'trigger' },
+    content: { type: 'Section', required: true, multiple: false, part: 'content', role: 'listbox' },
+    value: { type: 'Text', required: false, multiple: false, part: 'value' },
+    option: { type: 'Command', required: true, multiple: true, part: 'option', role: 'option' }
+  },
   Form: {
     section: { type: 'Section', required: false, multiple: true, part: 'section' },
     field: { type: 'Form', required: true, multiple: true, part: 'field' },

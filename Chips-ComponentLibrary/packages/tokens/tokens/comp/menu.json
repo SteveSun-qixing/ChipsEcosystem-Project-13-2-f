@@ -6,6 +6,11 @@
           "radius": "{chips.sys.radius.container}",
           "surface": "{chips.sys.color.surface}"
         },
+        "group": {
+          "label": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
         "item": {
           "surface": {
             "hover": "{chips.sys.color.surface}",
@@ -14,6 +19,10 @@
           "text": {
             "color": "{chips.sys.color.on-surface}"
           }
+        },
+        "separator": {
+          "color": "{chips.sys.color.on-surface}",
+          "thickness": "{chips.layout.divider.thickness}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

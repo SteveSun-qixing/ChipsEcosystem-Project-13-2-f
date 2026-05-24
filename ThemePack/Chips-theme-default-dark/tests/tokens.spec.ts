@@ -40,6 +40,10 @@ describe("theme tokens", () => {
     expect(parsed.comp.chips?.comp?.["search-field"]?.clear?.color?.hover).toBeDefined();
     expect(parsed.comp.chips?.comp?.["secure-field"]?.toggle?.color?.idle).toBeDefined();
     expect(parsed.comp.chips?.comp?.["segmented-control"]?.item?.surface?.selected).toBeDefined();
+    expect(parsed.comp.chips?.comp?.select?.content?.surface).toBeDefined();
+    expect(parsed.comp.chips?.comp?.select?.option?.surface?.highlighted).toBeDefined();
+    expect(parsed.comp.chips?.comp?.menu?.group?.label?.color).toBeDefined();
+    expect(parsed.comp.chips?.comp?.menu?.separator?.thickness).toBeDefined();
     expect(parsed.comp.chips?.comp?.["combo-box"]?.option?.surface?.highlighted).toBeDefined();
     expect(parsed.comp.chips?.comp?.["number-input"]?.root?.border?.error).toBeDefined();
     expect(parsed.comp.chips?.comp?.stepper?.increment?.surface?.active).toBeDefined();

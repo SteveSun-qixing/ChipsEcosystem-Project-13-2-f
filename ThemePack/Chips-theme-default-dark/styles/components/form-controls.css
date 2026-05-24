@@ -168,10 +168,12 @@
   color: var(--chips-sys-color-on-surface, #111111);
 }
 
-[data-scope="select"][data-part="list"] {
+[data-scope="select"][data-part="content"] {
   margin: 0;
   padding: 4px 0;
   list-style: none;
+  border-radius: var(--chips-comp-select-content-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-select-content-surface, var(--chips-sys-color-surface));
 }
 
 [data-scope="select"][data-part="option"] {
@@ -182,6 +184,12 @@
   color: var(--chips-comp-select-option-text-color);
 }
 
+[data-scope="select"][data-part="option"][data-highlighted="true"],
+[data-scope="select"][data-part="option"][data-state="hover"] {
+  background-color: var(--chips-comp-select-option-surface-highlighted, transparent);
+}
+
+[data-scope="select"][data-part="option"][data-selected="true"],
 [data-scope="select"][data-part="option"][data-state="active"] {
   background-color: var(--chips-comp-select-option-surface-selected);
 }

@@ -293,7 +293,7 @@ describe('Declarative UI', () => {
     );
   });
 
-  it('validates standard compound slot schemas for Dialog, Popover, Tabs, Menu, Form, and DataGrid', () => {
+  it('validates standard compound slot schemas for Dialog, Popover, Tabs, Menu, Select, Form, and DataGrid', () => {
     const Dialog = createCompoundComponent({
       name: 'Dialog',
       rootType: 'Section',
@@ -313,6 +313,11 @@ describe('Declarative UI', () => {
       name: 'Menu',
       rootType: 'Navigation',
       slots: StandardCompoundSlotSchemas.Menu
+    });
+    const Select = createCompoundComponent({
+      name: 'Select',
+      rootType: 'Navigation',
+      slots: StandardCompoundSlotSchemas.Select
     });
     const CompoundForm = createCompoundComponent({
       name: 'Form',
@@ -364,10 +369,32 @@ describe('Declarative UI', () => {
         root: { id: 'menu-root' },
         slots: {
           content: Section({ id: 'menu-content' }),
-          item: [Command({ id: 'menu-open' })]
+          item: [Command({ id: 'menu-open' })],
+          group: [Section({ id: 'menu-group' })],
+          separator: [View({ id: 'menu-separator' })]
         }
       })
     ).toEqual([]);
+    expect(
+      Select.validate({
+        root: { id: 'select-root' },
+        slots: {
+          trigger: Command({ id: 'select-trigger' }),
+          value: Text({ id: 'select-value' }),
+          content: Section({ id: 'select-content' }),
+          option: [Command({ id: 'select-option-a' }), Command({ id: 'select-option-b' })]
+        }
+      })
+    ).toEqual([]);
+    expect(
+      Select.validate({
+        root: { id: 'bad-select-root' },
+        slots: {
+          trigger: Command({ id: 'bad-select-trigger' }),
+          content: Section({ id: 'bad-select-content' })
+        }
+      })
+    ).toEqual([expect.objectContaining({ code: 'DECLARATIVE_UI_SLOT_REQUIRED', path: 'slots.option' })]);
     expect(
       CompoundForm.validate({
         root: { id: 'compound-form-root' },

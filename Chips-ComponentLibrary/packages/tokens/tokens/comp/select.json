@@ -12,8 +12,13 @@
             "idle": "{chips.sys.color.on-surface}"
           }
         },
+        "content": {
+          "radius": "{chips.sys.radius.container}",
+          "surface": "{chips.sys.color.surface}"
+        },
         "option": {
           "surface": {
+            "highlighted": "{chips.sys.color.surface}",
             "selected": "{chips.sys.color.primary}"
           },
           "text": {

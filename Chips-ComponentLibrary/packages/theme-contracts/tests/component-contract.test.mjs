@@ -196,11 +196,14 @@ test("switch contract contains thumb part", () => {
   assert.ok(contract.tokens.includes("chips.comp.switch.thumb.surface"));
 });
 
-test("select contract contains list and option parts", () => {
+test("select contract contains compound content and option parts", () => {
   const contract = readContract("select.contract.json");
   assertCommonShape(contract);
-  assert.ok(contract.parts.includes("list"));
+  assert.ok(contract.parts.includes("content"));
   assert.ok(contract.parts.includes("option"));
+  assert.equal(contract.parts.includes("list"), false);
+  assert.ok(contract.tokens.includes("chips.comp.select.content.surface"));
+  assert.ok(contract.tokens.includes("chips.comp.select.option.surface.highlighted"));
   assert.ok(contract.tokens.includes("chips.comp.select.option.surface.selected"));
 });
 
@@ -237,7 +240,12 @@ test("menu contract contains menu item tokens", () => {
   const contract = readContract("menu.contract.json");
   assertCommonShape(contract);
   assert.ok(contract.parts.includes("item"));
+  assert.ok(contract.parts.includes("group"));
+  assert.ok(contract.parts.includes("group-label"));
+  assert.ok(contract.parts.includes("separator"));
   assert.ok(contract.tokens.includes("chips.comp.menu.item.surface.active"));
+  assert.ok(contract.tokens.includes("chips.comp.menu.group.label.color"));
+  assert.ok(contract.tokens.includes("chips.comp.menu.separator.thickness"));
 });
 
 test("tooltip contract contains content text token", () => {

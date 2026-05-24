@@ -15,6 +15,15 @@
             "color": "{chips.sys.color.on-surface}"
           }
         },
+        "group": {
+          "label": {
+            "color": "{chips.sys.color.on-surface}"
+          }
+        },
+        "separator": {
+          "color": "{chips.sys.color.on-surface}",
+          "thickness": "{chips.layout.divider.thickness}"
+        },
         "focus": {
           "outline": "{chips.sys.color.primary}"
         }

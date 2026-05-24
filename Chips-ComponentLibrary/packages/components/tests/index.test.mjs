@@ -1713,6 +1713,21 @@ test("Dialog Popover and Tabs expose formal compound parts", () => {
   assert.equal(typeof ChipsTabs.Panel.render, "function");
 });
 
+test("Menu and Select expose formal compound parts", () => {
+  assert.equal(ChipsMenu.Root, ChipsMenu);
+  assert.equal(typeof ChipsMenu.Trigger.render, "function");
+  assert.equal(typeof ChipsMenu.Content.render, "function");
+  assert.equal(typeof ChipsMenu.Item.render, "function");
+  assert.equal(typeof ChipsMenu.Group.render, "function");
+  assert.equal(typeof ChipsMenu.Separator.render, "function");
+
+  assert.equal(ChipsSelect.Root, ChipsSelect);
+  assert.equal(typeof ChipsSelect.Trigger.render, "function");
+  assert.equal(typeof ChipsSelect.Content.render, "function");
+  assert.equal(typeof ChipsSelect.Option.render, "function");
+  assert.equal(typeof ChipsSelect.Value.render, "function");
+});
+
 test("all stage-seven data-form component exports exist", () => {
   for (const component of [ChipsFormField, ChipsFormGroup, ChipsVirtualList]) {
     assert.equal(typeof component, "object");
@@ -1760,8 +1775,13 @@ test("buildComponentContract includes stage-six third batch components", () => {
   const popover = buildComponentContract("popover");
   const tabs = buildComponentContract("tabs");
   const menu = buildComponentContract("menu");
+  const select = buildComponentContract("select");
   const tooltip = buildComponentContract("tooltip");
 
+  assert.ok(select.parts.includes("content"));
+  assert.equal(select.parts.includes("list"), false);
+  assert.ok(select.tokens.includes("chips.comp.select.content.surface"));
+  assert.ok(select.tokens.includes("chips.comp.select.option.surface.highlighted"));
   assert.ok(dialog.tokens.includes("chips.comp.dialog.content.surface"));
   assert.ok(dialog.parts.includes("header"));
   assert.ok(dialog.parts.includes("body"));
@@ -1771,7 +1791,12 @@ test("buildComponentContract includes stage-six third batch components", () => {
   assert.ok(popover.tokens.includes("chips.comp.popover.content.border"));
   assert.equal(popover.parts.includes("positioner"), false);
   assert.ok(tabs.tokens.includes("chips.comp.tabs.panel.surface"));
+  assert.ok(menu.parts.includes("group"));
+  assert.ok(menu.parts.includes("group-label"));
+  assert.ok(menu.parts.includes("separator"));
+  assert.ok(menu.tokens.includes("chips.comp.menu.group.label.color"));
   assert.ok(menu.tokens.includes("chips.comp.menu.item.surface.active"));
+  assert.ok(menu.tokens.includes("chips.comp.menu.separator.thickness"));
   assert.ok(tooltip.tokens.includes("chips.comp.tooltip.content.text.color"));
 });
 

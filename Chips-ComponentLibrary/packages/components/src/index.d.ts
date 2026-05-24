@@ -647,6 +647,7 @@ export interface SelectOption {
 }
 
 export interface SelectProps {
+  children?: React.ReactNode;
   value?: string;
   defaultValue?: string;
   open?: boolean;
@@ -661,6 +662,29 @@ export interface SelectProps {
   onOpenChange?: (open: boolean) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface SelectTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+
+export interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
+  placeholder?: React.ReactNode;
+}
+
+export interface SelectOptionProps extends React.HTMLAttributes<HTMLDivElement> {
+  value: string | number;
+  disabled?: boolean;
+  textValue?: string;
+  index?: number;
+}
+
+export interface SelectCompoundComponent extends React.ForwardRefExoticComponent<SelectProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<SelectProps & React.RefAttributes<HTMLDivElement>>;
+  Trigger: React.ForwardRefExoticComponent<SelectTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+  Content: React.ForwardRefExoticComponent<SelectContentProps & React.RefAttributes<HTMLDivElement>>;
+  Option: React.ForwardRefExoticComponent<SelectOptionProps & React.RefAttributes<HTMLDivElement>>;
+  Value: React.ForwardRefExoticComponent<SelectValueProps & React.RefAttributes<HTMLSpanElement>>;
 }
 
 export type SegmentedControlOption = SelectOption;
@@ -1101,6 +1125,7 @@ export interface MenuItem {
 }
 
 export interface MenuProps {
+  children?: React.ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   disabled?: boolean;
@@ -1113,6 +1138,33 @@ export interface MenuProps {
   onSelect?: (value: string) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
+}
+
+export interface MenuTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+
+export interface MenuContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface MenuItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  value: string | number;
+  disabled?: boolean;
+  textValue?: string;
+  index?: number;
+}
+
+export interface MenuGroupProps extends React.HTMLAttributes<HTMLDivElement> {
+  label?: React.ReactNode;
+  labelId?: string;
+}
+
+export interface MenuSeparatorProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export interface MenuCompoundComponent extends React.ForwardRefExoticComponent<MenuProps & React.RefAttributes<HTMLDivElement>> {
+  Root: React.ForwardRefExoticComponent<MenuProps & React.RefAttributes<HTMLDivElement>>;
+  Trigger: React.ForwardRefExoticComponent<MenuTriggerProps & React.RefAttributes<HTMLButtonElement>>;
+  Content: React.ForwardRefExoticComponent<MenuContentProps & React.RefAttributes<HTMLDivElement>>;
+  Item: React.ForwardRefExoticComponent<MenuItemProps & React.RefAttributes<HTMLButtonElement>>;
+  Group: React.ForwardRefExoticComponent<MenuGroupProps & React.RefAttributes<HTMLDivElement>>;
+  Separator: React.ForwardRefExoticComponent<MenuSeparatorProps & React.RefAttributes<HTMLDivElement>>;
 }
 
 export interface CommandConsumerBaseProps {
@@ -1603,7 +1655,7 @@ export const ChipsInput: React.ForwardRefExoticComponent<InputProps & React.RefA
 export const ChipsCheckbox: React.ForwardRefExoticComponent<CheckboxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsRadioGroup: React.ForwardRefExoticComponent<RadioGroupProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsSwitch: React.ForwardRefExoticComponent<SwitchProps & React.RefAttributes<HTMLButtonElement>>;
-export const ChipsSelect: React.ForwardRefExoticComponent<SelectProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsSelect: SelectCompoundComponent;
 export const ChipsSegmentedControl: React.ForwardRefExoticComponent<SegmentedControlProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsComboBox: React.ForwardRefExoticComponent<ComboBoxProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsNumberInput: React.ForwardRefExoticComponent<NumberInputProps & React.RefAttributes<HTMLInputElement>>;
@@ -1614,7 +1666,7 @@ export const ChipsTimePicker: React.ForwardRefExoticComponent<TimePickerProps & 
 export const ChipsDialog: DialogCompoundComponent;
 export const ChipsPopover: PopoverCompoundComponent;
 export const ChipsTabs: TabsCompoundComponent;
-export const ChipsMenu: React.ForwardRefExoticComponent<MenuProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsMenu: MenuCompoundComponent;
 export const ChipsCommandProvider: React.FC<ChipsCommandProviderProps>;
 export const ChipsShortcut: React.ForwardRefExoticComponent<ShortcutProps & React.RefAttributes<HTMLElement>>;
 export const ChipsToolbarItem: React.ForwardRefExoticComponent<ToolbarItemProps & React.RefAttributes<HTMLButtonElement>>;

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
   ChipsBox,
+  ChipsButton,
   ChipsErrorState,
   ChipsForm,
   ChipsStack,
+  ChipsText,
   ChipsTextArea,
   ChipsTextField,
   type StandardErrorLike,
@@ -76,6 +78,16 @@ html, body {
 .chips-basecard-editor__field {
   min-width: 0;
 }
+
+.chips-basecard-editor__resource-dropzone {
+  width: 100%;
+  min-width: 0;
+  padding: var(--chips-comp-basecard-resource-dropzone-padding, var(--chips-sys-space-3));
+}
+
+.chips-basecard-editor__actions {
+  min-width: 0;
+}
 `;
 
 function toStandardError(errorKey: string | undefined): StandardErrorLike | null {
@@ -87,6 +99,16 @@ function toStandardError(errorKey: string | undefined): StandardErrorLike | null
     code: errorKey,
     message: errorKey,
   };
+}
+
+function toPreferredResourcePath(file: File): string {
+  const fallbackName = "resource";
+  const safeName = file.name
+    .trim()
+    .replace(/[\\/]+/g, "-")
+    .replace(/^\.+/, "")
+    .trim();
+  return `assets/${safeName || fallbackName}`;
 }
 
 function BasecardEditor(props: BasecardEditorProps) {
@@ -105,7 +127,10 @@ function BasecardEditor(props: BasecardEditorProps) {
   };
   const titleError = toStandardError(errors.title);
   const bodyError = toStandardError(errors.body);
-  const firstError = toStandardError(Object.values(errors)[0]);
+  const resourcePathError = toStandardError(errors.resource_path);
+  const [resourceBridgeErrorKey, setResourceBridgeErrorKey] = useState<string | undefined>();
+  const resourceBridgeError = toStandardError(resourceBridgeErrorKey);
+  const firstError = resourceBridgeError ?? toStandardError(Object.values(errors)[0]);
 
   useEffect(() => {
     const next = normalizeBasecardConfig(props.initialConfig);
@@ -121,8 +146,58 @@ function BasecardEditor(props: BasecardEditorProps) {
     const validation = validateBasecardConfig(next);
     setConfig(next);
     setErrors(validation.errors);
+    setResourceBridgeErrorKey(undefined);
     if (validation.valid) {
       props.onChange(next);
+    }
+  }
+
+  async function importDroppedResource(file: File): Promise<void> {
+    if (!props.importResource) {
+      setResourceBridgeErrorKey("basecard.resource.importUnavailable");
+      return;
+    }
+
+    try {
+      const result = await props.importResource({
+        file,
+        preferredPath: toPreferredResourcePath(file),
+      });
+      updateConfig({ resource_path: result.path });
+    } catch {
+      setResourceBridgeErrorKey("basecard.resource.importFailed");
+    }
+  }
+
+  function handleResourceDragOver(event: React.DragEvent<HTMLElement>): void {
+    if (!props.importResource) {
+      return;
+    }
+    event.preventDefault();
+  }
+
+  function handleResourceDrop(event: React.DragEvent<HTMLElement>): void {
+    if (!props.importResource) {
+      return;
+    }
+
+    event.preventDefault();
+    const file = event.dataTransfer.files.item(0);
+    if (file) {
+      void importDroppedResource(file);
+    }
+  }
+
+  async function handleDeleteResource(): Promise<void> {
+    if (!config.resource_path || !props.deleteResource) {
+      return;
+    }
+
+    try {
+      await props.deleteResource(config.resource_path);
+      updateConfig({ resource_path: undefined });
+    } catch {
+      setResourceBridgeErrorKey("basecard.resource.deleteFailed");
     }
   }
 
@@ -196,6 +271,68 @@ function BasecardEditor(props: BasecardEditorProps) {
               {bodyError ? t(bodyError.message) : null}
             </ChipsForm.Error>
           </ChipsForm.Field>
+
+          <ChipsForm.Field
+            className="chips-basecard-editor__field"
+            name="resource_path"
+            error={resourcePathError}
+          >
+            <ChipsTextField
+              value={config.resource_path ?? ""}
+              labelKey="basecard.resource.pathLabel"
+              ariaLabel={t("basecard.resource.pathAriaLabel")}
+              ariaLabelKey="basecard.resource.pathAriaLabel"
+              placeholder={t("basecard.resource.pathPlaceholder")}
+              i18n={i18n}
+              error={resourcePathError ? {
+                ...resourcePathError,
+                message: t(resourcePathError.message),
+              } : null}
+              onValueChange={(value) => {
+                updateConfig({ resource_path: value });
+              }}
+            />
+            <ChipsForm.Error>
+              {resourcePathError ? t(resourcePathError.message) : null}
+            </ChipsForm.Error>
+          </ChipsForm.Field>
+
+          {props.importResource ? (
+            <ChipsBox
+              as="section"
+              className="chips-basecard-editor__resource-dropzone"
+              role="button"
+              tabIndex={0}
+              aria-label={t("basecard.resource.dropzoneAriaLabel")}
+              onDragOver={handleResourceDragOver}
+              onDrop={handleResourceDrop}
+              data-chips-basecard-resource-dropzone="true"
+            >
+              <ChipsText
+                as="span"
+                textKey="basecard.resource.dropzoneLabel"
+                i18n={i18n}
+              />
+            </ChipsBox>
+          ) : null}
+
+          {config.resource_path && props.deleteResource ? (
+            <ChipsStack
+              className="chips-basecard-editor__actions"
+              direction="horizontal"
+              gap="var(--chips-comp-basecard-editor-action-gap, var(--chips-sys-space-2))"
+              wrap
+            >
+              <ChipsButton
+                type="button"
+                onPress={() => {
+                  void handleDeleteResource();
+                }}
+              >
+                {t("basecard.resource.deleteAction")}
+              </ChipsButton>
+            </ChipsStack>
+          ) : null}
 
           {firstError ? (
             <ChipsErrorState

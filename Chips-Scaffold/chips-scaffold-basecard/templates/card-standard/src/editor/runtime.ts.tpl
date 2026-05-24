@@ -9,6 +9,10 @@ type StyleSnapshot = {
   display: string;
 };
 
+type BasecardEditorContainer = HTMLElement & {
+  __chipsBasecardEditorDispose?: () => void;
+};
+
 function captureStyle(target: HTMLElement): StyleSnapshot {
   return {
     height: target.style.height,
@@ -28,6 +32,9 @@ function restoreStyle(target: HTMLElement, snapshot: StyleSnapshot): void {
 }
 
 export function mountBasecardEditor(ctx: BasecardEditorContext): () => void {
+  const hostContainer = ctx.container as BasecardEditorContainer;
+  hostContainer.__chipsBasecardEditorDispose?.();
+
   const ownerDocument = ctx.container.ownerDocument;
   const html = ownerDocument.documentElement as HTMLElement;
   const body = ownerDocument.body as HTMLElement;
@@ -71,14 +78,26 @@ export function mountBasecardEditor(ctx: BasecardEditorContext): () => void {
 
   ctx.container.appendChild(root);
 
-  return () => {
+  let disposed = false;
+  const cleanup = () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
     root.__chipsDispose?.();
     restoreStyle(html, htmlStyle);
     restoreStyle(body, bodyStyle);
     restoreStyle(ctx.container, containerStyle);
+    if (hostContainer.__chipsBasecardEditorDispose === cleanup) {
+      delete hostContainer.__chipsBasecardEditorDispose;
+    }
 
     while (ctx.container.firstChild) {
       ctx.container.removeChild(ctx.container.firstChild);
     }
   };
+
+  hostContainer.__chipsBasecardEditorDispose = cleanup;
+
+  return cleanup;
 }

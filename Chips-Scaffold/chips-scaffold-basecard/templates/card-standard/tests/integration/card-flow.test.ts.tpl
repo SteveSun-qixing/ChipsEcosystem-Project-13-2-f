@@ -55,4 +55,37 @@ describe("basecard integration flow", () => {
     expect(titleEl?.textContent).toBe("Updated");
     expect(container.querySelector(".chips-basecard__surface")).toBeNull();
   });
+
+  it("cleans editor container styles after unmount", () => {
+    const editorContainer = document.createElement("div");
+    editorContainer.style.display = "block";
+    editorContainer.style.overflow = "visible";
+
+    const initialConfig: BasecardConfig = {
+      card_type: "{{ CARD_TYPE }}",
+      title: "Initial",
+      body: "Body",
+      locale: "zh-CN",
+      theme: "",
+    };
+
+    const firstDispose = mountBasecardEditor({
+      container: editorContainer,
+      initialConfig,
+      onChange: () => undefined,
+    });
+    const secondDispose = mountBasecardEditor({
+      container: editorContainer,
+      initialConfig,
+      onChange: () => undefined,
+    });
+
+    firstDispose();
+    expect(editorContainer.querySelectorAll("[data-chips-basecard-editor-root]")).toHaveLength(1);
+
+    secondDispose();
+    expect(editorContainer.childElementCount).toBe(0);
+    expect(editorContainer.style.display).toBe("block");
+    expect(editorContainer.style.overflow).toBe("visible");
+  });
 });

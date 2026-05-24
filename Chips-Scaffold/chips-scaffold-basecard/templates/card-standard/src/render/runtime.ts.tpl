@@ -9,8 +9,15 @@ type MountState = {
   root: Root;
 };
 
+type BasecardViewContainer = HTMLElement & {
+  __chipsBasecardViewDispose?: () => void;
+};
+
 export function mountBasecardView(ctx: BasecardRenderContext): () => void {
   const { container, config, themeCssText } = ctx;
+  const hostContainer = container as BasecardViewContainer;
+
+  hostContainer.__chipsBasecardViewDispose?.();
 
   while (container.firstChild) {
     container.removeChild(container.firstChild);
@@ -33,15 +40,30 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
         React.createElement("style", null, `${themeCssText ?? ""}\n${VIEW_STYLE_TEXT}`),
         React.createElement(BasecardView, {
           config: config as BasecardConfig,
+          resolveResourceUrl: ctx.resolveResourceUrl,
+          releaseResourceUrl: ctx.releaseResourceUrl,
+          openResource: ctx.openResource,
         }),
       ),
     );
   });
 
-  return () => {
+  let disposed = false;
+  const cleanup = () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
     state.root.unmount();
+    if (hostContainer.__chipsBasecardViewDispose === cleanup) {
+      delete hostContainer.__chipsBasecardViewDispose;
+    }
     while (container.firstChild) {
       container.removeChild(container.firstChild);
     }
   };
+
+  hostContainer.__chipsBasecardViewDispose = cleanup;
+
+  return cleanup;
 }

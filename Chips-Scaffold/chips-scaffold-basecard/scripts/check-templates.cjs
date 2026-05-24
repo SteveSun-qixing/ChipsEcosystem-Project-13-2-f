@@ -114,6 +114,16 @@ function main() {
         throw new Error(`模板 ${templateId} 编辑态不应保留原生控件样板：${forbiddenText}`);
       }
     }
+    for (const requiredText of ["resolveResourceUrl", "releaseResourceUrl", "openResource"]) {
+      if (!renderView.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 查看态缺少资源桥样板：${requiredText}`);
+      }
+    }
+    for (const requiredText of ["importResource", "deleteResource", "resource_path"]) {
+      if (!editorPanel.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} 编辑态缺少资源桥样板：${requiredText}`);
+      }
+    }
   }
 
   // eslint-disable-next-line no-console

@@ -9,6 +9,7 @@ export const localeBundles: Record<string, LocaleTree> = {
 };
 
 export const supportedLocales = ["zh-CN", "en-US"] as const;
+export type SupportedLocale = (typeof supportedLocales)[number];
 
 function readPath(source: LocaleTree, key: string): unknown {
   return key.split(".").reduce<unknown>((current, segment) => {

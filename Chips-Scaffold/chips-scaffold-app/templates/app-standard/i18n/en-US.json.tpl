@@ -1,29 +1,33 @@
 {
-  "app-standard": {
+  "app": {
+    "identity": {
+      "displayName": "{{ DISPLAY_NAME }}"
+    },
     "shell": {
-      "subtitle": "Standard app plugin"
+      "subtitle": "App workspace",
+      "languageSwitch": "Switch to {locale}",
+      "navigationLabel": "App scenes",
+      "contentLabel": "Main content",
+      "detailLabel": "Runtime environment",
+      "ready": "Runtime environment is ready",
+      "loading": "Reading runtime environment"
     },
-    "language": {
-      "switchTo": "Switch to {locale}"
-    },
-    "sample": {
-      "form": {
-        "title": "Sample form"
+    "scenes": {
+      "main": {
+        "title": "Workspace",
+        "description": "Current app scene and view state"
       },
-      "input": {
-        "placeholder": "Type something"
+      "settings": {
+        "title": "Settings",
+        "description": "App preferences and environment state"
       }
-    },
-    "actions": {
-      "submit": "Submit",
-      "learnMore": "Learn more"
     },
     "commands": {
       "sectionTitle": "Commands",
-      "showWelcome": {
-        "title": "Show welcome",
-        "description": "Invoke an app welcome action through the Host command system",
-        "ariaLabel": "Show welcome"
+      "openWorkspace": {
+        "title": "Open workspace",
+        "description": "Focus the main app scene",
+        "ariaLabel": "Open workspace"
       },
       "refreshTheme": {
         "title": "Refresh theme status",
@@ -38,7 +42,6 @@
         "ariaLabel": "Main toolbar"
       },
       "palette": {
-        "trigger": "Commands",
         "searchPlaceholder": "Search commands",
         "ariaLabel": "Command palette"
       },
@@ -51,21 +54,34 @@
         "errorWithCode": "Command error: {code}"
       }
     },
-    "environment": {
-      "title": "Host environment",
-      "themeLabel": "Current theme: ",
-      "localeLabel": "Current locale: ",
-      "surfaceLabel": "Current surface: ",
-      "permissionLabel": "Command permission: ",
-      "diagnosticsLabel": "Diagnostics: ",
+    "workspace": {
+      "overviewTitle": "Runtime overview",
+      "overviewDescription": "The app runs through Host surface, SDK, and the component library.",
+      "formTitle": "State binding",
+      "formDescription": "Input state is maintained by the component library state model.",
+      "formLabel": "Title",
+      "formPlaceholder": "Enter an in-app title",
+      "formAction": "Update state",
+      "listTitle": "Scene list",
+      "listDescription": "Scene definitions are maintained by the app registry.",
+      "emptyTitle": "No diagnostics",
+      "emptyDescription": "There are no runtime diagnostics to address.",
+      "emptyAction": "Refresh diagnostics",
+      "environmentTitle": "Host environment",
+      "themeLabel": "Current theme",
+      "localeLabel": "Current locale",
+      "surfaceLabel": "Current surface",
+      "permissionLabel": "Command permission",
+      "diagnosticsLabel": "Diagnostics",
       "permissionReady": "Command ready",
       "permissionMissing": "Missing command.invoke",
       "unknown": "Unknown",
       "error": "Environment read error: {code}"
     },
-    "examplePanel": {
-      "title": "Component library panel",
-      "body": "The component library, theme system, and i18n baseline are wired into this template."
+    "errors": {
+      "boundaryTitle": "App runtime error",
+      "boundaryDescription": "The runtime boundary caught an error.",
+      "retry": "Retry"
     }
   }
 }

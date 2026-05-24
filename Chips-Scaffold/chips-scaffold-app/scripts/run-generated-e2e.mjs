@@ -51,6 +51,7 @@ async function createWorkspaceSandbox(sandboxRoot) {
     "Chips-SDK",
     "Chips-Scaffold",
     "Chips-ComponentLibrary",
+    "ThemePack",
   ]) {
     await symlinkDir(
       path.join(ECOSYSTEM_ROOT, entry),
@@ -82,10 +83,7 @@ async function main() {
     const commands = [
       ["node", [sdkCliPath, "create", "app", projectRelativePath], { cwd: sandboxRoot, env }],
       ["npm", ["install", "--cache", npmCacheDir], { cwd: sandboxRoot, env }],
-      ["npm", ["run", "lint"], { cwd: projectDir, env }],
-      ["npm", ["test"], { cwd: projectDir, env }],
-      ["npm", ["run", "build"], { cwd: projectDir, env }],
-      ["npm", ["run", "validate"], { cwd: projectDir, env }],
+      ["npm", ["run", "verify"], { cwd: projectDir, env }],
     ];
 
     for (const [cmd, args, opts] of commands) {
@@ -113,6 +111,17 @@ async function main() {
     if (generatedPackage.volta?.extends !== "../../package.json") {
       throw new Error("E2E: chipsdev create 应为新工程写入根工作区 volta.extends");
     }
+    for (const scriptName of ["typecheck", "preview:smoke", "quality:gate", "verify"]) {
+      if (typeof generatedPackage.scripts?.[scriptName] !== "string") {
+        throw new Error(`E2E: 应用模板 package.json 缺少脚本 ${scriptName}`);
+      }
+    }
+    if (!generatedPackage.scripts.verify.includes("npm run preview:smoke")) {
+      throw new Error("E2E: verify 必须串联 preview:smoke");
+    }
+    if (!generatedPackage.scripts.verify.includes("npm run quality:gate")) {
+      throw new Error("E2E: verify 必须串联 quality:gate");
+    }
 
     const manifestText = await readFile(path.join(projectDir, "manifest.yaml"), "utf8");
     for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
@@ -132,6 +141,29 @@ async function main() {
       path.join(projectDir, "src", "App.tsx"),
       "utf8",
     );
+    const sourceBundle = (
+      await Promise.all(
+        [
+          "src/App.tsx",
+          "src/app/AppRoot.tsx",
+          "src/app/AppProviders.tsx",
+          "src/app/AppShell.tsx",
+          "src/app/scene-registry.ts",
+          "src/commands/useAppCommands.ts",
+          "src/scenes/MainScene.tsx",
+          "src/scenes/SettingsScene.tsx",
+          "src/views/WorkspaceOverviewView.tsx",
+          "src/views/StateBindingView.tsx",
+          "src/views/SceneListView.tsx",
+          "src/views/EnvironmentStatusView.tsx",
+          "src/i18n/useAppText.ts",
+          "src/runtime/launch-context.ts",
+          "src/theme/theme-runtime.ts",
+          "src/testing/mock-environment.ts",
+          "src/testing/render-with-chips.tsx",
+        ].map((relativePath) => readFile(path.join(projectDir, relativePath), "utf8")),
+      )
+    ).join("\n");
     const commandRuntimeSource = await readFile(
       path.join(projectDir, "src", "commands", "useAppCommands.ts"),
       "utf8",
@@ -174,6 +206,8 @@ async function main() {
     }
     for (const requiredText of [
       "ChipsEnvironmentProvider",
+      "ChipsThemeProvider",
+      "useChipsClient",
       "useChipsTheme",
       "useChipsI18n",
       "useChipsI18nText",
@@ -183,16 +217,19 @@ async function main() {
       "setLocale",
       "supportedLocales",
     ]) {
-      if (!appSource.includes(requiredText)) {
+      if (!sourceBundle.includes(requiredText)) {
         throw new Error(`E2E: App 环境入口缺少 ${requiredText}`);
       }
+    }
+    if (!appSource.includes("export { AppRoot as App } from \"./app/AppRoot\";")) {
+      throw new Error("E2E: src/App.tsx 应保持轻量根组件 re-export");
     }
     for (const requiredText of ["export const localeBundles", "export const supportedLocales"]) {
       if (!localeSource.includes(requiredText)) {
         throw new Error(`E2E: 本地 i18n adapter 缺少 ${requiredText}`);
       }
     }
-    for (const requiredText of ["createChipsI18nText", "localeBundles", "supportedLocales", "app-standard.language.switchTo"]) {
+    for (const requiredText of ["createChipsI18nText", "localeBundles", "supportedLocales", "app.shell.languageSwitch"]) {
       if (!appTestSource.includes(requiredText)) {
         throw new Error(`E2E: app 单元测试缺少同步 i18n adapter 覆盖 ${requiredText}`);
       }
@@ -205,13 +242,19 @@ async function main() {
     if (/window\.chips\.invoke\(["']command\./.test(commandRuntimeSource)) {
       throw new Error("E2E: command runtime 不得绕过 SDK 直连 Bridge action");
     }
-    if (/\buseChipsBridge\b/.test(`${appSource}\n${commandRuntimeSource}`)) {
+    if (/\buseChipsBridge\b/.test(`${sourceBundle}\n${commandRuntimeSource}`)) {
       throw new Error("E2E: 应用模板不得生成旧的 useChipsBridge 私有入口");
+    }
+    if (/style=\{\{/.test(sourceBundle)) {
+      throw new Error("E2E: 应用模板源码不得使用 inline style");
+    }
+    if (/\bapp-standard\b|\bchips-scaffold-app\b|\bExamplePanel\b/.test(sourceBundle)) {
+      throw new Error("E2E: 应用模板源码不得泄漏模板身份或旧示例面板");
     }
 
     const zhCnText = await readFile(path.join(projectDir, "i18n", "zh-CN.json"), "utf8");
     const enUsText = await readFile(path.join(projectDir, "i18n", "en-US.json"), "utf8");
-    for (const key of ["showWelcome", "refreshTheme", "lastInvoked", "palette", "switchTo"]) {
+    for (const key of ["openWorkspace", "refreshTheme", "lastInvoked", "palette", "languageSwitch"]) {
       if (!zhCnText.includes(key) || !enUsText.includes(key)) {
         throw new Error(`E2E: i18n 文件缺少 key：${key}`);
       }

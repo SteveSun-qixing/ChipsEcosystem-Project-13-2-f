@@ -4,7 +4,7 @@ version: {{ VERSION }}
 type: app
 entry: dist/index.html
 
-description: 标准应用插件模板示例工程，由 chips-scaffold-app 生成。
+description: {{ DISPLAY_NAME }} 是运行在薯片 Host surface 中的应用插件。
 
 author:
   name: {{ AUTHOR_NAME }}
@@ -13,7 +13,7 @@ author:
 keywords:
   - chips
   - app
-  - scaffold
+  - surface
 
 permissions:
   - theme.read
@@ -66,4 +66,3 @@ ui:
   window:
     chrome:
       frame: true
-      backgroundColor: "#ffffff"

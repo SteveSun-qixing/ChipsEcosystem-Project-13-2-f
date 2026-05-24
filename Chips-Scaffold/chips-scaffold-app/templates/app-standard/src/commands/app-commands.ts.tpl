@@ -3,16 +3,17 @@ import type {
   CommandInvokedEvent,
   CommandSource,
 } from "chips-sdk";
+import type { ChipsCommandView } from "@chips/component-library";
 
 export const APP_PLUGIN_ID = "{{ PLUGIN_ID }}";
 
 export const APP_COMMAND_IDS = {
-  showWelcome: "{{ PLUGIN_ID }}.show-welcome",
+  openWorkspace: "{{ PLUGIN_ID }}.open-workspace",
   refreshTheme: "{{ PLUGIN_ID }}.refresh-theme",
 } as const;
 
 export const APP_COMMAND_HANDLER_IDS = {
-  showWelcome: "show-welcome",
+  openWorkspace: "open-workspace",
   refreshTheme: "refresh-theme",
 } as const;
 
@@ -20,23 +21,23 @@ const APP_COMMAND_ID_SET = new Set<string>(Object.values(APP_COMMAND_IDS));
 
 export const appCommandDefinitions: CommandDefinitionInput[] = [
   {
-    commandId: APP_COMMAND_IDS.showWelcome,
-    titleKey: "app-standard.commands.showWelcome.title",
-    descriptionKey: "app-standard.commands.showWelcome.description",
-    ariaLabelKey: "app-standard.commands.showWelcome.ariaLabel",
-    icon: { name: "waving_hand", style: "rounded" },
+    commandId: APP_COMMAND_IDS.openWorkspace,
+    titleKey: "app.commands.openWorkspace.title",
+    descriptionKey: "app.commands.openWorkspace.description",
+    ariaLabelKey: "app.commands.openWorkspace.ariaLabel",
+    icon: { name: "dashboard", style: "rounded" },
     scope: { kind: "app", appId: APP_PLUGIN_ID },
-    handlerId: APP_COMMAND_HANDLER_IDS.showWelcome,
+    handlerId: APP_COMMAND_HANDLER_IDS.openWorkspace,
     menuPlacement: [{ menuId: "app", groupId: "primary", order: 10 }],
     toolbarPlacement: [{ toolbarId: "main", groupId: "primary", order: 10 }],
-    paletteKeywords: ["welcome", "hello", "start"],
+    paletteKeywords: ["workspace", "dashboard", "main"],
     state: { enabled: true, visible: true },
   },
   {
     commandId: APP_COMMAND_IDS.refreshTheme,
-    titleKey: "app-standard.commands.refreshTheme.title",
-    descriptionKey: "app-standard.commands.refreshTheme.description",
-    ariaLabelKey: "app-standard.commands.refreshTheme.ariaLabel",
+    titleKey: "app.commands.refreshTheme.title",
+    descriptionKey: "app.commands.refreshTheme.description",
+    ariaLabelKey: "app.commands.refreshTheme.ariaLabel",
     icon: { name: "palette", style: "rounded" },
     scope: { kind: "app", appId: APP_PLUGIN_ID },
     handlerId: APP_COMMAND_HANDLER_IDS.refreshTheme,
@@ -46,6 +47,8 @@ export const appCommandDefinitions: CommandDefinitionInput[] = [
     state: { enabled: true, visible: true },
   },
 ];
+
+export const appCommandViews = appCommandDefinitions as unknown as ChipsCommandView[];
 
 export type AppCommandId = (typeof APP_COMMAND_IDS)[keyof typeof APP_COMMAND_IDS];
 export type AppCommandHandlerId = (typeof APP_COMMAND_HANDLER_IDS)[keyof typeof APP_COMMAND_HANDLER_IDS];
@@ -68,7 +71,7 @@ export function getAppCommandHandlerId(
   event: CommandInvokedEvent,
 ): AppCommandHandlerId | null {
   const handlerId = event.handlerId;
-  if (handlerId === APP_COMMAND_HANDLER_IDS.showWelcome) {
+  if (handlerId === APP_COMMAND_HANDLER_IDS.openWorkspace) {
     return handlerId;
   }
   if (handlerId === APP_COMMAND_HANDLER_IDS.refreshTheme) {

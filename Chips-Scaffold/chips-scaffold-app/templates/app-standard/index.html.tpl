@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-chips-app="app-standard">
+<html lang="zh-CN" data-chips-app="{{ PLUGIN_ID }}">
   <head>
     <meta charset="UTF-8" />
     <title>{{ DISPLAY_NAME }}</title>

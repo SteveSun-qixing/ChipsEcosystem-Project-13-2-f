@@ -5,6 +5,7 @@
 
 /** @type {import('chips-dev-tools').ChipsConfig | Record<string, unknown>} */
 const config = {
+  type: "app",
   srcDir: "src",
   outDir: "dist",
   entry: "index.html",
@@ -12,4 +13,3 @@ const config = {
 };
 
 export default config;
-

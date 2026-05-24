@@ -9,8 +9,6 @@ export function createLogger(scope?: string) {
 
   function log(level: LogLevel, message: string, extra?: unknown) {
     const payload = extra === undefined ? "" : ` ${JSON.stringify(extra)}`;
-    // 目前先输出到控制台，未来可通过 Bridge 接入 Host 日志服务
-    // 该实现不影响后续演进，只作为统一入口
     // eslint-disable-next-line no-console
     console.log(`${prefix} ${level.toUpperCase()}: ${message}${payload}`);
   }
@@ -26,4 +24,3 @@ export function createLogger(scope?: string) {
 export function createScopedLogger(options: LoggerOptions) {
   return createLogger(options.scope);
 }
-

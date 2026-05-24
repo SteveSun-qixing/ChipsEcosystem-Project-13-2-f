@@ -16,11 +16,11 @@ describe("app command registry contract", () => {
     expect(appCommandDefinitions.length).toBeGreaterThan(0);
 
     for (const definition of appCommandDefinitions) {
-      const record = definition as Record<string, unknown>;
+      const record = definition as unknown as Record<string, unknown>;
       expect(definition.commandId.startsWith(`${APP_PLUGIN_ID}.`)).toBe(true);
-      expect(definition.titleKey).toMatch(/^app-standard\.commands\./);
-      expect(definition.descriptionKey).toMatch(/^app-standard\.commands\./);
-      expect(definition.ariaLabelKey).toMatch(/^app-standard\.commands\./);
+      expect(definition.titleKey).toMatch(/^app\.commands\./);
+      expect(definition.descriptionKey).toMatch(/^app\.commands\./);
+      expect(definition.ariaLabelKey).toMatch(/^app\.commands\./);
       expect(definition.handlerId).toBeTypeOf("string");
       expect(definition.scope).toEqual({ kind: "app", appId: APP_PLUGIN_ID });
       expect(definition.menuPlacement?.length).toBeGreaterThan(0);
@@ -42,7 +42,7 @@ describe("app command registry contract", () => {
 
     await client.command.register(appCommandDefinitions[0]);
     await client.command.list({ source: "toolbar" });
-    await client.command.invoke(APP_COMMAND_IDS.showWelcome, {}, { source: "toolbar" });
+    await client.command.invoke(APP_COMMAND_IDS.openWorkspace, {}, { source: "toolbar" });
 
     expect(client.calls.map((call) => call.action)).toEqual([
       "command.register",
@@ -50,18 +50,18 @@ describe("app command registry contract", () => {
       "command.invoke",
     ]);
     expect(client.calls[2].payload).toMatchObject({
-      commandId: APP_COMMAND_IDS.showWelcome,
+      commandId: APP_COMMAND_IDS.openWorkspace,
       source: "toolbar",
       payload: {},
     });
-    expect(invoked).toEqual([APP_COMMAND_IDS.showWelcome]);
+    expect(invoked).toEqual([APP_COMMAND_IDS.openWorkspace]);
     client.restoreBridge();
   });
 
   it("handles command.invoked events by handlerId", () => {
     const event: CommandInvokedEvent = {
-      commandId: APP_COMMAND_IDS.showWelcome,
-      handlerId: APP_COMMAND_HANDLER_IDS.showWelcome,
+      commandId: APP_COMMAND_IDS.openWorkspace,
+      handlerId: APP_COMMAND_HANDLER_IDS.openWorkspace,
       ownerPluginId: APP_PLUGIN_ID,
       invocationId: "invocation-test",
       source: "palette",
@@ -77,10 +77,10 @@ describe("app command registry contract", () => {
 
     expect(isAppCommandInvokedEvent(event)).toBe(true);
     const handlerId = getAppCommandHandlerId(event);
-    expect(handlerId).toBe(APP_COMMAND_HANDLER_IDS.showWelcome);
+    expect(handlerId).toBe(APP_COMMAND_HANDLER_IDS.openWorkspace);
     expect(createAppCommandStatus(event, handlerId!)).toEqual({
-      commandId: APP_COMMAND_IDS.showWelcome,
-      handlerId: APP_COMMAND_HANDLER_IDS.showWelcome,
+      commandId: APP_COMMAND_IDS.openWorkspace,
+      handlerId: APP_COMMAND_HANDLER_IDS.openWorkspace,
       invocationId: "invocation-test",
       source: "palette",
     });

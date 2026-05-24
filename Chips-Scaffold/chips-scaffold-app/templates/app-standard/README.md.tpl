@@ -1,91 +1,75 @@
-# {{ DISPLAY_NAME }} 应用插件工程（由 chips-scaffold-app 生成）
+# {{ DISPLAY_NAME }}
 
-> 插件 ID：`{{ PLUGIN_ID }}`  
-> 模板：`app-standard`  
-> 生成自：`chips-scaffold-app`
+> 插件 ID：`{{ PLUGIN_ID }}`
 
-## 1. 快速开始
+这是一个薯片生态 `type: app` 应用插件工程，默认使用 Host surface、`chips-sdk`、React Environment、组件库、主题 token、多语言资源、命令系统、预览 smoke 与质量门禁。
+
+## 快速开始
 
 ```bash
 cd <生态根工作区>
 npm install
 cd {{ PROJECT_NAME }}
-npm run dev        # 启动开发服务器（等价 chips dev server）
+npm run dev
 ```
 
-应用插件的一方依赖（如 `chips-sdk`、`@chips/component-library`）统一通过生态根工作区解析，本工程应通过 `chipsdev create` 接入生态工作区，不再单独在项目目录执行首次 `npm install`。
+应用插件依赖通过生态根工作区解析；工程根 `manifest.yaml` 是唯一正式清单源，Host 通过 `entry: dist/index.html` 加载构建产物。
 
-开发服务器启动后，薯片主机通过 `manifest.yaml` 中的 `entry: dist/index.html` 加载本插件窗口；标准模板同时预置 `ui.window.chrome`，默认保留白色窗口壳层与原生窗口标题栏。
+## 常用脚本
 
-模板已默认纳入 `assets/icons/app-icon.ico/.icns/.png/.svg` 与 `assets/icons/SOURCE.md`：
+- `npm run dev`：启动开发服务器。
+- `npm run lint`：执行源码规范检查。
+- `npm run typecheck`：执行 TypeScript 类型检查。
+- `npm test`：运行单元测试与 e2e smoke。
+- `npm run build`：构建应用插件产物。
+- `npm run validate`：校验 manifest 与构建产物。
+- `npm run preview:smoke`：生成 Host mock 预览链路报告并校验报告。
+- `npm run quality:gate`：生成生态质量门禁摘要报告。
+- `npm run verify`：串联执行完整本地验证。
 
-- `app-icon.ico` 是 `manifest.yaml -> ui.launcher.icon` 的正式默认文件；
-- Host 会按平台解析 `ico / icns / png` 作为系统入口图标；
-- 这些文件只用于操作系统入口、快捷方式与安装分发，不属于运行时 `ChipsIcon` 图标模型。
-
-## 2. 可用脚本
-
-- `npm run dev`：启动开发服务器（`chips dev server`）
-- `npm run build`：构建 `cpk` 插件包（`chips dev build`）
-- `npm test`：运行单元测试与组件测试（`chips dev test`，基于 Vitest）
-- `npm run lint`：运行代码规范检查（`chips dev lint`）
-- `npm run validate`：执行插件规范校验（`chips dev validate`）
-
-## 3. 目录结构总览
+## 目录结构
 
 ```text
 {{ PROJECT_NAME }}/
-├─ .eslintrc.cjs        # 工程级 ESLint 配置（供 chipsdev lint 调用）
-├─ manifest.yaml        # 插件清单（id/name/version/type/permissions/entry 等）
-├─ package.json         # NPM 包描述与脚本
-├─ tsconfig.json        # TypeScript 配置
-├─ chips.config.mjs     # Chips Dev 构建/运行配置
-├─ index.html           # HTML 入口文件
-├─ src/
-│  ├─ main.tsx          # React 入口（挂载到 index.html）
-│  ├─ App.tsx           # 根组件
-│  ├─ commands/         # 命令 schema、handlerId 与注册/事件接线
-│  ├─ components/       # 示例组件
-│  ├─ i18n/             # 本地 i18n adapter
-│  ├─ runtime/          # SDK client 与 Environment Provider 注入入口
+├─ manifest.yaml
+├─ package.json
+├─ chips.config.mjs
+├─ index.html
+├─ assets/
+│  └─ icons/
 ├─ config/
-│  ├─ app-config.ts     # 应用级配置（Feature Flag 等）
-│  └─ logging.ts        # 日志封装（预留接入 Host 日志服务）
+│  ├─ app-config.ts
+│  └─ logging.ts
 ├─ i18n/
-│  ├─ zh-CN.json        # 中文文案
-│  └─ en-US.json        # 英文文案
-├─ tests/
-│  ├─ unit/             # 单元/组件测试
-│  └─ e2e/              # 端到端测试
-└─ assets/
-   └─ icons/            # 图标等静态资源
+│  ├─ zh-CN.json
+│  └─ en-US.json
+├─ src/
+│  ├─ App.tsx
+│  ├─ main.tsx
+│  ├─ app/
+│  │  ├─ AppRoot.tsx
+│  │  ├─ AppProviders.tsx
+│  │  ├─ AppShell.tsx
+│  │  ├─ app-shell.css
+│  │  └─ scene-registry.ts
+│  ├─ commands/
+│  ├─ i18n/
+│  ├─ preview/
+│  ├─ runtime/
+│  ├─ scenes/
+│  ├─ testing/
+│  ├─ theme/
+│  └─ views/
+└─ tests/
+   ├─ unit/
+   └─ e2e/
 ```
 
-## 4. 技术栈与规范
+## 技术口径
 
-- 前端框架：React（参见生态设计原稿与应用插件开发指南）
-- UI 能力：`@chips/component-library`（组件库对外使用总览）
-- 多语言：所有界面文案通过 `i18n/*.json` 管理，不在组件内硬编码文本；React 渲染期通过 `useChipsI18nText()` 消费 `localeBundles`，语言切换按钮通过 `useChipsI18n().setLocale()` 进入 Host `i18n.setCurrent`
-- 主题系统：通过组件库 `ChipsEnvironmentProvider` 注入 SDK client，再由 `useChipsTheme` 与 `ChipsThemeProvider` 接入主题运行时，不在业务代码中硬编码颜色/圆角/阴影
-- 系统能力调用：React 组件优先通过 `ChipsEnvironmentProvider/useChips*` hooks 消费 `chips-sdk` client，不越层直接访问 Host 内部模块
-
-标准模板默认声明 `i18n.read / i18n.write`：读取语言状态和翻译文本使用 `i18n.read`，切换语言需要 `i18n.write`。如果移除语言切换入口，应同步收窄权限。
-
-## 5. Command 基线
-
-模板默认声明 `command.read / command.write / command.invoke` 权限，并在 `src/commands/app-commands.ts` 集中维护 command metadata：
-
-- command 只写 `titleKey / descriptionKey / ariaLabelKey`，不写原始文案；
-- `handlerId` 是插件侧处理器标识，Host 不接收函数；
-- `menuPlacement / toolbarPlacement / paletteKeywords` 是菜单、工具栏和命令面板的同一事实来源；
-- `src/commands/useAppCommands.ts` 负责通过 `client.command.register()` 注册命令，并监听 `command.invoked` 后按 `handlerId` 执行本地处理。
-
-根组件通过 `ChipsEnvironmentProvider` 注入 `chipsClient`，命令 hook 再用 `useChipsClient()` 取得同一个 SDK client。`ChipsCommandProvider` 注入 `createCommandAdapter(client)`，`ChipsMenuBar / ChipsToolbar / ChipsCommandPalette` 会从 `client.command.list()` 消费命令并统一触发 `client.command.invoke()`。不要在菜单、工具栏或命令面板中直接绑定业务函数。
-
-## 6. 下一步开发建议
-
-1. 根据业务需要在 `src/features/` 或 `src/components/` 中扩展页面与组件；
-2. 通过组件库与主题系统接入真实 UI 并补充交互测试；
-3. 按需扩展 `manifest.yaml` 中的权限与 capabilities（遵循插件开发规范与 Manifest 配置规范）；
-4. 标准模板默认保留原生窗口标题栏；若后续改为 `ui.window.chrome.titleBarStyle: hidden` 等自绘标题栏模式，页面头部必须补充拖拽区，并将交互控件显式标记为 `no-drag`；
-5. 在编写或调整 Host/Bridge 调用前，查阅生态共用技术文档中的协议与接口标准章节，避免契约漂移。
+- 官方前端栈使用 React。
+- 系统能力通过 `chips-sdk` 与组件库 Environment hooks 消费。
+- 命令通过 `client.command.*` 注册、查询、调用和监听，不写入 `manifest.commands`。
+- 用户可见文案统一维护在 `i18n/*.json`，渲染期通过本地同步 adapter 解析。
+- 视觉表达走组件库结构、主题 token 和 `--chips-*` CSS 变量，不在组件中写硬编码颜色、阴影或圆角。
+- 应用入口图标来自 `manifest.ui.launcher.icon`，运行时 UI 图标使用组件库 `ChipsIcon` 与 `IconDescriptor`。

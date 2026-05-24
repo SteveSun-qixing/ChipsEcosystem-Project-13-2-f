@@ -38,7 +38,7 @@ function toErrorCode(error: unknown): string {
 }
 
 export function useAppCommands(options: UseAppCommandsOptions = {}): UseAppCommandsResult {
-  const environmentClient = useChipsClient<Client>();
+  const environmentClient = useChipsClient() as unknown as Client;
   const client = options.client ?? environmentClient;
   const adapter = useMemo(() => createCommandAdapter(client), [client]);
   const [phase, setPhase] = useState<CommandRegistryPhase>("idle");
@@ -85,6 +85,9 @@ export function useAppCommands(options: UseAppCommandsOptions = {}): UseAppComma
     return () => {
       cancelled = true;
       offInvoked();
+      void Promise.all(
+        appCommandDefinitions.map((definition) => client.command.unregister(definition.commandId)),
+      ).catch(() => {});
     };
   }, [client]);
 

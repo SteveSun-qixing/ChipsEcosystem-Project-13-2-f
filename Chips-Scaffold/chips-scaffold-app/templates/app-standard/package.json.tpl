@@ -8,7 +8,11 @@
     "build": "chipsdev build",
     "test": "chipsdev test",
     "lint": "chipsdev lint",
-    "validate": "chipsdev validate"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "validate": "chipsdev validate",
+    "preview:smoke": "chipsdev preview --mode mock --target app --json --out reports/preview/app-preview-smoke.json && node src/preview/preview-smoke.js",
+    "quality:gate": "chipsdev quality gate --json --out reports/quality/quality-gate.json",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate && npm run preview:smoke && npm run quality:gate"
   },
   "dependencies": {
     "react": "^18.2.0",

@@ -1,29 +1,33 @@
 {
-  "app-standard": {
+  "app": {
+    "identity": {
+      "displayName": "{{ DISPLAY_NAME }}"
+    },
     "shell": {
-      "subtitle": "标准应用插件"
+      "subtitle": "应用工作区",
+      "languageSwitch": "切换到 {locale}",
+      "navigationLabel": "应用场景",
+      "contentLabel": "主要内容",
+      "detailLabel": "运行环境",
+      "ready": "运行环境已就绪",
+      "loading": "正在读取运行环境"
     },
-    "language": {
-      "switchTo": "切换到 {locale}"
-    },
-    "sample": {
-      "form": {
-        "title": "示例表单"
+    "scenes": {
+      "main": {
+        "title": "工作区",
+        "description": "当前应用场景与视图状态"
       },
-      "input": {
-        "placeholder": "请输入示例内容"
+      "settings": {
+        "title": "设置",
+        "description": "应用偏好与环境状态"
       }
-    },
-    "actions": {
-      "submit": "提交",
-      "learnMore": "了解更多"
     },
     "commands": {
       "sectionTitle": "命令",
-      "showWelcome": {
-        "title": "显示欢迎信息",
-        "description": "通过 Host 命令系统触发应用内欢迎动作",
-        "ariaLabel": "显示欢迎信息"
+      "openWorkspace": {
+        "title": "打开工作区",
+        "description": "聚焦主应用场景",
+        "ariaLabel": "打开工作区"
       },
       "refreshTheme": {
         "title": "刷新主题状态",
@@ -38,7 +42,6 @@
         "ariaLabel": "主工具栏"
       },
       "palette": {
-        "trigger": "命令",
         "searchPlaceholder": "搜索命令",
         "ariaLabel": "命令面板"
       },
@@ -51,21 +54,34 @@
         "errorWithCode": "命令错误：{code}"
       }
     },
-    "environment": {
-      "title": "Host 环境",
-      "themeLabel": "当前主题：",
-      "localeLabel": "当前语言：",
-      "surfaceLabel": "当前容器：",
-      "permissionLabel": "命令权限：",
-      "diagnosticsLabel": "诊断数量：",
+    "workspace": {
+      "overviewTitle": "运行概览",
+      "overviewDescription": "应用通过 Host surface、SDK 和组件库运行。",
+      "formTitle": "状态绑定",
+      "formDescription": "输入状态由组件库状态模型维护。",
+      "formLabel": "标题",
+      "formPlaceholder": "输入应用内标题",
+      "formAction": "更新状态",
+      "listTitle": "场景列表",
+      "listDescription": "场景定义由应用注册表维护。",
+      "emptyTitle": "暂无诊断",
+      "emptyDescription": "当前没有需要处理的运行时诊断。",
+      "emptyAction": "刷新诊断",
+      "environmentTitle": "Host 环境",
+      "themeLabel": "当前主题",
+      "localeLabel": "当前语言",
+      "surfaceLabel": "当前容器",
+      "permissionLabel": "命令权限",
+      "diagnosticsLabel": "诊断数量",
       "permissionReady": "可调用命令",
       "permissionMissing": "缺少 command.invoke",
       "unknown": "未知",
       "error": "环境读取错误：{code}"
     },
-    "examplePanel": {
-      "title": "组件库示例面板",
-      "body": "组件库、主题和多语言系统已接入模板基线。"
+    "errors": {
+      "boundaryTitle": "应用运行异常",
+      "boundaryDescription": "运行时边界捕获到异常。",
+      "retry": "重试"
     }
   }
 }

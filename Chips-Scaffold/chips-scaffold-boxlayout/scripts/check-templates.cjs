@@ -165,6 +165,23 @@ function main() {
     if (!readme.includes("@chips/component-library")) {
       throw new Error(`模板 ${templateId} README 必须说明组件库接入。`);
     }
+    for (const requiredText of [
+      "chipsdev create layout",
+      "renderEntryCover",
+      "runtime.openEntry",
+      "readBoxAsset",
+      "importBoxAsset",
+      "deleteBoxAsset",
+      "schemaVersion",
+      "assetRefs",
+      "schema_version",
+      "asset_refs",
+      "npm run verify",
+    ]) {
+      if (!readme.includes(requiredText)) {
+        throw new Error(`模板 ${templateId} README 缺少 vNext 说明：${requiredText}`);
+      }
+    }
 
     const typesTs = fs.readFileSync(path.join(dir, "src", "shared", "types.ts.tpl"), "utf8");
     for (const requiredText of [

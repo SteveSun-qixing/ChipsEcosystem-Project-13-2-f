@@ -135,6 +135,16 @@ describe("template-engine", () => {
       expect(readme).toMatch(/Standard Box Layout Plugin/);
       expect(readme).toMatch(/layoutDefinition/);
       expect(readme).toMatch(/@chips\/component-library/);
+      expect(readme).toMatch(/chipsdev create layout/);
+      expect(readme).toMatch(/renderEntryCover/);
+      expect(readme).toMatch(/readBoxAsset/);
+      expect(readme).toMatch(/importBoxAsset/);
+      expect(readme).toMatch(/deleteBoxAsset/);
+      expect(readme).toMatch(/schemaVersion/);
+      expect(readme).toMatch(/assetRefs/);
+      expect(readme).toMatch(/schema_version/);
+      expect(readme).toMatch(/asset_refs/);
+      expect(readme).toMatch(/npm run verify/);
       expect(readme).not.toMatch(/\bchips dev\b|chips-scaffold-boxlayout/);
 
       const generatedTextFiles = [

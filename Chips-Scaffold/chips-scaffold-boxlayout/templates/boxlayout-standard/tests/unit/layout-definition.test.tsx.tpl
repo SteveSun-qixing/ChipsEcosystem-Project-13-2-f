@@ -373,7 +373,7 @@ describe("layoutDefinition", () => {
 
     expect(importBoxAsset).toHaveBeenCalledWith({
       file,
-      preferredPath: expect.stringMatching(/^assets\/layouts\/chips\.layout\.grid\/background\/\d+-hero\.png$/),
+      preferredPath: expect.stringMatching(/^assets\/layouts\/{{ LAYOUT_TYPE }}\/background\/\d+-hero\.png$/),
     });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       assetRefs: ["assets/layouts/chips.layout.grid/background/hero.png"],

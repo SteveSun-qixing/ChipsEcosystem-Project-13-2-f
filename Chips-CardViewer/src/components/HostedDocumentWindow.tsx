@@ -7,6 +7,7 @@ interface HostedDocumentWindowProps {
   client: Client;
   documentUrl: string;
   traceId?: string;
+  iframeTitle: string;
   loadingLabel: string;
   containerErrorLabel: string;
   resourceOpenErrorTitle: string;
@@ -40,6 +41,11 @@ const DOCUMENT_FLOW_SAFE_BLOCK_END_FALLBACK = 72;
 const DOCUMENT_FLOW_SAFE_BLOCK_START_FALLBACK = 96;
 const DOCUMENT_FLOW_STABLE_DELAY_MS = 160;
 const DOCUMENT_FLOW_HEIGHT_EPSILON = 1;
+const HOSTED_DOCUMENT_SANDBOX = "allow-scripts allow-forms";
+const HOSTED_DOCUMENT_READY_EVENTS = new Set(["chips.composite:ready", "chips.box-layout:ready"]);
+const HOSTED_DOCUMENT_ERROR_EVENTS = new Set(["chips.composite:fatal-error", "chips.box-layout:error"]);
+const HOSTED_DOCUMENT_RESIZE_EVENT = "chips.composite:resize";
+const HOSTED_DOCUMENT_RESOURCE_OPEN_EVENT = "chips.composite:resource-open";
 
 function readElementBlockSize(element: HTMLElement | null, fallback: number): number {
   if (!element || typeof window === "undefined") {
@@ -106,10 +112,75 @@ function shouldPublishSurfaceResize(
   );
 }
 
+function resolveFrameOrigin(url: string): string {
+  if (typeof window === "undefined") {
+    return "null";
+  }
+
+  try {
+    return new URL(url, window.location.href).origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+function isAllowedFrameOrigin(frame: HTMLIFrameElement, origin: string): boolean {
+  if (origin === "null") {
+    return true;
+  }
+
+  const allowedOrigins = new Set<string>();
+  if (typeof window !== "undefined") {
+    allowedOrigins.add(window.location.origin);
+  }
+
+  const frameOrigin = frame.dataset?.chipsOrigin;
+  if (frameOrigin) {
+    allowedOrigins.add(frameOrigin);
+  }
+
+  return allowedOrigins.has(origin);
+}
+
+function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (isRecord(error) && typeof error.message === "string" && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
+
+function normalizeResourceOpenPayload(payload: unknown): {
+  intent?: string;
+  resource: {
+    resourceId: string;
+    mimeType?: string;
+    title?: string;
+    fileName?: string;
+    payload?: Record<string, unknown>;
+  };
+} | null {
+  if (!isRecord(payload) || typeof payload.resourceId !== "string" || payload.resourceId.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    intent: typeof payload.intent === "string" && payload.intent.trim().length > 0 ? payload.intent : undefined,
+    resource: {
+      resourceId: payload.resourceId.trim(),
+      mimeType: typeof payload.mimeType === "string" ? payload.mimeType : undefined,
+      title: typeof payload.title === "string" ? payload.title : undefined,
+      fileName: typeof payload.fileName === "string" ? payload.fileName : undefined,
+      payload: isRecord(payload.payload) ? payload.payload : undefined,
+    },
+  };
+}
+
 export function HostedDocumentWindow({
   client,
   documentUrl,
   traceId,
+  iframeTitle,
   loadingLabel,
   containerErrorLabel,
   resourceOpenErrorTitle,
@@ -318,14 +389,24 @@ export function HostedDocumentWindow({
         return;
       }
 
+      if (!isAllowedFrameOrigin(frame, event.origin)) {
+        logger.warn("已忽略来源不匹配的托管文档消息", {
+          documentUrl,
+          origin: event.origin,
+          expectedOrigin: frame.dataset.chipsOrigin,
+        });
+        return;
+      }
+
       const payload = event.data;
       if (!isRecord(payload) || typeof payload.type !== "string") {
         return;
       }
 
-      if (payload.type === "chips.composite:ready") {
-        logger.info("托管文档已通过正式复合卡片运行时发出 ready 事件", {
+      if (HOSTED_DOCUMENT_READY_EVENTS.has(payload.type)) {
+        logger.info("托管文档已通过正式运行时发出 ready 事件", {
           documentUrl,
+          type: payload.type,
           payload: payload.payload,
         });
         setError(null);
@@ -333,7 +414,7 @@ export function HostedDocumentWindow({
         return;
       }
 
-      if (payload.type === "chips.composite:resize") {
+      if (payload.type === HOSTED_DOCUMENT_RESIZE_EVENT) {
         const height =
           isRecord(payload.payload) && Number.isFinite(Number(payload.payload.height))
             ? Number(payload.payload.height)
@@ -348,28 +429,32 @@ export function HostedDocumentWindow({
         return;
       }
 
-      if (payload.type === "chips.composite:fatal-error") {
-        logger.error("托管文档复合卡片运行时报告致命错误", payload.payload);
+      if (HOSTED_DOCUMENT_ERROR_EVENTS.has(payload.type)) {
+        logger.error("托管文档运行时报告错误", {
+          type: payload.type,
+          payload: payload.payload,
+        });
         setIsLoading(false);
-        setError(containerErrorLabel);
+        setError(resolveErrorMessage(payload.payload, containerErrorLabel));
         return;
       }
 
-      if (payload.type !== "chips.composite:resource-open" || !isRecord(payload.payload)) {
+      if (payload.type !== HOSTED_DOCUMENT_RESOURCE_OPEN_EVENT) {
+        return;
+      }
+
+      const resourceOpenRequest = normalizeResourceOpenPayload(payload.payload);
+      if (!resourceOpenRequest) {
+        logger.warn("托管文档资源打开事件缺少有效 resourceId", payload.payload);
+        void client.platform.showMessage({
+          title: resourceOpenErrorTitle,
+          message: resourceOpenErrorFallback,
+        }).catch(() => undefined);
         return;
       }
 
       void client.resource
-        .open({
-          intent: typeof payload.payload.intent === "string" ? payload.payload.intent : undefined,
-          resource: {
-            resourceId: typeof payload.payload.resourceId === "string" ? payload.payload.resourceId : "",
-            mimeType: typeof payload.payload.mimeType === "string" ? payload.payload.mimeType : undefined,
-            title: typeof payload.payload.title === "string" ? payload.payload.title : undefined,
-            fileName: typeof payload.payload.fileName === "string" ? payload.payload.fileName : undefined,
-            payload: isRecord(payload.payload.payload) ? payload.payload.payload : undefined,
-          },
-        })
+        .open(resourceOpenRequest)
         .catch((resourceError) => {
           logger.error("通过正式资源路由打开文档内资源失败", resourceError);
           void client.platform.showMessage({
@@ -393,6 +478,7 @@ export function HostedDocumentWindow({
     frame.addEventListener("error", handleFrameError);
 
     frame.removeAttribute("src");
+    frame.dataset.chipsOrigin = resolveFrameOrigin(documentUrl);
     frame.src = documentUrl;
     scheduleDocumentHeightPublish("initial", innerDocumentHeightRef.current);
 
@@ -472,8 +558,9 @@ export function HostedDocumentWindow({
             <iframe
               ref={iframeRef}
               className="card-viewer-window__iframe card-viewer-window__iframe--document-flow"
-              title="Hosted Card Document"
-              sandbox="allow-scripts allow-same-origin allow-popups"
+              title={iframeTitle}
+              sandbox={HOSTED_DOCUMENT_SANDBOX}
+              data-chips-origin={resolveFrameOrigin(documentUrl)}
               style={{ height: `${documentHeight}px` }}
               scrolling="no"
             />

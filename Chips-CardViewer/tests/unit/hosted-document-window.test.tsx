@@ -65,6 +65,20 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     );
   }
 
+  function renderHostedDocument(documentUrl = "https://example.test/card.html") {
+    root.render(
+      <HostedDocumentWindow
+        client={hostedDocumentMock.client as any}
+        documentUrl={documentUrl}
+        iframeTitle="托管卡片文档"
+        loadingLabel="加载中"
+        containerErrorLabel="容器错误"
+        resourceOpenErrorTitle="资源错误"
+        resourceOpenErrorFallback="打开失败"
+      />,
+    );
+  }
+
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
@@ -90,16 +104,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
 
   it("初始发布完整的文档 surface resize 载荷，并在稳定窗口后发布 stable=true", async () => {
     await act(async () => {
-      root.render(
-        <HostedDocumentWindow
-          client={hostedDocumentMock.client as any}
-          documentUrl="https://example.test/card.html"
-          loadingLabel="加载中"
-          containerErrorLabel="容器错误"
-          resourceOpenErrorTitle="资源错误"
-          resourceOpenErrorFallback="打开失败"
-        />,
-      );
+      renderHostedDocument();
     });
 
     await act(async () => {
@@ -132,16 +137,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
 
   it("会把复合卡片高度变化归一为 content-resize，并对收缩等待 stable 发布", async () => {
     await act(async () => {
-      root.render(
-        <HostedDocumentWindow
-          client={hostedDocumentMock.client as any}
-          documentUrl="https://example.test/card.html"
-          loadingLabel="加载中"
-          containerErrorLabel="容器错误"
-          resourceOpenErrorTitle="资源错误"
-          resourceOpenErrorFallback="打开失败"
-        />,
-      );
+      renderHostedDocument();
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(160);
@@ -188,6 +184,102 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
       contentHeight: 868,
       reason: "content-resize",
       stable: true,
+    });
+  });
+
+  it("使用正式 sandbox 和 i18n iframe 标题，并记录允许的文档 origin", async () => {
+    await act(async () => {
+      renderHostedDocument("chips-render://session/card/index.html");
+    });
+
+    const frame = getHostedFrame();
+
+    expect(frame.getAttribute("sandbox")).toBe("allow-scripts allow-forms");
+    expect(frame.getAttribute("title")).toBe("托管卡片文档");
+    expect(frame.dataset.chipsOrigin).toBe("null");
+  });
+
+  it("忽略来源不匹配的消息，但接受 sandbox opaque origin 消息", async () => {
+    await act(async () => {
+      renderHostedDocument();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(160);
+    });
+
+    const frame = getHostedFrame();
+    hostedDocumentMock.emitted.length = 0;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          origin: "https://evil.test",
+          data: {
+            type: "chips.composite:resize",
+            payload: { height: 1400, reason: "node-height" },
+          },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(hostedDocumentMock.emitted).toHaveLength(0);
+    expect(hostedDocumentMock.logger.warn).toHaveBeenCalledWith(
+      "已忽略来源不匹配的托管文档消息",
+      expect.objectContaining({
+        origin: "https://evil.test",
+        expectedOrigin: "https://example.test",
+      }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          origin: "null",
+          data: {
+            type: "chips.composite:resize",
+            payload: { height: 1400, reason: "node-height" },
+          },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(latestResizePayload()).toMatchObject({
+      contentHeight: 1400,
+      stable: false,
+    });
+  });
+
+  it("资源打开事件缺少 resourceId 时不调用 resource.open，并显示可诊断错误", async () => {
+    await act(async () => {
+      renderHostedDocument();
+    });
+
+    const frame = getHostedFrame();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: frame.contentWindow,
+          origin: "null",
+          data: {
+            type: "chips.composite:resource-open",
+            payload: {
+              intent: "view",
+            },
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(hostedDocumentMock.client.resource.open).not.toHaveBeenCalled();
+    expect(hostedDocumentMock.client.platform.showMessage).toHaveBeenCalledWith({
+      title: "资源错误",
+      message: "打开失败",
     });
   });
 });

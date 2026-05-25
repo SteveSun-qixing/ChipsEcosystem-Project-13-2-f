@@ -19,6 +19,7 @@
       "documentDescription": "通过 Host 托管文档窗口查看卡片或箱子内容。",
       "hostedDocumentTitle": "托管文档查看",
       "hostedDocumentDescription": "通过 Host 提供的文档 URL 承载托管内容。",
+      "hostedDocumentFrameTitle": "托管卡片文档",
       "documentLoading": "正在加载文档…",
       "documentContainerError": "找不到文档窗口容器",
       "documentFatalError": "文档窗口发生严重错误",

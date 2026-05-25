@@ -13,6 +13,7 @@ export function HostedDocumentScene({ target }: HostedDocumentSceneProps): React
       client={runtime.client}
       documentUrl={target.documentUrl}
       traceId={runtime.traceId}
+      iframeTitle={runtime.t("card-viewer.viewer.hostedDocumentFrameTitle")}
       loadingLabel={runtime.t("card-viewer.viewer.documentLoading")}
       containerErrorLabel={runtime.t("card-viewer.viewer.documentContainerError")}
       resourceOpenErrorTitle={runtime.t("card-viewer.errors.resourceOpenFailedTitle")}

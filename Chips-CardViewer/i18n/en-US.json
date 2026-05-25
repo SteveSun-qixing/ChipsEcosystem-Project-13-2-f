@@ -19,6 +19,7 @@
       "documentDescription": "View card or box content through the Host-managed document window.",
       "hostedDocumentTitle": "Hosted Document Viewer",
       "hostedDocumentDescription": "Render hosted content through a document URL provided by Host.",
+      "hostedDocumentFrameTitle": "Hosted card document",
       "documentLoading": "Loading document…",
       "documentContainerError": "The document container is unavailable.",
       "documentFatalError": "A fatal error occurred while rendering the document.",

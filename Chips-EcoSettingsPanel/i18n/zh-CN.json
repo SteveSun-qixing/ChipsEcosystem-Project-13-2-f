@@ -482,14 +482,23 @@
         "menu": {
           "summary": "承载上下文动作列表，适合工具栏与更多操作入口。"
         },
+        "toolbar": {
+          "summary": "通过命令记录渲染工具栏动作，统一菜单、快捷键与按钮入口。"
+        },
+        "menuBar": {
+          "summary": "把 Host 命令分组渲染为应用菜单栏。"
+        },
+        "contextMenu": {
+          "summary": "为局部对象提供同源命令上下文菜单。"
+        },
+        "shortcut": {
+          "summary": "以统一格式展示命令快捷键。"
+        },
         "tooltip": {
           "summary": "为图标或缩写动作提供即时补充说明。"
         },
-        "formField": {
-          "summary": "统一字段标题、说明和控件承载结构。"
-        },
-        "formGroup": {
-          "summary": "把一组相关设置编排到同一个语义块中。"
+        "form": {
+          "summary": "通过 Root、Section、Field、Label、Control、Error 与 Hint 组合正式表单结构。"
         },
         "virtualList": {
           "summary": "在长列表场景中保持稳定滚动与渲染性能。"
@@ -505,6 +514,9 @@
         },
         "commandPalette": {
           "summary": "面向高级用户的全局命令检索与快速入口。"
+        },
+        "navigationSplitView": {
+          "summary": "表达设置类应用的侧栏、内容区和详情区导航结构。"
         },
         "splitPane": {
           "summary": "验证左右分栏内容在工作台布局中的伸缩关系。"
@@ -589,18 +601,39 @@
           "rename": "重命名",
           "duplicate": "复制"
         },
+        "commands": {
+          "theme": "打开主题设置",
+          "themeDescription": "切换到主题治理入口。",
+          "plugins": "管理插件",
+          "pluginsDescription": "切换到插件治理入口。",
+          "keywordTheme": "主题",
+          "keywordPlugins": "插件"
+        },
+        "toolbar": {
+          "ariaLabel": "组件展示工具栏"
+        },
+        "menuBar": {
+          "ariaLabel": "组件展示菜单栏",
+          "settings": "设置"
+        },
+        "contextMenu": {
+          "trigger": "打开上下文菜单"
+        },
+        "shortcut": {
+          "ariaLabel": "命令快捷键示例"
+        },
         "tooltip": {
           "trigger": "悬停目标",
           "content": "这里展示即时帮助说明。"
         },
-        "formField": {
-          "label": "工作区名称",
-          "description": "用于 Host 窗口标题。",
-          "value": "创作空间"
-        },
-        "formGroup": {
-          "legend": "启动行为",
-          "description": "在 Host 启动时应用。",
+        "form": {
+          "title": "工作区设置",
+          "description": "通过正式 Compound API 组合字段、说明和启动行为。",
+          "workspaceLabel": "工作区名称",
+          "workspaceHint": "用于 Host 窗口标题。",
+          "workspaceValue": "创作空间",
+          "startupLabel": "启动行为",
+          "startupHint": "在 Host 启动时应用。",
           "restoreTheme": "恢复上次主题",
           "openDashboard": "打开插件面板"
         },
@@ -633,6 +666,15 @@
           "keywordAppearance": "外观",
           "keywordPlugins": "插件",
           "keywordInstall": "安装"
+        },
+        "navigationSplitView": {
+          "ariaLabel": "设置导航分栏预览",
+          "sidebar": "设置分类",
+          "sidebarContent": "治理入口",
+          "content": "设置内容",
+          "contentBody": "主题与插件状态",
+          "detail": "详情",
+          "detailBody": "诊断与预览"
         },
         "splitPane": {
           "ariaLabel": "分栏预览",

@@ -70,7 +70,7 @@ function AppShell(): React.ReactElement {
             <div className="settings-mobile-nav__label">{t("settingsPanel.menu.mobileLabel")}</div>
             <ChipsSelect
               value={activeEntry.id}
-              ariaLabel={t("settingsPanel.menu.mobileAriaLabel")}
+              aria-label={t("settingsPanel.menu.mobileAriaLabel")}
               options={mobileMenuOptions}
               onValueChange={(nextValue) => setActiveMenuId(nextValue as MenuId)}
             />

@@ -10,12 +10,13 @@ import {
   ChipsDockPanel,
   ChipsEmptyState,
   ChipsErrorBoundary,
-  ChipsFormField,
-  ChipsFormGroup,
+  ChipsForm,
   ChipsInspector,
   ChipsInput,
   ChipsLoadingBoundary,
   ChipsMenu,
+  ChipsMenuBar,
+  ChipsContextMenu,
   ChipsNotification,
   ChipsPanelHeader,
   ChipsPopover,
@@ -29,6 +30,9 @@ import {
   ChipsTooltip,
   ChipsToolWindow,
   ChipsTree,
+  ChipsNavigationSplitView,
+  ChipsShortcut,
+  ChipsToolbar,
   ChipsVirtualList,
   P0_BASE_INTERACTIVE_COMPONENTS,
   P0_DATA_FORM_COMPONENTS,
@@ -249,32 +253,97 @@ function TooltipPreview(): React.ReactElement {
   );
 }
 
-function FormFieldPreview(): React.ReactElement {
+function getGalleryCommands(t: (key: string, params?: Record<string, string | number>) => string) {
+  return [
+    {
+      commandId: "settings.gallery.theme",
+      titleKey: "settingsPanel.gallery.preview.commands.theme",
+      descriptionKey: "settingsPanel.gallery.preview.commands.themeDescription",
+      shortcut: "⌘T",
+      menuPlacement: [{ menuId: "settings", groupId: "governance", order: 10 }],
+      toolbarPlacement: [{ toolbarId: "gallery", groupId: "primary", order: 10 }],
+      paletteKeywords: [t("settingsPanel.gallery.preview.commands.keywordTheme")],
+    },
+    {
+      commandId: "settings.gallery.plugins",
+      titleKey: "settingsPanel.gallery.preview.commands.plugins",
+      descriptionKey: "settingsPanel.gallery.preview.commands.pluginsDescription",
+      shortcut: "⌘P",
+      menuPlacement: [{ menuId: "settings", groupId: "governance", order: 20 }],
+      toolbarPlacement: [{ toolbarId: "gallery", groupId: "primary", order: 20 }],
+      paletteKeywords: [t("settingsPanel.gallery.preview.commands.keywordPlugins")],
+    },
+  ];
+}
+
+function ToolbarPreview(): React.ReactElement {
   const { t } = useI18n();
+  const commands = getGalleryCommands(t);
   return (
     <PreviewShell>
-      <ChipsFormField
-        label={t("settingsPanel.gallery.preview.formField.label")}
-        description={t("settingsPanel.gallery.preview.formField.description")}
-        defaultValue={t("settingsPanel.gallery.preview.formField.value")}
+      <ChipsToolbar commands={commands} i18n={t} toolbarId="gallery" ariaLabel={t("settingsPanel.gallery.preview.toolbar.ariaLabel")} />
+    </PreviewShell>
+  );
+}
+
+function MenuBarPreview(): React.ReactElement {
+  const { t } = useI18n();
+  const commands = getGalleryCommands(t);
+  return (
+    <PreviewShell>
+      <ChipsMenuBar
+        commands={commands}
+        i18n={t}
+        menus={[{ menuId: "settings", label: t("settingsPanel.gallery.preview.menuBar.settings") }]}
+        ariaLabel={t("settingsPanel.gallery.preview.menuBar.ariaLabel")}
       />
     </PreviewShell>
   );
 }
 
-function FormGroupPreview(): React.ReactElement {
+function ContextMenuPreview(): React.ReactElement {
+  const { t } = useI18n();
+  const commands = getGalleryCommands(t);
+  return (
+    <PreviewShell>
+      <ChipsContextMenu commands={commands} i18n={t} menuId="settings" triggerContent={t("settingsPanel.gallery.preview.contextMenu.trigger")} />
+    </PreviewShell>
+  );
+}
+
+function ShortcutPreview(): React.ReactElement {
   const { t } = useI18n();
   return (
     <PreviewShell>
-      <ChipsFormGroup
-        legend={t("settingsPanel.gallery.preview.formGroup.legend")}
-        description={t("settingsPanel.gallery.preview.formGroup.description")}
-      >
-        <div className="gallery-inline-stack">
-          <ChipsCheckbox defaultChecked label={t("settingsPanel.gallery.preview.formGroup.restoreTheme")} />
-          <ChipsCheckbox label={t("settingsPanel.gallery.preview.formGroup.openDashboard")} />
-        </div>
-      </ChipsFormGroup>
+      <ChipsShortcut shortcut="⌘⇧K" ariaLabel={t("settingsPanel.gallery.preview.shortcut.ariaLabel")} />
+    </PreviewShell>
+  );
+}
+
+function FormPreview(): React.ReactElement {
+  const { t } = useI18n();
+  return (
+    <PreviewShell>
+      <ChipsForm.Root>
+        <ChipsForm.Section
+          title={t("settingsPanel.gallery.preview.form.title")}
+          description={t("settingsPanel.gallery.preview.form.description")}
+        >
+          <ChipsForm.Field name="workspace" required>
+            <ChipsForm.Label>{t("settingsPanel.gallery.preview.form.workspaceLabel")}</ChipsForm.Label>
+            <ChipsForm.Control as="input" defaultValue={t("settingsPanel.gallery.preview.form.workspaceValue")} />
+            <ChipsForm.Hint>{t("settingsPanel.gallery.preview.form.workspaceHint")}</ChipsForm.Hint>
+          </ChipsForm.Field>
+          <ChipsForm.Field name="startup">
+            <ChipsForm.Label>{t("settingsPanel.gallery.preview.form.startupLabel")}</ChipsForm.Label>
+            <ChipsForm.Hint>{t("settingsPanel.gallery.preview.form.startupHint")}</ChipsForm.Hint>
+            <div className="gallery-inline-stack">
+              <ChipsCheckbox defaultChecked label={t("settingsPanel.gallery.preview.form.restoreTheme")} />
+              <ChipsCheckbox label={t("settingsPanel.gallery.preview.form.openDashboard")} />
+            </div>
+          </ChipsForm.Field>
+        </ChipsForm.Section>
+      </ChipsForm.Root>
     </PreviewShell>
   );
 }
@@ -357,8 +426,8 @@ function CommandPalettePreview(): React.ReactElement {
   return (
     <PreviewShell>
       <ChipsCommandPalette
-        triggerLabel={t("settingsPanel.gallery.preview.commandPalette.trigger")}
-        searchPlaceholder={t("settingsPanel.gallery.preview.commandPalette.searchPlaceholder")}
+        ariaLabel={t("settingsPanel.gallery.preview.commandPalette.trigger")}
+        inputPlaceholder={t("settingsPanel.gallery.preview.commandPalette.searchPlaceholder")}
         items={[
           {
             id: "theme",
@@ -378,6 +447,25 @@ function CommandPalettePreview(): React.ReactElement {
           },
         ]}
       />
+    </PreviewShell>
+  );
+}
+
+function NavigationSplitViewPreview(): React.ReactElement {
+  const { t } = useI18n();
+  return (
+    <PreviewShell>
+      <ChipsNavigationSplitView.Root ariaLabel={t("settingsPanel.gallery.preview.navigationSplitView.ariaLabel")}>
+        <ChipsNavigationSplitView.Sidebar ariaLabel={t("settingsPanel.gallery.preview.navigationSplitView.sidebar")}>
+          <div className="gallery-pane">{t("settingsPanel.gallery.preview.navigationSplitView.sidebarContent")}</div>
+        </ChipsNavigationSplitView.Sidebar>
+        <ChipsNavigationSplitView.Content ariaLabel={t("settingsPanel.gallery.preview.navigationSplitView.content")}>
+          <div className="gallery-pane">{t("settingsPanel.gallery.preview.navigationSplitView.contentBody")}</div>
+        </ChipsNavigationSplitView.Content>
+        <ChipsNavigationSplitView.Detail ariaLabel={t("settingsPanel.gallery.preview.navigationSplitView.detail")}>
+          <div className="gallery-pane">{t("settingsPanel.gallery.preview.navigationSplitView.detailBody")}</div>
+        </ChipsNavigationSplitView.Detail>
+      </ChipsNavigationSplitView.Root>
     </PreviewShell>
   );
 }
@@ -587,14 +675,18 @@ const SUMMARY_KEY_BY_NAME: Record<string, string> = {
   ChipsPopover: "settingsPanel.gallery.components.popover.summary",
   ChipsTabs: "settingsPanel.gallery.components.tabs.summary",
   ChipsMenu: "settingsPanel.gallery.components.menu.summary",
+  ChipsToolbar: "settingsPanel.gallery.components.toolbar.summary",
+  ChipsMenuBar: "settingsPanel.gallery.components.menuBar.summary",
+  ChipsContextMenu: "settingsPanel.gallery.components.contextMenu.summary",
+  ChipsShortcut: "settingsPanel.gallery.components.shortcut.summary",
   ChipsTooltip: "settingsPanel.gallery.components.tooltip.summary",
-  ChipsFormField: "settingsPanel.gallery.components.formField.summary",
-  ChipsFormGroup: "settingsPanel.gallery.components.formGroup.summary",
+  ChipsForm: "settingsPanel.gallery.components.form.summary",
   ChipsVirtualList: "settingsPanel.gallery.components.virtualList.summary",
   ChipsDataGrid: "settingsPanel.gallery.components.dataGrid.summary",
   ChipsTree: "settingsPanel.gallery.components.tree.summary",
   ChipsDateTime: "settingsPanel.gallery.components.dateTime.summary",
   ChipsCommandPalette: "settingsPanel.gallery.components.commandPalette.summary",
+  ChipsNavigationSplitView: "settingsPanel.gallery.components.navigationSplitView.summary",
   ChipsSplitPane: "settingsPanel.gallery.components.splitPane.summary",
   ChipsDockPanel: "settingsPanel.gallery.components.dockPanel.summary",
   ChipsInspector: "settingsPanel.gallery.components.inspector.summary",
@@ -620,14 +712,18 @@ const EMPHASIS_BY_NAME: Record<string, ComponentPreviewRegistration["emphasis"]>
   ChipsPopover: "standard",
   ChipsTabs: "wide",
   ChipsMenu: "standard",
+  ChipsToolbar: "wide",
+  ChipsMenuBar: "wide",
+  ChipsContextMenu: "standard",
+  ChipsShortcut: "standard",
   ChipsTooltip: "standard",
-  ChipsFormField: "wide",
-  ChipsFormGroup: "hero",
+  ChipsForm: "hero",
   ChipsVirtualList: "hero",
   ChipsDataGrid: "hero",
   ChipsTree: "wide",
   ChipsDateTime: "standard",
   ChipsCommandPalette: "hero",
+  ChipsNavigationSplitView: "hero",
   ChipsSplitPane: "hero",
   ChipsDockPanel: "hero",
   ChipsInspector: "hero",
@@ -653,14 +749,18 @@ const PREVIEW_BY_NAME: Record<string, () => React.ReactElement> = {
   ChipsPopover: PopoverPreview,
   ChipsTabs: TabsPreview,
   ChipsMenu: MenuPreview,
+  ChipsToolbar: ToolbarPreview,
+  ChipsMenuBar: MenuBarPreview,
+  ChipsContextMenu: ContextMenuPreview,
+  ChipsShortcut: ShortcutPreview,
   ChipsTooltip: TooltipPreview,
-  ChipsFormField: FormFieldPreview,
-  ChipsFormGroup: FormGroupPreview,
+  ChipsForm: FormPreview,
   ChipsVirtualList: VirtualListPreview,
   ChipsDataGrid: DataGridPreview,
   ChipsTree: TreePreview,
   ChipsDateTime: DateTimePreview,
   ChipsCommandPalette: CommandPalettePreview,
+  ChipsNavigationSplitView: NavigationSplitViewPreview,
   ChipsSplitPane: SplitPanePreview,
   ChipsDockPanel: DockPanelPreview,
   ChipsInspector: InspectorPreview,

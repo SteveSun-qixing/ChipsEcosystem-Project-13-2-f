@@ -482,14 +482,23 @@
         "menu": {
           "summary": "Contextual action list for toolbars and more-actions entry points."
         },
+        "toolbar": {
+          "summary": "Render toolbar actions from command records shared with menus, shortcuts, and buttons."
+        },
+        "menuBar": {
+          "summary": "Render Host command groups as an application menu bar."
+        },
+        "contextMenu": {
+          "summary": "Provide local object actions through the same command source."
+        },
+        "shortcut": {
+          "summary": "Display command shortcuts in the unified key format."
+        },
         "tooltip": {
           "summary": "Immediate helper text for icons and compact actions."
         },
-        "formField": {
-          "summary": "Shared field frame for labels, descriptions, and controls."
-        },
-        "formGroup": {
-          "summary": "Compose a related batch of settings inside one semantic block."
+        "form": {
+          "summary": "Compose formal form structure through Root, Section, Field, Label, Control, Error, and Hint."
         },
         "virtualList": {
           "summary": "Maintain stable rendering and scrolling for long list scenarios."
@@ -505,6 +514,9 @@
         },
         "commandPalette": {
           "summary": "Global command search and quick entry for power-user workflows."
+        },
+        "navigationSplitView": {
+          "summary": "Represent settings-app navigation with sidebar, content, and detail regions."
         },
         "splitPane": {
           "summary": "Validate resizable two-panel workbench relationships."
@@ -589,18 +601,39 @@
           "rename": "Rename",
           "duplicate": "Duplicate"
         },
+        "commands": {
+          "theme": "Open theme settings",
+          "themeDescription": "Switch to the theme governance entry.",
+          "plugins": "Manage plugins",
+          "pluginsDescription": "Switch to the plugin governance entry.",
+          "keywordTheme": "theme",
+          "keywordPlugins": "plugins"
+        },
+        "toolbar": {
+          "ariaLabel": "Component gallery toolbar"
+        },
+        "menuBar": {
+          "ariaLabel": "Component gallery menu bar",
+          "settings": "Settings"
+        },
+        "contextMenu": {
+          "trigger": "Open context menu"
+        },
+        "shortcut": {
+          "ariaLabel": "Command shortcut sample"
+        },
         "tooltip": {
           "trigger": "Hover target",
           "content": "Immediate helper guidance appears here."
         },
-        "formField": {
-          "label": "Workspace name",
-          "description": "Used by the Host window title.",
-          "value": "Studio"
-        },
-        "formGroup": {
-          "legend": "Startup behavior",
-          "description": "Applies when Host launches.",
+        "form": {
+          "title": "Workspace settings",
+          "description": "Compose fields, hints, and startup behavior through the formal Compound API.",
+          "workspaceLabel": "Workspace name",
+          "workspaceHint": "Used by the Host window title.",
+          "workspaceValue": "Studio",
+          "startupLabel": "Startup behavior",
+          "startupHint": "Applies when Host launches.",
           "restoreTheme": "Restore last theme",
           "openDashboard": "Open plugin dashboard"
         },
@@ -633,6 +666,15 @@
           "keywordAppearance": "appearance",
           "keywordPlugins": "plugins",
           "keywordInstall": "install"
+        },
+        "navigationSplitView": {
+          "ariaLabel": "Settings navigation split view preview",
+          "sidebar": "Settings categories",
+          "sidebarContent": "Governance entries",
+          "content": "Settings content",
+          "contentBody": "Theme and plugin state",
+          "detail": "Detail",
+          "detailBody": "Diagnostics and previews"
         },
         "splitPane": {
           "ariaLabel": "Split preview",

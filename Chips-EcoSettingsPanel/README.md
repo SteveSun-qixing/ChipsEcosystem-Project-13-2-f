@@ -2,20 +2,23 @@
 
 > 插件 ID：`com.chips.eco-settings-panel`  
 > 工程来源：`chips-scaffold-app` 标准应用插件模板  
-> 当前阶段：四个一级菜单与运行时治理主链路已落地，已通过自动化质量门禁，等待人工联调审核
+> 当前阶段：任务028迁移闭环，9 个运行时治理 Scene、AppRuntime/Commands、权限 smoke、主题诊断、预览质量与共享声明式布局已落地
 
 ## 项目定位
 
-生态设置面板是薯片生态与 Host 的统一运行时设置入口，当前已迁移到应用插件 vNext 入口结构：`AppRoot / AppProviders / AppRuntimeProvider / scene-registry / commands`。首版聚焦以下一级能力：
+生态设置面板是薯片生态与 Host 的统一运行时设置入口，当前已迁移到应用插件 vNext 入口结构：`AppRoot / AppProviders / AppRuntimeProvider / scene-registry / commands`。当前治理入口覆盖以下一级能力：
 
 - 主题管理：安装、切换、卸载主题包，并展示当前生效主题。
 - 主题诊断：展示当前主题 `theme.contract.get()` 与 `theme.resolve([])` 的 Contract 覆盖、诊断和解析链。
 - 多语言：列出已安装语言、切换当前语言、响应 `language.changed` 事件。
 - 应用插件：安装、启用、停用、卸载应用插件，并展示运行时状态。
+- 卡片插件：按 `plugin.query({ type: "card" })` 管理基础卡片插件安装、启停、卸载和能力标识。
+- 箱子布局插件：按 `plugin.query({ type: "layout" })` 管理布局插件安装、启停、卸载和布局类型。
+- 模块插件：按 `plugin.query({ type: "module" })` 管理功能模块插件安装、启停、卸载和能力集合。
 - 组件展示：基于薯片组件库真实组件构建 Bento 预览页，验证主题接入效果。
 - 预览与质量：展示 `chipsdev preview/component gallery/theme inspect/quality gate/diagnostics` 正式报告命令入口。
 
-该工程当前已经完成应用壳层、主题管理、多语言、插件治理、组件展示页、主题诊断页、预览与质量入口、运行时适配层、AppRuntime 入口和 Scene command 注册链路；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
+该工程当前已经完成应用壳层、主题管理、多语言、五类插件治理、组件展示页、主题诊断页、预览与质量入口、运行时适配层、AppRuntime 入口、Scene command 注册链路和共享声明式页面布局；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
 
 ## 快速开始
 
@@ -67,17 +70,18 @@ Chips-EcoSettingsPanel/
 
 ## 当前实现状态
 
-- 已完成注册表驱动的设置壳层与四个一级菜单。
+- 已完成注册表驱动的设置壳层与 9 个一级 Scene：主题管理、主题诊断、多语言、应用插件、卡片插件、箱子布局插件、模块插件、组件展示、预览与质量。
 - 已将根组件迁移为 `AppRoot / AppProviders / AppRuntimeProvider / AppShell` 结构，`src/App.tsx` 仅保留标准 re-export。
 - 已建立 `scene-registry.ts`，从菜单注册表派生应用 Scene，保持既有页面顺序与使用逻辑不变。
 - 已为 Scene 导航接入 `client.command.register/list/invoke/onInvoked/unregister` 与组件库 `ChipsMenuBar / ChipsToolbar / ChipsCommandPalette`，manifest 已声明 `command.read/write/invoke`。
 - 已切换为 Host 正式窗口契约驱动的 Electron 原生标题栏，不再在前端自绘窗口标题区。
 - 已完成 `chips-sdk` 运行时服务适配层与错误归一化。
-- 已完成主题/语言/应用插件治理的正式列表布局、详情弹窗、操作链路与事件刷新。
+- 已完成主题/语言/应用插件/卡片插件/箱子布局插件/模块插件治理的正式列表布局、详情弹窗、操作链路与事件刷新。
 - 已补齐权限不足、command 注册/调用失败、manifest 权限漂移和设置面板 mock Host smoke 测试，权限拒绝统一保留 SDK 标准 `permission` 诊断。
 - 已完成组件展示注册表与当前正式组件分组接入。
 - 已新增主题诊断入口，数据源仅为 SDK `client.theme.contract.get()` 与 `client.theme.resolve([])`。
 - 已新增预览与质量入口，展示正式 `chipsdev` 报告命令；当前运行时页面不直接读取本地报告文件。
+- 已新增 `PageLayout` 共享 UI，组件展示、主题诊断和预览质量页面复用 `PageStack / PageSection / SummaryPanel / CardGrid / BentoCardGrid / MetricCard / CardDescription`。
 - 已完成窄屏菜单切换器、左侧菜单精简与当前设置面板插件的自保护限制。
 - 已将脚手架遗留的同名 `.js` 副本移入 `归档/`，工程源码基线统一收口为 TypeScript。
 - 应用插件治理页当前优先展示 `PluginShortcutRecord.iconPath`，缺失时回退到正式运行时图标组件，不再显示 emoji 或路径字符串。
@@ -92,3 +96,9 @@ npm test -- runtime-permissions.test.ts settings-commands.test.tsx runtime-hooks
 ```
 
 提交前仍以 `npm run verify` 作为最终质量门禁。
+
+## 任务028闭环边界
+
+- 跨主题实时 contract 矩阵仍需要 Host/SDK 支持按主题查询 contract 或报告快照，当前页面只诊断当前主题。
+- 完整 CLI JSON 报告的运行时读取需要正式报告消费链路，当前预览与质量页只展示正式命令入口和边界。
+- Vite 构建存在单 chunk 超过 500 kB 的非阻塞提示，任务028不把它作为功能阻断；后续全生态质量门禁或性能任务再统一处理。

@@ -46,6 +46,19 @@
       "ariaLabel": "运行反馈",
       "runtimeErrorTitle": "运行时连接异常"
     },
+    "commands": {
+      "menu": {
+        "settings": "设置",
+        "ariaLabel": "设置面板菜单栏"
+      },
+      "toolbar": {
+        "ariaLabel": "设置面板工具栏"
+      },
+      "palette": {
+        "ariaLabel": "设置面板命令面板",
+        "searchPlaceholder": "搜索设置入口"
+      }
+    },
     "common": {
       "notAvailable": "暂无",
       "open": "打开",

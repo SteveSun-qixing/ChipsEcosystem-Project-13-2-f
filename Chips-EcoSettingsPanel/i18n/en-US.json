@@ -46,6 +46,19 @@
       "ariaLabel": "Runtime feedback",
       "runtimeErrorTitle": "Runtime connection error"
     },
+    "commands": {
+      "menu": {
+        "settings": "Settings",
+        "ariaLabel": "Settings panel menu bar"
+      },
+      "toolbar": {
+        "ariaLabel": "Settings panel toolbar"
+      },
+      "palette": {
+        "ariaLabel": "Settings panel command palette",
+        "searchPlaceholder": "Search settings entries"
+      }
+    },
     "common": {
       "notAvailable": "N/A",
       "open": "Open",

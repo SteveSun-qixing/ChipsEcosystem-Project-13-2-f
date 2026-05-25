@@ -6,21 +6,19 @@
 
 ## 项目定位
 
-生态设置面板是薯片生态与 Host 的统一运行时设置入口，首版聚焦四个一级能力：
+生态设置面板是薯片生态与 Host 的统一运行时设置入口，当前已迁移到应用插件 vNext 入口结构：`AppRoot / AppProviders / AppRuntimeProvider / scene-registry / commands`。首版聚焦四个一级能力：
 
 - 主题管理：安装、切换、卸载主题包，并展示当前生效主题。
 - 多语言：列出已安装语言、切换当前语言、响应 `language.changed` 事件。
 - 应用插件：安装、启用、停用、卸载应用插件，并展示运行时状态。
 - 组件展示：基于薯片组件库真实组件构建 Bento 预览页，验证主题接入效果。
 
-该工程当前已经完成应用壳层、主题管理、多语言、应用插件治理、组件展示页以及运行时适配层首版实现；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
+该工程当前已经完成应用壳层、主题管理、多语言、应用插件治理、组件展示页、运行时适配层、AppRuntime 入口和 Scene command 注册链路；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
 
 ## 快速开始
 
 ```bash
-cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f
-npm install
-cd Chips-EcoSettingsPanel
+cd <生态工作区>/Chips-EcoSettingsPanel
 npm run dev
 ```
 
@@ -68,6 +66,9 @@ Chips-EcoSettingsPanel/
 ## 当前实现状态
 
 - 已完成注册表驱动的设置壳层与四个一级菜单。
+- 已将根组件迁移为 `AppRoot / AppProviders / AppRuntimeProvider / AppShell` 结构，`src/App.tsx` 仅保留标准 re-export。
+- 已建立 `scene-registry.ts`，从菜单注册表派生应用 Scene，保持既有页面顺序与使用逻辑不变。
+- 已为 Scene 导航接入 `client.command.register/list/invoke/onInvoked/unregister` 与组件库 `ChipsMenuBar / ChipsToolbar / ChipsCommandPalette`，manifest 已声明 `command.read/write/invoke`。
 - 已切换为 Host 正式窗口契约驱动的 Electron 原生标题栏，不再在前端自绘窗口标题区。
 - 已完成 `chips-sdk` 运行时服务适配层与错误归一化。
 - 已完成主题/语言/应用插件治理的正式列表布局、详情弹窗、操作链路与事件刷新。

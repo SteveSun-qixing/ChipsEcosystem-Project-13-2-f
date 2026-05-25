@@ -26,6 +26,9 @@ permissions:
   - plugin.manage
   - platform.read
   - platform.external
+  - command.read
+  - command.write
+  - command.invoke
 
 runtime:
   targets:

@@ -113,6 +113,13 @@ textarea {
   align-content: start;
 }
 
+.settings-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(280px, 420px);
+  gap: 12px;
+  align-items: start;
+}
+
 .settings-mobile-nav {
   display: none;
   gap: 10px;
@@ -575,6 +582,10 @@ textarea {
 
   .gallery-bento-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .settings-command-row {
+    grid-template-columns: 1fr;
   }
 
   .gallery-card,

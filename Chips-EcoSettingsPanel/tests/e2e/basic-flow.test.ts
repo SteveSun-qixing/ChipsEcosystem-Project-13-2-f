@@ -21,6 +21,9 @@ describe("应用插件基础流程基线", () => {
       "plugin.manage",
       "platform.read",
       "platform.external",
+      "command.read",
+      "command.write",
+      "command.invoke",
     ]) {
       expect(manifest).toContain(`- ${permission}`);
     }

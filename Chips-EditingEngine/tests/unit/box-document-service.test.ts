@@ -257,6 +257,75 @@ describe('BoxDocumentService', () => {
     expect(saved.isDirty).toBe(false);
   });
 
+  it('keeps persisted manual sort keys aligned with the content list order', async () => {
+    const initialInspection = {
+      metadata: {
+        chipStandardsVersion: '1.0.0',
+        boxId: 'box1234567',
+        name: 'Demo Box',
+        createdAt: '2026-03-23T00:00:00.000Z',
+        modifiedAt: '2026-03-23T00:00:00.000Z',
+        activeLayoutType: DEFAULT_BOX_LAYOUT_TYPE,
+      },
+      content: {
+        activeLayoutType: DEFAULT_BOX_LAYOUT_TYPE,
+        layoutConfigs: {
+          [DEFAULT_BOX_LAYOUT_TYPE]: {
+            schemaVersion: '1.0.0',
+            props: {},
+            assetRefs: [],
+          },
+        },
+      },
+      entries: [
+        {
+          entryId: 'entry000001',
+          url: 'file:///workspace/cards/first.card',
+          enabled: true,
+          snapshot: { title: 'First', cover: { mode: 'none' } },
+          layoutHints: { sortKey: 42 },
+        },
+        {
+          entryId: 'entry000002',
+          url: 'file:///workspace/cards/second.card',
+          enabled: true,
+          snapshot: { title: 'Second', cover: { mode: 'none' } },
+          layoutHints: { sortKey: 88 },
+        },
+        {
+          entryId: 'entry000003',
+          url: 'file:///workspace/cards/third.card',
+          enabled: true,
+          snapshot: { title: 'Third', cover: { mode: 'none' } },
+          layoutHints: { sortKey: 99 },
+        },
+      ],
+      assets: [],
+    };
+
+    mockClient.box.inspect.mockResolvedValue(initialInspection);
+    mockClient.box.unpack.mockImplementation(async (_boxFile, outputDir) => {
+      directories.add(outputDir);
+      directories.add(`${outputDir}/.box`);
+      return outputDir;
+    });
+
+    const service = new BoxDocumentService();
+    await service.openBox('/workspace/demo.box', '/workspace', 'box1234567');
+
+    service.moveEntryToIndex('box1234567', 'entry000003', 0);
+    service.removeEntry('box1234567', 'entry000002');
+    await service.saveBox('box1234567');
+
+    const entries = lastPackedSnapshot.structure?.entries as Array<{
+      entry_id: string;
+      layout_hints?: { sort_key?: number };
+    }>;
+
+    expect(entries.map((entry) => entry.entry_id)).toEqual(['entry000003', 'entry000001']);
+    expect(entries.map((entry) => entry.layout_hints?.sort_key)).toEqual([0, 1]);
+  });
+
   it('deduplicates concurrent box open requests for the same file and box id', async () => {
     const initialInspection = {
       metadata: {

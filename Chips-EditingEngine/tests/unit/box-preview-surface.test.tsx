@@ -90,7 +90,7 @@ describe('BoxPreviewSurface', () => {
     expect(previewHost?.style.alignSelf).toBe('stretch');
     expect(previewHost?.style.width).toBe('100%');
     expect(previewHost?.style.maxWidth).toBe('100%');
-    expect(previewHost?.style.minWidth).toBe('100%');
+    expect(previewHost?.style.minWidth).toBe('0px');
     expect(previewHost?.style.minHeight).toBe('100%');
     expect(mockState.client.document.window.render).toHaveBeenCalledWith({
       filePath: '/workspace/demo.box',

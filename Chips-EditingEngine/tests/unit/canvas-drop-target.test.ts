@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveCompositeCardDropTarget } from '../../src/layouts/InfiniteCanvas/canvas-drop-target';
+import {
+  resolveBoxEntryImportDropTarget,
+  resolveCompositeCardDropTarget,
+} from '../../src/layouts/InfiniteCanvas/canvas-drop-target';
 import type { CompositeCard } from '../../src/core/card-service';
 
 interface RectInput {
@@ -109,6 +112,28 @@ function attachPreviewSurface(options: {
     preview,
     fallbackChild,
     nodeHandles,
+  };
+}
+
+function attachBoxPreviewSurface(options: {
+  boxId: string;
+  rect: RectInput;
+  acceptDrop?: boolean;
+}) {
+  const preview = document.createElement('div');
+  preview.dataset.chipsDropSurface = 'box-preview';
+  preview.dataset.chipsBoxId = options.boxId;
+  preview.dataset.chipsDropAccept = options.acceptDrop === false ? 'false' : 'true';
+  document.body.appendChild(preview);
+
+  defineElementRect(preview, options.rect);
+
+  const child = document.createElement('div');
+  preview.appendChild(child);
+
+  return {
+    preview,
+    child,
   };
 }
 
@@ -297,5 +322,70 @@ describe('resolveCompositeCardDropTarget', () => {
         width: 268,
       },
     });
+  });
+});
+
+describe('resolveBoxEntryImportDropTarget', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('accepts workspace card and box files on a box preview surface', () => {
+    const { child } = attachBoxPreviewSurface({
+      boxId: 'box-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+    });
+
+    expect(resolveBoxEntryImportDropTarget({
+      dragData: {
+        type: 'workspace-file',
+        fileId: 'card-1',
+        fileType: 'card',
+        filePath: '/workspace/card-1.card',
+        name: 'card-1.card',
+      },
+      eventTarget: child,
+      screenPosition: { x: 120, y: 140 },
+    })).toEqual({
+      type: 'box-entry-import',
+      boxId: 'box-1',
+    });
+
+    expect(resolveBoxEntryImportDropTarget({
+      dragData: {
+        type: 'workspace-file',
+        fileId: 'box-2',
+        fileType: 'box',
+        filePath: '/workspace/box-2.box',
+        name: 'box-2.box',
+      },
+      eventTarget: child,
+      screenPosition: { x: 120, y: 140 },
+    })).toEqual({
+      type: 'box-entry-import',
+      boxId: 'box-1',
+    });
+  });
+
+  it('does not treat disabled box preview surfaces as import targets', () => {
+    const { child } = attachBoxPreviewSurface({
+      boxId: 'box-1',
+      rect: { left: 40, top: 60, width: 300, height: 360 },
+      acceptDrop: false,
+    });
+
+    const target = resolveBoxEntryImportDropTarget({
+      dragData: {
+        type: 'workspace-file',
+        fileId: 'card-1',
+        fileType: 'card',
+        filePath: '/workspace/card-1.card',
+        name: 'card-1.card',
+      },
+      eventTarget: child,
+      screenPosition: { x: 120, y: 140 },
+    });
+
+    expect(target).toBeNull();
   });
 });

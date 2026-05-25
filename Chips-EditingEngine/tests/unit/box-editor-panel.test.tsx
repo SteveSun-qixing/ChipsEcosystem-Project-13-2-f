@@ -65,6 +65,19 @@ const serviceMocks = vi.hoisted(() => ({
   importDocumentFiles: vi.fn(),
 }));
 
+const clientMocks = vi.hoisted(() => ({
+  normalizeLayoutConfig: vi.fn(async (_layoutType: string, input: Record<string, unknown>) => input),
+  editorPanelRender: vi.fn(async () => ({
+    frame: document.createElement('iframe'),
+    origin: 'file://',
+    dispose: vi.fn(async () => undefined),
+  })),
+  editorPanelOnChange: vi.fn(),
+  editorPanelOnError: vi.fn(() => () => undefined),
+  openFile: vi.fn(async () => [] as string[]),
+  changeHandler: null as null | ((payload: { config: Record<string, unknown> }) => void),
+}));
+
 vi.mock('@chips/component-library', async () => {
   const ReactModule = await import('react');
   return {
@@ -127,20 +140,16 @@ vi.mock('../../src/hooks/useBoxLayoutDefinition', () => ({
 vi.mock('../../src/services/bridge-client', () => ({
   getChipsClient: () => ({
     box: {
-      normalizeLayoutConfig: vi.fn(async (_layoutType: string, input: Record<string, unknown>) => input),
+      normalizeLayoutConfig: clientMocks.normalizeLayoutConfig,
       editorPanel: {
-        render: vi.fn(async () => ({
-          frame: document.createElement('iframe'),
-          origin: 'file://',
-          dispose: vi.fn(async () => undefined),
-        })),
+        render: clientMocks.editorPanelRender,
         onReady: vi.fn(() => () => undefined),
-        onChange: vi.fn(() => () => undefined),
-        onError: vi.fn(() => () => undefined),
+        onChange: clientMocks.editorPanelOnChange,
+        onError: clientMocks.editorPanelOnError,
       },
     },
     platform: {
-      openFile: vi.fn(async () => []),
+      openFile: clientMocks.openFile,
     },
   }),
 }));
@@ -166,9 +175,27 @@ describe('BoxEditorPanel', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    sessionRef.current = {
+      ...sessionRef.current,
+      content: {
+        activeLayoutType: 'chips.layout.grid',
+        layoutConfigs: {},
+      },
+      isDirty: false,
+    };
     serviceMocks.moveEntryToIndex.mockClear();
     serviceMocks.removeEntry.mockClear();
     serviceMocks.importDocumentFiles.mockClear();
+    clientMocks.normalizeLayoutConfig.mockClear();
+    clientMocks.editorPanelRender.mockClear();
+    clientMocks.editorPanelOnChange.mockClear();
+    clientMocks.editorPanelOnChange.mockImplementation((_frame: HTMLIFrameElement, handler: (payload: { config: Record<string, unknown> }) => void) => {
+      clientMocks.changeHandler = handler;
+      return () => undefined;
+    });
+    clientMocks.editorPanelOnError.mockClear();
+    clientMocks.openFile.mockClear();
+    clientMocks.changeHandler = null;
   });
 
   afterEach(async () => {
@@ -206,6 +233,62 @@ describe('BoxEditorPanel', () => {
     expect(frame).not.toBeNull();
     expect(frame?.style.width).toBe('100%');
     expect(frame?.style.height).toBe('100%');
+  });
+
+  it('keeps the layout editor frame mounted when the editor emits a config snapshot', async () => {
+    await renderPanel('config');
+
+    expect(clientMocks.editorPanelRender).toHaveBeenCalledTimes(1);
+    expect(clientMocks.changeHandler).not.toBeNull();
+
+    await act(async () => {
+      clientMocks.changeHandler?.({
+        config: {
+          schemaVersion: '1.0.0',
+          props: {
+            gap: 24,
+          },
+          assetRefs: [],
+        },
+      });
+      await Promise.resolve();
+    });
+
+    sessionRef.current = {
+      ...sessionRef.current,
+      content: {
+        ...sessionRef.current.content,
+        layoutConfigs: {
+          'chips.layout.grid': {
+            schemaVersion: '1.0.0',
+            props: {
+              gap: 24,
+            },
+            assetRefs: [],
+          },
+        },
+      },
+      isDirty: true,
+    };
+
+    await act(async () => {
+      root.render(
+        <BoxEditorPanel
+          boxId="box-1"
+          boxPath="/workspace/demo.box"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(clientMocks.normalizeLayoutConfig).toHaveBeenCalledWith('chips.layout.grid', {
+      schemaVersion: '1.0.0',
+      props: {
+        gap: 24,
+      },
+      assetRefs: [],
+    });
+    expect(clientMocks.editorPanelRender).toHaveBeenCalledTimes(1);
   });
 
   it('keeps inactive tab panels from creating a blank overlay', async () => {

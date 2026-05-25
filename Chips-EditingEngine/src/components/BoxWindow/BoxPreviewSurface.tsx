@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FrameRenderResult } from 'chips-sdk';
+import { useTranslation } from '../../hooks/useTranslation';
 import { type BoxDocumentSessionSnapshot } from '../../services/box-document-service';
 import { getChipsClient } from '../../services/bridge-client';
 
@@ -24,6 +25,9 @@ export function BoxPreviewSurface({
   className,
   locale,
 }: BoxPreviewSurfaceProps) {
+  const { t } = useTranslation();
+  const previewLoadingText = t('box_window.preview_loading');
+  const previewFailedText = t('box_window.preview_failed');
   const client = useMemo(() => getChipsClient(), []);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const frameResultRef = useRef<FrameRenderResult | null>(null);
@@ -77,7 +81,7 @@ export function BoxPreviewSurface({
     }).catch((reason) => {
       if (!cancelled) {
         setIsLoading(false);
-        setError(resolveErrorMessage(reason, '箱子预览渲染失败'));
+        setError(resolveErrorMessage(reason, previewFailedText));
       }
     });
 
@@ -89,7 +93,7 @@ export function BoxPreviewSurface({
       void frameResult?.dispose().catch(() => undefined);
       container.replaceChildren();
     };
-  }, [client, locale, session.boxFile, session.lastSavedAt]);
+  }, [client, locale, previewFailedText, session.boxFile, session.lastSavedAt]);
 
   return (
     <div
@@ -99,8 +103,9 @@ export function BoxPreviewSurface({
         flexDirection: 'column',
         flex: '1 1 auto',
         alignSelf: 'stretch',
+        position: 'relative',
         minHeight: '100%',
-        minWidth: '100%',
+        minWidth: 0,
         width: '100%',
         maxWidth: '100%',
       }}
@@ -111,16 +116,18 @@ export function BoxPreviewSurface({
       <div
         ref={containerRef}
         style={{
+          display: 'flex',
           flex: '1 1 auto',
           minWidth: 0,
           minHeight: 0,
+          width: '100%',
         }}
       />
       {isLoading ? (
-        <div className="box-window__state">正在渲染箱子预览...</div>
+        <div className="box-window__state" aria-live="polite">{previewLoadingText}</div>
       ) : null}
       {error ? (
-        <div className="box-window__state box-window__state--error">{error}</div>
+        <div className="box-window__state box-window__state--error" role="alert">{error}</div>
       ) : null}
     </div>
   );

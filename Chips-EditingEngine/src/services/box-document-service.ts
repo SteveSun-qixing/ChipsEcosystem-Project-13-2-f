@@ -245,6 +245,16 @@ function serializeStructure(entries: BoxEntrySnapshot[]): Record<string, unknown
     };
 }
 
+function normalizeEntrySortOrder(entries: BoxEntrySnapshot[]): BoxEntrySnapshot[] {
+    return entries.map((entry, index) => ({
+        ...entry,
+        layoutHints: {
+            ...entry.layoutHints,
+            sortKey: index,
+        },
+    }));
+}
+
 function detectDocumentFileType(pathLike: string): 'card' | 'box' | null {
     const lower = pathLike.toLowerCase();
     if (lower.endsWith('.card')) {
@@ -689,7 +699,7 @@ export class BoxDocumentService {
 
         session.snapshot = this.markDirty({
             ...session.snapshot,
-            entries: [
+            entries: normalizeEntrySortOrder([
                 ...session.snapshot.entries,
                 {
                     entryId: generateId62(),
@@ -700,7 +710,7 @@ export class BoxDocumentService {
                         sortKey: session.snapshot.entries.length,
                     },
                 },
-            ],
+            ]),
         });
         this.emitSnapshot(session.snapshot);
         this.scheduleAutoSave(session.snapshot.boxId);
@@ -720,7 +730,7 @@ export class BoxDocumentService {
 
         session.snapshot = this.markDirty({
             ...session.snapshot,
-            entries: [
+            entries: normalizeEntrySortOrder([
                 ...session.snapshot.entries,
                 ...nextEntries.map((entry, index) => ({
                     ...entry,
@@ -729,7 +739,7 @@ export class BoxDocumentService {
                         sortKey: session.snapshot.entries.length + index,
                     },
                 })),
-            ],
+            ]),
         });
         this.emitSnapshot(session.snapshot);
         this.scheduleAutoSave(session.snapshot.boxId);
@@ -793,7 +803,7 @@ export class BoxDocumentService {
         entries.splice(targetIndex, 0, current);
         session.snapshot = this.markDirty({
             ...session.snapshot,
-            entries,
+            entries: normalizeEntrySortOrder(entries),
         });
         this.emitSnapshot(session.snapshot);
         this.scheduleAutoSave(session.snapshot.boxId);
@@ -817,7 +827,7 @@ export class BoxDocumentService {
         entries.splice(nextIndex, 0, current);
         session.snapshot = this.markDirty({
             ...session.snapshot,
-            entries,
+            entries: normalizeEntrySortOrder(entries),
         });
         this.emitSnapshot(session.snapshot);
         this.scheduleAutoSave(session.snapshot.boxId);
@@ -828,7 +838,9 @@ export class BoxDocumentService {
         const session = this.requireSession(boxId);
         session.snapshot = this.markDirty({
             ...session.snapshot,
-            entries: session.snapshot.entries.filter((entry) => entry.entryId !== entryId),
+            entries: normalizeEntrySortOrder(
+                session.snapshot.entries.filter((entry) => entry.entryId !== entryId),
+            ),
         });
         this.emitSnapshot(session.snapshot);
         this.scheduleAutoSave(session.snapshot.boxId);

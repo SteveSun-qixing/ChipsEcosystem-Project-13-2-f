@@ -315,6 +315,8 @@ const enUS: Record<string, string> = {
     'card_box.tab_boxes': 'Boxes',
     'box_window.loading': 'Loading box...',
     'box_window.empty': 'Box session is unavailable',
+    'box_window.preview_loading': 'Rendering box preview...',
+    'box_window.preview_failed': 'Failed to render box preview',
     'box_window.save': 'Save',
     'box_window.status_saving': 'Saving',
     'box_window.status_dirty': 'Unsaved',

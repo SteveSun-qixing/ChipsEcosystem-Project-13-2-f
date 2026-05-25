@@ -25,6 +25,7 @@ const mockState = vi.hoisted(() => {
       setTheme: vi.fn(),
       createToolWindow: vi.fn(),
       createCardWindow: vi.fn(),
+      createBoxWindow: vi.fn(),
       updateWindow: vi.fn(),
       focusWindow: vi.fn(),
     },
@@ -50,6 +51,10 @@ const mockState = vi.hoisted(() => {
       openFile: vi.fn(),
       createCard: vi.fn(),
       createBox: vi.fn(),
+    },
+    boxDocumentServiceMock: {
+      openBox: vi.fn(async () => undefined),
+      importDocumentFiles: vi.fn(async () => undefined),
     },
     bridgeClient: {
       platform: {
@@ -195,6 +200,11 @@ vi.mock('../../src/services/workspace-service', () => ({
   workspaceService: mockState.workspaceServiceMock,
 }));
 
+vi.mock('../../src/services/box-document-service', () => ({
+  DEFAULT_BOX_LAYOUT_TYPE: 'chips.layout.grid',
+  boxDocumentService: mockState.boxDocumentServiceMock,
+}));
+
 vi.mock('../../src/layouts/InfiniteCanvas', () => ({
   InfiniteCanvas: ({ onDropCreate }: { onDropCreate?: (data: unknown, worldPosition: { x: number; y: number }, target?: unknown) => void }) => {
     mockState.capturedCanvasDrop = onDropCreate ?? null;
@@ -233,6 +243,7 @@ describe('App canvas drop integration', () => {
     mockState.uiState.setTheme.mockClear();
     mockState.uiState.createToolWindow.mockClear();
     mockState.uiState.createCardWindow.mockClear();
+    mockState.uiState.createBoxWindow.mockClear();
     mockState.uiState.updateWindow.mockClear();
     mockState.uiState.focusWindow.mockClear();
     mockState.cardState.addBasicCard.mockReset();
@@ -248,6 +259,8 @@ describe('App canvas drop integration', () => {
     mockState.workspaceServiceMock.openFile.mockClear();
     mockState.workspaceServiceMock.createCard.mockClear();
     mockState.workspaceServiceMock.createBox.mockClear();
+    mockState.boxDocumentServiceMock.openBox.mockClear();
+    mockState.boxDocumentServiceMock.importDocumentFiles.mockClear();
     mockState.bridgeClient.plugin.query.mockClear();
     mockState.bridgeClient.platform.getLaunchContext.mockClear();
     mockState.bridgeClient.theme.getCurrent.mockClear();
@@ -403,6 +416,55 @@ describe('App canvas drop integration', () => {
     );
     expect(mockState.cardState.setSelectedBaseCard).toHaveBeenCalledWith('base-new');
     expect(mockState.workspaceServiceMock.createCard).not.toHaveBeenCalled();
+  });
+
+  it('imports a dropped workspace document into the targeted box instead of opening a new window', async () => {
+    mockState.uiState.windows = [
+      {
+        id: 'window-box-1',
+        type: 'box',
+        boxId: 'box-1',
+        boxPath: '/workspace/collection.box',
+        title: 'collection.box',
+        position: { x: 20, y: 20 },
+        size: { width: 520, height: 420 },
+        state: 'normal',
+        zIndex: 10,
+      },
+    ];
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await mockState.capturedCanvasDrop?.(
+        {
+          type: 'workspace-file',
+          fileId: 'card-1',
+          fileType: 'card',
+          filePath: '/workspace/demo.card',
+          name: 'demo.card',
+        },
+        { x: 420, y: 260 },
+        {
+          type: 'box-entry-import',
+          boxId: 'box-1',
+        },
+      );
+    });
+
+    expect(mockState.uiState.focusWindow).toHaveBeenCalledWith('window-box-1');
+    expect(mockState.boxDocumentServiceMock.openBox).toHaveBeenCalledWith(
+      '/workspace/collection.box',
+      '/workspace',
+      'box-1',
+    );
+    expect(mockState.boxDocumentServiceMock.importDocumentFiles).toHaveBeenCalledWith('box-1', ['/workspace/demo.card']);
+    expect(mockState.workspaceServiceMock.openFile).not.toHaveBeenCalled();
+    expect(mockState.uiState.createBoxWindow).not.toHaveBeenCalled();
   });
 
   it('repositions an already opened card window when the workspace open event includes a drop position', async () => {

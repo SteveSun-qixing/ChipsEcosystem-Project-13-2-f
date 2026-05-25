@@ -316,6 +316,8 @@ const zhCN: Record<string, string> = {
     'card_box.tab_boxes': '箱子',
     'box_window.loading': '正在加载箱子...',
     'box_window.empty': '箱子会话不可用',
+    'box_window.preview_loading': '正在渲染箱子预览...',
+    'box_window.preview_failed': '箱子预览渲染失败',
     'box_window.save': '保存',
     'box_window.status_saving': '保存中',
     'box_window.status_dirty': '未保存',

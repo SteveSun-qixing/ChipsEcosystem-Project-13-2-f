@@ -30,7 +30,24 @@ function BoxLayoutEditorSlot({
   const client = useMemo(() => getChipsClient(), []);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const frameResultRef = useRef<FrameRenderResult | null>(null);
+  const runtimeStateRef = useRef({
+    boxId,
+    activeLayoutType,
+  });
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
+  const entrySignature = useMemo(
+    () => entries.map((entry) => `${entry.entryId}:${entry.enabled ? '1' : '0'}`).join('|'),
+    [entries],
+  );
+  const layoutDefinitionType = layoutDefinition?.layoutType ?? null;
+
+  useEffect(() => {
+    runtimeStateRef.current = {
+      boxId,
+      activeLayoutType,
+    };
+  }, [activeLayoutType, boxId]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -79,9 +96,10 @@ function BoxLayoutEditorSlot({
 
       cleanupTasks.push(
         client.box.editorPanel.onChange(result.frame, (payload) => {
-          void client.box.normalizeLayoutConfig(activeLayoutType, payload.config)
+          const current = runtimeStateRef.current;
+          void client.box.normalizeLayoutConfig(current.activeLayoutType, payload.config)
             .then((normalized) => {
-              boxDocumentService.updateLayoutConfig(boxId, activeLayoutType, normalized);
+              boxDocumentService.updateLayoutConfig(current.boxId, current.activeLayoutType, normalized);
             })
             .catch((error) => {
               setRuntimeError(error instanceof Error ? error.message : String(error));
@@ -107,7 +125,7 @@ function BoxLayoutEditorSlot({
       void frameResult?.dispose().catch(() => undefined);
       container.replaceChildren();
     };
-  }, [activeLayoutConfig, activeLayoutType, boxId, client, entries, layoutDefinition, locale]);
+  }, [activeLayoutType, boxId, client, entrySignature, layoutDefinitionType, locale]);
 
   return (
     <div className="box-editor-panel__layout-slot">

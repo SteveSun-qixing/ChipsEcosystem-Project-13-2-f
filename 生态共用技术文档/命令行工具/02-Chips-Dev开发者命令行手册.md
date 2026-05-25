@@ -60,7 +60,7 @@ npm install
 ### 2. 工程命令
 
 - `chipsdev init`：初始化当前工程的 `chips.config.mjs`
-- `chipsdev create <app|card|layout|module|theme> <targetDir>`：创建新工程。创建模块工程时可追加 `--template`、`--plugin-id`、`--capability`、`--consumes` 参数。
+- `chipsdev create <app|card|layout|module|theme> <targetDir>`：创建新工程。模块工程与主题工程支持追加专用模板参数。
 - `chipsdev server`：启动 Vite 开发服务器
 - `chipsdev debug`：以调试预设启动开发服务器
 - `chipsdev module invoke`：在真实 Electron Host 中调用模块 capability/method
@@ -192,6 +192,47 @@ chipsdev create module Chips-ModulePlugin/file-orchestrator \
 ```
 
 这些参数只影响生成工程的 manifest、schema、源码和测试基线，不会自动安装或启用下游 provider；真实调用仍通过 Host `module.listProviders / module.resolve / module.invoke / module.job.*` 完成。模块插件通过 `ctx.module.invoke(...)` 调用其他模块 capability 时，Host 会校验调用方 `manifest.module.consumes` 中是否声明了该依赖。
+
+生成工程 README 必须同步上述正式口径：`npm run verify` 覆盖 lint/typecheck/test/build/validate/package，`chipsdev module invoke` 是真实 Host 联调入口，`--timeout-ms` 会进入 Host 方法级超时治理，`.cpk` 包必须可被 Host 安装启用后通过模块服务调用。
+
+## `chipsdev create theme` 的模板参数
+
+主题包脚手架使用 `Chips-Scaffold/chips-scaffold-theme` 的 `theme-standard` 模板创建完整主题插件工程。该模板以官方默认主题包 vNext 结构为工程基线，生成项目默认包含五层 token、组件 contract、图标字体、主题 CSS、测试与打包脚本。
+
+```bash
+chipsdev create theme <targetDir> \
+  --theme-id theme.my-product \
+  --plugin-id chips.theme.my.product \
+  --display-name "My Product Theme"
+```
+
+正式参数：
+
+- `--template <id>` 或 `--template=<id>`：选择主题模板；默认是 `theme-standard`。
+- `--plugin-id <id>` 或 `--plugin-id=<id>`：覆盖默认插件 ID；未提供时按目标目录推导为 `chips.theme.<slug>`。
+- `--theme-id <id>` 或 `--theme-id=<id>`：覆盖默认主题技术 ID；未提供时按目标目录推导为 `theme.<slug>`。
+- `--display-name <name>` 或 `--display-name=<name>`：覆盖显示名称；未提供时按目标目录转换为标题式名称。
+- `--publisher <name>` 或 `--publisher=<name>`：覆盖发行商标识；未提供时按当前系统用户名推导。
+- `--version <semver>` 或 `--version=<semver>`：覆盖插件版本；默认 `1.0.0`。
+- `--parent-theme-id <themeId>` 或 `--parent-theme-id=<themeId>`：声明父主题 ID；未提供时为空字符串。
+- `--description <text>` 或 `--description=<text>`：覆盖主题描述。
+
+生成工程的关键产物：
+
+- `manifest.yaml`：声明 `type: "theme"`、`themeId`、`displayName`、`entry.tokens`、`entry.themeCss`、`ui.layout.contract` 与 `ui.layout.minFunctionalSet`；
+- `tokens/ref.json`、`tokens/sys.json`、`tokens/motion.json`、`tokens/layout.json`、`tokens/comp/*.json`：五层 token 源文件；
+- `src/build-tokens.ts`、`src/build-contracts.ts`、`src/build-css.ts`、`src/validate-theme.ts`：主题构建与契约校验脚本；
+- `contracts/theme-interface.contract.json`、`contracts/theme-min-functional-set.json`：由 `@chips/theme-contracts` 生成并校验的主题契约产物；
+- `icons/variablefont/*.woff2`：运行时 UI 图标字体源文件，构建后复制到 `dist/icons/variablefont/`。
+
+生成后推荐执行：
+
+```bash
+cd <targetDir>
+npm run verify
+```
+
+`verify` 串联 `build`、`validate:theme`、`test`、`chipsdev validate` 与 `chipsdev package`。主题包 `.cpk` 进入 Host 开发工作区后，仍需显式 `chipsdev plugin enable <pluginId>` 才会出现在 `chipsdev theme list` 中。
 
 ## 开发者报告命令
 
@@ -396,6 +437,19 @@ npm run verify
 ```
 
 其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。生成工程的 `package` 脚本会输出 `.cpk`，布局插件没有独立的 `chipsdev run` 窗口入口；正式联调必须安装并启用该 `.cpk`，再由箱子查看器、编辑器或其他正式 `.box` 消费应用通过 Host 加载。重新构建并重新打包同一 `pluginId` 后，需要再次执行 `chipsdev plugin install`，让开发工作区替换旧安装副本。
+
+`chipsdev create theme <targetDir>` 会创建标准主题包插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`tokens/ref|sys|motion|layout|comp`、`styles`、`contracts`、`icons/variablefont`、`preview`、`src`、`tests` 与 README，并预置以下脚本：
+
+```bash
+npm run build
+npm run validate:theme
+npm test
+npm run validate
+npm run package
+npm run verify
+```
+
+其中 `verify` 串联 `build/validate:theme/test/validate/package`。主题插件没有独立窗口入口；正式联调必须安装并启用生成的 `.cpk`，再通过 `chipsdev theme apply <themeId>`、`chipsdev theme resolve`、`chipsdev theme contract` 与 `chipsdev theme validate` 验证运行时效果。
 
 ## 构建、打包与校验
 

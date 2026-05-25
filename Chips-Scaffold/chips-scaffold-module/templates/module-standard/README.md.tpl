@@ -54,6 +54,27 @@ npm run verify
 
 `npm run verify` 会依次执行 lint、typecheck、test、build、validate 和 package。发布或进入开发工作区联调前至少运行一次 `npm run verify`。
 
+## 打包与 Host 联调
+
+生成工程的正式产物是 `.cpk` 插件包：
+
+```bash
+npm run verify
+npm run package
+```
+
+真实 Host 调用必须通过 `chipsdev module invoke` 或应用/SDK 的模块服务接口完成：
+
+```bash
+chipsdev module invoke \
+  --capability {{ MODULE_CAPABILITY }} \
+  --method run \
+  --input '{"sourceText":"hello"}' \
+  --timeout-ms 60000
+```
+
+也可以使用等价的 `--capability={{ MODULE_CAPABILITY }}` 参数形式。CLI 会先执行正式构建，随后在开发工作区安装并启用当前模块，再通过 Host `module.invoke` 调用 capability/method；若返回 job，会轮询到 `completed`、`failed` 或 `cancelled` 终态。
+
 ## 默认能力定义
 
 模板默认声明一个 capability：
@@ -68,9 +89,17 @@ npm run verify
 你应根据实际业务替换 capability、方法名与 schema 文件，但要保持：
 
 - Manifest 中 `module.provides` 与仓库中的 contract 文件一致；
+- Manifest 中的 `module.consumes` 只声明模块间依赖，不会自动安装或启用下游 provider；
 - 模块访问 Host 正式服务动作时使用 `ctx.host.invoke(...)`；
-- 模块之间调用统一使用 Host 注入的 `ctx.module.invoke(...)`；
+- 模块之间调用统一使用 Host 注入的 `ctx.module.invoke(...)`，目标 capability 必须预先写入 `module.consumes`；
 - 不自行实现第二套模块加载器或通信通道。
+
+## 运行治理
+
+- 未指定 `pluginId` 时，Host 会在同一 capability 下选择 `enabled` 或 `running` 且版本范围匹配的最高语义化版本 provider；
+- `timeoutMs` 是 Host 方法级超时，sync 方法超时返回 `MODULE_TIMEOUT`，job 方法超时后 job 进入 `failed`；
+- `module.job.cancel` 取消运行中 job 后，job 进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`；
+- 输入和输出必须通过 `contracts/*.schema.json` 校验，schema 不匹配会被 Host 归一为 `MODULE_SCHEMA_INVALID`。
 
 ## 正式约束
 
@@ -78,6 +107,7 @@ npm run verify
 - 模块正式能力契约必须写在 `module.provides` 中，而不是旧 `capabilities` 主入口；
 - 调用方统一通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 使用模块能力；
 - 模块运行时只负责能力实现，不生成任何 UI 运行时、插槽挂载入口或主题注入逻辑；
+- 模块不能创建应用窗口，不能直接读写应用私有资源，不能被应用或其他插件跨目录 import；
 - 模块访问 Host 服务动作应使用 `ctx.host.invoke(...)`，不得依赖手写服务封装；
 - 如果模块需要调用其他模块，只能使用 Host 注入的 `ctx.module.invoke(...)`；
 - 每次功能迭代后应同步更新 README 与测试/契约资料，避免把文档目录当作模板产物。

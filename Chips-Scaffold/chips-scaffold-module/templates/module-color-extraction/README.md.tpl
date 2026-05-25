@@ -13,6 +13,7 @@ cd <生态根工作区>
 npm install
 cd {{ PROJECT_NAME }}
 npm run verify
+npm run package
 ```
 
 ## 默认能力
@@ -22,3 +23,22 @@ npm run verify
 - mode：`sync`
 
 正式颜色能力的公共契约应沉淀到生态共用技术文档，调用方仍通过 `module.invoke` 接入。
+
+## Host 联调
+
+```bash
+chipsdev module invoke \
+  --capability {{ MODULE_CAPABILITY }} \
+  --method pick \
+  --input-file /绝对路径/input.json \
+  --timeout-ms 60000
+```
+
+CLI 会构建当前工程、安装并启用 `.cpk`，再通过 Host `module.invoke` 调用颜色提取能力。sync 方法超时返回 `MODULE_TIMEOUT`，输入或输出不符合 schema 会返回 `MODULE_SCHEMA_INVALID`。若后续添加 job 方法，取消运行中 job 后应进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`。
+
+## 正式边界
+
+- 模块通过 Host 文件能力读取资源，不直接读写应用私有资源；
+- 模块不创建应用窗口，不生成 UI，不接入主题或多语言运行时；
+- 颜色算法和输出字段一旦对外公开，需要同步更新 `contracts/`、README、测试和生态共用技术文档；
+- 如需复用下游图像分析模块，必须先声明 `module.consumes`，再通过 `ctx.module.invoke(...)` 调用。

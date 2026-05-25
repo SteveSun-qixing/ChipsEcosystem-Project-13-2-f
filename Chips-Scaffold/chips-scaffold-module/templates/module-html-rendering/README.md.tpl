@@ -13,6 +13,7 @@ cd <生态根工作区>
 npm install
 cd {{ PROJECT_NAME }}
 npm run verify
+npm run package
 ```
 
 ## 默认能力
@@ -22,3 +23,22 @@ npm run verify
 - mode：`job`
 
 `options.target` 决定调用 `platform.renderHtmlToPdf` 或 `platform.renderHtmlToImage`。真实联调应使用 `chipsdev module invoke` 走 Host 模块服务。
+
+## Host 联调
+
+```bash
+chipsdev module invoke \
+  --capability {{ MODULE_CAPABILITY }} \
+  --method convert \
+  --input-file /绝对路径/input.json \
+  --timeout-ms 60000
+```
+
+该模板依赖真实 Electron Host 的平台渲染能力，因此不要用普通开发服务器替代联调。CLI 会构建当前工程、安装并启用 `.cpk`，再通过 Host `module.invoke` 调用 job 并轮询终态。
+
+## 正式边界
+
+- 模块只能通过 `ctx.host.invoke("platform.renderHtmlToPdf", payload)` 或 `ctx.host.invoke("platform.renderHtmlToImage", payload)` 使用 Host 渲染导出能力；
+- 模块不直接导入 Electron，不创建应用窗口，不复制 Host 渲染容器实现；
+- job 超时进入 `failed`，错误码为 `MODULE_TIMEOUT`；取消进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`；
+- 若后续编排其他转换模块，必须先声明 `module.consumes`，再通过 `ctx.module.invoke(...)` 调用。

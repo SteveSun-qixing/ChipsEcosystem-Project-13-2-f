@@ -137,6 +137,11 @@ describe("module template-engine", () => {
       const readme = await fs.readFile(path.join(targetDir, "README.md"), "utf8");
       expect(readme).toMatch(/Standard Module Plugin/);
       expect(readme).toMatch(/安装到 Host 中的无界面能力模块/);
+      expect(readme).toMatch(/chipsdev module invoke/);
+      expect(readme).toMatch(/\.cpk/);
+      expect(readme).toMatch(/MODULE_TIMEOUT/);
+      expect(readme).toMatch(/MODULE_JOB_CANCELLED/);
+      expect(readme).toMatch(/module\.consumes/);
 
       for (const dirName of FORBIDDEN_PROJECT_DIRS) {
         await expect(fs.stat(path.join(targetDir, dirName))).rejects.toMatchObject({
@@ -266,6 +271,7 @@ describe("module template-engine", () => {
         }
 
         const manifest = await fs.readFile(path.join(targetDir, "manifest.yaml"), "utf8");
+        const readme = await fs.readFile(path.join(targetDir, "README.md"), "utf8");
         const source = await fs.readFile(path.join(targetDir, "src", "index.ts"), "utf8");
         const testFile = await fs.readFile(
           path.join(targetDir, "tests", "unit", "module-definition.test.ts"),
@@ -277,6 +283,11 @@ describe("module template-engine", () => {
         for (const pattern of expected.source) {
           expect(source, templateId).toMatch(pattern);
         }
+        expect(readme, templateId).toMatch(/chipsdev module invoke/);
+        expect(readme, templateId).toMatch(/\.cpk/);
+        expect(readme, templateId).toMatch(/MODULE_TIMEOUT/);
+        expect(readme, templateId).toMatch(/MODULE_JOB_CANCELLED/);
+        expect(readme, templateId).toMatch(/module\.consumes/);
         expect(testFile, templateId).toMatch(new RegExp(expected.method));
       }
     } finally {

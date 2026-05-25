@@ -13,6 +13,7 @@ cd <生态根工作区>
 npm install
 cd {{ PROJECT_NAME }}
 npm run verify
+npm run package
 ```
 
 ## 默认能力
@@ -22,3 +23,22 @@ npm run verify
 - mode：`sync`
 
 若后续需要接入更复杂的解码或采样算法，应先确认技术选型和公共契约，再把依赖写入正式工程。
+
+## Host 联调
+
+```bash
+chipsdev module invoke \
+  --capability {{ MODULE_CAPABILITY }} \
+  --method process \
+  --input-file /绝对路径/input.json \
+  --timeout-ms 60000
+```
+
+CLI 会先构建当前工程，再在开发工作区安装并启用 `.cpk`，最后通过 Host `module.invoke` 调用 capability/method。sync 方法超时返回 `MODULE_TIMEOUT`，schema 不匹配返回 `MODULE_SCHEMA_INVALID`。若后续添加 job 方法，取消运行中 job 后应进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`。
+
+## 正式边界
+
+- 模块通过 `ctx.host.invoke("file.read", payload)` 读取 Host 授权资源，不直接读写应用私有资源；
+- 模块不创建应用窗口，不生成 UI，不接入主题或多语言运行时；
+- 不在模板内私自引入图像处理依赖；新增依赖必须有正式技术选型和公共契约依据；
+- 若需要组合其他模块能力，必须先声明 `module.consumes`，再通过 `ctx.module.invoke(...)` 调用。

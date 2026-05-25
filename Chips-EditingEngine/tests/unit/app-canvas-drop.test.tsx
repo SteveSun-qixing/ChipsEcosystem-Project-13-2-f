@@ -48,14 +48,40 @@ const mockState = vi.hoisted(() => {
       createBox: vi.fn(),
     },
     bridgeClient: {
+      platform: {
+        getLaunchContext: vi.fn(() => ({
+          pluginId: 'chips-official.editing-engine',
+          sceneId: 'scene-workspace',
+          surfaceId: 'surface-workspace',
+          launchParams: {},
+          surfaceContext: {
+            sceneId: 'scene-workspace',
+            surfaceId: 'surface-workspace',
+            pluginId: 'chips-official.editing-engine',
+            kind: 'window',
+            presentation: {},
+            launchParams: {},
+          },
+        })),
+      },
       plugin: {
         query: vi.fn(async () => []),
       },
       theme: {
         getCurrent: vi.fn(async () => ({
           themeId: 'chips-official.default-theme',
+          displayName: 'Default Theme',
           version: '1',
         })),
+        apply: vi.fn(async () => undefined),
+        onChanged: vi.fn(() => () => undefined),
+      },
+      i18n: {
+        getCurrent: vi.fn(async () => 'zh-CN'),
+        setCurrent: vi.fn(async () => undefined),
+        translate: vi.fn(async (key: string) => key),
+        listLocales: vi.fn(async () => ['zh-CN', 'en-US']),
+        onChanged: vi.fn(() => () => undefined),
       },
       events: {
         on: vi.fn(() => () => undefined),
@@ -65,7 +91,14 @@ const mockState = vi.hoisted(() => {
 });
 
 vi.mock('@chips/component-library', () => ({
+  ChipsEnvironmentProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ChipsThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useChipsTheme: () => ({
+    theme: {
+      themeId: 'chips-official.default-theme',
+      version: '1',
+    },
+  }),
 }));
 
 vi.mock('../../src/context', () => ({
@@ -92,6 +125,10 @@ vi.mock('../../src/hooks/useTranslation', () => ({
 
 vi.mock('../../src/services/bridge-client', () => ({
   getChipsClient: () => mockState.bridgeClient,
+}));
+
+vi.mock('../../src/runtime/chips-client', () => ({
+  getEditingEngineClient: () => mockState.bridgeClient,
 }));
 
 vi.mock('../../src/services/i18n-service', () => ({
@@ -155,7 +192,15 @@ describe('App canvas drop integration', () => {
     mockState.workspaceServiceMock.createCard.mockClear();
     mockState.workspaceServiceMock.createBox.mockClear();
     mockState.bridgeClient.plugin.query.mockClear();
+    mockState.bridgeClient.platform.getLaunchContext.mockClear();
     mockState.bridgeClient.theme.getCurrent.mockClear();
+    mockState.bridgeClient.theme.apply.mockClear();
+    mockState.bridgeClient.theme.onChanged.mockClear();
+    mockState.bridgeClient.i18n.getCurrent.mockClear();
+    mockState.bridgeClient.i18n.setCurrent.mockClear();
+    mockState.bridgeClient.i18n.translate.mockClear();
+    mockState.bridgeClient.i18n.listLocales.mockClear();
+    mockState.bridgeClient.i18n.onChanged.mockClear();
     mockState.bridgeClient.events.on.mockClear();
   });
 

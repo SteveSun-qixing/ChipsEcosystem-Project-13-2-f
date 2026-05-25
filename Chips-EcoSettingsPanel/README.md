@@ -74,6 +74,7 @@ Chips-EcoSettingsPanel/
 - 已切换为 Host 正式窗口契约驱动的 Electron 原生标题栏，不再在前端自绘窗口标题区。
 - 已完成 `chips-sdk` 运行时服务适配层与错误归一化。
 - 已完成主题/语言/应用插件治理的正式列表布局、详情弹窗、操作链路与事件刷新。
+- 已补齐权限不足、command 注册/调用失败、manifest 权限漂移和设置面板 mock Host smoke 测试，权限拒绝统一保留 SDK 标准 `permission` 诊断。
 - 已完成组件展示注册表与当前正式组件分组接入。
 - 已新增主题诊断入口，数据源仅为 SDK `client.theme.contract.get()` 与 `client.theme.resolve([])`。
 - 已新增预览与质量入口，展示正式 `chipsdev` 报告命令；当前运行时页面不直接读取本地报告文件。
@@ -81,3 +82,13 @@ Chips-EcoSettingsPanel/
 - 已将脚手架遗留的同名 `.js` 副本移入 `归档/`，工程源码基线统一收口为 TypeScript。
 - 应用插件治理页当前优先展示 `PluginShortcutRecord.iconPath`，缺失时回退到正式运行时图标组件，不再显示 emoji 或路径字符串。
 - 当前工程 `assets/icons/app-icon.ico`、`assets/icons/app-icon.icns`、`assets/icons/app-icon.png` 已与 `design-assets/Appicon/EcoSettingsPanel.*` 对齐。
+
+## 聚焦验证
+
+权限与 Host smoke 相关修改可优先执行：
+
+```bash
+npm test -- runtime-permissions.test.ts settings-commands.test.tsx runtime-hooks.test.tsx basic-flow.test.ts host-smoke.test.ts
+```
+
+提交前仍以 `npm run verify` 作为最终质量门禁。

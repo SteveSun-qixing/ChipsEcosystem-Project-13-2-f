@@ -49,6 +49,7 @@
 - `clipboard`
 - `shell`
 - `surface`
+- `command`
 - `transfer`
 - `association`
 - `platform`
@@ -72,6 +73,7 @@
 - `config`
 - `theme`
 - `i18n`
+- `command`
 - `surface`
 - `transfer`
 - `association`
@@ -134,7 +136,33 @@
 - `transfer.revealInShell`
 - `transfer.share`
 
-### 6.4 `association.*`
+### 6.4 `command.*`
+
+正式动作：
+
+- `command.register`
+- `command.unregister`
+- `command.get`
+- `command.list`
+- `command.setState`
+- `command.invoke`
+
+关键语义：
+
+- `command` 是菜单、工具栏、快捷键、命令面板和上下文菜单共享的运行时动作注册与调度语义；
+- command 定义只允许使用 `titleKey / descriptionKey / ariaLabelKey` 等 i18n key，不允许注册原始展示文案；
+- `icon` 必须是运行时 `IconDescriptor`，由组件库图标链路消费；
+- `command.invoke` 由 Host 完成存在性、scope、服务级权限、命令级权限和 enabled/visible 状态校验后发出 `command.invoked`；
+- 业务 handler 函数不得通过 Bridge 传给 Host，插件侧通过 SDK 监听 `command.invoked` 后执行本地业务处理。
+
+标准权限：
+
+- `command.read`
+- `command.write`
+- `command.invoke`
+- `command.manage`
+
+### 6.5 `association.*`
 
 正式动作：
 
@@ -142,7 +170,7 @@
 - `association.openPath`
 - `association.openUrl`
 
-### 6.5 `resource.*`
+### 6.6 `resource.*`
 
 当前 `resource` 命名空间除 `resolve/open/readMetadata/readBinary` 外，新增正式动作：
 
@@ -156,7 +184,7 @@
 - Host 负责校验输入是否为 TIFF，并把结果落盘为 PNG 文件；
 - 调用方不直接感知底层平台实现，正式输入输出以共享契约文档为准。
 
-### 6.6 `platform.*`
+### 6.7 `platform.*`
 
 当前 `platform` 收口到平台原语与离屏导出：
 
@@ -179,7 +207,7 @@
 - `platform.shortcut*`
 - `platform.ipc*`
 
-### 6.7 `box.*` 统一文档链路补充
+### 6.8 `box.*` 统一文档链路补充
 
 当前 `box` 命名空间已经正式公开以下统一文档链路动作：
 
@@ -216,6 +244,10 @@
 - `plugin.init`
 - `plugin.ready`
 - `plugin.launched`
+- `command.registered`
+- `command.unregistered`
+- `command.changed`
+- `command.invoked`
 - `surface.opened`
 - `window.opened`
 - `module.runtime.started`

@@ -17,22 +17,9 @@ import { createScopedLogger } from "../../config/logging";
 import { AppRuntimeProvider } from "./AppRuntimeProvider";
 import { I18nProvider } from "./providers/I18nProvider";
 import { RuntimeProvider, useRuntimeContext } from "./providers/RuntimeProvider";
+import { SETTINGS_PANEL_PERMISSIONS } from "./settings-permissions";
 
 const runtimeLogger = createScopedLogger({ scope: "settings-runtime" });
-
-const SETTINGS_PANEL_PERMISSIONS = [
-  "theme.read",
-  "theme.write",
-  "i18n.read",
-  "i18n.write",
-  "plugin.read",
-  "plugin.manage",
-  "platform.read",
-  "platform.external",
-  "command.read",
-  "command.write",
-  "command.invoke",
-];
 
 function toThemeState(theme: ThemeState): ChipsThemeState {
   return {
@@ -154,7 +141,7 @@ export function AppProviders({ children }: React.PropsWithChildren): React.React
     <ChipsEnvironmentProvider
       client={environmentClient}
       initialLocale="zh-CN"
-      initialPermissions={SETTINGS_PANEL_PERMISSIONS}
+      initialPermissions={[...SETTINGS_PANEL_PERMISSIONS]}
       initialDiagnostics={[]}
       onDiagnostic={reportEnvironmentDiagnostic}
     >

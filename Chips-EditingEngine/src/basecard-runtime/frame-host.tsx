@@ -138,6 +138,7 @@ export function BasecardFrameHost({
   const onSelectRef = useRef(onSelect);
   const onInteractionRef = useRef(onInteraction);
   const interactionPolicyRef = useRef(interactionPolicy);
+  const pendingResourceImportsRef = useRef(pendingResourceImports);
   const resolvedResourceUrlsRef = useRef(new Map<string, string>());
   const [status, setStatus] = useState<BasecardFrameStatus>(DEFAULT_STATUS);
   const [registryVersion, setRegistryVersion] = useState(() => getBasecardRegistryVersion());
@@ -181,6 +182,10 @@ export function BasecardFrameHost({
   }, [interactionPolicy]);
 
   useEffect(() => {
+    pendingResourceImportsRef.current = pendingResourceImports;
+  }, [pendingResourceImports]);
+
+  useEffect(() => {
     return () => {
       resolvedResourceUrlsRef.current.forEach((url) => {
         URL.revokeObjectURL(url);
@@ -218,7 +223,7 @@ export function BasecardFrameHost({
         throw new Error(`资源路径无效: ${resourcePath}`);
       }
 
-      const pendingImport = pendingResourceImports?.get(normalizedResourcePath);
+      const pendingImport = pendingResourceImportsRef.current?.get(normalizedResourcePath);
       if (pendingImport) {
         const cachedUrl = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
         if (cachedUrl) {
@@ -413,7 +418,6 @@ export function BasecardFrameHost({
     configSignature,
     descriptor,
     normalizedConfig,
-    pendingResourceImports,
     resourceBaseUrl,
     themeCacheKey,
   ]);

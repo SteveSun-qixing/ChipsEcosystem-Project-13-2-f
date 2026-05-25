@@ -1,5 +1,5 @@
 import React from 'react';
-import { getInstalledBasecardDescriptors, subscribeBasecardRegistry } from '../../basecard-runtime/registry';
+import { getRegisteredBasecardDescriptors, subscribeBasecardRegistry } from '../../basecard-runtime/registry';
 import type { BoxLayoutDescriptor } from 'chips-sdk';
 import type { CardTypeDefinition, LayoutTypeDefinition } from './types';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -7,7 +7,7 @@ import { ENGINE_ICONS } from '../../icons/descriptors';
 import { getChipsClient } from '../../services/bridge-client';
 
 function createCardTypeDefinitions(): CardTypeDefinition[] {
-  return getInstalledBasecardDescriptors()
+  return getRegisteredBasecardDescriptors()
     .map((descriptor) => ({
       id: descriptor.cardType,
       name: descriptor.displayName,

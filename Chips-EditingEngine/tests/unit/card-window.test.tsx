@@ -74,6 +74,13 @@ vi.mock('../../src/basecard-runtime/CompositeCardAssembler', () => ({
         >
           height-small
         </button>
+        <button
+          type="button"
+          data-testid="preview-error"
+          onClick={() => props.onErrorChange?.('single basecard failed')}
+        >
+          preview-error
+        </button>
       </div>
     );
   },
@@ -249,6 +256,26 @@ describe('CardWindow', () => {
     const preview = container.querySelector('.card-window__preview') as HTMLDivElement | null;
     expect(preview?.style.height).toBe('129px');
     expect(preview?.style.minHeight).toBe('129px');
+  });
+
+  it('does not cover the whole composite card when one basecard reports an error', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await renderCardWindow();
+
+    await act(async () => {
+      (container.querySelector('[data-testid="preview-error"]') as HTMLButtonElement).click();
+    });
+
+    expect(container.querySelector('[data-testid="composite-assembler"]')).not.toBeNull();
+    expect(container.querySelector('.card-window__overlay--error')).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[CardWindow] Basecard preview failed.',
+      expect.objectContaining({
+        cardId: 'card-1',
+        error: 'single basecard failed',
+      }),
+    );
+    consoleError.mockRestore();
   });
 
   it('uses the formal surface token for the composite preview background', () => {

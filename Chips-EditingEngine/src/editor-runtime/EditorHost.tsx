@@ -136,8 +136,10 @@ export function EditorHost({
   const [renderRevision, setRenderRevision] = useState(0);
   const mountRevision = snapshot?.mountRevision ?? 0;
   const latestDraftConfigRef = useRef<Record<string, unknown>>(sourceConfig);
+  const pendingResourceImportsRef = useRef(pendingResourceImports);
   const resolvedResourceUrlsRef = useRef(new Map<string, string>());
   const pendingResourceResolvesRef = useRef(new Map<string, Promise<string>>());
+  const commitSessionRef = useRef<() => Promise<void>>(async () => undefined);
 
   const syncSnapshot = useCallback(() => {
     setSnapshot(store.getSnapshot(sessionKey));
@@ -180,6 +182,10 @@ export function EditorHost({
   useEffect(() => {
     latestDraftConfigRef.current = snapshot?.draftConfig ?? sourceConfig;
   }, [snapshot?.draftConfig, sourceConfig]);
+
+  useEffect(() => {
+    pendingResourceImportsRef.current = pendingResourceImports;
+  }, [pendingResourceImports]);
 
   useEffect(() => {
     if (!descriptor) {
@@ -259,7 +265,7 @@ export function EditorHost({
     const resolver = (async () => {
       const pendingImport =
         store.getPendingResourceImport(sessionKey, normalizedResourcePath)
-        ?? pendingResourceImports?.get(normalizedResourcePath)
+        ?? pendingResourceImportsRef.current?.get(normalizedResourcePath)
         ?? null;
       const nextUrl = pendingImport
         ? createObjectUrl(pendingImport)
@@ -274,7 +280,7 @@ export function EditorHost({
 
     pendingResourceResolvesRef.current.set(normalizedResourcePath, resolver);
     return resolver;
-  }, [cardPath, pendingResourceImports, releaseResolvedResourceUrl, sessionKey, store]);
+  }, [cardPath, releaseResolvedResourceUrl, sessionKey, store]);
 
   const pickAvailableResourcePath = useCallback(async (fileName: string) => {
     const sanitizedName = sanitizeImportedResourcePath(fileName);
@@ -446,6 +452,10 @@ export function EditorHost({
   }, [cardPath, releaseResolvedResourceUrl]);
 
   useEffect(() => {
+    commitSessionRef.current = commitSession;
+  }, [commitSession]);
+
+  useEffect(() => {
     if (
       !descriptor
       || !snapshot?.dirty
@@ -485,14 +495,8 @@ export function EditorHost({
   ]);
 
   useEffect(() => {
-    return () => {
-      void commitSession().catch(() => undefined);
-    };
-  }, [commitSession]);
-
-  useEffect(() => {
     const flushPendingSession = () => {
-      void commitSession().catch(() => undefined);
+      void commitSessionRef.current().catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {
@@ -510,7 +514,13 @@ export function EditorHost({
       window.removeEventListener('beforeunload', flushPendingSession);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [commitSession]);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void commitSessionRef.current().catch(() => undefined);
+    };
+  }, [sessionKey]);
 
   useEffect(() => {
     const container = containerRef.current;

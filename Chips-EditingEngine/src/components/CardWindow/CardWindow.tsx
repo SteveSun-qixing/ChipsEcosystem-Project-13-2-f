@@ -73,7 +73,6 @@ export function CardWindow({
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [coverError, setCoverError] = useState<string | null>(null);
-    const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewHeight, setPreviewHeight] = useState<number | null>(null);
     const [coverRenderPosition, setCoverRenderPosition] = useState(config.position);
 
@@ -94,7 +93,6 @@ export function CardWindow({
     useEffect(() => {
         if (!cardInfo || windowState === 'cover' || visibleBaseCards.length === 0) {
             setIsPreviewLoading(false);
-            setPreviewError(null);
             setPreviewHeight(null);
             return;
         }
@@ -426,7 +424,12 @@ export function CardWindow({
                                             setIsPreviewLoading(loading);
                                         }}
                                         onErrorChange={(message) => {
-                                            setPreviewError(message);
+                                            if (message) {
+                                                console.error('[CardWindow] Basecard preview failed.', {
+                                                    cardId: config.cardId,
+                                                    error: message,
+                                                });
+                                            }
                                         }}
                                         onInteraction={(payload, frame) => {
                                             handleCompositeInteraction(frame, payload);
@@ -446,15 +449,6 @@ export function CardWindow({
                                             <RuntimeIcon icon={ENGINE_ICONS.loading} />
                                         </span>
                                         <span className="card-window__loading-text">{t('card_window.loading')}</span>
-                                    </div>
-                                )}
-
-                                {previewError && (
-                                    <div className="card-window__overlay card-window__overlay--error">
-                                        <span className="card-window__empty-icon">
-                                            <RuntimeIcon icon={ENGINE_ICONS.warning} />
-                                        </span>
-                                        <span className="card-window__empty-text">{previewError}</span>
                                     </div>
                                 )}
                             </div>

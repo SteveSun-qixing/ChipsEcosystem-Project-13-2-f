@@ -204,6 +204,63 @@ describe('PluginHost', () => {
     );
   });
 
+  it('does not flush an intermediate draft between separated editor change frames', async () => {
+    vi.useFakeTimers();
+    const onConfigChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="RichTextCard"
+            baseCardId="base-1"
+            config={{ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'init' }}
+            onConfigChange={onConfigChange}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'a' });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      editorChangeHandler?.({ id: 'base-1', card_type: 'RichTextCard', content_format: 'markdown', content_source: 'inline', content_text: 'ab' });
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(259);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      {
+        id: 'base-1',
+        card_type: 'RichTextCard',
+        content_format: 'markdown',
+        content_source: 'inline',
+        content_text: 'ab',
+      },
+      undefined,
+    );
+  });
+
   it('flushes the last pending editor draft before unmount', async () => {
     vi.useFakeTimers();
     const onConfigChange = vi.fn();
@@ -533,6 +590,7 @@ describe('PluginHost', () => {
 
     expect(onConfigChange).toHaveBeenCalledTimes(1);
     expect(editorResolveResourceUrl).not.toBeNull();
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       root.render(
@@ -565,6 +623,7 @@ describe('PluginHost', () => {
     const resolvedUrl = await editorResolveResourceUrl?.('photo.png');
     expect(resolvedUrl?.startsWith('blob:')).toBe(true);
     expect(createObjectURL).toHaveBeenCalled();
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
   });
 
   it('stages TIFF conversion results back into the editor session for music cover extraction', async () => {

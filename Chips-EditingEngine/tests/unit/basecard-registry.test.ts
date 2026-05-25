@@ -1,9 +1,56 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Client, PluginRecord } from 'chips-sdk';
+import type { BasecardDescriptor } from '../../src/basecard-runtime/contracts';
 import {
   createInitialBasecardConfig,
   getBasecardDescriptor,
+  getInstalledBasecardDescriptors,
+  getRegisteredBasecardDescriptors,
   normalizeBasecardConfig,
+  syncInstalledBasecardDescriptors,
 } from '../../src/basecard-runtime/registry';
+
+function createPluginRecord(input: Partial<PluginRecord> & Pick<PluginRecord, 'id'>): PluginRecord {
+  return {
+    id: input.id,
+    manifestPath: input.manifestPath ?? `/plugins/${input.id}/manifest.yaml`,
+    enabled: input.enabled ?? true,
+    version: input.version ?? '1.0.0',
+    type: input.type ?? 'card',
+    name: input.name ?? input.id,
+    description: input.description,
+    installPath: input.installPath ?? `/plugins/${input.id}`,
+    capabilities: input.capabilities ?? [],
+    entry: input.entry ?? 'dist/index.mjs',
+    installedAt: input.installedAt ?? 0,
+  };
+}
+
+function createClientStub(records: PluginRecord[]): Client {
+  return {
+    plugin: {
+      query: vi.fn(async () => records),
+    },
+  } as unknown as Client;
+}
+
+const mockDescriptor: BasecardDescriptor = {
+  pluginId: 'chips.basecard.mock',
+  cardType: 'base.mock',
+  displayName: 'Mock Basecard',
+  description: 'Mock descriptor',
+  icon: { name: 'extension' },
+  aliases: ['MockCard'],
+  createInitialConfig: (baseCardId) => ({ id: baseCardId, card_type: 'base.mock' }),
+  normalizeConfig: (input, baseCardId) => ({ ...input, id: baseCardId, card_type: 'base.mock' }),
+  validateConfig: () => ({ valid: true, errors: {} }),
+  renderView: () => () => undefined,
+};
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await syncInstalledBasecardDescriptors(createClientStub([]));
+});
 
 describe('basecard registry', () => {
   it('creates richtext starter content through the descriptor for new base cards', () => {
@@ -76,5 +123,68 @@ describe('basecard registry', () => {
       file_path: 'cover.png',
     });
     expect(descriptor.collectResourcePaths(normalized)).toEqual(['cover.png']);
+  });
+
+  it('keeps builtin descriptors available while adding valid installed basecard plugins', async () => {
+    await syncInstalledBasecardDescriptors(
+      createClientStub([
+        createPluginRecord({
+          id: 'chips.basecard.mock',
+          name: 'Mock Basecard',
+          installPath: '/plugins/mock-card',
+          entry: 'dist/index.mjs',
+          capabilities: ['base.mock'],
+        }),
+      ]),
+      async (moduleUrl) => {
+        expect(moduleUrl).toBe('file:///plugins/mock-card/dist/index.mjs');
+        return { basecardDefinition: mockDescriptor };
+      },
+    );
+
+    const registeredCardTypes = getRegisteredBasecardDescriptors().map((descriptor) => descriptor.cardType);
+    expect(registeredCardTypes).toContain('base.richtext');
+    expect(registeredCardTypes).toContain('base.image');
+    expect(registeredCardTypes).toContain('base.webpage');
+    expect(registeredCardTypes).toContain('base.mock');
+    expect(getInstalledBasecardDescriptors().map((descriptor) => descriptor.cardType)).toEqual(['base.mock']);
+    expect(getBasecardDescriptor('MockCard')?.cardType).toBe('base.mock');
+  });
+
+  it('isolates invalid installed plugins instead of clearing the whole registry', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await syncInstalledBasecardDescriptors(
+      createClientStub([
+        createPluginRecord({
+          id: 'chips.basecard.good',
+          name: 'Good Basecard',
+          installPath: '/plugins/good-card',
+          entry: 'dist/index.mjs',
+          capabilities: ['base.mock'],
+        }),
+        createPluginRecord({
+          id: 'chips.basecard.bad',
+          name: 'Bad Basecard',
+          installPath: '/plugins/bad-card',
+          entry: 'dist/index.mjs',
+          capabilities: ['base.bad'],
+        }),
+      ]),
+      async (moduleUrl) => (
+        moduleUrl.includes('/bad-card/')
+          ? {}
+          : { basecardDefinition: mockDescriptor }
+      ),
+    );
+
+    const registeredCardTypes = getRegisteredBasecardDescriptors().map((descriptor) => descriptor.cardType);
+    expect(registeredCardTypes).toContain('base.richtext');
+    expect(registeredCardTypes).toContain('base.mock');
+    expect(registeredCardTypes).not.toContain('base.bad');
+    expect(consoleError).toHaveBeenCalledWith(
+      '[BasecardRegistry] Failed to load installed basecard plugin.',
+      expect.objectContaining({ pluginId: 'chips.basecard.bad' }),
+    );
   });
 });

@@ -49,16 +49,18 @@ async function defaultBasecardModuleLoader(moduleUrl: string): Promise<BasecardD
 function applyDescriptors(nextDescriptors: BasecardDescriptor[]): void {
   descriptorMap.clear();
   aliasMap.clear();
+  const availableDescriptorMap = new Map<string, BasecardDescriptor>();
 
   for (const descriptor of nextDescriptors) {
     descriptorMap.set(descriptor.cardType, descriptor);
+    availableDescriptorMap.set(descriptor.cardType, descriptor);
     aliasMap.set(descriptor.cardType, descriptor.cardType);
     for (const alias of descriptor.aliases ?? []) {
       aliasMap.set(alias, descriptor.cardType);
     }
   }
 
-  availableBasecardDescriptors = nextDescriptors;
+  availableBasecardDescriptors = [...availableDescriptorMap.values()];
   registryVersion += 1;
   registryListeners.forEach((listener) => listener());
 }
@@ -80,6 +82,9 @@ function toInstalledDescriptor(
   }
   if (typeof definition.cardType !== 'string' || definition.cardType.trim().length === 0) {
     throw new Error(`基础卡片插件缺少 cardType: ${plugin.id}`);
+  }
+  if (!plugin.capabilities?.includes(definition.cardType)) {
+    throw new Error(`基础卡片插件 cardType 未声明在 manifest.capabilities.cardTypes 中: ${plugin.id}`);
   }
   if (typeof definition.renderView !== 'function') {
     throw new Error(`基础卡片插件缺少 renderView: ${plugin.id}`);
@@ -134,11 +139,20 @@ export async function syncInstalledBasecardDescriptors(
   const nextInstalledDescriptors = new Map<string, BasecardDescriptor>();
 
   for (const plugin of installedPlugins.filter(isEnabledCardPlugin)) {
-    const entryPath = `${plugin.installPath}/${plugin.entry}`.replace(/\\/g, '/').replace(/\/+/g, '/');
-    const moduleUrl = toFileModuleUrl(entryPath);
-    const loadedModule = await moduleLoader(moduleUrl);
-    const descriptor = toInstalledDescriptor(plugin, loadedModule);
-    nextInstalledDescriptors.set(plugin.id, descriptor);
+    try {
+      const entryPath = `${plugin.installPath}/${plugin.entry}`.replace(/\\/g, '/').replace(/\/+/g, '/');
+      const moduleUrl = toFileModuleUrl(entryPath);
+      const loadedModule = await moduleLoader(moduleUrl);
+      const descriptor = toInstalledDescriptor(plugin, loadedModule);
+      nextInstalledDescriptors.set(plugin.id, descriptor);
+    } catch (error) {
+      console.error('[BasecardRegistry] Failed to load installed basecard plugin.', {
+        pluginId: plugin.id,
+        entry: plugin.entry,
+        installPath: plugin.installPath,
+        error,
+      });
+    }
   }
 
   installedDescriptorMap.clear();

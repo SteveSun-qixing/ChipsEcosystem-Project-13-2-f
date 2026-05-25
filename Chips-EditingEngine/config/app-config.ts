@@ -8,9 +8,8 @@ export interface AppConfig {
 }
 
 export const appConfig: AppConfig = {
-  appId: "{{ PLUGIN_ID }}",
+  appId: "chips-official.editing-engine",
   featureFlags: {
     enableDebugPanel: false,
   },
 };
-

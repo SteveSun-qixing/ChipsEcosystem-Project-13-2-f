@@ -19,7 +19,7 @@
 ## 2. 快速开始
 
 ```bash
-cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task008-图标系统搭建
+cd <生态工作区>
 npm install
 cd Chips-EditingEngine
 npm run dev
@@ -51,7 +51,6 @@ Chips-EditingEngine/
 ├─ chips.config.mjs
 ├─ assets/
 │  └─ icons/
-├─ i18n/
 ├─ src/
 │  ├─ App.tsx
 │  ├─ main.tsx
@@ -95,7 +94,7 @@ Chips-EditingEngine/
 ## 7. 主题与多语言
 
 - 主题运行时通过组件库 `ChipsThemeProvider` 与 Host 主题事件接入
-- 多语言通过 `i18n/` 资源、`src/i18n/` 与运行时语言服务接入
+- 多语言通过 `src/i18n/` 本地资源、`useTranslation` 与运行时语言服务接入
 - 业务层不得硬编码正式界面文案、颜色、尺寸与阴影
 
 ## 8. 相关说明

@@ -1,6 +1,6 @@
 # 编辑引擎启动图标来源说明
 
-- 正式来源目录：`/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task008-图标系统搭建/design-assets/Appicon/`
+- 正式来源目录：`design-assets/Appicon/`
 - 对应源文件：
   - `EditingEngine.png`
   - `EditingEngine.ico`

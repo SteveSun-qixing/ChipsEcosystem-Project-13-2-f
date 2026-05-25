@@ -1,10 +1,10 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useChipsBridge } from "../hooks/useChipsBridge";
-import { useChipsClient } from "../hooks/useChipsClient";
+import type { Client } from "chips-sdk";
 import { createScopedLogger } from "../../config/logging";
 import "./CardWindow.css";
 
 interface HostedDocumentWindowProps {
+  client: Client;
   documentUrl: string;
   traceId?: string;
   loadingLabel: string;
@@ -107,6 +107,7 @@ function shouldPublishSurfaceResize(
 }
 
 export function HostedDocumentWindow({
+  client,
   documentUrl,
   traceId,
   loadingLabel,
@@ -114,7 +115,6 @@ export function HostedDocumentWindow({
   resourceOpenErrorTitle,
   resourceOpenErrorFallback,
 }: HostedDocumentWindowProps) {
-  const bridge = useChipsBridge();
   const logger = useMemo(
     () =>
       createScopedLogger({
@@ -123,7 +123,6 @@ export function HostedDocumentWindow({
       }),
     [traceId],
   );
-  const client = useChipsClient(traceId ?? "hosted-document-window");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -204,10 +203,8 @@ export function HostedDocumentWindow({
 
     currentSurfaceHeightRef.current = contentHeight;
     lastPublishedPayloadRef.current = payload;
-    if (typeof bridge.emit === "function") {
-      void bridge.emit("plugin.surface.resize", payload).catch(() => undefined);
-    }
-  }, [bridge, readSafeBlockEnd, readSafeBlockStart]);
+    void client.events.emit("plugin.surface.resize", payload).catch(() => undefined);
+  }, [client, readSafeBlockEnd]);
 
   const scheduleStableHeightPublish = useCallback((reason: DocumentSurfaceResizeReason) => {
     if (stableHeightTimerRef.current !== null) {

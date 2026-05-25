@@ -2,59 +2,7 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import { App } from "../../src/App";
 import { CardWindow } from "../../src/components/CardWindow";
-import { ViewerCoverSurface } from "../../src/components/ViewerCoverSurface";
-import { parseCardViewerSource } from "../../src/types/viewer-source";
-
-const appMock = vi.hoisted(() => ({
-  launchParams: {} as Record<string, unknown>,
-  emitted: [] as Array<{ event: string; payload: Record<string, unknown> }>,
-  client: {
-    platform: {
-      getLaunchContext: () => ({
-        launchParams: appMock.launchParams,
-      }),
-      openFile: vi.fn(),
-      showMessage: vi.fn(),
-    },
-    theme: {
-      getCurrent: vi.fn(async () => ({ themeId: "chips-official.default-theme", version: "1.0.0" })),
-    },
-    i18n: {
-      getCurrent: vi.fn(async () => "zh-CN"),
-    },
-    document: {
-      detectType: vi.fn((filePath: string) => filePath.endsWith(".box") ? "box" : filePath.endsWith(".card") ? "card" : null),
-      window: {
-        render: vi.fn(),
-        onResize: vi.fn(() => () => undefined),
-      },
-    },
-    card: {
-      readInfo: vi.fn(),
-    },
-    box: {
-      readMetadata: vi.fn(),
-      renderCover: vi.fn(),
-    },
-    resource: {
-      open: vi.fn(),
-    },
-  },
-  bridge: {
-    on: vi.fn(() => () => undefined),
-    emit: vi.fn(async (event: string, payload: Record<string, unknown>) => {
-      appMock.emitted.push({ event, payload });
-    }),
-  },
-}));
-
-vi.mock("../../src/hooks/useChipsClient", () => ({
-  useChipsClient: () => appMock.client,
-}));
-
-vi.mock("../../src/hooks/useChipsBridge", () => ({
-  useChipsBridge: () => appMock.bridge,
-}));
+import { chipsClient } from "../../src/runtime/chips-client";
 
 describe("App（卡片查看器根组件）", () => {
   beforeEach(() => {
@@ -162,6 +110,7 @@ describe("App（卡片查看器根组件）", () => {
   it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {
     const html = renderToString(
       <CardWindow
+        client={chipsClient}
         filePath="/tmp/demo.box"
         traceId="test-trace"
         locale="zh-CN"

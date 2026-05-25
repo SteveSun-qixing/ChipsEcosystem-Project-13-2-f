@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useThemeRuntime } from "@chips/component-library";
-import type { DocumentWindowResizePayload, FrameRenderResult } from "chips-sdk";
-import { useChipsClient } from "../hooks/useChipsClient";
+import type { Client, FrameRenderResult } from "chips-sdk";
 import { createScopedLogger } from "../../config/logging";
 import type { ViewerDocumentKind } from "../types/viewer-source";
 import "./CardWindow.css";
 
 interface CardWindowProps {
+  client: Client;
   filePath: string;
   documentType?: ViewerDocumentKind;
   traceId?: string;
@@ -42,6 +42,7 @@ function normalizeResizeHeight(payload: DocumentWindowResizePayload | undefined)
 }
 
 export function CardWindow({
+  client,
   filePath,
   documentType,
   traceId,
@@ -62,7 +63,6 @@ export function CardWindow({
       }),
     [traceId],
   );
-  const client = useChipsClient(traceId ?? "document-window");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const frameResultRef = useRef<FrameRenderResult | null>(null);
   const [error, setError] = useState<string | null>(null);

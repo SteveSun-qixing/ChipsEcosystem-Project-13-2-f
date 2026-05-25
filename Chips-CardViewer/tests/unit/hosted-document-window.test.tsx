@@ -8,13 +8,12 @@ import { HostedDocumentWindow } from "../../src/components/HostedDocumentWindow"
 
 const hostedDocumentMock = vi.hoisted(() => ({
   emitted: [] as Array<{ event: string; payload: Record<string, unknown> }>,
-  bridge: {
-    on: vi.fn(() => () => undefined),
-    emit: vi.fn(async (event: string, payload: Record<string, unknown>) => {
-      hostedDocumentMock.emitted.push({ event, payload });
-    }),
-  },
   client: {
+    events: {
+      emit: vi.fn(async (event: string, payload: Record<string, unknown>) => {
+        hostedDocumentMock.emitted.push({ event, payload });
+      }),
+    },
     resource: {
       open: vi.fn(async () => undefined),
     },
@@ -28,14 +27,6 @@ const hostedDocumentMock = vi.hoisted(() => ({
     error: vi.fn(),
     debug: vi.fn(),
   },
-}));
-
-vi.mock("../../src/hooks/useChipsBridge", () => ({
-  useChipsBridge: () => hostedDocumentMock.bridge,
-}));
-
-vi.mock("../../src/hooks/useChipsClient", () => ({
-  useChipsClient: () => hostedDocumentMock.client,
 }));
 
 vi.mock("../../config/logging", () => ({
@@ -101,6 +92,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     await act(async () => {
       root.render(
         <HostedDocumentWindow
+          client={hostedDocumentMock.client as any}
           documentUrl="https://example.test/card.html"
           loadingLabel="加载中"
           containerErrorLabel="容器错误"
@@ -142,6 +134,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     await act(async () => {
       root.render(
         <HostedDocumentWindow
+          client={hostedDocumentMock.client as any}
           documentUrl="https://example.test/card.html"
           loadingLabel="加载中"
           containerErrorLabel="容器错误"

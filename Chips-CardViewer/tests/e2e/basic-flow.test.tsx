@@ -45,10 +45,6 @@ const mockState = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../src/hooks/useChipsClient', () => ({
-  useChipsClient: () => mockState.client,
-}));
-
 vi.mock('@chips/component-library', async () => {
   const actual = await vi.importActual('@chips/component-library');
   return {
@@ -86,6 +82,7 @@ describe('统一文档查看窗口基础流程', () => {
     await act(async () => {
       root.render(
         <CardWindow
+          client={mockState.client as any}
           filePath="/tmp/demo.box"
           traceId="trace-document-view"
           locale="zh-CN"

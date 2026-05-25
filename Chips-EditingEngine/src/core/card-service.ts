@@ -144,6 +144,80 @@ function normalizeResourcePath(resourcePath: string): string | null {
     return segments.join('/');
 }
 
+function sanitizeCoverResourcePath(resourcePath: string): string {
+    let normalized = resourcePath.replace(/\\/g, '/').trim().replace(/^\.?\//, '');
+    if (normalized.startsWith('.card/')) {
+        normalized = normalized.slice('.card/'.length);
+    }
+
+    const segments = normalized
+        .split('/')
+        .filter((segment) => segment.length > 0 && segment !== '.');
+    if (segments.length === 0 || segments.some((segment) => segment === '..')) {
+        throw new Error(`Invalid cover resource path: ${resourcePath}`);
+    }
+
+    const safeSegments = segments.map((segment) =>
+        segment
+            .replace(/[\u0000-\u001f]/g, '')
+            .replace(/[<>:"\\|?*]/g, '')
+            .trim()
+    ).filter(Boolean);
+
+    if (safeSegments.length === 0) {
+        throw new Error(`Invalid cover resource path: ${resourcePath}`);
+    }
+
+    const rootedSegments = safeSegments[0] === 'cardcover'
+        ? safeSegments
+        : ['cardcover', ...safeSegments];
+    return rootedSegments.join('/');
+}
+
+function normalizeCoverReferencePath(resourcePath: string): string | null {
+    let normalized = resourcePath
+        .replace(/&amp;/g, '&')
+        .replace(/\\/g, '/')
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
+    if (!normalized || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(normalized)) {
+        return null;
+    }
+
+    normalized = normalized.split(/[?#]/)[0] ?? '';
+    normalized = normalized.replace(/^\.?\//, '');
+    if (normalized.startsWith('.card/')) {
+        normalized = normalized.slice('.card/'.length);
+    }
+    if (!normalized.startsWith('cardcover/')) {
+        return null;
+    }
+
+    try {
+        return sanitizeCoverResourcePath(normalized);
+    } catch {
+        return null;
+    }
+}
+
+function collectCoverResourceReferences(html: string): Set<string> {
+    const references = new Set<string>();
+    const attributePattern = /\b(?:src|href|poster|data-chips-cover-image-source)\s*=\s*["']([^"']+)["']/gi;
+    const urlPattern = /url\(\s*["']?([^"')]+)["']?\s*\)/gi;
+
+    for (const pattern of [attributePattern, urlPattern]) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(html)) !== null) {
+            const normalizedPath = normalizeCoverReferencePath(match[1] ?? '');
+            if (normalizedPath) {
+                references.add(normalizedPath);
+            }
+        }
+    }
+
+    return references;
+}
+
 function splitResourcePathSegments(resourcePath: string): string[] {
     return resourcePath.replace(/\\/g, '/').split('/').filter(Boolean);
 }
@@ -781,7 +855,7 @@ export class CardService {
             html: input.html,
             ratio: nextRatio,
             resources: (input.resources ?? []).map((resource) => ({
-                path: resource.path,
+                path: sanitizeCoverResourcePath(resource.path),
                 data: new Uint8Array(resource.data),
             })),
         };
@@ -867,6 +941,11 @@ export class CardService {
             await fileService.writeBinary(resourcePath, resource.data);
         }
 
+        await this.reconcileCoverResources(
+            card.path,
+            card.cover?.html ?? createDefaultCoverHtml(card.metadata.name),
+        );
+
         for (const entry of await fileService.list(contentDir)) {
             if (!entry.isDirectory && entry.path.endsWith('.yaml') && !expectedContentFiles.has(entry.path)) {
                 await fileService.delete(entry.path);
@@ -887,6 +966,34 @@ export class CardService {
         };
 
         await fileService.writeText(structurePath, yaml.stringify(structure));
+    }
+
+    private async reconcileCoverResources(cardPath: string, coverHtml: string): Promise<void> {
+        const coverRoot = joinPath(cardPath, '.card', 'cardcover');
+        if (!(await fileService.exists(coverRoot))) {
+            return;
+        }
+
+        const referencedPaths = collectCoverResourceReferences(coverHtml);
+        const entries = await fileService.list(coverRoot, { recursive: true });
+
+        for (const entry of entries) {
+            if ((entry as { isDirectory?: boolean }).isDirectory) {
+                continue;
+            }
+
+            const normalizedEntryPath = entry.path.replace(/\\/g, '/');
+            const relativePath = normalizedEntryPath.startsWith(`${coverRoot}/`)
+                ? normalizedEntryPath.slice(coverRoot.length + 1)
+                : normalizedEntryPath;
+            const coverResourcePath = normalizeCoverReferencePath(`cardcover/${relativePath}`);
+            if (!coverResourcePath || referencedPaths.has(coverResourcePath)) {
+                continue;
+            }
+
+            await fileService.delete(entry.path);
+            await this.pruneEmptyCoverDirectories(cardPath, coverResourcePath);
+        }
     }
 
     private async buildResourceManifest(cardPath: string): Promise<{
@@ -926,6 +1033,27 @@ export class CardService {
             resource_count: resources.length,
             resources,
         };
+    }
+
+    private async pruneEmptyCoverDirectories(cardPath: string, resourcePath: string): Promise<void> {
+        const segments = splitResourcePathSegments(resourcePath);
+        if (segments.length <= 1) {
+            return;
+        }
+
+        for (let index = segments.length - 2; index >= 0; index -= 1) {
+            const directoryPath = joinPath(cardPath, '.card', ...segments.slice(0, index + 1));
+            if (!(await fileService.exists(directoryPath))) {
+                continue;
+            }
+
+            const children = await fileService.list(directoryPath);
+            if (children.length > 0) {
+                break;
+            }
+
+            await fileService.delete(directoryPath);
+        }
     }
 
     private async pruneEmptyResourceDirectories(cardPath: string, resourcePath: string): Promise<void> {

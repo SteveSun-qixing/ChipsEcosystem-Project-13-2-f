@@ -158,10 +158,15 @@ describe('unpacked .card files', () => {
       directories.add(targetPath);
     });
 
-    mockFileService.list.mockImplementation(async (dirPath) => {
+    mockFileService.list.mockImplementation(async (dirPath, options?: { recursive?: boolean }) => {
       const prefix = `${dirPath}/`;
       return Array.from(files.keys())
-        .filter((filePath) => filePath.startsWith(prefix) && !filePath.slice(prefix.length).includes('/'))
+        .filter((filePath) => {
+          if (!filePath.startsWith(prefix)) {
+            return false;
+          }
+          return options?.recursive || !filePath.slice(prefix.length).includes('/');
+        })
         .map((filePath) => ({
           path: filePath,
           isDirectory: false,
@@ -280,6 +285,52 @@ describe('unpacked .card files', () => {
     expect(metadata.cover_ratio).toBe('16:9');
     expect(files.get('/workspace/demo.card/.card/cover.html')).toContain('./cardcover/cover-image.png');
     expect(files.get('/workspace/demo.card/.card/cardcover/cover-image.png')).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'));
+  });
+
+  it('removes stale card cover resources when cover.html no longer references them', async () => {
+    seedCardDirectory();
+    directories.add('/workspace/demo.card/.card/cardcover');
+    setFile('/workspace/demo.card/.card/cardcover/old-cover.png', Buffer.from([1, 2, 3]).toString('base64'));
+    setFile('/workspace/demo.card/.card/cardcover/nested/old-bg.png', Buffer.from([4, 5, 6]).toString('base64'));
+
+    const service = createCardService();
+    await service.openCard('demo-card', '/workspace/demo.card');
+
+    service.updateCardCover('demo-card', {
+      html: '<!doctype html><html><body><h1>纯 HTML 封面</h1></body></html>',
+      ratio: '3:4',
+      resources: [],
+    });
+    await service.saveCard('demo-card');
+
+    expect(files.has('/workspace/demo.card/.card/cardcover/old-cover.png')).toBe(false);
+    expect(files.has('/workspace/demo.card/.card/cardcover/nested/old-bg.png')).toBe(false);
+  });
+
+  it('keeps existing card cover resources that are still referenced by cover.html', async () => {
+    seedCardDirectory();
+    directories.add('/workspace/demo.card/.card/cardcover');
+    setFile('/workspace/demo.card/.card/cardcover/existing-cover.png', Buffer.from([1, 2, 3]).toString('base64'));
+    setFile('/workspace/demo.card/.card/cardcover/stale-cover.png', Buffer.from([4, 5, 6]).toString('base64'));
+
+    const service = createCardService();
+    await service.openCard('demo-card', '/workspace/demo.card');
+
+    service.updateCardCover('demo-card', {
+      html: [
+        '<!doctype html>',
+        '<html><head><style>',
+        'body { background-image: url("./cardcover/existing-cover.png"); }',
+        '</style></head>',
+        '<body data-chips-cover-image-source="./cardcover/existing-cover.png"></body></html>',
+      ].join(''),
+      ratio: '16:9',
+      resources: [],
+    });
+    await service.saveCard('demo-card');
+
+    expect(files.has('/workspace/demo.card/.card/cardcover/existing-cover.png')).toBe(true);
+    expect(files.has('/workspace/demo.card/.card/cardcover/stale-cover.png')).toBe(false);
   });
 
   it('writes imported base card resources into the card root and finalizes deletions on save', async () => {

@@ -6,12 +6,14 @@ export interface AppFeatureFlags {
 
 export interface AppConfig {
   appId: string;
+  defaultSceneId: string;
   defaultPreferences: ReaderPreferences;
   featureFlags: AppFeatureFlags;
 }
 
 export const appConfig: AppConfig = {
   appId: "com.chips.book-reader",
+  defaultSceneId: "book-reader.main",
   defaultPreferences: {
     fontScale: 1,
     contentWidth: 760,

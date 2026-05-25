@@ -40,7 +40,12 @@ export function Dock({ onOpenSettings }: DockProps) {
     if (!dockVisible) return null;
 
     return (
-        <div className={`dock dock--${dockPosition}`}>
+        <div
+            className={`dock dock--${dockPosition}`}
+            role="toolbar"
+            aria-label={t('dock.aria_label')}
+            data-chips-surface="dock"
+        >
             {allTools.map((tool) => (
                 <DockItem
                     key={tool.id}
@@ -52,7 +57,7 @@ export function Dock({ onOpenSettings }: DockProps) {
                 />
             ))}
 
-            {allTools.length > 0 && <div className="dock__divider" />}
+            {allTools.length > 0 && <div className="dock__divider" role="separator" aria-orientation={dockPosition === 'bottom' ? 'vertical' : 'horizontal'} />}
 
             <DockItem
                 toolId="__engine-settings__"

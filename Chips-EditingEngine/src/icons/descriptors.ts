@@ -21,6 +21,7 @@ export const ENGINE_ICONS = {
   chevronDown: icon("keyboard_arrow_down"),
   chevronLeft: icon("keyboard_arrow_left"),
   chevronRight: icon("keyboard_arrow_right"),
+  chevronUp: icon("keyboard_arrow_up"),
   close: icon("close"),
   code: icon("code"),
   copy: icon("content_copy"),

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ChipsInput } from '@chips/component-library';
 import type { WorkspaceFile } from '../../types/workspace';
+import { useTranslation } from '../../hooks/useTranslation';
 import { ENGINE_ICONS, getWorkspaceFileIcon } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileItem.css';
@@ -9,31 +10,46 @@ interface FileItemProps {
     file: WorkspaceFile;
     level?: number;
     selected?: boolean;
+    active?: boolean;
     renaming?: boolean;
     searchQuery?: string;
+    tabIndex?: number;
+    treeItemId?: string;
+    ariaLevel?: number;
+    ariaSetSize?: number;
+    ariaPosInSet?: number;
     onClick: (file: WorkspaceFile, event: React.MouseEvent) => void;
     onDoubleClick: (file: WorkspaceFile) => void;
     onContextMenu: (file: WorkspaceFile, event: React.MouseEvent) => void;
     onToggle: (file: WorkspaceFile, event: React.MouseEvent) => void;
+    onFocus?: (file: WorkspaceFile) => void;
     onRename: (file: WorkspaceFile, newName: string) => void;
     onRenameCancel: () => void;
     onDragStart: (file: WorkspaceFile, event: React.DragEvent) => void;
 }
 
-export function FileItem({
+export const FileItem = React.forwardRef<HTMLDivElement, FileItemProps>(function FileItem({
     file,
     level = 0,
     selected = false,
+    active = false,
     renaming = false,
     searchQuery = '',
+    tabIndex = -1,
+    treeItemId,
+    ariaLevel,
+    ariaSetSize,
+    ariaPosInSet,
     onClick,
     onDoubleClick,
     onContextMenu,
     onToggle,
+    onFocus,
     onRename,
     onRenameCancel,
     onDragStart,
-}: FileItemProps) {
+}, ref) {
+    const { t } = useTranslation();
     const [renameValue, setRenameValue] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const isDirectory = file.type === 'folder';
@@ -98,18 +114,33 @@ export function FileItem({
 
     return (
         <div
-            className={`file-item ${selected ? 'file-item--selected' : ''} ${isDirectory ? 'file-item--directory' : ''} ${renaming ? 'file-item--renaming' : ''}`}
+            ref={ref}
+            id={treeItemId}
+            className={`file-item ${selected ? 'file-item--selected' : ''} ${active ? 'file-item--active' : ''} ${isDirectory ? 'file-item--directory' : ''} ${renaming ? 'file-item--renaming' : ''}`}
             style={indentStyle}
+            role="treeitem"
+            tabIndex={tabIndex}
+            aria-selected={selected}
+            aria-expanded={isDirectory ? Boolean(file.expanded) : undefined}
+            aria-level={ariaLevel}
+            aria-setsize={ariaSetSize}
+            aria-posinset={ariaPosInSet}
+            data-active={active}
             draggable={!renaming && !isDirectory && (file.type === 'card' || file.type === 'box')}
             onClick={(e) => onClick(file, e)}
             onDoubleClick={() => !renaming && onDoubleClick(file)}
             onContextMenu={(e) => onContextMenu(file, e)}
+            onFocus={() => onFocus?.(file)}
             onDragStart={(e) => onDragStart(file, e)}
         >
             {isDirectory ? (
                 <button
                     type="button"
                     className="file-item__toggle"
+                    tabIndex={-1}
+                    aria-label={file.expanded
+                        ? t('file.collapse_folder', { name: file.name })
+                        : t('file.expand_folder', { name: file.name })}
                     onClick={(e: React.MouseEvent) => onToggle(file, e)}
                 >
                     <span className={`file-item__arrow ${file.expanded ? 'file-item__arrow--expanded' : ''}`}>
@@ -142,4 +173,4 @@ export function FileItem({
             )}
         </div>
     );
-}
+});

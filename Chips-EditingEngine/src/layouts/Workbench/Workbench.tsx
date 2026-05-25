@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SidePanel } from './SidePanel';
 import { MainArea, type TabInfo } from './MainArea';
+import { useTranslation } from '../../hooks/useTranslation';
 import './Workbench.css';
 
 export interface WorkbenchLayoutConfig {
@@ -37,6 +38,7 @@ export function Workbench({
     tabContentRenderer,
     emptyActionsSlot,
 }: WorkbenchProps) {
+    const { t } = useTranslation();
     const [config, setConfig] = useState<WorkbenchLayoutConfig>({
         leftPanelWidth: 280,
         rightPanelWidth: 320,
@@ -85,7 +87,13 @@ export function Workbench({
     } as React.CSSProperties;
 
     return (
-        <div className="workbench" style={workbenchStyle}>
+        <div
+            className="workbench"
+            style={workbenchStyle}
+            role="group"
+            aria-label={t('workbench.aria_label')}
+            data-chips-surface="workbench"
+        >
             {showLeftPanel && (
                 <SidePanel
                     position="left"
@@ -93,11 +101,20 @@ export function Workbench({
                     expanded={leftPanelExpanded}
                     minWidth={180}
                     maxWidth={480}
-                    title="工程目录"
+                    title={t('workbench.left_panel_title')}
+                    toggleLabel={leftPanelExpanded
+                        ? t('workbench.left_panel_collapse')
+                        : t('workbench.left_panel_expand')}
+                    collapsedLabel={t('workbench.left_panel_expand')}
+                    resizeLabel={t('workbench.left_panel_resize')}
                     onWidthChange={(w) => updateConfig({ leftPanelWidth: w })}
                     onExpandedChange={(exp) => updateConfig({ leftPanelExpanded: exp })}
                 >
-                    {leftPanelContent || <div>File Tree Placeholder</div>}
+                    {leftPanelContent || (
+                        <div className="workbench__placeholder" role="status">
+                            {t('workbench.left_panel_empty')}
+                        </div>
+                    )}
                 </SidePanel>
             )}
 
@@ -105,7 +122,12 @@ export function Workbench({
                 activeTabId={activeTabId}
                 tabs={tabs}
                 showTabs={true}
-                emptyText="请在左侧目录选择项目文件以开启"
+                ariaLabel={t('workbench.main_area_label')}
+                tabListLabel={t('workbench.tabs_label')}
+                emptyText={t('workbench.empty_text')}
+                modifiedLabel={t('workbench.tab_modified')}
+                closeTabLabel={(title) => t('workbench.close_tab', { title })}
+                previewFallbackLabel={(title) => t('workbench.preview_fallback', { title })}
                 onTabChange={onTabChange}
                 onTabClose={onTabClose}
                 tabContentRenderer={tabContentRenderer}
@@ -119,11 +141,20 @@ export function Workbench({
                     expanded={rightPanelExpanded}
                     minWidth={200}
                     maxWidth={500}
-                    title="属性面板"
+                    title={t('workbench.right_panel_title')}
+                    toggleLabel={rightPanelExpanded
+                        ? t('workbench.right_panel_collapse')
+                        : t('workbench.right_panel_expand')}
+                    collapsedLabel={t('workbench.right_panel_expand')}
+                    resizeLabel={t('workbench.right_panel_resize')}
                     onWidthChange={(w) => updateConfig({ rightPanelWidth: w })}
                     onExpandedChange={(exp) => updateConfig({ rightPanelExpanded: exp })}
                 >
-                    {rightPanelContent || <div>Properties Placeholder</div>}
+                    {rightPanelContent || (
+                        <div className="workbench__placeholder" role="status">
+                            {t('workbench.right_panel_empty')}
+                        </div>
+                    )}
                 </SidePanel>
             )}
         </div>

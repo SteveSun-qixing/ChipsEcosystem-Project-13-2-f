@@ -72,6 +72,26 @@ const zhCN: Record<string, string> = {
     // Dock
     'dock.settings': '设置',
     'dock.about': '关于',
+    'dock.aria_label': '工作台程序坞',
+
+    // Workbench
+    'workbench.aria_label': '编辑引擎工作台',
+    'workbench.left_panel_title': '工程目录',
+    'workbench.left_panel_expand': '展开工程目录',
+    'workbench.left_panel_collapse': '收起工程目录',
+    'workbench.left_panel_resize': '调整工程目录宽度',
+    'workbench.left_panel_empty': '工程目录暂无内容',
+    'workbench.main_area_label': '工作台编辑区',
+    'workbench.tabs_label': '打开的文件',
+    'workbench.empty_text': '请在左侧目录选择项目文件以开启',
+    'workbench.tab_modified': '已修改',
+    'workbench.close_tab': '关闭 {title}',
+    'workbench.preview_fallback': '卡片预览：{title}',
+    'workbench.right_panel_title': '属性面板',
+    'workbench.right_panel_expand': '展开属性面板',
+    'workbench.right_panel_collapse': '收起属性面板',
+    'workbench.right_panel_resize': '调整属性面板宽度',
+    'workbench.right_panel_empty': '属性面板暂无内容',
 
     // Engine Settings
     'engine_settings.title': '引擎设置',
@@ -252,6 +272,16 @@ const zhCN: Record<string, string> = {
     'window.close': '关闭',
     'window.expand': '展开',
     'window.collapse': '折叠',
+    'window.titlebar_label': '{title} 标题栏',
+    'window.actions_label': '{title} 窗口操作',
+    'window.minimize_window': '最小化 {title}',
+    'window.expand_window': '展开 {title}',
+    'window.collapse_window': '收起 {title}',
+    'window.close_window': '关闭 {title}',
+    'window.resize_handle_label': '调整 {title} 窗口大小',
+    'tool_window.aria_label': '{title} 工具窗口',
+    'tool_window.loading': '正在加载工具窗口…',
+    'tool_window.missing_component': '工具组件 {component} 未找到',
 
     // Window Menu
     'window_menu.switch_view': '切换到预览',
@@ -299,6 +329,8 @@ const zhCN: Record<string, string> = {
     'file_manager.selected_count': '已选择 {count} 项',
     'file_manager.total_items': '共 {count} 项',
     'file.tree_label': '文件树',
+    'file.expand_folder': '展开文件夹 {name}',
+    'file.collapse_folder': '收起文件夹 {name}',
     'file.empty_folder': '空文件夹',
     'file.untitled_card': '未命名卡片',
     'file.untitled_box': '未命名箱子',

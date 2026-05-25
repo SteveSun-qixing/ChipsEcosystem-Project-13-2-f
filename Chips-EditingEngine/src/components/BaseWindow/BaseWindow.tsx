@@ -1,6 +1,25 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { AnyWindowConfig, BaseWindowConfig, Position, Size } from '../../types/window';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
+import { createKeyboardMap, getKeyboardAction } from '@chips/a11y';
+import { useTranslation } from '../../hooks/useTranslation';
+import { ENGINE_ICONS } from '../../icons/descriptors';
+import { RuntimeIcon } from '../../icons/RuntimeIcon';
+import type { BaseWindowConfig, Position, Size } from '../../types/window';
 import './BaseWindow.css';
+
+const WINDOW_TITLEBAR_KEYBOARD_MAP = createKeyboardMap({
+    moveLeft: 'ArrowLeft',
+    moveRight: 'ArrowRight',
+    moveUp: 'ArrowUp',
+    moveDown: 'ArrowDown',
+    collapse: ['Enter', ' '],
+});
+
+const WINDOW_RESIZE_KEYBOARD_MAP = createKeyboardMap({
+    shrinkWidth: 'ArrowLeft',
+    growWidth: 'ArrowRight',
+    shrinkHeight: 'ArrowUp',
+    growHeight: 'ArrowDown',
+});
 
 export interface BaseWindowProps {
     config: BaseWindowConfig;
@@ -16,6 +35,8 @@ export interface BaseWindowProps {
     onCollapse?: () => void;
     headerSlot?: React.ReactNode;
     actionsSlot?: React.ReactNode;
+    ariaLabel?: string;
+    ariaRole?: React.AriaRole;
     children?: React.ReactNode;
 }
 
@@ -33,8 +54,13 @@ export function BaseWindow({
     onCollapse,
     headerSlot,
     actionsSlot,
+    ariaLabel,
+    ariaRole = 'region',
     children,
 }: BaseWindowProps) {
+    const { t } = useTranslation();
+    const titleId = useId();
+    const contentId = useId();
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
 
@@ -61,7 +87,10 @@ export function BaseWindow({
     ].filter(Boolean).join(' ');
 
     const handleDragStart = (e: React.MouseEvent) => {
-        if ((e.target as HTMLElement).closest('.base-window__action')) {
+        if (e.button !== 0) {
+            return;
+        }
+        if ((e.target as HTMLElement).closest('button, input, textarea, select, [role="button"]')) {
             return;
         }
         if (!draggable) return;
@@ -71,6 +100,45 @@ export function BaseWindow({
         initialPosition.current = { ...config.position };
 
         e.preventDefault();
+    };
+
+    const handleTitlebarKeyDown = (event: React.KeyboardEvent) => {
+        if ((event.target as HTMLElement).closest('button, input, textarea, select, [role="button"]')) {
+            return;
+        }
+
+        const action = getKeyboardAction(event, WINDOW_TITLEBAR_KEYBOARD_MAP);
+        if (!action) {
+            return;
+        }
+
+        if (action === 'collapse') {
+            event.preventDefault();
+            onCollapse?.();
+            return;
+        }
+
+        if (!draggable || !onUpdatePosition) {
+            return;
+        }
+
+        const step = event.shiftKey ? 24 : 8;
+        const nextPosition = { ...config.position };
+        if (action === 'moveLeft') {
+            nextPosition.x -= step;
+        }
+        if (action === 'moveRight') {
+            nextPosition.x += step;
+        }
+        if (action === 'moveUp') {
+            nextPosition.y -= step;
+        }
+        if (action === 'moveDown') {
+            nextPosition.y += step;
+        }
+
+        event.preventDefault();
+        onUpdatePosition(nextPosition);
     };
 
     const handleDragMove = (e: MouseEvent) => {
@@ -112,6 +180,35 @@ export function BaseWindow({
         e.preventDefault();
     };
 
+    const handleResizeKeyDown = (event: React.KeyboardEvent) => {
+        if (!resizable || !onUpdateSize) {
+            return;
+        }
+
+        const action = getKeyboardAction(event, WINDOW_RESIZE_KEYBOARD_MAP);
+        if (!action) {
+            return;
+        }
+
+        const step = event.shiftKey ? 24 : 8;
+        const nextSize = { ...config.size };
+        if (action === 'shrinkWidth') {
+            nextSize.width = Math.max(minWidth, nextSize.width - step);
+        }
+        if (action === 'growWidth') {
+            nextSize.width = nextSize.width + step;
+        }
+        if (action === 'shrinkHeight') {
+            nextSize.height = Math.max(minHeight, nextSize.height - step);
+        }
+        if (action === 'growHeight') {
+            nextSize.height = nextSize.height + step;
+        }
+
+        event.preventDefault();
+        onUpdateSize(nextSize);
+    };
+
     const handleResizeMove = (e: MouseEvent) => {
         const deltaX = e.clientX - resizeStart.current.x;
         const deltaY = e.clientY - resizeStart.current.y;
@@ -146,39 +243,59 @@ export function BaseWindow({
         <div
             className={windowClass}
             style={windowStyle}
+            role={ariaRole}
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabel ? undefined : titleId}
+            aria-describedby={contentId}
+            data-chips-surface="tool-window"
             onMouseDown={() => onFocus?.()}
+            onFocusCapture={() => onFocus?.()}
         >
-            <div className="base-window__header" onMouseDown={handleDragStart}>
-                {headerSlot || <span className="base-window__title">{config.title}</span>}
+            <div
+                className="base-window__header"
+                tabIndex={draggable || onCollapse ? 0 : undefined}
+                aria-label={t('window.titlebar_label', { title: config.title })}
+                onMouseDown={handleDragStart}
+                onKeyDown={handleTitlebarKeyDown}
+            >
+                {headerSlot || <span id={titleId} className="base-window__title">{config.title}</span>}
 
-                <div className="base-window__actions">
+                <div className="base-window__actions" role="toolbar" aria-label={t('window.actions_label', { title: config.title })}>
                     {actionsSlot || (
                         <>
                             {config.minimizable !== false && (
                                 <button
                                     type="button"
                                     className="base-window__action"
+                                    aria-label={t('window.minimize_window', { title: config.title })}
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onMinimize?.(); }}
                                 >
-                                    <span className="base-window__action-icon">−</span>
+                                    <RuntimeIcon className="base-window__action-icon" icon={ENGINE_ICONS.remove} />
                                 </button>
                             )}
                             <button
                                 type="button"
                                 className="base-window__action"
+                                aria-label={config.state === 'collapsed'
+                                    ? t('window.expand_window', { title: config.title })
+                                    : t('window.collapse_window', { title: config.title })}
+                                aria-expanded={config.state !== 'collapsed'}
+                                aria-controls={contentId}
                                 onClick={(e: React.MouseEvent) => { e.stopPropagation(); onCollapse?.(); }}
                             >
-                                <span className="base-window__action-icon">
-                                    {config.state === 'collapsed' ? '▽' : '△'}
-                                </span>
+                                <RuntimeIcon
+                                    className="base-window__action-icon"
+                                    icon={config.state === 'collapsed' ? ENGINE_ICONS.chevronDown : ENGINE_ICONS.chevronUp}
+                                />
                             </button>
                             {config.closable !== false && (
                                 <button
                                     type="button"
                                     className="base-window__action base-window__action--close"
+                                    aria-label={t('window.close_window', { title: config.title })}
                                     onClick={(e: React.MouseEvent) => { e.stopPropagation(); onClose?.(); }}
                                 >
-                                    <span className="base-window__action-icon">×</span>
+                                    <RuntimeIcon className="base-window__action-icon" icon={ENGINE_ICONS.close} />
                                 </button>
                             )}
                         </>
@@ -187,7 +304,9 @@ export function BaseWindow({
             </div>
 
             <div
+                id={contentId}
                 className="base-window__content"
+                aria-hidden={config.state === 'collapsed'}
                 style={{ display: config.state === 'collapsed' ? 'none' : 'flex' }}
             >
                 {children}
@@ -196,7 +315,11 @@ export function BaseWindow({
             {resizable && config.state === 'normal' && (
                 <div
                     className="base-window__resize-handle"
+                    role="separator"
+                    tabIndex={0}
+                    aria-label={t('window.resize_handle_label', { title: config.title })}
                     onMouseDown={handleResizeStart}
+                    onKeyDown={handleResizeKeyDown}
                 />
             )}
         </div>

@@ -6,7 +6,10 @@
   cursor: pointer;
   user-select: none;
   border-radius: var(--chips-radius-sm, 4px);
-  transition: background-color 0.15s ease;
+  outline: none;
+  transition:
+    background-color var(--chips-motion-duration-fast, 0.15s) var(--chips-motion-easing-standard, ease),
+    box-shadow var(--chips-motion-duration-fast, 0.15s) var(--chips-motion-easing-standard, ease);
   height: 28px;
 }
 
@@ -15,11 +18,16 @@
 }
 
 .file-item--selected {
-  background-color: var(--chips-color-primary-light, #e3f2fd) !important;
+  background-color: var(--chips-sys-color-primary-container, var(--chips-color-primary-light, #e3f2fd)) !important;
 }
 
 .file-item--selected:hover {
-  background-color: var(--chips-color-primary-lighter, #bbdefb) !important;
+  background-color: var(--chips-sys-color-primary-container-hover, var(--chips-color-primary-lighter, #bbdefb)) !important;
+}
+
+.file-item--active,
+.file-item:focus-visible {
+  box-shadow: inset 0 0 0 var(--chips-layout-focus-outline-width, 2px) var(--chips-layout-focus-color, var(--chips-sys-color-primary, #1890ff));
 }
 
 .file-item__toggle {
@@ -66,7 +74,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--chips-font-size-sm, 14px);
-  color: var(--chips-color-text-primary, #1a1a1a);
+  color: var(--chips-sys-color-on-surface, var(--chips-color-text-primary, #1a1a1a));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

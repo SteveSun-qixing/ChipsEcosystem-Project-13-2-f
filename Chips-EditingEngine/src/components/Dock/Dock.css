@@ -1,14 +1,17 @@
 .dock {
     position: absolute;
     display: flex;
-    gap: 10px;
-    padding: 10px 14px;
-    background: var(--chips-sys-color-surface, #ffffff);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    gap: var(--chips-layout-gap-sm, 10px);
+    padding: var(--chips-layout-gap-sm, 10px) var(--chips-layout-gap-md, 14px);
+    background: var(--chips-comp-dock-panel-root-surface, var(--chips-sys-color-surface, #ffffff));
+    border: 1px solid var(--chips-sys-color-outline-variant, var(--chips-sys-color-border, #e0e0e0));
+    border-radius: var(--chips-comp-dock-panel-root-radius, 12px);
+    box-shadow: var(--chips-comp-dock-panel-root-shadow, 0 8px 24px rgba(0, 0, 0, 0.12));
     pointer-events: auto;
     z-index: 1000;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition:
+        opacity var(--chips-motion-duration-medium, 0.3s) var(--chips-motion-easing-standard, ease),
+        transform var(--chips-motion-duration-medium, 0.3s) var(--chips-motion-easing-standard, ease);
 }
 
 .dock--bottom {
@@ -35,7 +38,7 @@
 .dock__divider {
     width: 1px;
     height: 32px;
-    background: var(--chips-sys-color-border, #e0e0e0);
+    background: var(--chips-sys-color-outline-variant, var(--chips-sys-color-border, #e0e0e0));
     align-self: center;
     flex-shrink: 0;
 }
@@ -44,9 +47,4 @@
 .dock--right .dock__divider {
     width: 32px;
     height: 1px;
-}
-
-:global(.dark) .dock {
-    background: #1a1a1a;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }

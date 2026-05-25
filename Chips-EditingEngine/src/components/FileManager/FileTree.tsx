@@ -1,10 +1,42 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    createKeyboardMap,
+    createRovingTabIndex,
+    getKeyboardAction,
+    getRovingTabIndexProps,
+} from '@chips/a11y';
 import { FileItem } from './FileItem';
 import type { WorkspaceFile } from '../../types/workspace';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENGINE_ICONS } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import './FileTree.css';
+
+const FILE_TREE_KEYBOARD_MAP = createKeyboardMap({
+    activate: ['Enter', ' '],
+    expand: 'ArrowRight',
+    collapse: 'ArrowLeft',
+});
+
+interface FlattenedFileNode {
+    file: WorkspaceFile;
+    level: number;
+    posInSet: number;
+    setSize: number;
+}
+
+function getTreeItemId(path: string): string {
+    const encoded = Array.from(path)
+        .map((char) => {
+            if (/^[a-zA-Z0-9_-]$/.test(char)) {
+                return char;
+            }
+            return `-${char.codePointAt(0)?.toString(16) ?? '0'}-`;
+        })
+        .join('');
+
+    return `file-tree-item-${encoded}`;
+}
 
 interface FileTreeProps {
     files: WorkspaceFile[];
@@ -38,33 +70,74 @@ export function FileTree({
     onDragStart,
 }: FileTreeProps) {
     const { t } = useTranslation();
-    const [focusIndex, setFocusIndex] = useState(-1);
+    const [focusPath, setFocusPath] = useState<string | null>(selectedPaths[0] ?? null);
+    const itemRefs = useRef(new Map<string, HTMLDivElement>());
     const rootDepth = useMemo(
         () => (rootPath ?? '').split('/').filter(Boolean).length,
         [rootPath],
     );
 
-    const flattenedFiles = useMemo(() => {
-        const result: WorkspaceFile[] = [];
+    const flattenedNodes = useMemo(() => {
+        const result: FlattenedFileNode[] = [];
+        const getFileLevel = (file: WorkspaceFile): number => {
+            const parts = file.path.split('/').filter(Boolean);
+            if (!rootDepth) {
+                return 0;
+            }
+            return Math.max(0, parts.length - rootDepth - 1);
+        };
+
         const flatten = (list: WorkspaceFile[]) => {
-            for (const file of list) {
-                result.push(file);
+            const setSize = list.length;
+            list.forEach((file, index) => {
+                result.push({
+                    file,
+                    level: getFileLevel(file),
+                    posInSet: index + 1,
+                    setSize,
+                });
                 if (file.type === 'folder' && file.expanded && file.children) {
                     flatten(file.children);
                 }
-            }
+            });
         };
         flatten(files);
         return result;
-    }, [files]);
+    }, [files, rootDepth]);
 
-    const getFileLevel = (file: WorkspaceFile): number => {
-        const parts = file.path.split('/').filter(Boolean);
-        if (!rootDepth) {
-            return 0;
+    const flattenedFiles = useMemo(
+        () => flattenedNodes.map((node) => node.file),
+        [flattenedNodes],
+    );
+
+    const activePath = focusPath ?? selectedPaths[0] ?? flattenedFiles[0]?.path ?? null;
+    const activeIndex = flattenedFiles.findIndex((file) => file.path === activePath);
+    const rovingModel = useMemo(
+        () => createRovingTabIndex(
+            flattenedFiles.map((file) => ({ id: file.path })),
+            {
+                activeIndex: activeIndex >= 0 ? activeIndex : 0,
+                orientation: 'vertical',
+                loop: false,
+            },
+        ),
+        [activeIndex, flattenedFiles],
+    );
+
+    useEffect(() => {
+        if (!activePath || flattenedFiles.some((file) => file.path === activePath)) {
+            return;
         }
-        return Math.max(0, parts.length - rootDepth - 1);
-    };
+        setFocusPath(flattenedFiles[0]?.path ?? null);
+    }, [activePath, flattenedFiles]);
+
+    const setItemRef = useCallback((path: string) => (node: HTMLDivElement | null) => {
+        if (node) {
+            itemRefs.current.set(path, node);
+        } else {
+            itemRefs.current.delete(path);
+        }
+    }, []);
 
     const handleFileClick = (file: WorkspaceFile, event: React.MouseEvent) => {
         let newPaths: string[] = [];
@@ -101,14 +174,16 @@ export function FileTree({
             newFiles = [file];
         }
 
-        setFocusIndex(flattenedFiles.findIndex((f) => f.path === file.path));
+        setFocusPath(file.path);
         onSelect(newPaths, newFiles);
     };
 
     const selectFocusedFile = (index: number) => {
         const file = flattenedFiles[index];
         if (file) {
+            setFocusPath(file.path);
             onSelect([file.path], [file]);
+            itemRefs.current.get(file.path)?.focus();
         }
     };
 
@@ -118,60 +193,46 @@ export function FileTree({
         const len = flattenedFiles.length;
         if (len === 0) return;
 
-        switch (event.key) {
-            case 'ArrowDown': {
-                event.preventDefault();
-                const next = Math.min(focusIndex + 1, len - 1);
-                setFocusIndex(next);
-                selectFocusedFile(next);
-                break;
+        const nextIndex = rovingModel.getIndexByKey(event, { orientation: 'vertical', loop: false });
+        if (nextIndex >= 0) {
+            event.preventDefault();
+            selectFocusedFile(nextIndex);
+            return;
+        }
+
+        const currentIndex = activeIndex >= 0 ? activeIndex : 0;
+        const currentFile = flattenedFiles[currentIndex];
+        const action = getKeyboardAction(event, FILE_TREE_KEYBOARD_MAP);
+        if (!action || !currentFile) {
+            return;
+        }
+
+        if (action === 'activate') {
+            event.preventDefault();
+            if (currentFile.type === 'folder') {
+                onToggle(currentFile);
+            } else {
+                onOpen(currentFile);
             }
-            case 'ArrowUp': {
-                event.preventDefault();
-                const next = Math.max(focusIndex - 1, 0);
-                setFocusIndex(next);
-                selectFocusedFile(next);
-                break;
+            return;
+        }
+
+        if (action === 'expand') {
+            event.preventDefault();
+            if (currentFile.type === 'folder' && !currentFile.expanded) {
+                onToggle(currentFile);
+                return;
             }
-            case 'ArrowRight': {
-                event.preventDefault();
-                const file = flattenedFiles[focusIndex];
-                if (file?.type === 'folder' && !file.expanded) {
-                    onToggle(file);
-                }
-                break;
+            if (currentFile.type === 'folder' && currentFile.expanded && currentFile.children?.length) {
+                selectFocusedFile(Math.min(currentIndex + 1, len - 1));
             }
-            case 'ArrowLeft': {
-                event.preventDefault();
-                const file = flattenedFiles[focusIndex];
-                if (file?.type === 'folder' && file.expanded) {
-                    onToggle(file);
-                }
-                break;
-            }
-            case 'Enter': {
-                event.preventDefault();
-                const file = flattenedFiles[focusIndex];
-                if (file) {
-                    if (file.type === 'folder') {
-                        onToggle(file);
-                    } else {
-                        onOpen(file);
-                    }
-                }
-                break;
-            }
-            case 'Home': {
-                event.preventDefault();
-                setFocusIndex(0);
-                selectFocusedFile(0);
-                break;
-            }
-            case 'End': {
-                event.preventDefault();
-                setFocusIndex(len - 1);
-                selectFocusedFile(len - 1);
-                break;
+            return;
+        }
+
+        if (action === 'collapse') {
+            event.preventDefault();
+            if (currentFile.type === 'folder' && currentFile.expanded) {
+                onToggle(currentFile);
             }
         }
     };
@@ -179,30 +240,47 @@ export function FileTree({
     return (
         <div
             className="file-tree"
-            tabIndex={0}
+            tabIndex={flattenedFiles.length > 0 ? undefined : 0}
             role="tree"
+            aria-label={t('file.tree_label')}
+            aria-multiselectable={multiSelect ? true : undefined}
             onKeyDown={handleKeyDown}
         >
             {files.length > 0 ? (
-                flattenedFiles.map((file) => (
+                flattenedNodes.map((node, index) => {
+                    const file = node.file;
+                    const rovingItem = rovingModel.items[index];
+                    const rovingProps = getRovingTabIndexProps(rovingItem, { includeAriaDisabled: false });
+                    const treeItemId = getTreeItemId(file.path);
+
+                    return (
                     <FileItem
                         key={file.path}
+                        ref={setItemRef(file.path)}
                         file={file}
-                        level={getFileLevel(file)}
+                        level={node.level}
                         selected={selectedPaths.includes(file.path)}
+                        active={rovingItem?.active ?? false}
                         renaming={renamingPath === file.path}
                         searchQuery={searchQuery}
+                        tabIndex={rovingProps.tabIndex}
+                        treeItemId={treeItemId}
+                        ariaLevel={node.level + 1}
+                        ariaSetSize={node.setSize}
+                        ariaPosInSet={node.posInSet}
                         onClick={handleFileClick}
                         onDoubleClick={(f) => f.type === 'folder' ? onToggle(f) : onOpen(f)}
                         onContextMenu={onContextMenu}
                         onToggle={(f) => onToggle(f)}
+                        onFocus={(f) => setFocusPath(f.path)}
                         onRename={onRename}
                         onRenameCancel={onRenameCancel}
                         onDragStart={onDragStart}
                     />
-                ))
+                    );
+                })
             ) : (
-                <div className="file-tree__empty">
+                <div className="file-tree__empty" role="status">
                     <span className="file-tree__empty-icon">
                         <RuntimeIcon icon={ENGINE_ICONS.folderClosed} />
                     </span>

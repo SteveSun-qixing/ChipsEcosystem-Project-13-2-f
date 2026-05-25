@@ -14,7 +14,7 @@
 .tool-window__title {
     font-size: 14px;
     font-weight: 500;
-    color: var(--chips-color-text-primary, #1a1a1a);
+    color: var(--chips-sys-color-on-surface, var(--chips-color-text-primary, #1a1a1a));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -33,6 +33,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--chips-color-text-secondary, #666);
+    color: var(--chips-sys-color-on-surface-variant, var(--chips-color-text-secondary, #666));
     font-size: 13px;
+}
+
+.tool-window__missing {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--chips-layout-gap-lg, 16px);
+    color: var(--chips-sys-color-error, #dc2626);
+    font-size: 13px;
+    text-align: center;
 }

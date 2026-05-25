@@ -13,20 +13,25 @@ export interface DockItemProps {
 }
 
 export function DockItem({ toolId, icon, title, minimized = false, onRestore }: DockItemProps) {
-    const [isHovered, setIsHovered] = useState(false);
+    const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+    const tooltipId = `dock-item-tooltip-${toolId}`;
 
     return (
         <div
             className={`dock-item ${minimized ? 'dock-item--minimized' : ''}`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={() => onRestore(toolId)}
+            onMouseEnter={() => setIsTooltipVisible(true)}
+            onMouseLeave={() => setIsTooltipVisible(false)}
         >
             <button
                 type="button"
                 className="dock-item__btn"
                 title="" // We use custom tooltip
                 aria-label={title}
+                aria-describedby={isTooltipVisible ? tooltipId : undefined}
+                aria-pressed={!minimized}
+                onFocus={() => setIsTooltipVisible(true)}
+                onBlur={() => setIsTooltipVisible(false)}
+                onClick={() => onRestore(toolId)}
             >
                 <div className="dock-item__icon-wrapper">
                     <span className="dock-item__icon">
@@ -36,8 +41,8 @@ export function DockItem({ toolId, icon, title, minimized = false, onRestore }: 
             </button>
 
             {/* Tooltip */}
-            {isHovered && (
-                <div className="dock-item__tooltip">
+            {isTooltipVisible && (
+                <div id={tooltipId} className="dock-item__tooltip" role="tooltip">
                     {title}
                 </div>
             )}

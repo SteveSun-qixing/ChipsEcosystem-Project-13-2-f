@@ -71,6 +71,26 @@ const enUS: Record<string, string> = {
     // Dock
     'dock.settings': 'Settings',
     'dock.about': 'About',
+    'dock.aria_label': 'Workbench Dock',
+
+    // Workbench
+    'workbench.aria_label': 'Editing engine workbench',
+    'workbench.left_panel_title': 'Project Directory',
+    'workbench.left_panel_expand': 'Expand Project Directory',
+    'workbench.left_panel_collapse': 'Collapse Project Directory',
+    'workbench.left_panel_resize': 'Resize Project Directory',
+    'workbench.left_panel_empty': 'Project directory is empty',
+    'workbench.main_area_label': 'Workbench Editor Area',
+    'workbench.tabs_label': 'Open files',
+    'workbench.empty_text': 'Select a project file from the left directory to begin',
+    'workbench.tab_modified': 'Modified',
+    'workbench.close_tab': 'Close {title}',
+    'workbench.preview_fallback': 'Card preview: {title}',
+    'workbench.right_panel_title': 'Inspector',
+    'workbench.right_panel_expand': 'Expand Inspector',
+    'workbench.right_panel_collapse': 'Collapse Inspector',
+    'workbench.right_panel_resize': 'Resize Inspector',
+    'workbench.right_panel_empty': 'Inspector is empty',
 
     // Engine Settings
     'engine_settings.title': 'Engine Settings',
@@ -251,6 +271,16 @@ const enUS: Record<string, string> = {
     'window.close': 'Close',
     'window.expand': 'Expand',
     'window.collapse': 'Collapse',
+    'window.titlebar_label': '{title} title bar',
+    'window.actions_label': '{title} window actions',
+    'window.minimize_window': 'Minimize {title}',
+    'window.expand_window': 'Expand {title}',
+    'window.collapse_window': 'Collapse {title}',
+    'window.close_window': 'Close {title}',
+    'window.resize_handle_label': 'Resize {title} window',
+    'tool_window.aria_label': '{title} tool window',
+    'tool_window.loading': 'Loading tool window…',
+    'tool_window.missing_component': 'Tool component {component} was not found',
 
     // Window Menu
     'window_menu.switch_view': 'Switch to Preview',
@@ -298,6 +328,8 @@ const enUS: Record<string, string> = {
     'file_manager.selected_count': '{count} selected',
     'file_manager.total_items': '{count} items',
     'file.tree_label': 'File tree',
+    'file.expand_folder': 'Expand folder {name}',
+    'file.collapse_folder': 'Collapse folder {name}',
     'file.empty_folder': 'Empty folder',
     'file.untitled_card': 'Untitled Card',
     'file.untitled_box': 'Untitled Box',

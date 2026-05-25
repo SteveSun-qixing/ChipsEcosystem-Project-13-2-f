@@ -60,7 +60,8 @@ describe("ThemePage", () => {
     const { ThemePage } = await import("../../src/features/themes/ThemePage");
     const markup = renderToStaticMarkup(<ThemePage />);
 
-    expect(markup).toContain("governance-list");
+    expect(markup).toContain("data-scope=\"data-grid\"");
+    expect(markup).toContain("settings-governance-list");
     expect(markup).toContain("settingsPanel.themes.columns.theme");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("chips.theme-demo");

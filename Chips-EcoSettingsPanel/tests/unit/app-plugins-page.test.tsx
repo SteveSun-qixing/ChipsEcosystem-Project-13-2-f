@@ -68,7 +68,8 @@ describe("AppPluginsPage", () => {
     const { AppPluginsPage } = await import("../../src/features/app-plugins/AppPluginsPage");
     const markup = renderToStaticMarkup(<AppPluginsPage />);
 
-    expect(markup).toContain("governance-list");
+    expect(markup).toContain("data-scope=\"data-grid\"");
+    expect(markup).toContain("settings-governance-list");
     expect(markup).toContain("settingsPanel.appPlugins.badges.currentApp");
     expect(markup).toContain("settingsPanel.appPlugins.selfManaged.description");
     expect(markup).toContain("disabled");

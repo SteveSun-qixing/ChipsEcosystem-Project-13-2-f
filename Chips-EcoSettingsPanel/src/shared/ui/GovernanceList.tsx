@@ -1,4 +1,5 @@
 import React from "react";
+import { ChipsDataGrid } from "@chips/component-library";
 
 interface GovernanceListColumn {
   id: string;
@@ -23,38 +24,75 @@ interface GovernanceListCellProps {
   children: React.ReactNode;
 }
 
+function isGovernanceRow(element: React.ReactNode): element is React.ReactElement<GovernanceListRowProps> {
+  return React.isValidElement(element) && element.type === GovernanceListRow;
+}
+
+function isGovernanceCell(element: React.ReactNode): element is React.ReactElement<GovernanceListCellProps> {
+  return React.isValidElement(element) && element.type === GovernanceListCell;
+}
+
 export function GovernanceList({ ariaLabel, columns, children }: GovernanceListProps): React.ReactElement {
   const style = React.useMemo(() => {
     return {
-      "--governance-list-columns": columns.map((column) => column.width).join(" "),
+      "--settings-governance-columns": columns.map((column) => column.width).join(" "),
     } as React.CSSProperties;
   }, [columns]);
 
-  return (
-    <section className="governance-list" aria-label={ariaLabel} style={style}>
-      <div className="governance-list__header" role="presentation">
-        {columns.map((column) => (
+  const dataGridColumns = React.useMemo(() => {
+    return columns.map((column) => ({
+      key: column.id,
+      label: column.label,
+      sortable: false,
+    }));
+  }, [columns]);
+
+  const rows = React.useMemo(() => {
+    return React.Children.toArray(children).map((rowElement, rowIndex) => {
+      const rowChildren = isGovernanceRow(rowElement) ? rowElement.props.children : rowElement;
+      const cells = React.Children.toArray(rowChildren);
+      const row: Record<string, React.ReactNode> = {
+        id: React.isValidElement(rowElement) && rowElement.key !== null ? String(rowElement.key) : String(rowIndex),
+      };
+
+      columns.forEach((column, columnIndex) => {
+        const cell = cells[columnIndex];
+        const label = isGovernanceCell(cell) ? cell.props.label : column.label;
+        const align = isGovernanceCell(cell) ? cell.props.align ?? column.align : column.align;
+        const content = isGovernanceCell(cell) ? cell.props.children : cell;
+        row[column.id] = (
           <div
-            key={column.id}
-            className={`governance-list__header-cell${column.align === "end" ? " governance-list__header-cell--end" : ""}`}
+            className={`settings-governance-cell-content${align === "end" ? " settings-governance-cell-content--end" : ""}`}
+            data-label={label}
           >
-            {column.label}
+            {content}
           </div>
-        ))}
-      </div>
-      <div className="governance-list__body">{children}</div>
-    </section>
+        );
+      });
+
+      return row;
+    });
+  }, [children, columns]);
+
+  return (
+    <ChipsDataGrid.Root
+      className="settings-governance-list"
+      ariaLabel={ariaLabel}
+      columns={dataGridColumns}
+      rows={rows}
+      selectedRowIds={[]}
+      onSelectedRowIdsChange={() => undefined}
+      style={style}
+    />
   );
 }
 
 export function GovernanceListRow({ children }: GovernanceListRowProps): React.ReactElement {
-  return <div className="governance-list__row">{children}</div>;
+  return <>{children}</>;
 }
 
 export function GovernanceListCell({ label, align = "start", children }: GovernanceListCellProps): React.ReactElement {
-  return (
-    <div className={`governance-list__cell${align === "end" ? " governance-list__cell--end" : ""}`} data-label={label}>
-      {children}
-    </div>
-  );
+  void label;
+  void align;
+  return <>{children}</>;
 }

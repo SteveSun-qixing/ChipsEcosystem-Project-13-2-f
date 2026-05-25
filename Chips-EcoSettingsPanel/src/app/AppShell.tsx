@@ -1,9 +1,16 @@
 import React from "react";
 import {
+  ChipsBox,
+  ChipsButton,
   ChipsCommandPalette,
   ChipsCommandProvider,
+  ChipsGrid,
+  ChipsLoadingBoundary,
   ChipsMenuBar,
+  ChipsNavigationSplitView,
   ChipsSelect,
+  ChipsStack,
+  ChipsText,
   ChipsToolbar,
 } from "@chips/component-library";
 import { useI18n } from "./providers/I18nProvider";
@@ -70,29 +77,53 @@ export function AppShell(): React.ReactElement {
 
   return (
     <ChipsCommandProvider adapter={commands.adapter} commands={settingsCommandViews} i18n={t}>
-      <div className="settings-app-shell" data-app-id={runtime.environment.appId} data-scene-id={activeSceneId}>
-        <aside className="settings-sidebar">
-          <div className="settings-sidebar__brand">
-            <div className="settings-sidebar__eyebrow">{t("settingsPanel.app.eyebrow")}</div>
-            <h1 className="settings-sidebar__title">{t("settingsPanel.app.title")}</h1>
-            <p className="settings-sidebar__subtitle">{t("settingsPanel.app.subtitle")}</p>
-          </div>
-          <nav className="settings-sidebar__nav" aria-label={t("settingsPanel.menu.ariaLabel")}>
-            {sceneDefinitions.map((scene) => (
-              <button
-                key={scene.id}
-                type="button"
-                className={`settings-menu-item${scene.id === activeSceneId ? " settings-menu-item--active" : ""}`}
-                onClick={() => invokeSceneCommand(scene.id)}
-              >
-                <span className="settings-menu-item__title">{t(scene.titleKey)}</span>
-                <span className="settings-menu-item__summary">{t(scene.summaryKey)}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-        <main className="settings-content" data-theme-id={currentTheme?.themeId}>
-          <div className="settings-command-row">
+      <ChipsNavigationSplitView.Root
+        className="settings-app-shell"
+        ariaLabel={t("settingsPanel.app.title")}
+        data-app-id={runtime.environment.appId}
+        data-scene-id={activeSceneId}
+      >
+        <ChipsNavigationSplitView.Sidebar
+          className="settings-shell__sidebar"
+          ariaLabel={t("settingsPanel.menu.ariaLabel")}
+        >
+          <ChipsStack gap="var(--chips-layout-gap-lg, 24px)" align="stretch">
+            <ChipsStack className="settings-brand" gap="var(--chips-layout-gap-sm, 10px)" align="stretch">
+              <ChipsText className="settings-brand__eyebrow" as="span" text={t("settingsPanel.app.eyebrow")} tone="muted" />
+              <ChipsText className="settings-brand__title" as="strong" text={t("settingsPanel.app.title")} emphasis="strong" />
+              <ChipsText className="settings-brand__subtitle" as="p" text={t("settingsPanel.app.subtitle")} tone="muted" />
+            </ChipsStack>
+            <ChipsStack
+              className="settings-nav-list"
+              as="nav"
+              gap="var(--chips-layout-gap-sm, 10px)"
+              aria-label={t("settingsPanel.menu.ariaLabel")}
+              align="stretch"
+            >
+              {sceneDefinitions.map((scene) => (
+                <ChipsButton
+                  key={scene.id}
+                  toggleable
+                  pressed={scene.id === activeSceneId}
+                  onPress={() => invokeSceneCommand(scene.id)}
+                >
+                  <span className="settings-nav-label">
+                    <ChipsText as="span" text={t(scene.titleKey)} emphasis="strong" />
+                    <ChipsText as="span" text={t(scene.summaryKey)} tone="muted" />
+                  </span>
+                </ChipsButton>
+              ))}
+            </ChipsStack>
+          </ChipsStack>
+        </ChipsNavigationSplitView.Sidebar>
+        <ChipsNavigationSplitView.Detail
+          as="main"
+          className="settings-shell__detail"
+          ariaLabel={t(activeScene.titleKey)}
+          data-theme-id={currentTheme?.themeId}
+        >
+          <ChipsStack className="settings-shell__content" gap="var(--chips-layout-gap-md, 18px)" align="stretch">
+          <ChipsGrid className="settings-command-row" minItemSize="220px" gap="var(--chips-layout-gap-sm, 12px)">
             <ChipsMenuBar
               adapter={commands.adapter}
               commands={settingsCommandViews}
@@ -111,32 +142,38 @@ export function AppShell(): React.ReactElement {
               ariaLabel={t("settingsPanel.commands.palette.ariaLabel")}
               inputPlaceholder={t("settingsPanel.commands.palette.searchPlaceholder")}
             />
-          </div>
-          <div className="settings-mobile-nav">
-            <div className="settings-mobile-nav__label">{t("settingsPanel.menu.mobileLabel")}</div>
+          </ChipsGrid>
+          <ChipsBox className="settings-mobile-nav" padding="var(--chips-layout-gap-md, 16px)" radius="var(--chips-sys-radius-container, 14px)">
+            <ChipsText className="settings-mobile-nav__label" as="span" text={t("settingsPanel.menu.mobileLabel")} tone="muted" />
             <ChipsSelect
               value={activeScene.id}
               aria-label={t("settingsPanel.menu.mobileAriaLabel")}
               options={mobileSceneOptions}
               onValueChange={(nextValue) => invokeSceneCommand(nextValue as SettingsSceneId)}
             />
-            <p className="settings-mobile-nav__summary">{t(activeScene.summaryKey)}</p>
-          </div>
+            <ChipsText className="settings-mobile-nav__summary" as="p" text={t(activeScene.summaryKey)} tone="muted" />
+          </ChipsBox>
           <NotificationStack ariaLabel={t("settingsPanel.feedback.ariaLabel")} items={feedbackItems} />
           {!ready ? (
-            <div className="settings-content__loading">{t("settingsPanel.app.loading")}</div>
+            <ChipsLoadingBoundary
+              loading
+              delayMs={0}
+              loadingText={t("settingsPanel.app.loading")}
+              ariaLabel={t("settingsPanel.app.loading")}
+            />
           ) : (
             activeScene.render()
           )}
           {runtimeError ? (
-            <div className="settings-content__footer-action">
-              <button type="button" className="text-button" onClick={() => void refreshRuntimeState()}>
+            <div className="settings-shell__footer-action">
+              <ChipsButton onPress={() => void refreshRuntimeState()}>
                 {t("settingsPanel.app.retry")}
-              </button>
+              </ChipsButton>
             </div>
           ) : null}
-        </main>
-      </div>
+          </ChipsStack>
+        </ChipsNavigationSplitView.Detail>
+      </ChipsNavigationSplitView.Root>
     </ChipsCommandProvider>
   );
 }

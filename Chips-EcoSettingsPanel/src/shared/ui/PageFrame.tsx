@@ -1,5 +1,5 @@
 import React from "react";
-import { ChipsPanelHeader } from "@chips/component-library";
+import { ChipsPanelHeader, ChipsStack } from "@chips/component-library";
 
 interface PageFrameProps {
   title: string;
@@ -10,9 +10,21 @@ interface PageFrameProps {
 
 export function PageFrame({ title, subtitle, actions, children }: PageFrameProps): React.ReactElement {
   return (
-    <section className="page-frame">
+    <ChipsStack
+      as="section"
+      className="settings-page-frame"
+      gap="var(--chips-layout-gap-md, 18px)"
+      align="stretch"
+      aria-label={title}
+    >
       <ChipsPanelHeader title={title} subtitle={subtitle} actions={actions} />
-      <div className="page-frame__body">{children}</div>
-    </section>
+      <ChipsStack
+        className="settings-page-frame__body"
+        gap="var(--chips-layout-gap-md, 18px)"
+        align="stretch"
+      >
+        {children}
+      </ChipsStack>
+    </ChipsStack>
   );
 }

@@ -95,6 +95,7 @@ describe("ThemeDiagnosticsPage", () => {
     expect(markup).toContain("client.theme.contract.get");
     expect(markup).toContain("client.theme.resolve");
     expect(markup).toContain("THEME_OPTIONAL_TOKEN_MISSING");
-    expect(markup).toContain("governance-list");
+    expect(markup).toContain("data-scope=\"data-grid\"");
+    expect(markup).toContain("settings-governance-list");
   });
 });

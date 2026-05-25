@@ -1,5 +1,5 @@
 import React from "react";
-import { ChipsDialog } from "@chips/component-library";
+import { ChipsBox, ChipsDialog } from "@chips/component-library";
 import { useI18n } from "../../app/providers/I18nProvider";
 
 export interface DetailField {
@@ -29,14 +29,17 @@ export function RecordDetailDialog({
       description={description}
       closeButtonLabel={t("settingsPanel.common.close")}
     >
-      <dl className="detail-field-list">
+      <ChipsBox
+        as="dl"
+        className="settings-detail-field-list"
+      >
         {fields.map((field) => (
-          <div key={field.label} className="detail-field-list__item">
+          <div key={field.label} className="settings-detail-field-list__item">
             <dt>{field.label}</dt>
             <dd>{field.value}</dd>
           </div>
         ))}
-      </dl>
+      </ChipsBox>
     </ChipsDialog>
   );
 }

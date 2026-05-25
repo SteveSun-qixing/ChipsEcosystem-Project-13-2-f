@@ -178,7 +178,8 @@ describe("App (标准应用插件根组件)", () => {
     const markup = renderToStaticMarkup(<App />);
 
     expect(markup).not.toContain("settings-titlebar");
-    expect(markup).toContain("settings-sidebar__nav");
+    expect(markup).toContain("data-scope=\"navigation-split-view\"");
+    expect(markup).toContain("settings-nav-list");
     expect(markup).toContain("settings-mobile-nav");
     expect(markup).toContain("settingsPanel.menu.mobileLabel");
     expect(markup).toContain("settingsPanel.menu.themes.title");

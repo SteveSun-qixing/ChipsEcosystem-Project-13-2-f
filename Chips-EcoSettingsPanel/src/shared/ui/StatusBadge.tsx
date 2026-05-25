@@ -1,15 +1,24 @@
 import React from "react";
+import { ChipsBadge } from "@chips/component-library";
 
 interface StatusBadgeProps {
   tone: "neutral" | "positive" | "attention" | "danger";
   label: string;
 }
 
+const BADGE_TONE_MAP = {
+  neutral: "neutral",
+  positive: "success",
+  attention: "warning",
+  danger: "error",
+} as const;
+
 export function StatusBadge({ tone, label }: StatusBadgeProps): React.ReactElement {
   return (
-    <span className={`status-badge status-badge--${tone}`}>
-      <span className="status-badge__dot" aria-hidden="true" />
-      <span>{label}</span>
-    </span>
+    <ChipsBadge
+      className="settings-status-badge"
+      tone={BADGE_TONE_MAP[tone]}
+      label={label}
+    />
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { ChipsButton, ChipsCardShell, ChipsEmptyState } from "@chips/component-library";
+import { ChipsBox, ChipsButton, ChipsCardShell, ChipsEmptyState } from "@chips/component-library";
 import type { ThemeDiagnosticStatus } from "chips-sdk";
 import { useI18n } from "../../app/providers/I18nProvider";
 import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
@@ -85,20 +85,23 @@ function DiagnosticList({ diagnostics }: { diagnostics: ThemeDiagnosticRowViewMo
             <StatusBadge tone={diagnosticTone(diagnostic)} label={diagnostic.code} />
             <span className="diagnostic-list__severity">{diagnostic.severity}</span>
           </div>
-          <dl className="detail-field-list">
-            <div className="detail-field-list__item">
+          <ChipsBox
+            as="dl"
+            className="settings-detail-field-list"
+          >
+            <div className="settings-detail-field-list__item">
               <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.messageKey")}</dt>
               <dd>{diagnostic.messageKey}</dd>
             </div>
-            <div className="detail-field-list__item">
+            <div className="settings-detail-field-list__item">
               <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.target")}</dt>
               <dd>{diagnostic.component ?? diagnostic.tokenKey ?? diagnostic.themeId ?? t("settingsPanel.common.notAvailable")}</dd>
             </div>
-            <div className="detail-field-list__item">
+            <div className="settings-detail-field-list__item">
               <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.suggestion")}</dt>
               <dd>{diagnostic.suggestionKey ?? t("settingsPanel.common.notAvailable")}</dd>
             </div>
-          </dl>
+          </ChipsBox>
         </article>
       ))}
     </div>

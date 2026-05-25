@@ -46,7 +46,8 @@ describe("LanguagePage", () => {
     const { LanguagePage } = await import("../../src/features/languages/LanguagePage");
     const markup = renderToStaticMarkup(<LanguagePage />);
 
-    expect(markup).toContain("governance-list");
+    expect(markup).toContain("data-scope=\"data-grid\"");
+    expect(markup).toContain("settings-governance-list");
     expect(markup).toContain("settingsPanel.languages.columns.language");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("zh-CN");

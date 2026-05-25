@@ -1,4 +1,5 @@
 import React from "react";
+import { ChipsBox, ChipsStack, ChipsText } from "@chips/component-library";
 
 interface DropZoneProps {
   title: string;
@@ -28,13 +29,19 @@ export function DropZone({ title, description, active, disabled = false, onDropF
   }, [disabled, onDropFiles]);
 
   return (
-    <div
-      className={`drop-zone${active ? " drop-zone--active" : ""}${disabled ? " drop-zone--disabled" : ""}`}
+    <ChipsBox
+      className="settings-drop-zone"
+      active={active}
+      disabled={disabled}
+      padding="var(--chips-layout-gap-md, 18px)"
+      radius="var(--chips-sys-radius-container, 16px)"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className="drop-zone__title">{title}</div>
-      <div className="drop-zone__description">{description}</div>
-    </div>
+      <ChipsStack gap="var(--chips-layout-gap-xs, 8px)" align="stretch">
+        <ChipsText as="strong" text={title} emphasis="strong" />
+        <ChipsText as="span" text={description} tone="muted" />
+      </ChipsStack>
+    </ChipsBox>
   );
 }

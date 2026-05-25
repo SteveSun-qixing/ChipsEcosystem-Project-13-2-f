@@ -86,9 +86,57 @@ describe('EditorSessionStore', () => {
             path: 'photo.png',
             data: new Uint8Array([1, 2, 3]),
             mimeType: 'image/png',
+            token: expect.any(String),
           },
         ],
         deletions: [],
+      },
+    });
+  });
+
+  it('keeps deletion intents pending until the draft stops referencing the resource', async () => {
+    const store = new EditorSessionStore();
+    const key = store.createKey('card-1', 'base-1');
+    store.ensureSession({
+      cardId: 'card-1',
+      baseCardId: 'base-1',
+      cardType: 'base.mock',
+      sourceConfig: {
+        id: 'base-1',
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'photo.png',
+          },
+        ],
+      },
+      descriptor,
+    });
+
+    store.queueResourceDeletion(key, 'photo.png');
+
+    const commitAction = vi.fn();
+    expect(store.canCommit(key, descriptor)).toBe(false);
+    await store.commit(key, descriptor, commitAction);
+    expect(commitAction).not.toHaveBeenCalled();
+
+    store.updateDraft(key, descriptor, {
+      id: 'base-1',
+      images: [],
+    });
+
+    expect(store.canCommit(key, descriptor)).toBe(true);
+    await store.commit(key, descriptor, commitAction);
+    expect(commitAction).toHaveBeenCalledTimes(1);
+    expect(commitAction).toHaveBeenCalledWith({
+      config: {
+        id: 'base-1',
+        images: [],
+      },
+      resourceOperations: {
+        imports: [],
+        deletions: ['photo.png'],
       },
     });
   });

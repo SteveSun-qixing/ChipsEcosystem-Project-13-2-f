@@ -77,6 +77,7 @@ export interface BasecardPendingResourceImport {
   path: string;
   data: Uint8Array;
   mimeType?: string;
+  token?: string;
 }
 
 export interface BasecardResourceOperations {

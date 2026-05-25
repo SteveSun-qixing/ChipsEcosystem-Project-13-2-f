@@ -32,7 +32,12 @@ function cloneResourceImport(resource: BasecardPendingResourceImport): BasecardP
     path: resource.path,
     data: cloneBytes(resource.data),
     mimeType: resource.mimeType,
+    token: resource.token,
   };
+}
+
+function createPendingResourceToken(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function hasPendingResourceMutations(session: InternalEditorSession): boolean {
@@ -248,7 +253,10 @@ export class EditorSessionStore {
       throw new Error(`未找到编辑会话: ${key}`);
     }
 
-    session.resourceImports.set(resource.path, cloneResourceImport(resource));
+    session.resourceImports.set(resource.path, {
+      ...cloneResourceImport(resource),
+      token: resource.token ?? createPendingResourceToken(),
+    });
     session.resourceDeletions.delete(resource.path);
     syncDirtyFlag(session);
     session.revision += 1;

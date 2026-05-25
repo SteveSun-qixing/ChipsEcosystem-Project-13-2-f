@@ -60,6 +60,19 @@ function createObjectUrl(resource: BasecardPendingResourceImport): string {
   return URL.createObjectURL(new Blob([buffer], { type }));
 }
 
+function getPendingResourceCacheKey(resource: BasecardPendingResourceImport): string {
+  if (resource.token) {
+    return resource.token;
+  }
+
+  let hash = 2166136261;
+  for (const byte of resource.data) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${resource.mimeType ?? ''}:${resource.data.byteLength}:${hash >>> 0}`;
+}
+
 function createFrameDocumentHtml(resourceBaseUrl?: string): string {
   return [
     '<!doctype html>',
@@ -139,7 +152,7 @@ export function BasecardFrameHost({
   const onInteractionRef = useRef(onInteraction);
   const interactionPolicyRef = useRef(interactionPolicy);
   const pendingResourceImportsRef = useRef(pendingResourceImports);
-  const resolvedResourceUrlsRef = useRef(new Map<string, string>());
+  const resolvedResourceUrlsRef = useRef(new Map<string, { url: string; cacheKey: string }>());
   const [status, setStatus] = useState<BasecardFrameStatus>(DEFAULT_STATUS);
   const [registryVersion, setRegistryVersion] = useState(() => getBasecardRegistryVersion());
 
@@ -188,7 +201,7 @@ export function BasecardFrameHost({
   useEffect(() => {
     return () => {
       resolvedResourceUrlsRef.current.forEach((url) => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url.url);
       });
       resolvedResourceUrlsRef.current.clear();
     };
@@ -215,6 +228,7 @@ export function BasecardFrameHost({
     }
 
     let disposed = false;
+    let frameMounted = false;
     let renderCleanup: (() => void) | void;
     const cleanupTasks: Array<() => void> = [];
     const resolveResourceUrl = async (resourcePath: string): Promise<string> => {
@@ -225,16 +239,22 @@ export function BasecardFrameHost({
 
       const pendingImport = pendingResourceImportsRef.current?.get(normalizedResourcePath);
       if (pendingImport) {
+        const cacheKey = getPendingResourceCacheKey(pendingImport);
         const cachedUrl = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
+        if (cachedUrl?.cacheKey === cacheKey) {
+          return cachedUrl.url;
+        }
+
         if (cachedUrl) {
-          return cachedUrl;
+          URL.revokeObjectURL(cachedUrl.url);
         }
 
         const nextUrl = createObjectUrl(pendingImport);
-        resolvedResourceUrlsRef.current.set(normalizedResourcePath, nextUrl);
+        resolvedResourceUrlsRef.current.set(normalizedResourcePath, { url: nextUrl, cacheKey });
         return nextUrl;
       }
 
+      releaseResourceUrl(normalizedResourcePath);
       if (resourceBaseUrl) {
         return new URL(normalizedResourcePath, resourceBaseUrl).toString();
       }
@@ -252,7 +272,7 @@ export function BasecardFrameHost({
         return;
       }
 
-      URL.revokeObjectURL(currentUrl);
+      URL.revokeObjectURL(currentUrl.url);
       resolvedResourceUrlsRef.current.delete(normalizedResourcePath);
     };
     setStatus((current) => {
@@ -372,19 +392,24 @@ export function BasecardFrameHost({
         doc.removeEventListener('wheel', handleWheel);
       });
 
-      frameWindow.requestAnimationFrame(() => {
-        applyMeasuredHeight();
-      });
+      applyMeasuredHeight();
+      if (typeof frameWindow.requestAnimationFrame === 'function') {
+        frameWindow.requestAnimationFrame(() => {
+          applyMeasuredHeight();
+        });
+      }
     };
 
     const handleFrameLoad = () => {
-      if (disposed) {
+      if (disposed || frameMounted) {
         return;
       }
 
       try {
+        frameMounted = true;
         mountFrame();
       } catch (error) {
+        frameMounted = false;
         const normalizedError = error instanceof Error ? error : new Error(String(error));
         setStatus({
           state: 'error',
@@ -405,7 +430,7 @@ export function BasecardFrameHost({
       disposed = true;
       cleanupTasks.forEach((cleanup) => cleanup());
       resolvedResourceUrlsRef.current.forEach((url) => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url.url);
       });
       resolvedResourceUrlsRef.current.clear();
       if (typeof renderCleanup === 'function') {

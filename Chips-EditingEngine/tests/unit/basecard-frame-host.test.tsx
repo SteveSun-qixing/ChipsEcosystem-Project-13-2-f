@@ -263,6 +263,87 @@ describe('BasecardFrameHost', () => {
     expect(previewImage?.getAttribute('src')?.startsWith('blob:')).toBe(true);
   });
 
+  it('keeps the iframe mounted while invalidating replaced pending resource urls', async () => {
+    const resolvedUrls: string[] = [];
+    createObjectURL
+      .mockReturnValueOnce('blob:pending-cover-v1')
+      .mockReturnValueOnce('blob:pending-cover-v2');
+    mockRenderView.mockReset();
+    mockRenderView.mockImplementation(({ resolveResourceUrl }: {
+      resolveResourceUrl?: (resourcePath: string) => Promise<string>;
+    }) => {
+      void resolveResourceUrl?.('cover.png').then((src) => {
+        resolvedUrls.push(src);
+      });
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          pendingResourceImports={new Map([
+            ['cover.png', { path: 'cover.png', data: new Uint8Array([1, 2, 3]), mimeType: 'image/png', token: 'v1' }],
+          ])}
+          interactionPolicy="native"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
+    expect(frameWindow).not.toBeNull();
+    Object.defineProperty(frameWindow, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as (cb: FrameRequestCallback) => number,
+    });
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(resolvedUrls).toContain('blob:pending-cover-v1');
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(mockRenderView).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          pendingResourceImports={new Map([
+            ['cover.png', { path: 'cover.png', data: new Uint8Array([4, 5, 6]), mimeType: 'image/png', token: 'v2' }],
+          ])}
+          interactionPolicy="native"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const lastRenderCall = mockRenderView.mock.calls[mockRenderView.mock.calls.length - 1];
+    const resolveResourceUrl = lastRenderCall?.[0]?.resolveResourceUrl as
+      | ((resourcePath: string) => Promise<string>)
+      | undefined;
+    const nextUrl = await resolveResourceUrl?.('cover.png');
+
+    expect(nextUrl).toBe('blob:pending-cover-v2');
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:pending-cover-v1');
+    expect(mockRenderView).toHaveBeenCalledTimes(1);
+  });
+
   it('renders a transparent selection shield when the descriptor requests shielded preview pointers', async () => {
     mockPreviewPointerEvents = 'shielded';
     const onSelect = vi.fn();

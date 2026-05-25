@@ -626,6 +626,73 @@ describe('PluginHost', () => {
     expect(mockRenderEditor).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidates cached editor preview urls when pending imports are replaced in place', async () => {
+    createObjectURL
+      .mockReturnValueOnce('blob:photo-v1')
+      .mockReturnValueOnce('blob:photo-v2');
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              images: [
+                {
+                  id: 'image-1',
+                  source: 'file',
+                  file_path: 'photo.png',
+                },
+              ],
+            }}
+            pendingResourceImports={new Map([
+              ['photo.png', { path: 'photo.png', data: new Uint8Array([1, 2, 3]), mimeType: 'image/png', token: 'v1' }],
+            ])}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+    await expect(editorResolveResourceUrl?.('photo.png')).resolves.toBe('blob:photo-v1');
+
+    await act(async () => {
+      root.render(
+        <EditorRuntimeProvider>
+          <PluginHost
+            cardId="card-1"
+            cardPath="/workspace/card-1.card"
+            cardType="ImageCard"
+            baseCardId="base-1"
+            config={{
+              id: 'base-1',
+              images: [
+                {
+                  id: 'image-1',
+                  source: 'file',
+                  file_path: 'photo.png',
+                },
+              ],
+            }}
+            pendingResourceImports={new Map([
+              ['photo.png', { path: 'photo.png', data: new Uint8Array([4, 5, 6]), mimeType: 'image/png', token: 'v2' }],
+            ])}
+          />
+        </EditorRuntimeProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    await expect(editorResolveResourceUrl?.('photo.png')).resolves.toBe('blob:photo-v2');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:photo-v1');
+    expect(mockRenderEditor).toHaveBeenCalledTimes(1);
+  });
+
   it('stages TIFF conversion results back into the editor session for music cover extraction', async () => {
     await act(async () => {
       root.render(

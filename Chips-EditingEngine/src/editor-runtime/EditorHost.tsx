@@ -77,6 +77,19 @@ function createObjectUrl(resource: BasecardPendingResourceImport): string {
   return URL.createObjectURL(new Blob([buffer], { type }));
 }
 
+function getPendingResourceCacheKey(resource: BasecardPendingResourceImport): string {
+  if (resource.token) {
+    return resource.token;
+  }
+
+  let hash = 2166136261;
+  for (const byte of resource.data) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${resource.mimeType ?? ''}:${resource.data.byteLength}:${hash >>> 0}`;
+}
+
 function createStagedConversionFilePath(cardPath: string, baseCardId: string, extension: string): string {
   const normalizedExtension = extension.replace(/^\./, '').toLowerCase() || 'bin';
   const normalizedBaseCardId = baseCardId.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/-+/g, '-') || 'basecard';
@@ -137,7 +150,11 @@ export function EditorHost({
   const mountRevision = snapshot?.mountRevision ?? 0;
   const latestDraftConfigRef = useRef<Record<string, unknown>>(sourceConfig);
   const pendingResourceImportsRef = useRef(pendingResourceImports);
-  const resolvedResourceUrlsRef = useRef(new Map<string, string>());
+  const resolvedResourceUrlsRef = useRef(new Map<string, {
+    url: string;
+    kind: 'pending' | 'file';
+    cacheKey: string;
+  }>());
   const pendingResourceResolvesRef = useRef(new Map<string, Promise<string>>());
   const commitSessionRef = useRef<() => Promise<void>>(async () => undefined);
 
@@ -151,16 +168,16 @@ export function EditorHost({
       return;
     }
 
-    if (url.startsWith('blob:')) {
-      URL.revokeObjectURL(url);
+    if (url.url.startsWith('blob:')) {
+      URL.revokeObjectURL(url.url);
     }
     resolvedResourceUrlsRef.current.delete(resourcePath);
   }, []);
 
   const releaseAllResolvedResourceUrls = useCallback(() => {
     resolvedResourceUrlsRef.current.forEach((url) => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url);
+      if (url.url.startsWith('blob:')) {
+        URL.revokeObjectURL(url.url);
       }
     });
     resolvedResourceUrlsRef.current.clear();
@@ -253,8 +270,17 @@ export function EditorHost({
     }
 
     const cached = resolvedResourceUrlsRef.current.get(normalizedResourcePath);
-    if (cached) {
-      return cached;
+    const pendingImport =
+      store.getPendingResourceImport(sessionKey, normalizedResourcePath)
+      ?? pendingResourceImportsRef.current?.get(normalizedResourcePath)
+      ?? null;
+    const nextKind = pendingImport ? 'pending' : 'file';
+    const nextCacheKey = pendingImport
+      ? getPendingResourceCacheKey(pendingImport)
+      : joinPath(cardPath, normalizedResourcePath);
+
+    if (cached?.kind === nextKind && cached.cacheKey === nextCacheKey) {
+      return cached.url;
     }
 
     const pendingResolve = pendingResourceResolvesRef.current.get(normalizedResourcePath);
@@ -263,16 +289,15 @@ export function EditorHost({
     }
 
     const resolver = (async () => {
-      const pendingImport =
-        store.getPendingResourceImport(sessionKey, normalizedResourcePath)
-        ?? pendingResourceImportsRef.current?.get(normalizedResourcePath)
-        ?? null;
       const nextUrl = pendingImport
         ? createObjectUrl(pendingImport)
         : createFileUrl(joinPath(cardPath, normalizedResourcePath));
-
       releaseResolvedResourceUrl(normalizedResourcePath);
-      resolvedResourceUrlsRef.current.set(normalizedResourcePath, nextUrl);
+      resolvedResourceUrlsRef.current.set(normalizedResourcePath, {
+        url: nextUrl,
+        kind: nextKind,
+        cacheKey: nextCacheKey,
+      });
       return nextUrl;
     })().finally(() => {
       pendingResourceResolvesRef.current.delete(normalizedResourcePath);

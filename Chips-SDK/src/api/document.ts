@@ -1,6 +1,6 @@
 import type {
   CompositeInteractionPolicy,
-  CompositeResizePayload,
+  CompositeNodeError,
   CompositeResourceOpenPayload,
   FrameRenderResult,
 } from "./card";
@@ -30,14 +30,8 @@ export interface DocumentWindowErrorPayload extends StandardError {
   documentType: DocumentType;
 }
 
-export interface DocumentWindowResizePayload {
-  documentType: DocumentType;
-  height: number;
-  reason: string;
-  nodeCount?: number;
-  layoutType?: string;
-  pluginId?: string;
-  sessionId?: string;
+export interface DocumentWindowNodeErrorPayload extends CompositeNodeError {
+  documentType: "card";
 }
 
 export interface DocumentApi {
@@ -50,6 +44,10 @@ export interface DocumentApi {
     onResourceOpen(
       frame: HTMLIFrameElement,
       handler: (payload: CompositeResourceOpenPayload) => void,
+    ): () => void;
+    onNodeError(
+      frame: HTMLIFrameElement,
+      handler: (payload: DocumentWindowNodeErrorPayload) => void,
     ): () => void;
   };
 }
@@ -155,6 +153,14 @@ export function createDocumentApi(client: CoreClient): DocumentApi {
       },
       onResourceOpen(frame, handler) {
         return cardApi.compositeWindow.onResourceOpen(frame, handler);
+      },
+      onNodeError(frame, handler) {
+        return cardApi.compositeWindow.onNodeError(frame, (payload) => {
+          handler({
+            ...payload,
+            documentType: "card",
+          });
+        });
       },
     },
   };

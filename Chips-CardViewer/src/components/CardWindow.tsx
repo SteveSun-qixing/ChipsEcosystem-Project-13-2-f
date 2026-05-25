@@ -163,6 +163,13 @@ export function CardWindow({
           }),
         );
         cleanupTasks.push(
+          client.document.window.onNodeError(frame, (payload) => {
+            if (!cancelled) {
+              logger.warn("收到复合卡片节点降级事件", payload);
+            }
+          }),
+        );
+        cleanupTasks.push(
           client.document.window.onResourceOpen(frame, (payload) => {
             void client.resource
               .open({

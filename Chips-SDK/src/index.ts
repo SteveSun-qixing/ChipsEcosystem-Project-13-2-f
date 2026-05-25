@@ -25,6 +25,7 @@ export type {
   DocumentType,
   DocumentWindowErrorPayload,
   DocumentWindowMode,
+  DocumentWindowNodeErrorPayload,
   DocumentWindowRenderOptions,
   DocumentWindowRenderResult,
   DocumentWindowResizePayload,

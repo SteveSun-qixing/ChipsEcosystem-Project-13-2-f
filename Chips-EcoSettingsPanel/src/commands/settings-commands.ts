@@ -42,6 +42,8 @@ function resolveSceneIcon(sceneId: SettingsSceneId): string {
   switch (sceneId) {
     case "themes":
       return "palette";
+    case "theme-diagnostics":
+      return "rule_settings";
     case "languages":
       return "translate";
     case "app-plugins":
@@ -54,6 +56,8 @@ function resolveSceneIcon(sceneId: SettingsSceneId): string {
       return "extension";
     case "component-gallery":
       return "widgets";
+    case "preview-quality":
+      return "speed";
     default:
       return "settings";
   }

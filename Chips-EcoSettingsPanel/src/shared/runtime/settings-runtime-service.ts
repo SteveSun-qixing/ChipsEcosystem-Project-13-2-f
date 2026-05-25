@@ -1,4 +1,14 @@
-import type { Client, PlatformDialogFileOptions, PluginRecord, PluginShortcutRecord, PluginType, ThemeMeta, ThemeState } from "chips-sdk";
+import type {
+  Client,
+  PlatformDialogFileOptions,
+  PluginRecord,
+  PluginShortcutRecord,
+  PluginType,
+  ResolvedTheme,
+  ThemeContractView,
+  ThemeMeta,
+  ThemeState,
+} from "chips-sdk";
 import { appConfig } from "../../../config/app-config";
 import { getChipsClient } from "./client";
 import { normalizeSettingsError, type SettingsPanelError } from "./errors";
@@ -172,6 +182,22 @@ export class SettingsRuntimeService {
       await this.client.theme.apply(themeId);
     } catch (error) {
       throw toSettingsError(error, "Failed to apply selected theme.");
+    }
+  }
+
+  public async getThemeContract(component?: string): Promise<ThemeContractView> {
+    try {
+      return await this.client.theme.contract.get(component);
+    } catch (error) {
+      throw toSettingsError(error, "Failed to load theme contract diagnostics.");
+    }
+  }
+
+  public async resolveThemeDiagnostics(chain: string[] = []): Promise<ResolvedTheme> {
+    try {
+      return await this.client.theme.resolve(chain);
+    } catch (error) {
+      throw toSettingsError(error, "Failed to resolve theme diagnostics.");
     }
   }
 

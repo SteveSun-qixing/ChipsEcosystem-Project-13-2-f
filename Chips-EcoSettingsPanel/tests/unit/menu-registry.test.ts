@@ -7,12 +7,14 @@ describe("menu registry", () => {
   it("keeps menu entries sorted by order and registered exactly once", () => {
     expect(MENU_REGISTRY.map((entry) => entry.id)).toEqual([
       "themes",
+      "theme-diagnostics",
       "languages",
       "app-plugins",
       "card-plugins",
       "layout-plugins",
       "module-plugins",
       "component-gallery",
+      "preview-quality",
     ]);
     expect(new Set(MENU_REGISTRY.map((entry) => entry.id)).size).toBe(MENU_REGISTRY.length);
   });

@@ -17,6 +17,10 @@
         "title": "主题管理",
         "summary": "安装、切换、卸载主题包"
       },
+      "themeDiagnostics": {
+        "title": "主题诊断",
+        "summary": "查看当前主题 Contract 与缺失 token"
+      },
       "languages": {
         "title": "多语言",
         "summary": "切换当前语言并验证即时刷新"
@@ -40,6 +44,10 @@
       "gallery": {
         "title": "组件展示",
         "summary": "用真实组件验证当前主题效果"
+      },
+      "previewQuality": {
+        "title": "预览与质量",
+        "summary": "查看预览、Contract 与质量报告入口"
       }
     },
     "feedback": {
@@ -73,6 +81,7 @@
       "themeInstall": "安装主题失败。",
       "themeApply": "切换主题失败。",
       "themeUninstall": "卸载主题失败。",
+      "themeDiagnostics": "读取主题诊断失败。",
       "languageList": "读取语言列表失败。",
       "languageSwitch": "切换语言失败。",
       "appPluginList": "读取应用插件列表失败。",
@@ -749,6 +758,151 @@
         },
         "skeleton": {
           "ariaLabel": "骨架屏预览"
+        }
+      }
+    },
+    "themeDiagnostics": {
+      "title": "主题诊断",
+      "subtitle": "只读取 Host 当前主题的 Contract 与 resolve 诊断，不在前端扫描主题包文件。",
+      "loading": "正在加载主题 Contract 与解析诊断…",
+      "actions": {
+        "refresh": "刷新诊断"
+      },
+      "empty": {
+        "ariaLabel": "主题诊断空状态",
+        "title": "暂无主题诊断",
+        "description": "Host 当前没有返回可展示的主题 Contract 或解析结果。"
+      },
+      "status": {
+        "complete": "完整",
+        "warning": "警告",
+        "blocked": "阻断"
+      },
+      "fields": {
+        "themeVersion": "主题版本",
+        "contractVersion": "Contract 版本",
+        "schemaVersion": "Schema 版本"
+      },
+      "summary": {
+        "ariaLabel": "主题诊断摘要",
+        "source": "数据源：{contract} 与 {resolve}"
+      },
+      "metrics": {
+        "requiredCoverage": "必需 token 覆盖率",
+        "requiredDetail": "缺失 {missing} / 共 {total}",
+        "optionalCoverage": "可选 token 覆盖率",
+        "optionalDetail": "缺失 {missing} / 共 {total}",
+        "components": "组件覆盖",
+        "componentsDetail": "当前主题 Contract 组件覆盖情况",
+        "diagnostics": "诊断项",
+        "diagnosticsDetail": "其中 {blocking} 项阻断"
+      },
+      "chain": {
+        "title": "当前主题解析链"
+      },
+      "components": {
+        "ariaLabel": "主题组件 Contract 覆盖列表",
+        "columns": {
+          "component": "组件",
+          "coverage": "覆盖率",
+          "tokens": "Token",
+          "status": "状态"
+        },
+        "scope": "Scope：{scope}",
+        "requiredTokens": "必需 token 缺失 {missing} / 共 {total}",
+        "partsStates": "{parts} 个 parts，{states} 个 states"
+      },
+      "diagnostics": {
+        "title": "缺失 token 与 Contract 诊断",
+        "ariaLabel": "主题诊断列表",
+        "fields": {
+          "messageKey": "消息键",
+          "target": "目标",
+          "suggestion": "建议"
+        },
+        "empty": {
+          "ariaLabel": "无诊断项",
+          "title": "未发现主题诊断项",
+          "description": "Host 返回的当前主题 Contract 与 resolve 诊断均为空。"
+        }
+      }
+    },
+    "previewQuality": {
+      "title": "预览与质量",
+      "subtitle": "展示正式 chipsdev 报告入口；运行时页面不直接读取本地私有报告文件。",
+      "summary": {
+        "ariaLabel": "预览与质量入口摘要",
+        "badge": "报告入口",
+        "title": "开发工具链入口",
+        "description": "这些命令用于生成正式 JSON 报告，后续若要在运行时直接展示完整报告，需要先补 Host/SDK 报告消费链路。",
+        "runtimeBoundary": "运行时只消费正式 SDK/Bridge 接口",
+        "reportBoundary": "报告由 chipsdev 命令生成"
+      },
+      "kind": {
+        "preview": "预览",
+        "contract": "Contract",
+        "quality": "质量"
+      },
+      "command": {
+        "ariaLabel": "正式命令"
+      },
+      "targets": {
+        "app": "应用插件预览报告",
+        "component": "组件预览报告",
+        "card": "卡片预览报告",
+        "box": "箱子预览报告",
+        "layout": "布局插件预览报告",
+        "theme": "主题预览报告",
+        "componentContract": "组件 Contract 矩阵",
+        "themeContract": "主题包检查",
+        "quality": "质量门禁摘要",
+        "diagnostics": "生态诊断摘要"
+      },
+      "boundaries": {
+        "previewReport": "只生成预览链路报告，真实应用窗口联调仍使用 chipsdev run。",
+        "formalRenderOnly": "卡片、箱子与布局预览必须走正式 SDK/Host 渲染链路，不在前端伪造样本。",
+        "reportOnly": "当前入口只声明正式报告命令，不在应用运行时读取本地报告文件。"
+      },
+      "entries": {
+        "previewApp": {
+          "title": "应用插件预览",
+          "description": "检查当前应用 manifest、surface 与 Host mock 预览链路。"
+        },
+        "previewComponent": {
+          "title": "组件预览",
+          "description": "生成组件预览链路报告，配合组件展示页验证当前主题。"
+        },
+        "previewCard": {
+          "title": "卡片预览",
+          "description": "为正式卡片预览链路生成报告，后续文件输入必须走 SDK card API。"
+        },
+        "previewBox": {
+          "title": "箱子预览",
+          "description": "为箱子与布局内容预览生成报告，后续渲染必须走 SDK box API。"
+        },
+        "previewLayout": {
+          "title": "布局插件预览",
+          "description": "生成布局插件预览计划，验证 Host mock 与真实工作区联调路径。"
+        },
+        "previewTheme": {
+          "title": "主题预览",
+          "description": "生成主题预览链路报告，用于后续主题包可视验收。"
+        },
+        "componentGallery": {
+          "title": "组件 Contract 矩阵",
+          "description": "汇总组件 parts、states、token 覆盖和组件库质量报告摘要。"
+        },
+        "themeInspect": {
+          "title": "主题包检查",
+          "description": "读取主题包 manifest、contract、tokens 与 dist 产物并输出检查报告。"
+        },
+        "qualityGate": {
+          "title": "质量门禁",
+          "description": "汇总当前工程、SDK route manifest、组件库质量与主题检查摘要。"
+        },
+        "diagnostics": {
+          "title": "生态诊断",
+          "description": "汇总 route、权限、组件矩阵、主题检查和质量门禁状态。"
         }
       }
     }

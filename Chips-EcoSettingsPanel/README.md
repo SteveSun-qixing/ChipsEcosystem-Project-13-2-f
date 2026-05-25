@@ -6,14 +6,16 @@
 
 ## 项目定位
 
-生态设置面板是薯片生态与 Host 的统一运行时设置入口，当前已迁移到应用插件 vNext 入口结构：`AppRoot / AppProviders / AppRuntimeProvider / scene-registry / commands`。首版聚焦四个一级能力：
+生态设置面板是薯片生态与 Host 的统一运行时设置入口，当前已迁移到应用插件 vNext 入口结构：`AppRoot / AppProviders / AppRuntimeProvider / scene-registry / commands`。首版聚焦以下一级能力：
 
 - 主题管理：安装、切换、卸载主题包，并展示当前生效主题。
+- 主题诊断：展示当前主题 `theme.contract.get()` 与 `theme.resolve([])` 的 Contract 覆盖、诊断和解析链。
 - 多语言：列出已安装语言、切换当前语言、响应 `language.changed` 事件。
 - 应用插件：安装、启用、停用、卸载应用插件，并展示运行时状态。
 - 组件展示：基于薯片组件库真实组件构建 Bento 预览页，验证主题接入效果。
+- 预览与质量：展示 `chipsdev preview/component gallery/theme inspect/quality gate/diagnostics` 正式报告命令入口。
 
-该工程当前已经完成应用壳层、主题管理、多语言、应用插件治理、组件展示页、运行时适配层、AppRuntime 入口和 Scene command 注册链路；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
+该工程当前已经完成应用壳层、主题管理、多语言、插件治理、组件展示页、主题诊断页、预览与质量入口、运行时适配层、AppRuntime 入口和 Scene command 注册链路；后续迭代必须严格按 `需求文档/`、`技术文档/` 与 `开发计划/` 执行，不得保留模板示例思维或临时实现。
 
 ## 快速开始
 
@@ -73,6 +75,8 @@ Chips-EcoSettingsPanel/
 - 已完成 `chips-sdk` 运行时服务适配层与错误归一化。
 - 已完成主题/语言/应用插件治理的正式列表布局、详情弹窗、操作链路与事件刷新。
 - 已完成组件展示注册表与当前正式组件分组接入。
+- 已新增主题诊断入口，数据源仅为 SDK `client.theme.contract.get()` 与 `client.theme.resolve([])`。
+- 已新增预览与质量入口，展示正式 `chipsdev` 报告命令；当前运行时页面不直接读取本地报告文件。
 - 已完成窄屏菜单切换器、左侧菜单精简与当前设置面板插件的自保护限制。
 - 已将脚手架遗留的同名 `.js` 副本移入 `归档/`，工程源码基线统一收口为 TypeScript。
 - 应用插件治理页当前优先展示 `PluginShortcutRecord.iconPath`，缺失时回退到正式运行时图标组件，不再显示 emoji 或路径字符串。

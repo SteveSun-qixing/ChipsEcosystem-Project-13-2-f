@@ -183,6 +183,45 @@ describe("SettingsRuntimeService", () => {
     expect(client.plugin.enable).toHaveBeenCalledWith("theme.demo");
   });
 
+  it("loads theme contract and resolve diagnostics through the SDK theme Domain API", async () => {
+    const client = createClientMock();
+    vi.mocked(client.theme.contract.get).mockResolvedValue({
+      schemaVersion: "1.0.0",
+      themeId: "chips.theme-demo",
+      themeVersion: "1.0.0",
+      contractVersion: "1.0.0",
+      components: [],
+      summary: {
+        total: 0,
+        blocking: 0,
+        bySeverity: { info: 0, warning: 0, error: 0 },
+        byCode: {},
+        status: "complete",
+      },
+    } as never);
+    vi.mocked(client.theme.resolve).mockResolvedValue({
+      resolved: [{ id: "chips.theme-demo", displayName: "Theme Demo", version: "1.0.0", order: 0 }],
+      tokens: {},
+      diagnostics: [],
+      summary: {
+        total: 0,
+        blocking: 0,
+        bySeverity: { info: 0, warning: 0, error: 0 },
+        byCode: {},
+        status: "complete",
+      },
+    } as never);
+
+    const service = new SettingsRuntimeService(client);
+    await service.getThemeContract();
+    await service.getThemeContract("Button");
+    await service.resolveThemeDiagnostics([]);
+
+    expect(client.theme.contract.get).toHaveBeenNthCalledWith(1, undefined);
+    expect(client.theme.contract.get).toHaveBeenNthCalledWith(2, "Button");
+    expect(client.theme.resolve).toHaveBeenCalledWith([]);
+  });
+
   it("sorts enabled app plugins ahead of disabled ones", async () => {
     const client = createClientMock();
     vi.mocked(client.plugin.query).mockResolvedValue([

@@ -182,6 +182,8 @@ describe("App (标准应用插件根组件)", () => {
     expect(markup).toContain("settings-mobile-nav");
     expect(markup).toContain("settingsPanel.menu.mobileLabel");
     expect(markup).toContain("settingsPanel.menu.themes.title");
+    expect(markup).toContain("settingsPanel.menu.themeDiagnostics.title");
+    expect(markup).toContain("settingsPanel.menu.previewQuality.title");
     expect(markup).not.toContain("settings-sidebar__runtime");
   }, 15000);
 });

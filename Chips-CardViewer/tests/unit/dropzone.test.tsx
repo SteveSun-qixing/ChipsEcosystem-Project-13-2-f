@@ -17,6 +17,7 @@ describe("DropZone", () => {
         onOpenFile={vi.fn()}
         error="当前只支持打开 .card 或 .box 文件。"
         ariaLabel="导入卡片或箱子"
+        fileMarkLabel=".card / .box"
         title="拖入卡片或箱子文件"
         description="将 .card 或 .box 文件拖到当前窗口。"
         openLabel="打开文件"
@@ -28,5 +29,6 @@ describe("DropZone", () => {
     expect(html).toContain('aria-labelledby="card-viewer-dropzone-title"');
     expect(html).toContain('aria-describedby="card-viewer-dropzone-description card-viewer-dropzone-error"');
     expect(html).toContain('role="alert"');
+    expect(html).toContain(".card / .box");
   });
 });

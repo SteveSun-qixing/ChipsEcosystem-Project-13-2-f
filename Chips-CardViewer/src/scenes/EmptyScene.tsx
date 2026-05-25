@@ -14,6 +14,7 @@ export function EmptyScene({ onOpenFile }: EmptySceneProps): React.ReactElement 
       onOpenFile={onOpenFile ?? runtime.openFile}
       traceId={runtime.traceId}
       ariaLabel={runtime.t("card-viewer.dropzone.ariaLabel")}
+      fileMarkLabel={runtime.t("card-viewer.dropzone.fileMark")}
       title={runtime.t("card-viewer.dropzone.title")}
       description={runtime.t("card-viewer.dropzone.description")}
       openLabel={runtime.t("card-viewer.actions.open")}

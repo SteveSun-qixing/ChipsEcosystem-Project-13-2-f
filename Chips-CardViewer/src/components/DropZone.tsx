@@ -9,6 +9,7 @@ interface DropZoneProps {
   error?: string | null;
   traceId?: string;
   ariaLabel: string;
+  fileMarkLabel: string;
   title: string;
   description: string;
   openLabel: string;
@@ -36,6 +37,7 @@ export function DropZone({
   error = null,
   traceId,
   ariaLabel,
+  fileMarkLabel,
   title,
   description,
   openLabel,
@@ -142,7 +144,7 @@ export function DropZone({
           aria-hidden="true"
           className="card-viewer-dropzone__file-mark"
         >
-          .card
+          {fileMarkLabel}
         </div>
         <div className="card-viewer-dropzone__copy">
           <h1 id={titleId} className="card-viewer-dropzone__title">{title}</h1>

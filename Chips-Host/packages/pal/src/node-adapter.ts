@@ -18,6 +18,7 @@ import type {
   ClipboardPayload,
   ConvertTiffToPngRequest,
   ConvertTiffToPngResult,
+  DialogFileFilter,
   DialogFileOptions,
   DialogMessageOptions,
   DialogSaveOptions,
@@ -84,6 +85,27 @@ const quotePowerShell = (value: string): string => value.replaceAll('`', '``').r
 const sanitizeLauncherName = (value: string): string => {
   const sanitized = value.replace(/[\\/:*?"<>|]/g, '-').trim();
   return sanitized.length > 0 ? sanitized : 'Chips App';
+};
+
+const normalizeDialogFileFilters = (filters: DialogFileOptions['filters']): DialogFileFilter[] | undefined => {
+  if (!Array.isArray(filters)) {
+    return undefined;
+  }
+  const normalized = filters
+    .map((filter) => ({
+      name: typeof filter?.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
+      extensions: Array.isArray(filter?.extensions)
+        ? filter.extensions
+            .map((extension) => typeof extension === 'string' ? extension.trim().replace(/^\./, '') : '')
+            .filter((extension) => extension.length > 0)
+        : []
+    }))
+    .filter((filter) => filter.extensions.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+};
+
+const flattenDialogFileExtensions = (filters: DialogFileOptions['filters']): string[] => {
+  return normalizeDialogFileFilters(filters)?.flatMap((filter) => filter.extensions) ?? [];
 };
 
 const cloneWindowChromeOptions = (chrome: WindowChromeOptions | undefined): WindowChromeOptions | undefined => {
@@ -714,14 +736,19 @@ class NodeDialog implements PALDialog {
   public async openFile(options?: DialogFileOptions): Promise<string[] | null> {
     const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
     if (this.electron?.dialog?.showOpenDialog) {
-      const properties = [options?.mode === 'directory' ? 'openDirectory' : 'openFile'];
+      const properties = options?.mode === 'directory'
+        ? ['openDirectory']
+        : options?.mode === 'file-or-directory'
+          ? ['openFile', 'openDirectory']
+          : ['openFile'];
       if (options?.allowMultiple) {
         properties.push('multiSelections');
       }
       const result = await this.electron.dialog.showOpenDialog({
         title: options?.title,
         defaultPath: normalizedDefault,
-        properties
+        properties,
+        filters: normalizeDialogFileFilters(options?.filters)
       });
       const filePaths = Array.isArray(result.filePaths)
         ? result.filePaths.map((item) => path.resolve(item)).filter(Boolean)
@@ -808,16 +835,20 @@ class NodeDialog implements PALDialog {
       : '';
 
     const selectionExpr = mode === 'directory' ? 'choose folder' : 'choose file';
+    const filterExtensions = flattenDialogFileExtensions(options?.filters);
+    const typeFilterArg = mode === 'file' && filterExtensions.length > 0
+      ? ` of type {${filterExtensions.map((extension) => `"${quoteAppleScript(extension)}"`).join(', ')}}`
+      : '';
     const script = allowMultiple
       ? [
-          `set selectedItems to ${selectionExpr} with prompt "${title}"${defaultLocationArg} with multiple selections allowed true`,
+          `set selectedItems to ${selectionExpr}${typeFilterArg} with prompt "${title}"${defaultLocationArg} with multiple selections allowed true`,
           'set output to ""',
           'repeat with itemPath in selectedItems',
           'set output to output & POSIX path of itemPath & linefeed',
           'end repeat',
           'return output'
         ]
-      : [`POSIX path of (${selectionExpr} with prompt "${title}"${defaultLocationArg})`];
+      : [`POSIX path of (${selectionExpr}${typeFilterArg} with prompt "${title}"${defaultLocationArg})`];
 
     try {
       const raw = await runCommand('osascript', script.flatMap((line) => ['-e', line]));
@@ -846,6 +877,10 @@ class NodeDialog implements PALDialog {
     if (options?.defaultPath) {
       args.push(`--filename=${path.resolve(options.defaultPath)}`);
     }
+    const filterExtensions = flattenDialogFileExtensions(options?.filters);
+    if (filterExtensions.length > 0 && options?.mode !== 'directory') {
+      args.push(`--file-filter=${filterExtensions.map((extension) => `*.${extension}`).join(' ')}`);
+    }
 
     try {
       const raw = await runCommand('zenity', args);
@@ -862,6 +897,10 @@ class NodeDialog implements PALDialog {
     const normalizedDefault = options?.defaultPath ? path.resolve(options.defaultPath) : undefined;
     const defaultDirectory = normalizedDefault ? path.dirname(normalizedDefault) : undefined;
     const defaultName = normalizedDefault ? path.basename(normalizedDefault) : undefined;
+    const filters = normalizeDialogFileFilters(options?.filters) ?? [];
+    const filterScript = !directoryMode && filters.length > 0
+      ? `$dialog.Filter = "${quotePowerShell(filters.map((filter) => `${filter.name}|${filter.extensions.map((extension) => `*.${extension}`).join(';')}`).join('|'))}";`
+      : '';
     const script = directoryMode
       ? [
           'Add-Type -AssemblyName System.Windows.Forms;',
@@ -876,6 +915,7 @@ class NodeDialog implements PALDialog {
           defaultDirectory ? `$dialog.InitialDirectory = "${quotePowerShell(defaultDirectory)}";` : '',
           defaultName ? `$dialog.FileName = "${quotePowerShell(defaultName)}";` : '',
           multiple,
+          filterScript,
           '$result = $dialog.ShowDialog();',
           'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.FileNames | ForEach-Object { Write-Output $_ } }'
         ];

@@ -2474,7 +2474,14 @@ describe("createClient", () => {
       },
     });
 
-    await expect(client.platform.openFile({ title: "Open" })).resolves.toEqual(["/tmp/demo.card"]);
+    await expect(
+      client.platform.openFile({
+        title: "Open",
+        mode: "file-or-directory",
+        allowMultiple: true,
+        filters: [{ name: "Cards", extensions: ["card"] }],
+      }),
+    ).resolves.toEqual(["/tmp/demo.card"]);
     await expect(client.platform.saveFile({ title: "Save" })).resolves.toBe("/tmp/export.card");
     await expect(client.platform.showMessage({ message: "Hello" })).resolves.toBe(0);
     await expect(client.platform.showConfirm({ message: "Continue?" })).resolves.toBe(true);
@@ -2485,6 +2492,9 @@ describe("createClient", () => {
         payload: {
           options: {
             title: "Open",
+            mode: "file-or-directory",
+            allowMultiple: true,
+            filters: [{ name: "Cards", extensions: ["card"] }],
           },
         },
       },

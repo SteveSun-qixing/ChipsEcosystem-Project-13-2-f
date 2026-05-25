@@ -704,9 +704,18 @@ describe('Host services PAL routing', () => {
     const context = createContextFactory();
     const platformRead = ['platform.read'];
 
-    const opened = await kernel.invoke<{ options: { defaultPath: string } }, { filePaths: string[] | null }>(
+    const opened = await kernel.invoke<
+      { options: { defaultPath: string; mode: 'file-or-directory'; filters: Array<{ name: string; extensions: string[] }> } },
+      { filePaths: string[] | null }
+    >(
       'platform.dialogOpenFile',
-      { options: { defaultPath: '/tmp/demo.txt' } },
+      {
+        options: {
+          defaultPath: '/tmp/demo.txt',
+          mode: 'file-or-directory',
+          filters: [{ name: 'Text', extensions: ['txt'] }]
+        }
+      },
       context(platformRead)
     );
     const saved = await kernel.invoke<{ options: { defaultPath: string } }, { filePath: string | null }>(
@@ -730,6 +739,11 @@ describe('Host services PAL routing', () => {
     expect(message.response).toBe(0);
     expect(confirm.confirmed).toBe(true);
     expect(state.dialogOpenArgs).toHaveLength(1);
+    expect(state.dialogOpenArgs[0]).toEqual({
+      defaultPath: '/tmp/demo.txt',
+      mode: 'file-or-directory',
+      filters: [{ name: 'Text', extensions: ['txt'] }]
+    });
     expect(state.dialogSaveArgs).toHaveLength(1);
     expect(state.dialogMessageArgs).toHaveLength(1);
     expect(state.dialogConfirmArgs).toHaveLength(1);

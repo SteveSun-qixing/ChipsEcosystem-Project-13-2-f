@@ -99,10 +99,16 @@ export interface PlatformPowerState {
 
 export interface PlatformDialogFileOptions {
   defaultPath?: string;
-  mode?: "file" | "directory";
+  mode?: "file" | "directory" | "file-or-directory";
   allowMultiple?: boolean;
   mustExist?: boolean;
   title?: string;
+  filters?: PlatformDialogFileFilter[];
+}
+
+export interface PlatformDialogFileFilter {
+  name: string;
+  extensions: string[];
 }
 
 export interface PlatformDialogSaveOptions {

@@ -46,6 +46,10 @@ function createClientMock(): Client {
       getCapabilities: vi.fn(),
       openExternal: vi.fn(),
       getPathForFile: vi.fn(() => ""),
+      openFile: vi.fn(),
+      showConfirm: vi.fn(),
+      showMessage: vi.fn(),
+      shellShowItemInFolder: vi.fn(),
     },
     file: {} as Client["file"],
     card: {} as Client["card"],
@@ -314,11 +318,9 @@ describe("SettingsRuntimeService", () => {
     expect(client.plugin.get).toHaveBeenCalledWith("chips.basecard.image");
   });
 
-  it("opens the plugin file dialog through the formal Host action", async () => {
+  it("opens the plugin file dialog through the SDK platform Domain API", async () => {
     const client = createClientMock();
-    vi.mocked(client.invoke).mockResolvedValue({
-      filePaths: ["/packages/demo.cpk"],
-    });
+    vi.mocked(client.platform.openFile).mockResolvedValue(["/packages/demo.cpk"]);
 
     const service = new SettingsRuntimeService(client);
     const paths = await service.openPluginFileDialog("theme", {
@@ -327,17 +329,40 @@ describe("SettingsRuntimeService", () => {
     });
 
     expect(paths).toEqual(["/packages/demo.cpk"]);
-    expect(client.invoke).toHaveBeenCalledWith("platform.dialogOpenFile", {
-      options: {
-        title: "Install theme package",
-        properties: ["openFile", "openDirectory"],
-        filters: [
-          {
-            name: "Theme package",
-            extensions: ["cpk", "yaml", "yml", "json"],
-          },
-        ],
-      },
+    expect(client.platform.openFile).toHaveBeenCalledWith({
+      title: "Install theme package",
+      mode: "file-or-directory",
+      allowMultiple: false,
+      filters: [
+        {
+          name: "Theme package",
+          extensions: ["cpk", "yaml", "yml", "json"],
+        },
+      ],
+    });
+  });
+
+  it("uses SDK platform helpers for reveal and system dialogs", async () => {
+    const client = createClientMock();
+    vi.mocked(client.platform.showConfirm).mockResolvedValue(true);
+    vi.mocked(client.platform.showMessage).mockResolvedValue(0);
+
+    const service = new SettingsRuntimeService(client);
+    await service.revealPath("/shortcuts/app.viewer");
+    const confirmed = await service.showConfirm("Confirm", "Continue?", "Details");
+    await service.showMessage("Done", "Finished", "Details");
+
+    expect(client.platform.shellShowItemInFolder).toHaveBeenCalledWith("/shortcuts/app.viewer");
+    expect(confirmed).toBe(true);
+    expect(client.platform.showConfirm).toHaveBeenCalledWith({
+      title: "Confirm",
+      message: "Continue?",
+      detail: "Details",
+    });
+    expect(client.platform.showMessage).toHaveBeenCalledWith({
+      title: "Done",
+      message: "Finished",
+      detail: "Details",
     });
   });
 

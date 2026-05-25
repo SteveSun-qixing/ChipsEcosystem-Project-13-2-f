@@ -190,6 +190,7 @@ export type {
   PlatformNotificationOptions,
   PlatformPowerState,
   PlatformDialogFileOptions,
+  PlatformDialogFileFilter,
   PlatformDialogSaveOptions,
   PlatformDialogMessageOptions,
   PlatformScreenInfo,

@@ -51,13 +51,26 @@ describe('Node PAL dialog chain', () => {
     const selectedPaths = await pal.dialog.openFile({
       title: '选择卡片',
       defaultPath: '/tmp/story-board.card',
-      allowMultiple: true
+      mode: 'file-or-directory',
+      allowMultiple: true,
+      filters: [
+        {
+          name: '卡片文件',
+          extensions: ['card']
+        }
+      ]
     });
 
     expect(showOpenDialog).toHaveBeenCalledWith({
       title: '选择卡片',
       defaultPath: '/tmp/story-board.card',
-      properties: ['openFile', 'multiSelections']
+      properties: ['openFile', 'openDirectory', 'multiSelections'],
+      filters: [
+        {
+          name: '卡片文件',
+          extensions: ['card']
+        }
+      ]
     });
     expect(selectedPaths).toBeNull();
   });

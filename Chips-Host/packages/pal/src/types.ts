@@ -165,10 +165,16 @@ export interface ScreenInfo {
 
 export interface DialogFileOptions {
   defaultPath?: string;
-  mode?: 'file' | 'directory';
+  mode?: 'file' | 'directory' | 'file-or-directory';
   allowMultiple?: boolean;
   mustExist?: boolean;
   title?: string;
+  filters?: DialogFileFilter[];
+}
+
+export interface DialogFileFilter {
+  name: string;
+  extensions: string[];
 }
 
 export interface DialogSaveOptions {

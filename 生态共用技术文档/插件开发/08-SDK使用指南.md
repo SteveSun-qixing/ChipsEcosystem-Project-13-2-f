@@ -127,8 +127,11 @@ SDK提供卡片文件的读写能力。
 ```typescript
 client.platform.openFile({
   title: "选择卡片",
-  mode: "file",
+  mode: "file-or-directory",
   allowMultiple: false,
+  filters: [
+    { name: "卡片文件", extensions: ["card"] },
+  ],
 });
 
 client.platform.saveFile({
@@ -154,6 +157,8 @@ client.platform.showConfirm({
 - `client.platform.showMessage(...)` 对应 Host `platform.dialogShowMessage`；
 - `client.platform.showConfirm(...)` 对应 Host `platform.dialogShowConfirm`；
 - `defaultPath` 是系统对话框的初始建议路径，不是自动确认结果；Host 仍会弹出正式对话框，用户取消时返回 `null`；
+- `openFile.filters` 使用 `{ name, extensions }` 描述扩展名过滤器，`extensions` 不写点号，例如 `["card", "box", "cpk"]`；
+- `openFile.mode` 支持 `file / directory / file-or-directory`，`allowMultiple` 表示是否允许多选；需要同时支持多类插件包时，应通过 `filters` 扩展名列表表达，而不是在应用层裸调 Host action；
 - 应用层应优先调用这些 SDK 正式封装，而不是在业务组件中散落 `client.invoke("platform.dialog*")` 私有调用。
 
 打包目录态卡片使用 `client.card.pack()` 方法，传入卡片目录与输出文件路径。方法签名：
@@ -259,6 +264,10 @@ SDK 的 `client.platform` 对 Host `platform.*` 系统能力提供正式封装�
 ```typescript
 client.platform.clipboardRead(format?: "text" | "image" | "files"): Promise<PlatformClipboardPayload>
 client.platform.clipboardWrite(data: PlatformClipboardPayload, format?: "text" | "image" | "files"): Promise<void>
+client.platform.openFile(options?: PlatformDialogFileOptions): Promise<string[] | null>
+client.platform.saveFile(options?: PlatformDialogSaveOptions): Promise<string | null>
+client.platform.showMessage(options: PlatformDialogMessageOptions): Promise<number>
+client.platform.showConfirm(options: PlatformDialogMessageOptions): Promise<boolean>
 client.platform.shellOpenPath(path: string): Promise<void>
 client.platform.shellOpenExternal(url: string): Promise<void>
 client.platform.shellShowItemInFolder(path: string): Promise<void>

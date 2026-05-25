@@ -1,4 +1,4 @@
-import type { Client, PluginRecord, PluginShortcutRecord, PluginType, ThemeMeta, ThemeState } from "chips-sdk";
+import type { Client, PlatformDialogFileOptions, PluginRecord, PluginShortcutRecord, PluginType, ThemeMeta, ThemeState } from "chips-sdk";
 import { appConfig } from "../../../config/app-config";
 import { getChipsClient } from "./client";
 import { normalizeSettingsError, type SettingsPanelError } from "./errors";
@@ -55,21 +55,9 @@ export interface PluginGovernanceRecord {
   displayName?: string;
 }
 
-interface OpenFileDialogResult {
-  filePaths: string[] | null;
-}
-
 interface OpenPluginFileDialogOptions {
   title: string;
   filterName: string;
-}
-
-interface ConfirmDialogResult {
-  confirmed: boolean;
-}
-
-interface MessageDialogResult {
-  response: number;
 }
 
 function sortByName<T extends { displayName?: string; name?: string; installedAt?: number }>(items: T[]): T[] {
@@ -351,7 +339,7 @@ export class SettingsRuntimeService {
 
   public async revealPath(path: string): Promise<void> {
     try {
-      await this.client.invoke("platform.shellShowItemInFolder", { path });
+      await this.client.platform.shellShowItemInFolder(path);
     } catch (error) {
       throw toSettingsError(error, "Failed to reveal shortcut path.");
     }
@@ -359,22 +347,19 @@ export class SettingsRuntimeService {
 
   public async openPluginFileDialog(kind: "theme" | "app" | GovernedPluginType, dialog: OpenPluginFileDialogOptions): Promise<string[]> {
     try {
-      const result = await this.client.invoke<{ options: Record<string, unknown> }, OpenFileDialogResult>(
-        "platform.dialogOpenFile",
-        {
-          options: {
-            title: dialog.title,
-            properties: ["openFile", "openDirectory"],
-            filters: [
-              {
-                name: dialog.filterName,
-                extensions: ["cpk", "yaml", "yml", "json"],
-              },
-            ],
+      const options: PlatformDialogFileOptions = {
+        title: dialog.title,
+        mode: "file-or-directory",
+        allowMultiple: false,
+        filters: [
+          {
+            name: dialog.filterName,
+            extensions: ["cpk", "yaml", "yml", "json"],
           },
-        },
-      );
-      return result.filePaths ?? [];
+        ],
+      };
+      const filePaths = await this.client.platform.openFile(options);
+      return filePaths ?? [];
     } catch (error) {
       throw toSettingsError(error, "Failed to open file picker.");
     }
@@ -386,17 +371,7 @@ export class SettingsRuntimeService {
 
   public async showConfirm(title: string, message: string, detail?: string): Promise<boolean> {
     try {
-      const result = await this.client.invoke<{ options: Record<string, unknown> }, ConfirmDialogResult>(
-        "platform.dialogShowConfirm",
-        {
-          options: {
-            title,
-            message,
-            detail,
-          },
-        },
-      );
-      return result.confirmed;
+      return await this.client.platform.showConfirm({ title, message, detail });
     } catch (error) {
       throw toSettingsError(error, "Failed to open confirm dialog.");
     }
@@ -404,13 +379,7 @@ export class SettingsRuntimeService {
 
   public async showMessage(title: string, message: string, detail?: string): Promise<void> {
     try {
-      await this.client.invoke<{ options: Record<string, unknown> }, MessageDialogResult>("platform.dialogShowMessage", {
-        options: {
-          title,
-          message,
-          detail,
-        },
-      });
+      await this.client.platform.showMessage({ title, message, detail });
     } catch (error) {
       throw toSettingsError(error, "Failed to open message dialog.");
     }

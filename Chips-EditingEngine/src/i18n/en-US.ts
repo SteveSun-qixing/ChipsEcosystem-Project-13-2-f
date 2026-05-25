@@ -256,6 +256,8 @@ const enUS: Record<string, string> = {
     'card_window.loading': 'Loading…',
     'card_window.empty': 'Card is empty',
     'card_window.empty_hint': 'Drag content from Card Box Library here',
+    'card_window.resource_open_failed_title': 'Resource Open Failed',
+    'card_window.resource_open_failed_message': 'The resource could not be opened through the Host route: {error}',
     'card_window.type_rich_text': 'Rich Text',
     'card_window.type_markdown': 'Markdown',
     'card_window.type_image': 'Image',

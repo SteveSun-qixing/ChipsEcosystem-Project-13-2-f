@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CompositeInteractionPayload } from 'chips-sdk';
-import type { BasecardPendingResourceImport } from './contracts';
+import type { BasecardOpenResourceInput, BasecardPendingResourceImport } from './contracts';
 import {
   getBasecardDescriptor,
   getBasecardRegistryVersion,
@@ -27,6 +27,7 @@ export interface BasecardFrameHostProps {
   onSelect?: () => void;
   onStatusChange?: (status: BasecardFrameStatus) => void;
   onInteraction?: (payload: CompositeInteractionPayload, frame: HTMLIFrameElement) => void;
+  onResourceOpen?: (input: BasecardOpenResourceInput) => void;
 }
 
 const DEFAULT_STATUS: BasecardFrameStatus = {
@@ -71,6 +72,62 @@ function getPendingResourceCacheKey(resource: BasecardPendingResourceImport): st
     hash = Math.imul(hash, 16777619);
   }
   return `${resource.mimeType ?? ''}:${resource.data.byteLength}:${hash >>> 0}`;
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeOptionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function normalizeOpenResourceId(resourceId: string, resourceBaseUrl?: string): string {
+  const trimmed = resourceId.trim();
+  if (!trimmed || !resourceBaseUrl || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    return new URL(trimmed.replace(/\\/g, '/'), resourceBaseUrl).toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function normalizeOpenResourceInput(
+  input: BasecardOpenResourceInput,
+  resourceBaseUrl?: string,
+): BasecardOpenResourceInput | null {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  const rawResourceId = normalizeOptionalString(input.resourceId);
+  if (!rawResourceId) {
+    return null;
+  }
+
+  const resourceId = normalizeOpenResourceId(rawResourceId, resourceBaseUrl);
+  if (!resourceId) {
+    return null;
+  }
+
+  const payload = normalizeOptionalRecord(input.payload);
+  return {
+    resourceId,
+    ...(normalizeOptionalString(input.mimeType) ? { mimeType: normalizeOptionalString(input.mimeType) } : undefined),
+    ...(normalizeOptionalString(input.title) ? { title: normalizeOptionalString(input.title) } : undefined),
+    ...(normalizeOptionalString(input.fileName) ? { fileName: normalizeOptionalString(input.fileName) } : undefined),
+    ...(payload ? { payload } : undefined),
+  };
 }
 
 function createFrameDocumentHtml(resourceBaseUrl?: string): string {
@@ -144,12 +201,14 @@ export function BasecardFrameHost({
   onSelect,
   onStatusChange,
   onInteraction,
+  onResourceOpen,
 }: BasecardFrameHostProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const selectableRef = useRef(selectable);
   const onSelectRef = useRef(onSelect);
   const onInteractionRef = useRef(onInteraction);
+  const onResourceOpenRef = useRef(onResourceOpen);
   const interactionPolicyRef = useRef(interactionPolicy);
   const pendingResourceImportsRef = useRef(pendingResourceImports);
   const resolvedResourceUrlsRef = useRef(new Map<string, { url: string; cacheKey: string }>());
@@ -189,6 +248,10 @@ export function BasecardFrameHost({
   useEffect(() => {
     onInteractionRef.current = onInteraction;
   }, [onInteraction]);
+
+  useEffect(() => {
+    onResourceOpenRef.current = onResourceOpen;
+  }, [onResourceOpen]);
 
   useEffect(() => {
     interactionPolicyRef.current = interactionPolicy;
@@ -275,6 +338,14 @@ export function BasecardFrameHost({
       URL.revokeObjectURL(currentUrl.url);
       resolvedResourceUrlsRef.current.delete(normalizedResourcePath);
     };
+    const openResource = (input: BasecardOpenResourceInput): void => {
+      const normalizedInput = normalizeOpenResourceInput(input, resourceBaseUrl);
+      if (!normalizedInput) {
+        return;
+      }
+
+      onResourceOpenRef.current?.(normalizedInput);
+    };
     setStatus((current) => {
       if (current.state === 'ready') {
         return {
@@ -312,6 +383,7 @@ export function BasecardFrameHost({
         themeCssText: createBasecardFrameThemeCss(wrapper),
         resolveResourceUrl,
         releaseResourceUrl,
+        openResource,
       });
 
       const applyMeasuredHeight = () => {

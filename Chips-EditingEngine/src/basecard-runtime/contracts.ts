@@ -85,12 +85,21 @@ export interface BasecardResourceOperations {
   deletions: string[];
 }
 
+export interface BasecardOpenResourceInput {
+  resourceId: string;
+  mimeType?: string;
+  title?: string;
+  fileName?: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface BasecardRenderContext {
   container: HTMLElement;
   config: BasecardConfigRecord;
   themeCssText?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: BasecardOpenResourceInput) => void;
 }
 
 export interface BasecardEditorContext {

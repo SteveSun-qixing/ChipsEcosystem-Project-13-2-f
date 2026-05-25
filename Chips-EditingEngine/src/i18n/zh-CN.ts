@@ -257,6 +257,8 @@ const zhCN: Record<string, string> = {
     'card_window.loading': '加载中…',
     'card_window.empty': '卡片为空',
     'card_window.empty_hint': '从卡箱库拖入内容到此处',
+    'card_window.resource_open_failed_title': '资源打开失败',
+    'card_window.resource_open_failed_message': '无法通过 Host 资源路由打开该资源：{error}',
     'card_window.type_rich_text': '富文本',
     'card_window.type_markdown': 'Markdown',
     'card_window.type_image': '图片',

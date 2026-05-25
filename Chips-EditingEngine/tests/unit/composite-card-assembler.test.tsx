@@ -126,4 +126,58 @@ describe('CompositeCardAssembler', () => {
     expect(onHeightChange).toHaveBeenLastCalledWith(240);
     expect(onHeightChange).not.toHaveBeenLastCalledWith(480);
   });
+
+  it('forwards basecard resource open events with composite node context', async () => {
+    const onResourceOpen = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <CompositeCardAssembler
+          cardId="card-1"
+          baseCards={[
+            {
+              id: 'base-1',
+              type: 'base.image',
+              data: { id: 'base-1', images: [] },
+              createdAt: '2026-03-14T00:00:00.000Z',
+              modifiedAt: '2026-03-14T00:00:00.000Z',
+            },
+          ]}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          mode="view"
+          interactionPolicy="native"
+          onResourceOpen={onResourceOpen}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const firstCall = basecardFrameHostMock.mock.calls[0]?.[0] as {
+      onResourceOpen?: (input: {
+        resourceId: string;
+        mimeType?: string;
+        title?: string;
+        fileName?: string;
+      }) => void;
+    };
+
+    firstCall.onResourceOpen?.({
+      resourceId: 'file:///workspace/demo.card/image.png',
+      mimeType: 'image/png',
+      title: 'Preview',
+      fileName: 'image.png',
+    });
+
+    expect(onResourceOpen).toHaveBeenCalledWith({
+      cardId: 'card-1',
+      baseCardId: 'base-1',
+      cardType: 'base.image',
+      resource: {
+        resourceId: 'file:///workspace/demo.card/image.png',
+        mimeType: 'image/png',
+        title: 'Preview',
+        fileName: 'image.png',
+      },
+    });
+  });
 });

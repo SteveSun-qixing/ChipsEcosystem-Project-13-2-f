@@ -429,6 +429,74 @@ describe('BasecardFrameHost', () => {
     expect(resolvedUrls[0]?.startsWith('blob:')).toBe(true);
   });
 
+  it('passes normalized resource open intent from basecard preview to the host callback', async () => {
+    const onResourceOpen = vi.fn();
+    mockRenderView.mockReset();
+    mockRenderView.mockImplementation(({ openResource }: {
+      openResource?: (input: {
+        resourceId: string;
+        mimeType?: string;
+        title?: string;
+        fileName?: string;
+        payload?: Record<string, unknown>;
+      }) => void;
+    }) => {
+      openResource?.({
+        resourceId: 'images/cover.png',
+        mimeType: ' image/png ',
+        title: ' Cover ',
+        fileName: ' cover.png ',
+        payload: {
+          kind: 'chips.image-card',
+          index: 0,
+        },
+      });
+      return () => undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        <BasecardFrameHost
+          baseCardId="base-1"
+          cardType="base.mock"
+          config={{ id: 'base-1' }}
+          resourceBaseUrl="file:///workspace/demo.card/"
+          interactionPolicy="native"
+          onResourceOpen={onResourceOpen}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const frameWindow = frame?.contentWindow as (Window & { requestAnimationFrame?: (cb: FrameRequestCallback) => number }) | null;
+    expect(frameWindow).not.toBeNull();
+    Object.defineProperty(frameWindow, 'requestAnimationFrame', {
+      configurable: true,
+      writable: true,
+      value: ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as (cb: FrameRequestCallback) => number,
+    });
+
+    await act(async () => {
+      frame?.dispatchEvent(new Event('load'));
+      await Promise.resolve();
+    });
+
+    expect(onResourceOpen).toHaveBeenCalledWith({
+      resourceId: 'file:///workspace/demo.card/images/cover.png',
+      mimeType: 'image/png',
+      title: 'Cover',
+      fileName: 'cover.png',
+      payload: {
+        kind: 'chips.image-card',
+        index: 0,
+      },
+    });
+  });
+
   it('keeps previously rendered preview visible while a config refresh is remounting', async () => {
     await act(async () => {
       root.render(<RefreshHarness />);

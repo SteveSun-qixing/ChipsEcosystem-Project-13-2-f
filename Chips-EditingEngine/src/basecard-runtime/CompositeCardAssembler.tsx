@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CompositeInteractionPayload } from 'chips-sdk';
 import type { BasicCardData, CardStructure } from '../core/card-service';
+import type { BasecardOpenResourceInput } from './contracts';
 import { BasecardFrameHost, type BasecardFrameStatus } from './frame-host';
 import './basecard-runtime.css';
+
+export interface BasecardResourceOpenEvent {
+  cardId: string;
+  baseCardId: string;
+  cardType: string;
+  resource: BasecardOpenResourceInput;
+}
 
 export interface CompositeCardAssemblerProps {
   cardId: string;
@@ -18,6 +26,7 @@ export interface CompositeCardAssemblerProps {
   onErrorChange?: (message: string | null) => void;
   onInteraction?: (payload: CompositeInteractionPayload, frame: HTMLIFrameElement) => void;
   onBaseCardSelect?: (baseCardId: string) => void;
+  onResourceOpen?: (event: BasecardResourceOpenEvent) => void;
 }
 
 function measureCompositeLayoutHeight(container: HTMLDivElement): number {
@@ -47,6 +56,7 @@ export function CompositeCardAssembler({
   onErrorChange,
   onInteraction,
   onBaseCardSelect,
+  onResourceOpen,
 }: CompositeCardAssemblerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [frameStates, setFrameStates] = useState<Record<string, BasecardFrameStatus>>({});
@@ -158,6 +168,14 @@ export function CompositeCardAssembler({
               onBaseCardSelect?.(baseCard.id);
             }}
             onInteraction={onInteraction}
+            onResourceOpen={(resource) => {
+              onResourceOpen?.({
+                cardId,
+                baseCardId: baseCard.id,
+                cardType: baseCard.type,
+                resource,
+              });
+            }}
             onStatusChange={(status) => {
               handleFrameStatusChange(baseCard.id, status);
             }}

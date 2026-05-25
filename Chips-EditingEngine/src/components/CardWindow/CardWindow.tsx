@@ -10,7 +10,10 @@ import { workspaceService } from '../../services/workspace-service';
 import { useCanvas } from '../../layouts/InfiniteCanvas/CanvasContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import type { CardWindowConfig, Position, Size } from '../../types/window';
-import { CompositeCardAssembler } from '../../basecard-runtime/CompositeCardAssembler';
+import {
+    CompositeCardAssembler,
+    type BasecardResourceOpenEvent,
+} from '../../basecard-runtime/CompositeCardAssembler';
 import { ENGINE_ICONS } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
 import { normalizeCoverRatio, parseCoverRatio } from '../../utils/card-cover';
@@ -32,6 +35,10 @@ function toCardRootFileUrl(cardPath?: string): string | undefined {
 
     const absolutePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
     return encodeURI(`file://${absolutePath.endsWith('/') ? absolutePath : `${absolutePath}/`}`);
+}
+
+function toErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 export interface CardWindowProps {
@@ -238,6 +245,28 @@ export function CardWindow({
         panByInputRef.current(payload.deltaX, payload.deltaY);
     }, [windowState]);
 
+    const handleResourceOpen = useCallback((event: BasecardResourceOpenEvent) => {
+        void clientRef.current.resource
+            .open({
+                intent: 'view',
+                resource: event.resource,
+            })
+            .catch((error: unknown) => {
+                const message = toErrorMessage(error);
+                console.error('[CardWindow] Failed to open basecard resource through Host route.', {
+                    cardId: event.cardId,
+                    baseCardId: event.baseCardId,
+                    cardType: event.cardType,
+                    resourceId: event.resource.resourceId,
+                    error,
+                });
+                void clientRef.current.platform.showMessage({
+                    title: t('card_window.resource_open_failed_title'),
+                    message: t('card_window.resource_open_failed_message', { error: message }),
+                }).catch(() => undefined);
+            });
+    }, [t]);
+
     const selectBaseCard = useCallback((baseCardId: string) => {
         setActiveCard(config.cardId);
         setSelectedBaseCard(baseCardId);
@@ -434,6 +463,7 @@ export function CardWindow({
                                         onInteraction={(payload, frame) => {
                                             handleCompositeInteraction(frame, payload);
                                         }}
+                                        onResourceOpen={handleResourceOpen}
                                         onBaseCardSelect={(baseCardId) => {
                                             if (!isEditing) {
                                                 return;

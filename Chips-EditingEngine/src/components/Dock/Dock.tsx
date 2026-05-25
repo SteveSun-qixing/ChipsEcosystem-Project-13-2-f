@@ -3,14 +3,17 @@ import { DockItem } from './DockItem';
 import { useUI } from '../../context/UIContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENGINE_ICONS } from '../../icons/descriptors';
+import { useEditingEngineCommands } from '../../commands/EditingEngineCommandProvider';
+import { EDITING_ENGINE_COMMAND_IDS } from '../../commands/editing-engine-commands';
 import './Dock.css';
 
 export interface DockProps {
-    onOpenSettings: () => void;
+    onOpenSettings?: () => void;
 }
 
 export function Dock({ onOpenSettings }: DockProps) {
     const { dockPosition, dockVisible, windows, focusWindow, updateWindow } = useUI();
+    const commands = useEditingEngineCommands();
     const { t } = useTranslation();
 
     const allTools = windows.filter(w => w.type === 'tool');
@@ -27,6 +30,11 @@ export function Dock({ onOpenSettings }: DockProps) {
     const isMinimized = (toolId: string) => {
         const tool = windows.find(w => w.id === toolId);
         return tool?.state === 'minimized';
+    };
+
+    const handleOpenSettings = () => {
+        void commands.invokeCommand(EDITING_ENGINE_COMMAND_IDS.settingsOpen, 'toolbar')
+            .catch(() => onOpenSettings?.());
     };
 
     if (!dockVisible) return null;
@@ -51,7 +59,7 @@ export function Dock({ onOpenSettings }: DockProps) {
                 icon={ENGINE_ICONS.settings}
                 title={t('engine_settings.title')}
                 minimized={false}
-                onRestore={onOpenSettings}
+                onRestore={handleOpenSettings}
             />
         </div>
     );

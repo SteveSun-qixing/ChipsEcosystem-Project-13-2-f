@@ -1,26 +1,33 @@
 import React from 'react';
+import {
+    ChipsCommandPalette,
+    ChipsMenuBar,
+    ChipsToolbar,
+} from '@chips/component-library';
 import { useEditor } from '../../context/EditorContext';
-import { useUI } from '../../context/UIContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { AppBrandIcon } from '../../icons/AppBrandIcon';
-import { getLayoutSwitcherIcon, getThemeSwitcherIcon } from '../../icons/descriptors';
-import { RuntimeIcon } from '../../icons/RuntimeIcon';
+import { useEditingEngineCommands } from '../../commands/EditingEngineCommandProvider';
+import { isApplicationChromeCommand } from '../../commands/editing-engine-commands';
 import './HeaderBar.css';
 
 export function HeaderBar() {
-    const { currentLayout, setLayout, state } = useEditor();
-    const { theme, setTheme } = useUI();
+    const { state } = useEditor();
+    const commands = useEditingEngineCommands();
     const { t } = useTranslation();
 
     const isReady = state === 'ready';
 
-    const handleToggleLayout = () => {
-        setLayout(currentLayout === 'infinite-canvas' ? 'workbench' : 'infinite-canvas');
-    };
-
-    const handleToggleTheme = () => {
-        setTheme(theme.includes('dark') ? 'chips-official.default-theme' : 'chips-official.dark-theme');
-    };
+    const menuDescriptors = React.useMemo(() => [
+        { menuId: 'file', label: t('commands.menu.file') },
+        { menuId: 'edit', label: t('commands.menu.edit') },
+        { menuId: 'view', label: t('commands.menu.view') },
+        { menuId: 'app', label: t('commands.menu.app') },
+    ], [t]);
+    const chromeCommandViews = React.useMemo(
+        () => commands.commandViews.filter(isApplicationChromeCommand),
+        [commands.commandViews],
+    );
 
     return (
         <div className="header-bar">
@@ -35,26 +42,32 @@ export function HeaderBar() {
             </div>
 
             <div className="header-bar__center">
-                {/* 工具栏预留位 */}
+                <ChipsMenuBar
+                    adapter={commands.adapter}
+                    commands={chromeCommandViews}
+                    menus={menuDescriptors}
+                    ariaLabel={t('commands.menu.ariaLabel')}
+                    invocationContext={commands.invocationContext}
+                />
+                <ChipsToolbar
+                    adapter={commands.adapter}
+                    commands={chromeCommandViews}
+                    toolbarId="workspace"
+                    ariaLabel={t('commands.toolbar.ariaLabel')}
+                    invocationContext={commands.invocationContext}
+                />
             </div>
 
             <div className="header-bar__right">
-                <button
-                    type="button"
-                    className="header-bar__action"
-                    onClick={handleToggleLayout}
-                    aria-label={t('header_bar.toggle_layout')}
-                >
-                    <RuntimeIcon icon={getLayoutSwitcherIcon(currentLayout)} />
-                </button>
-                <button
-                    type="button"
-                    className="header-bar__action"
-                    onClick={handleToggleTheme}
-                    aria-label={t('header_bar.toggle_theme')}
-                >
-                    <RuntimeIcon icon={getThemeSwitcherIcon(theme)} />
-                </button>
+                <ChipsCommandPalette
+                    className="header-bar__palette"
+                    adapter={commands.adapter}
+                    commands={chromeCommandViews}
+                    defaultOpen={false}
+                    ariaLabel={t('commands.palette.ariaLabel')}
+                    inputPlaceholder={t('commands.palette.searchPlaceholder')}
+                    invocationContext={commands.invocationContext}
+                />
             </div>
         </div>
     );

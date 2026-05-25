@@ -18,7 +18,11 @@ keywords:
 
 permissions:
   - theme.read
+  - theme.write
   - i18n.read
+  - command.read
+  - command.write
+  - command.invoke
   - resource.read
   - file.read
   - file.write

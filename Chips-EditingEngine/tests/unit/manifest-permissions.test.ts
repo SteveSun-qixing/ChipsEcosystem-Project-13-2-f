@@ -29,4 +29,28 @@ describe('editing-engine manifest permissions', () => {
     expect(manifest.permissions).toContain('resource.read');
     expect(manifest.permissions).toContain('zip.manage');
   });
+
+  it('declares command registry permissions without cross-owner command management', async () => {
+    const manifestPath = path.resolve(__dirname, '../../manifest.yaml');
+    const manifest = yaml.parse(await fs.readFile(manifestPath, 'utf-8')) as {
+      permissions?: unknown;
+    };
+
+    expect(Array.isArray(manifest.permissions)).toBe(true);
+    expect(manifest.permissions).toContain('command.read');
+    expect(manifest.permissions).toContain('command.write');
+    expect(manifest.permissions).toContain('command.invoke');
+    expect(manifest.permissions).not.toContain('command.manage');
+  });
+
+  it('declares theme write permission for the formal theme toggle command', async () => {
+    const manifestPath = path.resolve(__dirname, '../../manifest.yaml');
+    const manifest = yaml.parse(await fs.readFile(manifestPath, 'utf-8')) as {
+      permissions?: unknown;
+    };
+
+    expect(Array.isArray(manifest.permissions)).toBe(true);
+    expect(manifest.permissions).toContain('theme.read');
+    expect(manifest.permissions).toContain('theme.write');
+  });
 });

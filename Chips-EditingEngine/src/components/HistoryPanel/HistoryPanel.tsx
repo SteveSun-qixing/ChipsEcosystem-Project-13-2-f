@@ -3,6 +3,12 @@ import { getCommandManager } from '../../core/command-manager';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ENGINE_ICONS } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
+import { useEditingEngineCommands } from '../../commands/EditingEngineCommandProvider';
+import {
+  EDITING_ENGINE_COMMAND_HANDLER_IDS,
+  EDITING_ENGINE_COMMAND_IDS,
+  type EditingEngineCommandStatus,
+} from '../../commands/editing-engine-commands';
 import './HistoryPanel.css';
 
 interface CommandHistory {
@@ -29,6 +35,7 @@ export function HistoryPanel({
   onRedo,
 }: HistoryPanelProps) {
   const { t } = useTranslation();
+  const commands = useEditingEngineCommands();
   const commandManager = getCommandManager();
 
   const [undoHistory, setUndoHistory] = useState<CommandHistory[]>([]);
@@ -104,7 +111,7 @@ export function HistoryPanel({
     setRedoHistory(commandManager.getRedoHistory());
   }, [commandManager, maxItems]);
 
-  const handleUndo = async () => {
+  const handleUndoCommand = useCallback(async (_status?: EditingEngineCommandStatus) => {
     if (!canUndo || isLoading) return;
 
     setIsLoading(true);
@@ -115,9 +122,9 @@ export function HistoryPanel({
       setIsLoading(false);
       updateHistory();
     }
-  };
+  }, [canUndo, commandManager, isLoading, onUndo, updateHistory]);
 
-  const handleRedo = async () => {
+  const handleRedoCommand = useCallback(async (_status?: EditingEngineCommandStatus) => {
     if (!canRedo || isLoading) return;
 
     setIsLoading(true);
@@ -128,6 +135,16 @@ export function HistoryPanel({
       setIsLoading(false);
       updateHistory();
     }
+  }, [canRedo, commandManager, isLoading, onRedo, updateHistory]);
+
+  const handleUndo = async () => {
+    if (!canUndo || isLoading) return;
+    await commands.invokeCommand(EDITING_ENGINE_COMMAND_IDS.editUndo, 'toolbar');
+  };
+
+  const handleRedo = async () => {
+    if (!canRedo || isLoading) return;
+    await commands.invokeCommand(EDITING_ENGINE_COMMAND_IDS.editRedo, 'toolbar');
   };
 
   const handleGoto = async (historyId: string) => {
@@ -157,6 +174,22 @@ export function HistoryPanel({
 
     return unsubscribe;
   }, [commandManager, updateHistory]);
+
+  useEffect(() => {
+    const unregisterUndo = commands.registerHandler(
+      EDITING_ENGINE_COMMAND_HANDLER_IDS.editUndo,
+      handleUndoCommand,
+    );
+    const unregisterRedo = commands.registerHandler(
+      EDITING_ENGINE_COMMAND_HANDLER_IDS.editRedo,
+      handleRedoCommand,
+    );
+
+    return () => {
+      unregisterUndo();
+      unregisterRedo();
+    };
+  }, [commands, handleRedoCommand, handleUndoCommand]);
 
   return (
     <div className={`history-panel ${compact ? 'compact' : ''}`}>

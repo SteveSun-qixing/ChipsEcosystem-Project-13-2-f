@@ -14,11 +14,15 @@ const mockState = vi.hoisted(() => {
       | ((data: unknown, worldPosition: { x: number; y: number }, target?: unknown) => void | Promise<void>)
       | null,
     editorState: {
+      state: 'ready' as const,
       currentLayout: 'infinite-canvas' as const,
       setState: vi.fn(),
+      setLayout: vi.fn(),
     },
     uiState: {
       windows: [] as Array<Record<string, unknown>>,
+      theme: 'chips-official.default-theme',
+      setTheme: vi.fn(),
       createToolWindow: vi.fn(),
       createCardWindow: vi.fn(),
       updateWindow: vi.fn(),
@@ -83,6 +87,37 @@ const mockState = vi.hoisted(() => {
         listLocales: vi.fn(async () => ['zh-CN', 'en-US']),
         onChanged: vi.fn(() => () => undefined),
       },
+      command: {
+        register: vi.fn(async (definition: Record<string, unknown>) => ({
+          ...definition,
+          diagnostic: { visible: true, enabled: true, checked: false },
+        })),
+        unregister: vi.fn(async () => undefined),
+        get: vi.fn(async () => undefined),
+        list: vi.fn(async () => []),
+        invoke: vi.fn(async (commandId: string) => ({
+          commandId,
+          invocationId: `invoked:${commandId}`,
+          dispatched: true,
+          command: {
+            commandId,
+            titleKey: commandId,
+            handlerId: commandId,
+            diagnostic: { visible: true, enabled: true, checked: false },
+          },
+        })),
+        setState: vi.fn(async (commandId: string, state: Record<string, unknown>) => ({
+          commandId,
+          titleKey: commandId,
+          handlerId: commandId,
+          state,
+          diagnostic: { visible: state.visible !== false, enabled: state.enabled !== false, checked: state.checked === true },
+        })),
+        onRegistered: vi.fn(() => () => undefined),
+        onUnregistered: vi.fn(() => () => undefined),
+        onChanged: vi.fn(() => () => undefined),
+        onInvoked: vi.fn(() => () => undefined),
+      },
       events: {
         on: vi.fn(() => () => undefined),
       },
@@ -93,6 +128,25 @@ const mockState = vi.hoisted(() => {
 vi.mock('@chips/component-library', () => ({
   ChipsEnvironmentProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ChipsThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ChipsCommandProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ChipsMenuBar: () => <nav data-testid="mock-command-menu" />,
+  ChipsToolbar: () => <div data-testid="mock-command-toolbar" />,
+  ChipsCommandPalette: () => <div data-testid="mock-command-palette" />,
+  createCommandAdapter: (client: {
+    command?: {
+      list?: (options?: Record<string, unknown>) => Promise<unknown>;
+      invoke?: (commandId: string, payload?: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
+      onChanged?: (handler: (event: unknown) => void) => () => void;
+    };
+  }) => ({
+    listCommands: (options?: Record<string, unknown>) => client.command?.list?.(options) ?? Promise.resolve([]),
+    invokeCommand: (
+      commandId: string,
+      payload?: Record<string, unknown>,
+      options?: Record<string, unknown>,
+    ) => client.command?.invoke?.(commandId, payload, options) ?? Promise.resolve(undefined),
+    onCommandsChanged: client.command?.onChanged,
+  }),
   useChipsTheme: () => ({
     theme: {
       themeId: 'chips-official.default-theme',
@@ -173,7 +227,10 @@ describe('App canvas drop integration', () => {
     mockState.capturedCanvasDrop = null;
     mockState.workspaceListeners.clear();
     mockState.editorState.setState.mockClear();
+    mockState.editorState.setLayout.mockClear();
     mockState.uiState.windows = [];
+    mockState.uiState.theme = 'chips-official.default-theme';
+    mockState.uiState.setTheme.mockClear();
     mockState.uiState.createToolWindow.mockClear();
     mockState.uiState.createCardWindow.mockClear();
     mockState.uiState.updateWindow.mockClear();
@@ -201,6 +258,16 @@ describe('App canvas drop integration', () => {
     mockState.bridgeClient.i18n.translate.mockClear();
     mockState.bridgeClient.i18n.listLocales.mockClear();
     mockState.bridgeClient.i18n.onChanged.mockClear();
+    mockState.bridgeClient.command.register.mockClear();
+    mockState.bridgeClient.command.unregister.mockClear();
+    mockState.bridgeClient.command.get.mockClear();
+    mockState.bridgeClient.command.list.mockClear();
+    mockState.bridgeClient.command.invoke.mockClear();
+    mockState.bridgeClient.command.setState.mockClear();
+    mockState.bridgeClient.command.onRegistered.mockClear();
+    mockState.bridgeClient.command.onUnregistered.mockClear();
+    mockState.bridgeClient.command.onChanged.mockClear();
+    mockState.bridgeClient.command.onInvoked.mockClear();
     mockState.bridgeClient.events.on.mockClear();
   });
 

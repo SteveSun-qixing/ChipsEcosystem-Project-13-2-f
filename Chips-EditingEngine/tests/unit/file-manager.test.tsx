@@ -8,7 +8,35 @@ import FileManager from '../../src/components/FileManager/FileManager';
 import { CHIPS_DRAG_DATA_TYPE } from '../../src/components/CardBoxLibrary/types';
 import type { WorkspaceFile } from '../../src/types/workspace';
 
-const { workspaceServiceMock } = vi.hoisted(() => {
+const { commandContextMock, workspaceServiceMock } = vi.hoisted(() => {
+  const commandViews = [
+    {
+      commandId: 'chips-official.editing-engine.file.new-card',
+      titleKey: 'commands.file.new_card.title',
+      handlerId: 'editing-engine:file.new-card',
+      toolbarPlacement: [{ toolbarId: 'file-manager', groupId: 'create', order: 10 }],
+      menuPlacement: [{ menuId: 'workspace-file', groupId: 'create', order: 10 }],
+      state: { enabled: true, visible: true },
+      diagnostic: { visible: true, enabled: true, checked: false },
+    },
+    {
+      commandId: 'chips-official.editing-engine.file.open',
+      titleKey: 'commands.file.open.title',
+      handlerId: 'editing-engine:file.open',
+      menuPlacement: [{ menuId: 'workspace-file', groupId: 'open', order: 10 }],
+      state: { enabled: true, visible: true },
+      diagnostic: { visible: true, enabled: true, checked: false },
+    },
+    {
+      commandId: 'chips-official.editing-engine.search.workspace',
+      titleKey: 'commands.search.workspace.title',
+      handlerId: 'editing-engine:search.workspace',
+      toolbarPlacement: [{ toolbarId: 'file-manager', groupId: 'view', order: 20 }],
+      state: { enabled: true, visible: true },
+      diagnostic: { visible: true, enabled: true, checked: false },
+    },
+  ];
+
   const files: WorkspaceFile[] = [
     {
       id: 'card-1',
@@ -35,6 +63,24 @@ const { workspaceServiceMock } = vi.hoisted(() => {
       deleteFile: vi.fn(),
       refresh: vi.fn(),
     },
+    commandContextMock: {
+      adapter: {
+        listCommands: vi.fn(async () => commandViews),
+        invokeCommand: vi.fn(async () => undefined),
+      },
+      commandViews,
+      phase: 'ready',
+      errorCode: null,
+      invocationContext: {
+        pluginId: 'chips-official.editing-engine',
+        sceneId: 'scene-workspace',
+        surfaceId: 'surface-workspace',
+      },
+      invokeCommand: vi.fn(async () => undefined),
+      registerHandler: vi.fn(() => () => undefined),
+      setCommandState: vi.fn(),
+      i18n: (key: string) => key,
+    },
   };
 });
 
@@ -45,6 +91,80 @@ vi.mock('@chips/component-library', () => ({
       return <input ref={ref} {...props} />;
     },
   ),
+  ChipsToolbar: ({
+    adapter,
+    commands = [],
+    toolbarId,
+    payload,
+    invocationContext,
+  }: {
+    adapter?: { invokeCommand?: (commandId: string, payload?: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown> };
+    commands?: Array<{
+      commandId: string;
+      titleKey: string;
+      toolbarPlacement?: Array<{ toolbarId?: string; order?: number }>;
+      state?: { enabled?: boolean };
+      diagnostic?: { enabled?: boolean };
+    }>;
+    toolbarId?: string;
+    payload?: Record<string, unknown>;
+    invocationContext?: Record<string, unknown>;
+  }) => (
+    <div role="toolbar" aria-label={toolbarId}>
+      {commands
+        .filter((command) => command.toolbarPlacement?.some((placement) => placement.toolbarId === toolbarId))
+        .map((command) => (
+          <button
+            key={command.commandId}
+            type="button"
+            data-command-id={command.commandId}
+            disabled={command.state?.enabled === false || command.diagnostic?.enabled === false}
+            onClick={() => void adapter?.invokeCommand?.(command.commandId, payload, {
+              source: 'toolbar',
+              context: invocationContext,
+            })}
+          >
+            {command.titleKey}
+          </button>
+        ))}
+    </div>
+  ),
+  resolveCommandMenuGroups: (
+    commands: Array<{
+      commandId: string;
+      titleKey: string;
+      menuPlacement?: Array<{ menuId?: string; groupId?: string; order?: number }>;
+      state?: { enabled?: boolean };
+      diagnostic?: { enabled?: boolean };
+    }>,
+    options: { menuId?: string; i18n?: (key: string) => string } = {},
+  ) => {
+    const groups = new Map<string, Array<Record<string, unknown>>>();
+    commands.forEach((command) => {
+      command.menuPlacement
+        ?.filter((placement) => placement.menuId === options.menuId)
+        .forEach((placement) => {
+          const groupId = placement.groupId ?? 'default';
+          const items = groups.get(groupId) ?? [];
+          items.push({
+            ...command,
+            label: options.i18n?.(command.titleKey) ?? command.titleKey,
+            disabled: command.state?.enabled === false || command.diagnostic?.enabled === false,
+            hidden: false,
+            checked: false,
+            shortcutLabel: '',
+            placement,
+          });
+          groups.set(groupId, items);
+        });
+    });
+
+    return Array.from(groups.entries()).map(([groupId, items]) => ({ groupId, items }));
+  },
+}));
+
+vi.mock('../../src/commands/EditingEngineCommandProvider', () => ({
+  useEditingEngineCommands: () => commandContextMock,
 }));
 
 vi.mock('../../src/hooks/useTranslation', () => ({
@@ -74,6 +194,11 @@ describe('FileManager', () => {
     workspaceServiceMock.on.mockClear();
     workspaceServiceMock.off.mockClear();
     workspaceServiceMock.openFile.mockClear();
+    commandContextMock.adapter.listCommands.mockClear();
+    commandContextMock.adapter.invokeCommand.mockClear();
+    commandContextMock.invokeCommand.mockClear();
+    commandContextMock.registerHandler.mockClear();
+    commandContextMock.setCommandState.mockClear();
   });
 
   afterEach(async () => {

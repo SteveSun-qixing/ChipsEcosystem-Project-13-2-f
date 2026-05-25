@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChipsInput } from '@chips/component-library';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
+import { ChipsInput, ChipsToolbar, type ChipsCommandView } from '@chips/component-library';
 import { FileTree } from './FileTree';
 import { ContextMenu } from './ContextMenu';
 import { workspaceService } from '../../services/workspace-service';
@@ -9,6 +9,15 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { CHIPS_DRAG_DATA_TYPE, type WorkspaceFileDragData } from '../CardBoxLibrary/types';
 import { ENGINE_ICONS } from '../../icons/descriptors';
 import { RuntimeIcon } from '../../icons/RuntimeIcon';
+import { useEditingEngineCommands } from '../../commands/EditingEngineCommandProvider';
+import {
+    EDITING_ENGINE_COMMAND_HANDLER_IDS,
+    EDITING_ENGINE_COMMAND_IDS,
+    isEditingEngineCommandId,
+    type EditingEngineCommandHandlerId,
+    type EditingEngineCommandId,
+    type EditingEngineCommandStatus,
+} from '../../commands/editing-engine-commands';
 import './FileManager.css';
 
 interface FileManagerProps {
@@ -17,6 +26,7 @@ interface FileManagerProps {
 
 export default function FileManager({ workingDirectory }: FileManagerProps) {
     const { t } = useTranslation();
+    const commands = useEditingEngineCommands();
 
     // State
     const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -26,7 +36,6 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
-    const [hasClipboard, setHasClipboard] = useState(false);
 
     const searchInputRef = useRef<any>(null);
 
@@ -58,6 +67,16 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
 
     const displayFiles = isSearching ? searchResults : files;
     const rootPath = workingDirectory || workspaceService.getState().rootPath;
+    const selectedFilesRef = useRef<WorkspaceFile[]>([]);
+    const workingDirectoryRef = useRef<string | undefined>(workingDirectory);
+
+    useEffect(() => {
+        selectedFilesRef.current = selectedFiles;
+    }, [selectedFiles]);
+
+    useEffect(() => {
+        workingDirectoryRef.current = workingDirectory;
+    }, [workingDirectory]);
 
     // Initialization & Event Listeners
     useEffect(() => {
@@ -89,11 +108,11 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
         setSelectedPaths(paths);
     };
 
-    const handleOpen = (file: WorkspaceFile) => {
+    const handleOpen = useCallback((file: WorkspaceFile) => {
         if (file.type !== 'folder') {
             workspaceService.openFile(file.id);
         }
-    };
+    }, []);
 
     const handleContextMenu = (file: WorkspaceFile, event: React.MouseEvent) => {
         event.preventDefault();
@@ -151,79 +170,108 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
         event.dataTransfer.effectAllowed = 'copy';
     };
 
-    const handleContextMenuAction = async (actionId: string, targetFiles: WorkspaceFile[]) => {
-        const targetFile = targetFiles[0];
-        const parentPath = targetFile?.type === 'folder' ? targetFile.path : workingDirectory;
+    const toggleSearch = useCallback(() => {
+        setIsSearchExpanded((wasExpanded) => {
+            if (!wasExpanded) {
+                setTimeout(() => searchInputRef.current?.focus(), 0);
+                return true;
+            }
 
-        switch (actionId) {
-            case 'new-card':
-                await workspaceService.createCard(t('file.untitled_card') || '无标题卡片', undefined, undefined, parentPath);
+            setSearchQuery('');
+            return false;
+        });
+    }, []);
+
+    const handleCommandStatus = useCallback(async (status: EditingEngineCommandStatus) => {
+        const targetFiles = deserializeWorkspaceFiles(status.payload?.files) ?? selectedFilesRef.current;
+        const targetFile = targetFiles[0];
+        const parentPath = targetFile?.type === 'folder' ? targetFile.path : workingDirectoryRef.current;
+
+        switch (status.handlerId) {
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileNewCard:
+                await workspaceService.createCard(
+                    t('file.untitled_card') || '无标题卡片',
+                    undefined,
+                    undefined,
+                    parentPath,
+                );
                 break;
-            case 'new-box':
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileNewBox:
                 await workspaceService.createBox(
                     t('file.untitled_box') || '无标题盒子',
                     DEFAULT_BOX_LAYOUT_TYPE,
                     parentPath,
                 );
                 break;
-            case 'open':
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileOpen:
                 if (targetFile) handleOpen(targetFile);
                 break;
-            case 'rename':
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileRename:
                 if (targetFile) setRenamingPath(targetFile.path);
                 break;
-            case 'delete':
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileDelete:
                 for (const f of targetFiles) {
                     await workspaceService.deleteFile(f.id);
                 }
                 setSelectedPaths([]);
                 break;
-            case 'refresh':
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.fileRefresh:
                 await workspaceService.refresh();
                 break;
+            case EDITING_ENGINE_COMMAND_HANDLER_IDS.searchWorkspace:
+                toggleSearch();
+                break;
         }
-    };
+    }, [handleOpen, t, toggleSearch]);
 
-    const toggleSearch = () => {
-        setIsSearchExpanded(!isSearchExpanded);
-        if (!isSearchExpanded) {
-            setTimeout(() => searchInputRef.current?.focus(), 0);
-        } else {
-            setSearchQuery('');
-        }
-    };
+    useEffect(() => {
+        const handlerIds: EditingEngineCommandHandlerId[] = [
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileNewCard,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileNewBox,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileOpen,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileRename,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileDelete,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.fileRefresh,
+            EDITING_ENGINE_COMMAND_HANDLER_IDS.searchWorkspace,
+        ];
+
+        const unregisterFns = handlerIds.map((handlerId) => commands.registerHandler(handlerId, handleCommandStatus));
+        return () => unregisterFns.forEach((unregister) => unregister());
+    }, [commands, handleCommandStatus]);
+
+    const commandPayload = useMemo(() => ({
+        files: serializeWorkspaceFiles(selectedFiles),
+    }), [selectedFiles]);
+
+    const commandInvocationContext = useMemo(() => ({
+        ...commands.invocationContext,
+        componentId: 'FileManager',
+    }), [commands.invocationContext]);
+
+    const fileCommandViews = useMemo(() => {
+        return createFileManagerCommandViews(commands.commandViews, {
+            hasSelection: selectedFiles.length > 0,
+            isSingleFile: selectedFiles.length === 1,
+            hasOpenableSelection: selectedFiles.length === 1 && selectedFiles[0]?.type !== 'folder',
+        });
+    }, [commands.commandViews, selectedFiles]);
+
+    const invokeFileCommand = useCallback((commandId: EditingEngineCommandId, source: 'toolbar' | 'context-menu') => {
+        void commands.invokeCommand(commandId, source, commandPayload, commandInvocationContext);
+    }, [commandInvocationContext, commandPayload, commands]);
 
     return (
         <div className="file-manager">
             {/* Toolbar */}
             <div className="file-manager__toolbar">
-                <div className="file-manager__toolbar-left">
-                    <button
-                        type="button"
-                        className="file-manager__btn file-manager__btn--icon"
-                        title={t('file_manager.new_card') || '新建卡片'}
-                        onClick={() => handleContextMenuAction('new-card', [])}
-                    >
-                        <RuntimeIcon icon={ENGINE_ICONS.card} />
-                    </button>
-                    <button
-                        type="button"
-                        className="file-manager__btn file-manager__btn--icon"
-                        title={t('file_manager.new_box') || '新建盒子'}
-                        onClick={() => handleContextMenuAction('new-box', [])}
-                    >
-                        <RuntimeIcon icon={ENGINE_ICONS.box} />
-                    </button>
-                </div>
-
-                <button
-                    type="button"
-                    className="file-manager__btn file-manager__btn--icon"
-                    title={t('file_manager.search_placeholder') || '搜索'}
-                    onClick={toggleSearch}
-                >
-                    <RuntimeIcon icon={ENGINE_ICONS.search} />
-                </button>
+                <ChipsToolbar
+                    adapter={commands.adapter}
+                    commands={fileCommandViews}
+                    toolbarId="file-manager"
+                    ariaLabel={t('commands.file_manager.toolbar.ariaLabel')}
+                    payload={commandPayload}
+                    invocationContext={commandInvocationContext}
+                />
             </div>
 
             {/* Search Input Row */}
@@ -323,11 +371,104 @@ export default function FileManager({ workingDirectory }: FileManagerProps) {
                 visible={contextMenu.visible}
                 x={contextMenu.x}
                 y={contextMenu.y}
-                selectedFiles={selectedFiles}
-                hasClipboard={hasClipboard}
+                commands={fileCommandViews}
                 onClose={() => setContextMenu({ ...contextMenu, visible: false })}
-                onAction={handleContextMenuAction}
+                onCommand={(commandId) => {
+                    if (isEditingEngineCommandId(commandId)) {
+                        invokeFileCommand(commandId, 'context-menu');
+                    }
+                }}
             />
         </div>
     );
+}
+
+function serializeWorkspaceFiles(files: WorkspaceFile[]): Record<string, unknown>[] {
+    return files.map((file) => ({
+        id: file.id,
+        name: file.name,
+        path: file.path,
+        type: file.type,
+        createdAt: file.createdAt,
+        modifiedAt: file.modifiedAt,
+    }));
+}
+
+function deserializeWorkspaceFiles(value: unknown): WorkspaceFile[] | null {
+    if (!Array.isArray(value)) {
+        return null;
+    }
+
+    return value
+        .map((item): WorkspaceFile | null => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+            const record = item as Record<string, unknown>;
+            if (
+                typeof record.id !== 'string' ||
+                typeof record.name !== 'string' ||
+                typeof record.path !== 'string' ||
+                (record.type !== 'card' && record.type !== 'box' && record.type !== 'folder')
+            ) {
+                return null;
+            }
+
+            return {
+                id: record.id,
+                name: record.name,
+                path: record.path,
+                type: record.type,
+                createdAt: typeof record.createdAt === 'string' ? record.createdAt : '',
+                modifiedAt: typeof record.modifiedAt === 'string' ? record.modifiedAt : '',
+            };
+        })
+        .filter((item): item is WorkspaceFile => item !== null);
+}
+
+function createFileManagerCommandViews(
+    commandViews: ChipsCommandView[],
+    selection: {
+        hasSelection: boolean;
+        isSingleFile: boolean;
+        hasOpenableSelection: boolean;
+    },
+): ChipsCommandView[] {
+    return commandViews.map((command) => {
+        if (!isEditingEngineCommandId(command.commandId)) {
+            return command;
+        }
+
+        let enabled = command.state?.enabled !== false;
+        let disabledReasonKey = command.state?.disabledReasonKey;
+
+        if (command.commandId === EDITING_ENGINE_COMMAND_IDS.fileOpen) {
+            enabled = enabled && selection.hasOpenableSelection;
+            disabledReasonKey = enabled ? undefined : 'commands.file.open.disabled';
+        }
+        if (command.commandId === EDITING_ENGINE_COMMAND_IDS.fileRename) {
+            enabled = enabled && selection.isSingleFile;
+            disabledReasonKey = enabled ? undefined : 'commands.file.rename.disabled';
+        }
+        if (command.commandId === EDITING_ENGINE_COMMAND_IDS.fileDelete) {
+            enabled = enabled && selection.hasSelection;
+            disabledReasonKey = enabled ? undefined : 'commands.file.delete.disabled';
+        }
+
+        const nextState = {
+            ...command.state,
+            enabled,
+            disabledReasonKey,
+        };
+
+        return {
+            ...command,
+            state: nextState,
+            diagnostic: {
+                ...command.diagnostic,
+                enabled,
+                disabledReasonKey,
+            },
+        };
+    });
 }

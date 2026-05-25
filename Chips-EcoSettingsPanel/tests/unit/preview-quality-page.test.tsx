@@ -24,6 +24,10 @@ describe("PreviewQualityPage", () => {
 
     expect(PREVIEW_QUALITY_ENTRIES).toHaveLength(10);
     expect(markup).toContain("settingsPanel.previewQuality.title");
+    expect(markup).toContain("settings-summary-panel");
+    expect(markup).toContain("settings-card-grid");
+    expect(markup).not.toContain("preview-quality-page");
+    expect(markup).not.toContain("preview-quality-grid");
     expect(markup).toContain("chipsdev preview --target app");
     expect(markup).toContain("chipsdev component gallery");
     expect(markup).toContain("chipsdev theme inspect");

@@ -1,7 +1,8 @@
 import React from "react";
-import { ChipsCardShell } from "@chips/component-library";
+import { ChipsCardShell, ChipsText } from "@chips/component-library";
 import { useI18n } from "../../app/providers/I18nProvider";
 import { PageFrame } from "../../shared/ui/PageFrame";
+import { CardDescription, CardGrid, CardGridItem, PageStack, SummaryPanel } from "../../shared/ui/PageLayout";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { PREVIEW_QUALITY_ENTRIES, type PreviewQualityEntryKind } from "./view-model";
 
@@ -24,37 +25,42 @@ export function PreviewQualityPage(): React.ReactElement {
 
   return (
     <PageFrame title={t("settingsPanel.previewQuality.title")} subtitle={t("settingsPanel.previewQuality.subtitle")}>
-      <div className="preview-quality-page">
-        <section className="diagnostics-hero" aria-label={t("settingsPanel.previewQuality.summary.ariaLabel")}>
-          <div className="diagnostics-hero__main">
-            <StatusBadge tone="attention" label={t("settingsPanel.previewQuality.summary.badge")} />
-            <h2>{t("settingsPanel.previewQuality.summary.title")}</h2>
-            <p>{t("settingsPanel.previewQuality.summary.description")}</p>
-          </div>
-          <div className="diagnostics-hero__meta">
-            <span>{t("settingsPanel.previewQuality.summary.runtimeBoundary")}</span>
-            <span>{t("settingsPanel.previewQuality.summary.reportBoundary")}</span>
-          </div>
-        </section>
+      <PageStack>
+        <SummaryPanel
+          ariaLabel={t("settingsPanel.previewQuality.summary.ariaLabel")}
+          main={
+            <>
+              <StatusBadge tone="attention" label={t("settingsPanel.previewQuality.summary.badge")} />
+              <ChipsText as="strong" text={t("settingsPanel.previewQuality.summary.title")} emphasis="strong" />
+              <ChipsText as="p" text={t("settingsPanel.previewQuality.summary.description")} tone="muted" />
+            </>
+          }
+          meta={
+            <>
+              <ChipsText as="span" text={t("settingsPanel.previewQuality.summary.runtimeBoundary")} tone="muted" />
+              <ChipsText as="span" text={t("settingsPanel.previewQuality.summary.reportBoundary")} tone="muted" />
+            </>
+          }
+        />
 
-        <div className="preview-quality-grid">
+        <CardGrid>
           {PREVIEW_QUALITY_ENTRIES.map((entry) => (
-            <article key={entry.id} className="preview-quality-card">
+            <CardGridItem key={entry.id}>
               <ChipsCardShell
                 title={t(entry.titleKey)}
                 toolbar={<StatusBadge tone={kindTone(entry.kind)} label={t(kindLabelKey(entry.kind))} />}
                 footer={<span className="preview-quality-card__target">{t(entry.targetKey)}</span>}
               >
-                <p className="card-description">{t(entry.descriptionKey)}</p>
+                <CardDescription>{t(entry.descriptionKey)}</CardDescription>
                 <div className="command-snippet" aria-label={t("settingsPanel.previewQuality.command.ariaLabel")}>
                   <code>{entry.command}</code>
                 </div>
-                <p className="preview-quality-card__boundary">{t(entry.boundaryKey)}</p>
+                <ChipsText as="p" text={t(entry.boundaryKey)} tone="muted" />
               </ChipsCardShell>
-            </article>
+            </CardGridItem>
           ))}
-        </div>
-      </div>
+        </CardGrid>
+      </PageStack>
     </PageFrame>
   );
 }

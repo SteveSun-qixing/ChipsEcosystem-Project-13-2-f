@@ -1,9 +1,10 @@
 import React from "react";
-import { ChipsBox, ChipsButton, ChipsCardShell, ChipsEmptyState } from "@chips/component-library";
+import { ChipsBox, ChipsButton, ChipsCardShell, ChipsEmptyState, ChipsText } from "@chips/component-library";
 import type { ThemeDiagnosticStatus } from "chips-sdk";
 import { useI18n } from "../../app/providers/I18nProvider";
 import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
 import { PageFrame } from "../../shared/ui/PageFrame";
+import { CardGrid, CardGridItem, MetricCard, PageStack, SummaryPanel } from "../../shared/ui/PageLayout";
 import { SectionStateBoundary } from "../../shared/ui/SectionStateBoundary";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { useThemeDiagnostics } from "./useThemeDiagnostics";
@@ -33,32 +34,24 @@ function diagnosticTone(diagnostic: ThemeDiagnosticRowViewModel): "neutral" | "p
   return "neutral";
 }
 
-function MetricCard({ label, value, detail }: { label: string; value: string | number; detail: string }): React.ReactElement {
-  return (
-    <article className="metric-card">
-      <div className="metric-card__label">{label}</div>
-      <div className="metric-card__value">{value}</div>
-      <div className="metric-card__detail">{detail}</div>
-    </article>
-  );
-}
-
 function ThemeChain({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
   const { t } = useI18n();
   return (
     <ChipsCardShell title={t("settingsPanel.themeDiagnostics.chain.title")}>
-      <div className="chain-list">
+      <CardGrid minItemSize="220px">
         {diagnostics.chain.map((entry) => (
-          <div key={`${entry.order}:${entry.id}`} className="chain-list__item">
-            <span className="chain-list__order">{entry.order + 1}</span>
-            <span className="chain-list__body">
-              <strong>{entry.displayName}</strong>
-              <span>{entry.id}</span>
-            </span>
-            <span className="chain-list__version">{entry.version}</span>
-          </div>
+          <CardGridItem key={`${entry.order}:${entry.id}`}>
+            <div className="settings-chain-item">
+              <span className="settings-chain-item__order">{entry.order + 1}</span>
+              <span className="settings-chain-item__body">
+                <strong>{entry.displayName}</strong>
+                <ChipsText as="span" text={entry.id} tone="muted" />
+              </span>
+              <ChipsText as="span" text={entry.version} tone="muted" />
+            </div>
+          </CardGridItem>
         ))}
-      </div>
+      </CardGrid>
     </ChipsCardShell>
   );
 }
@@ -78,58 +71,81 @@ function DiagnosticList({ diagnostics }: { diagnostics: ThemeDiagnosticRowViewMo
   }
 
   return (
-    <div className="diagnostic-list" aria-label={t("settingsPanel.themeDiagnostics.diagnostics.ariaLabel")}>
+    <CardGrid minItemSize="260px">
       {visibleDiagnostics.map((diagnostic) => (
-        <article key={diagnostic.id} className="diagnostic-list__item">
-          <div className="diagnostic-list__header">
-            <StatusBadge tone={diagnosticTone(diagnostic)} label={diagnostic.code} />
-            <span className="diagnostic-list__severity">{diagnostic.severity}</span>
-          </div>
-          <ChipsBox
-            as="dl"
-            className="settings-detail-field-list"
+        <CardGridItem key={diagnostic.id}>
+          <ChipsCardShell
+            title={<StatusBadge tone={diagnosticTone(diagnostic)} label={diagnostic.code} />}
+            toolbar={<span className="settings-diagnostic-severity">{diagnostic.severity}</span>}
+            ariaLabel={t("settingsPanel.themeDiagnostics.diagnostics.ariaLabel")}
           >
-            <div className="settings-detail-field-list__item">
-              <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.messageKey")}</dt>
-              <dd>{diagnostic.messageKey}</dd>
-            </div>
-            <div className="settings-detail-field-list__item">
-              <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.target")}</dt>
-              <dd>{diagnostic.component ?? diagnostic.tokenKey ?? diagnostic.themeId ?? t("settingsPanel.common.notAvailable")}</dd>
-            </div>
-            <div className="settings-detail-field-list__item">
-              <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.suggestion")}</dt>
-              <dd>{diagnostic.suggestionKey ?? t("settingsPanel.common.notAvailable")}</dd>
-            </div>
-          </ChipsBox>
-        </article>
+            <ChipsBox
+              as="dl"
+              className="settings-detail-field-list"
+            >
+              <div className="settings-detail-field-list__item">
+                <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.messageKey")}</dt>
+                <dd>{diagnostic.messageKey}</dd>
+              </div>
+              <div className="settings-detail-field-list__item">
+                <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.target")}</dt>
+                <dd>{diagnostic.component ?? diagnostic.tokenKey ?? diagnostic.themeId ?? t("settingsPanel.common.notAvailable")}</dd>
+              </div>
+              <div className="settings-detail-field-list__item">
+                <dt>{t("settingsPanel.themeDiagnostics.diagnostics.fields.suggestion")}</dt>
+                <dd>{diagnostic.suggestionKey ?? t("settingsPanel.common.notAvailable")}</dd>
+              </div>
+            </ChipsBox>
+          </ChipsCardShell>
+        </CardGridItem>
       ))}
-    </div>
+    </CardGrid>
   );
 }
 
-function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
+function ThemeDiagnosticsSummary({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
   const { t } = useI18n();
-
   return (
-    <div className="diagnostics-page">
-      <section className="diagnostics-hero" aria-label={t("settingsPanel.themeDiagnostics.summary.ariaLabel")}>
-        <div className="diagnostics-hero__main">
+    <SummaryPanel
+      ariaLabel={t("settingsPanel.themeDiagnostics.summary.ariaLabel")}
+      main={
+        <>
           <StatusBadge
             tone={statusTone(diagnostics.summary.status)}
             label={t(`settingsPanel.themeDiagnostics.status.${diagnostics.summary.status}`)}
           />
-          <h2>{diagnostics.themeId}</h2>
-          <p>{t("settingsPanel.themeDiagnostics.summary.source", diagnostics.sources)}</p>
-        </div>
-        <div className="diagnostics-hero__meta">
-          <span>{t("settingsPanel.themeDiagnostics.fields.themeVersion")}: {diagnostics.themeVersion}</span>
-          <span>{t("settingsPanel.themeDiagnostics.fields.contractVersion")}: {diagnostics.contractVersion}</span>
-          <span>{t("settingsPanel.themeDiagnostics.fields.schemaVersion")}: {diagnostics.schemaVersion}</span>
-        </div>
-      </section>
+          <ChipsText as="strong" text={diagnostics.themeId} emphasis="strong" />
+          <ChipsText as="p" text={t("settingsPanel.themeDiagnostics.summary.source", diagnostics.sources)} tone="muted" />
+        </>
+      }
+      meta={
+        <>
+          <ChipsText
+            as="span"
+            text={`${t("settingsPanel.themeDiagnostics.fields.themeVersion")}: ${diagnostics.themeVersion}`}
+            tone="muted"
+          />
+          <ChipsText
+            as="span"
+            text={`${t("settingsPanel.themeDiagnostics.fields.contractVersion")}: ${diagnostics.contractVersion}`}
+            tone="muted"
+          />
+          <ChipsText
+            as="span"
+            text={`${t("settingsPanel.themeDiagnostics.fields.schemaVersion")}: ${diagnostics.schemaVersion}`}
+            tone="muted"
+          />
+        </>
+      }
+    />
+  );
+}
 
-      <div className="metric-grid">
+function ThemeDiagnosticsMetrics({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
+  const { t } = useI18n();
+  return (
+    <CardGrid minItemSize="180px">
+      <CardGridItem>
         <MetricCard
           label={t("settingsPanel.themeDiagnostics.metrics.requiredCoverage")}
           value={formatPercent(diagnostics.summary.requiredCoverage)}
@@ -138,6 +154,8 @@ function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnostic
             total: diagnostics.summary.requiredTokenCount,
           })}
         />
+      </CardGridItem>
+      <CardGridItem>
         <MetricCard
           label={t("settingsPanel.themeDiagnostics.metrics.optionalCoverage")}
           value={formatPercent(diagnostics.summary.optionalCoverage)}
@@ -146,11 +164,15 @@ function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnostic
             total: diagnostics.summary.optionalTokenCount,
           })}
         />
+      </CardGridItem>
+      <CardGridItem>
         <MetricCard
           label={t("settingsPanel.themeDiagnostics.metrics.components")}
           value={`${diagnostics.summary.coveredComponentCount}/${diagnostics.summary.componentCount}`}
           detail={t("settingsPanel.themeDiagnostics.metrics.componentsDetail")}
         />
+      </CardGridItem>
+      <CardGridItem>
         <MetricCard
           label={t("settingsPanel.themeDiagnostics.metrics.diagnostics")}
           value={diagnostics.summary.totalDiagnostics}
@@ -158,7 +180,19 @@ function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnostic
             blocking: diagnostics.summary.blockingDiagnostics,
           })}
         />
-      </div>
+      </CardGridItem>
+    </CardGrid>
+  );
+}
+
+function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
+  const { t } = useI18n();
+
+  return (
+    <PageStack>
+      <ThemeDiagnosticsSummary diagnostics={diagnostics} />
+
+      <ThemeDiagnosticsMetrics diagnostics={diagnostics} />
 
       <ThemeChain diagnostics={diagnostics} />
 
@@ -209,7 +243,7 @@ function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnostic
       <ChipsCardShell title={t("settingsPanel.themeDiagnostics.diagnostics.title")}>
         <DiagnosticList diagnostics={diagnostics.diagnostics} />
       </ChipsCardShell>
-    </div>
+    </PageStack>
   );
 }
 

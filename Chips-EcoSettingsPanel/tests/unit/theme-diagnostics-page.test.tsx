@@ -95,7 +95,13 @@ describe("ThemeDiagnosticsPage", () => {
     expect(markup).toContain("client.theme.contract.get");
     expect(markup).toContain("client.theme.resolve");
     expect(markup).toContain("THEME_OPTIONAL_TOKEN_MISSING");
+    expect(markup).toContain("settings-summary-panel");
+    expect(markup).toContain("settings-metric-card__value");
+    expect(markup).toContain("settings-chain-item");
     expect(markup).toContain("data-scope=\"data-grid\"");
     expect(markup).toContain("settings-governance-list");
+    expect(markup).not.toContain("diagnostics-page");
+    expect(markup).not.toContain("diagnostics-hero");
+    expect(markup).not.toContain("metric-grid");
   });
 });

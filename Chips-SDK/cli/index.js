@@ -1664,6 +1664,12 @@ const parseCreateArgs = (args) => {
   const options = {
     template: undefined,
     pluginId: undefined,
+    themeId: undefined,
+    displayName: undefined,
+    publisher: undefined,
+    version: undefined,
+    parentThemeId: undefined,
+    description: undefined,
     capability: undefined,
     consumes: []
   };
@@ -1685,6 +1691,42 @@ const parseCreateArgs = (args) => {
     if (optionName === 'plugin-id') {
       const parsed = readOptionValue(args, index, token);
       options.pluginId = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'theme-id') {
+      const parsed = readOptionValue(args, index, token);
+      options.themeId = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'display-name') {
+      const parsed = readOptionValue(args, index, token);
+      options.displayName = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'publisher') {
+      const parsed = readOptionValue(args, index, token);
+      options.publisher = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'version') {
+      const parsed = readOptionValue(args, index, token);
+      options.version = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'parent-theme-id') {
+      const parsed = readOptionValue(args, index, token);
+      options.parentThemeId = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
+    if (optionName === 'description') {
+      const parsed = readOptionValue(args, index, token);
+      options.description = parsed.value;
       index = parsed.nextIndex;
       continue;
     }
@@ -1735,24 +1777,35 @@ const handleCreate = async (args) => {
     const modulePath = path.join(
       packageDir,
       'dist',
-      'src',
       'index.js'
     );
     await ensurePackageBuildArtifact(packageDir, modulePath, '主题脚手架');
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const themeScaffold = require(modulePath);
+    const projectName = deriveProjectName(targetDir);
+    const slug = slugifyForPluginId(projectName);
+    const dottedSlug = slug.replace(/-/g, '.');
+    const displayName = createOptions.displayName ?? toDisplayName(projectName);
     const options = {
       targetDir: path.resolve(projectRoot, targetDir),
-      themeId: 'chips-official:default-theme',
-      displayName: 'Chips Theme',
-      templateId: 'theme-standard'
+      templateId: createOptions.template ?? 'theme-standard',
+      themeId: createOptions.themeId ?? `theme.${dottedSlug}`,
+      displayName,
+      pluginId: createOptions.pluginId ?? `chips.theme.${dottedSlug}`,
+      version: createOptions.version ?? '1.0.0',
+      publisher: createOptions.publisher ?? slugifyForPluginId(deriveAuthorName()),
+      parentThemeId: createOptions.parentThemeId,
+      description: createOptions.description ?? `${displayName} 主题包。`
     };
     await themeScaffold.createThemeProject(options);
     await adaptWorkspaceDependencies(options.targetDir);
     log({
       message: '主题工程创建完成',
       targetDir: options.targetDir,
-      templateId: options.templateId
+      templateId: options.templateId,
+      pluginId: options.pluginId,
+      themeId: options.themeId,
+      displayName: options.displayName
     });
     return;
   }

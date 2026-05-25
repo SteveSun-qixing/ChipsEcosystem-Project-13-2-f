@@ -1,11 +1,12 @@
 schemaVersion: "1.0.0"
-id: {{pluginId}}
-name: {{name}}
-version: {{version}}
-type: theme
-description: {{description}}
+id: "{{pluginId}}"
+name: "{{name}}"
+version: "{{version}}"
+type: "theme"
+publisher: "{{publisher}}"
+description: "{{description}}"
 permissions:
-  - theme.read
+  - "theme.read"
 
 runtime:
   targets:
@@ -19,15 +20,14 @@ runtime:
       supported: true
 
 entry:
-  tokens: dist/tokens.json
-  themeCss: dist/theme.css
+  tokens: "dist/tokens.json"
+  themeCss: "dist/theme.css"
 
 # 主题相关配置（供 Theme Runtime 与生态工具使用）
-themeId: {{themeId}}
-displayName: {{displayName}}
+themeId: "{{themeId}}"
+displayName: "{{displayName}}"
 isDefault: {{isDefault}}
-parentTheme: {{parentThemeId}}
-publisher: {{publisher}}
+parentTheme: "{{parentThemeId}}"
 
 ui:
   layout:

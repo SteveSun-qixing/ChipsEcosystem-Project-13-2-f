@@ -3,13 +3,12 @@
  * 当前配置采用最小字段集，后续如需扩展可在此基础上演进。
  */
 
-/** @type {{ type: string; srcDir: string; distDir: string; manifest: string }} */
+/** @type {{ type: string; srcDir: string; outDir: string; manifest: string }} */
 const config = {
   type: "theme",
   srcDir: "src",
-  distDir: "dist",
+  outDir: "dist",
   manifest: "manifest.yaml"
 };
 
 export default config;
-

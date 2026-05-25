@@ -1,9 +1,10 @@
-# 主题图标字体来源说明
+# 默认主题图标字体来源说明
 
-- 上游来源：生态工作区 `design-assets/material-symbols/`
+- 上游来源：`/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task008-图标系统搭建/design-assets/material-symbols/`
 - 正式基线：Material Symbols Variable Font
+- 复制时间：2026-03-25
 
-## 随模板纳入的文件
+## 随主题工程纳入版本控制的文件
 
 - `variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2`
 - `variablefont/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].woff2`

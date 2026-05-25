@@ -1,6 +1,6 @@
 # 图标资源规范
 
-本目录存放主题工程正式随包交付的运行时图标字体资源。
+本目录存放默认主题正式随包交付的运行时图标字体资源。
 
 - Material Symbols Variable Font 作为基线图标库；
 - 构建阶段会把 `icons/variablefont/*.woff2` 复制到 `dist/icons/variablefont/`；

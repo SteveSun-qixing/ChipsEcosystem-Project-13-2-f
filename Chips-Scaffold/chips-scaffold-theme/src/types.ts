@@ -95,18 +95,18 @@ const resolvePluginId = (explicitId: string | undefined, themeId: string): strin
     return trimmed;
   }
 
-  // 约定：优先支持当前生态使用的点语义 themeId；
-  // 例如 chips-official.default-theme -> theme.theme.chips-official-default-theme。
-  // 若传入历史的 `publisher:name` 形式，也继续按旧规则进行安全转换。
   const normalized = themeId.toLowerCase();
-  const parts = normalized.split(':');
-  const publisher = parts[0] ?? 'chips';
-  const name = parts[1] ?? 'theme';
+  if (normalized.includes(':')) {
+    const [publisher = 'chips', name = 'theme'] = normalized.split(':');
+    const safePublisher = publisher.replace(/[^a-z0-9-]+/g, '-');
+    const safeName = name.replace(/[^a-z0-9-]+/g, '-');
+    const candidate = `theme.${safeName}.${safePublisher}`;
+    validatePluginId(candidate);
+    return candidate;
+  }
 
-  const safePublisher = publisher.replace(/[^a-z0-9-]+/g, '-');
-  const safeName = name.replace(/[^a-z0-9-]+/g, '-');
-
-  const candidate = `theme.${safeName}.${safePublisher}`;
+  const safeThemeId = normalized.replace(/[^a-z0-9-]+/g, '-');
+  const candidate = `theme.theme.${safeThemeId}`;
   validatePluginId(candidate);
   return candidate;
 };

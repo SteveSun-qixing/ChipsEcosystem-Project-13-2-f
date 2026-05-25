@@ -53,11 +53,33 @@ interface TemplateVariables {
   publisher: string;
 }
 
+const RENDERABLE_EXTENSIONS = new Set([
+  '.cjs',
+  '.css',
+  '.html',
+  '.js',
+  '.json',
+  '.md',
+  '.mjs',
+  '.ts',
+  '.tsx',
+  '.txt',
+  '.yaml',
+  '.yml'
+]);
+
 const renderTemplateString = (template: string, variables: TemplateVariables): string => {
   return template.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (match, key) => {
     const value = variables[key as keyof TemplateVariables];
     return typeof value === 'string' ? value : match;
   });
+};
+
+const shouldRenderAsText = (fileName: string): boolean => {
+  if (fileName.endsWith('.tpl')) {
+    return true;
+  }
+  return RENDERABLE_EXTENSIONS.has(path.extname(fileName).toLowerCase());
 };
 
 const copyTemplateDirectory = async (
@@ -80,10 +102,16 @@ const copyTemplateDirectory = async (
       continue;
     }
 
-    const raw = await fsp.readFile(sourcePath, 'utf-8');
-    const rendered = renderTemplateString(raw, variables);
     await fsp.mkdir(path.dirname(targetPath), { recursive: true });
-    await fsp.writeFile(targetPath, rendered, 'utf-8');
+
+    if (shouldRenderAsText(entry.name)) {
+      const raw = await fsp.readFile(sourcePath, 'utf-8');
+      const rendered = renderTemplateString(raw, variables);
+      await fsp.writeFile(targetPath, rendered, 'utf-8');
+      continue;
+    }
+
+    await fsp.copyFile(sourcePath, targetPath);
   }
 };
 

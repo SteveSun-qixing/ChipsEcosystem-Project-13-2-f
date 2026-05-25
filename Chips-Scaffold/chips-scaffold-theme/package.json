@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "commonjs",
-  "main": "dist/src/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run tests/create-theme-project.test.ts",
+    "test:e2e": "node scripts/run-generated-e2e.cjs",
     "test:watch": "vitest"
   },
   "devDependencies": {

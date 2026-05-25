@@ -10,6 +10,7 @@ import {
 } from "@chips/component-library";
 import { appConfig } from "../../config/app-config";
 import { createScopedLogger } from "../../config/logging";
+import { resolveLocale } from "../i18n/messages";
 import { chipsClient } from "../runtime/chips-client";
 import { createCardViewerEnvironmentClient, toLaunchContext } from "../runtime/environment-client";
 import { readLaunchContext } from "../runtime/launch-context";
@@ -55,6 +56,10 @@ function reportRuntimeDiagnostic(diagnostic: ChipsRuntimeDiagnostic): void {
   runtimeLogger.warn("Chips environment diagnostic received.", diagnostic);
 }
 
+function readDocumentLocale(): string {
+  return resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined);
+}
+
 export function AppProviders({ children }: AppProvidersProps): React.ReactElement {
   const launchContext = React.useMemo(() => readLaunchContext(chipsClient), []);
   const environmentClient = React.useMemo<ChipsClientLike>(
@@ -62,12 +67,13 @@ export function AppProviders({ children }: AppProvidersProps): React.ReactElemen
     [],
   );
   const initialTheme = React.useMemo(() => readDocumentThemeState(), []);
+  const initialLocale = React.useMemo(() => readDocumentLocale(), []);
 
   return (
     <ChipsEnvironmentProvider
       client={environmentClient}
       initialTheme={initialTheme ?? defaultThemeState}
-      initialLocale="zh-CN"
+      initialLocale={initialLocale}
       initialLaunchContext={toLaunchContext(launchContext) as ChipsLaunchContext}
       initialSurface={toLaunchContext(launchContext).surfaceContext as ChipsSurfaceContext | undefined}
       initialPermissions={[...CARD_VIEWER_PERMISSIONS]}

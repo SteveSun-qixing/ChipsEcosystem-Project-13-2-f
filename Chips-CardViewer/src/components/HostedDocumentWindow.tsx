@@ -570,6 +570,8 @@ export function HostedDocumentWindow({
               data-scope="composite-card-window"
               data-part="overlay"
               data-state="loading"
+              role="status"
+              aria-live="polite"
               className="card-viewer-window__overlay"
             >
               {loadingLabel}
@@ -580,6 +582,7 @@ export function HostedDocumentWindow({
               data-scope="composite-card-window"
               data-part="overlay"
               data-state="error"
+              role="alert"
               className="card-viewer-window__overlay card-viewer-window__overlay--error"
             >
               <span>{error}</span>

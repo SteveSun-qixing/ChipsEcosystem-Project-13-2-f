@@ -116,19 +116,26 @@ export function DropZone({
     },
     [logger, onFilePath, resetDragState],
   );
+  const titleId = "card-viewer-dropzone-title";
+  const descriptionId = "card-viewer-dropzone-description";
+  const errorId = error ? "card-viewer-dropzone-error" : undefined;
+  const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
     <div
       data-chips-app="card-viewer.dropzone"
       data-state={isDragActive ? "drag-active" : "idle"}
       className="card-viewer-dropzone"
+      role="region"
+      aria-label={ariaLabel}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <section
-        aria-label={ariaLabel}
+        aria-labelledby={titleId}
+        aria-describedby={describedBy}
         className="card-viewer-dropzone__panel"
       >
         <div
@@ -138,8 +145,9 @@ export function DropZone({
           .card
         </div>
         <div className="card-viewer-dropzone__copy">
-          <h1 className="card-viewer-dropzone__title">{title}</h1>
+          <h1 id={titleId} className="card-viewer-dropzone__title">{title}</h1>
           <p
+            id={descriptionId}
             className="card-viewer-dropzone__description"
           >
             {description}
@@ -152,6 +160,7 @@ export function DropZone({
         </div>
         {error ? (
           <div
+            id={errorId}
             role="alert"
             className="card-viewer-dropzone__error"
           >

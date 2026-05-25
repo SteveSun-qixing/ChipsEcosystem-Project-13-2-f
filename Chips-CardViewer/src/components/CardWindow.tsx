@@ -239,31 +239,27 @@ export function CardWindow({
           className="card-viewer-window__viewport card-viewer-window__viewport--document-flow"
         >
           <div
-            ref={containerRef}
-            className="card-viewer-window__frame-host card-viewer-window__frame-host--document-flow"
-            style={{ minHeight: `${documentHeight}px` }}
-          />
-          {isLoading && (
-            <div
-              data-scope="document-window"
-              data-part="overlay"
-              data-state="loading"
-              className="card-viewer-window__overlay"
-            >
-              {loadingLabel}
-            </div>
-          )}
-          {error && (
-            <div
-              data-scope="document-window"
-              data-part="overlay"
-              data-state="error"
-              className="card-viewer-window__overlay card-viewer-window__overlay--error"
-            >
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
+            data-scope="document-window"
+            data-part="overlay"
+            data-state="loading"
+            role="status"
+            aria-live="polite"
+            className="card-viewer-window__overlay"
+          >
+            {loadingLabel}
+          </div>
+        )}
+        {error && (
+          <div
+            data-scope="document-window"
+            data-part="overlay"
+            data-state="error"
+            role="alert"
+            className="card-viewer-window__overlay card-viewer-window__overlay--error"
+          >
+            <span>{error}</span>
+          </div>
+        )}
       </div>
       <div className="card-viewer-window__safe-area" aria-hidden="true" />
     </div>

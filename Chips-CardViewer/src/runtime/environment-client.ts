@@ -1,7 +1,7 @@
 import type { ChipsClientLike, ChipsLaunchContext, ChipsSurfaceContext, ChipsThemeState } from "@chips/component-library";
 import type { Client, PlatformLaunchContext, ThemeChangedPayload, ThemeState } from "chips-sdk";
 import { appConfig } from "../../config/app-config";
-import { formatMessage } from "../i18n/messages";
+import { translateLocalKey } from "../i18n/messages";
 import { readLaunchContext } from "./launch-context";
 
 function toThemeState(theme: ThemeState): ChipsThemeState {
@@ -75,7 +75,7 @@ export function createCardViewerEnvironmentClient(client: Client): ChipsClientLi
       },
       translate: async (key: string, params?: Record<string, unknown>) => {
         const locale = await client.i18n.getCurrent();
-        return formatMessage(locale, key, params as Record<string, string | number> | undefined);
+        return translateLocalKey(key, locale, params as Record<string, string | number> | undefined);
       },
       onChanged: (handler: (payload: { locale: string }) => void) => client.i18n.onChanged(handler),
     },

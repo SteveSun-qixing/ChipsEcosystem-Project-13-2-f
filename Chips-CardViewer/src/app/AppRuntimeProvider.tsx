@@ -2,7 +2,8 @@ import React from "react";
 import type { Client, PlatformLaunchContext, SurfaceContext } from "chips-sdk";
 import { appConfig } from "../../config/app-config";
 import { createLogger, createTraceId } from "../../config/logging";
-import { formatMessage, resolveLocale, type SupportedLocale } from "../i18n/messages";
+import { resolveLocaleDirection, type SupportedLocale } from "../i18n/messages";
+import { useCardViewerText, type CardViewerTextResolver } from "../i18n/useCardViewerText";
 import { chipsClient } from "../runtime/chips-client";
 import { readLaunchContext } from "../runtime/launch-context";
 import {
@@ -45,7 +46,7 @@ export interface CardViewerRuntimeValue {
   error: string | null;
   locale: SupportedLocale;
   surfaceMode: "immersive" | "document";
-  t(key: string, params?: Record<string, string | number>): string;
+  t: CardViewerTextResolver;
   openFile(): Promise<void>;
   openFilePath(filePath: string): void;
 }
@@ -78,10 +79,6 @@ function resolveOpenedTarget(filePath: string): OpenedTarget | null {
 function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string | null {
   const documentUrl = typeof launchParams.webDocumentUrl === "string" ? launchParams.webDocumentUrl.trim() : "";
   return documentUrl.length > 0 ? documentUrl : null;
-}
-
-function readInitialLocale(): SupportedLocale {
-  return resolveLocale(typeof document !== "undefined" ? document.documentElement.lang : undefined);
 }
 
 function resolveHostSceneId(launchContext: PlatformLaunchContext): string {
@@ -117,13 +114,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   const [launchContext, setLaunchContext] = React.useState<PlatformLaunchContext>(() => readLaunchContext(client));
   const [openedTarget, setOpenedTarget] = React.useState<OpenedTarget | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [locale, setLocale] = React.useState<SupportedLocale>(() => readInitialLocale());
+  const { locale, text } = useCardViewerText();
   const hasResolvedLaunchContextRef = React.useRef(false);
-
-  const t = React.useCallback(
-    (key: string, params?: Record<string, string | number>) => formatMessage(locale, key, params),
-    [locale],
-  );
 
   React.useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -158,24 +150,6 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   }, [error, logger]);
 
   React.useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([client.theme.getCurrent({ appId: appConfig.appId }), client.i18n.getCurrent()])
-      .then(([, currentLocale]) => {
-        if (!cancelled) {
-          setLocale(resolveLocale(currentLocale));
-        }
-      })
-      .catch((runtimeError) => {
-        logger.warn("读取运行时主题或语言失败，继续使用文档已注入的快照", runtimeError);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [client, logger]);
-
-  React.useEffect(() => {
     if (hasResolvedLaunchContextRef.current) {
       return;
     }
@@ -207,7 +181,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     const nextTarget = resolveOpenedTarget(targetPath);
 
     if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
-      setError(t("card-viewer.errors.unsupportedFile"));
+      setError(text("card-viewer.errors.unsupportedFile"));
       return;
     }
 
@@ -217,15 +191,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     });
     setOpenedTarget(nextTarget);
     setError(null);
-  }, [client, logger, t]);
-
-  React.useEffect(() => {
-    return client.i18n.onChanged((payload) => {
-      if (typeof payload?.locale === "string") {
-        setLocale(resolveLocale(payload.locale));
-      }
-    });
-  }, [client]);
+  }, [client, logger, text]);
 
   const surfaceMode = openedTarget?.kind === "document" ? "document" : "immersive";
 
@@ -243,13 +209,44 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     };
   }, [surfaceMode]);
 
+  React.useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const previousLang = document.documentElement.getAttribute("lang");
+    const previousDir = document.documentElement.getAttribute("dir");
+    const previousLocale = document.documentElement.getAttribute("data-chips-locale");
+    document.documentElement.setAttribute("lang", locale);
+    document.documentElement.setAttribute("dir", resolveLocaleDirection(locale));
+    document.documentElement.setAttribute("data-chips-locale", locale);
+
+    return () => {
+      if (previousLang === null) {
+        document.documentElement.removeAttribute("lang");
+      } else {
+        document.documentElement.setAttribute("lang", previousLang);
+      }
+      if (previousDir === null) {
+        document.documentElement.removeAttribute("dir");
+      } else {
+        document.documentElement.setAttribute("dir", previousDir);
+      }
+      if (previousLocale === null) {
+        document.documentElement.removeAttribute("data-chips-locale");
+      } else {
+        document.documentElement.setAttribute("data-chips-locale", previousLocale);
+      }
+    };
+  }, [locale]);
+
   const openFilePath = React.useCallback((filePath: string) => {
     const nextTarget = resolveOpenedTarget(filePath);
     if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
       logger.warn("选择的文件类型当前不受支持", {
         filePath,
       });
-      setError(t("card-viewer.errors.unsupportedFile"));
+      setError(text("card-viewer.errors.unsupportedFile"));
       return;
     }
 
@@ -258,14 +255,14 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     });
     setError(null);
     setOpenedTarget(nextTarget);
-  }, [client, logger, t]);
+  }, [client, logger, text]);
 
   const openFile = React.useCallback(async () => {
     try {
       setError(null);
       logger.info("用户点击“打开文件”按钮，准备调用文件选择对话框");
       const selected = await client.platform.openFile({
-        title: t("card-viewer.dialogs.openFileTitle"),
+        title: text("card-viewer.dialogs.openFileTitle"),
         mode: "file",
         allowMultiple: false,
         mustExist: true,
@@ -281,9 +278,9 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
       }
     } catch (runtimeError) {
       logger.error("通过按钮选择查看目标失败", runtimeError);
-      setError(resolveErrorMessage(runtimeError, t("card-viewer.errors.hostActionFailed")));
+      setError(resolveErrorMessage(runtimeError, text("card-viewer.errors.hostActionFailed")));
     }
-  }, [client, logger, openFilePath, t]);
+  }, [client, logger, openFilePath, text]);
 
   const activeSceneId = getSceneIdForTarget(openedTarget);
   const activeScene = getSceneDefinition(activeSceneId);
@@ -310,7 +307,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     error,
     locale,
     surfaceMode,
-    t,
+    t: text,
     openFile,
     openFilePath,
   }), [
@@ -325,7 +322,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     openFilePath,
     openedTarget,
     surfaceMode,
-    t,
+    text,
     traceId,
   ]);
 

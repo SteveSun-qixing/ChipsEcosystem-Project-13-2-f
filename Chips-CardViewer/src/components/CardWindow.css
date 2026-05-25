@@ -51,9 +51,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--chips-spacing-md, 16px);
+  padding: var(--chips-sys-layout-space-md, 16px);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--chips-sys-typography-body-sm-size, 14px);
+  line-height: 1.6;
+  background:
+    color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 86%, transparent);
   color: var(--chips-sys-color-on-surface, #111111);
 }
 
@@ -82,7 +85,6 @@
   width: 100%;
   min-height: 0;
   overflow: visible;
-  padding: 0;
   background: var(--chips-sys-color-surface, #ffffff);
 }
 
@@ -129,8 +131,7 @@
   width: 100%;
   height: auto;
   min-height: 0;
-  overflow: hidden;
-  background: #ffffff;
+  background: var(--chips-sys-color-surface, #ffffff);
 }
 
 .card-viewer-window__safe-area {

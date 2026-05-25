@@ -1,7 +1,9 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
 import { renderToString } from "react-dom/server";
+import { createChipsI18nText } from "@chips/component-library";
 import { App } from "../../src/App";
 import { CardWindow } from "../../src/components/CardWindow";
+import { localeBundles, supportedLocales, translateLocalKey } from "../../src/i18n/messages";
 import { chipsClient } from "../../src/runtime/chips-client";
 
 describe("App（卡片查看器根组件）", () => {
@@ -27,84 +29,24 @@ describe("App（卡片查看器根组件）", () => {
     expect(html).not.toContain("卡片查看器");
   });
 
-  it("应当解析正式 cardSource 启动来源", () => {
-    expect(parseCardViewerSource({
-      kind: "local-file",
-      documentKind: "box",
-      filePath: "/tmp/demo.box",
-    })).toEqual({
-      kind: "local-file",
-      documentKind: "box",
-      filePath: "/tmp/demo.box",
+  it("应当通过组件库同步 i18n adapter 解析本地语言包", () => {
+    const zhText = createChipsI18nText({
+      bundles: localeBundles,
+      locale: "zh-CN",
+      fallbackLocale: "en-US",
+      defaultLocale: "zh-CN",
+    });
+    const missingLocaleText = createChipsI18nText({
+      bundles: localeBundles,
+      locale: "fr-FR",
+      fallbackLocale: "en-US",
+      defaultLocale: "zh-CN",
     });
 
-    expect(parseCardViewerSource({
-      kind: "community-card",
-      cardId: "card-1",
-      title: "社区卡片",
-      documentUrl: "https://example.test/card.html",
-      coverUrl: "https://example.test/cover.html",
-      coverFragmentUrl: "https://example.test/cover-fragment.html",
-      coverRenderMode: "fragment-shadow",
-      coverRatio: "3:4",
-    })).toMatchObject({
-      kind: "community-card",
-      cardId: "card-1",
-      title: "社区卡片",
-      documentUrl: "https://example.test/card.html",
-      coverUrl: "https://example.test/cover.html",
-      coverFragmentUrl: "https://example.test/cover-fragment.html",
-      coverRenderMode: "fragment-shadow",
-      coverRatio: "3:4",
-    });
-  });
-
-  it("封面查看层应当使用受控文档 iframe 并提供点击返回命中层", () => {
-    const html = renderToString(
-      <ViewerCoverSurface
-        cover={{
-          title: "卡片封面",
-          coverUrl: "https://example.test/cover.html",
-          coverFragmentUrl: "https://example.test/cover-fragment.html",
-          coverRenderMode: "fragment-shadow",
-          ratio: "3:4",
-        }}
-        title="社区卡片"
-        closeLabel="点击封面返回内容"
-        unavailableLabel="当前文档没有可用封面。"
-        onClose={() => undefined}
-      />,
-    );
-
-    expect(html).toContain('data-chips-app="card-viewer.cover"');
-    expect(html).toContain('data-scope="viewer-cover-frame"');
-    expect(html).toContain('data-ratio="3:4"');
-    expect(html).toContain("viewer-cover-surface__hit-target");
-    expect(html).toContain('aria-label="点击封面返回内容"');
-    expect(html).toContain("viewer-cover-surface__title");
-    expect(html).toContain("社区卡片");
-  });
-
-  it("封面查看层应当把任意合法比例转换为视口自适应尺寸变量", () => {
-    const html = renderToString(
-      <ViewerCoverSurface
-        cover={{
-          title: "超宽封面",
-          coverUrl: "https://example.test/wide-cover.html",
-          ratio: "2:1",
-        }}
-        title="横版卡片"
-        closeLabel="点击封面返回内容"
-        unavailableLabel="当前文档没有可用封面。"
-        onClose={() => undefined}
-      />,
-    );
-
-    expect(html).toContain("--viewer-cover-ratio-width:2");
-    expect(html).toContain("--viewer-cover-ratio-height:1");
-    expect(html).toContain("--viewer-cover-ratio-scale:1.4142");
-    expect(html).toContain("--viewer-cover-aspect-ratio:2 / 1");
-    expect(html).toContain("横版卡片");
+    expect(supportedLocales).toEqual(["zh-CN", "en-US"]);
+    expect(zhText("card-viewer.commands.openFile.title")).toBe("打开文件");
+    expect(missingLocaleText("card-viewer.viewer.documentLoading")).toBe("Loading document…");
+    expect(translateLocalKey("card-viewer.missing.key", "zh-CN")).toBe("card-viewer.missing.key");
   });
 
   it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {

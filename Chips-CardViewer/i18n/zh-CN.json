@@ -6,6 +6,20 @@
       "showCover": "查看封面",
       "showContent": "查看内容"
     },
+    "commands": {
+      "openFile": {
+        "title": "打开文件",
+        "description": "通过 Host 文件选择器打开 .card 或 .box 文件。",
+        "ariaLabel": "打开卡片或箱子文件"
+      },
+      "menu": {
+        "file": "文件",
+        "ariaLabel": "卡片查看器菜单"
+      },
+      "toolbar": {
+        "ariaLabel": "卡片查看器工具栏"
+      }
+    },
     "dialogs": {
       "openFileTitle": "打开卡片或箱子文件"
     },

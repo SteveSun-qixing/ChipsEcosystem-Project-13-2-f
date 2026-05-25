@@ -24,6 +24,9 @@ const CARD_VIEWER_PERMISSIONS = [
   "platform.read",
   "theme.read",
   "i18n.read",
+  "command.read",
+  "command.write",
+  "command.invoke",
 ] as const;
 
 const runtimeLogger = createScopedLogger({ scope: "card-viewer-environment" });

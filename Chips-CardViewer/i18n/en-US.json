@@ -6,6 +6,20 @@
       "showCover": "Show Cover",
       "showContent": "Show Content"
     },
+    "commands": {
+      "openFile": {
+        "title": "Open File",
+        "description": "Open a .card or .box file through the Host file picker.",
+        "ariaLabel": "Open card or box file"
+      },
+      "menu": {
+        "file": "File",
+        "ariaLabel": "Card viewer menu"
+      },
+      "toolbar": {
+        "ariaLabel": "Card viewer toolbar"
+      }
+    },
     "dialogs": {
       "openFileTitle": "Open Card or Box File"
     },

@@ -13,7 +13,8 @@
 }
 
 .card-viewer-shell--document {
-  display: block;
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
   overflow: visible;
   background: var(--chips-sys-color-surface, #ffffff);
@@ -31,8 +32,9 @@
 }
 
 .card-viewer-shell__main--document {
-  display: block;
-  min-height: 100%;
+  display: flex;
+  flex: 1;
+  min-height: 0;
   overflow: visible;
   background: var(--chips-sys-color-surface, #ffffff);
 }
@@ -65,4 +67,28 @@
   font-size: 18px;
   line-height: 1.35;
   letter-spacing: 0;
+}
+
+.card-viewer-shell__command-row {
+  display: flex;
+  align-items: center;
+  gap: var(--chips-sys-layout-gap-sm, 8px);
+  padding:
+    var(--chips-sys-layout-space-xs, 8px)
+    var(--chips-sys-layout-space-md, 16px);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 12%, transparent);
+  background:
+    color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 96%, var(--chips-sys-color-primary, #246bff));
+  -webkit-app-region: no-drag;
+}
+
+.card-viewer-shell__command-row [data-scope="toolbar"][data-part="root"] {
+  margin-inline-start: auto;
+}
+
+.card-viewer-shell__command-status {
+  font-size: var(--chips-sys-typography-caption-size, 12px);
+  line-height: 1.5;
+  color: var(--chips-sys-color-error, #d92d20);
 }

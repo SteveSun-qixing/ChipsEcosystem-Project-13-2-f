@@ -435,8 +435,8 @@ const readConversionManifest = async (ctx: HtmlToPdfContext, htmlDir: string): P
           cardFile: asString(source.cardFile),
           title: asString(source.title),
           semanticHash: asString(source.semanticHash),
-          locale: asString(source.locale),
-          themeId: asString(source.themeId),
+          locale: asString(source.requestedLocale) ?? asString(source.locale),
+          themeId: asString(source.requestedThemeId) ?? asString(source.themeId),
         }
       : undefined,
     output: isRecord(parsed.output)

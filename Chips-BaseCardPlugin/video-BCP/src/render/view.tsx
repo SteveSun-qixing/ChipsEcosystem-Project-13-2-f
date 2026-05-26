@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ChipsBadge, ChipsEmptyState, ChipsIcon, ChipsImage } from "@chips/component-library";
+import type { VideoCardOpenPayload, VideoCardOpenResource, VideoCardOpenSubtitleResource } from "chips-sdk";
 import type { BasecardConfig } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
 import {
   deriveDisplayTitle,
   deriveMetaLine,
+  inferSubtitleMimeType,
   inferVideoMimeType,
   normalizeRelativeCardResourcePath,
   resolveFileName,
@@ -36,6 +39,21 @@ export const VIEW_STYLE_TEXT = `
   cursor: pointer;
 }
 
+.chips-video-card [data-scope="button"][data-part="root"] {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.chips-video-card [data-scope="button"][data-part="label"] {
+  width: 100%;
+}
+
 .chips-video-card__surface-button:focus-visible {
   outline: none;
 }
@@ -60,6 +78,19 @@ export const VIEW_STYLE_TEXT = `
   background: #030712;
 }
 
+.chips-video-card__poster[data-scope="image"][data-part="root"],
+.chips-video-card__fallback-video[data-scope="media"][data-part="root"] {
+  width: 100%;
+  height: 100%;
+}
+
+.chips-video-card__poster [data-scope="image"][data-part="media"],
+.chips-video-card__fallback-video [data-scope="media"][data-part="media"] {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .chips-video-card__empty {
   display: grid;
   place-items: center;
@@ -68,6 +99,12 @@ export const VIEW_STYLE_TEXT = `
   padding: 20px;
   color: var(--chips-sys-color-on-surface, #0f172a);
   text-align: center;
+}
+
+.chips-video-card__empty [data-scope="empty-state"][data-part="root"] {
+  min-height: 100%;
+  border: 0;
+  background: transparent;
 }
 
 .chips-video-card__overlay {
@@ -123,7 +160,7 @@ export const VIEW_STYLE_TEXT = `
   font-size: 17px;
   font-weight: 700;
   line-height: 1.35;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--chips-sys-color-on-surface, #0f172a);
 }
 
@@ -132,6 +169,13 @@ export const VIEW_STYLE_TEXT = `
   font-size: 12px;
   line-height: 1.5;
   color: var(--chips-sys-color-on-surface-variant, #64748b);
+}
+
+.chips-video-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 6px 0;
 }
 
 @media (max-width: 560px) {
@@ -155,6 +199,7 @@ export interface BasecardViewProps {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: VideoCardOpenPayload;
   }) => void;
 }
 
@@ -284,6 +329,143 @@ function VideoFallbackPoster(props: { src: string }) {
   );
 }
 
+function buildOpenResourceDescriptor(
+  resourceId: string,
+  resourcePath: string,
+  mimeType?: string,
+): VideoCardOpenResource | null {
+  const normalizedResourceId = resourceId.trim();
+  const normalizedRelativePath = normalizeRelativeCardResourcePath(resourcePath);
+  if (!normalizedResourceId || !normalizedRelativePath) {
+    return null;
+  }
+
+  return {
+    resourceId: normalizedResourceId,
+    relativePath: normalizedRelativePath,
+    fileName: resolveFileName(normalizedRelativePath) || undefined,
+    mimeType,
+  };
+}
+
+function buildVideoCardOpenPayload(input: {
+  config: BasecardConfig;
+  displayTitle: string;
+}): VideoCardOpenPayload | null {
+  const video = buildOpenResourceDescriptor(
+    input.config.video_file,
+    input.config.video_file,
+    inferVideoMimeType(input.config.video_file),
+  );
+  if (!video) {
+    return null;
+  }
+
+  const cover = buildOpenResourceDescriptor(input.config.cover_image, input.config.cover_image);
+  const subtitles = input.config.subtitles
+    .map((subtitle): VideoCardOpenSubtitleResource | null => {
+      const resource = buildOpenResourceDescriptor(
+        subtitle.file_path,
+        subtitle.file_path,
+        inferSubtitleMimeType(subtitle.file_path),
+      );
+      if (!resource) {
+        return null;
+      }
+
+      return {
+        ...resource,
+        id: subtitle.id,
+        label: subtitle.label || undefined,
+        language: subtitle.language || undefined,
+        kind: subtitle.kind,
+        default: subtitle.default || undefined,
+      };
+    })
+    .filter((subtitle): subtitle is VideoCardOpenSubtitleResource => subtitle !== null);
+
+  return {
+    kind: "chips.video-card",
+    version: "1.0.0",
+    cardType: "base.video",
+    config: {
+      card_type: "VideoCard",
+      theme: input.config.theme || "",
+      video_file: input.config.video_file,
+      cover_image: input.config.cover_image,
+      subtitles: input.config.subtitles.map((subtitle) => ({ ...subtitle })),
+      playback: { ...input.config.playback },
+      video_title: input.config.video_title,
+      publish_time: input.config.publish_time,
+      creator: input.config.creator,
+    },
+    resources: {
+      video,
+      ...(cover ? { cover } : undefined),
+      ...(subtitles.length > 0 ? { subtitles } : undefined),
+    },
+    display: {
+      title: input.displayTitle,
+      creator: input.config.creator || undefined,
+      publishTime: input.config.publish_time || undefined,
+    },
+    playback: {
+      autoplay: input.config.playback.autoplay,
+      loop: input.config.playback.loop,
+      muted: input.config.playback.muted,
+      playbackRate: input.config.playback.playback_rate,
+      startTime: input.config.playback.start_time,
+    },
+  };
+}
+
+function useResolvedResourceUrlMap(
+  resourcePaths: string[],
+  resolveResourceUrl?: (resourcePath: string) => Promise<string>,
+  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void,
+): Map<string, string> {
+  const [resolved, setResolved] = useState<Map<string, string>>(new Map());
+  const resourceKey = resourcePaths.join("\n");
+
+  useEffect(() => {
+    let cancelled = false;
+    const normalizedPaths = Array.from(new Set(
+      resourcePaths
+        .map((resourcePath) => normalizeRelativeCardResourcePath(resourcePath))
+        .filter((resourcePath): resourcePath is string => Boolean(resourcePath)),
+    ));
+
+    if (!resolveResourceUrl) {
+      setResolved(new Map(normalizedPaths.map((resourcePath) => [resourcePath, resourcePath])));
+      return undefined;
+    }
+
+    setResolved(new Map());
+
+    void Promise.all(normalizedPaths.map(async (resourcePath) => {
+      try {
+        const url = await resolveResourceUrlWithRetry(resolveResourceUrl, resourcePath);
+        return [resourcePath, url] as const;
+      } catch {
+        return [resourcePath, ""] as const;
+      }
+    })).then((entries) => {
+      if (!cancelled) {
+        setResolved(new Map(entries.filter(([, url]) => url)));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      normalizedPaths.forEach((resourcePath) => {
+        void Promise.resolve(releaseResourceUrl?.(resourcePath)).catch(() => undefined);
+      });
+    };
+  }, [releaseResourceUrl, resolveResourceUrl, resourceKey]);
+
+  return resolved;
+}
+
 export function BasecardView({
   config,
   resolveResourceUrl,
@@ -294,30 +476,65 @@ export function BasecardView({
   const t = createTranslator(locale);
   const videoUrl = useResolvedResourceUrl(config.video_file, resolveResourceUrl, releaseResourceUrl);
   const coverUrl = useResolvedResourceUrl(config.cover_image, resolveResourceUrl, releaseResourceUrl);
+  useResolvedResourceUrlMap(
+    config.subtitles.map((subtitle) => subtitle.file_path),
+    resolveResourceUrl,
+    releaseResourceUrl,
+  );
   const displayTitle = deriveDisplayTitle(config);
   const metaLine = deriveMetaLine(config);
-  const canOpen = Boolean(openResource && videoUrl);
+  const canOpen = Boolean(openResource && normalizeRelativeCardResourcePath(config.video_file));
+  const openPayload = buildVideoCardOpenPayload({
+    config,
+    displayTitle,
+  });
+  const subtitleCount = config.subtitles.length;
 
   const content = (
     <>
       <div className="chips-video-card__poster-shell">
         {coverUrl ? (
-          <img
+          <ChipsImage
             src={coverUrl}
-            alt=""
+            alt={displayTitle}
+            decorative
             className="chips-video-card__poster"
-            draggable={false}
+            fit="cover"
+            loadingStrategy="lazy"
           />
         ) : videoUrl ? (
           <VideoFallbackPoster src={videoUrl} />
         ) : (
-          <div className="chips-video-card__empty">{t("video.view.cover_unavailable")}</div>
+          <div className="chips-video-card__empty">
+            <ChipsEmptyState
+              ariaLabel={t("video.view.cover_unavailable")}
+              title={t("video.view.cover_unavailable")}
+            />
+          </div>
         )}
 
         <div className="chips-video-card__overlay" aria-hidden="true">
-          <span className="chips-video-card__play-badge" />
+          <span className="chips-video-card__play-badge">
+            <ChipsIcon descriptor={{ name: "play_arrow", decorative: true }} tone="default" />
+          </span>
         </div>
       </div>
+
+      {subtitleCount > 0 || config.playback.loop || config.playback.autoplay ? (
+        <div className="chips-video-card__badges">
+          {subtitleCount > 0 ? (
+            <ChipsBadge tone="accent">
+              {t("video.view.badge_subtitles", { count: subtitleCount })}
+            </ChipsBadge>
+          ) : null}
+          {config.playback.loop ? (
+            <ChipsBadge tone="neutral">{t("video.view.badge_loop")}</ChipsBadge>
+          ) : null}
+          {config.playback.autoplay ? (
+            <ChipsBadge tone="neutral">{t("video.view.badge_autoplay")}</ChipsBadge>
+          ) : null}
+        </div>
+      ) : null}
 
       {displayTitle || metaLine ? (
         <div className="chips-video-card__info">
@@ -332,7 +549,12 @@ export function BasecardView({
     return (
       <div className="chips-video-card" data-card-type={config.card_type}>
         <div className="chips-video-card__poster-shell">
-          <div className="chips-video-card__empty">{t("video.view.empty")}</div>
+          <div className="chips-video-card__empty">
+            <ChipsEmptyState
+              ariaLabel={t("video.view.empty")}
+              title={t("video.view.empty")}
+            />
+          </div>
         </div>
       </div>
     );
@@ -345,11 +567,16 @@ export function BasecardView({
           type="button"
           className="chips-video-card__surface-button"
           onClick={() => {
+            const resourceId = normalizeRelativeCardResourcePath(config.video_file);
+            if (!resourceId) {
+              return;
+            }
             openResource?.({
-              resourceId: videoUrl,
+              resourceId,
               mimeType: inferVideoMimeType(config.video_file),
               title: displayTitle || undefined,
               fileName: resolveFileName(config.video_file) || undefined,
+              payload: openPayload || undefined,
             });
           }}
           aria-label={

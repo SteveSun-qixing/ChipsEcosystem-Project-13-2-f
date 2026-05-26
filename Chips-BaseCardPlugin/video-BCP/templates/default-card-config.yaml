@@ -2,6 +2,19 @@ card_type: "VideoCard"
 theme: ""
 video_file: "demo-video.mp4"
 cover_image: "demo-video-cover.jpg"
+subtitles:
+  - id: "zh-cn"
+    label: "简体中文"
+    language: "zh-CN"
+    kind: "subtitles"
+    file_path: "demo-video.zh.vtt"
+    default: true
+playback:
+  autoplay: false
+  loop: false
+  muted: false
+  playback_rate: 1
+  start_time: 0
 video_title: "示例视频标题"
 publish_time: "2026-04-18"
 creator: "薯片工作室"

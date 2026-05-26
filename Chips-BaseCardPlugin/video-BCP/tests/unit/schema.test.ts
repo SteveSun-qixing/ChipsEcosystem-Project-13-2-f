@@ -18,12 +18,30 @@ describe("basecard schema", () => {
       theme: "",
       video_file: "videos/demo.mp4",
       cover_image: "videos/demo-cover.jpg",
+      subtitles: [
+        {
+          id: "zh",
+          label: "简体中文",
+          language: "zh-CN",
+          kind: "subtitles",
+          file_path: "videos/demo.zh.vtt",
+          default: true,
+        },
+      ],
+      playback: {
+        autoplay: false,
+        loop: true,
+        muted: false,
+        playback_rate: 1.25,
+        start_time: 12,
+      },
       video_title: "",
       publish_time: "",
       creator: "",
     })).toEqual([
       "videos/demo.mp4",
       "videos/demo-cover.jpg",
+      "videos/demo.zh.vtt",
     ]);
   });
 
@@ -31,6 +49,23 @@ describe("basecard schema", () => {
     const normalized = normalizeBasecardConfig({
       card_type: "VideoCard",
       video_file: "demo.mp4",
+      subtitles: [
+        {
+          id: "zh",
+          label: "简体中文",
+          language: "zh-CN",
+          kind: "captions",
+          file_path: "./subtitles/demo.zh.vtt",
+          default: true,
+        },
+      ],
+      playback: {
+        autoplay: true,
+        loop: true,
+        muted: true,
+        playback_rate: 8,
+        start_time: -10,
+      },
     });
 
     expect(normalized).toMatchObject({
@@ -38,6 +73,23 @@ describe("basecard schema", () => {
       theme: "",
       video_file: "demo.mp4",
       cover_image: "",
+      subtitles: [
+        {
+          id: "zh",
+          label: "简体中文",
+          language: "zh-CN",
+          kind: "captions",
+          file_path: "subtitles/demo.zh.vtt",
+          default: true,
+        },
+      ],
+      playback: {
+        autoplay: true,
+        loop: true,
+        muted: true,
+        playback_rate: 4,
+        start_time: 0,
+      },
       video_title: "",
       publish_time: "",
       creator: "",
@@ -53,6 +105,28 @@ describe("basecard schema", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors.video_file).toBeTruthy();
+    expect(result.errors.video_file).toBe("video.validation.video_file_required");
+  });
+
+  it("drops unsafe absolute and runtime resource paths during normalization", () => {
+    const normalized = normalizeBasecardConfig({
+      card_type: "VideoCard",
+      video_file: "/Users/demo/movie.mp4",
+      cover_image: "blob:cover",
+      subtitles: [
+        {
+          id: "unsafe",
+          label: "Unsafe",
+          language: "en-US",
+          kind: "subtitles",
+          file_path: "../subtitle.vtt",
+          default: true,
+        },
+      ],
+    });
+
+    expect(normalized.video_file).toBe("");
+    expect(normalized.cover_image).toBe("");
+    expect(normalized.subtitles).toEqual([]);
   });
 });

@@ -27,8 +27,23 @@ export function normalizeRelativeCardResourcePath(value: unknown): string | unde
     return undefined;
   }
 
-  const normalized = value.replace(/\\/g, "/").trim().replace(/^\.?\//, "");
+  const trimmed = value.trim();
+  if (
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("~") ||
+    /[\u0000-\u001f]/.test(trimmed) ||
+    /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(trimmed) ||
+    /^[a-z][a-z0-9+.-]*:/i.test(trimmed)
+  ) {
+    return undefined;
+  }
+
+  const normalized = trimmed.replace(/\\/g, "/").replace(/^\.?\//, "");
   if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.includes("?") || normalized.includes("#")) {
     return undefined;
   }
 
@@ -90,10 +105,30 @@ export function inferVideoMimeType(resourcePath: string): string | undefined {
   return undefined;
 }
 
+export function inferSubtitleMimeType(resourcePath: string): string | undefined {
+  const lower = resolveFileName(resourcePath).toLowerCase();
+
+  if (lower.endsWith(".vtt")) {
+    return "text/vtt";
+  }
+  if (lower.endsWith(".srt")) {
+    return "application/x-subrip";
+  }
+  if (lower.endsWith(".ass") || lower.endsWith(".ssa")) {
+    return "text/plain";
+  }
+
+  return undefined;
+}
+
 export function collectInternalResourcePaths(config: BasecardConfig): string[] {
   const paths = new Set<string>();
 
-  [config.video_file, config.cover_image].forEach((resourcePath) => {
+  [
+    config.video_file,
+    config.cover_image,
+    ...config.subtitles.map((subtitle) => subtitle.file_path),
+  ].forEach((resourcePath) => {
     const normalized = normalizeRelativeCardResourcePath(resourcePath);
     if (normalized) {
       paths.add(normalized);

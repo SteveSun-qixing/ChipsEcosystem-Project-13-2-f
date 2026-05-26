@@ -70,6 +70,68 @@ export interface BookCardOpenPayload {
   };
 }
 
+export interface VideoCardOpenResource {
+  resourceId: string;
+  relativePath: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
+export interface VideoCardOpenSubtitleResource extends VideoCardOpenResource {
+  id: string;
+  label?: string;
+  language?: string;
+  kind: "subtitles" | "captions";
+  default?: boolean;
+}
+
+export interface VideoCardOpenPayload {
+  kind: "chips.video-card";
+  version: "1.0.0";
+  cardType: "base.video";
+  config: {
+    card_type: "VideoCard";
+    theme?: string;
+    video_file: string;
+    cover_image: string;
+    subtitles: Array<{
+      id: string;
+      label: string;
+      language: string;
+      kind: "subtitles" | "captions";
+      file_path: string;
+      default: boolean;
+    }>;
+    playback: {
+      autoplay: boolean;
+      loop: boolean;
+      muted: boolean;
+      playback_rate: number;
+      start_time: number;
+    };
+    video_title: string;
+    publish_time: string;
+    creator: string;
+  };
+  resources: {
+    video: VideoCardOpenResource;
+    cover?: VideoCardOpenResource;
+    subtitles?: VideoCardOpenSubtitleResource[];
+  };
+  display: {
+    title: string;
+    creator?: string;
+    publishTime?: string;
+  };
+  playback: {
+    autoplay: boolean;
+    loop: boolean;
+    muted: boolean;
+    playbackRate: number;
+    startTime: number;
+  };
+}
+
 export interface ResourceOpenRequest {
   intent?: string;
   resource: {

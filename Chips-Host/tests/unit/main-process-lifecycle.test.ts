@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HostApplication } from '../../src/main/core/host-application';
 import { HostMainProcess } from '../../src/main/core/main-process';
@@ -170,6 +173,56 @@ describe('HostMainProcess lifecycle', () => {
     expect(stop).toHaveBeenCalledTimes(1);
     expect(quit).toHaveBeenCalledTimes(0);
     expect(main.isRunning()).toBe(false);
+  });
+
+  it('sets Electron userData inside the Host workspace before Electron ready', async () => {
+    const processRef = new ProcessStub();
+    const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-main-user-data-'));
+    const callOrder: string[] = [];
+
+    const fakeHost = {
+      workspacePath,
+      logger: {
+        write: vi.fn(),
+      },
+      start: vi.fn(async () => {
+        callOrder.push('host.start');
+      }),
+      stop: vi.fn(async () => {}),
+      isRunning: vi.fn(() => true),
+    } as unknown as HostApplication;
+
+    const appEvents = new EventEmitter();
+    const electronApp = {
+      whenReady: vi.fn(async () => {
+        callOrder.push('electron.whenReady');
+      }),
+      setPath: vi.fn(() => {
+        callOrder.push('electron.setPath');
+      }),
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.on(event, listener);
+      },
+      off: (event: string, listener: (...args: unknown[]) => void) => {
+        appEvents.off(event, listener);
+      },
+      quit: vi.fn(() => {}),
+    };
+
+    try {
+      const main = new HostMainProcess({
+        hostApplication: fakeHost,
+        processRef,
+        electronApp: electronApp as any,
+      });
+
+      await main.start();
+
+      expect(electronApp.setPath).toHaveBeenCalledWith('userData', path.join(workspacePath, 'electron-user-data'));
+      expect(callOrder).toEqual(['electron.setPath', 'electron.whenReady', 'host.start']);
+    } finally {
+      await fs.rm(workspacePath, { recursive: true, force: true });
+    }
   });
 
   it('can optionally quit electron when stopping short-lived runners', async () => {

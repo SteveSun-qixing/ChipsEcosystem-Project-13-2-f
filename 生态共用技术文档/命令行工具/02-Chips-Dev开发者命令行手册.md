@@ -35,6 +35,7 @@ npm install
 - 当前主题
 - Host 配置
 - 运行日志与诊断结果
+- Electron 运行态数据（开发态位于 `.chips-host-dev/electron-user-data`）
 
 因此，开发者在 `chips` 中切换的主题，不会自动影响 `chipsdev run` 的结果；反之亦然。
 
@@ -104,7 +105,7 @@ npm install
 4. 使用工程根 `manifest.yaml` 作为唯一安装清单；
 5. 解析开发工作区 `.chips-host-dev`；
 6. 若开发工作区尚无已启用主题插件，则自动引导默认主题包进入该工作区并设为当前主题；
-7. 拉起真实 Electron Host 主进程；
+7. 拉起真实 Electron Host 主进程，并将 Electron `userData` 绑定到 `.chips-host-dev/electron-user-data`；
 8. 先按开发工作区 `plugins.json` 重新同步其中已配置的插件副本，确保 Host 运行时不会继续消费旧安装残留；
 9. 在开发工作区中安装并启用当前应用插件；
 10. 通过 Host `window` 服务打开应用窗口。
@@ -144,7 +145,7 @@ chipsdev module invoke \
 1. 解析开发工作区 `.chips-host-dev`；
 2. 若开发工作区尚无已启用主题插件，则自动引导默认主题包进入该工作区并设为当前主题；
 3. 若当前目录或 `--manifest` 指向模块插件工程，则先执行正式构建；
-4. 拉起真实 Electron Host 主进程；
+4. 拉起真实 Electron Host 主进程，并将 Electron `userData` 绑定到 `.chips-host-dev/electron-user-data`；
 5. 在开发工作区中安装并启用目标模块插件；
 6. 通过 Host `module.invoke` 发起 capability/method 调用；
 7. 若模块返回 `mode = "job"`，则持续轮询到 `completed/failed/cancelled` 终态；

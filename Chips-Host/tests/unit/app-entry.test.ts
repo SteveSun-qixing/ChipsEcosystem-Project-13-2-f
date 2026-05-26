@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ElectronAppLike } from '../../src/main/electron/electron-loader';
 import {
   extractAssociatedFilePath,
@@ -9,11 +11,24 @@ import {
 
 class ElectronAppStub extends EventEmitter {
   public readonly whenReady = vi.fn(async () => {});
+  public readonly setPath = vi.fn(() => {});
   public readonly quit = vi.fn(() => {});
   public readonly requestSingleInstanceLock = vi.fn(() => true);
 }
 
 describe('electron app entry', () => {
+  const tempDirs: string[] = [];
+
+  const createTempWorkspace = async (): Promise<string> => {
+    const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-app-entry-'));
+    tempDirs.push(workspacePath);
+    return workspacePath;
+  };
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  });
+
   it('extracts associated file paths from argv while ignoring switches', () => {
     const target = extractAssociatedFilePath([
       '/Applications/Chips.app/Contents/MacOS/Chips',
@@ -27,6 +42,7 @@ describe('electron app entry', () => {
 
   it('routes initial associated file argv through openAssociatedFile', async () => {
     const electronApp = new ElectronAppStub();
+    const workspacePath = await createTempWorkspace();
     const runtime = {
       invoke: vi.fn(async () => ({ window: { id: 'window-1' } })),
     };
@@ -39,7 +55,7 @@ describe('electron app entry', () => {
     }));
 
     await runElectronAppEntry({
-      argv: ['/Applications/Chips.app/Contents/MacOS/Chips', '--workspace=/tmp/chips-workspace', '/tmp/demo.card'],
+      argv: ['/Applications/Chips.app/Contents/MacOS/Chips', `--workspace=${workspacePath}`, '/tmp/demo.card'],
       electronApp: electronApp as unknown as ElectronAppLike,
       bootstrapMainProcess,
       createRuntime: () => runtime as any,
@@ -52,14 +68,48 @@ describe('electron app entry', () => {
     });
 
     expect(bootstrapMainProcess).toHaveBeenCalledWith({
-      workspacePath: path.resolve('/tmp/chips-workspace'),
+      workspacePath,
     });
     expect(openAssociatedFileFn).toHaveBeenCalledWith(runtime, path.resolve('/tmp/demo.card'));
     expect(runtime.invoke).not.toHaveBeenCalledWith('plugin.launch', expect.anything());
   });
 
+  it('sets Electron userData inside the selected Host workspace before requesting the single-instance lock', async () => {
+    const callOrder: string[] = [];
+    const workspacePath = await createTempWorkspace();
+    const electronApp = new ElectronAppStub();
+    electronApp.setPath.mockImplementation(() => {
+      callOrder.push('setPath');
+    });
+    electronApp.requestSingleInstanceLock.mockImplementation(() => {
+      callOrder.push('requestSingleInstanceLock');
+      return true;
+    });
+
+    await runElectronAppEntry({
+      argv: ['/Applications/Chips.app/Contents/MacOS/Chips', `--workspace=${workspacePath}`],
+      electronApp: electronApp as unknown as ElectronAppLike,
+      bootstrapMainProcess: async () => ({
+        getHostApplication: () => ({
+          createBridge: () => ({}),
+          takeStartupLaunchPluginId: () => undefined,
+        }),
+      }),
+      createRuntime: () => ({ invoke: vi.fn(async () => undefined) }) as any,
+      processRef: {
+        stderr: {
+          write: vi.fn(() => true),
+        },
+      },
+    });
+
+    expect(electronApp.setPath).toHaveBeenCalledWith('userData', path.join(workspacePath, 'electron-user-data'));
+    expect(callOrder).toEqual(['setPath', 'requestSingleInstanceLock']);
+  });
+
   it('keeps app shortcut launch flow unchanged when plugin launch args are provided', async () => {
     const electronApp = new ElectronAppStub();
+    const workspacePath = await createTempWorkspace();
     const runtime = {
       invoke: vi.fn(async () => ({ window: { id: 'window-2' } })),
     };
@@ -68,7 +118,7 @@ describe('electron app entry', () => {
     await runElectronAppEntry({
       argv: [
         '/Applications/Chips.app/Contents/MacOS/Chips',
-        '--workspace=/tmp/chips-workspace',
+        `--workspace=${workspacePath}`,
         '--chips-launch-plugin=chips.viewer',
       ],
       electronApp: electronApp as unknown as ElectronAppLike,

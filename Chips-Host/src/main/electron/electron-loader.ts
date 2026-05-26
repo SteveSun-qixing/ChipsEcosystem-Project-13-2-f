@@ -21,6 +21,7 @@ export interface ElectronContextBridgeLike {
 
 export interface ElectronAppLike {
   whenReady(): Promise<void>;
+  setPath?(name: 'userData' | string, path: string): void;
   on(
     event: 'before-quit' | 'window-all-closed' | 'activate',
     listener: () => void

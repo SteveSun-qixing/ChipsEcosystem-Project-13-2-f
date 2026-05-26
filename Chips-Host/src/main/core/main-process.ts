@@ -3,6 +3,7 @@ import { HostApplication } from './host-application';
 import type { ElectronAppLike } from '../electron/electron-loader';
 import { loadElectronModule } from '../electron/electron-loader';
 import { registerChipsRenderDocumentScheme } from '../electron/render-document-protocol';
+import { configureElectronUserDataPath } from '../electron/workspace-paths';
 import { toStandardError } from '../../shared/errors';
 
 registerChipsRenderDocumentScheme(loadElectronModule());
@@ -81,6 +82,7 @@ export class HostMainProcess {
     this.bindGlobalHandlers();
     if (this.electronApp) {
       registerChipsRenderDocumentScheme();
+      this.configureElectronUserDataPath();
       await this.electronApp.whenReady();
     }
 
@@ -126,6 +128,10 @@ export class HostMainProcess {
 
   public getHostApplication(): HostApplication {
     return this.hostApplication;
+  }
+
+  private configureElectronUserDataPath(): void {
+    configureElectronUserDataPath(this.electronApp, this.hostApplication.workspacePath);
   }
 
   private bindGlobalHandlers(): void {

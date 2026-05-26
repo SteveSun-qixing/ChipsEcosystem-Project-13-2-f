@@ -7,6 +7,7 @@ import { openAssociatedFile } from '../core/file-association';
 import { toStandardError } from '../../shared/errors';
 import type { ElectronAppLike } from './electron-loader';
 import { loadElectronModule } from './electron-loader';
+import { configureElectronUserDataPath } from './workspace-paths';
 
 interface PluginLaunchRequest {
   workspacePath: string;
@@ -178,12 +179,14 @@ export const runElectronAppEntry = async (options: RunElectronAppEntryOptions = 
     });
   }
 
+  const workspacePath = initialRequest?.workspacePath ?? resolveWorkspacePath(argv);
+  configureElectronUserDataPath(electronApp, workspacePath);
+
   if (electronApp?.requestSingleInstanceLock && !electronApp.requestSingleInstanceLock()) {
     electronApp.quit();
     return;
   }
 
-  const workspacePath = initialRequest?.workspacePath ?? resolveWorkspacePath(argv);
   const mainProcess = await bootstrapMainProcess({ workspacePath });
   const runtime = createRuntime(mainProcess);
 

@@ -74,11 +74,14 @@
 
 新增文件：
 - `src/main/core/main-process.ts`
+- `src/main/electron/workspace-paths.ts`
 - `src/main/index.ts`（新增导出）
 - `src/main/electron/dev-run-app.ts`
 
 行为：
 - `chips-render://` 等需要 `registerSchemesAsPrivileged` 的受控协议，在主进程模块装载期立即注册，再进入任何异步启动步骤，避免 Electron 在 `app ready` 之后拒绝接收特权协议声明。
+- 启动入口在申请 Electron 单实例锁和进入 `app.whenReady()` 前，会将 Electron `userData` 设置为当前 Host 工作区下的 `electron-user-data`。
+- 因此，`chipsdev run`、`chipsdev module invoke` 和带 `--workspace` 的 Electron Host 启动会把 Chromium 缓存、LocalStorage、Session、IndexedDB 等 Electron 运行态数据留在对应工作区内；开发态默认落在 `.chips-host-dev/electron-user-data`。
 - 启动时统一编排 `app.whenReady -> hostApplication.start`。
 - 绑定并治理 Electron 生命周期事件：
   - `before-quit`：触发主机停止与资源回收；

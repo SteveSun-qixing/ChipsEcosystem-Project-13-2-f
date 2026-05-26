@@ -1706,7 +1706,7 @@ describe('Host services PAL routing', () => {
           })
         })
       );
-      expect(state.shortcuts).toContain('CommandOrControl+,');
+      expect(state.shortcuts).not.toContain('CommandOrControl+,');
 
       const listed = await kernel.invoke<Record<string, unknown>, { commands: unknown[] }>(
         'command.list',
@@ -1999,7 +1999,7 @@ describe('Host services PAL routing', () => {
       },
       pluginContext
     );
-    expect(state.shortcuts).toContain('CommandOrControl+R');
+    expect(state.shortcuts).not.toContain('CommandOrControl+R');
 
     await kernel.invoke('surface.close', { surfaceId: opened.surface.id }, context(['window.control']));
     const commands = await kernel.invoke<Record<string, unknown>, { commands: unknown[] }>(

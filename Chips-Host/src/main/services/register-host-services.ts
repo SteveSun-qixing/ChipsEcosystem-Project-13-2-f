@@ -341,7 +341,7 @@ interface RuntimeState {
   locale: string;
   locales: Record<string, Record<string, string>>;
   commands: Map<string, RegisteredCommand>;
-  commandShortcuts: Map<string, string[]>;
+  commandShortcuts: Map<string, CommandShortcut[]>;
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
 }
@@ -525,7 +525,7 @@ const buildState = (): RuntimeState => ({
     }
   },
   commands: new Map<string, RegisteredCommand>(),
-  commandShortcuts: new Map<string, string[]>(),
+  commandShortcuts: new Map<string, CommandShortcut[]>(),
   routeMetrics: new Map<string, RouteMetric>(),
   activatedServices: new Set<string>()
 });
@@ -1828,14 +1828,9 @@ const listCommandViews = (
 };
 
 const unregisterCommandShortcuts = async (
-  ctx: HostServiceContext,
   state: RuntimeState,
   commandId: string
 ): Promise<void> => {
-  const accelerators = state.commandShortcuts.get(commandId) ?? [];
-  for (const accelerator of accelerators) {
-    await ctx.pal.systemUi.shortcut.unregister(accelerator);
-  }
   state.commandShortcuts.delete(commandId);
 };
 
@@ -1844,47 +1839,14 @@ const registerCommandShortcuts = async (
   state: RuntimeState,
   command: RegisteredCommand
 ): Promise<void> => {
-  await unregisterCommandShortcuts(ctx, state, command.commandId);
-  const registered: string[] = [];
+  await unregisterCommandShortcuts(state, command.commandId);
+  const registered: CommandShortcut[] = [];
   const platformInfo = await ctx.pal.environment.getInfo();
   for (const shortcut of command.shortcut) {
     if (shortcut.platform && shortcut.platform !== 'all' && shortcut.platform !== platformInfo.hostKind) {
       continue;
     }
-    const ok = await ctx.pal.systemUi.shortcut.register(shortcut.accelerator, () => {
-      void ctx.kernel.invoke<CommandInvokeInput, { invocationId: string; dispatched: boolean }>(
-        'command.invoke',
-        {
-          commandId: command.commandId,
-          source: 'shortcut',
-          payload: {
-            accelerator: shortcut.accelerator
-          },
-          context: {
-            pluginId: command.ownerPluginId,
-            sceneId: command.scope.sceneId,
-            surfaceId: command.scope.surfaceId,
-            documentId: command.scope.documentId
-          }
-        },
-        {
-          requestId: createId(),
-          timestamp: Date.now(),
-          caller: {
-            id: 'command-shortcut',
-            type: 'service',
-            permissions: ['command.invoke', ...command.permission]
-          }
-        }
-      );
-    });
-    if (!ok) {
-      throw createError('COMMAND_SHORTCUT_REGISTER_FAILED', `Cannot register command shortcut: ${shortcut.accelerator}`, {
-        commandId: command.commandId,
-        accelerator: shortcut.accelerator
-      });
-    }
-    registered.push(shortcut.accelerator);
+    registered.push(cloneCommandViewPart(shortcut));
   }
   if (registered.length > 0) {
     state.commandShortcuts.set(command.commandId, registered);
@@ -1901,7 +1863,7 @@ const unregisterCommand = async (
   if (!command) {
     return undefined;
   }
-  await unregisterCommandShortcuts(ctx, state, commandId);
+  await unregisterCommandShortcuts(state, commandId);
   state.commands.delete(commandId);
   await ctx.kernel.events.emit('command.unregistered', 'command-service', {
     commandId,

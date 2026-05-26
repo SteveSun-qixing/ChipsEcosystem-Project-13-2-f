@@ -8,6 +8,7 @@ import {
   normalizeThemeCssForBrowser,
   normalizeThemeTokenValueForBrowser
 } from '../shared/theme-css-units';
+import { bootCommandShortcutRuntime } from './command-shortcuts';
 
 const CHIPS_BRIDGE_CONTEXT_ARG_PREFIX = '--chips-bridge-context=';
 
@@ -187,6 +188,7 @@ const bridge = createAndExposeBridgeForKernel(null, {
   ...parsedBridgeContext.bridge,
   launchContext: parsedBridgeContext.launchContext
 });
+bootCommandShortcutRuntime(bridge, parsedBridgeContext.launchContext);
 
 const syncThemeToDocument = async (): Promise<void> => {
   const { document, window } = getDomGlobals();

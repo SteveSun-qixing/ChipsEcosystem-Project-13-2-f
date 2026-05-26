@@ -1,6 +1,6 @@
 # 评分基础卡片配置参数说明
 
-本文件说明 [default-card-config.yaml](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/templates/default-card-config.yaml) 中各字段的正式含义与填写约束。
+本文件说明 [default-card-config.yaml](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/templates/default-card-config.yaml) 中各字段的正式含义与填写约束。
 
 - `card_type`
   - 固定为 `"ScoreCard"`。

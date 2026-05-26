@@ -27,6 +27,7 @@
   - `chips.comp.avatar.*`
   - `chips.comp.spinner.*`
   - `chips.comp.progress.*`
+  - `chips.comp.rating.*`
   - `chips.comp.text-field.*`
   - `chips.comp.text-area.*`
   - `chips.comp.search-field.*`
@@ -129,8 +130,11 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.avatar.*`
 - `chips.comp.spinner.*`
 - `chips.comp.progress.*`
+- `chips.comp.rating.*`
 
 `chips.comp.icon-button.root.size` 与 `chips.comp.avatar.root.size` 允许引用或定义结构尺寸；`chips.comp.spinner.motion.duration` 必须引用 `chips.motion.duration.*`，不得在组件库运行时硬编码动画时长。`ChipsProgress` 的动态宽度只由运行时 CSS 变量 `--chips-progress-ratio` 表达，主题包只负责 `track/range/label/value/status/focus` token。
+
+`ChipsRating` 是生态通用评分选择与评分展示控件，正式 scope 为 `rating`，公开 part 为 `root / label / item / icon / status`。组件只表达有限项评分、图标形态、键盘选择和 ARIA 语义，业务语义仍由使用方决定。`readOnly` 用于查看态评分展示时应保留 `item/icon` 的 active 视觉状态，只有真正禁用态才使用 disabled token。主题包必须通过 `chips.comp.rating.item.*`、`chips.comp.rating.icon.*`、`chips.comp.rating.label.*`、`chips.comp.rating.status.*` 与 `chips.comp.rating.focus.*` 表达不同形态和状态；不得在评分基础卡片等业务插件内长期私造不可复用评分控件。
 
 任务015第三批基础输入控件 token 是文本、搜索与密码输入的正式契约，默认主题和暗色主题必须覆盖：
 

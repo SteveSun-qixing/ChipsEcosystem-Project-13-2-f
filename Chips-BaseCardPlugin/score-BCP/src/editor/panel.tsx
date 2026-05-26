@@ -1,9 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChipsNumberInput,
+  ChipsProgress,
+  ChipsRating,
+  ChipsSegmentedControl,
+  ChipsText,
+} from "@chips/component-library";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
+  BasecardArchiveImportRequest,
+  BasecardArchiveImportResult,
   BasecardResourceImportRequest,
   BasecardResourceImportResult,
+  BasecardTiffToPngRequest,
+  BasecardTiffToPngResult,
 } from "../index";
 import {
   MAX_TOTAL_SCORE,
@@ -17,7 +28,6 @@ import {
   type ScoreStyle,
 } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
-import { ScoreSymbolIcon } from "../shared/score-symbol-icon";
 
 export interface BasecardEditorProps {
   initialConfig: BasecardConfig;
@@ -27,7 +37,11 @@ export interface BasecardEditorProps {
   importResource?: (
     input: BasecardResourceImportRequest,
   ) => Promise<BasecardResourceImportResult>;
+  importArchiveBundle?: (
+    input: BasecardArchiveImportRequest,
+  ) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
 }
 
 type EditorRoot = HTMLElement & {
@@ -69,76 +83,32 @@ html, body {
   gap: 10px;
 }
 
-.chips-score-editor__label {
+.chips-score-editor__label[data-scope="text"][data-part="root"] {
   color: var(--chips-sys-color-on-surface, #111827);
-  font-weight: 600;
+  font-weight: 650;
 }
 
-.chips-score-editor__segmented {
+.chips-score-editor__segmented[data-scope="segmented-control"][data-part="root"] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--chips-layout-gap-xs, 8px);
+  width: 100%;
 }
 
-.chips-score-editor__segment,
-.chips-score-editor__rating-button {
-  min-height: 44px;
-  border: 1px solid var(--chips-comp-button-border-color, rgba(15, 23, 42, 0.12));
-  border-radius: 10px;
-  background: var(--chips-comp-button-container-color, var(--chips-sys-color-surface-container-low, #f8fafc));
-  color: var(--chips-comp-button-label-color, var(--chips-sys-color-on-surface, #111827));
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-  transition:
-    border-color 0.16s ease,
-    background 0.16s ease,
-    color 0.16s ease,
-    transform 0.16s ease;
+.chips-score-editor__segmented[data-scope="segmented-control"][data-part="root"] [data-part="item"] {
+  min-height: var(--chips-layout-density-comfortable, 44px);
 }
 
-.chips-score-editor__segment:hover,
-.chips-score-editor__rating-button:hover,
-.chips-score-editor__segment:focus-visible,
-.chips-score-editor__rating-button:focus-visible {
-  border-color: var(--chips-sys-color-primary, #2563eb);
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.chips-score-editor__segment--active,
-.chips-score-editor__rating-button--active {
-  border-color: var(--chips-sys-color-primary, #2563eb);
-  background: var(--chips-sys-color-primary-container, rgba(37, 99, 235, 0.10));
-  color: var(--chips-sys-color-primary, #2563eb);
-}
-
-.chips-score-editor__rating {
+.chips-score-editor__rating[data-scope="rating"][data-part="root"] {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--chips-layout-gap-xs, 8px);
+  width: 100%;
+  --chips-comp-rating-item-size: var(--chips-layout-density-comfortable, 44px);
 }
 
-.chips-score-editor__rating-button {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  color: var(--chips-sys-color-outline, rgba(15, 23, 42, 0.38));
-  line-height: 1;
-}
-
-.chips-score-editor__rating-icon {
-  display: block;
-  width: 26px;
-  height: 26px;
-}
-
-.chips-score-editor__rating-button--active {
-  color: var(--chips-sys-color-primary, #f59e0b);
-}
-
-.chips-score-editor__rating-button--heart.chips-score-editor__rating-button--active {
-  color: var(--chips-sys-color-error, #e11d48);
+.chips-score-editor__rating[data-scope="rating"][data-part="root"] [data-part="item"] {
+  width: 100%;
 }
 
 .chips-score-editor__number-grid {
@@ -147,30 +117,14 @@ html, body {
   gap: 10px;
 }
 
-.chips-score-editor__field {
+.chips-score-editor__number-grid [data-scope="number-input"][data-part="root"] {
   display: grid;
   gap: 8px;
 }
 
-.chips-score-editor__input {
+.chips-score-editor__number-grid [data-scope="number-input"][data-part="control"] {
   width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--chips-comp-input-border-color, rgba(15, 23, 42, 0.16));
-  border-radius: 10px;
-  background: var(--chips-comp-input-container-color, var(--chips-sys-color-surface, #ffffff));
-  color: inherit;
-  font: inherit;
-  padding: 0 12px;
-  outline: none;
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease;
-}
-
-.chips-score-editor__input:hover,
-.chips-score-editor__input:focus {
-  border-color: var(--chips-sys-color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  min-height: var(--chips-layout-density-comfortable, 44px);
 }
 
 .chips-score-editor__preview {
@@ -178,24 +132,47 @@ html, body {
   gap: 8px;
 }
 
-.chips-score-editor__progress-track {
+.chips-score-editor__preview [data-scope="progress"][data-part="root"] {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.chips-score-editor__preview [data-scope="progress"][data-part="track"] {
+  position: relative;
+  display: block;
   width: 100%;
   height: 12px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--chips-sys-color-surface-container-highest, rgba(15, 23, 42, 0.12));
+  background: var(--chips-comp-progress-track-surface, var(--chips-sys-color-surface-container-highest, rgba(15, 23, 42, 0.12)));
 }
 
-.chips-score-editor__progress-fill {
+.chips-score-editor__preview [data-scope="progress"][data-part="range"] {
+  display: block;
+  width: calc(var(--chips-progress-ratio, 0) * 100%);
   height: 100%;
   border-radius: inherit;
-  background: var(--chips-sys-color-primary, #2563eb);
+  background: var(--chips-comp-progress-range-surface, var(--chips-sys-color-primary, #2563eb));
 }
 
-.chips-score-editor__preview-value {
+.chips-score-editor__preview-value[data-scope="text"][data-part="root"] {
   color: var(--chips-sys-color-on-surface-variant, #64748b);
   font-size: 13px;
   line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.chips-score-editor__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
 }
 
 .chips-basecard-editor__errors {
@@ -228,6 +205,10 @@ function parseNumberInput(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getRatingShape(config: BasecardConfig): "heart" | "star" {
+  return config.style === "hearts" ? "heart" : "star";
+}
+
 function BasecardEditor(props: BasecardEditorProps) {
   const [config, setConfig] = useState(() => normalizeBasecardConfig(props.initialConfig));
   const configRef = useRef(config);
@@ -235,10 +216,13 @@ function BasecardEditor(props: BasecardEditorProps) {
     validateBasecardConfig(normalizeBasecardConfig(props.initialConfig)).errors
   );
   const t = createTranslator(config.locale);
-  const symbolKind = config.style === "hearts" ? "heart" : "star";
   const ratio = useMemo(() => getScoreRatio(config), [config]);
   const formattedScore = formatNumber(config.score, config.locale);
   const formattedTotal = formatNumber(config.total_score, config.locale);
+  const progressPercent = formatNumber(ratio * 100, config.locale);
+  const styleLabelId = React.useId();
+  const valueLabelId = React.useId();
+  const previewLabelId = React.useId();
 
   useEffect(() => {
     const next = normalizeBasecardConfig(props.initialConfig);
@@ -261,115 +245,108 @@ function BasecardEditor(props: BasecardEditorProps) {
     }
   }
 
+  const styleOptions = scoreStyles.map((style) => ({
+    value: style,
+    label: t(styleTranslationKeys[style]),
+  }));
+
+  const scoreValueText = t("score.accessible.value", {
+    score: formattedScore,
+    total: formattedTotal,
+  });
+
   return (
     <div className="chips-basecard-editor chips-basecard-editor--standard">
-      <section className="chips-score-editor__group" aria-labelledby="chips-score-style-label">
-        <div className="chips-score-editor__label" id="chips-score-style-label">
+      <section className="chips-score-editor__group" aria-labelledby={styleLabelId}>
+        <ChipsText as="div" className="chips-score-editor__label" id={styleLabelId}>
           {t("score.style")}
-        </div>
-        <div className="chips-score-editor__segmented" role="radiogroup" aria-labelledby="chips-score-style-label">
-          {scoreStyles.map((style) => (
-            <button
-              type="button"
-              className={[
-                "chips-score-editor__segment",
-                style === config.style ? "chips-score-editor__segment--active" : "",
-              ].filter(Boolean).join(" ")}
-              aria-checked={style === config.style}
-              key={style}
-              role="radio"
-              onClick={() => {
-                updateConfig({
-                  style,
-                  total_score: isSymbolScoreStyle(style) ? SYMBOL_SCORE_TOTAL : config.total_score,
-                });
-              }}
-            >
-              {t(styleTranslationKeys[style])}
-            </button>
-          ))}
-        </div>
+        </ChipsText>
+        <ChipsSegmentedControl
+          ariaLabelledBy={styleLabelId}
+          className="chips-score-editor__segmented"
+          options={styleOptions}
+          value={config.style}
+          onValueChange={(value) => {
+            const style = value as ScoreStyle;
+            updateConfig({
+              style,
+              total_score: isSymbolScoreStyle(style) ? SYMBOL_SCORE_TOTAL : config.total_score,
+            });
+          }}
+        />
       </section>
 
-      <section className="chips-score-editor__group" aria-labelledby="chips-score-value-label">
-        <div className="chips-score-editor__label" id="chips-score-value-label">
+      <section className="chips-score-editor__group" aria-labelledby={valueLabelId}>
+        <ChipsText as="div" className="chips-score-editor__label" id={valueLabelId}>
           {t("score.earnedScore")}
-        </div>
+        </ChipsText>
 
         {isSymbolScoreStyle(config.style) ? (
-          <div className="chips-score-editor__rating" role="radiogroup" aria-labelledby="chips-score-value-label">
-            {Array.from({ length: SYMBOL_SCORE_TOTAL }, (_, index) => {
-              const score = index + 1;
-              const active = score <= config.score;
-              return (
-                <button
-                  type="button"
-                  className={[
-                    "chips-score-editor__rating-button",
-                    config.style === "hearts" ? "chips-score-editor__rating-button--heart" : "",
-                    active ? "chips-score-editor__rating-button--active" : "",
-                  ].filter(Boolean).join(" ")}
-                  aria-checked={score === config.score}
-                  aria-label={t("score.setScore", { score })}
-                  key={score}
-                  role="radio"
-                  onClick={() => {
-                    updateConfig({ score, total_score: SYMBOL_SCORE_TOTAL });
-                  }}
-                >
-                  <ScoreSymbolIcon className="chips-score-editor__rating-icon" kind={symbolKind} />
-                </button>
-              );
-            })}
-          </div>
+          <ChipsRating
+            ariaLabelledBy={valueLabelId}
+            className="chips-score-editor__rating"
+            count={SYMBOL_SCORE_TOTAL}
+            getItemLabel={(value) => t("score.setScore", { score: value })}
+            shape={getRatingShape(config)}
+            value={config.score}
+            onValueChange={(score) => {
+              updateConfig({ score, total_score: SYMBOL_SCORE_TOTAL });
+            }}
+          />
         ) : (
           <div className="chips-score-editor__number-grid">
-            <label className="chips-score-editor__field">
-              <span className="chips-score-editor__label">{t("score.totalScore")}</span>
-              <input
-                type="number"
-                className="chips-score-editor__input chips-score-editor__input--total"
-                min="1"
-                max={MAX_TOTAL_SCORE}
-                step="0.1"
-                value={config.total_score}
-                onInput={(event) => {
-                  updateConfig({ total_score: parseNumberInput(event.currentTarget.value) });
-                }}
-              />
-            </label>
-
-            <label className="chips-score-editor__field">
-              <span className="chips-score-editor__label">{t("score.scoreValue")}</span>
-              <input
-                type="number"
-                className="chips-score-editor__input chips-score-editor__input--score"
-                min="0"
-                max={config.total_score}
-                step="0.1"
-                value={config.score}
-                onInput={(event) => {
-                  updateConfig({ score: parseNumberInput(event.currentTarget.value) });
-                }}
-              />
-            </label>
+            <ChipsNumberInput
+              decrementLabel={t("score.totalScore.decrement")}
+              incrementLabel={t("score.totalScore.increment")}
+              label={t("score.totalScore")}
+              max={MAX_TOTAL_SCORE}
+              min={1}
+              step={0.1}
+              value={config.total_score}
+              onInputChange={(value) => {
+                updateConfig({ total_score: parseNumberInput(value) });
+              }}
+              onValueChange={(value) => {
+                updateConfig({ total_score: value ?? 1 });
+              }}
+            />
+            <ChipsNumberInput
+              decrementLabel={t("score.scoreValue.decrement")}
+              incrementLabel={t("score.scoreValue.increment")}
+              label={t("score.scoreValue")}
+              max={config.total_score}
+              min={0}
+              step={0.1}
+              value={config.score}
+              onInputChange={(value) => {
+                updateConfig({ score: parseNumberInput(value) });
+              }}
+              onValueChange={(value) => {
+                updateConfig({ score: value ?? 0 });
+              }}
+            />
           </div>
         )}
 
         {config.style === "progress" ? (
-          <div className="chips-score-editor__preview" aria-label={t("score.accessible.value", {
-            score: formattedScore,
-            total: formattedTotal,
-          })}>
-            <div className="chips-score-editor__progress-track" aria-hidden="true">
-              <div
-                className="chips-score-editor__progress-fill"
-                style={{ width: `${ratio * 100}%` }}
-              />
-            </div>
-            <div className="chips-score-editor__preview-value" aria-hidden="true">
+          <div className="chips-score-editor__preview">
+            <span className="chips-score-editor__sr-only" id={previewLabelId}>
+              {t("score.progressPreview", {
+                score: formattedScore,
+                total: formattedTotal,
+                percent: progressPercent,
+              })}
+            </span>
+            <ChipsProgress
+              aria-labelledby={previewLabelId}
+              max={config.total_score}
+              min={0}
+              value={config.score}
+              valueText={t("score.progress.percent", { percent: progressPercent })}
+            />
+            <ChipsText aria-hidden="true" as="div" className="chips-score-editor__preview-value">
               {formattedScore} / {formattedTotal}
-            </div>
+            </ChipsText>
           </div>
         ) : null}
 

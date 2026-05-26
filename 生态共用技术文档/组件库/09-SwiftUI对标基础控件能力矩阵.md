@@ -2,7 +2,7 @@
 
 > 文档状态：任务015基础控件矩阵正式口径
 > 适用范围：组件库、主题包、应用插件、卡片插件、布局插件
-> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；`DatePicker / TimePicker` 已作为任务015第六批收口；`Image / Media / ErrorState` 已作为任务015第七批收口；后续批次必须继续按本矩阵补齐。
+> 当前基线：`Text / Label / Icon` 已作为任务015第一批收口；`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress / Rating` 已作为任务015第二批收口；`TextField / TextArea / SearchField / SecureField` 已作为任务015第三批收口；`SegmentedControl / ComboBox` 已作为任务015第四批收口；`NumberInput / Stepper` 已作为任务015第五批 A 收口；`Slider` 已作为任务015第五批 B 收口；`DatePicker / TimePicker` 已作为任务015第六批收口；`Image / Media / ErrorState` 已作为任务015第七批收口；后续批次必须继续按本矩阵补齐。
 
 ## 1. 矩阵口径
 
@@ -42,6 +42,7 @@
 | 展示控件 | Avatar | `ChipsAvatar` | 已落地 | `avatar` | 需要图像、缩写、fallback 与 alt 语义 |
 | 展示控件 | Tooltip | `ChipsTooltip` | 已落地 | `tooltip` | 维持说明气泡闭环 |
 | 反馈控件 | Progress | `ChipsProgress` | 已落地 | `progress` | 需要 determinate/indeterminate 与 progressbar 语义 |
+| 反馈控件 | Rating / Gauge 相邻能力 | `ChipsRating` | 已落地 | `rating` | 用于有限项评分展示和选择，维持 radiogroup/radio、键盘与 IconDescriptor 语义 |
 | 反馈控件 | Spinner | `ChipsSpinner` | 已落地 | `spinner` | 需要 status 语义与 motion token |
 | 反馈控件 | Skeleton | `ChipsSkeleton` | 已落地 | `skeleton` | 维持加载占位闭环 |
 | 反馈控件 | EmptyState | `ChipsEmptyState` | 已落地 | `empty-state` | 维持空态展示闭环 |
@@ -122,6 +123,14 @@
 - 状态：`idle / disabled / loading / error`；模式通过 `data-mode="determinate|indeterminate"` 表达。
 - 主题 token：`chips.comp.progress.track.*`、`range.surface.*`、`label.color`、`value.color`、`status.color.error`、`focus.outline`。
 - 确定进度必须输出 `aria-valuemin / aria-valuemax / aria-valuenow`；不确定进度不得输出 `aria-valuenow`。
+
+### `ChipsRating`
+
+- `data-scope="rating"`，公开 part：`root / label / item / icon / status`。
+- 状态：标准交互状态集合。
+- 主题 token：`chips.comp.rating.root.*`、`item.*`、`icon.color.*`、`label.color`、`status.color.error`、`focus.outline`。
+- 根节点必须使用 `role="radiogroup"` 并提供可访问名称；每个评分项使用 `role="radio"`、`aria-checked` 和 roving tabindex。`readOnly` 只阻止提交并设置 `aria-readonly`，不得覆盖已选项视觉状态为禁用态。
+- 支持 `shape="star|heart"`、有限 `count`、受控 `value/onValueChange`、只读和禁用状态；图标通过 `ChipsIcon + IconDescriptor` 渲染，不使用 emoji。
 
 ## 5. 第三批已冻结控件
 
@@ -235,7 +244,7 @@
 
 ## 10. 后续批次建议
 
-- 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress`（已落地）。
+- 批次 B：`IconButton / ToggleButton / Badge / Tag / Avatar / Spinner / Progress / Rating`（已落地）。
 - 批次 C：`TextField / TextArea / SearchField / SecureField`（已落地）。
 - 批次 D：`SegmentedControl / ComboBox`（已落地）。
 - 批次 E：`NumberInput / Stepper / Slider`（已落地）。

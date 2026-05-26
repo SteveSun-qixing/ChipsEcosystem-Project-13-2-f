@@ -1,7 +1,7 @@
 import React from "react";
+import { ChipsProgress, ChipsRating, ChipsText } from "@chips/component-library";
 import { getScoreRatio, isSymbolScoreStyle, type BasecardConfig } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
-import { ScoreSymbolIcon } from "../shared/score-symbol-icon";
 
 export const VIEW_STYLE_TEXT = `
 .chips-score-card {
@@ -25,39 +25,44 @@ export const VIEW_STYLE_TEXT = `
   justify-content: center;
 }
 
-.chips-score-card__symbols {
+.chips-score-card__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+
+.chips-score-card__rating[data-scope="rating"][data-part="root"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--chips-comp-rating-root-gap, var(--chips-layout-gap-xs, 8px));
   min-width: 0;
   width: 100%;
-  line-height: 1;
+  --chips-comp-rating-item-size: 38px;
 }
 
-.chips-score-card__symbol {
-  flex: 0 0 auto;
-  display: inline-grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  color: var(--chips-sys-color-outline-variant, rgba(15, 23, 42, 0.24));
-  line-height: 1;
-  transition: color 0.16s ease, transform 0.16s ease;
+.chips-score-card__rating[data-scope="rating"][data-part="root"] [data-part="item"] {
+  cursor: default;
 }
 
-.chips-score-card__symbol-icon {
-  display: block;
-  width: 34px;
-  height: 34px;
+.chips-score-card__rating[data-scope="rating"][data-part="root"] [data-part="item"]:hover {
+  background-color: var(--chips-comp-rating-item-surface-idle, transparent);
 }
 
-.chips-score-card__symbol--active {
-  color: var(--chips-sys-color-primary, #f59e0b);
+.chips-score-card__rating[data-scope="rating"][data-part="root"] [data-part="item"][data-active="true"],
+.chips-score-card__rating[data-scope="rating"][data-part="root"] [data-part="item"][data-state="active"] {
+  color: var(--chips-comp-rating-icon-color-active, var(--chips-sys-color-primary, #f59e0b));
 }
 
-.chips-score-card__symbol--heart.chips-score-card__symbol--active {
-  color: var(--chips-sys-color-error, #e11d48);
+.chips-score-card__rating[data-scope="rating"][data-part="root"][data-shape="heart"] [data-part="item"][data-active="true"],
+.chips-score-card__rating[data-scope="rating"][data-part="root"][data-shape="heart"] [data-part="item"][data-state="active"] {
+  color: var(--chips-comp-rating-icon-color-heart-active, var(--chips-sys-color-error, #e11d48));
 }
 
 .chips-score-card__numeric {
@@ -67,23 +72,25 @@ export const VIEW_STYLE_TEXT = `
   color: var(--chips-sys-color-on-surface, #0f172a);
 }
 
-.chips-score-card__numeric-score {
+.chips-score-card__numeric-score[data-scope="text"][data-part="root"] {
   font-size: 42px;
   font-weight: 750;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.chips-score-card__numeric-separator {
+.chips-score-card__numeric-separator[data-scope="text"][data-part="root"] {
   margin: 0 8px;
   color: var(--chips-sys-color-outline, rgba(15, 23, 42, 0.36));
   font-size: 24px;
   font-weight: 600;
 }
 
-.chips-score-card__numeric-total {
+.chips-score-card__numeric-total[data-scope="text"][data-part="root"] {
   color: var(--chips-sys-color-on-surface-variant, #64748b);
   font-size: 22px;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .chips-score-card__progress {
@@ -92,19 +99,29 @@ export const VIEW_STYLE_TEXT = `
   width: 100%;
 }
 
-.chips-score-card__progress-track {
+.chips-score-card__progress-control[data-scope="progress"][data-part="root"] {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.chips-score-card__progress-control[data-scope="progress"][data-part="root"] [data-part="track"] {
+  position: relative;
+  display: block;
   width: 100%;
   height: 14px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--chips-sys-color-surface-container-highest, rgba(15, 23, 42, 0.12));
+  background: var(--chips-comp-progress-track-surface, var(--chips-sys-color-surface-container-highest, rgba(15, 23, 42, 0.12)));
 }
 
-.chips-score-card__progress-fill {
+.chips-score-card__progress-control[data-scope="progress"][data-part="root"] [data-part="range"] {
+  display: block;
   height: 100%;
+  width: calc(var(--chips-progress-ratio, 0) * 100%);
   min-width: 0;
   border-radius: inherit;
-  background: var(--chips-sys-color-primary, #2563eb);
+  background: var(--chips-comp-progress-range-surface, var(--chips-sys-color-primary, #2563eb));
   transition: width 0.18s ease;
 }
 
@@ -118,9 +135,15 @@ export const VIEW_STYLE_TEXT = `
   line-height: 1.3;
 }
 
-.chips-score-card__progress-score {
+.chips-score-card__progress-score[data-scope="text"][data-part="root"] {
   color: var(--chips-sys-color-on-surface, #0f172a);
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.chips-score-card__progress-percent[data-scope="text"][data-part="root"] {
+  color: var(--chips-sys-color-on-surface-variant, #64748b);
+  font-variant-numeric: tabular-nums;
 }
 `;
 
@@ -134,29 +157,44 @@ function formatNumber(value: number, locale: string | undefined): string {
   }).format(value);
 }
 
-function renderSymbols(config: BasecardConfig, ariaLabel: string) {
-  const symbolKind = config.style === "hearts" ? "heart" : "star";
-  const roundedScore = Math.round(config.score);
+function getRatingShape(config: BasecardConfig): "heart" | "star" {
+  return config.style === "hearts" ? "heart" : "star";
+}
+
+function getRatingItemLabel(
+  config: BasecardConfig,
+  t: ReturnType<typeof createTranslator>,
+) {
+  return (value: number, details: { active: boolean; count: number }) =>
+    t(details.active ? "score.rating.item.active" : "score.rating.item.inactive", {
+      score: value,
+      total: details.count,
+    });
+}
+
+function renderSymbols(
+  config: BasecardConfig,
+  ariaLabel: string,
+  labelId: string,
+  t: ReturnType<typeof createTranslator>,
+) {
+  const symbolKind = getRatingShape(config);
 
   return (
-    <div className="chips-score-card__symbols" role="img" aria-label={ariaLabel}>
-      {Array.from({ length: config.total_score }, (_, index) => {
-        const active = index < roundedScore;
-        return (
-          <span
-            className={[
-              "chips-score-card__symbol",
-              config.style === "hearts" ? "chips-score-card__symbol--heart" : "",
-              active ? "chips-score-card__symbol--active" : "",
-            ].filter(Boolean).join(" ")}
-            aria-hidden="true"
-            key={index}
-          >
-            <ScoreSymbolIcon className="chips-score-card__symbol-icon" kind={symbolKind} />
-          </span>
-        );
-      })}
-    </div>
+    <>
+      <span className="chips-score-card__sr-only" id={labelId}>
+        {ariaLabel}
+      </span>
+      <ChipsRating
+        ariaLabelledBy={labelId}
+        className="chips-score-card__rating"
+        count={config.total_score}
+        getItemLabel={getRatingItemLabel(config, t)}
+        readOnly
+        shape={symbolKind}
+        value={config.score}
+      />
+    </>
   );
 }
 
@@ -170,6 +208,8 @@ export function BasecardView({ config }: BasecardViewProps) {
     score: scoreText,
     total: totalText,
   });
+  const progressLabelId = React.useId();
+  const ratingLabelId = React.useId();
 
   return (
     <div className="chips-score-card" data-card-type={config.card_type} data-score-style={config.style}>
@@ -179,29 +219,42 @@ export function BasecardView({ config }: BasecardViewProps) {
           isSymbolScoreStyle(config.style) ? "chips-score-card__surface--symbols" : "",
         ].filter(Boolean).join(" ")}
       >
-        {isSymbolScoreStyle(config.style) ? renderSymbols(config, ariaLabel) : null}
+        {isSymbolScoreStyle(config.style) ? renderSymbols(config, ariaLabel, ratingLabelId, t) : null}
 
         {config.style === "score" ? (
           <div className="chips-score-card__numeric" role="img" aria-label={ariaLabel}>
-            <span className="chips-score-card__numeric-score">{scoreText}</span>
-            <span className="chips-score-card__numeric-separator">/</span>
-            <span className="chips-score-card__numeric-total">{totalText}</span>
+            <ChipsText aria-hidden="true" as="span" className="chips-score-card__numeric-score">
+              {scoreText}
+            </ChipsText>
+            <ChipsText aria-hidden="true" as="span" className="chips-score-card__numeric-separator">
+              {t("score.separator")}
+            </ChipsText>
+            <ChipsText aria-hidden="true" as="span" className="chips-score-card__numeric-total">
+              {totalText}
+            </ChipsText>
           </div>
         ) : null}
 
         {config.style === "progress" ? (
-          <div className="chips-score-card__progress" role="img" aria-label={ariaLabel}>
-            <div className="chips-score-card__progress-track" aria-hidden="true">
-              <div
-                className="chips-score-card__progress-fill"
-                style={{ width: `${ratio * 100}%` }}
-              />
-            </div>
+          <div className="chips-score-card__progress">
+            <span className="chips-score-card__sr-only" id={progressLabelId}>
+              {ariaLabel}
+            </span>
+            <ChipsProgress
+              aria-labelledby={progressLabelId}
+              className="chips-score-card__progress-control"
+              max={config.total_score}
+              min={0}
+              value={config.score}
+              valueText={t("score.progress.percent", { percent: percentText })}
+            />
             <div className="chips-score-card__progress-meta" aria-hidden="true">
-              <span className="chips-score-card__progress-score">
+              <ChipsText as="span" className="chips-score-card__progress-score">
                 {scoreText} / {totalText}
-              </span>
-              <span>{percentText}%</span>
+              </ChipsText>
+              <ChipsText as="span" className="chips-score-card__progress-percent">
+                {t("score.progress.percent", { percent: percentText })}
+              </ChipsText>
             </div>
           </div>
         ) : null}

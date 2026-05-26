@@ -1,6 +1,6 @@
 # 评分基础卡片插件
 
-评分基础卡片插件（`chips.basecard.score`）用于在复合卡片中展示和编辑评分数据。插件通过 `chips-scaffold-basecard` 初始化，并按正式基础卡片插件契约导出 React 查看态、编辑态和 `basecardDefinition`。
+评分基础卡片插件（`chips.basecard.score`）用于在复合卡片中展示和编辑评分数据。插件通过 `chips-scaffold-basecard` 初始化，并按正式基础卡片插件契约导出 React 查看态、编辑态和 `basecardDefinition`，界面统一接入 `@chips/component-library`、主题 token 与本地 i18n。
 
 ## 当前能力
 
@@ -11,6 +11,8 @@
   - `progress`：进度条
 - 星星与爱心样式固定五分制，未获得项为灰色，已获得项使用主题 token 色值。
 - 数字分数与进度条样式提供 `total_score` 和 `score` 两个输入字段。
+- 查看态使用 `ChipsRating / ChipsProgress / ChipsText`；编辑态使用 `ChipsSegmentedControl / ChipsRating / ChipsNumberInput / ChipsProgress`。
+- 五分制评分支持点击和方向键、Home、End 键盘操作；进度样式输出正式 `role="progressbar"` 语义。
 - 查看态不添加最外层描边、背景色或阴影，只渲染评分内容本身。
 - 多语言：
   - `zh-CN`
@@ -40,7 +42,7 @@ total_score: 5
 locale: "zh-CN"
 ```
 
-正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/src/schema/card-config.ts)，参数说明见 [templates/parameters.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/templates/parameters.md)。
+正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/src/schema/card-config.ts)，参数说明见 [templates/parameters.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/templates/parameters.md)。
 
 ## 目录结构
 
@@ -67,13 +69,16 @@ score-BCP/
 
 ```bash
 npm run lint
+npm run typecheck
 npm test -- --run
 npm run build
 npm run validate
+npm run package
+npm run verify
 ```
 
 ## 相关文档
 
-- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/docs/requirements/01-需求规格说明书.md)
-- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/docs/technical/01-架构设计.md)
-- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/score-BCP/docs/technical/02-数据模型设计.md)
+- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/docs/requirements/01-需求规格说明书.md)
+- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/docs/technical/01-架构设计.md)
+- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/score-BCP/docs/technical/02-数据模型设计.md)

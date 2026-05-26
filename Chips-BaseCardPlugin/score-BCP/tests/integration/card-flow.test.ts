@@ -42,7 +42,7 @@ describe("score basecard integration flow", () => {
     });
 
     const ratingButtons = Array.from(
-      editorContainer.querySelectorAll(".chips-score-editor__rating-button"),
+      editorContainer.querySelectorAll('[data-scope="rating"][data-part="item"]'),
     ) as HTMLButtonElement[];
 
     const fourthButton = ratingButtons[3];
@@ -52,7 +52,7 @@ describe("score basecard integration flow", () => {
 
     fourthButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
-    const activeSymbols = container.querySelectorAll(".chips-score-card__symbol--active");
+    const activeSymbols = container.querySelectorAll('[data-scope="rating"][data-part="item"][data-active="true"]');
     expect(currentConfig.score).toBe(4);
     expect(activeSymbols).toHaveLength(4);
   });

@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { extractZipEntry, parseZipEntries } from "../../src/shared/archive";
 import { createStoredZip, JPEG_BYTES, PNG_BYTES } from "../helpers/zip";
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 describe("archive image bundle utilities", () => {
   it("parses ZIP central directory metadata", () => {
     const zip = createStoredZip([
@@ -16,7 +22,7 @@ describe("archive image bundle utilities", () => {
       },
     ]);
 
-    const entries = parseZipEntries(zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength));
+    const entries = parseZipEntries(toArrayBuffer(zip));
 
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
@@ -34,7 +40,7 @@ describe("archive image bundle utilities", () => {
       { path: "comic/002.png", data: PNG_BYTES },
       { path: "comic/readme.txt", data: "ignore" },
     ]);
-    const buffer = zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength);
+    const buffer = toArrayBuffer(zip);
     const entries = parseZipEntries(buffer);
     const pngEntry = entries.find((entry) => entry.path === "comic/002.png");
 
@@ -56,7 +62,7 @@ describe("archive image bundle utilities", () => {
       },
     ]);
 
-    const entries = parseZipEntries(zip.buffer.slice(zip.byteOffset, zip.byteOffset + zip.byteLength));
+    const entries = parseZipEntries(toArrayBuffer(zip));
 
     expect(entries.map((entry) => entry.entryTime)).toEqual([
       expect.any(Number),

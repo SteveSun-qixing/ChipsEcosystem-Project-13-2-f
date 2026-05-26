@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { parseEpubMetadata } from "../../src/shared/epub";
 import { createStoredZip, JPEG_BYTES } from "../helpers/zip";
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 describe("EPUB metadata parser", () => {
   it("reads title, author and cover from OPF metadata", async () => {
     const zip = createStoredZip([
@@ -35,7 +41,7 @@ describe("EPUB metadata parser", () => {
     ]);
 
     const metadata = await parseEpubMetadata(
-      new File([zip], "sea.epub", { type: "application/epub+zip" }),
+      new File([toArrayBuffer(zip)], "sea.epub", { type: "application/epub+zip" }),
     );
 
     expect(metadata.title).toBe("Sea of Pages");

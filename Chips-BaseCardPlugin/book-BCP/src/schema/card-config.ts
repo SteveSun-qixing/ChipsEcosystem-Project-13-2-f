@@ -19,7 +19,7 @@ export interface BookImageItem {
 }
 
 export interface BasecardConfig {
-  card_type: "BookCard";
+  card_type: "base.book";
   theme?: string;
   source_type: BookSourceType;
   book_file: string;
@@ -38,7 +38,7 @@ export interface ConfigValidationResult {
 }
 
 export const defaultBasecardConfig: BasecardConfig = {
-  card_type: "BookCard",
+  card_type: "base.book",
   theme: "",
   source_type: "ebook",
   book_file: "",
@@ -119,7 +119,7 @@ export function normalizeBasecardConfig(
   ]);
 
   return {
-    card_type: "BookCard",
+    card_type: "base.book",
     theme: asString(record.theme),
     source_type: normalizeSourceType(record.source_type, imageSequence),
     book_file: bookFile,
@@ -136,8 +136,8 @@ export function normalizeBasecardConfig(
 export function validateBasecardConfig(config: BasecardConfig): ConfigValidationResult {
   const errors: Record<string, string> = {};
 
-  if (config.card_type !== "BookCard") {
-    errors.card_type = "card_type 必须为 BookCard。";
+  if (config.card_type !== "base.book") {
+    errors.card_type = "card_type 必须为 base.book。";
   }
 
   if (config.source_type !== "ebook" && config.source_type !== "image-sequence") {

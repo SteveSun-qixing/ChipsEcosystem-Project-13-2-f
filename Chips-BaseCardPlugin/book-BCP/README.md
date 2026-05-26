@@ -15,7 +15,7 @@
 
 核心字段在 `src/schema/card-config.ts` 中定义：
 
-- `card_type: "BookCard"`
+- `card_type: "base.book"`
 - `source_type: "ebook" | "image-sequence"`
 - `book_file`
 - `book_format`
@@ -66,10 +66,13 @@ Host 负责把资源打开意图路由给合适的应用插件。`Chips-BookRead
 ## 开发命令
 
 ```bash
-npm run build
-npm run test
 npm run lint
+npm run typecheck
+npm test
+npm run build
 npm run validate
+npm run package
+npm run verify
 ```
 
 工程由 `chips-scaffold-basecard` 初始化，并保留标准导出：

@@ -1,4 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
+import {
+  ChipsButton,
+  ChipsErrorState,
+  ChipsForm,
+  ChipsIcon,
+  ChipsText,
+  ChipsTextField,
+  ChipsVirtualList,
+  type StandardErrorLike,
+} from "@chips/component-library";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
@@ -63,6 +73,18 @@ type EditorRoot = HTMLElement & {
 type BusyState = "main" | "cover" | null;
 type DropzoneKind = "main" | "cover";
 
+function toStandardError(message: string): StandardErrorLike {
+  return {
+    code: "BOOK_BASECARD_VALIDATION",
+    message,
+  };
+}
+
+function firstValidationError(errors: Record<string, string>): StandardErrorLike | null {
+  const message = Object.values(errors)[0];
+  return message ? toStandardError(message) : null;
+}
+
 const MAIN_ACCEPT = [
   ".epub",
   ".pdf",
@@ -99,6 +121,10 @@ html, body {
 }
 
 .chips-book-editor {
+  --chips-book-editor-border-color: var(--chips-comp-card-shell-border-color, var(--chips-sys-color-outline-variant, rgba(15, 23, 42, 0.14)));
+  --chips-book-editor-separator-color: var(--chips-sys-color-outline-variant, rgba(15, 23, 42, 0.08));
+  --chips-book-editor-subtle-separator-color: var(--chips-sys-color-outline-variant, rgba(15, 23, 42, 0.06));
+  --chips-book-editor-focus-ring: var(--chips-sys-color-primary-container, rgba(17, 102, 255, 0.12));
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -121,13 +147,18 @@ html, body {
   margin: 0 auto;
 }
 
+.chips-book-editor [data-scope="form"][data-part="root"] {
+  display: grid;
+  gap: 14px;
+}
+
 .chips-book-editor__group {
   padding: 4px 0 0;
 }
 
 .chips-book-editor__group + .chips-book-editor__group {
   margin-top: 14px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  border-top: 1px solid var(--chips-book-editor-separator-color);
 }
 
 .chips-book-editor__group-head {
@@ -159,11 +190,15 @@ html, body {
   color: var(--chips-sys-color-error, #b42318);
 }
 
+.chips-book-editor__status:empty {
+  display: none;
+}
+
 .chips-book-editor__row {
   display: grid;
   gap: 10px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  border-bottom: 1px solid var(--chips-book-editor-subtle-separator-color);
 }
 
 .chips-book-editor__field-row {
@@ -171,7 +206,7 @@ html, body {
   grid-template-columns: 104px minmax(0, 1fr);
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  border-bottom: 1px solid var(--chips-book-editor-subtle-separator-color);
 }
 
 .chips-book-editor__label {
@@ -191,7 +226,7 @@ html, body {
   width: 100%;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.14));
+  border: 1px solid var(--chips-book-editor-border-color);
   border-radius: 8px;
   background: var(--chips-sys-color-surface, #ffffff);
   color: inherit;
@@ -202,7 +237,7 @@ html, body {
 .chips-book-editor__input:focus,
 .chips-book-editor__select:focus {
   border-color: var(--chips-sys-color-primary, #1166ff);
-  box-shadow: 0 0 0 3px rgba(17, 102, 255, 0.12);
+  box-shadow: 0 0 0 3px var(--chips-book-editor-focus-ring);
 }
 
 .chips-book-editor__dropzone {
@@ -211,7 +246,7 @@ html, body {
   gap: 6px;
   min-height: 72px;
   padding: 12px 14px;
-  border: 1.5px dashed rgba(15, 23, 42, 0.16);
+  border: 1.5px dashed var(--chips-book-editor-border-color);
   border-radius: 8px;
   background: var(--chips-sys-color-surface-container-low, #f7f9fc);
   color: inherit;
@@ -260,7 +295,7 @@ html, body {
   height: 104px;
   overflow: hidden;
   border-radius: 6px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  border: 1px solid var(--chips-book-editor-border-color);
   background: var(--chips-sys-color-surface-container, #edf2f8);
 }
 
@@ -291,7 +326,7 @@ html, body {
   appearance: none;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.14));
+  border: 1px solid var(--chips-book-editor-border-color);
   border-radius: 8px;
   background: var(--chips-sys-color-surface, #ffffff);
   color: inherit;
@@ -308,6 +343,36 @@ html, body {
 
 .chips-book-editor__button--danger {
   color: var(--chips-sys-color-error, #b42318);
+}
+
+.chips-book-editor__actions [data-scope="button"][data-part="root"] {
+  min-height: 34px;
+}
+
+.chips-book-editor__validation {
+  margin-top: 12px;
+}
+
+.chips-book-editor__image-list {
+  margin-top: 10px;
+  border: 1px solid var(--chips-book-editor-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chips-book-editor__image-list-item {
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+.chips-book-editor__image-list-path {
+  color: var(--chips-sys-color-on-surface-variant, #64748b);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 560px) {
@@ -421,6 +486,12 @@ function BasecardEditor(props: BasecardEditorProps) {
     props.releaseResourceUrl,
   );
   const validation = validateBasecardConfig(config);
+  const validationError = firstValidationError(validation.errors);
+  const i18n = {
+    translate(input: string | { key: string; params?: Record<string, string | number> }, params?: Record<string, string | number>) {
+      return typeof input === "string" ? t(input, params) : t(input.key, input.params);
+    },
+  };
 
   useEffect(() => {
     setConfig(normalizeBasecardConfig(props.initialConfig));
@@ -485,7 +556,7 @@ function BasecardEditor(props: BasecardEditorProps) {
       }
     }
     const next = normalizeBasecardConfig({
-      card_type: "BookCard",
+      card_type: "base.book",
       theme: config.theme,
       source_type: "ebook",
       book_file: importedBook.path,
@@ -545,7 +616,7 @@ function BasecardEditor(props: BasecardEditorProps) {
     const sortedImages = sortImageItems(importedImages, config.image_sort_basis);
     const coverImage = sortedImages[0]?.file_path ?? "";
     const next = normalizeBasecardConfig({
-      card_type: "BookCard",
+      card_type: "base.book",
       theme: config.theme,
       source_type: "image-sequence",
       book_file: "",
@@ -716,19 +787,38 @@ function BasecardEditor(props: BasecardEditorProps) {
 
   const primaryLabel = getPrimaryFileLabel(config, t("editor.images_unit"));
   const hasResource = isNonEmptyString(config.book_file) || config.image_sequence.length > 0;
+  const imageListItems = config.image_sequence.map((image) => ({
+    value: image.id,
+    label: image.file_name,
+    resourcePath: image.file_path,
+  }));
 
   return (
     <div className="chips-book-editor">
       <div className="chips-book-editor__shell">
-        <p className={`chips-book-editor__status${error ? " chips-book-editor__status--error" : ""}`}>
-          {error || status}
-        </p>
+        <ChipsForm.Root
+          aria-label={t("editor.form_aria_label")}
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+          }}
+        >
+          {error || status ? (
+            <p className={`chips-book-editor__status${error ? " chips-book-editor__status--error" : ""}`}>
+              {error || status}
+            </p>
+          ) : null}
 
-        <section className="chips-book-editor__group">
-          <div className="chips-book-editor__group-head">
-            <h2 className="chips-book-editor__group-title">{t("editor.group.resource")}</h2>
-          </div>
-          <div className="chips-book-editor__row">
+          <section className="chips-book-editor__group">
+            <div className="chips-book-editor__group-head">
+              <ChipsText
+                as="div"
+                className="chips-book-editor__group-title"
+                text={t("editor.group.resource")}
+                emphasis="strong"
+              />
+            </div>
+            <div className="chips-book-editor__row">
             <label
               className="chips-book-editor__dropzone"
               data-role="main-dropzone"
@@ -739,7 +829,10 @@ function BasecardEditor(props: BasecardEditorProps) {
                 handleDrop(event, "main");
               }}
             >
-              <span className="chips-book-editor__dropzone-title">{t("editor.upload_main")}</span>
+              <span className="chips-book-editor__dropzone-title">
+                <ChipsIcon descriptor={{ name: "upload_file", decorative: true }} tone="accent" />
+                {t("editor.upload_main")}
+              </span>
               <span className="chips-book-editor__dropzone-meta">
                 {primaryLabel || t("editor.no_resource")}
               </span>
@@ -759,25 +852,47 @@ function BasecardEditor(props: BasecardEditorProps) {
               />
             </label>
             <div className="chips-book-editor__actions">
-              <button
+              <ChipsButton
                 type="button"
-                className="chips-book-editor__button chips-book-editor__button--danger"
                 disabled={!hasResource || busy !== null}
-                onClick={() => {
+                onPress={() => {
                   void clearMainResource();
                 }}
               >
                 {t("editor.clear_resource")}
-              </button>
+              </ChipsButton>
             </div>
-          </div>
-        </section>
+            {imageListItems.length > 0 ? (
+              <div className="chips-book-editor__image-list">
+                <ChipsVirtualList
+                  items={imageListItems}
+                  itemHeight={54}
+                  height={Math.min(220, Math.max(54, imageListItems.length * 54))}
+                  ariaLabel={t("editor.image_list_aria_label")}
+                  renderItem={(item) => (
+                    <div className="chips-book-editor__image-list-item">
+                      <strong>{item.label}</strong>
+                      <span className="chips-book-editor__image-list-path">
+                        {String(item.resourcePath ?? "")}
+                      </span>
+                    </div>
+                  )}
+                />
+              </div>
+            ) : null}
+            </div>
+          </section>
 
-        <section className="chips-book-editor__group">
-          <div className="chips-book-editor__group-head">
-            <h2 className="chips-book-editor__group-title">{t("editor.group.cover")}</h2>
-          </div>
-          <div className="chips-book-editor__row">
+          <section className="chips-book-editor__group">
+            <div className="chips-book-editor__group-head">
+              <ChipsText
+                as="div"
+                className="chips-book-editor__group-title"
+                text={t("editor.group.cover")}
+                emphasis="strong"
+              />
+            </div>
+            <div className="chips-book-editor__row">
             <div className="chips-book-editor__cover-row">
               <div className="chips-book-editor__cover">
                 {coverPreview ? (
@@ -796,7 +911,10 @@ function BasecardEditor(props: BasecardEditorProps) {
                   handleDrop(event, "cover");
                 }}
               >
-                <span className="chips-book-editor__dropzone-title">{t("editor.upload_cover")}</span>
+                <span className="chips-book-editor__dropzone-title">
+                  <ChipsIcon descriptor={{ name: "add_photo_alternate", decorative: true }} tone="accent" />
+                  {t("editor.upload_cover")}
+                </span>
                 <span className="chips-book-editor__dropzone-meta">
                   {config.cover_image ? resolveFileName(config.cover_image) : t("editor.no_cover")}
                 </span>
@@ -817,56 +935,56 @@ function BasecardEditor(props: BasecardEditorProps) {
               </label>
             </div>
             <div className="chips-book-editor__actions">
-              <button
+              <ChipsButton
                 type="button"
-                className="chips-book-editor__button chips-book-editor__button--danger"
                 disabled={!config.cover_image || busy !== null}
-                onClick={() => {
+                onPress={() => {
                   void clearCover();
                 }}
               >
                 {t("editor.clear_cover")}
-              </button>
+              </ChipsButton>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="chips-book-editor__group">
-          <div className="chips-book-editor__group-head">
-            <h2 className="chips-book-editor__group-title">{t("editor.group.metadata")}</h2>
-          </div>
-          <label className="chips-book-editor__field-row">
-            <span className="chips-book-editor__label">{t("editor.book_name")}</span>
-            <span className="chips-book-editor__control">
-              <input
+          <section className="chips-book-editor__group">
+            <div className="chips-book-editor__group-head">
+              <ChipsText
+                as="div"
+                className="chips-book-editor__group-title"
+                text={t("editor.group.metadata")}
+                emphasis="strong"
+              />
+            </div>
+            <ChipsForm.Field name="book_name">
+              <ChipsTextField
                 data-role="book-name-input"
-                className="chips-book-editor__input"
-                type="text"
                 value={config.book_name}
+                label={t("editor.book_name")}
+                ariaLabel={t("editor.book_name")}
                 placeholder={t("editor.placeholder.book_name")}
-                onInput={(event) => {
-                  updateFields({ book_name: event.currentTarget.value });
+                i18n={i18n}
+                onValueChange={(value) => {
+                  updateFields({ book_name: value });
                 }}
               />
-            </span>
-          </label>
-          <label className="chips-book-editor__field-row">
-            <span className="chips-book-editor__label">{t("editor.book_author")}</span>
-            <span className="chips-book-editor__control">
-              <input
+            </ChipsForm.Field>
+            <ChipsForm.Field name="book_author">
+              <ChipsTextField
                 data-role="book-author-input"
-                className="chips-book-editor__input"
-                type="text"
                 value={config.book_author}
+                label={t("editor.book_author")}
+                ariaLabel={t("editor.book_author")}
                 placeholder={t("editor.placeholder.book_author")}
-                onInput={(event) => {
-                  updateFields({ book_author: event.currentTarget.value });
+                i18n={i18n}
+                onValueChange={(value) => {
+                  updateFields({ book_author: value });
                 }}
               />
-            </span>
-          </label>
-          {config.source_type === "image-sequence" ? (
-            <label className="chips-book-editor__field-row">
+            </ChipsForm.Field>
+            {config.source_type === "image-sequence" ? (
+              <label className="chips-book-editor__field-row">
               <span className="chips-book-editor__label">{t("editor.image_sort_basis")}</span>
               <span className="chips-book-editor__control">
                 <select
@@ -881,17 +999,20 @@ function BasecardEditor(props: BasecardEditorProps) {
                   <option value="entry-time">{t("editor.sort.entry_time")}</option>
                 </select>
               </span>
-            </label>
-          ) : null}
-        </section>
-
-        {!validation.valid ? (
-          <section className="chips-book-editor__group">
-            <div className="chips-book-editor__resource-meta">
-              {Object.values(validation.errors).join(" ")}
-            </div>
+              </label>
+            ) : null}
           </section>
-        ) : null}
+
+          {validationError ? (
+            <ChipsErrorState
+              className="chips-book-editor__validation"
+              error={validationError}
+              title={t("editor.validation_title")}
+              description={validationError.message}
+              ariaLabel={t("editor.validation_title")}
+            />
+          ) : null}
+        </ChipsForm.Root>
       </div>
     </div>
   );

@@ -16,14 +16,14 @@ describe("book basecard schema", () => {
     expect(basecardDefinition.cardType).toBe("base.book");
     expect(basecardDefinition.aliases).toContain("BookCard");
     expect(basecardDefinition.createInitialConfig("base-1")).toMatchObject({
-      card_type: "BookCard",
+      card_type: "base.book",
       source_type: "ebook",
     });
   });
 
   it("normalizes image sequence resources and collects all internal paths", () => {
     const normalized = normalizeBasecardConfig({
-      card_type: "BookCard",
+      card_type: "base.book",
       source_type: "image-sequence",
       book_file: "content/book.epub",
       cover_image: "./covers/cover.jpg",
@@ -55,7 +55,7 @@ describe("book basecard schema", () => {
 
   it("keeps empty book metadata valid so placeholders can be shown", () => {
     const normalized = normalizeBasecardConfig({
-      card_type: "BookCard",
+      card_type: "base.book",
       source_type: "ebook",
       book_file: "",
       book_name: "",

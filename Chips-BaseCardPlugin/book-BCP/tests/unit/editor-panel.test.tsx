@@ -3,7 +3,7 @@ import { createBasecardEditorRoot } from "../../src/editor/panel";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
 const emptyConfig: BasecardConfig = {
-  card_type: "BookCard",
+  card_type: "base.book",
   theme: "",
   source_type: "ebook",
   book_file: "",
@@ -27,6 +27,18 @@ function setInputFiles(input: HTMLInputElement, files: File[]): void {
     value: files,
     configurable: true,
   });
+}
+
+function changeTextInput(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (valueSetter) {
+    valueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function dispatchFileDrop(target: Element, files: File[]): void {
@@ -260,17 +272,16 @@ describe("createBasecardEditorRoot", () => {
       },
     });
 
-    const nameInput = root.querySelector('[data-role="book-name-input"]') as HTMLInputElement | null;
+    const nameInput = root.querySelector('[data-role="book-name-input"] input') as HTMLInputElement | null;
     if (!nameInput) {
       throw new Error("找不到书名输入框");
     }
 
-    nameInput.value = "Manual Title";
-    nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    changeTextInput(nameInput, "Manual Title");
 
     expect(lastConfig).toMatchObject({
       book_name: "Manual Title",
-      card_type: "BookCard",
+      card_type: "base.book",
     });
   });
 });

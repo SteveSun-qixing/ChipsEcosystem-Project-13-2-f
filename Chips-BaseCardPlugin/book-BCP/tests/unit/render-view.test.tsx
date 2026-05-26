@@ -26,7 +26,7 @@ describe("mountBasecardView", () => {
     const container = document.createElement("div");
     const openResource = vi.fn();
     const config: BasecardConfig = {
-      card_type: "BookCard",
+      card_type: "base.book",
       theme: "",
       source_type: "ebook",
       book_file: "books/demo.epub",
@@ -52,7 +52,7 @@ describe("mountBasecardView", () => {
     expect(container.querySelector(".chips-book-card__author")?.textContent).toBe("Alice");
     expect(container.textContent).toContain("EPUB");
 
-    const button = container.querySelector(".chips-book-card__button") as HTMLButtonElement | null;
+    const button = container.querySelector('[data-scope="button"][data-part="root"]') as HTMLButtonElement | null;
     if (!button) {
       throw new Error("找不到电子书基础卡片按钮");
     }
@@ -89,7 +89,7 @@ describe("mountBasecardView", () => {
     const container = document.createElement("div");
     const openResource = vi.fn();
     const config: BasecardConfig = {
-      card_type: "BookCard",
+      card_type: "base.book",
       theme: "",
       source_type: "image-sequence",
       book_file: "",
@@ -126,7 +126,7 @@ describe("mountBasecardView", () => {
 
     await flushViewEffects();
 
-    const button = container.querySelector(".chips-book-card__button") as HTMLButtonElement | null;
+    const button = container.querySelector('[data-scope="button"][data-part="root"]') as HTMLButtonElement | null;
     if (!button) {
       throw new Error("找不到图片包基础卡片按钮");
     }
@@ -158,7 +158,7 @@ describe("mountBasecardView", () => {
     const dispose = mountBasecardView({
       container,
       config: {
-        card_type: "BookCard",
+        card_type: "base.book",
         theme: "",
         source_type: "ebook",
         book_file: "",
@@ -172,7 +172,7 @@ describe("mountBasecardView", () => {
       },
     });
 
-    expect(container.querySelector(".chips-book-card__empty")?.textContent).toContain("No ebook selected");
+    expect(container.querySelector('[data-scope="empty-state"][data-part="root"]')?.textContent).toContain("No ebook selected");
     dispose();
   });
 });

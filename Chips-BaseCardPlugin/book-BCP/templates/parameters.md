@@ -1,6 +1,6 @@
 # 电子书基础卡片配置参数说明
 
-- `card_type`：固定为 `BookCard`，由插件别名映射到正式类型 `base.book`。
+- `card_type`：固定为正式类型 `base.book`。`BookCard` 仅作为运行时别名保留在 `basecardDefinition.aliases`，不得写入新配置。
 - `theme`：可选主题变体，通常为空并跟随当前主题系统。
 - `source_type`：资源类型，`ebook` 表示普通电子书文件，`image-sequence` 表示 ZIP/CBZ 解包后的漫画图片序列。
 - `book_file`：普通电子书文件的卡片根目录相对路径。图片序列模式下必须为空。

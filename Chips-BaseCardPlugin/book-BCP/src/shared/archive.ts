@@ -231,7 +231,9 @@ async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
     throw new Error("当前运行时缺少 DecompressionStream，无法解压 deflate ZIP 条目。");
   }
 
-  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStreamCtor("deflate-raw"));
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  const stream = new Blob([buffer]).stream().pipeThrough(new CompressionStreamCtor("deflate-raw"));
   const output = await new Response(stream).arrayBuffer();
   return new Uint8Array(output);
 }

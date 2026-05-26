@@ -3,13 +3,25 @@ import { mountBasecardEditor } from "../../src/editor/runtime";
 import { mountBasecardView } from "../../src/render/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
+function changeTextInput(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (valueSetter) {
+    valueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("book basecard integration flow", () => {
   it("updates the rendered title when the editor emits a config change", async () => {
     const viewContainer = document.createElement("div");
     const editorContainer = document.createElement("div");
 
     const initialConfig: BasecardConfig = {
-      card_type: "BookCard",
+      card_type: "base.book",
       theme: "",
       source_type: "ebook",
       book_file: "books/demo.epub",
@@ -43,13 +55,12 @@ describe("book basecard integration flow", () => {
       },
     });
 
-    const bookNameInput = editorContainer.querySelector('[data-role="book-name-input"]') as HTMLInputElement | null;
+    const bookNameInput = editorContainer.querySelector('[data-role="book-name-input"] input') as HTMLInputElement | null;
     if (!bookNameInput) {
       throw new Error("找不到书名输入框");
     }
 
-    bookNameInput.value = "Updated Book";
-    bookNameInput.dispatchEvent(new Event("input", { bubbles: true }));
+    changeTextInput(bookNameInput, "Updated Book");
 
     await new Promise((resolve) => {
       setTimeout(resolve, 20);

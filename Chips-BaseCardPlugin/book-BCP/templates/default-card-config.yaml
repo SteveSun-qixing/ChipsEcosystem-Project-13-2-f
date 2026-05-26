@@ -1,4 +1,4 @@
-card_type: "BookCard"
+card_type: "base.book"
 theme: ""
 source_type: "ebook"
 book_file: ""

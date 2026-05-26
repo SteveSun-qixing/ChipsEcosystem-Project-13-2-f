@@ -113,6 +113,12 @@ async function readEntryText(buffer: ArrayBuffer, entry: ZipEntry): Promise<stri
   return decodeUtf8(await extractZipEntry(buffer, entry));
 }
 
+function copyBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 export async function parseEpubMetadata(file: File): Promise<EpubMetadata> {
   const buffer = await file.arrayBuffer();
   const entries = parseZipEntries(buffer);
@@ -178,7 +184,7 @@ export async function parseEpubMetadata(file: File): Promise<EpubMetadata> {
     title,
     author,
     cover: {
-      file: new File([coverBytes], sanitizeImportedFileName(suggestedFileName, "ebook-cover"), {
+      file: new File([copyBytesToArrayBuffer(coverBytes)], sanitizeImportedFileName(suggestedFileName, "ebook-cover"), {
         type: mimeType,
         lastModified: file.lastModified,
       }),

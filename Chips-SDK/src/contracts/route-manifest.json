@@ -1392,6 +1392,19 @@
       "idempotent": false,
       "retries": 0
     },
+    "resource.extractVideoFrame": {
+      "action": "resource.extractVideoFrame",
+      "schemaIn": "schemas/resource.extractVideoFrame.request.json",
+      "schemaOut": "schemas/resource.extractVideoFrame.response.json",
+      "permission": [
+        "resource.read",
+        "file.read",
+        "file.write"
+      ],
+      "timeoutMs": 30000,
+      "idempotent": false,
+      "retries": 0
+    },
     "resource.open": {
       "action": "resource.open",
       "schemaIn": "schemas/resource.open.request.json",

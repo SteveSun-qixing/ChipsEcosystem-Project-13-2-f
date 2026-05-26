@@ -293,6 +293,34 @@ export interface RenderHtmlToImageResult {
   format: 'png' | 'jpeg' | 'webp';
 }
 
+export type ExtractVideoFrameFormat = 'png' | 'jpeg';
+
+export interface ExtractVideoFrameOptions {
+  timeSeconds?: number;
+  format?: ExtractVideoFrameFormat;
+  width?: number;
+  height?: number;
+  fit?: 'contain' | 'cover';
+  quality?: number;
+}
+
+export interface ExtractVideoFrameRequest {
+  videoFile: string;
+  outputFile: string;
+  overwrite?: boolean;
+  options?: ExtractVideoFrameOptions;
+}
+
+export interface ExtractVideoFrameResult {
+  outputFile: string;
+  width: number;
+  height: number;
+  format: ExtractVideoFrameFormat;
+  mimeType: 'image/png' | 'image/jpeg';
+  frameTimeSeconds: number;
+  durationSeconds?: number;
+}
+
 export interface ConvertTiffToPngRequest {
   sourceFile: string;
   outputFile: string;
@@ -361,6 +389,7 @@ export interface PalCapabilitySnapshot {
     offscreenRender: {
       htmlToPdf: boolean;
       htmlToImage: boolean;
+      videoFrame: boolean;
     };
   };
 }
@@ -437,6 +466,7 @@ export interface PALBackground {
 export interface PALOffscreenRender {
   renderHtmlToPdf(input: RenderHtmlToPdfRequest): Promise<RenderHtmlToPdfResult>;
   renderHtmlToImage(input: RenderHtmlToImageRequest): Promise<RenderHtmlToImageResult>;
+  extractVideoFrame(input: ExtractVideoFrameRequest): Promise<ExtractVideoFrameResult>;
 }
 
 export interface PALImage {

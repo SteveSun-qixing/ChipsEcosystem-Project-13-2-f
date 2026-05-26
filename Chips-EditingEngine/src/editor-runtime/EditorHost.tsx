@@ -97,6 +97,25 @@ function createStagedConversionFilePath(cardPath: string, baseCardId: string, ex
   return joinPath(cardPath, '.card', `.__editor-${normalizedBaseCardId}-${token}.${normalizedExtension}`);
 }
 
+function resolveResourceExtension(resourcePath: string, fallback: string): string {
+  const fileName = resourcePath.split('/').filter(Boolean).pop() ?? '';
+  const dotIndex = fileName.lastIndexOf('.');
+  const extension = dotIndex >= 0 ? fileName.slice(dotIndex + 1).trim().toLowerCase() : '';
+  return extension || fallback;
+}
+
+function resolveVideoThumbnailOutputExtension(
+  outputPath: string,
+  format?: 'png' | 'jpeg',
+): string {
+  if (format === 'jpeg') {
+    return 'jpg';
+  }
+
+  const extension = resolveResourceExtension(outputPath, 'png');
+  return extension === 'jpg' || extension === 'jpeg' ? 'jpg' : 'png';
+}
+
 export interface EditorHostProps {
   cardId: string;
   cardPath: string;
@@ -425,6 +444,85 @@ export function EditorHost({
     }
   }, [baseCardId, cardPath, releaseResolvedResourceUrl, sessionKey, store]);
 
+  const extractVideoThumbnail = useCallback(async (input: {
+    resourcePath: string;
+    outputPath: string;
+    overwrite?: boolean;
+    options?: {
+      timeSeconds?: number;
+      format?: 'png' | 'jpeg';
+      width?: number;
+      height?: number;
+      fit?: 'contain' | 'cover';
+      quality?: number;
+    };
+  }) => {
+    const normalizedResourcePath = normalizeResourcePath(input.resourcePath);
+    if (!normalizedResourcePath) {
+      throw new Error(`资源路径无效: ${input.resourcePath}`);
+    }
+
+    const normalizedOutputPath = normalizeResourcePath(input.outputPath);
+    if (!normalizedOutputPath) {
+      throw new Error(`输出路径无效: ${input.outputPath}`);
+    }
+
+    const pendingSourceImport = store.getPendingResourceImport(sessionKey, normalizedResourcePath);
+    const absoluteSourcePath = joinPath(cardPath, normalizedResourcePath);
+    const stagedSourcePath = pendingSourceImport
+      ? createStagedConversionFilePath(cardPath, baseCardId, resolveResourceExtension(normalizedResourcePath, 'video'))
+      : null;
+    const stagedOutputPath = createStagedConversionFilePath(
+      cardPath,
+      baseCardId,
+      resolveVideoThumbnailOutputExtension(normalizedOutputPath, input.options?.format),
+    );
+    let extractedOutputPath = stagedOutputPath;
+
+    try {
+      if (pendingSourceImport) {
+        await fileService.writeBinary(stagedSourcePath!, pendingSourceImport.data);
+      } else {
+        const sourceExists = await fileService.exists(absoluteSourcePath);
+        if (!sourceExists) {
+          throw new Error(`视频资源不存在: ${normalizedResourcePath}`);
+        }
+      }
+
+      const extracted = await resourceService.extractVideoFrame({
+        resourceId: stagedSourcePath ?? absoluteSourcePath,
+        outputFile: stagedOutputPath,
+        ...(typeof input.overwrite === 'boolean' ? { overwrite: input.overwrite } : undefined),
+        ...(input.options ? { options: input.options } : undefined),
+      });
+
+      extractedOutputPath = extracted.outputFile || stagedOutputPath;
+      const extractedBytes = await fileService.readBinary(extractedOutputPath);
+      releaseResolvedResourceUrl(normalizedOutputPath);
+      store.queueResourceImport(sessionKey, {
+        path: normalizedOutputPath,
+        data: extractedBytes,
+        mimeType: extracted.mimeType,
+      });
+
+      return {
+        path: normalizedOutputPath,
+        mimeType: extracted.mimeType,
+        sourceMimeType: extracted.sourceMimeType,
+        width: extracted.width,
+        height: extracted.height,
+        format: extracted.format,
+        frameTimeSeconds: extracted.frameTimeSeconds,
+        durationSeconds: extracted.durationSeconds,
+      };
+    } finally {
+      if (stagedSourcePath) {
+        await fileService.delete(stagedSourcePath).catch(() => undefined);
+      }
+      await fileService.delete(extractedOutputPath).catch(() => undefined);
+    }
+  }, [baseCardId, cardPath, releaseResolvedResourceUrl, sessionKey, store]);
+
   const importArchiveBundle = useCallback(async (input: {
     file: File;
     preferredRootDir?: string;
@@ -608,6 +706,7 @@ export function EditorHost({
         importArchiveBundle,
         deleteResource,
         convertTiffToPng,
+        extractVideoThumbnail,
       });
 
       setIsLoading(false);
@@ -645,6 +744,7 @@ export function EditorHost({
     importArchiveBundle,
     deleteResource,
     convertTiffToPng,
+    extractVideoThumbnail,
     releaseResolvedResourceUrl,
     sessionKey,
     mountRevision,

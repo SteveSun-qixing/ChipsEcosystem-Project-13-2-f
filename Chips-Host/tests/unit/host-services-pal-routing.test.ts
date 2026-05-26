@@ -22,6 +22,7 @@ interface PalState {
   clipboardImageBase64: string | null;
   clipboardFiles: string[];
   imageConversions: Array<{ sourceFile: string; outputFile: string; overwrite?: boolean }>;
+  videoFrameExtractions: Array<{ videoFile: string; outputFile: string; overwrite?: boolean; options?: unknown }>;
   windowCreateArgs: unknown[];
   surfaces: Map<string, Awaited<ReturnType<PALAdapter['surface']['open']>>>;
   dialogOpenArgs: unknown[];
@@ -43,6 +44,7 @@ const createPalState = (): PalState => ({
   clipboardImageBase64: null,
   clipboardFiles: [],
   imageConversions: [],
+  videoFrameExtractions: [],
   windowCreateArgs: [],
   surfaces: new Map(),
   dialogOpenArgs: [],
@@ -132,7 +134,8 @@ const createPal = (state: PalState): PALAdapter => {
       },
       offscreenRender: {
         htmlToPdf: true,
-        htmlToImage: true
+        htmlToImage: true,
+        videoFrame: true
       }
     }
   } as const;
@@ -527,6 +530,23 @@ const createPal = (state: PalState): PALAdapter => {
         width: input.options?.width,
         height: input.options?.height,
         format: input.options?.format ?? 'png'
+      };
+    },
+    async extractVideoFrame(input) {
+      state.videoFrameExtractions.push({
+        videoFile: input.videoFile,
+        outputFile: input.outputFile,
+        overwrite: input.overwrite,
+        options: input.options
+      });
+      return {
+        outputFile: input.outputFile,
+        width: input.options?.width ?? 1280,
+        height: input.options?.height ?? 720,
+        format: input.options?.format ?? 'png',
+        mimeType: input.options?.format === 'jpeg' ? 'image/jpeg' : 'image/png',
+        frameTimeSeconds: input.options?.timeSeconds ?? 0,
+        durationSeconds: 12
       };
     }
   };
@@ -948,6 +968,128 @@ describe('Host services PAL routing', () => {
         overwrite: true
       }
     ]);
+  });
+
+  it('routes resource.extractVideoFrame through the PAL offscreen video frame capability', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const sourceFile = path.join(workspace, 'demo.mp4');
+    const outputFile = path.join(workspace, 'demo-poster.png');
+    await fs.writeFile(sourceFile, Buffer.from([
+      0x00, 0x00, 0x00, 0x18,
+      0x66, 0x74, 0x79, 0x70,
+      0x69, 0x73, 0x6f, 0x6d,
+      0x00, 0x00, 0x02, 0x00
+    ]));
+
+    const context = createContextFactory();
+    const result = await kernel.invoke<
+      {
+        resourceId: string;
+        outputFile: string;
+        overwrite?: boolean;
+        options?: { timeSeconds?: number; format?: 'png'; width?: number; height?: number; fit?: 'cover' };
+      },
+      {
+        outputFile: string;
+        mimeType: 'image/png';
+        sourceMimeType: string;
+        width: number;
+        height: number;
+        format: 'png';
+        frameTimeSeconds: number;
+        durationSeconds?: number;
+      }
+    >(
+      'resource.extractVideoFrame',
+      {
+        resourceId: sourceFile,
+        outputFile,
+        overwrite: true,
+        options: {
+          timeSeconds: 1.5,
+          format: 'png',
+          width: 640,
+          height: 360,
+          fit: 'cover'
+        }
+      },
+      context(['resource.read', 'file.read', 'file.write'])
+    );
+
+    expect(result).toEqual({
+      outputFile,
+      mimeType: 'image/png',
+      sourceMimeType: 'video/mp4',
+      width: 640,
+      height: 360,
+      format: 'png',
+      frameTimeSeconds: 1.5,
+      durationSeconds: 12
+    });
+    expect(state.videoFrameExtractions).toEqual([
+      {
+        videoFile: sourceFile,
+        outputFile,
+        overwrite: true,
+        options: {
+          timeSeconds: 1.5,
+          format: 'png',
+          width: 640,
+          height: 360,
+          fit: 'cover'
+        }
+      }
+    ]);
+  });
+
+  it('normalizes unsupported video frame source URIs with the video error namespace', async () => {
+    const state = createPalState();
+    const kernel = new Kernel();
+    const runtime = new PluginRuntime(workspace, { locale: 'zh-CN', themeId: 'chips-official.default-theme' });
+    await runtime.load();
+    registerHostSchemas();
+    await registerHostServices({
+      kernel,
+      pal: createPal(state),
+      workspacePath: workspace,
+      logger: new StructuredLogger(),
+      getCardService: () => new CardService(),
+      getCardInfoService: () => createCardInfoService(),
+      getBoxService: () => new BoxService(),
+      getZipService: () => new StoreZipService(),
+      runtime
+    });
+
+    const context = createContextFactory();
+    await expect(
+      kernel.invoke(
+        'resource.extractVideoFrame',
+        {
+          resourceId: 'https://example.test/demo.mp4',
+          outputFile: path.join(workspace, 'demo-poster.png')
+        },
+        context(['resource.read', 'file.read', 'file.write'])
+      )
+    ).rejects.toMatchObject({
+      code: 'RESOURCE_VIDEO_FRAME_UNSUPPORTED_URI'
+    });
+    expect(state.videoFrameExtractions).toEqual([]);
   });
 
   it('injects the current Host workspace into app launch params when opening a plugin window', async () => {

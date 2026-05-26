@@ -2262,7 +2262,8 @@ const resolveResourceUri = (ctx: HostServiceContext, resourceId: string): string
 const createResourceImageService = (ctx: HostServiceContext): ResourceImageService => {
   return new ResourceImageService({
     fs: ctx.pal.fs,
-    image: ctx.pal.image
+    image: ctx.pal.image,
+    offscreenRender: ctx.pal.offscreenRender
   });
 };
 
@@ -3883,6 +3884,42 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'resource.convertTiffToPng', async (input) => {
             return createResourceImageService(ctx).convertTiffToPng(input);
+          })
+        )
+      },
+      extractVideoFrame: {
+        descriptor: descriptor<
+          {
+            resourceId: string;
+            outputFile: string;
+            overwrite?: boolean;
+            options?: {
+              timeSeconds?: number;
+              format?: 'png' | 'jpeg';
+              width?: number;
+              height?: number;
+              fit?: 'contain' | 'cover';
+              quality?: number;
+            };
+          },
+          {
+            outputFile: string;
+            mimeType: 'image/png' | 'image/jpeg';
+            sourceMimeType: string;
+            width: number;
+            height: number;
+            format: 'png' | 'jpeg';
+            frameTimeSeconds: number;
+            durationSeconds?: number;
+          }
+        >(
+          'resource.extractVideoFrame',
+          ['resource.read', 'file.read', 'file.write'],
+          30_000,
+          false,
+          0,
+          withMetrics(state, 'resource.extractVideoFrame', async (input) => {
+            return createResourceImageService(ctx).extractVideoFrame(input);
           })
         )
       }

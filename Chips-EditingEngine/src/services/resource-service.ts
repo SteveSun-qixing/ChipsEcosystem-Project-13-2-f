@@ -31,6 +31,31 @@ export interface ResourceConvertTiffToPngResult {
     height?: number;
 }
 
+export interface ResourceExtractVideoFrameRequest {
+    resourceId: string;
+    outputFile: string;
+    overwrite?: boolean;
+    options?: {
+        timeSeconds?: number;
+        format?: 'png' | 'jpeg';
+        width?: number;
+        height?: number;
+        fit?: 'contain' | 'cover';
+        quality?: number;
+    };
+}
+
+export interface ResourceExtractVideoFrameResult {
+    outputFile: string;
+    mimeType: 'image/png' | 'image/jpeg';
+    sourceMimeType: string;
+    width: number;
+    height: number;
+    format: 'png' | 'jpeg';
+    frameTimeSeconds: number;
+    durationSeconds?: number;
+}
+
 let resourceServiceInstance: ResourceService | null = null;
 
 export class ResourceService {
@@ -157,6 +182,10 @@ export class ResourceService {
         return getChipsClient().resource.convertTiffToPng(request);
     }
 
+    async extractVideoFrame(request: ResourceExtractVideoFrameRequest): Promise<ResourceExtractVideoFrameResult> {
+        return getChipsClient().resource.extractVideoFrame(request);
+    }
+
     reset(): void {
         this.initialized = false;
         this.workspaceRoot = '';
@@ -240,5 +269,10 @@ export const resourceService = {
         request: ResourceConvertTiffToPngRequest,
     ): Promise<ResourceConvertTiffToPngResult> {
         return getResourceService().convertTiffToPng(request);
+    },
+    async extractVideoFrame(
+        request: ResourceExtractVideoFrameRequest,
+    ): Promise<ResourceExtractVideoFrameResult> {
+        return getResourceService().extractVideoFrame(request);
     },
 };

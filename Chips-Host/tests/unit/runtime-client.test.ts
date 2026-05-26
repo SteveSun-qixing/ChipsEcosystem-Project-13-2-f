@@ -194,7 +194,8 @@ const createBridge = (handler: (action: string, payload: unknown) => Promise<unk
         },
         offscreenRender: {
           htmlToPdf: true,
-          htmlToImage: true
+          htmlToImage: true,
+          videoFrame: true
         }
       }
     }),

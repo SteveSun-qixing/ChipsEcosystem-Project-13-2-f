@@ -73,6 +73,31 @@ export interface BasecardTiffToPngResult {
   height?: number;
 }
 
+export interface BasecardVideoThumbnailRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+  options?: {
+    timeSeconds?: number;
+    format?: "png" | "jpeg";
+    width?: number;
+    height?: number;
+    fit?: "contain" | "cover";
+    quality?: number;
+  };
+}
+
+export interface BasecardVideoThumbnailResult {
+  path: string;
+  mimeType: "image/png" | "image/jpeg";
+  sourceMimeType: string;
+  width: number;
+  height: number;
+  format: "png" | "jpeg";
+  frameTimeSeconds: number;
+  durationSeconds?: number;
+}
+
 export interface BasecardPendingResourceImport {
   path: string;
   data: Uint8Array;
@@ -112,6 +137,7 @@ export interface BasecardEditorContext {
   importArchiveBundle?: (input: BasecardArchiveImportRequest) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
   convertTiffToPng?: (input: BasecardTiffToPngRequest) => Promise<BasecardTiffToPngResult>;
+  extractVideoThumbnail?: (input: BasecardVideoThumbnailRequest) => Promise<BasecardVideoThumbnailResult>;
 }
 
 export interface BasecardDescriptor {

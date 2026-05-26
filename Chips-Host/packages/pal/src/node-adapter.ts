@@ -22,6 +22,9 @@ import type {
   DialogFileOptions,
   DialogMessageOptions,
   DialogSaveOptions,
+  ExtractVideoFrameFormat,
+  ExtractVideoFrameRequest,
+  ExtractVideoFrameResult,
   FileWatchEvent,
   FileWatchSubscription,
   FileListOptions,
@@ -264,6 +267,57 @@ const parsePngDimensions = (buffer: Buffer): { width?: number; height?: number }
     width: buffer.readUInt32BE(16),
     height: buffer.readUInt32BE(20)
   };
+};
+
+const parseJpegDimensions = (buffer: Buffer): { width?: number; height?: number } => {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return {};
+  }
+
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    const marker = buffer[offset + 1];
+    if (typeof marker !== 'number') {
+      break;
+    }
+    if (marker === 0xd9 || marker === 0xda) {
+      break;
+    }
+
+    const length = buffer.readUInt16BE(offset + 2);
+    if (length < 2 || offset + 2 + length > buffer.length) {
+      break;
+    }
+
+    const isStartOfFrame =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+
+    if (isStartOfFrame && length >= 7) {
+      return {
+        height: buffer.readUInt16BE(offset + 5),
+        width: buffer.readUInt16BE(offset + 7)
+      };
+    }
+
+    offset += 2 + length;
+  }
+
+  return {};
+};
+
+const parseImageDimensions = (buffer: Buffer, format: ExtractVideoFrameFormat): { width?: number; height?: number } => {
+  if (format === 'png') {
+    return parsePngDimensions(buffer);
+  }
+  return parseJpegDimensions(buffer);
 };
 
 const statSafe = async (inputPath: string): Promise<{ isFile: boolean; isDirectory: boolean } | null> => {
@@ -1704,7 +1758,8 @@ const buildDesktopCapabilitySnapshot = (): PalCapabilitySnapshot => {
       },
       offscreenRender: {
         htmlToPdf: true,
-        htmlToImage: true
+        htmlToImage: true,
+        videoFrame: true
       }
     }
   };
@@ -1765,7 +1820,8 @@ const buildHeadlessCapabilitySnapshot = (): PalCapabilitySnapshot => {
       },
       offscreenRender: {
         htmlToPdf: false,
-        htmlToImage: false
+        htmlToImage: false,
+        videoFrame: false
       }
     }
   };
@@ -1806,7 +1862,11 @@ const toLegacyCapabilities = (snapshot: PalCapabilitySnapshot): string[] => {
   if (snapshot.facets.ipc.namedPipe || snapshot.facets.ipc.sharedMemory || snapshot.facets.ipc.unixSocket) {
     capabilities.add('ipc');
   }
-  if (snapshot.facets.offscreenRender.htmlToPdf || snapshot.facets.offscreenRender.htmlToImage) {
+  if (
+    snapshot.facets.offscreenRender.htmlToPdf ||
+    snapshot.facets.offscreenRender.htmlToImage ||
+    snapshot.facets.offscreenRender.videoFrame
+  ) {
     capabilities.add('offscreen-render');
   }
 
@@ -2191,6 +2251,55 @@ const resolveExportViewport = (
   return { width, height };
 };
 
+const VIDEO_FRAME_FORMATS = new Set<ExtractVideoFrameFormat>(['png', 'jpeg']);
+
+const resolveVideoFrameFormat = (input: ExtractVideoFrameRequest): ExtractVideoFrameFormat => {
+  const requested = input.options?.format;
+  if (requested && VIDEO_FRAME_FORMATS.has(requested)) {
+    return requested;
+  }
+
+  const ext = path.extname(input.outputFile).toLowerCase();
+  if (ext === '.jpg' || ext === '.jpeg') {
+    return 'jpeg';
+  }
+  return 'png';
+};
+
+const toVideoFrameMimeType = (format: ExtractVideoFrameFormat): ExtractVideoFrameResult['mimeType'] => {
+  if (format === 'jpeg') {
+    return 'image/jpeg';
+  }
+  return 'image/png';
+};
+
+const toVideoFrameOutputExtension = (format: ExtractVideoFrameFormat): string => {
+  if (format === 'jpeg') {
+    return '.jpg';
+  }
+  return '.png';
+};
+
+const clampVideoFrameQuality = (value: number | undefined, fallback: number): number => {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(100, Math.max(1, Math.round(value as number)));
+};
+
+interface ElectronNativeImageLike {
+  toPNG(): Buffer;
+  toJPEG?(quality: number): Buffer;
+  getSize?(): { width?: number; height?: number };
+}
+
+const readVideoFrameOutput = (image: ElectronNativeImageLike, format: ExtractVideoFrameFormat, quality?: number): Buffer => {
+  if (format === 'jpeg' && typeof image.toJPEG === 'function') {
+    return image.toJPEG(clampVideoFrameQuality(quality, 88));
+  }
+  return image.toPNG();
+};
+
 class NodeOffscreenRender implements PALOffscreenRender {
   public async renderHtmlToPdf(input: RenderHtmlToPdfRequest): Promise<RenderHtmlToPdfResult> {
     const electron = loadElectronModule();
@@ -2334,6 +2443,188 @@ class NodeOffscreenRender implements PALOffscreenRender {
         height: size.height,
         format
       };
+    } finally {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.close();
+      }
+    }
+  }
+
+  public async extractVideoFrame(input: ExtractVideoFrameRequest): Promise<ExtractVideoFrameResult> {
+    const electron = loadElectronModule();
+    if (!electron?.BrowserWindow) {
+      throw createError('PLATFORM_UNSUPPORTED', 'Video frame extraction requires Electron BrowserWindow support');
+    }
+
+    const videoFile = path.resolve(input.videoFile);
+    const videoStats = await statSafe(videoFile);
+    if (!videoStats?.isFile) {
+      throw createError('PAL_VIDEO_FRAME_SOURCE_NOT_FOUND', `Video source does not exist: ${videoFile}`, {
+        videoFile
+      });
+    }
+
+    const format = resolveVideoFrameFormat(input);
+    const outputFile = path.resolve(input.outputFile);
+    const expectedExtension = toVideoFrameOutputExtension(format);
+    const normalizedExt = path.extname(outputFile).toLowerCase();
+    const validExtension =
+      format === 'jpeg'
+        ? normalizedExt === '.jpg' || normalizedExt === '.jpeg'
+        : normalizedExt === expectedExtension;
+    if (!validExtension) {
+      throw createError('PAL_VIDEO_FRAME_INVALID_OUTPUT', 'Video frame output extension does not match requested format', {
+        outputFile,
+        format,
+        expectedExtension
+      });
+    }
+
+    const outputStats = await statSafe(outputFile);
+    if (outputStats?.isDirectory) {
+      throw createError('PAL_VIDEO_FRAME_INVALID_OUTPUT', 'Video frame output path points to a directory', {
+        outputFile
+      });
+    }
+    if (outputStats?.isFile && input.overwrite !== true) {
+      throw createError('PAL_VIDEO_FRAME_OUTPUT_EXISTS', `Video frame output already exists: ${outputFile}`, {
+        outputFile
+      });
+    }
+
+    const requestedWidth = asPositiveFiniteNumber(input.options?.width);
+    const requestedHeight = asPositiveFiniteNumber(input.options?.height);
+    const viewport = {
+      width: Math.max(1, Math.round(requestedWidth ?? 1280)),
+      height: Math.max(1, Math.round(requestedHeight ?? 720))
+    };
+    const frameTimeSeconds = Math.max(0, input.options?.timeSeconds ?? 0);
+    const fit = input.options?.fit === 'cover' ? 'cover' : 'contain';
+    const requestPayload = {
+      videoUrl: pathToFileURL(videoFile).href,
+      frameTimeSeconds,
+      width: viewport.width,
+      height: viewport.height,
+      fit
+    };
+
+    const html = [
+      '<!doctype html>',
+      '<html>',
+      '<head>',
+      '  <meta charset="utf-8" />',
+      '  <style>',
+      '    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }',
+      '    video { width: 100%; height: 100%; object-fit: contain; background: transparent; display: block; }',
+      '    video[data-fit="cover"] { object-fit: cover; }',
+      '  </style>',
+      '</head>',
+      '<body>',
+      '  <video muted playsinline preload="auto"></video>',
+      '  <script>',
+      '    (() => {',
+      `      const input = ${JSON.stringify(requestPayload)};`,
+      '      const video = document.querySelector("video");',
+      '      video.dataset.fit = input.fit;',
+      '      window.__chipsVideoFrameInfo = null;',
+      '      window.__chipsVideoFrameReady = new Promise((resolve, reject) => {',
+      '        const timeout = window.setTimeout(() => reject(new Error("Video frame extraction timed out.")), 30000);',
+      '        const finish = () => {',
+      '          window.clearTimeout(timeout);',
+      '          window.__chipsVideoFrameInfo = {',
+      '            durationSeconds: Number.isFinite(video.duration) ? video.duration : undefined,',
+      '            frameTimeSeconds: Number.isFinite(video.currentTime) ? video.currentTime : input.frameTimeSeconds,',
+      '            intrinsicWidth: video.videoWidth || undefined,',
+      '            intrinsicHeight: video.videoHeight || undefined',
+      '          };',
+      '          resolve(window.__chipsVideoFrameInfo);',
+      '        };',
+      '        const fail = () => {',
+      '          const mediaError = video.error;',
+      '          reject(new Error(mediaError ? `Video decode failed: ${mediaError.code}` : "Video decode failed."));',
+      '        };',
+      '        video.addEventListener("error", fail, { once: true });',
+      '        video.addEventListener("loadedmetadata", () => {',
+      '          const duration = Number.isFinite(video.duration) ? video.duration : 0;',
+      '          const target = Math.max(0, Math.min(input.frameTimeSeconds, Math.max(0, duration - 0.001)));',
+      '          if (Math.abs(video.currentTime - target) < 0.001) {',
+      '            if (video.readyState >= 2) {',
+      '              finish();',
+      '            } else {',
+      '              video.addEventListener("loadeddata", finish, { once: true });',
+      '            }',
+      '            return;',
+      '          }',
+      '          video.addEventListener("seeked", finish, { once: true });',
+      '          video.currentTime = target;',
+      '        }, { once: true });',
+      '        video.src = input.videoUrl;',
+      '        video.load();',
+      '      });',
+      '    })();',
+      '  </script>',
+      '</body>',
+      '</html>'
+    ].join('\n');
+
+    const browserWindow = new electron.BrowserWindow({
+      show: false,
+      width: viewport.width,
+      height: viewport.height,
+      transparent: format !== 'jpeg',
+      backgroundColor: format === 'jpeg' ? '#000000' : '#00000000',
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true
+      }
+    });
+
+    try {
+      await Promise.resolve(browserWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`));
+      const frameInfo = await browserWindow.webContents.executeJavaScript?.<{
+        durationSeconds?: number;
+        frameTimeSeconds?: number;
+      }>('window.__chipsVideoFrameReady', false);
+
+      if (typeof browserWindow.webContents.capturePage !== 'function') {
+        throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose capturePage');
+      }
+
+      await fs.mkdir(path.dirname(outputFile), { recursive: true });
+      if (outputStats?.isFile && input.overwrite === true) {
+        await fs.rm(outputFile, { force: true });
+      }
+
+      const image = await browserWindow.webContents.capturePage({
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height
+      });
+      const output = readVideoFrameOutput(image, format, input.options?.quality);
+      await fs.writeFile(outputFile, output);
+      const parsedSize = parseImageDimensions(output, format);
+      const imageSize = typeof image.getSize === 'function' ? image.getSize() : undefined;
+
+      return {
+        outputFile,
+        width: parsedSize.width ?? imageSize?.width ?? viewport.width,
+        height: parsedSize.height ?? imageSize?.height ?? viewport.height,
+        format,
+        mimeType: toVideoFrameMimeType(format),
+        frameTimeSeconds: frameInfo?.frameTimeSeconds ?? frameTimeSeconds,
+        durationSeconds: frameInfo?.durationSeconds
+      };
+    } catch (error) {
+      const code = typeof (error as { code?: unknown })?.code === 'string' ? String((error as { code: string }).code) : '';
+      if (code.startsWith('PAL_VIDEO_FRAME_') || code === 'PLATFORM_UNSUPPORTED') {
+        throw error;
+      }
+      throw createError('PAL_VIDEO_FRAME_EXTRACTION_FAILED', 'Video frame extraction failed in the current Host runtime', {
+        videoFile,
+        outputFile,
+        frameTimeSeconds
+      });
     } finally {
       if (!browserWindow.isDestroyed()) {
         browserWindow.close();
@@ -2813,6 +3104,10 @@ class HeadlessOffscreenRender implements PALOffscreenRender {
 
   public async renderHtmlToImage(): Promise<RenderHtmlToImageResult> {
     throw createUnsupportedError('offscreenRender.renderHtmlToImage');
+  }
+
+  public async extractVideoFrame(): Promise<ExtractVideoFrameResult> {
+    throw createUnsupportedError('offscreenRender.extractVideoFrame');
   }
 }
 

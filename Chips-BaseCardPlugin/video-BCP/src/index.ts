@@ -18,6 +18,31 @@ export interface BasecardResourceImportResult {
   path: string;
 }
 
+export interface BasecardVideoThumbnailRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+  options?: {
+    timeSeconds?: number;
+    format?: "png" | "jpeg";
+    width?: number;
+    height?: number;
+    fit?: "contain" | "cover";
+    quality?: number;
+  };
+}
+
+export interface BasecardVideoThumbnailResult {
+  path: string;
+  mimeType: "image/png" | "image/jpeg";
+  sourceMimeType: string;
+  width: number;
+  height: number;
+  format: "png" | "jpeg";
+  frameTimeSeconds: number;
+  durationSeconds?: number;
+}
+
 export interface BasecardRenderContext {
   container: HTMLElement;
   config: BasecardConfig;
@@ -41,6 +66,7 @@ export interface BasecardEditorContext {
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  extractVideoThumbnail?: (input: BasecardVideoThumbnailRequest) => Promise<BasecardVideoThumbnailResult>;
 }
 
 export function renderBasecardView(ctx: BasecardRenderContext): () => void {
@@ -112,6 +138,7 @@ export const basecardDefinition = {
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
     importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
     deleteResource?: (resourcePath: string) => Promise<void>;
+    extractVideoThumbnail?: (input: BasecardVideoThumbnailRequest) => Promise<BasecardVideoThumbnailResult>;
   }) {
     return renderBasecardEditor({
       container: ctx.container,
@@ -123,6 +150,7 @@ export const basecardDefinition = {
       releaseResourceUrl: ctx.releaseResourceUrl,
       importResource: ctx.importResource,
       deleteResource: ctx.deleteResource,
+      extractVideoThumbnail: ctx.extractVideoThumbnail,
     });
   },
 } as const;

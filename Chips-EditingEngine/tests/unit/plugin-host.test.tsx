@@ -25,6 +25,30 @@ let editorConvertTiffToPng:
       height?: number;
     }>)
   | null = null;
+let editorExtractVideoThumbnail:
+  | ((input: {
+      resourcePath: string;
+      outputPath: string;
+      overwrite?: boolean;
+      options?: {
+        timeSeconds?: number;
+        format?: 'png' | 'jpeg';
+        width?: number;
+        height?: number;
+        fit?: 'contain' | 'cover';
+        quality?: number;
+      };
+    }) => Promise<{
+      path: string;
+      mimeType: 'image/png' | 'image/jpeg';
+      sourceMimeType: string;
+      width: number;
+      height: number;
+      format: 'png' | 'jpeg';
+      frameTimeSeconds: number;
+      durationSeconds?: number;
+    }>)
+  | null = null;
 
 vi.mock('../../src/basecard-runtime/registry', () => ({
   getBasecardDescriptor: () => ({
@@ -96,6 +120,30 @@ vi.mock('../../src/services/resource-service', () => ({
       width: 320,
       height: 320,
     })),
+    extractVideoFrame: vi.fn(async ({
+      outputFile,
+    }: {
+      resourceId: string;
+      outputFile: string;
+      overwrite?: boolean;
+      options?: {
+        timeSeconds?: number;
+        format?: 'png' | 'jpeg';
+        width?: number;
+        height?: number;
+        fit?: 'contain' | 'cover';
+        quality?: number;
+      };
+    }) => ({
+      outputFile,
+      mimeType: 'image/png' as const,
+      sourceMimeType: 'video/mp4',
+      width: 640,
+      height: 360,
+      format: 'png' as const,
+      frameTimeSeconds: 1.5,
+      durationSeconds: 12,
+    })),
   },
 }));
 
@@ -125,6 +173,7 @@ describe('PluginHost', () => {
     editorImportResource = null;
     editorResolveResourceUrl = null;
     editorConvertTiffToPng = null;
+    editorExtractVideoThumbnail = null;
     mockRenderEditor.mockReset();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
@@ -136,11 +185,28 @@ describe('PluginHost', () => {
       width: 320,
       height: 320,
     });
-    mockRenderEditor.mockImplementation(({ onChange, importResource, resolveResourceUrl, convertTiffToPng }) => {
+    vi.mocked(resourceService.extractVideoFrame).mockResolvedValue({
+      outputFile: '/workspace/card-1.card/.card/.__editor-base-1-video-frame.png',
+      mimeType: 'image/png',
+      sourceMimeType: 'video/mp4',
+      width: 640,
+      height: 360,
+      format: 'png',
+      frameTimeSeconds: 1.5,
+      durationSeconds: 12,
+    });
+    mockRenderEditor.mockImplementation(({
+      onChange,
+      importResource,
+      resolveResourceUrl,
+      convertTiffToPng,
+      extractVideoThumbnail,
+    }) => {
       editorChangeHandler = onChange;
       editorImportResource = importResource;
       editorResolveResourceUrl = resolveResourceUrl ?? null;
       editorConvertTiffToPng = convertTiffToPng ?? null;
+      editorExtractVideoThumbnail = extractVideoThumbnail ?? null;
       return () => undefined;
     });
   });

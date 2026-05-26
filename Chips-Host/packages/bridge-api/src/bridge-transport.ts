@@ -101,6 +101,7 @@ export interface BridgePalCapabilitySnapshot {
     offscreenRender: {
       htmlToPdf: boolean;
       htmlToImage: boolean;
+      videoFrame: boolean;
     };
   };
 }

@@ -46,7 +46,7 @@ const createPal = (): PALAdapter => {
       systemUi: { clipboard: true, tray: true, globalShortcut: true, notification: true },
       background: { keepAlive: true, wakeEvents: true },
       ipc: { namedPipe: true, unixSocket: process.platform !== 'win32', sharedMemory: true },
-      offscreenRender: { htmlToPdf: true, htmlToImage: true }
+      offscreenRender: { htmlToPdf: true, htmlToImage: true, videoFrame: true }
     }
   } as const;
 
@@ -337,6 +337,16 @@ const createPal = (): PALAdapter => {
         width: input.options?.width,
         height: input.options?.height,
         format: input.options?.format ?? 'png'
+      };
+    },
+    async extractVideoFrame(input) {
+      return {
+        outputFile: input.outputFile,
+        width: input.options?.width ?? 1280,
+        height: input.options?.height ?? 720,
+        format: input.options?.format ?? 'png',
+        mimeType: input.options?.format === 'jpeg' ? 'image/jpeg' : 'image/png',
+        frameTimeSeconds: input.options?.timeSeconds ?? 0
       };
     }
   };

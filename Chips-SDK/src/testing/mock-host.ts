@@ -613,6 +613,7 @@ function createDefaultPlatformCapabilities(
       offscreenRender: {
         htmlToPdf: false,
         htmlToImage: false,
+        videoFrame: false,
       },
     },
     ...overrides,

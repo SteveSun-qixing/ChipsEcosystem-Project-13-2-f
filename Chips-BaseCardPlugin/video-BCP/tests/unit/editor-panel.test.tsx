@@ -70,7 +70,7 @@ describe("createBasecardEditorRoot", () => {
     root.remove();
   });
 
-  it("imports the video without generating a plugin-local default cover", async () => {
+  it("imports the video without generating a cover when the host thumbnail capability is unavailable", async () => {
     const importResource = vi.fn(async (input: { preferredPath?: string }) => ({
       path: input.preferredPath ?? "resource.bin",
     }));
@@ -110,6 +110,118 @@ describe("createBasecardEditorRoot", () => {
     });
     expect(root.querySelector('[data-role="video-resource"] video')?.getAttribute("src")).toBe("demo.mp4");
     expect(root.querySelector('[data-role="cover-resource"]')).toBeNull();
+  });
+
+  it("imports the video and stores the host generated thumbnail as the default cover", async () => {
+    const importResource = vi.fn(async (input: { preferredPath?: string }) => ({
+      path: input.preferredPath ?? "resource.bin",
+    }));
+    const extractVideoThumbnail = vi.fn(async (input: { outputPath: string }) => ({
+      path: input.outputPath,
+      mimeType: "image/png" as const,
+      sourceMimeType: "video/mp4",
+      width: 1280,
+      height: 720,
+      format: "png" as const,
+      frameTimeSeconds: 0,
+    }));
+
+    let lastConfig: BasecardConfig | undefined;
+    const root = createBasecardEditorRoot({
+      initialConfig: {
+        ...createConfig(),
+      },
+      onChange(next) {
+        lastConfig = next;
+      },
+      importResource,
+      extractVideoThumbnail,
+    });
+
+    const input = root.querySelector('[data-role="video-input"]') as HTMLInputElement | null;
+    if (!input) {
+      throw new Error("找不到视频上传输入框");
+    }
+
+    const videoFile = new File(["video"], "demo.mp4", { type: "video/mp4" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [videoFile],
+    });
+
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(importResource).toHaveBeenCalledTimes(1);
+    expect(extractVideoThumbnail).toHaveBeenCalledWith({
+      resourcePath: "demo.mp4",
+      outputPath: "demo-cover.png",
+      overwrite: true,
+      options: {
+        timeSeconds: 0,
+        format: "png",
+        width: 1280,
+        height: 720,
+        fit: "cover",
+      },
+    });
+    expect(lastConfig).toMatchObject({
+      card_type: "VideoCard",
+      video_file: "demo.mp4",
+      cover_image: "demo-cover.png",
+    });
+
+    root.remove();
+  });
+
+  it("keeps the imported video when host thumbnail generation fails", async () => {
+    const importResource = vi.fn(async (input: { preferredPath?: string }) => ({
+      path: input.preferredPath ?? "resource.bin",
+    }));
+    const extractVideoThumbnail = vi.fn(async () => {
+      throw new Error("host thumbnail unavailable");
+    });
+
+    let lastConfig: BasecardConfig | undefined;
+    const root = createBasecardEditorRoot({
+      initialConfig: {
+        ...createConfig(),
+      },
+      onChange(next) {
+        lastConfig = next;
+      },
+      importResource,
+      extractVideoThumbnail,
+    });
+
+    const input = root.querySelector('[data-role="video-input"]') as HTMLInputElement | null;
+    if (!input) {
+      throw new Error("找不到视频上传输入框");
+    }
+
+    const videoFile = new File(["video"], "demo.mp4", { type: "video/mp4" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [videoFile],
+    });
+
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(importResource).toHaveBeenCalledTimes(1);
+    expect(extractVideoThumbnail).toHaveBeenCalledTimes(1);
+    expect(lastConfig).toMatchObject({
+      card_type: "VideoCard",
+      video_file: "demo.mp4",
+      cover_image: "",
+    });
+    expect(root.textContent).toContain("host thumbnail unavailable");
+
+    root.remove();
   });
 
   it("imports a video resource from a URL input", async () => {

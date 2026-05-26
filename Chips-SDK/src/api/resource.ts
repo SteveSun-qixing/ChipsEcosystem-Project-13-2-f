@@ -183,12 +183,38 @@ export interface ResourceConvertTiffToPngResult {
   height?: number;
 }
 
+export interface ResourceExtractVideoFrameRequest {
+  resourceId: string;
+  outputFile: string;
+  overwrite?: boolean;
+  options?: {
+    timeSeconds?: number;
+    format?: "png" | "jpeg";
+    width?: number;
+    height?: number;
+    fit?: "contain" | "cover";
+    quality?: number;
+  };
+}
+
+export interface ResourceExtractVideoFrameResult {
+  outputFile: string;
+  mimeType: "image/png" | "image/jpeg";
+  sourceMimeType: string;
+  width: number;
+  height: number;
+  format: "png" | "jpeg";
+  frameTimeSeconds: number;
+  durationSeconds?: number;
+}
+
 export interface ResourceApi {
   resolve(resourceId: string): Promise<ResourceUri>;
   open(request: ResourceOpenRequest): Promise<ResourceOpenResult>;
   readMetadata(resourceId: string): Promise<ResourceMeta>;
   readBinary(resourceId: string): Promise<ArrayBuffer>;
   convertTiffToPng(request: ResourceConvertTiffToPngRequest): Promise<ResourceConvertTiffToPngResult>;
+  extractVideoFrame(request: ResourceExtractVideoFrameRequest): Promise<ResourceExtractVideoFrameResult>;
 }
 
 function normalizeOptionalString(value: unknown): string | undefined {
@@ -328,6 +354,57 @@ export function createResourceApi(client: CoreClient): ResourceApi {
         ...(typeof request?.overwrite === "boolean" ? { overwrite: request.overwrite } : undefined),
       };
       return client.invoke("resource.convertTiffToPng", payload);
+    },
+    async extractVideoFrame(request) {
+      const resourceId = normalizeOptionalString(request?.resourceId);
+      if (!resourceId) {
+        throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: resourceId is required.");
+      }
+
+      const outputFile = normalizeOptionalString(request?.outputFile);
+      if (!outputFile) {
+        throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: outputFile is required.");
+      }
+
+      if (typeof request?.overwrite !== "undefined" && typeof request.overwrite !== "boolean") {
+        throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: overwrite must be a boolean when provided.");
+      }
+
+      const options = request.options;
+      if (typeof options !== "undefined") {
+        if (!options || typeof options !== "object" || Array.isArray(options)) {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options must be an object when provided.");
+        }
+        if (typeof options.timeSeconds !== "undefined" && (!Number.isFinite(options.timeSeconds) || options.timeSeconds < 0)) {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.timeSeconds must be >= 0 when provided.");
+        }
+        if (typeof options.format !== "undefined" && options.format !== "png" && options.format !== "jpeg") {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.format must be png or jpeg when provided.");
+        }
+        if (typeof options.width !== "undefined" && (!Number.isFinite(options.width) || options.width <= 0)) {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.width must be > 0 when provided.");
+        }
+        if (typeof options.height !== "undefined" && (!Number.isFinite(options.height) || options.height <= 0)) {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.height must be > 0 when provided.");
+        }
+        if (typeof options.fit !== "undefined" && options.fit !== "contain" && options.fit !== "cover") {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.fit must be contain or cover when provided.");
+        }
+        if (
+          typeof options.quality !== "undefined" &&
+          (!Number.isFinite(options.quality) || options.quality < 1 || options.quality > 100)
+        ) {
+          throw createError("INVALID_ARGUMENT", "resource.extractVideoFrame: options.quality must be between 1 and 100 when provided.");
+        }
+      }
+
+      const payload: ResourceExtractVideoFrameRequest = {
+        resourceId,
+        outputFile,
+        ...(typeof request?.overwrite === "boolean" ? { overwrite: request.overwrite } : undefined),
+        ...(options ? { options } : undefined),
+      };
+      return client.invoke("resource.extractVideoFrame", payload);
     },
   };
 }

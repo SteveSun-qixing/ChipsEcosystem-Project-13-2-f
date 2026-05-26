@@ -247,4 +247,63 @@ describe("ResourceApi", () => {
       code: "INVALID_ARGUMENT",
     });
   });
+
+  it("passes resource.extractVideoFrame through the official route", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const api = createResourceApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        return {
+          outputFile: "/tmp/poster.png",
+          mimeType: "image/png",
+          sourceMimeType: "video/mp4",
+          width: 640,
+          height: 360,
+          format: "png",
+          frameTimeSeconds: 1.5,
+          durationSeconds: 12,
+        } as never;
+      }),
+    );
+
+    await expect(
+      api.extractVideoFrame({
+        resourceId: " /tmp/demo.mp4 ",
+        outputFile: " /tmp/poster.png ",
+        overwrite: true,
+        options: {
+          timeSeconds: 1.5,
+          format: "png",
+          width: 640,
+          height: 360,
+          fit: "cover",
+        },
+      }),
+    ).resolves.toEqual({
+      outputFile: "/tmp/poster.png",
+      mimeType: "image/png",
+      sourceMimeType: "video/mp4",
+      width: 640,
+      height: 360,
+      format: "png",
+      frameTimeSeconds: 1.5,
+      durationSeconds: 12,
+    });
+
+    expect(calls[0]).toEqual({
+      action: "resource.extractVideoFrame",
+      payload: {
+        resourceId: "/tmp/demo.mp4",
+        outputFile: "/tmp/poster.png",
+        overwrite: true,
+        options: {
+          timeSeconds: 1.5,
+          format: "png",
+          width: 640,
+          height: 360,
+          fit: "cover",
+        },
+      },
+    });
+  });
 });

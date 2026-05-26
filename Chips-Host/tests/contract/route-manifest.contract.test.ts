@@ -31,6 +31,7 @@ describe('route manifest contract', () => {
       'resource.readMetadata',
       'resource.readBinary',
       'resource.convertTiffToPng',
+      'resource.extractVideoFrame',
       'config.get',
       'config.set',
       'config.batchSet',

@@ -151,6 +151,63 @@ const validateResourceConvertTiffToPngRequest: SchemaValidator = (input: unknown
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+const validateResourceExtractVideoFrameRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+
+  const errors: string[] = [];
+  if (typeof input.resourceId !== 'string' || input.resourceId.trim().length === 0) {
+    errors.push('resourceId must be a non-empty string');
+  }
+  if (typeof input.outputFile !== 'string' || input.outputFile.trim().length === 0) {
+    errors.push('outputFile must be a non-empty string');
+  }
+  if (typeof input.overwrite !== 'undefined' && typeof input.overwrite !== 'boolean') {
+    errors.push('overwrite must be a boolean when provided');
+  }
+  if (typeof input.options !== 'undefined') {
+    if (!isRecord(input.options)) {
+      errors.push('options must be an object');
+    } else {
+      validateOptionalFiniteNumber(input.options.timeSeconds, 'options.timeSeconds', errors);
+      if (typeof input.options.timeSeconds === 'number' && input.options.timeSeconds < 0) {
+        errors.push('options.timeSeconds must be greater than or equal to 0 when provided');
+      }
+      validateOptionalString(input.options.format, 'options.format', errors);
+      if (
+        typeof input.options.format !== 'undefined' &&
+        input.options.format !== 'png' &&
+        input.options.format !== 'jpeg'
+      ) {
+        errors.push('options.format must be png or jpeg when provided');
+      }
+      validateOptionalFiniteNumber(input.options.width, 'options.width', errors);
+      validateOptionalFiniteNumber(input.options.height, 'options.height', errors);
+      if (typeof input.options.width === 'number' && input.options.width <= 0) {
+        errors.push('options.width must be greater than 0 when provided');
+      }
+      if (typeof input.options.height === 'number' && input.options.height <= 0) {
+        errors.push('options.height must be greater than 0 when provided');
+      }
+      validateOptionalString(input.options.fit, 'options.fit', errors);
+      if (
+        typeof input.options.fit !== 'undefined' &&
+        input.options.fit !== 'contain' &&
+        input.options.fit !== 'cover'
+      ) {
+        errors.push('options.fit must be contain or cover when provided');
+      }
+      validateOptionalFiniteNumber(input.options.quality, 'options.quality', errors);
+      if (typeof input.options.quality === 'number' && (input.options.quality < 1 || input.options.quality > 100)) {
+        errors.push('options.quality must be between 1 and 100 when provided');
+      }
+    }
+  }
+
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 const validateOptionalString = (value: unknown, field: string, errors: string[]): void => {
   if (typeof value !== 'undefined' && (typeof value !== 'string' || value.trim().length === 0)) {
     errors.push(`${field} must be a non-empty string when provided`);
@@ -608,6 +665,8 @@ export const registerHostSchemas = (): void => {
   registerPair('resource.readBinary', ['resourceId']);
   schemaRegistry.register('schemas/resource.convertTiffToPng.request.json', validateResourceConvertTiffToPngRequest);
   schemaRegistry.register('schemas/resource.convertTiffToPng.response.json', objectWithKeys(['outputFile', 'mimeType', 'sourceMimeType']));
+  schemaRegistry.register('schemas/resource.extractVideoFrame.request.json', validateResourceExtractVideoFrameRequest);
+  schemaRegistry.register('schemas/resource.extractVideoFrame.response.json', objectWithKeys(['outputFile', 'mimeType', 'sourceMimeType', 'format', 'frameTimeSeconds']));
 
   registerPair('config.get', ['key']);
   registerPair('config.set', ['key', 'value']);

@@ -16,6 +16,8 @@ import { createRoot, type Root } from "react-dom/client";
 import type {
   BasecardResourceImportRequest,
   BasecardResourceImportResult,
+  BasecardVideoThumbnailRequest,
+  BasecardVideoThumbnailResult,
 } from "../index";
 import {
   normalizeBasecardConfig,
@@ -44,6 +46,9 @@ export interface BasecardEditorProps {
     input: BasecardResourceImportRequest,
   ) => Promise<BasecardResourceImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  extractVideoThumbnail?: (
+    input: BasecardVideoThumbnailRequest,
+  ) => Promise<BasecardVideoThumbnailResult>;
 }
 
 type EditorRoot = HTMLElement & {
@@ -58,6 +63,13 @@ const VIDEO_ACCEPT = ".mp4,.webm,.mov,.m4v,.ogv,.ogg,video/*";
 const COVER_ACCEPT = "image/*";
 const SUBTITLE_ACCEPT = ".vtt,.srt,.ass,.ssa,text/vtt,text/plain,application/x-subrip";
 const SUPPORTED_URL_PROTOCOLS = new Set(["http:", "https:"]);
+const DEFAULT_THUMBNAIL_OPTIONS = {
+  timeSeconds: 0,
+  format: "png",
+  width: 1280,
+  height: 720,
+  fit: "cover",
+} as const;
 
 const EDITOR_STYLE_TEXT = `
 html, body {
@@ -973,6 +985,24 @@ function BasecardEditor(props: BasecardEditorProps) {
     });
   }
 
+  async function extractVideoThumbnail(
+    resourcePath: string,
+    preferredPath: string,
+  ): Promise<BasecardVideoThumbnailResult | null> {
+    const normalizedResourcePath = normalizeRelativeCardResourcePath(resourcePath);
+    const normalizedOutputPath = normalizeRelativeCardResourcePath(preferredPath);
+    if (!normalizedResourcePath || !normalizedOutputPath || !props.extractVideoThumbnail) {
+      return null;
+    }
+
+    return props.extractVideoThumbnail({
+      resourcePath: normalizedResourcePath,
+      outputPath: normalizedOutputPath,
+      overwrite: true,
+      options: DEFAULT_THUMBNAIL_OPTIONS,
+    });
+  }
+
   async function deleteResourceQuietly(resourcePath: string): Promise<void> {
     const normalizedPath = normalizeRelativeCardResourcePath(resourcePath);
     if (!normalizedPath || !props.deleteResource) {
@@ -990,19 +1020,34 @@ function BasecardEditor(props: BasecardEditorProps) {
     const currentConfig = configRef.current;
     const preferredVideoPath = sanitizeImportedFileName(file.name, "video.mp4");
     const importedVideo = await importRequiredResource(file, preferredVideoPath);
+    const baseName = stripFileExtension(resolveFileName(importedVideo.path) || file.name || "video");
+    const preferredCoverPath = sanitizeImportedFileName(`${baseName}-cover.png`, "video-cover.png");
+    let extractedCoverPath = "";
+    let thumbnailErrorMessage = "";
+
+    try {
+      const thumbnail = await extractVideoThumbnail(importedVideo.path, preferredCoverPath);
+      extractedCoverPath = thumbnail?.path ?? "";
+    } catch (error) {
+      thumbnailErrorMessage = resolveErrorMessage(error, t("video.editor.errors.thumbnail_failed"));
+    }
 
     commitConfig({
       ...currentConfig,
       video_file: importedVideo.path,
-      cover_image: "",
+      cover_image: extractedCoverPath,
     });
 
     const deletions = dedupeResourcePaths([
       currentConfig.video_file && currentConfig.video_file !== importedVideo.path ? currentConfig.video_file : "",
-      currentConfig.cover_image,
+      currentConfig.cover_image && currentConfig.cover_image !== extractedCoverPath ? currentConfig.cover_image : "",
     ]);
 
     await Promise.all(deletions.map((resourcePath) => deleteResourceQuietly(resourcePath)));
+
+    if (thumbnailErrorMessage) {
+      setPanelError(thumbnailErrorMessage);
+    }
   }
 
   async function importCoverFile(file: File): Promise<void> {

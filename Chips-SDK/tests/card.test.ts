@@ -682,7 +682,27 @@ describe("CardApi", () => {
         mimeType: "image/png" as const,
         sourceMimeType: "image/tiff" as const,
         width: overwrite ? 512 : undefined,
-        height: overwrite ? 512 : undefined,
+          height: overwrite ? 512 : undefined,
+        }));
+      const extractVideoThumbnail = vi.fn(async (
+        {
+          outputPath,
+          options,
+        }: {
+          resourcePath: string;
+          outputPath: string;
+          overwrite?: boolean;
+          options?: { timeSeconds?: number; width?: number; height?: number; fit?: "cover" | "contain" };
+        },
+      ) => ({
+        path: outputPath,
+        mimeType: "image/png" as const,
+        sourceMimeType: "video/mp4",
+        width: options?.width ?? 640,
+        height: options?.height ?? 360,
+        format: "png" as const,
+        frameTimeSeconds: options?.timeSeconds ?? 0,
+        durationSeconds: 12,
       }));
       const releaseResourceUrl = vi.fn();
 
@@ -695,6 +715,7 @@ describe("CardApi", () => {
           importArchiveBundle,
           deleteResource,
           convertTiffToPng,
+          extractVideoThumbnail,
           releaseResourceUrl,
         },
       });
@@ -860,6 +881,54 @@ describe("CardApi", () => {
       );
 
       await dispatch({
+        type: "chips.card-editor:resource-request",
+        payload: {
+          requestId: "video-thumbnail-1",
+          action: "extractVideoThumbnail",
+          resourcePath: "./videos/demo.mp4",
+          outputPath: "./videos/demo-poster.png",
+          overwrite: true,
+          options: {
+            timeSeconds: 1.5,
+            width: 640,
+            height: 360,
+            fit: "cover",
+          },
+        },
+      });
+      expect(extractVideoThumbnail).toHaveBeenCalledWith({
+        resourcePath: "videos/demo.mp4",
+        outputPath: "videos/demo-poster.png",
+        overwrite: true,
+        options: {
+          timeSeconds: 1.5,
+          width: 640,
+          height: 360,
+          fit: "cover",
+        },
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "video-thumbnail-1",
+            ok: true,
+            result: {
+              path: "videos/demo-poster.png",
+              mimeType: "image/png",
+              sourceMimeType: "video/mp4",
+              width: 640,
+              height: 360,
+              format: "png",
+              frameTimeSeconds: 1.5,
+              durationSeconds: 12,
+            },
+          },
+        },
+        "*",
+      );
+
+      await dispatch({
         type: "chips.card-editor:resource-release",
         payload: {
           resourcePath: "./images/cover.png",
@@ -1009,6 +1078,243 @@ describe("CardApi", () => {
               width: 256,
               height: 256,
             },
+          },
+        },
+        "*",
+      );
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("uses rootPath as the fallback editor video thumbnail extraction target", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "card.renderEditor") {
+          return {
+            view: {
+              title: "VideoCard Editor",
+              documentUrl: "file:///workspace/editor/video-root-path.html",
+              sessionId: "editor-session-video",
+              cardType: "VideoCard",
+              pluginId: "chips.basecard.video",
+              baseCardId: "video-1",
+            },
+          } as any;
+        }
+
+        if (action === "resource.extractVideoFrame") {
+          return {
+            outputFile: "/workspace/card-root/videos/demo-poster.png",
+            mimeType: "image/png",
+            sourceMimeType: "video/mp4",
+            width: 640,
+            height: 360,
+            format: "png",
+            frameTimeSeconds: 1.25,
+            durationSeconds: 12,
+          } as any;
+        }
+
+        throw new Error(`unexpected action: ${action}`);
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const postMessage = vi.fn();
+      let createdFrame: HTMLIFrameElement | undefined;
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test", href: "https://example.test/app" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      };
+
+      (globalThis as any).document = {
+        createElement: (tag: string) => {
+          const el = createMockIframe({
+            tagName: tag.toUpperCase(),
+            contentWindow: { postMessage },
+            isConnected: true,
+          });
+          createdFrame = el as HTMLIFrameElement;
+          return el;
+        },
+      };
+
+      await api.editorPanel.render({
+        cardType: "VideoCard",
+        resources: {
+          rootPath: "/workspace/card-root",
+        },
+      });
+
+      listeners[0]?.({
+        source: createdFrame?.contentWindow,
+        origin: "null",
+        data: {
+          type: "chips.card-editor:resource-request",
+          payload: {
+            requestId: "thumbnail-root",
+            action: "extractVideoThumbnail",
+            resourcePath: "videos/demo.mp4",
+            outputPath: "videos/demo-poster.png",
+            overwrite: true,
+            options: {
+              timeSeconds: 1.25,
+              format: "png",
+              width: 640,
+              height: 360,
+              fit: "cover",
+              quality: 92,
+            },
+          },
+        },
+      } as MessageEvent);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(calls).toContainEqual({
+        action: "resource.extractVideoFrame",
+        payload: {
+          resourceId: "/workspace/card-root/videos/demo.mp4",
+          outputFile: "/workspace/card-root/videos/demo-poster.png",
+          overwrite: true,
+          options: {
+            timeSeconds: 1.25,
+            format: "png",
+            width: 640,
+            height: 360,
+            fit: "cover",
+            quality: 92,
+          },
+        },
+      });
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "thumbnail-root",
+            ok: true,
+            result: {
+              path: "videos/demo-poster.png",
+              mimeType: "image/png",
+              sourceMimeType: "video/mp4",
+              width: 640,
+              height: 360,
+              format: "png",
+              frameTimeSeconds: 1.25,
+              durationSeconds: 12,
+            },
+          },
+        },
+        "*",
+      );
+    } finally {
+      (globalThis as any).window = previousWindow;
+      (globalThis as any).document = previousDocument;
+    }
+  });
+
+  it("rejects invalid editor video thumbnail options before invoking the Host route", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const api = createCardApi(
+      createStubClient(async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "card.renderEditor") {
+          return {
+            view: {
+              title: "VideoCard Editor",
+              documentUrl: "file:///workspace/editor/video-root-path.html",
+              sessionId: "editor-session-video-invalid",
+              cardType: "VideoCard",
+              pluginId: "chips.basecard.video",
+              baseCardId: "video-1",
+            },
+          } as any;
+        }
+
+        throw new Error(`unexpected action: ${action}`);
+      }),
+    );
+
+    const previousWindow = (globalThis as any).window;
+    const previousDocument = (globalThis as any).document;
+
+    try {
+      const listeners: Array<(event: MessageEvent) => void> = [];
+      const postMessage = vi.fn();
+      let createdFrame: HTMLIFrameElement | undefined;
+
+      (globalThis as any).window = {
+        location: { origin: "https://example.test", href: "https://example.test/app" },
+        addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
+          if (type === "message") {
+            listeners.push(listener);
+          }
+        },
+        removeEventListener: () => {},
+      };
+
+      (globalThis as any).document = {
+        createElement: (tag: string) => {
+          const el = createMockIframe({
+            tagName: tag.toUpperCase(),
+            contentWindow: { postMessage },
+            isConnected: true,
+          });
+          createdFrame = el as HTMLIFrameElement;
+          return el;
+        },
+      };
+
+      await api.editorPanel.render({
+        cardType: "VideoCard",
+        resources: {
+          rootPath: "/workspace/card-root",
+        },
+      });
+
+      listeners[0]?.({
+        source: createdFrame?.contentWindow,
+        origin: "null",
+        data: {
+          type: "chips.card-editor:resource-request",
+          payload: {
+            requestId: "thumbnail-invalid",
+            action: "extractVideoThumbnail",
+            resourcePath: "videos/demo.mp4",
+            outputPath: "videos/demo-poster.png",
+            options: {
+              width: -1,
+            },
+          },
+        },
+      } as MessageEvent);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(calls.some((call) => call.action === "resource.extractVideoFrame")).toBe(false);
+      expect(postMessage).toHaveBeenCalledWith(
+        {
+          type: "chips.card-editor:resource-response",
+          payload: {
+            requestId: "thumbnail-invalid",
+            ok: false,
+            message: "card.editorPanel.resource.extractVideoThumbnail: options.width must be > 0 when provided.",
           },
         },
         "*",

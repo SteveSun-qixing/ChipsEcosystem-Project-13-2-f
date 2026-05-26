@@ -237,6 +237,31 @@ export interface CardEditorTiffToPngResult {
   height?: number;
 }
 
+export interface CardEditorVideoThumbnailRequest {
+  resourcePath: string;
+  outputPath: string;
+  overwrite?: boolean;
+  options?: {
+    timeSeconds?: number;
+    format?: "png" | "jpeg";
+    width?: number;
+    height?: number;
+    fit?: "contain" | "cover";
+    quality?: number;
+  };
+}
+
+export interface CardEditorVideoThumbnailResult {
+  path: string;
+  mimeType: "image/png" | "image/jpeg";
+  sourceMimeType: string;
+  width: number;
+  height: number;
+  format: "png" | "jpeg";
+  frameTimeSeconds: number;
+  durationSeconds?: number;
+}
+
 export interface CardEditorResourceBridge {
   rootPath?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string> | string;
@@ -251,6 +276,9 @@ export interface CardEditorResourceBridge {
   convertTiffToPng?: (
     input: CardEditorTiffToPngRequest,
   ) => Promise<CardEditorTiffToPngResult> | CardEditorTiffToPngResult;
+  extractVideoThumbnail?: (
+    input: CardEditorVideoThumbnailRequest,
+  ) => Promise<CardEditorVideoThumbnailResult> | CardEditorVideoThumbnailResult;
 }
 
 export interface FrameRenderResult {
@@ -673,7 +701,13 @@ export function createCardApi(client: CoreClient): CardApi {
   };
 }
 
-type CardEditorResourceAction = "resolve" | "import" | "importArchiveBundle" | "delete" | "convertTiffToPng";
+type CardEditorResourceAction =
+  | "resolve"
+  | "import"
+  | "importArchiveBundle"
+  | "delete"
+  | "convertTiffToPng"
+  | "extractVideoThumbnail";
 
 type CardEditorResourceRequestPayload = {
   requestId: string;
@@ -688,6 +722,7 @@ type CardEditorResourceRequestPayload = {
   excludeSystemArtifacts?: boolean;
   file?: File;
   overwrite?: boolean;
+  options?: CardEditorVideoThumbnailRequest["options"];
 };
 
 function attachCardEditorResourceBridge(
@@ -755,7 +790,7 @@ function attachCardEditorResourceBridge(
             payload: {
               requestId: payload.requestId,
               ok: false,
-              message: error instanceof Error ? error.message : String(error),
+              message: getErrorMessage(error),
             },
           },
           "*",
@@ -765,6 +800,18 @@ function attachCardEditorResourceBridge(
 
   window.addEventListener("message", listener);
   return cleanup;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+
+  return String(error);
 }
 
 async function handleCardEditorResourceRequest(
@@ -901,6 +948,83 @@ async function handleCardEditorResourceRequest(
         height: result.height,
       };
     }
+    case "extractVideoThumbnail": {
+      const resourcePath = normalizeRelativeResourcePath(payload.resourcePath);
+      if (!resourcePath) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.extractVideoThumbnail: resourcePath is required.",
+        );
+      }
+
+      const outputPath = normalizeRelativeResourcePath(payload.outputPath);
+      if (!outputPath) {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.extractVideoThumbnail: outputPath is required.",
+        );
+      }
+
+      if (typeof payload.overwrite !== "undefined" && typeof payload.overwrite !== "boolean") {
+        throw createError(
+          "INVALID_ARGUMENT",
+          "card.editorPanel.resource.extractVideoThumbnail: overwrite must be a boolean when provided.",
+        );
+      }
+
+      const options = normalizeVideoThumbnailOptions(payload.options);
+
+      if (resources.extractVideoThumbnail) {
+        return resources.extractVideoThumbnail({
+          resourcePath,
+          outputPath,
+          ...(typeof payload.overwrite === "boolean" ? { overwrite: payload.overwrite } : undefined),
+          ...(options ? { options } : undefined),
+        });
+      }
+
+      if (!resources.rootPath || !client) {
+        throw createError(
+          "RUNTIME_ENV_UNSUPPORTED",
+          "card.editorPanel.resource.extractVideoThumbnail requires resources.extractVideoThumbnail or resources.rootPath.",
+        );
+      }
+
+      const result = await client.invoke<
+        {
+          resourceId: string;
+          outputFile: string;
+          overwrite?: boolean;
+          options?: CardEditorVideoThumbnailRequest["options"];
+        },
+        {
+          outputFile: string;
+          mimeType: "image/png" | "image/jpeg";
+          sourceMimeType: string;
+          width: number;
+          height: number;
+          format: "png" | "jpeg";
+          frameTimeSeconds: number;
+          durationSeconds?: number;
+        }
+      >("resource.extractVideoFrame", {
+        resourceId: joinPath(resources.rootPath, resourcePath),
+        outputFile: joinPath(resources.rootPath, outputPath),
+        ...(typeof payload.overwrite === "boolean" ? { overwrite: payload.overwrite } : undefined),
+        ...(options ? { options } : undefined),
+      });
+
+      return {
+        path: outputPath,
+        mimeType: result.mimeType,
+        sourceMimeType: result.sourceMimeType,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        frameTimeSeconds: result.frameTimeSeconds,
+        durationSeconds: result.durationSeconds,
+      };
+    }
     default:
       throw createError("INVALID_ARGUMENT", `Unsupported editor resource action: ${String(payload.action)}`);
   }
@@ -927,6 +1051,86 @@ function normalizeArchiveImportFilter(input: unknown): CardEditorArchiveImportFi
     ...(mimeTypes && mimeTypes.length > 0 ? { mimeTypes } : undefined),
     ...(extensions && extensions.length > 0 ? { extensions } : undefined),
   };
+}
+
+function normalizeVideoThumbnailOptions(
+  input: unknown,
+): CardEditorVideoThumbnailRequest["options"] | undefined {
+  if (typeof input === "undefined") {
+    return undefined;
+  }
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw createError(
+      "INVALID_ARGUMENT",
+      "card.editorPanel.resource.extractVideoThumbnail: options must be an object when provided.",
+    );
+  }
+
+  const options = input as Record<string, unknown>;
+  const normalized: CardEditorVideoThumbnailRequest["options"] = {};
+
+  if (typeof options.timeSeconds !== "undefined") {
+    if (typeof options.timeSeconds !== "number" || !Number.isFinite(options.timeSeconds) || options.timeSeconds < 0) {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.timeSeconds must be >= 0 when provided.",
+      );
+    }
+    normalized.timeSeconds = options.timeSeconds;
+  }
+
+  if (typeof options.format !== "undefined") {
+    if (options.format !== "png" && options.format !== "jpeg") {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.format must be png or jpeg when provided.",
+      );
+    }
+    normalized.format = options.format;
+  }
+
+  if (typeof options.width !== "undefined") {
+    if (typeof options.width !== "number" || !Number.isFinite(options.width) || options.width <= 0) {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.width must be > 0 when provided.",
+      );
+    }
+    normalized.width = options.width;
+  }
+
+  if (typeof options.height !== "undefined") {
+    if (typeof options.height !== "number" || !Number.isFinite(options.height) || options.height <= 0) {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.height must be > 0 when provided.",
+      );
+    }
+    normalized.height = options.height;
+  }
+
+  if (typeof options.fit !== "undefined") {
+    if (options.fit !== "contain" && options.fit !== "cover") {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.fit must be contain or cover when provided.",
+      );
+    }
+    normalized.fit = options.fit;
+  }
+
+  if (typeof options.quality !== "undefined") {
+    if (typeof options.quality !== "number" || !Number.isFinite(options.quality) || options.quality < 1 || options.quality > 100) {
+      throw createError(
+        "INVALID_ARGUMENT",
+        "card.editorPanel.resource.extractVideoThumbnail: options.quality must be between 1 and 100 when provided.",
+      );
+    }
+    normalized.quality = options.quality;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function normalizeRelativeResourcePath(resourcePath: unknown): string | null {

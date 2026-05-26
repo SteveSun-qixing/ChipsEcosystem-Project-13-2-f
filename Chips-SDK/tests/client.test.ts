@@ -119,6 +119,7 @@ describe("createClient", () => {
         offscreenRender: {
           htmlToPdf: true,
           htmlToImage: true,
+          videoFrame: true,
         },
       },
     };

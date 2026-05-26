@@ -67,6 +67,7 @@ export interface PlatformCapabilitySnapshot {
     offscreenRender: {
       htmlToPdf: boolean;
       htmlToImage: boolean;
+      videoFrame: boolean;
     };
   };
 }

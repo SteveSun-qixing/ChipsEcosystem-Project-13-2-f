@@ -1,13 +1,15 @@
 # 书籍阅读器
 
-薯片生态正式应用插件，用于打开本地 EPUB 文件、接收 Host 资源路由唤起的电子书，以及在具备可访问链接时直接读取远程 EPUB。
+薯片生态正式应用插件，用于打开本地电子书、PDF、文本类阅读资源，接收 Host `resource.open` 资源路由唤起的电子书基础卡片上下文，并在具备可访问链接时直接读取远程阅读资源。
 
 ## 当前范围
 
-- 正式支持 EPUB / EPUB3 阅读
-- 支持 `file-handler:.epub/.epub3`
-- 支持 `resource-handler:view:application/epub+zip`
-- 支持目录导航、章节切换、拖拽打开、远程链接打开、基础阅读偏好
+- 正式渲染 EPUB / EPUB3 / PDF / TXT / Markdown / FB2 / RTF。
+- 识别 MOBI / AZW / AZW3 / DJVU / DOC / DOCX 启动目标，并在缺少正式跨平台解码器时给出明确错误。
+- 支持 `file-handler:.epub/.epub3/.pdf/.txt/.md/.markdown/.fb2/.rtf/.mobi/.azw/.azw3/.djvu/.djv/.doc/.docx`。
+- 支持 manifest 中已声明的电子书、PDF、纯文本、Markdown、FB2、RTF 和重型文档 `resource-handler:view:<mime>` 能力。
+- 支持空启动、文件选择、拖拽打开、`launchParams.targetPath`、`launchParams.resourceOpen`、`chips.book-card` payload 和远程 URL 入口。
+- 支持目录导航、章节切换、搜索、书签、阅读进度、阅读偏好和配置持久化。
 - 支持两种正式阅读模式：
   - 左右翻页
   - 上下滚动
@@ -21,7 +23,7 @@
   - 空态仅保留居中导入提示
   - 阅读态默认隐藏操作按钮
   - 点击阅读区中部后再显示目录、导入与阅读偏好控制
-- 已完成真实样书回归，覆盖封面页、目录页、正文页、图片资源与章节内样式
+- 已完成最小真实样本回归，覆盖 EPUB/EPUB3、PDF、TXT、Markdown、FB2、RTF、重型格式错误态、Host 启动参数归一和搜索基础链路。
 
 当前不纳入：
 
@@ -34,7 +36,7 @@
 ## 快速开始
 
 ```bash
-cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BookReader
+cd Chips-BookReader
 npm run dev
 ```
 
@@ -50,9 +52,15 @@ npm run dev
 ## 目录说明
 
 - `src/domain/epub/`: EPUB 解包、OPF/nav 解析、Publication/Link 适配、HTML 章节变换器
-- `src/domain/readium/`: Thorium / Readium 适配后的阅读运行时与 ReadiumCSS 资源
-- `src/components/`: 阅读器界面与章节 iframe 承载
-- `src/utils/`: 启动上下文、源目标、二进制工具
+- `src/domain/book/`: PDF、TXT、Markdown、FB2、RTF 等虚拟阅读书籍加载层
+- `src/domain/readium/`: Thorium / Readium 来源资源归档与 ReadiumCSS 资源
+- `src/app/`: AppRuntime、Scene、Environment 与 Host launch context 接入
+- `src/commands/`: 菜单、工具栏、快捷键和命令面板共享的 command metadata 与处理器
+- `src/engine/`: 分页、滚动、布局、位置、动画、搜索和文档控制器
+- `src/interaction/`: 键盘、点击、滚轮、触摸输入意图层
+- `src/components/`: 阅读器界面、面板、章节 iframe 承载和沉浸式控制层
+- `src/runtime/`: SDK client、主题、多语言、surface 与 launch context 适配
+- `src/utils/`: 启动资源、源目标、二进制和阅读偏好工具
 - `i18n/`: 正式双语资源
 - `技术文档/`: 开源吸收评估、架构映射、实现说明
 - `需求文档/`: 当前项目范围与正式需求边界
@@ -66,8 +74,11 @@ npm run dev
 
 ## 当前实现说明
 
-- 应用壳层仍然完全遵循薯片生态 app 插件架构、主题、多语言与 Host 启动契约
+- 应用壳层已遵循薯片生态 app 插件架构、AppRuntime/Scene/Environment、主题、多语言与 Host 启动契约。
+- Host 资源路由入口优先消费 `launchParams.resourceOpen`，并支持电子书基础卡片透传的 `chips.book-card` payload；`targetPath` 只作为本地文件关联回退。
 - EPUB 内部能力改为使用内部 `Publication/Link` 适配层、HTML 章节变换器和 `ReadiumDocumentController`
+- PDF/TXT/Markdown/FB2/RTF 会被转为内部虚拟章节，继续复用同一套目录、搜索、书签、进度和阅读偏好链路。
+- MOBI/AZW/AZW3/DJVU/DOC/DOCX 仅作为正式处理器目标识别；正式解码能力缺口复用既有工单，不在阅读器里加入临时解析器。
 - 章节渲染只负责输出内容文档，分页/滚动、字号、背景色、版心宽度和 fragment 定位全部由 iframe 内阅读运行时动态接管
 - `paginated` 模式使用移植后的 Thorium / Readium 列分页测量链路，滚轮 / 触摸板轻滚即可直接左右翻页
 - 分页运行时已修正 iframe 跨 realm 滚动根节点识别，`PageDown`、滚轮和触摸板不会再误判为“直接下一章”
@@ -83,3 +94,22 @@ npm run dev
 - 已移除额外的翻页特效，阅读区保持干净，页面切换只保留内容本身的自然变化
 - 前端界面改为“阅读面 + 临时浮层 + 抽屉面板”结构，不再常驻工具栏和侧栏
 - 当前已把 Thorium / Readium 的阅读内核子模块移植到插件内部，但没有迁入其 Electron / Redux 桌面应用链路
+
+## 验证
+
+任务031闭环阶段使用以下正式脚本验证：
+
+```bash
+cd Chips-BookReader
+npm run lint
+npm test
+npm run build
+npm run validate
+```
+
+关键回归入口：
+
+- `tests/e2e/basic-flow.test.ts`：最小真实样本覆盖 EPUB/EPUB3、PDF、TXT、Markdown、FB2、RTF、重型格式错误态、Host 启动参数归一和搜索基础链路。
+- `tests/unit/launch-resource.test.ts`：`resourceOpen`、`targetPath`、远程 URL 和 `chips.book-card` payload 归一。
+- `tests/unit/commands.test.ts` / `tests/unit/use-book-reader-commands.test.tsx`：命令注册、状态和 Host invoke 链路。
+- `tests/unit/reader-a11y.test.tsx`：面板 FocusScope、目录/搜索/书签 roving tabindex 和焦点恢复。

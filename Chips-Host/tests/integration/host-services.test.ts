@@ -1401,6 +1401,88 @@ describe('Host services integration', () => {
       ).rejects.toMatchObject({
         code: 'MODULE_SCHEMA_INVALID'
       });
+
+      await runtime.invoke('plugin.disable', { pluginId: installed.pluginId });
+      const disabledListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render'
+      });
+      expect(disabledListed.providers).toContainEqual(
+        expect.objectContaining({
+          pluginId: 'chips.module.markdown-renderer',
+          status: 'disabled'
+        })
+      );
+      const disabledEnabledListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render',
+        status: 'enabled'
+      });
+      expect(disabledEnabledListed.providers).toEqual([]);
+      const disabledRunningListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render',
+        status: 'running'
+      });
+      expect(disabledRunningListed.providers).toEqual([]);
+      await expect(
+        runtime.invoke('module.resolve', {
+          capability: 'text.markdown.render',
+          versionRange: '^1.0.0'
+        })
+      ).rejects.toMatchObject({
+        code: 'MODULE_PROVIDER_NOT_FOUND'
+      });
+
+      await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
+      const reenabledListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render'
+      });
+      expect(reenabledListed.providers).toContainEqual(
+        expect.objectContaining({
+          pluginId: 'chips.module.markdown-renderer',
+          status: 'enabled'
+        })
+      );
+
+      await runtime.invoke('plugin.uninstall', { pluginId: installed.pluginId });
+      const uninstalledListed = await runtime.invoke<{
+        providers: Array<{
+          pluginId: string;
+          status: string;
+        }>;
+      }>('module.listProviders', {
+        capability: 'text.markdown.render'
+      });
+      expect(uninstalledListed.providers).toEqual([]);
+      await expect(
+        runtime.invoke('module.invoke', {
+          capability: 'text.markdown.render',
+          method: 'render',
+          input: {
+            markdown: '# Removed'
+          }
+        })
+      ).rejects.toMatchObject({
+        code: 'MODULE_PROVIDER_NOT_FOUND'
+      });
     } catch (error) {
       throw error;
     }

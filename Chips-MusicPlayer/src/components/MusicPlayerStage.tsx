@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChipsIcon } from "@chips/component-library";
 import type { IconDescriptor } from "chips-sdk";
+import type { MusicPlayerQueueItem } from "../app/AppRuntimeProvider";
+import { useMusicPlayerCommands } from "../commands/useMusicPlayerCommands";
 import { useMusicPlayerController } from "../hooks/useMusicPlayerController";
 import { findActiveLyricIndex, resolveActiveLyricProgress } from "../utils/lyrics";
 import { resolveControlAccentPalette, type RGBColor } from "../utils/color";
@@ -21,12 +23,18 @@ import { resolveMobilePagerTargetPage, shouldUseMobilePagerLayout } from "../uti
 
 interface MusicPlayerStageProps {
   track: TrackPresentation | null;
+  queue: MusicPlayerQueueItem[];
+  queueIndex: number;
+  canGoPrevious: boolean;
+  canGoNext: boolean;
   isResolving: boolean;
   isSaving: boolean;
   feedback: ViewerFeedback | null;
   onOpenFiles: () => void | Promise<void>;
   onSaveAudio: () => void | Promise<void>;
   onDropFiles: (files: File[]) => void | Promise<void>;
+  onPreviousTrack: () => void | Promise<void>;
+  onNextTrack: () => void | Promise<void>;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -48,6 +56,8 @@ const ICONS = {
   pause: { name: "pause", fill: 1, decorative: true } satisfies IconDescriptor,
   rewind: { name: "replay_10", decorative: true } satisfies IconDescriptor,
   forward: { name: "forward_10", decorative: true } satisfies IconDescriptor,
+  previous: { name: "skip_previous", fill: 1, decorative: true } satisfies IconDescriptor,
+  next: { name: "skip_next", fill: 1, decorative: true } satisfies IconDescriptor,
   save: { name: "download", decorative: true } satisfies IconDescriptor,
   mute: { name: "volume_off", decorative: true } satisfies IconDescriptor,
   volume: { name: "volume_up", decorative: true } satisfies IconDescriptor,
@@ -132,9 +142,10 @@ function SecondaryControlButton(props: {
   icon: IconDescriptor;
   disabled?: boolean;
   active?: boolean;
+  pressed?: boolean;
   onClick: () => void | Promise<void>;
 }) {
-  const { label, icon, disabled, active, onClick } = props;
+  const { label, icon, disabled, active, pressed, onClick } = props;
 
   return (
     <span className="music-player-tooltip-anchor" data-tooltip={label}>
@@ -142,6 +153,7 @@ function SecondaryControlButton(props: {
         type="button"
         className={`auxcontrol${active ? " auxcontrol--active" : ""}`}
         aria-label={label}
+        aria-pressed={typeof pressed === "boolean" ? pressed : undefined}
         disabled={disabled}
         onClick={() => void onClick()}
       >
@@ -172,7 +184,22 @@ function isMobilePagerDragIgnoredTarget(target: EventTarget | null): boolean {
 }
 
 export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactElement {
-  const { track, isResolving, isSaving, feedback, onOpenFiles, onSaveAudio, onDropFiles, t } = props;
+  const {
+    track,
+    queue,
+    queueIndex,
+    canGoPrevious,
+    canGoNext,
+    isResolving,
+    isSaving,
+    feedback,
+    onOpenFiles,
+    onSaveAudio,
+    onDropFiles,
+    onPreviousTrack,
+    onNextTrack,
+    t,
+  } = props;
   const [isDragActive, setIsDragActive] = useState(false);
   const [isMousePagerDragging, setIsMousePagerDragging] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
@@ -181,7 +208,9 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
   const [mobilePageIndex, setMobilePageIndex] = useState(0);
   const controller = useMusicPlayerController({
     sessionKey: track ? `${track.source.sourceId}:${track.source.revision}` : null,
+    onEnded: canGoNext ? onNextTrack : undefined,
   });
+  useMusicPlayerCommands({ controller });
   const dragDepthRef = useRef(0);
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const mobilePageIndexRef = useRef(0);
@@ -226,6 +255,12 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
     ? track.album || [sourceBadge, formatLabel || t("music-player.labels.unknown")].filter(Boolean).join(" · ")
     : t("music-player.viewer.selectBundleHint");
   const isMobilePagerLayout = shouldUseMobilePagerLayout(viewportWidth, viewportHeight);
+  const queueStatus = queue.length > 1
+    ? t("music-player.labels.queueStatus", {
+        current: queueIndex + 1,
+        total: queue.length,
+      })
+    : "";
 
   function setMousePagerDraggingState(nextValue: boolean): void {
     if (mobilePagerDraggingStateRef.current === nextValue) {
@@ -716,6 +751,7 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
           <div className="metarow" aria-live="polite">
             <p>{metaPrimary}</p>
             <p>{metaSecondary}</p>
+            {queueStatus ? <p>{queueStatus}</p> : null}
           </div>
 
           <div className="processbar">
@@ -765,6 +801,12 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
           <div className="tooldock" aria-label={t("music-player.section.controls")}>
             <div className="auxcontrols">
               <SecondaryControlButton
+                label={t("music-player.actions.previousTrack")}
+                icon={ICONS.previous}
+                disabled={!canGoPrevious}
+                onClick={onPreviousTrack}
+              />
+              <SecondaryControlButton
                 label={t("music-player.actions.rewind10")}
                 icon={ICONS.rewind}
                 disabled={!track}
@@ -777,10 +819,17 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
                 onClick={() => controller.seekBy(10)}
               />
               <SecondaryControlButton
+                label={t("music-player.actions.nextTrack")}
+                icon={ICONS.next}
+                disabled={!canGoNext}
+                onClick={onNextTrack}
+              />
+              <SecondaryControlButton
                 label={controller.loopMode === "one" ? t("music-player.actions.loopOne") : t("music-player.actions.loopOff")}
                 icon={controller.loopMode === "one" ? ICONS.loop : ICONS.loopOff}
                 disabled={!track}
                 active={controller.loopMode === "one"}
+                pressed={controller.loopMode === "one"}
                 onClick={controller.toggleLoopMode}
               />
               <SecondaryControlButton
@@ -788,6 +837,7 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
                 icon={controller.isMuted ? ICONS.mute : ICONS.volume}
                 disabled={!track}
                 active={controller.isMuted}
+                pressed={controller.isMuted}
                 onClick={controller.toggleMute}
               />
               <SecondaryControlButton
@@ -860,13 +910,26 @@ export function MusicPlayerStage(props: MusicPlayerStageProps): React.ReactEleme
 
       <canvas ref={canvasRef} className="canvas" aria-hidden="true" />
 
-      {feedback ? <div className={`music-player-feedback music-player-feedback--${feedback.tone}`}>{feedback.message}</div> : null}
-      {overlayMessage ? <div className="music-player-overlay">{overlayMessage}</div> : null}
+      {feedback ? (
+        <div
+          className={`music-player-feedback music-player-feedback--${feedback.tone}`}
+          role={feedback.tone === "error" ? "alert" : "status"}
+          aria-live={feedback.tone === "error" ? "assertive" : "polite"}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
+      {overlayMessage ? (
+        <div className="music-player-overlay" role="status" aria-live="polite">
+          {overlayMessage}
+        </div>
+      ) : null}
 
       <audio
         key={track?.source.revision ?? "empty"}
         ref={controller.audioRef}
         className="music-player-audio"
+        aria-label={track?.source.title ?? t("music-player.app.title")}
         src={track?.source.resourceUri}
         preload="metadata"
         autoPlay

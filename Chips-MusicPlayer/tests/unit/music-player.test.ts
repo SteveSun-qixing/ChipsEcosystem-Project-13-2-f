@@ -34,9 +34,14 @@ describe("music player utilities", () => {
       resolveFileSelection(["/tmp/audio/demo.flac", "/tmp/audio/cover.jpg", "/tmp/audio/lyrics.lrc"]),
     ).toEqual({
       audioPath: "/tmp/audio/demo.flac",
+      audioPaths: ["/tmp/audio/demo.flac"],
       coverPath: "/tmp/audio/cover.jpg",
       lyricsPath: "/tmp/audio/lyrics.lrc",
     });
+    expect(resolveFileSelection(["/tmp/audio/a.mp3", "/tmp/audio/b.flac"]).audioPaths).toEqual([
+      "/tmp/audio/a.mp3",
+      "/tmp/audio/b.flac",
+    ]);
   });
 
   it("formats playback labels and clamps numeric values", () => {

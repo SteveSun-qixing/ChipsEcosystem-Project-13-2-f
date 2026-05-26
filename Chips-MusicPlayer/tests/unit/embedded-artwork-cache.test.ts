@@ -100,6 +100,37 @@ describe("embedded artwork workspace cache", () => {
     expect(result?.uri).toBe(`file://${writes[0]?.path}`);
   });
 
+  it("returns null for non-PNG and non-TIFF artwork instead of running local image conversion", async () => {
+    const write = vi.fn(async (_path: string, _content: string | Uint8Array) => {});
+    const convertTiffToPng = vi.fn(async () => ({}));
+
+    const result = await persistEmbeddedArtworkPngToWorkspace({
+      workspacePath: "/tmp/chips-host",
+      sourceId: "/tmp/demo.mp3",
+      fileName: "cover.jpg",
+      artwork: {
+        mimeType: "image/jpeg",
+        bytes: Uint8Array.from([0xff, 0xd8, 0xff]),
+      },
+      client: {
+        file: {
+          stat: vi.fn(async () => ({ isDirectory: true })),
+          mkdir: vi.fn(async () => {}),
+          write,
+          delete: vi.fn(async () => {}),
+        },
+        resource: {
+          convertTiffToPng,
+          resolve: vi.fn(async () => ({ uri: "" })),
+        },
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(write).not.toHaveBeenCalled();
+    expect(convertTiffToPng).not.toHaveBeenCalled();
+  });
+
   it("treats an EEXIST mkdir race as success when the cache directory already exists", async () => {
     const stat = vi
       .fn()
@@ -113,7 +144,7 @@ describe("embedded artwork workspace cache", () => {
         },
       };
     });
-    const write = vi.fn(async () => {});
+    const write = vi.fn(async (_path: string, _content: string | Uint8Array) => {});
     const resolve = vi.fn(async (resourceId: string) => ({ uri: `file://${resourceId}` }));
 
     const result = await persistEmbeddedArtworkPngToWorkspace({
@@ -140,7 +171,9 @@ describe("embedded artwork workspace cache", () => {
 
     expect(mkdir).toHaveBeenCalledWith("/tmp/chips-host/.music-player-artwork-cache");
     expect(write).toHaveBeenCalledTimes(1);
-    expect(result?.uri).toBe(`file://${write.mock.calls[0]?.[0]}`);
+    const firstWriteCall = write.mock.calls[0];
+    expect(firstWriteCall).toBeDefined();
+    expect(result?.uri).toBe(`file://${firstWriteCall?.[0]}`);
   });
 
   it("returns null when no Host workspace path is available", async () => {

@@ -35,6 +35,7 @@ export interface TrackPresentation {
 
 export interface FileSelectionBundle {
   audioPath?: string;
+  audioPaths?: string[];
   lyricsPath?: string;
   coverPath?: string;
 }
@@ -211,11 +212,14 @@ export function isLikelyLocalPath(value: string): boolean {
 }
 
 export function resolveFileSelection(paths: string[]): FileSelectionBundle {
-  const selection: FileSelectionBundle = {};
+  const selection: FileSelectionBundle = {
+    audioPaths: [],
+  };
 
   for (const path of paths) {
-    if (!selection.audioPath && isAudioFilePath(path)) {
-      selection.audioPath = path;
+    if (isAudioFilePath(path)) {
+      selection.audioPaths?.push(path);
+      selection.audioPath ??= path;
       continue;
     }
 
@@ -227,6 +231,10 @@ export function resolveFileSelection(paths: string[]): FileSelectionBundle {
     if (!selection.lyricsPath && isLyricsFilePath(path)) {
       selection.lyricsPath = path;
     }
+  }
+
+  if (selection.audioPaths?.length === 0) {
+    delete selection.audioPaths;
   }
 
   return selection;

@@ -9,6 +9,7 @@ const MESSAGE_BUNDLES = {
 export type SupportedLocale = keyof typeof MESSAGE_BUNDLES;
 
 export const DEFAULT_LOCALE: SupportedLocale = "zh-CN";
+export const localeBundles = MESSAGE_BUNDLES;
 
 function getByPath(record: Record<string, unknown>, key: string): unknown {
   return key.split(".").reduce<unknown>((current, part) => {

@@ -9,6 +9,8 @@
       "pause": "暂停",
       "showPlayerPage": "切换到播放器页面",
       "showLyricsPage": "切换到歌词页面",
+      "previousTrack": "上一首",
+      "nextTrack": "下一首",
       "rewind10": "后退 10 秒",
       "forward10": "前进 10 秒",
       "save": "保存副本",
@@ -29,12 +31,76 @@
       "artworkEmbedded": "嵌入封面",
       "artworkCompanion": "伴生封面",
       "artworkDefault": "默认封面",
-      "volume": "音量"
+      "volume": "音量",
+      "queueStatus": "队列 {current} / {total}"
     },
     "status": {
       "samePath": "目标路径与当前音频相同，未执行保存。",
       "saveSuccess": "已保存到 {path}",
-      "downloadFallback": "当前来源会按下载方式保存。"
+      "downloadFallback": "当前来源会按下载方式保存。",
+      "volumeChanged": "音量 {volume}%"
+    },
+    "commands": {
+      "openFiles": {
+        "title": "打开文件",
+        "description": "选择音频、歌词或封面文件。",
+        "ariaLabel": "打开音频文件"
+      },
+      "saveAudio": {
+        "title": "保存副本",
+        "description": "将当前音频保存为副本。",
+        "ariaLabel": "保存当前音频副本"
+      },
+      "previousTrack": {
+        "title": "上一首",
+        "description": "播放队列中的上一首音频。",
+        "ariaLabel": "播放上一首"
+      },
+      "nextTrack": {
+        "title": "下一首",
+        "description": "播放队列中的下一首音频。",
+        "ariaLabel": "播放下一首"
+      },
+      "togglePlayback": {
+        "title": "播放 / 暂停",
+        "description": "切换当前音频的播放状态。",
+        "ariaLabel": "播放或暂停"
+      },
+      "rewind10": {
+        "title": "后退 10 秒",
+        "description": "将当前音频后退 10 秒。",
+        "ariaLabel": "后退 10 秒"
+      },
+      "forward10": {
+        "title": "前进 10 秒",
+        "description": "将当前音频前进 10 秒。",
+        "ariaLabel": "前进 10 秒"
+      },
+      "volumeUp": {
+        "title": "增大音量",
+        "description": "提高当前音频音量。",
+        "ariaLabel": "增大音量"
+      },
+      "volumeDown": {
+        "title": "减小音量",
+        "description": "降低当前音频音量。",
+        "ariaLabel": "减小音量"
+      },
+      "toggleMute": {
+        "title": "静音 / 取消静音",
+        "description": "切换当前音频静音状态。",
+        "ariaLabel": "静音或取消静音"
+      },
+      "toggleLoop": {
+        "title": "单曲循环",
+        "description": "切换当前音频单曲循环。",
+        "ariaLabel": "切换单曲循环"
+      },
+      "disabled": {
+        "noTrack": "当前没有可操作的音频。",
+        "noPreviousTrack": "队列中没有上一首。",
+        "noNextTrack": "队列中没有下一首。"
+      }
     },
     "errors": {
       "missingPath": "没有可打开的音频资源。",
@@ -43,6 +109,8 @@
       "saveFailed": "保存音频失败。",
       "loadFailed": "音频资源加载失败。",
       "missingAudioInSelection": "请至少选择一个音频文件，歌词和封面会作为补充资源处理。",
+      "permissionDenied": "当前权限不足，无法完成这次操作。",
+      "resourceNotFound": "没有找到要打开的音频资源。",
       "mediaAborted": "播放已中止。",
       "mediaNetwork": "网络异常，音频暂时无法继续播放。",
       "mediaDecode": "当前运行时无法解码这段音频。",

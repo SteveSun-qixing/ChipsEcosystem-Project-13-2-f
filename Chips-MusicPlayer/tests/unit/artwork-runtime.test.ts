@@ -38,65 +38,6 @@ function installCanvasStub() {
   };
 }
 
-function createSimpleTiffBytes(): Uint8Array {
-  function writeUInt16BE(value: number): Uint8Array {
-    const bytes = new Uint8Array(2);
-    new DataView(bytes.buffer).setUint16(0, value, false);
-    return bytes;
-  }
-
-  function writeUInt32BE(value: number): Uint8Array {
-    const bytes = new Uint8Array(4);
-    new DataView(bytes.buffer).setUint32(0, value, false);
-    return bytes;
-  }
-
-  function concat(parts: Uint8Array[]): Uint8Array {
-    const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
-    const bytes = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const part of parts) {
-      bytes.set(part, offset);
-      offset += part.length;
-    }
-    return bytes;
-  }
-
-  function buildField(tag: number, type: number, count: number, valueBytes: Uint8Array): Uint8Array {
-    const inline = valueBytes.length <= 4 ? concat([valueBytes, new Uint8Array(4 - valueBytes.length)]) : valueBytes;
-    return concat([writeUInt16BE(tag), writeUInt16BE(type), writeUInt32BE(count), inline.slice(0, 4)]);
-  }
-
-  const width = 2;
-  const height = 1;
-  const pixelBytes = Uint8Array.from([255, 0, 0, 0, 255, 0]);
-  const bitsPerSampleOffset = 8 + pixelBytes.length;
-  const ifdOffset = bitsPerSampleOffset + 6;
-  const bitsPerSample = concat([writeUInt16BE(8), writeUInt16BE(8), writeUInt16BE(8)]);
-  const entries = [
-    buildField(256, 4, 1, writeUInt32BE(width)),
-    buildField(257, 4, 1, writeUInt32BE(height)),
-    buildField(258, 3, 3, writeUInt32BE(bitsPerSampleOffset)),
-    buildField(259, 3, 1, writeUInt16BE(1)),
-    buildField(262, 3, 1, writeUInt16BE(2)),
-    buildField(273, 4, 1, writeUInt32BE(8)),
-    buildField(277, 3, 1, writeUInt16BE(3)),
-    buildField(278, 4, 1, writeUInt32BE(height)),
-    buildField(279, 4, 1, writeUInt32BE(pixelBytes.length)),
-    buildField(284, 3, 1, writeUInt16BE(1)),
-  ];
-
-  return concat([
-    Uint8Array.from([0x4d, 0x4d, 0x00, 0x2a]),
-    writeUInt32BE(ifdOffset),
-    pixelBytes,
-    bitsPerSample,
-    writeUInt16BE(entries.length),
-    ...entries,
-    writeUInt32BE(0),
-  ]);
-}
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -152,11 +93,15 @@ describe("embedded artwork runtime handling", () => {
     expect((createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe("image/png");
   });
 
-  it("transcodes baseline tiff artwork into png bytes without relying on browser decoders", async () => {
-    const pngBytes = await convertEmbeddedArtworkToPngBytes(createArtwork("image/tiff", Array.from(createSimpleTiffBytes())));
+  it("does not duplicate Host TIFF conversion in the renderer fallback", async () => {
+    const createObjectURL = mockObjectUrls();
+    const tiffBytes = [0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08];
+    const pngBytes = await convertEmbeddedArtworkToPngBytes(createArtwork("image/tiff", tiffBytes));
+    const url = await resolveEmbeddedArtworkUrl(createArtwork("image/tiff", tiffBytes));
 
-    expect(pngBytes).not.toBeNull();
-    expect(Array.from(pngBytes?.slice(0, 8) ?? [])).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(pngBytes).toBeNull();
+    expect(url).toBe("blob:image/tiff:8");
+    expect((createObjectURL.mock.calls[0]?.[0] as Blob).type).toBe("image/tiff");
   });
 
   it("falls back to the original artwork blob when runtime transcoding is unavailable", async () => {

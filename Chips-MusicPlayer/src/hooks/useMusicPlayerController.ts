@@ -36,6 +36,7 @@ export interface MusicPlayerController {
 
 interface UseMusicPlayerControllerOptions {
   sessionKey: string | null;
+  onEnded?: () => void | Promise<void>;
 }
 
 const DEFAULT_VOLUME = 0.82;
@@ -56,6 +57,7 @@ export function useMusicPlayerController(options: UseMusicPlayerControllerOption
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previousVolumeRef = useRef(DEFAULT_VOLUME);
+  const onEndedRef = useRef(options.onEnded);
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -236,6 +238,9 @@ export function useMusicPlayerController(options: UseMusicPlayerControllerOption
   function handleEnded(): void {
     setIsPlaying(loopMode === "one");
     setIsBuffering(false);
+    if (loopMode !== "one") {
+      void onEndedRef.current?.();
+    }
   }
 
   function handleTimeUpdate(): void {
@@ -276,6 +281,10 @@ export function useMusicPlayerController(options: UseMusicPlayerControllerOption
     setIsBuffering(false);
     setErrorKey(resolveMediaErrorKey(audio?.error ?? null));
   }
+
+  useEffect(() => {
+    onEndedRef.current = options.onEnded;
+  }, [options.onEnded]);
 
   useEffect(() => {
     const audio = audioRef.current;

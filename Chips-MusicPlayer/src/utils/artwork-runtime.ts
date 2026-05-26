@@ -1,6 +1,4 @@
 import type { EmbeddedArtwork } from "./audio-metadata";
-import { encodeRgbaToPngBytes } from "./png";
-import { decodeBaselineTiffToRgba } from "./tiff";
 
 const DIRECT_RENDERABLE_ARTWORK_MIME_TYPES = new Set([
   "image/png",
@@ -168,12 +166,7 @@ export async function convertEmbeddedArtworkToPngBytes(artwork: EmbeddedArtwork)
   const mimeType = normalizeMimeType(artwork.mimeType);
 
   if (isTiffMimeType(mimeType)) {
-    try {
-      const raster = decodeBaselineTiffToRgba(artwork.bytes);
-      return encodeRgbaToPngBytes(raster);
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   const decodedByImageDecoder = await tryDecodeWithImageDecoder(artwork.bytes, mimeType);
@@ -192,6 +185,10 @@ export async function convertEmbeddedArtworkToPngBytes(artwork: EmbeddedArtwork)
 export async function resolveEmbeddedArtworkUrl(artwork: EmbeddedArtwork): Promise<string> {
   const mimeType = normalizeMimeType(artwork.mimeType);
   if (DIRECT_RENDERABLE_ARTWORK_MIME_TYPES.has(mimeType)) {
+    return createObjectUrlForBytes(artwork.bytes, mimeType);
+  }
+
+  if (isTiffMimeType(mimeType)) {
     return createObjectUrlForBytes(artwork.bytes, mimeType);
   }
 

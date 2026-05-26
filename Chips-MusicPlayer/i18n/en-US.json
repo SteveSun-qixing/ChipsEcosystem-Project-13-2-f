@@ -9,6 +9,8 @@
       "pause": "Pause",
       "showPlayerPage": "Switch to the player page",
       "showLyricsPage": "Switch to the lyrics page",
+      "previousTrack": "Previous Track",
+      "nextTrack": "Next Track",
       "rewind10": "Back 10 Seconds",
       "forward10": "Forward 10 Seconds",
       "save": "Save Copy",
@@ -29,12 +31,76 @@
       "artworkEmbedded": "Embedded artwork",
       "artworkCompanion": "Companion artwork",
       "artworkDefault": "Default artwork",
-      "volume": "Volume"
+      "volume": "Volume",
+      "queueStatus": "Queue {current} / {total}"
     },
     "status": {
       "samePath": "The destination matches the current source, so nothing was written.",
       "saveSuccess": "Saved to {path}",
-      "downloadFallback": "This source will be saved through a download fallback."
+      "downloadFallback": "This source will be saved through a download fallback.",
+      "volumeChanged": "Volume {volume}%"
+    },
+    "commands": {
+      "openFiles": {
+        "title": "Open Files",
+        "description": "Choose audio, lyrics, or cover art files.",
+        "ariaLabel": "Open audio files"
+      },
+      "saveAudio": {
+        "title": "Save Copy",
+        "description": "Save the current audio as a copy.",
+        "ariaLabel": "Save a copy of the current audio"
+      },
+      "previousTrack": {
+        "title": "Previous Track",
+        "description": "Play the previous audio item in the queue.",
+        "ariaLabel": "Play the previous track"
+      },
+      "nextTrack": {
+        "title": "Next Track",
+        "description": "Play the next audio item in the queue.",
+        "ariaLabel": "Play the next track"
+      },
+      "togglePlayback": {
+        "title": "Play / Pause",
+        "description": "Toggle playback for the current audio.",
+        "ariaLabel": "Play or pause"
+      },
+      "rewind10": {
+        "title": "Back 10 Seconds",
+        "description": "Seek the current audio backward 10 seconds.",
+        "ariaLabel": "Back 10 seconds"
+      },
+      "forward10": {
+        "title": "Forward 10 Seconds",
+        "description": "Seek the current audio forward 10 seconds.",
+        "ariaLabel": "Forward 10 seconds"
+      },
+      "volumeUp": {
+        "title": "Volume Up",
+        "description": "Increase the current audio volume.",
+        "ariaLabel": "Increase volume"
+      },
+      "volumeDown": {
+        "title": "Volume Down",
+        "description": "Decrease the current audio volume.",
+        "ariaLabel": "Decrease volume"
+      },
+      "toggleMute": {
+        "title": "Mute / Unmute",
+        "description": "Toggle mute for the current audio.",
+        "ariaLabel": "Mute or unmute"
+      },
+      "toggleLoop": {
+        "title": "Repeat Track",
+        "description": "Toggle repeat for the current audio.",
+        "ariaLabel": "Toggle repeat track"
+      },
+      "disabled": {
+        "noTrack": "There is no active track.",
+        "noPreviousTrack": "There is no previous track in the queue.",
+        "noNextTrack": "There is no next track in the queue."
+      }
     },
     "errors": {
       "missingPath": "There is no playable audio resource.",
@@ -43,6 +109,8 @@
       "saveFailed": "Unable to save the audio file.",
       "loadFailed": "Unable to load the audio resource.",
       "missingAudioInSelection": "Select at least one audio file. Lyrics and cover art are treated as supplemental files.",
+      "permissionDenied": "The current permissions are not enough to complete this action.",
+      "resourceNotFound": "The audio resource could not be found.",
       "mediaAborted": "Playback was aborted.",
       "mediaNetwork": "A network issue interrupted playback.",
       "mediaDecode": "This runtime could not decode the current track.",

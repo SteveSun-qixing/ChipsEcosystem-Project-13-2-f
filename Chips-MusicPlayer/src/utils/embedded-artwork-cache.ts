@@ -1,5 +1,4 @@
 import type { EmbeddedArtwork } from "./audio-metadata";
-import { convertEmbeddedArtworkToPngBytes } from "./artwork-runtime";
 import { joinPath, resolveFileName, resolveStem } from "./music-player";
 
 interface FileStatLike {
@@ -181,11 +180,5 @@ export async function persistEmbeddedArtworkPngToWorkspace(
     }
   }
 
-  const pngBytes = await convertEmbeddedArtworkToPngBytes(options.artwork);
-  if (!pngBytes) {
-    return null;
-  }
-
-  await options.client.file.write(outputFile, pngBytes);
-  return resolvePersistedArtwork(options.client, outputFile);
+  return null;
 }

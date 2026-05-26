@@ -4,12 +4,21 @@ import type { BasecardConfig } from "../../src/schema/card-config";
 
 function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
   return {
-    card_type: "RichTextCard",
+    card_type: "base.richtext",
     content_format: "markdown",
     content_source: "inline",
     content_text: "初始内容",
     locale: "zh-CN",
     theme: "",
+    markdown_capabilities: {
+      commonmark: true,
+      gfm: true,
+      math: true,
+      highlight: true,
+      underline: true,
+      superscript: true,
+      subscript: true,
+    },
     ...overrides,
   };
 }
@@ -46,6 +55,8 @@ describe("createBasecardEditorRoot (Milkdown)", () => {
       expect(button.childElementCount).toBe(1);
     });
     expect(root.querySelector(".chips-basecard-editor__editor-host .ProseMirror")?.textContent).toContain("初始内容");
+    expect(root.querySelector(".chips-basecard-editor__statusbar")?.textContent).toContain("正文字数");
+    expect(root.querySelector(".chips-basecard-editor__react-icon")).not.toBeNull();
   });
 
   it("loads file-backed markdown into the editor runtime via fetch when runtime URL is network-like", async () => {
@@ -74,18 +85,17 @@ describe("createBasecardEditorRoot (Milkdown)", () => {
   it("reads file-backed markdown through bridge file.read when runtime URL is file://", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const previousChips = (window as typeof window & {
-      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-    }).chips;
+    const chipsWindow = window as typeof window & { chips?: Window["chips"] };
+    const previousChips = chipsWindow.chips;
     try {
-      (window as typeof window & {
-        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-      }).chips = {
+      chipsWindow.chips = {
         invoke: vi.fn(async (route: string, input?: Record<string, unknown>) => {
           expect(route).toBe("file.read");
           expect(input?.path).toBe("/card-root/richtext-base-3.md");
           return { content: "# Bridge 正文\n\n来自正式文件服务" };
         }),
+        on: vi.fn(() => () => undefined),
+        emit: vi.fn(async () => undefined),
       };
 
       const root = createBasecardEditorRoot({
@@ -103,9 +113,7 @@ describe("createBasecardEditorRoot (Milkdown)", () => {
       expect(fetchMock).not.toHaveBeenCalled();
       expect(root.textContent).toContain("Bridge 正文");
     } finally {
-      (window as typeof window & {
-        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-      }).chips = previousChips;
+      chipsWindow.chips = previousChips;
       vi.unstubAllGlobals();
     }
   });

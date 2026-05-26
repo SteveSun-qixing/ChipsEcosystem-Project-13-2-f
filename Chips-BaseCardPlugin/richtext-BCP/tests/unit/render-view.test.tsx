@@ -5,12 +5,21 @@ import { VIEW_STYLE_TEXT } from "../../src/render/view";
 
 function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
   return {
-    card_type: "RichTextCard",
+    card_type: "base.richtext",
     content_format: "markdown",
     content_source: "inline",
     content_text: "Hello world",
     locale: "zh-CN",
     theme: "",
+    markdown_capabilities: {
+      commonmark: true,
+      gfm: true,
+      math: true,
+      highlight: true,
+      underline: true,
+      superscript: true,
+      subscript: true,
+    },
     ...overrides,
   };
 }
@@ -75,18 +84,17 @@ describe("mountBasecardView (richtext)", () => {
   it("reads file-backed markdown through bridge file.read when runtime URL is file://", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const previousChips = (window as typeof window & {
-      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-    }).chips;
+    const chipsWindow = window as typeof window & { chips?: Window["chips"] };
+    const previousChips = chipsWindow.chips;
     try {
-      (window as typeof window & {
-        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-      }).chips = {
+      chipsWindow.chips = {
         invoke: vi.fn(async (route: string, input?: Record<string, unknown>) => {
           expect(route).toBe("file.read");
           expect(input?.path).toBe("/card-root/richtext-base-4.md");
           return { content: "## Bridge 文件正文\n\n来自正式文件服务" };
         }),
+        on: vi.fn(() => () => undefined),
+        emit: vi.fn(async () => undefined),
       };
 
       const container = document.createElement("div");
@@ -106,9 +114,7 @@ describe("mountBasecardView (richtext)", () => {
       expect(container.textContent).toContain("Bridge 文件正文");
       dispose();
     } finally {
-      (window as typeof window & {
-        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-      }).chips = previousChips;
+      chipsWindow.chips = previousChips;
       vi.unstubAllGlobals();
     }
   });
@@ -204,5 +210,36 @@ $$`,
     expect(VIEW_STYLE_TEXT).not.toContain(".chips-richtext-card {\n  border:");
     expect(VIEW_STYLE_TEXT).not.toContain(".chips-richtext-card__surface {\n  border:");
     expect(VIEW_STYLE_TEXT).not.toContain("box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);");
+  });
+
+  it("opens internal markdown links through the host resource open callback", async () => {
+    const container = document.createElement("div");
+    const openResource = vi.fn();
+    const dispose = mountBasecardView({
+      container,
+      config: createConfig({
+        content_text: "[附件](docs/manual.md)",
+      }),
+      resolveResourceUrl: async (resourcePath) => `https://runtime.example/${resourcePath}`,
+      openResource,
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ProseMirror a")));
+    const link = container.querySelector(".ProseMirror a") as HTMLAnchorElement | null;
+    expect(link).not.toBeNull();
+    link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "docs/manual.md",
+      fileName: "manual.md",
+      payload: {
+        kind: "chips.richtext-card",
+        version: "1.0.0",
+        cardType: "base.richtext",
+        resourcePath: "docs/manual.md",
+      },
+    });
+
+    dispose();
   });
 });

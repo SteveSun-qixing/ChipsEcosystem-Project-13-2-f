@@ -94,7 +94,7 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
         return;
       }
 
-      const resolved = await rewriteRelativeResourceUrls(surface, ctx.resolveResourceUrl);
+      const resolved = await rewriteRelativeResourceUrls(surface, ctx.resolveResourceUrl, ctx.openResource);
       resolved.forEach((resourcePath) => state.resolvedResources.add(resourcePath));
       hideStatus();
     } catch (error) {

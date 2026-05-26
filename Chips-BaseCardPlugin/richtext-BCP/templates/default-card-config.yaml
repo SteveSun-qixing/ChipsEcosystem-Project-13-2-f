@@ -1,8 +1,16 @@
-card_type: "RichTextCard"
+card_type: "base.richtext"
 theme: ""
 locale: "zh-CN"
 content_format: "markdown"
 content_source: "inline"
+markdown_capabilities:
+  commonmark: true
+  gfm: true
+  math: true
+  highlight: true
+  underline: true
+  superscript: true
+  subscript: true
 content_text: |
   # 富文本示例
 

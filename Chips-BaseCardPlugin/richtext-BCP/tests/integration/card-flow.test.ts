@@ -5,12 +5,21 @@ import type { BasecardConfig } from "../../src/schema/card-config";
 
 function createConfig(overrides: Partial<BasecardConfig> = {}): BasecardConfig {
   return {
-    card_type: "RichTextCard",
+    card_type: "base.richtext",
     content_format: "markdown",
     content_source: "inline",
     content_text: "Body",
     locale: "zh-CN",
     theme: "",
+    markdown_capabilities: {
+      commonmark: true,
+      gfm: true,
+      math: true,
+      highlight: true,
+      underline: true,
+      superscript: true,
+      subscript: true,
+    },
     ...overrides,
   };
 }
@@ -64,13 +73,12 @@ describe("basecard integration flow (markdown richtext)", () => {
       expect(resourcePath).toBe("docs/runtime-wrapper.md");
       return "file:///workspace/docs/runtime-wrapper.md";
     });
-    const previousChips = (window as typeof window & {
-      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-    }).chips;
-    (window as typeof window & {
-      chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-    }).chips = {
+    const chipsWindow = window as typeof window & { chips?: Window["chips"] };
+    const previousChips = chipsWindow.chips;
+    chipsWindow.chips = {
       invoke: vi.fn(async () => ({ content: "# Runtime Wrapper\n\n来自统一资源 URL" })),
+      on: vi.fn(() => () => undefined),
+      emit: vi.fn(async () => undefined),
     };
 
     try {
@@ -92,9 +100,7 @@ describe("basecard integration flow (markdown richtext)", () => {
 
       disposeEditor();
     } finally {
-      (window as typeof window & {
-        chips?: { invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown> };
-      }).chips = previousChips;
+      chipsWindow.chips = previousChips;
     }
   });
 });

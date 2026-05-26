@@ -1,6 +1,14 @@
 import type { BasecardConfig } from "../schema/card-config";
 import { isRelativeResourcePath, normalizeResourcePath } from "./utils";
 
+export type RichTextOpenResource = (input: {
+  resourceId: string;
+  mimeType?: string;
+  title?: string;
+  fileName?: string;
+  payload?: Record<string, unknown>;
+}) => void;
+
 type ChipsBridgeLike = {
   invoke?: (route: string, input?: Record<string, unknown>) => Promise<unknown>;
 };
@@ -97,8 +105,9 @@ export async function loadMarkdownFromConfig(
 export async function rewriteRelativeResourceUrls(
   container: HTMLElement,
   resolveResourceUrl?: (resourcePath: string) => Promise<string>,
+  openResource?: RichTextOpenResource,
 ): Promise<string[]> {
-  if (!resolveResourceUrl) {
+  if (!resolveResourceUrl && !openResource) {
     return [];
   }
 
@@ -118,19 +127,37 @@ export async function rewriteRelativeResourceUrls(
     }
 
     tracked.add(resourcePath);
-    tasks.push(
-      resolveResourceUrl(resourcePath)
-        .then((resolvedUrl) => {
-          element.setAttribute(attribute, resolvedUrl);
-          if (attribute === "href") {
-            element.setAttribute("target", "_blank");
-            element.setAttribute("rel", "noopener noreferrer");
-          }
-        })
-        .catch(() => {
-          // 保持原始相对路径，交由宿主或 base href 决定最终行为。
-        }),
-    );
+    if (attribute === "href") {
+      element.setAttribute("target", "_blank");
+      element.setAttribute("rel", "noopener noreferrer");
+      if (openResource) {
+        element.addEventListener("click", (event) => {
+          event.preventDefault();
+          openResource({
+            resourceId: resourcePath,
+            fileName: resourcePath.split("/").pop(),
+            payload: {
+              kind: "chips.richtext-card",
+              version: "1.0.0",
+              cardType: "base.richtext",
+              resourcePath,
+            },
+          });
+        });
+      }
+    }
+
+    if (resolveResourceUrl) {
+      tasks.push(
+        resolveResourceUrl(resourcePath)
+          .then((resolvedUrl) => {
+            element.setAttribute(attribute, resolvedUrl);
+          })
+          .catch(() => {
+            // 保持原始相对路径，交由宿主或 base href 决定最终行为。
+          }),
+      );
+    }
   }
 
   await Promise.all(tasks);

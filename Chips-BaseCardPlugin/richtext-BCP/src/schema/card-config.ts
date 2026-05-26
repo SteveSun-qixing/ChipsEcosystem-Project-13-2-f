@@ -1,7 +1,11 @@
 import {
   DEFAULT_RICHTEXT_MARKDOWN,
+  LEGACY_RICHTEXT_CARD_TYPE,
   MARKDOWN_CONTENT_FORMAT,
+  RICHTEXT_CARD_TYPE,
+  collectMarkdownResourcePaths,
   countPlainTextLengthFromMarkdown,
+  dedupeResourcePaths,
   hasMeaningfulMarkdownContent,
   isMarkdownFilePath,
   isNonEmptyString,
@@ -11,14 +15,25 @@ import {
 
 export type RichTextContentSource = "inline" | "file";
 
-export interface BasecardConfig {
-  card_type: "RichTextCard";
+export interface RichTextMarkdownCapabilities {
+  commonmark: boolean;
+  gfm: boolean;
+  math: boolean;
+  highlight: boolean;
+  underline: boolean;
+  superscript: boolean;
+  subscript: boolean;
+}
+
+export interface BasecardConfig extends Record<string, unknown> {
+  card_type: typeof RICHTEXT_CARD_TYPE;
   theme?: string;
   locale?: string;
   content_format: "markdown";
   content_source: RichTextContentSource;
   content_text?: string;
   content_file?: string;
+  markdown_capabilities: RichTextMarkdownCapabilities;
 }
 
 export interface ConfigValidationResult {
@@ -27,12 +42,21 @@ export interface ConfigValidationResult {
 }
 
 export const defaultBasecardConfig: BasecardConfig = {
-  card_type: "RichTextCard",
+  card_type: RICHTEXT_CARD_TYPE,
   theme: "",
   locale: "zh-CN",
   content_format: MARKDOWN_CONTENT_FORMAT,
   content_source: "inline",
   content_text: "",
+  markdown_capabilities: {
+    commonmark: true,
+    gfm: true,
+    math: true,
+    highlight: true,
+    underline: true,
+    superscript: true,
+    subscript: true,
+  },
 };
 
 function asString(value: unknown): string | undefined {
@@ -53,14 +77,36 @@ function inferContentSource(record: Record<string, unknown>): RichTextContentSou
   return "inline";
 }
 
+function normalizeCardType(input: unknown): typeof RICHTEXT_CARD_TYPE {
+  return input === RICHTEXT_CARD_TYPE || input === LEGACY_RICHTEXT_CARD_TYPE
+    ? RICHTEXT_CARD_TYPE
+    : RICHTEXT_CARD_TYPE;
+}
+
+function normalizeCapabilities(input: unknown): RichTextMarkdownCapabilities {
+  const record = typeof input === "object" && input ? input as Record<string, unknown> : {};
+  const defaults = defaultBasecardConfig.markdown_capabilities;
+
+  return {
+    commonmark: record.commonmark === false ? false : defaults.commonmark,
+    gfm: record.gfm === false ? false : defaults.gfm,
+    math: record.math === false ? false : defaults.math,
+    highlight: record.highlight === false ? false : defaults.highlight,
+    underline: record.underline === false ? false : defaults.underline,
+    superscript: record.superscript === false ? false : defaults.superscript,
+    subscript: record.subscript === false ? false : defaults.subscript,
+  };
+}
+
 export function createInlineBasecardConfig(markdown: string, locale = "zh-CN", theme = ""): BasecardConfig {
   return {
-    card_type: "RichTextCard",
+    card_type: RICHTEXT_CARD_TYPE,
     theme,
     locale,
     content_format: MARKDOWN_CONTENT_FORMAT,
     content_source: "inline",
     content_text: normalizeMarkdown(markdown),
+    markdown_capabilities: { ...defaultBasecardConfig.markdown_capabilities },
   };
 }
 
@@ -70,12 +116,13 @@ export function createFileBasecardConfig(
   theme = "",
 ): BasecardConfig {
   return {
-    card_type: "RichTextCard",
+    card_type: RICHTEXT_CARD_TYPE,
     theme,
     locale,
     content_format: MARKDOWN_CONTENT_FORMAT,
     content_source: "file",
     content_file: normalizeResourcePath(resourcePath),
+    markdown_capabilities: { ...defaultBasecardConfig.markdown_capabilities },
   };
 }
 
@@ -86,16 +133,19 @@ export function normalizeBasecardConfig(
   const contentSource = inferContentSource(record);
   const locale = asString(record.locale) ?? defaultBasecardConfig.locale;
   const theme = asString(record.theme) ?? defaultBasecardConfig.theme;
+  const markdownCapabilities = normalizeCapabilities(record.markdown_capabilities);
+  const cardType = normalizeCardType(record.card_type);
 
   if (contentSource === "file") {
     const contentFile = normalizeResourcePath(asString(record.content_file) ?? "");
     return {
-      card_type: "RichTextCard",
+      card_type: cardType,
       theme,
       locale,
       content_format: MARKDOWN_CONTENT_FORMAT,
       content_source: "file",
       content_file: contentFile,
+      markdown_capabilities: markdownCapabilities,
     };
   }
 
@@ -108,12 +158,13 @@ export function normalizeBasecardConfig(
   );
 
   return {
-    card_type: "RichTextCard",
+    card_type: cardType,
     theme,
     locale,
     content_format: MARKDOWN_CONTENT_FORMAT,
     content_source: "inline",
     content_text: contentText,
+    markdown_capabilities: markdownCapabilities,
   };
 }
 
@@ -124,8 +175,8 @@ export function createInitialBasecardConfig(): BasecardConfig {
 export function validateBasecardConfig(config: BasecardConfig): ConfigValidationResult {
   const errors: Record<string, string> = {};
 
-  if (config.card_type !== "RichTextCard") {
-    errors.card_type = "card_type 必须为 RichTextCard";
+  if (config.card_type !== RICHTEXT_CARD_TYPE) {
+    errors.card_type = `card_type 必须为 ${RICHTEXT_CARD_TYPE}`;
   }
 
   if (config.content_format !== MARKDOWN_CONTENT_FORMAT) {
@@ -146,6 +197,20 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
     }
   }
 
+  const capabilities = config.markdown_capabilities;
+  if (
+    !capabilities ||
+    capabilities.commonmark !== true ||
+    capabilities.gfm !== true ||
+    capabilities.math !== true ||
+    capabilities.highlight !== true ||
+    capabilities.underline !== true ||
+    capabilities.superscript !== true ||
+    capabilities.subscript !== true
+  ) {
+    errors.markdown_capabilities = "markdown_capabilities 必须显式声明当前富文本 Markdown 能力矩阵";
+  }
+
   if (config.content_source === "inline" && isNonEmptyString(config.content_file)) {
     errors.content_source = "inline 模式下不能同时保存 content_file";
   }
@@ -161,12 +226,13 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
 }
 
 export function collectRichTextResourcePaths(config: BasecardConfig): string[] {
-  if (config.content_source !== "file") {
-    return [];
-  }
+  const resourcePaths = config.content_source === "inline"
+    ? collectMarkdownResourcePaths(config.content_text ?? "")
+    : [
+        isMarkdownFilePath(config.content_file) ? normalizeResourcePath(config.content_file) : "",
+      ];
 
-  const resourcePath = normalizeResourcePath(config.content_file ?? "");
-  return isMarkdownFilePath(resourcePath) ? [resourcePath] : [];
+  return dedupeResourcePaths(resourcePaths);
 }
 
 export function getPlainTextLength(config: BasecardConfig): number {

@@ -5,6 +5,9 @@ import {
   editorViewOptionsCtx,
   rootCtx,
 } from "@milkdown/core";
+import React from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { ChipsIcon } from "@chips/component-library";
 import type { Editor as MilkdownEditor } from "@milkdown/core";
 import { listener, listenerCtx } from "@milkdown/plugin-listener";
 import {
@@ -36,6 +39,7 @@ import { createTranslator } from "../shared/i18n";
 import { configureRichTextMarkdown, richTextMarkdownPlugins } from "../shared/markdown-extensions";
 import { loadMarkdownFromConfig, rewriteRelativeResourceUrls } from "../shared/resource-links";
 import {
+  MAX_INLINE_RICHTEXT_LENGTH,
   countUnicodeCharacters,
   createRichTextMarkdownFileName,
   extractPlainTextFromMarkdown,
@@ -58,6 +62,10 @@ export interface BasecardEditorProps {
 
 type EditorRoot = HTMLElement & {
   __chipsDispose?: () => void;
+};
+
+type ReactIslandHost = HTMLElement & {
+  __chipsReactRoot?: Root;
 };
 
 type ToolbarIconName =
@@ -105,6 +113,10 @@ type EditorController = {
   tooltipArrow: HTMLDivElement;
   contextMenu: HTMLDivElement;
   contextMenuContent: HTMLDivElement;
+  statusBar: HTMLDivElement;
+  statusStorageMode: HTMLSpanElement;
+  statusCharacters: HTMLSpanElement;
+  statusValidation: HTMLSpanElement;
   errorList: HTMLUListElement;
   locale: string;
   theme: string;
@@ -559,6 +571,43 @@ html, body {
   margin: 0;
   padding-left: 18px;
 }
+
+.chips-basecard-editor__statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 16px;
+  border-top: 1px solid var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.12));
+  color: var(--chips-sys-color-on-surface-variant, #667085);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.chips-basecard-editor__statusbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.chips-basecard-editor__statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.chips-basecard-editor__statusbar-item[data-state="error"] {
+  color: var(--chips-sys-color-error, #d92d20);
+}
+
+.chips-basecard-editor__statusbar-icon {
+  color: currentColor;
+}
 `;
 
 const PREVIEW_COMMIT_DELAY_MS = 120;
@@ -709,33 +758,39 @@ function askUserForValue(label: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function mountRuntimeIcon(
+  host: ReactIslandHost,
+  descriptor: IconDescriptor,
+  className: string,
+  sizePx: number,
+): void {
+  host.__chipsReactRoot?.unmount();
+  const root = createRoot(host);
+  host.__chipsReactRoot = root;
+  root.render(
+    React.createElement(ChipsIcon, {
+      descriptor,
+      className,
+      size: sizePx,
+    }),
+  );
+}
+
+function disposeRuntimeIcon(host: ReactIslandHost): void {
+  host.__chipsReactRoot?.unmount();
+  host.__chipsReactRoot = undefined;
+}
+
 function createRuntimeIconElement(
   icon: ToolbarIconName,
   className: string,
   sizePx: number,
 ): HTMLSpanElement {
   const descriptor = TOOLBAR_ICON_DESCRIPTORS[icon];
-  const node = document.createElement("span");
-  node.className = className;
-  node.dataset.scope = "icon";
-  node.dataset.part = "root";
-  node.dataset.iconName = descriptor.name;
-  node.dataset.iconStyle = descriptor.style ?? "outlined";
+  const node = document.createElement("span") as ReactIslandHost;
+  node.className = `${className} chips-basecard-editor__react-icon`;
   node.setAttribute("aria-hidden", "true");
-  node.style.setProperty("--chips-icon-size", `${sizePx}px`);
-  if (descriptor.fill !== undefined) {
-    node.style.setProperty("--chips-icon-fill", String(descriptor.fill));
-  }
-  if (descriptor.wght !== undefined) {
-    node.style.setProperty("--chips-icon-wght", String(descriptor.wght));
-  }
-  if (descriptor.grad !== undefined) {
-    node.style.setProperty("--chips-icon-grad", String(descriptor.grad));
-  }
-  if (descriptor.opsz !== undefined) {
-    node.style.setProperty("--chips-icon-opsz", String(descriptor.opsz));
-  }
-  node.textContent = descriptor.name;
+  mountRuntimeIcon(node, descriptor, className, sizePx);
   return node;
 }
 
@@ -891,7 +946,6 @@ function createToolbarButton(controller: EditorController, definition: ToolbarBu
   button.dataset.part = "root";
   button.setAttribute("aria-label", controller.t(definition.labelKey));
 
-  const icon = document.createElement("span");
   button.appendChild(createRuntimeIconElement(definition.icon, "chips-basecard-editor__toolbar-button-icon", 16));
 
   applyInteractiveState(button);
@@ -948,12 +1002,54 @@ function createContextMenuItem(controller: EditorController, action: ContextMenu
   return item;
 }
 
+function createStatusItem(
+  icon: IconDescriptor,
+  label: string,
+): { root: HTMLSpanElement; label: HTMLSpanElement; iconHost: ReactIslandHost } {
+  const root = document.createElement("span");
+  root.className = "chips-basecard-editor__statusbar-item";
+
+  const iconHost = document.createElement("span") as ReactIslandHost;
+  iconHost.className = "chips-basecard-editor__statusbar-icon";
+  iconHost.setAttribute("aria-hidden", "true");
+  mountRuntimeIcon(iconHost, icon, "chips-basecard-editor__statusbar-icon", 14);
+  root.appendChild(iconHost);
+
+  const labelNode = document.createElement("span");
+  labelNode.textContent = label;
+  root.appendChild(labelNode);
+
+  return { root, label: labelNode, iconHost };
+}
+
+function getStorageModeLabel(controller: EditorController, plainTextLength: number): string {
+  const useFile = controller.currentFilePath || shouldUseFileStorage(plainTextLength);
+  return controller.t(useFile ? "basecard.storage.file" : "basecard.storage.inline");
+}
+
+function updateStatusBar(controller: EditorController): void {
+  const plainTextLength = countUnicodeCharacters(extractPlainTextFromMarkdown(controller.currentMarkdown));
+  controller.statusStorageMode.textContent = getStorageModeLabel(controller, plainTextLength);
+  controller.statusCharacters.textContent = controller.t("basecard.meta.characters", {
+    count: plainTextLength,
+    limit: MAX_INLINE_RICHTEXT_LENGTH,
+  });
+  controller.statusValidation.textContent = controller.pendingErrors.length > 0
+    ? controller.t("basecard.status.invalid")
+    : controller.t("basecard.status.ready");
+  controller.statusValidation.parentElement?.setAttribute(
+    "data-state",
+    controller.pendingErrors.length > 0 ? "error" : "idle",
+  );
+}
+
 function setErrors(controller: EditorController, errors: string[]): void {
   controller.pendingErrors = errors;
   controller.errorList.innerHTML = "";
   const wrapper = controller.errorList.parentElement as HTMLElement;
   if (errors.length === 0) {
     wrapper.hidden = true;
+    updateStatusBar(controller);
     return;
   }
 
@@ -963,6 +1059,7 @@ function setErrors(controller: EditorController, errors: string[]): void {
     controller.errorList.appendChild(item);
   }
   wrapper.hidden = false;
+  updateStatusBar(controller);
 }
 
 function syncValidationErrors(controller: EditorController, markdown: string): void {
@@ -988,6 +1085,7 @@ function emitPreviewConfig(controller: EditorController): void {
 
   const markdown = normalizeMarkdown(controller.currentMarkdown);
   controller.currentMarkdown = markdown;
+  updateStatusBar(controller);
   syncValidationErrors(controller, markdown);
   if (!hasMeaningfulMarkdownContent(markdown)) {
     return;
@@ -1042,6 +1140,7 @@ async function commitCurrentMarkdown(controller: EditorController): Promise<void
 
   const markdown = normalizeMarkdown(controller.editor.action(getMarkdown()));
   controller.currentMarkdown = markdown;
+  updateStatusBar(controller);
 
   const hasContent = hasMeaningfulMarkdownContent(markdown);
   if (!hasContent) {
@@ -1372,6 +1471,27 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
   errors.appendChild(errorList);
   editorRoot.appendChild(errors);
 
+  const statusBar = document.createElement("div");
+  statusBar.className = "chips-basecard-editor__statusbar";
+  statusBar.setAttribute("role", "status");
+  statusBar.setAttribute("aria-live", "polite");
+
+  const statusPrimary = document.createElement("div");
+  statusPrimary.className = "chips-basecard-editor__statusbar-group";
+  statusBar.appendChild(statusPrimary);
+
+  const statusSecondary = document.createElement("div");
+  statusSecondary.className = "chips-basecard-editor__statusbar-group";
+  statusBar.appendChild(statusSecondary);
+
+  const storageItem = createStatusItem({ name: "database", decorative: true }, "");
+  const charactersItem = createStatusItem({ name: "text_fields", decorative: true }, "");
+  const validationItem = createStatusItem({ name: "check_circle", decorative: true }, "");
+  statusPrimary.appendChild(storageItem.root);
+  statusPrimary.appendChild(charactersItem.root);
+  statusSecondary.appendChild(validationItem.root);
+  editorRoot.appendChild(statusBar);
+
   const controller: EditorController = {
     root,
     surfaceFrame,
@@ -1383,6 +1503,10 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
     tooltipArrow,
     contextMenu,
     contextMenuContent,
+    statusBar,
+    statusStorageMode: storageItem.label,
+    statusCharacters: charactersItem.label,
+    statusValidation: validationItem.label,
     errorList,
     locale: config.locale ?? "zh-CN",
     theme: config.theme ?? "",
@@ -1447,6 +1571,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
       controller.floatingToolbar.hidden = true;
     },
   };
+  updateStatusBar(controller);
 
   for (const definition of TOOLBAR_BUTTONS) {
     floatingToolbar.appendChild(createToolbarButton(controller, definition));
@@ -1512,6 +1637,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
         resolveResourceUrl: props.resolveResourceUrl,
       }));
       controller.currentMarkdown = markdown;
+      updateStatusBar(controller);
       controller.editor = await Editor.make()
         .config((ctx) => {
           ctx.set(rootCtx, editorHost);
@@ -1519,14 +1645,14 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
           configureRichTextMarkdown(ctx);
           ctx.update(editorViewOptionsCtx, (prev) => ({
             ...prev,
-            handlePaste: (view, event) => {
+            handlePaste: (view, event, slice) => {
               if (handleMarkdownPaste(controller, event)) {
                 view.focus();
                 return true;
               }
 
               if (typeof prev.handlePaste === "function") {
-                return prev.handlePaste(view, event);
+                return prev.handlePaste(view, event, slice);
               }
 
               return false;
@@ -1555,6 +1681,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
         const manager = ctx.get(listenerCtx);
         manager.markdownUpdated((_listenerCtx, nextMarkdown) => {
           controller.currentMarkdown = normalizeMarkdown(nextMarkdown);
+          updateStatusBar(controller);
           void syncPreviewResources(controller);
           scheduleCommit(controller, "change");
         });
@@ -1624,6 +1751,7 @@ export function createBasecardEditorRoot(props: BasecardEditorProps): EditorRoot
       controller.props.releaseResourceUrl?.(resourcePath);
     }
     controller.lastResolvedResources.clear();
+    root.querySelectorAll<ReactIslandHost>(".chips-basecard-editor__react-icon").forEach(disposeRuntimeIcon);
     scrollSurface.removeEventListener("scroll", handleSurfaceScroll);
     ownerWindow.removeEventListener("resize", controller.handleWindowResize);
     ownerWindow.removeEventListener("blur", controller.handleWindowBlur);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countPlainTextLengthFromMarkdown,
+  collectMarkdownResourcePaths,
   createRichTextMarkdownFileName,
   extractPlainTextFromMarkdown,
   normalizeResourcePath,
@@ -37,7 +38,16 @@ $$\\frac{a}{b}$$`;
 
   it("normalizes resource paths and markdown file naming", () => {
     expect(normalizeResourcePath("./richtext-a.md")).toBe("richtext-a.md");
+    expect(normalizeResourcePath("../escape.md")).toBe("");
+    expect(normalizeResourcePath("file:///tmp/escape.md")).toBe("");
+    expect(normalizeResourcePath("docs/a.md?x=1")).toBe("");
     expect(createRichTextMarkdownFileName("base-1")).toBe("richtext-base-1.md");
+  });
+
+  it("collects only card-root relative markdown resources", () => {
+    expect(
+      collectMarkdownResourcePaths("![图](assets/a.png) [文档](docs/a.md) [外链](https://example.com/a.png) <img src=\"./assets/b.webp\">"),
+    ).toEqual(["assets/a.png", "docs/a.md", "assets/b.webp"]);
   });
 
   it("switches to file storage only after 200 characters", () => {

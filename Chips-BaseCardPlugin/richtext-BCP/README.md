@@ -34,7 +34,7 @@
 其中：
 
 - `basecardDefinition.cardType = "base.richtext"` 与 `manifest.yaml -> capabilities.cardTypes` 保持一致；
-- `basecardDefinition.aliases = ["RichTextCard"]` 负责兼容正式配置中的历史卡片类型别名；
+- `basecardDefinition.aliases = ["RichTextCard"]` 仅负责输入归一中的历史类型别名；
 - `basecardDefinition.createInitialConfig()` 默认生成 Markdown inline 配置；
 - `basecardDefinition.icon` 是运行时正式图标描述符；
 - `assets/icons/basecard-icon.svg` 只作为静态资源保留，来源说明见 `assets/icons/SOURCE.md`。
@@ -43,22 +43,26 @@
 
 当前正式配置模型位于 `src/schema/card-config.ts`：
 
-- `card_type: "RichTextCard"`
+- `card_type: "base.richtext"`
 - `theme?: string`
 - `locale?: string`
 - `content_format: "markdown"`
 - `content_source: "inline" | "file"`
 - `content_text?: string`
 - `content_file?: string`
+- `markdown_capabilities`：显式声明 CommonMark、GFM、数学公式、高亮、下划线、上标和下标能力。
 
 ## 开发命令
 
 ```bash
-cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/richtext-BCP
-npm run build
-npm run test
+cd /Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/richtext-BCP
 npm run lint
+npm run typecheck
+npm test
+npm run build
 npm run validate
+npm run package
+npm run verify
 ```
 
 ## 文档

@@ -1,4 +1,5 @@
 import type { BasecardEditorContext } from "../index";
+import { normalizeBasecardConfig } from "../schema/card-config";
 import { createBasecardEditorRoot } from "./panel";
 
 type StyleSnapshot = {
@@ -58,8 +59,8 @@ export function mountBasecardEditor(ctx: BasecardEditorContext): () => void {
   }
 
   const root = createBasecardEditorRoot({
-    initialConfig,
-    onChange,
+    initialConfig: normalizeBasecardConfig(initialConfig),
+    onChange: (next) => onChange(next as unknown as Record<string, unknown>),
     resolveResourceUrl: ctx.resolveResourceUrl,
     releaseResourceUrl: ctx.releaseResourceUrl,
     importResource: ctx.importResource,

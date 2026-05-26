@@ -7,7 +7,6 @@ import {
   defaultBasecardConfig,
   normalizeBasecardConfig,
   validateBasecardConfig,
-  type BasecardConfig,
 } from "./schema/card-config";
 
 export interface BasecardResourceImportRequest {
@@ -21,20 +20,55 @@ export interface BasecardResourceImportResult {
 
 export interface BasecardRenderContext {
   container: HTMLElement;
-  config: BasecardConfig;
+  config: Record<string, unknown>;
   themeCssText?: string;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: {
+    resourceId: string;
+    mimeType?: string;
+    title?: string;
+    fileName?: string;
+    payload?: Record<string, unknown>;
+  }) => void;
 }
 
 export interface BasecardEditorContext {
   container: HTMLElement;
-  initialConfig: BasecardConfig;
-  onChange: (next: BasecardConfig) => void;
+  initialConfig: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
   importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  importArchiveBundle?: (input: {
+    file: File;
+    preferredRootDir?: string;
+    entryFile?: string;
+    include?: {
+      mimeTypes?: string[];
+      extensions?: string[];
+    };
+    stripSingleRootDir?: boolean;
+    excludeSystemArtifacts?: boolean;
+  }) => Promise<{
+    rootDir: string;
+    entryFile?: string;
+    resourcePaths: string[];
+    entries: Array<Record<string, unknown>>;
+    discardedEntries: Array<Record<string, unknown>>;
+  }>;
+  convertTiffToPng?: (input: {
+    resourcePath: string;
+    outputPath: string;
+    overwrite?: boolean;
+  }) => Promise<{
+    path: string;
+    mimeType: "image/png";
+    sourceMimeType: "image/tiff";
+    width?: number;
+    height?: number;
+  }>;
 }
 
 export function renderBasecardView(ctx: BasecardRenderContext): () => void {
@@ -79,6 +113,13 @@ export const basecardDefinition = {
     themeCssText?: string;
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+    openResource?: (input: {
+      resourceId: string;
+      mimeType?: string;
+      title?: string;
+      fileName?: string;
+      payload?: Record<string, unknown>;
+    }) => void;
   }) {
     return renderBasecardView({
       container: ctx.container,
@@ -86,6 +127,7 @@ export const basecardDefinition = {
       themeCssText: ctx.themeCssText,
       resolveResourceUrl: ctx.resolveResourceUrl,
       releaseResourceUrl: ctx.releaseResourceUrl,
+      openResource: ctx.openResource,
     });
   },
   renderEditor(ctx: {
@@ -95,7 +137,9 @@ export const basecardDefinition = {
     resolveResourceUrl?: (resourcePath: string) => Promise<string>;
     releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
     importResource?: (input: BasecardResourceImportRequest) => Promise<BasecardResourceImportResult>;
+    importArchiveBundle?: BasecardEditorContext["importArchiveBundle"];
     deleteResource?: (resourcePath: string) => Promise<void>;
+    convertTiffToPng?: BasecardEditorContext["convertTiffToPng"];
   }) {
     return renderBasecardEditor({
       container: ctx.container,
@@ -106,7 +150,9 @@ export const basecardDefinition = {
       resolveResourceUrl: ctx.resolveResourceUrl,
       releaseResourceUrl: ctx.releaseResourceUrl,
       importResource: ctx.importResource,
+      importArchiveBundle: ctx.importArchiveBundle,
       deleteResource: ctx.deleteResource,
+      convertTiffToPng: ctx.convertTiffToPng,
     });
   },
 } as const;

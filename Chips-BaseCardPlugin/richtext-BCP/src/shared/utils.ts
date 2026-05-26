@@ -1,6 +1,10 @@
 export const MARKDOWN_CONTENT_FORMAT = "markdown" as const;
 export const MAX_INLINE_RICHTEXT_LENGTH = 200;
-export const DEFAULT_RICHTEXT_MARKDOWN = "123456789";
+export const RICHTEXT_CARD_TYPE = "base.richtext" as const;
+export const LEGACY_RICHTEXT_CARD_TYPE = "RichTextCard" as const;
+export const DEFAULT_RICHTEXT_MARKDOWN = "# 富文本\n\n开始写点什么。";
+
+const MARKDOWN_RESOURCE_PATTERN = /!?\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)|<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi;
 
 export function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -16,12 +20,35 @@ export function normalizeMarkdown(markdown: string): string {
     .trimEnd();
 }
 
-export function normalizeResourcePath(resourcePath: string): string {
+export function normalizeResourcePath(resourcePath: unknown): string {
+  if (typeof resourcePath !== "string") {
+    return "";
+  }
+
   const normalized = resourcePath.replace(/\\/g, "/").trim();
   if (!normalized) {
     return "";
   }
-  return normalized.replace(/^\.\//, "").replace(/^\//, "");
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || normalized.startsWith("//") || normalized.startsWith("/")) {
+    return "";
+  }
+
+  const withoutPrefix = normalized.replace(/^\.?\//, "");
+  if (
+    withoutPrefix.startsWith("/") ||
+    withoutPrefix.includes("?") ||
+    withoutPrefix.includes("#")
+  ) {
+    return "";
+  }
+
+  const segments = withoutPrefix.split("/").filter(Boolean);
+  if (segments.length === 0 || segments.some((segment) => segment === "." || segment === "..")) {
+    return "";
+  }
+
+  return segments.join("/");
 }
 
 export function isExternalUrl(value: string): boolean {
@@ -29,7 +56,7 @@ export function isExternalUrl(value: string): boolean {
 }
 
 export function isRelativeResourcePath(value: string | undefined): value is string {
-  return isNonEmptyString(value) && !isExternalUrl(value.trim());
+  return isNonEmptyString(value) && normalizeResourcePath(value).length > 0;
 }
 
 export function isMarkdownFilePath(value: string | undefined): value is string {
@@ -38,6 +65,29 @@ export function isMarkdownFilePath(value: string | undefined): value is string {
   }
   const normalized = normalizeResourcePath(value);
   return normalized.toLowerCase().endsWith(".md");
+}
+
+export function dedupeResourcePaths(paths: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  for (const path of paths) {
+    const normalized = normalizeResourcePath(path);
+    if (normalized) {
+      seen.add(normalized);
+    }
+  }
+  return Array.from(seen);
+}
+
+export function collectMarkdownResourcePaths(markdown: string): string[] {
+  const paths: string[] = [];
+  for (const match of markdown.matchAll(MARKDOWN_RESOURCE_PATTERN)) {
+    const rawPath = match[1] ?? match[2] ?? match[3] ?? "";
+    const normalized = normalizeResourcePath(rawPath);
+    if (normalized) {
+      paths.push(normalized);
+    }
+  }
+  return dedupeResourcePaths(paths);
 }
 
 export function createRichTextMarkdownFileName(seed?: string): string {

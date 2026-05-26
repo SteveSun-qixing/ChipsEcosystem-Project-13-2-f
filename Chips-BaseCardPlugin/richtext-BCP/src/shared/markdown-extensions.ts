@@ -4,14 +4,21 @@ import type { Ctx, MilkdownPlugin } from "@milkdown/ctx";
 import { remarkStringifyOptionsCtx } from "@milkdown/core";
 import { remarkGFMPlugin } from "@milkdown/preset-gfm";
 import { markRule } from "@milkdown/prose";
-import type { MarkSpec, NodeSpec } from "@milkdown/prose/model";
+import type { Mark as ProseMark, Node as ProseNode } from "@milkdown/prose/model";
 import { textblockTypeInputRule } from "@milkdown/prose/inputrules";
+import type { MarkSchema, MarkdownNode, NodeSchema } from "@milkdown/transformer";
 import { $inputRule, $markAttr, $markSchema, $nodeAttr, $nodeSchema, $remark } from "@milkdown/utils";
 import katex from "katex";
-import { pandocMarkFromMarkdown, pandocMarkToMarkdown } from "mdast-util-mark";
-import { pandocMark } from "micromark-extension-mark";
+import { pandocMarkFromMarkdown, pandocMarkToMarkdown } from "mdast-util-mark/index.js";
+import type {
+  Handle as ToMarkdownHandle,
+  Info as ToMarkdownInfo,
+  State as ToMarkdownState,
+} from "mdast-util-to-markdown";
+import { pandocMark } from "micromark-extension-mark/index.js";
 import remarkMath from "remark-math";
 import remarkSupersub from "remark-supersub";
+import type { RemarkPluginRaw } from "@milkdown/transformer";
 
 type MarkdownNodeLike = {
   type: string;
@@ -32,7 +39,26 @@ type MarkdownParentLike = MarkdownNodeLike & {
   children: MarkdownNodeLike[];
 };
 
+type UnsafeEntry = {
+  character: string;
+  inConstruct?: unknown;
+};
+
+type MarkdownPhrasingState = {
+  enter: ToMarkdownState["enter"];
+  containerPhrasing: ToMarkdownState["containerPhrasing"];
+};
+
 const KATEX_STRICT_MODE = "warn";
+
+function asMarkdownNodeLike(node: MarkdownNode): MarkdownNodeLike {
+  return node as MarkdownNodeLike;
+}
+
+function readStringAttr(node: ProseNode, key: string): string {
+  const value = node.attrs[key];
+  return typeof value === "string" ? value : "";
+}
 
 function filterMeaningfulChildren(children: MarkdownNodeLike[] | undefined): MarkdownNodeLike[] {
   return (children ?? []).filter(
@@ -55,8 +81,8 @@ function stripEmptyTextNodes(node: MarkdownNodeLike): void {
 }
 
 function appendUniqueUnsafeEntries(
-  existing: Array<{ character: string; inConstruct?: string }> | undefined,
-  additions: Array<{ character: string; inConstruct?: string }>,
+  existing: readonly UnsafeEntry[] | null | undefined,
+  additions: readonly UnsafeEntry[],
 ) {
   const next = [...(existing ?? [])];
   for (const entry of additions) {
@@ -68,22 +94,15 @@ function appendUniqueUnsafeEntries(
 }
 
 function renderWrappedPhrasing(
-  wrapper: string,
+  wrapper: Parameters<ToMarkdownState["enter"]>[0],
   marker: string,
   node: MarkdownContainerNode,
-  context: {
-    enter: (name: string) => () => void;
-    containerPhrasing: (
-      node: MarkdownContainerNode,
-      options: {
-        before: string;
-        after: string;
-      },
-    ) => string;
-  },
+  context: MarkdownPhrasingState,
+  info: ToMarkdownInfo,
 ) {
   const exit = context.enter(wrapper);
-  const value = context.containerPhrasing(node, {
+  const value = context.containerPhrasing(node as Parameters<ToMarkdownState["containerPhrasing"]>[0], {
+    ...info,
     before: marker,
     after: marker,
   });
@@ -148,7 +167,7 @@ const highlightSchema = $markSchema("highlight", (ctx) => ({
     match: (node) => node.type === "mark",
     runner: (state, node, markType) => {
       state.openMark(markType);
-      state.next(filterMeaningfulChildren(node.children));
+      state.next(filterMeaningfulChildren(asMarkdownNodeLike(node).children));
       state.closeMark(markType);
     },
   },
@@ -158,7 +177,7 @@ const highlightSchema = $markSchema("highlight", (ctx) => ({
       state.withMark(mark, "mark");
     },
   },
-} satisfies MarkSpec));
+} satisfies MarkSchema));
 
 const underlineAttr = $markAttr("underline");
 const underlineSchema = $markSchema("underline", (ctx) => ({
@@ -168,7 +187,7 @@ const underlineSchema = $markSchema("underline", (ctx) => ({
     match: (node) => node.type === "insert",
     runner: (state, node, markType) => {
       state.openMark(markType);
-      state.next(filterMeaningfulChildren(node.children));
+      state.next(filterMeaningfulChildren(asMarkdownNodeLike(node).children));
       state.closeMark(markType);
     },
   },
@@ -178,7 +197,7 @@ const underlineSchema = $markSchema("underline", (ctx) => ({
       state.withMark(mark, "insert");
     },
   },
-} satisfies MarkSpec));
+} satisfies MarkSchema));
 
 const superscriptAttr = $markAttr("superscript");
 const superscriptSchema = $markSchema("superscript", (ctx) => ({
@@ -188,7 +207,7 @@ const superscriptSchema = $markSchema("superscript", (ctx) => ({
     match: (node) => node.type === "superscript",
     runner: (state, node, markType) => {
       state.openMark(markType);
-      state.next(filterMeaningfulChildren(node.children));
+      state.next(filterMeaningfulChildren(asMarkdownNodeLike(node).children));
       state.closeMark(markType);
     },
   },
@@ -198,7 +217,7 @@ const superscriptSchema = $markSchema("superscript", (ctx) => ({
       state.withMark(mark, "superscript");
     },
   },
-} satisfies MarkSpec));
+} satisfies MarkSchema));
 
 const subscriptAttr = $markAttr("subscript");
 const subscriptSchema = $markSchema("subscript", (ctx) => ({
@@ -208,7 +227,7 @@ const subscriptSchema = $markSchema("subscript", (ctx) => ({
     match: (node) => node.type === "subscript",
     runner: (state, node, markType) => {
       state.openMark(markType);
-      state.next(filterMeaningfulChildren(node.children));
+      state.next(filterMeaningfulChildren(asMarkdownNodeLike(node).children));
       state.closeMark(markType);
     },
   },
@@ -218,7 +237,7 @@ const subscriptSchema = $markSchema("subscript", (ctx) => ({
       state.withMark(mark, "subscript");
     },
   },
-} satisfies MarkSpec));
+} satisfies MarkSchema));
 
 const inlineMathAttr = $nodeAttr("inline_math");
 const inlineMathSchema = $nodeSchema("inline_math", (ctx) => ({
@@ -233,7 +252,7 @@ const inlineMathSchema = $nodeSchema("inline_math", (ctx) => ({
     },
   },
   toDOM: (node) => {
-    const rendered = renderInlineMathMarkup(node.attrs.value);
+    const rendered = renderInlineMathMarkup(readStringAttr(node, "value"));
     for (const [key, value] of Object.entries(ctx.get(inlineMathAttr.key)(node))) {
       rendered.setAttribute(key, String(value));
     }
@@ -251,17 +270,17 @@ const inlineMathSchema = $nodeSchema("inline_math", (ctx) => ({
     match: (node) => node.type === "inlineMath",
     runner: (state, node, type) => {
       state.addNode(type, {
-        value: typeof node.value === "string" ? node.value : "",
+        value: typeof asMarkdownNodeLike(node).value === "string" ? asMarkdownNodeLike(node).value : "",
       });
     },
   },
   toMarkdown: {
     match: (node) => node.type.name === "inline_math",
     runner: (state, node) => {
-      state.addNode("inlineMath", undefined, node.attrs.value);
+      state.addNode("inlineMath", undefined, readStringAttr(node, "value"));
     },
   },
-} satisfies NodeSpec));
+} satisfies NodeSchema));
 
 const blockMathAttr = $nodeAttr("block_math");
 const blockMathSchema = $nodeSchema("block_math", (ctx) => ({
@@ -277,7 +296,7 @@ const blockMathSchema = $nodeSchema("block_math", (ctx) => ({
     },
   },
   toDOM: (node) => {
-    const rendered = renderBlockMathMarkup(node.attrs.value);
+    const rendered = renderBlockMathMarkup(readStringAttr(node, "value"));
     for (const [key, value] of Object.entries(ctx.get(blockMathAttr.key)(node))) {
       rendered.setAttribute(key, String(value));
     }
@@ -295,17 +314,17 @@ const blockMathSchema = $nodeSchema("block_math", (ctx) => ({
     match: (node) => node.type === "math",
     runner: (state, node, type) => {
       state.addNode(type, {
-        value: typeof node.value === "string" ? node.value : "",
+        value: typeof asMarkdownNodeLike(node).value === "string" ? asMarkdownNodeLike(node).value : "",
       });
     },
   },
   toMarkdown: {
     match: (node) => node.type.name === "block_math",
     runner: (state, node) => {
-      state.addNode("math", undefined, node.attrs.value);
+      state.addNode("math", undefined, readStringAttr(node, "value"));
     },
   },
-} satisfies NodeSpec));
+} satisfies NodeSchema));
 
 const highlightInputRule = $inputRule((ctx) =>
   markRule(/(?:==)([^=\s](?:[\s\S]*?[^=\s])?)==$/, highlightSchema.type(ctx)));
@@ -382,7 +401,10 @@ const richTextUnderlinePlugin = $remark("richTextUnderline", () => () => (tree) 
   visitTextNodes(tree as MarkdownNodeLike);
 });
 const richTextMathPlugin = $remark("richTextMath", () => remarkMath);
-const richTextSuperSubPlugin = $remark("richTextSuperSub", () => remarkSupersub);
+const richTextSuperSubPlugin = $remark(
+  "richTextSuperSub",
+  () => remarkSupersub as unknown as RemarkPluginRaw<unknown>,
+);
 const richTextCleanupPlugin = $remark("richTextCleanup", () => () => (tree) => {
   stripEmptyTextNodes(tree as MarkdownNodeLike);
 });
@@ -392,24 +414,52 @@ export function configureRichTextMarkdown(ctx: Ctx): void {
     singleTilde: false,
   });
 
-  ctx.update(remarkStringifyOptionsCtx, (prev) => ({
-    ...prev,
-    handlers: {
+  ctx.update(remarkStringifyOptionsCtx, (prev) => {
+    const richTextHandlers = {
+      insert: ((node, _parent, state, info) =>
+        renderWrappedPhrasing(
+          "insert",
+          "++",
+          node as MarkdownContainerNode,
+          state as unknown as MarkdownPhrasingState,
+          info,
+        )) satisfies ToMarkdownHandle,
+      superscript: ((node, _parent, state, info) =>
+        renderWrappedPhrasing(
+          "superscript",
+          "^",
+          node as MarkdownContainerNode,
+          state as unknown as MarkdownPhrasingState,
+          info,
+        )) satisfies ToMarkdownHandle,
+      subscript: ((node, _parent, state, info) =>
+        renderWrappedPhrasing(
+          "subscript",
+          "~",
+          node as MarkdownContainerNode,
+          state as unknown as MarkdownPhrasingState,
+          info,
+        )) satisfies ToMarkdownHandle,
+    };
+    const handlers = {
       ...(prev.handlers ?? {}),
       ...(pandocMarkToMarkdown.handlers ?? {}),
-      insert: (node, _, state) => renderWrappedPhrasing("insert", "++", node, state),
-      superscript: (node, _, state) => renderWrappedPhrasing("superscript", "^", node, state),
-      subscript: (node, _, state) => renderWrappedPhrasing("subscript", "~", node, state),
-    },
-    unsafe: appendUniqueUnsafeEntries(
-      appendUniqueUnsafeEntries(prev.unsafe, pandocMarkToMarkdown.unsafe ?? []),
-      [
-        { character: "+", inConstruct: "phrasing" },
-        { character: "^", inConstruct: "phrasing" },
-        { character: "~", inConstruct: "phrasing" },
-      ],
-    ),
-  }));
+      ...richTextHandlers,
+    };
+
+    return {
+      ...prev,
+      handlers: handlers as typeof prev.handlers,
+      unsafe: appendUniqueUnsafeEntries(
+        appendUniqueUnsafeEntries(prev.unsafe as UnsafeEntry[] | null | undefined, pandocMarkToMarkdown.unsafe ?? []),
+        [
+          { character: "+", inConstruct: "phrasing" },
+          { character: "^", inConstruct: "phrasing" },
+          { character: "~", inConstruct: "phrasing" },
+        ],
+      ) as typeof prev.unsafe,
+    };
+  });
 }
 
 export const richTextMarkdownPlugins: MilkdownPlugin[] = [

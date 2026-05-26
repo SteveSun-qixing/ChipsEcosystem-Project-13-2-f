@@ -35,6 +35,15 @@ describe("layoutDefinition", () => {
           name: "Demo",
           activeLayoutType: "chips.layout.grid",
           availableLayouts: ["chips.layout.grid"],
+          capabilities: {
+            listEntries: true,
+            readEntryDetail: true,
+            renderEntryCover: true,
+            resolveEntryResource: true,
+            readBoxAsset: true,
+            prefetchEntries: true,
+            openEntry: true,
+          },
         },
         initialView: {
           items: [
@@ -77,6 +86,7 @@ describe("layoutDefinition", () => {
     expect(tile?.querySelector('[data-grid-entry-summary]')).toBeNull();
     expect(container.querySelector('[data-scope="embedded-document-frame"]')).toBeTruthy();
     expect(renderEntryCover).toHaveBeenCalledWith("entry-1");
+    expect(renderEntryCover).toHaveBeenCalledTimes(1);
     tile?.querySelector('[data-grid-entry-title]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(openEntry).toHaveBeenCalledWith("entry-1");
     await act(async () => {
@@ -112,6 +122,15 @@ describe("layoutDefinition", () => {
           name: "Sort Box",
           activeLayoutType: "chips.layout.grid",
           availableLayouts: ["chips.layout.grid"],
+          capabilities: {
+            listEntries: true,
+            readEntryDetail: true,
+            renderEntryCover: true,
+            resolveEntryResource: true,
+            readBoxAsset: true,
+            prefetchEntries: true,
+            openEntry: true,
+          },
         },
         initialView: {
           items: [
@@ -178,17 +197,18 @@ describe("layoutDefinition", () => {
       });
     });
 
-    expect(container.querySelector('select')).toBeTruthy();
+    expect(container.querySelector('[data-scope="select"][data-part="root"]')).toBeTruthy();
     expect(container.querySelector('input[type="number"]')).toBeNull();
     expect(container.textContent).toContain("移动端固定为两列");
     expect(container.style.display).toBe("flex");
     expect(container.style.overflow).toBe("hidden");
     expect(container.querySelector('[data-chips-grid-layout-editor-root="true"]')).toBeTruthy();
-    const editorShell = container.querySelector('[data-scope="chips-grid-layout-editor"]') as HTMLElement | null;
-    const editorBody = container.querySelector('[data-part="body"]') as HTMLElement | null;
-    expect(editorShell?.style.height).toBe("100%");
-    expect(editorShell?.style.overflow).toBe("hidden");
-    expect(editorBody?.style.overflowY).toBe("auto");
+    expect(container.querySelector('[data-scope="chips-grid-layout-editor"]')).toBeTruthy();
+    const editorRoot = container.querySelector('[data-chips-grid-layout-editor-root="true"]') as HTMLElement | null;
+    expect(editorRoot?.style.height).toBe("100%");
+    expect(container.querySelector('[data-scope="form"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="select"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="form"][data-part="root"]')).toBeTruthy();
 
     await act(async () => {
       cleanup?.();
@@ -210,6 +230,15 @@ describe("layoutDefinition", () => {
           name: "Empty Box",
           activeLayoutType: "chips.layout.grid",
           availableLayouts: ["chips.layout.grid"],
+          capabilities: {
+            listEntries: true,
+            readEntryDetail: true,
+            renderEntryCover: true,
+            resolveEntryResource: true,
+            readBoxAsset: true,
+            prefetchEntries: true,
+            openEntry: true,
+          },
         },
         initialView: {
           items: [],
@@ -233,5 +262,160 @@ describe("layoutDefinition", () => {
     expect(container.querySelector('[data-scope="chips-box-grid-layout"]')).toBeTruthy();
     expect(container.querySelector('[data-layout-grid]')).toBeTruthy();
     expect(container.textContent).toContain("暂无条目");
+  });
+
+  it("loads additional entry pages and prefetches visible covers", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const listEntries = vi.fn().mockResolvedValue({
+      items: [
+        {
+          entryId: "entry-2",
+          url: "file:///tmp/2.card",
+          enabled: true,
+          snapshot: {
+            title: "Second",
+            cover: {
+              mode: "none",
+            },
+            contentType: "chips/card",
+          },
+        },
+      ],
+      total: 2,
+    });
+    const prefetchEntries = vi.fn().mockResolvedValue(undefined);
+
+    await act(async () => {
+      layoutDefinition.renderView({
+        container,
+        sessionId: "session-pages",
+        box: {
+          boxId: "box-pages",
+          boxFile: "/tmp/pages.box",
+          name: "Pages Box",
+          activeLayoutType: "chips.layout.grid",
+          availableLayouts: ["chips.layout.grid"],
+          capabilities: {
+            listEntries: true,
+            readEntryDetail: true,
+            renderEntryCover: true,
+            resolveEntryResource: true,
+            readBoxAsset: true,
+            prefetchEntries: true,
+            openEntry: true,
+          },
+        },
+        initialView: {
+          items: [
+            {
+              entryId: "entry-1",
+              url: "file:///tmp/1.card",
+              enabled: true,
+              snapshot: {
+                title: "First",
+                cover: {
+                  mode: "none",
+                },
+                contentType: "chips/card",
+              },
+            },
+          ],
+          total: 2,
+          nextCursor: "cursor-2",
+        },
+        config: layoutDefinition.createDefaultConfig(),
+        runtime: {
+          listEntries,
+          readEntryDetail: vi.fn(),
+          renderEntryCover: vi.fn(),
+          resolveEntryResource: vi.fn(),
+          readBoxAsset: vi.fn(),
+          prefetchEntries,
+          openEntry: vi.fn(),
+        },
+        locale: "zh-CN",
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("加载更多");
+    expect(prefetchEntries).toHaveBeenCalledWith({
+      entryIds: ["entry-1"],
+      targets: ["cover"],
+    });
+
+    await act(async () => {
+      container.querySelector('[data-layout-load-more]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(listEntries).toHaveBeenCalledWith({
+      cursor: "cursor-2",
+      limit: 48,
+    });
+    expect(container.textContent).toContain("Second");
+  });
+
+  it("imports editor assets through the box asset bridge", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const importBoxAsset = vi.fn().mockResolvedValue({
+      assetPath: "assets/layouts/grid/background/hero.webp",
+    });
+    const readBoxAsset = vi.fn().mockResolvedValue({
+      resourceUrl: "chips-render://box-assets/hero.webp",
+      mimeType: "image/webp",
+    });
+    const deleteBoxAsset = vi.fn().mockResolvedValue(undefined);
+
+    await act(async () => {
+      layoutDefinition.renderEditor?.({
+        container,
+        entries: [],
+        initialConfig: layoutDefinition.normalizeConfig({
+          props: {
+            background: {
+              mode: "image",
+            },
+          },
+        }),
+        onChange,
+        readBoxAsset,
+        importBoxAsset,
+        deleteBoxAsset,
+        locale: "zh-CN",
+      });
+      await Promise.resolve();
+    });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).toBeTruthy();
+    const file = new File(["hero"], "hero.webp", { type: "image/webp" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+
+    await act(async () => {
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(importBoxAsset).toHaveBeenCalledWith(expect.objectContaining({
+      file,
+      preferredPath: expect.stringMatching(/^assets\/layouts\/grid\/background\/[0-9]+-hero\.webp$/),
+    }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      props: expect.objectContaining({
+        background: {
+          mode: "image",
+          assetPath: "assets/layouts/grid/background/hero.webp",
+        },
+      }),
+      assetRefs: ["assets/layouts/grid/background/hero.webp"],
+    }));
   });
 });

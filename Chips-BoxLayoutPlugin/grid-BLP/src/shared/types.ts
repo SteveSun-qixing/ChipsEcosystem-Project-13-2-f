@@ -1,8 +1,10 @@
 export interface ResolvedRuntimeResource {
-  resourceUrl?: string;
-  mimeType?: string;
-  assetPath?: string;
-  status?: "ready" | "missing" | "forbidden" | "error";
+  resourceUrl: string;
+  mimeType: string;
+  cacheKey?: string;
+  expiresAt?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface BoxEntryCoverView {
@@ -21,7 +23,7 @@ export interface BoxSessionInfo {
   coverRatio?: string;
   tags?: Array<string | string[]>;
   coverAsset?: string;
-  capabilities?: {
+  capabilities: {
     listEntries: true;
     readEntryDetail: true;
     renderEntryCover: true;

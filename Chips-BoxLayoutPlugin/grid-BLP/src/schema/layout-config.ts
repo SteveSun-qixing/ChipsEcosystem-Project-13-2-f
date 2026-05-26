@@ -37,12 +37,25 @@ function normalizeSortMode(value: unknown): SortMode {
   return "manual";
 }
 
+const BOX_ASSET_PATH_PATTERN = /^assets\/[^\\:?#/]+(?:\/[^\\:?#/]+)*$/;
+
+export function isSafeBoxAssetPath(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed !== value || !BOX_ASSET_PATH_PATTERN.test(trimmed)) {
+    return false;
+  }
+  if (trimmed.startsWith("/") || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return false;
+  }
+
+  return trimmed.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+}
+
 function normalizeFrameRegion(value: unknown): FrameRegionConfig {
   const raw = typeof value === "object" && value ? value as Record<string, unknown> : {};
   const mode = raw.mode === "image" || raw.mode === "html" ? raw.mode : "none";
-  const assetPath = typeof raw.assetPath === "string" && raw.assetPath.trim().length > 0
-    ? raw.assetPath.trim()
-    : undefined;
+  const rawAssetPath = typeof raw.assetPath === "string" ? raw.assetPath : "";
+  const assetPath = rawAssetPath.length > 0 && isSafeBoxAssetPath(rawAssetPath) ? rawAssetPath : undefined;
   const html = typeof raw.html === "string" && raw.html.trim().length > 0
     ? raw.html
     : undefined;
@@ -83,7 +96,9 @@ function syncAssetRefs(config: LayoutConfig): LayoutConfig {
   const nextAssetRefs = [
     config.props.background.mode === "image" ? config.props.background.assetPath : undefined,
     config.props.topRegion.mode === "image" ? config.props.topRegion.assetPath : undefined,
-  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  ].filter((value): value is string =>
+    typeof value === "string" && value.length > 0 && isSafeBoxAssetPath(value)
+  );
 
   return {
     ...config,
@@ -115,7 +130,7 @@ export function createDefaultLayoutConfig(): LayoutConfig {
   };
 }
 
-export function normalizeLayoutConfig(input: Record<string, unknown> | undefined): LayoutConfig {
+export function normalizeLayoutConfig(input: LayoutConfig | Record<string, unknown> | undefined): LayoutConfig {
   const props = typeof input?.props === "object" && input?.props ? input.props as Record<string, unknown> : {};
 
   return syncAssetRefs({
@@ -144,17 +159,55 @@ export function validateLayoutConfig(config: LayoutConfig): {
     errors["props.sortMode"] = "sortMode is invalid.";
   }
 
-  if (config.props.background.mode === "image" && !config.props.background.assetPath) {
-    errors["props.background.assetPath"] = "background assetPath is required when mode is image.";
+  const backgroundAssetPath = config.props.background.assetPath;
+  if (config.props.background.mode === "image") {
+    if (!backgroundAssetPath) {
+      errors["props.background.assetPath"] = "background assetPath is required when mode is image.";
+    } else if (!isSafeBoxAssetPath(backgroundAssetPath)) {
+      errors["props.background.assetPath"] = "background assetPath must be a box assets/ relative path.";
+    }
   }
   if (config.props.background.mode === "html" && !config.props.background.html) {
     errors["props.background.html"] = "background html is required when mode is html.";
   }
-  if (config.props.topRegion.mode === "image" && !config.props.topRegion.assetPath) {
-    errors["props.topRegion.assetPath"] = "topRegion assetPath is required when mode is image.";
+  const topRegionAssetPath = config.props.topRegion.assetPath;
+  if (config.props.topRegion.mode === "image") {
+    if (!topRegionAssetPath) {
+      errors["props.topRegion.assetPath"] = "topRegion assetPath is required when mode is image.";
+    } else if (!isSafeBoxAssetPath(topRegionAssetPath)) {
+      errors["props.topRegion.assetPath"] = "topRegion assetPath must be a box assets/ relative path.";
+    }
   }
   if (config.props.topRegion.mode === "html" && !config.props.topRegion.html) {
     errors["props.topRegion.html"] = "topRegion html is required when mode is html.";
+  }
+
+  config.assetRefs.forEach((assetPath, index) => {
+    if (!isSafeBoxAssetPath(assetPath)) {
+      errors[`assetRefs[${index}]`] = "assetRefs item must be a box assets/ relative path.";
+    }
+  });
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validateLayoutConfigInput(input: LayoutConfig | Record<string, unknown> | undefined): {
+  valid: boolean;
+  errors: Record<string, string>;
+} {
+  const normalized = normalizeLayoutConfig(input);
+  const result = validateLayoutConfig(normalized);
+  const errors = { ...result.errors };
+
+  if (Array.isArray(input?.assetRefs)) {
+    input.assetRefs.forEach((assetRef, index) => {
+      if (typeof assetRef !== "string" || !isSafeBoxAssetPath(assetRef)) {
+        errors[`assetRefs[${index}]`] = "assetRefs item must be a box assets/ relative path.";
+      }
+    });
   }
 
   return {

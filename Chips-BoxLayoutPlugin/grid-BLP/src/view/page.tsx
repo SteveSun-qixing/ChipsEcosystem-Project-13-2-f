@@ -1,17 +1,19 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasFrameRegionContent, type LayoutConfig } from "../schema/layout-config";
 import { FrameRegionSurface } from "../shared/frame-region";
-import type { BoxEntrySnapshot, BoxLayoutRuntime } from "../shared/types";
+import type { BoxEntryPage, BoxEntrySnapshot, BoxLayoutRuntime } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 import { EntryTile } from "./entry-tile";
 import { GRID_LAYOUT_STYLE } from "./styles";
 
 export interface LayoutViewProps {
-  entries: BoxEntrySnapshot[];
+  initialView: BoxEntryPage;
   config: LayoutConfig;
   runtime: BoxLayoutRuntime;
   locale?: string;
 }
+
+const PAGE_LIMIT = 48;
 
 function resolveEntryTitle(entry: BoxEntrySnapshot): string {
   return entry.snapshot.title ?? entry.snapshot.documentId ?? entry.entryId;
@@ -34,21 +36,101 @@ function sortEntries(entries: BoxEntrySnapshot[], sortMode: LayoutConfig["props"
   });
 }
 
+function appendUniqueEntries(current: BoxEntrySnapshot[], next: BoxEntrySnapshot[]): BoxEntrySnapshot[] {
+  const seen = new Set(current.map((entry) => entry.entryId));
+  const appended = next.filter((entry) => {
+    if (seen.has(entry.entryId)) {
+      return false;
+    }
+    seen.add(entry.entryId);
+    return true;
+  });
+
+  return [...current, ...appended];
+}
+
 export function LayoutViewPage({
-  entries,
+  initialView,
   config,
   runtime,
   locale,
 }: LayoutViewProps) {
+  const isMountedRef = useRef(true);
+  const [items, setItems] = useState<BoxEntrySnapshot[]>(initialView.items);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(initialView.nextCursor);
+  const [total, setTotal] = useState(initialView.total);
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
+  const [pageError, setPageError] = useState(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setItems(initialView.items);
+    setNextCursor(initialView.nextCursor);
+    setTotal(initialView.total);
+    setIsLoadingNext(false);
+    setPageError(false);
+  }, [initialView]);
+
   const sortedEntries = useMemo(
-    () => sortEntries(entries, config.props.sortMode, locale),
-    [config.props.sortMode, entries, locale],
+    () => sortEntries(items.filter((entry) => entry.enabled), config.props.sortMode, locale),
+    [config.props.sortMode, items, locale],
+  );
+  const prefetchEntries = useMemo(
+    () => sortedEntries.slice(-PAGE_LIMIT),
+    [sortedEntries],
   );
   const showBackground = hasFrameRegionContent(config.props.background);
   const showTopRegion = hasFrameRegionContent(config.props.topRegion);
 
+  useEffect(() => {
+    if (prefetchEntries.length === 0) {
+      return;
+    }
+
+    void runtime.prefetchEntries({
+      entryIds: prefetchEntries.map((entry) => entry.entryId),
+      targets: ["cover"],
+    }).catch(() => undefined);
+  }, [prefetchEntries, runtime]);
+
+  const loadNextPage = useCallback(async () => {
+    if (!nextCursor || isLoadingNext) {
+      return;
+    }
+
+    setIsLoadingNext(true);
+    setPageError(false);
+    try {
+      const page = await runtime.listEntries({
+        cursor: nextCursor,
+        limit: PAGE_LIMIT,
+      });
+
+      if (!isMountedRef.current) {
+        return;
+      }
+      setItems((current) => appendUniqueEntries(current, page.items));
+      setNextCursor(page.nextCursor);
+      setTotal(page.total);
+    } catch {
+      if (isMountedRef.current) {
+        setPageError(true);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoadingNext(false);
+      }
+    }
+  }, [isLoadingNext, nextCursor, runtime]);
+
   return (
-    <section data-scope="chips-box-grid-layout">
+    <section data-scope="chips-box-grid-layout" aria-label={getLayoutMessage(locale, "layout.aria_label")}>
       <style>{GRID_LAYOUT_STYLE}</style>
 
       {showBackground ? (
@@ -96,6 +178,30 @@ export function LayoutViewPage({
             </div>
           )}
         </div>
+
+        {nextCursor || pageError ? (
+          <div data-layout-footer data-total={total}>
+            {pageError ? (
+              <div data-layout-page-error role="status">
+                <span>{getLayoutMessage(locale, "layout.page_error")}</span>
+                <button type="button" data-layout-retry onClick={loadNextPage}>
+                  {getLayoutMessage(locale, "layout.retry")}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                data-layout-load-more
+                onClick={loadNextPage}
+                disabled={isLoadingNext}
+              >
+                {isLoadingNext
+                  ? getLayoutMessage(locale, "layout.loading_more")
+                  : getLayoutMessage(locale, "layout.load_more")}
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     </section>
   );

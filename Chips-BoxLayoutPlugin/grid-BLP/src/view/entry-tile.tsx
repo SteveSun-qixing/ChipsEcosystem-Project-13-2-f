@@ -87,19 +87,30 @@ export function EntryTile({
             onActivate={openEntry}
           />
         ) : (
-          <button type="button" data-grid-cover-placeholder onClick={openEntry}>
+          <button
+            type="button"
+            data-grid-cover-placeholder
+            aria-label={`${getLayoutMessage(locale, "layout.open_entry")}: ${title}`}
+            onClick={openEntry}
+          >
             <strong data-grid-cover-placeholder-title>{title}</strong>
             <span data-grid-cover-placeholder-text>
               {coverState.status === "loading"
                 ? getLayoutMessage(locale, "layout.loading")
-                : `${kindLabel} · ${getLayoutMessage(locale, "layout.cover_missing")}`}
+                : `${kindLabel} · ${getLayoutMessage(locale, coverState.status === "error" ? "layout.cover_error" : "layout.cover_missing")}`}
             </span>
           </button>
         )}
       </div>
 
       <div data-grid-entry-body>
-        <button type="button" data-grid-entry-title onClick={openEntry}>
+        <button
+          type="button"
+          data-grid-entry-title
+          aria-label={`${getLayoutMessage(locale, "layout.open_entry")}: ${title}`}
+          title={title}
+          onClick={openEntry}
+        >
           {title}
         </button>
       </div>

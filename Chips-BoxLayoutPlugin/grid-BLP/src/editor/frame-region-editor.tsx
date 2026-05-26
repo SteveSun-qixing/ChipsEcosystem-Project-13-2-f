@@ -1,10 +1,35 @@
 import React from "react";
-import { FrameRegionSurface } from "../shared/frame-region";
-import { hasFrameRegionContent, type FrameRegionConfig } from "../schema/layout-config";
+import {
+  ChipsButton,
+  ChipsErrorState,
+  ChipsForm,
+  ChipsSegmentedControl,
+  ChipsTextArea,
+  ChipsToolbar,
+  EmbeddedDocumentFrame,
+  type ChipsCommandAdapter,
+  type ChipsCommandView,
+  type StandardErrorLike,
+} from "@chips/component-library";
+import {
+  hasFrameRegionContent,
+  isSafeBoxAssetPath,
+  type FrameRegionConfig,
+} from "../schema/layout-config";
 import type { ResolvedRuntimeResource } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 
+type LayoutMessageKey = Parameters<typeof getLayoutMessage>[1];
+type FrameMode = FrameRegionConfig["mode"];
+
+interface PreviewState {
+  status: "idle" | "loading" | "ready" | "error";
+  resourceUrl?: string;
+  errorKey?: LayoutMessageKey;
+}
+
 export interface FrameRegionEditorProps {
+  id: string;
   region: FrameRegionConfig;
   locale?: string;
   title: string;
@@ -18,61 +43,180 @@ export interface FrameRegionEditorProps {
   onChange(next: FrameRegionConfig): void;
 }
 
-const shellStyle: React.CSSProperties = {
-  display: "grid",
-  gap: "14px",
-  width: "100%",
-  minWidth: 0,
-};
-
-const modeRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const modeButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(148,163,184,0.28)",
-  borderRadius: "999px",
-  background: "rgba(255,255,255,0.82)",
-  padding: "8px 14px",
-  fontSize: "13px",
-  cursor: "pointer",
-};
-
-const activeModeButtonStyle: React.CSSProperties = {
-  ...modeButtonStyle,
-  background: "#0f172a",
-  color: "#ffffff",
-  borderColor: "#0f172a",
-};
-
-const actionButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(148,163,184,0.28)",
-  borderRadius: "12px",
-  background: "#ffffff",
-  padding: "10px 14px",
-  fontSize: "13px",
-  cursor: "pointer",
-};
-
-const MODE_MESSAGE_KEY = {
+const MODE_MESSAGE_KEY: Record<FrameMode, LayoutMessageKey> = {
   none: "editor.frame_mode_none",
   image: "editor.frame_mode_image",
   html: "editor.frame_mode_html",
-} as const;
+};
 
-async function safeDeleteAsset(
-  assetPath: string | undefined,
-  deleteBoxAsset?: (assetPath: string) => Promise<void>,
-): Promise<void> {
-  if (!assetPath || !deleteBoxAsset) {
-    return;
+function createI18nAdapter(locale: string | undefined) {
+  return {
+    translate(
+      input: string | { key: string; params?: Record<string, string | number> },
+      params?: Record<string, string | number>,
+    ) {
+      const key = typeof input === "string" ? input : input.key;
+      const message = getLayoutMessage(locale, key as LayoutMessageKey);
+      const replacements = typeof input === "string" ? params : input.params;
+      if (!replacements) {
+        return message;
+      }
+      return Object.entries(replacements).reduce(
+        (current, [name, value]) => current.replace(`{${name}}`, String(value)),
+        message,
+      );
+    },
+  };
+}
+
+function toStandardError(locale: string | undefined, key: LayoutMessageKey | undefined): StandardErrorLike | null {
+  if (!key) {
+    return null;
   }
-  await deleteBoxAsset(assetPath).catch(() => undefined);
+  return {
+    code: key,
+    message: getLayoutMessage(locale, key),
+    retryable: true,
+  };
+}
+
+function sanitizeAssetFileName(name: string): string {
+  const sanitized = name
+    .trim()
+    .replace(/[\\/]+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/^\.+/, "")
+    .replace(/-+$/, "");
+  return sanitized.length > 0 ? sanitized : "asset";
+}
+
+function buildPreferredAssetPath(prefix: string, file: File): string {
+  return `${prefix}/${Date.now()}-${sanitizeAssetFileName(file.name)}`;
+}
+
+function useMountedRef(): React.MutableRefObject<boolean> {
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  return mountedRef;
+}
+
+function FrameRegionPreview({
+  region,
+  locale,
+  title,
+  ratio,
+  previewMinHeight,
+  readBoxAsset,
+}: {
+  region: FrameRegionConfig;
+  locale?: string;
+  title: string;
+  ratio: string;
+  previewMinHeight?: string;
+  readBoxAsset?: (assetPath: string) => Promise<ResolvedRuntimeResource>;
+}) {
+  const [state, setState] = React.useState<PreviewState>({ status: "idle" });
+
+  React.useEffect(() => {
+    if (region.mode !== "image" || !region.assetPath) {
+      setState({ status: "idle" });
+      return;
+    }
+
+    if (!readBoxAsset) {
+      setState({
+        status: "error",
+        errorKey: "editor.asset_bridge_missing",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ status: "loading" });
+    void readBoxAsset(region.assetPath)
+      .then((resource) => {
+        if (cancelled) {
+          return;
+        }
+        if (typeof resource.resourceUrl === "string" && resource.resourceUrl.trim().length > 0) {
+          setState({
+            status: "ready",
+            resourceUrl: resource.resourceUrl,
+          });
+          return;
+        }
+        setState({
+          status: "error",
+          errorKey: "editor.read_failed",
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setState({
+            status: "error",
+            errorKey: "editor.read_failed",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [readBoxAsset, region.assetPath, region.mode]);
+
+  if (region.mode === "html" && region.html) {
+    return (
+      <EmbeddedDocumentFrame
+        title={title}
+        srcDoc={region.html}
+        ratio={ratio}
+      />
+    );
+  }
+
+  if (region.mode === "image" && state.status === "ready" && state.resourceUrl) {
+    return (
+      <img
+        data-frame-region-preview-image
+        src={state.resourceUrl}
+        alt={title}
+      />
+    );
+  }
+
+  const minHeight = previewMinHeight ?? "180px";
+
+  if (region.mode === "image" && state.status === "loading") {
+    return (
+      <div data-frame-region-preview-status role="status" style={{ minHeight }}>
+        {getLayoutMessage(locale, "editor.asset_loading")}
+      </div>
+    );
+  }
+
+  if (region.mode === "image" && state.status === "error") {
+    return (
+      <div data-frame-region-preview-status role="status" style={{ minHeight }}>
+        {getLayoutMessage(locale, state.errorKey ?? "editor.read_failed")}
+      </div>
+    );
+  }
+
+  return (
+    <div data-frame-region-preview-status style={{ minHeight }}>
+      {getLayoutMessage(locale, "editor.frame_empty")}
+    </div>
+  );
 }
 
 export function FrameRegionEditor({
+  id,
   region,
   locale,
   title,
@@ -86,17 +230,58 @@ export function FrameRegionEditor({
   onChange,
 }: FrameRegionEditorProps) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const mountedRef = useMountedRef();
+  const i18n = React.useMemo(() => createI18nAdapter(locale), [locale]);
+  const [errorKey, setErrorKey] = React.useState<LayoutMessageKey | undefined>();
+  const [busyAction, setBusyAction] = React.useState<"import" | "delete" | undefined>();
+  const fieldError = toStandardError(locale, errorKey);
   const hasContent = hasFrameRegionContent(region);
+  const hasImageAssetBridge = Boolean(importBoxAsset && readBoxAsset && deleteBoxAsset);
+  const imageBridgeMissing = region.mode === "image" && !hasImageAssetBridge;
 
-  const applyMode = async (nextMode: FrameRegionConfig["mode"]) => {
+  const setErrorWhenMounted = React.useCallback((nextKey: LayoutMessageKey | undefined) => {
+    if (mountedRef.current) {
+      setErrorKey(nextKey);
+    }
+  }, [mountedRef]);
+
+  const deleteExistingAsset = React.useCallback(async (assetPath: string | undefined): Promise<boolean> => {
+    if (!assetPath) {
+      return true;
+    }
+    if (!deleteBoxAsset) {
+      setErrorWhenMounted("editor.asset_bridge_missing");
+      return false;
+    }
+
+    setBusyAction("delete");
+    try {
+      await deleteBoxAsset(assetPath);
+      setErrorWhenMounted(undefined);
+      return true;
+    } catch {
+      setErrorWhenMounted("editor.delete_failed");
+      return false;
+    } finally {
+      if (mountedRef.current) {
+        setBusyAction(undefined);
+      }
+    }
+  }, [deleteBoxAsset, mountedRef, setErrorWhenMounted]);
+
+  const applyMode = React.useCallback(async (nextMode: FrameMode) => {
     if (nextMode === region.mode) {
       return;
     }
 
     if (region.mode === "image" && nextMode !== "image") {
-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      const deleted = await deleteExistingAsset(region.assetPath);
+      if (!deleted) {
+        return;
+      }
     }
 
+    setErrorWhenMounted(undefined);
     if (nextMode === "image") {
       onChange({
         mode: "image",
@@ -116,152 +301,234 @@ export function FrameRegionEditor({
     onChange({
       mode: "none",
     });
-  };
+  }, [deleteExistingAsset, onChange, region, setErrorWhenMounted]);
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    if (!file || !importBoxAsset) {
-      event.currentTarget.value = "";
+  const handleUpload = React.useCallback(async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+    if (!importBoxAsset || !readBoxAsset || !deleteBoxAsset) {
+      setErrorWhenMounted("editor.asset_bridge_missing");
       return;
     }
 
-    const imported = await importBoxAsset({
-      file,
-      preferredPath: `${preferredAssetPrefix}/${file.name}`,
-    });
-    const previousAssetPath = region.mode === "image" ? region.assetPath : undefined;
-    onChange({
-      mode: "image",
-      assetPath: imported.assetPath,
-    });
+    setBusyAction("import");
+    try {
+      const imported = await importBoxAsset({
+        file,
+        preferredPath: buildPreferredAssetPath(preferredAssetPrefix, file),
+      });
+      if (!isSafeBoxAssetPath(imported.assetPath)) {
+        setErrorWhenMounted("editor.imported_asset_path_invalid");
+        return;
+      }
 
-    if (previousAssetPath && previousAssetPath !== imported.assetPath) {
-      await safeDeleteAsset(previousAssetPath, deleteBoxAsset);
+      const previousAssetPath = region.mode === "image" ? region.assetPath : undefined;
+      onChange({
+        mode: "image",
+        assetPath: imported.assetPath,
+      });
+      setErrorWhenMounted(undefined);
+
+      if (previousAssetPath && previousAssetPath !== imported.assetPath) {
+        try {
+          await deleteBoxAsset(previousAssetPath);
+        } catch {
+          setErrorWhenMounted("editor.delete_failed");
+        }
+      }
+    } catch {
+      setErrorWhenMounted("editor.import_failed");
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      if (mountedRef.current) {
+        setBusyAction(undefined);
+      }
     }
+  }, [
+    deleteBoxAsset,
+    importBoxAsset,
+    mountedRef,
+    onChange,
+    preferredAssetPrefix,
+    readBoxAsset,
+    region.assetPath,
+    region.mode,
+    setErrorWhenMounted,
+  ]);
 
-    event.currentTarget.value = "";
-  };
-
-  const handleClear = async () => {
+  const handleClear = React.useCallback(async () => {
     if (region.mode === "image") {
-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      const deleted = await deleteExistingAsset(region.assetPath);
+      if (!deleted) {
+        return;
+      }
     }
+
+    setErrorWhenMounted(undefined);
     onChange({
       mode: "none",
     });
-  };
+  }, [deleteExistingAsset, onChange, region.assetPath, region.mode, setErrorWhenMounted]);
+
+  const toolbarCommands = React.useMemo<ChipsCommandView[]>(() => [
+    {
+      commandId: `${id}.upload`,
+      titleKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
+      ariaLabelKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
+      icon: { name: "upload_file" },
+      toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 1 }],
+      state: {
+        enabled: hasImageAssetBridge && busyAction !== "delete",
+        busy: busyAction === "import",
+      },
+    },
+    {
+      commandId: `${id}.clear`,
+      titleKey: "editor.clear_asset",
+      ariaLabelKey: "editor.clear_asset",
+      icon: { name: "delete" },
+      toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 2 }],
+      state: {
+        enabled: hasContent && busyAction !== "import",
+        busy: busyAction === "delete",
+      },
+    },
+  ], [busyAction, hasContent, hasImageAssetBridge, id, region.assetPath]);
+
+  const toolbarAdapter = React.useMemo<ChipsCommandAdapter>(() => ({
+    listCommands: async () => toolbarCommands,
+    invokeCommand: async (commandId) => {
+      if (commandId === `${id}.upload`) {
+        fileInputRef.current?.click();
+        return undefined;
+      }
+      if (commandId === `${id}.clear`) {
+        await handleClear();
+      }
+      return undefined;
+    },
+  }), [handleClear, id, toolbarCommands]);
+
+  const modeOptions = React.useMemo(() => ([
+    {
+      value: "none",
+      label: getLayoutMessage(locale, MODE_MESSAGE_KEY.none),
+    },
+    {
+      value: "image",
+      label: getLayoutMessage(locale, MODE_MESSAGE_KEY.image),
+    },
+    {
+      value: "html",
+      label: getLayoutMessage(locale, MODE_MESSAGE_KEY.html),
+    },
+  ]), [locale]);
 
   return (
-    <section style={shellStyle}>
-      <div style={{ display: "grid", gap: "6px" }}>
-        <strong style={{ fontSize: "15px", color: "#0f172a" }}>{title}</strong>
-        <span style={{ color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>{description}</span>
-      </div>
-
-      <div style={modeRowStyle}>
-        {(["none", "image", "html"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            style={region.mode === mode ? activeModeButtonStyle : modeButtonStyle}
-            onClick={() => { void applyMode(mode); }}
-          >
-            {getLayoutMessage(locale, MODE_MESSAGE_KEY[mode])}
-          </button>
-        ))}
-      </div>
+    <ChipsForm.Section
+      className="chips-grid-layout-editor__region"
+      title={title}
+      description={description}
+      data-frame-region-editor={id}
+    >
+      <ChipsForm.Field name={`${id}.mode`}>
+        <ChipsForm.Label>{getLayoutMessage(locale, "editor.frame_mode")}</ChipsForm.Label>
+        <ChipsSegmentedControl
+          value={region.mode}
+          ariaLabel={getLayoutMessage(locale, "editor.frame_mode")}
+          options={modeOptions}
+          i18n={i18n}
+          onValueChange={(value) => {
+            void applyMode(value as FrameMode);
+          }}
+        />
+      </ChipsForm.Field>
 
       {region.mode === "image" ? (
-        <div style={{ display: "grid", gap: "10px" }}>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button type="button" style={actionButtonStyle} onClick={() => fileInputRef.current?.click()}>
-              {getLayoutMessage(locale, "editor.upload_image")}
-            </button>
-            <button type="button" style={actionButtonStyle} onClick={() => { void handleClear(); }}>
-              {getLayoutMessage(locale, "editor.clear_frame")}
-            </button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(event) => { void handleUpload(event); }}
-          />
-          <span style={{ fontSize: "12px", color: "#64748b" }}>
-            {region.assetPath ?? getLayoutMessage(locale, "editor.frame_empty")}
-          </span>
-        </div>
+        <ChipsForm.Field
+          name={`${id}.assetPath`}
+          error={fieldError}
+        >
+          <ChipsForm.Label>{getLayoutMessage(locale, "editor.asset_path")}</ChipsForm.Label>
+          <ChipsForm.Control as="div">
+            <ChipsToolbar
+              toolbarId={`${id}.asset-toolbar`}
+              commands={toolbarCommands}
+              adapter={toolbarAdapter}
+              i18n={i18n}
+              ariaLabel={getLayoutMessage(locale, "editor.asset_toolbar")}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                void handleUpload(event.currentTarget.files?.[0]);
+              }}
+            />
+            <span data-frame-region-asset-path>
+              {region.assetPath ?? getLayoutMessage(locale, "editor.frame_empty")}
+            </span>
+          </ChipsForm.Control>
+          <ChipsForm.Hint>{getLayoutMessage(locale, "editor.asset_hint")}</ChipsForm.Hint>
+          <ChipsForm.Error>{fieldError?.message}</ChipsForm.Error>
+          {imageBridgeMissing ? (
+            <ChipsErrorState
+              error={toStandardError(locale, "editor.asset_bridge_missing")}
+              title={getLayoutMessage(locale, "editor.asset_bridge_missing")}
+              description={getLayoutMessage(locale, "editor.asset_bridge_missing_desc")}
+            />
+          ) : null}
+        </ChipsForm.Field>
       ) : null}
 
       {region.mode === "html" ? (
-        <div style={{ display: "grid", gap: "10px" }}>
-          <textarea
-            rows={12}
+        <ChipsForm.Field name={`${id}.html`}>
+          <ChipsTextArea
             value={region.html ?? ""}
+            label={getLayoutMessage(locale, "editor.html")}
+            ariaLabel={getLayoutMessage(locale, "editor.html")}
             placeholder={getLayoutMessage(locale, "editor.html_placeholder")}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              minHeight: "220px",
-              maxWidth: "100%",
-              resize: "vertical",
-              borderRadius: "14px",
-              border: "1px solid rgba(148,163,184,0.24)",
-              background: "#ffffff",
-              padding: "14px 16px",
-              font: "13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-              color: "#0f172a",
-            }}
-            onChange={(event) => {
+            rows={10}
+            resize="block"
+            onValueChange={(value) => {
+              setErrorWhenMounted(undefined);
               onChange({
                 mode: "html",
-                html: event.currentTarget.value,
+                html: value,
               });
             }}
           />
-          <div>
-            <button type="button" style={actionButtonStyle} onClick={() => { void handleClear(); }}>
-              {getLayoutMessage(locale, "editor.clear_frame")}
-            </button>
-          </div>
-        </div>
+          <ChipsForm.Hint>{getLayoutMessage(locale, "editor.html_hint")}</ChipsForm.Hint>
+          <ChipsButton
+            type="button"
+            disabled={!hasContent || busyAction !== undefined}
+            onPress={() => {
+              void handleClear();
+            }}
+          >
+            {getLayoutMessage(locale, "editor.clear_asset")}
+          </ChipsButton>
+        </ChipsForm.Field>
       ) : null}
 
-      <div style={{ display: "grid", gap: "10px" }}>
-        <span style={{ fontSize: "12px", color: "#64748b" }}>{getLayoutMessage(locale, "editor.preview")}</span>
-        <div
-          style={{
-            borderRadius: "18px",
-            overflow: "hidden",
-            border: "1px solid rgba(148,163,184,0.24)",
-            background: "linear-gradient(180deg, rgba(248,250,252,0.9) 0%, rgba(241,245,249,0.92) 100%)",
-            minHeight: previewMinHeight ?? "180px",
-          }}
-        >
-          <FrameRegionSurface
+      <div data-frame-region-preview-shell>
+        <span data-frame-region-preview-label>{getLayoutMessage(locale, "editor.preview")}</span>
+        <div data-frame-region-preview style={{ aspectRatio: previewRatio.replace(":", " / ") }}>
+          <FrameRegionPreview
             region={region}
+            locale={locale}
             title={title}
             ratio={previewRatio}
+            previewMinHeight={previewMinHeight}
             readBoxAsset={readBoxAsset}
           />
-          {!hasContent ? (
-            <div
-              style={{
-                minHeight: previewMinHeight ?? "180px",
-                display: "grid",
-                placeItems: "center",
-                padding: "24px",
-                fontSize: "13px",
-                color: "#64748b",
-                textAlign: "center",
-              }}
-            >
-              {getLayoutMessage(locale, "editor.frame_empty")}
-            </div>
-          ) : null}
         </div>
       </div>
-    </section>
+    </ChipsForm.Section>
   );
 }

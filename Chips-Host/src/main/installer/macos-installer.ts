@@ -47,7 +47,12 @@ export interface BuildMacHostInstallerResult extends PrepareMacHostAppBundleResu
   installerPath: string;
 }
 
-export type RunCommandFn = (command: string, args: string[], options?: { cwd?: string }) => Promise<void>;
+interface RunCommandOptions {
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+}
+
+export type RunCommandFn = (command: string, args: string[], options?: RunCommandOptions) => Promise<void>;
 
 const APP_BUNDLE_NAME = 'Chips.app';
 const EXECUTABLE_NAME = 'Chips';
@@ -124,8 +129,15 @@ const resolveAvailableBuiltInPluginBundles = async (
 const defaultRunCommand: RunCommandFn = async (command, args, options) => {
   await execFile(command, args, {
     cwd: options?.cwd,
-    env: process.env
+    env: {
+      ...process.env,
+      ...(options?.env ?? {})
+    }
   });
+};
+
+const PACKAGE_TOOL_ENV: Record<string, string> = {
+  COPYFILE_DISABLE: '1'
 };
 
 const resolveRuntimePackageDir = (hostProjectDir: string, packageName: string): string => {
@@ -283,13 +295,17 @@ const sanitizeFlatComponentPackage = async (flatPackagePath: string): Promise<vo
 
   const expandedDir = `${flatPackagePath}.expanded`;
   const packageInfoPath = path.join(expandedDir, 'PackageInfo');
+  const payloadPath = path.join(expandedDir, 'Payload');
+  const bomPath = path.join(expandedDir, 'Bom');
 
   await fs.rm(expandedDir, { recursive: true, force: true });
 
   try {
-    await execFile('pkgutil', ['--expand-full', flatPackagePath, expandedDir], {
+    await execFile('pkgutil', ['--expand', flatPackagePath, expandedDir], {
       env: process.env
     });
+
+    await sanitizePackagePayload(payloadPath, bomPath);
 
     if (!(await pathExists(packageInfoPath))) {
       return;
@@ -300,13 +316,68 @@ const sanitizeFlatComponentPackage = async (flatPackagePath: string): Promise<vo
     if (sanitized !== original) {
       await fs.writeFile(packageInfoPath, sanitized, 'utf-8');
       await fs.rm(flatPackagePath, { force: true });
-      await execFile('pkgutil', ['--flatten-full', expandedDir, flatPackagePath], {
+      await execFile('pkgutil', ['--flatten', expandedDir, flatPackagePath], {
+        env: process.env
+      });
+    } else if (await pathExists(payloadPath)) {
+      await fs.rm(flatPackagePath, { force: true });
+      await execFile('pkgutil', ['--flatten', expandedDir, flatPackagePath], {
         env: process.env
       });
     }
   } finally {
     await fs.rm(expandedDir, { recursive: true, force: true });
   }
+};
+
+const sanitizePackagePayload = async (payloadPath: string, bomPath: string): Promise<void> => {
+  if (!(await pathExists(payloadPath))) {
+    return;
+  }
+
+  const payloadDir = `${payloadPath}.contents`;
+  await fs.rm(payloadDir, { recursive: true, force: true });
+  await fs.mkdir(payloadDir, { recursive: true });
+
+  try {
+    await execFile('/bin/sh', ['-c', 'gzip -dc "$1" | cpio -id --quiet', 'sh', payloadPath], {
+      cwd: payloadDir,
+      env: process.env
+    });
+
+    await removePackageMetadataEntries(payloadDir);
+
+    await execFile('/bin/sh', ['-c', 'find . | sort | cpio -o --format odc --quiet | gzip -c > "$1"', 'sh', payloadPath], {
+      cwd: payloadDir,
+      env: process.env
+    });
+
+    await execFile('mkbom', [payloadDir, bomPath], {
+      env: process.env
+    });
+  } finally {
+    await fs.rm(payloadDir, { recursive: true, force: true });
+  }
+};
+
+const removePackageMetadataEntries = async (rootPath: string): Promise<number> => {
+  let removedCount = 0;
+  const entries = await fs.readdir(rootPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const entryPath = path.join(rootPath, entry.name);
+    if (entry.name.startsWith('._') || entry.name === '.DS_Store' || entry.name === 'CodeResources') {
+      await fs.rm(entryPath, { recursive: true, force: true });
+      removedCount += 1;
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      removedCount += await removePackageMetadataEntries(entryPath);
+    }
+  }
+
+  return removedCount;
 };
 
 const sanitizeDistributionFile = async (distributionPath: string): Promise<void> => {
@@ -332,14 +403,14 @@ const sanitizeFlatProductArchive = async (archivePath: string): Promise<void> =>
   await fs.rm(expandedDir, { recursive: true, force: true });
 
   try {
-    await execFile('pkgutil', ['--expand-full', archivePath, expandedDir], {
+    await execFile('pkgutil', ['--expand', archivePath, expandedDir], {
       env: process.env
     });
 
     await sanitizeDistributionFile(distributionPath);
 
     await fs.rm(archivePath, { force: true });
-    await execFile('pkgutil', ['--flatten-full', expandedDir, archivePath], {
+    await execFile('pkgutil', ['--flatten', expandedDir, archivePath], {
       env: process.env
     });
   } finally {
@@ -846,28 +917,40 @@ export const createMacPkgInstaller = async (options: CreateMacPkgInstallerOption
   await fs.writeFile(postinstallPath, createMacPostinstallScript(options.packageVersion), 'utf-8');
   await fs.chmod(postinstallPath, 0o755);
   try {
-    await runCommand('pkgbuild', [
-      '--identifier', COMPONENT_PACKAGE_IDENTIFIER,
-      '--version', options.packageVersion,
-      '--root', payloadRoot,
-      '--install-location', '/',
-      '--scripts', scriptsDir,
-      componentPackagePath
-    ]);
+    await runCommand(
+      'pkgbuild',
+      [
+        '--identifier', COMPONENT_PACKAGE_IDENTIFIER,
+        '--version', options.packageVersion,
+        '--root', payloadRoot,
+        '--install-location', '/',
+        '--scripts', scriptsDir,
+        componentPackagePath
+      ],
+      { env: PACKAGE_TOOL_ENV }
+    );
     await sanitizeFlatComponentPackage(componentPackagePath);
-    await runCommand('productbuild', [
-      '--synthesize',
-      '--package', componentPackagePath,
-      distributionPath
-    ]);
+    await runCommand(
+      'productbuild',
+      [
+        '--synthesize',
+        '--package', componentPackagePath,
+        distributionPath
+      ],
+      { env: PACKAGE_TOOL_ENV }
+    );
     await sanitizeDistributionFile(distributionPath);
-    await runCommand('productbuild', [
-      '--distribution', distributionPath,
-      '--package-path', packagesDir,
-      '--identifier', APP_BUNDLE_IDENTIFIER,
-      '--version', options.packageVersion,
-      options.outputPath
-    ]);
+    await runCommand(
+      'productbuild',
+      [
+        '--distribution', distributionPath,
+        '--package-path', packagesDir,
+        '--identifier', APP_BUNDLE_IDENTIFIER,
+        '--version', options.packageVersion,
+        options.outputPath
+      ],
+      { env: PACKAGE_TOOL_ENV }
+    );
     await sanitizeFlatProductArchive(options.outputPath);
   } finally {
     await fs.rm(stagingDir, { recursive: true, force: true });

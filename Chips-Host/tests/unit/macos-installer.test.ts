@@ -1,6 +1,8 @@
+import childProcess from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMacPkgInstaller,
@@ -18,6 +20,7 @@ let esbuildPackageDir: string;
 let cssstylePackageDir: string;
 let toughCookiePackageDir: string;
 let dateNowSpy: ReturnType<typeof vi.spyOn>;
+const execFile = promisify(childProcess.execFile);
 
 const write = async (targetPath: string, value: string): Promise<void> => {
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
@@ -502,10 +505,12 @@ describe('macOS installer builder', () => {
       runCommand
     });
 
-    const calls = runCommand.mock.calls as unknown as Array<[string, string[]]>;
+    const calls = runCommand.mock.calls as unknown as Array<
+      [string, string[], { cwd?: string; env?: Record<string, string | undefined> } | undefined]
+    >;
     expect(calls.length).toBe(3);
 
-    const [pkgbuildCommand, pkgbuildArgs] = calls[0]!;
+    const [pkgbuildCommand, pkgbuildArgs, pkgbuildOptions] = calls[0]!;
     expect(pkgbuildCommand).toBe('pkgbuild');
     expect(pkgbuildArgs).toContain('--identifier');
     expect(pkgbuildArgs).toContain('local.chips.host.component');
@@ -521,8 +526,11 @@ describe('macOS installer builder', () => {
     const payloadRoot = pkgbuildArgs[rootIndex + 1];
     expect(payloadRoot).toBe(path.join(outputDir, '.pkg-build-0', 'payload-root'));
     expect(capturedPayloadRoot).toBe(payloadRoot);
+    expect(pkgbuildOptions?.env).toMatchObject({
+      COPYFILE_DISABLE: '1'
+    });
 
-    const [synthesizeCommand, synthesizeArgs] = calls[1]!;
+    const [synthesizeCommand, synthesizeArgs, synthesizeOptions] = calls[1]!;
     expect(synthesizeCommand).toBe('productbuild');
     expect(synthesizeArgs).toEqual([
       '--synthesize',
@@ -530,8 +538,11 @@ describe('macOS installer builder', () => {
       path.join(outputDir, '.pkg-build-0', 'packages', 'Chips-Host-component.pkg'),
       path.join(outputDir, '.pkg-build-0', 'Distribution.xml')
     ]);
+    expect(synthesizeOptions?.env).toMatchObject({
+      COPYFILE_DISABLE: '1'
+    });
 
-    const [productbuildCommand, productbuildArgs] = calls[2]!;
+    const [productbuildCommand, productbuildArgs, productbuildOptions] = calls[2]!;
     expect(productbuildCommand).toBe('productbuild');
     expect(productbuildArgs).toEqual([
       '--distribution',
@@ -544,6 +555,9 @@ describe('macOS installer builder', () => {
       '0.1.0',
       path.join(outputDir, 'Chips-Host-0.1.0-macos.pkg')
     ]);
+    expect(productbuildOptions?.env).toMatchObject({
+      COPYFILE_DISABLE: '1'
+    });
 
     expect(capturedPostinstall).toContain('Info.plist');
     expect(capturedPostinstall).toContain('CFBundleExecutable');
@@ -556,4 +570,30 @@ describe('macOS installer builder', () => {
     expect(capturedPostinstall).not.toContain('APP_ENTRY=');
     expect(capturedPostinstall).not.toContain('app-entry.js');
   });
+
+  it.runIf(process.platform === 'darwin')(
+    'removes AppleDouble metadata entries from the generated installer payload',
+    async () => {
+      const appBundlePath = path.join(outputDir, 'Dirty.app');
+      const appExecutablePath = path.join(appBundlePath, 'Contents', 'MacOS', 'Chips');
+      const installerPath = path.join(outputDir, 'Chips-Host-0.1.0-macos.pkg');
+
+      await write(appExecutablePath, '#!/bin/sh\nexit 0\n');
+      await fs.chmod(appExecutablePath, 0o755);
+      await write(path.join(appBundlePath, 'Contents', 'Info.plist'), '<plist version="1.0"></plist>\n');
+      await execFile('xattr', ['-w', 'com.chips.test', 'dirty', appExecutablePath]);
+
+      await createMacPkgInstaller({
+        appBundlePath,
+        outputPath: installerPath,
+        packageVersion: '0.1.0'
+      });
+
+      const { stdout } = await execFile('pkgutil', ['--payload-files', installerPath]);
+      expect(stdout).toContain('./Applications/Chips.app/Contents/MacOS/Chips');
+      expect(stdout).not.toMatch(/(^|\/)\._/m);
+      expect(stdout).not.toContain('/.DS_Store');
+    },
+    60_000
+  );
 });

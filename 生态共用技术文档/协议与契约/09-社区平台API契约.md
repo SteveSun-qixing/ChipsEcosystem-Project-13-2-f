@@ -1,8 +1,8 @@
 # 薯片社区平台 HTTP API 契约
 
-**文档编号**：协议与契约 / 09  
-**文档版本**：v1.1  
-**最后核对时间**：2026-05-23
+**文档编号**：协议与契约 / 09
+**文档版本**：v1.2
+**最后核对时间**：2026-05-24
 **适用范围**：所有需要与薯片社区平台服务器交互的客户端、工具与生态内其他系统。
 
 ## 1. 基础约定
@@ -166,12 +166,15 @@ Authorization: Bearer <access_token>
 - `ROOM_FORBIDDEN`
 - `CARD_NOT_FOUND`
 - `CARD_FORBIDDEN`
-- `CARD_PIPELINE_ERROR`
+- `CARD_RENDER_ERROR`
+- `CARD_RENDER_NOT_READY`
 - `BOX_NOT_FOUND`
 - `BOX_FORBIDDEN`
 - `FILE_TYPE_INVALID`
 - `FILE_TOO_LARGE`
 - `FILE_CORRUPT`
+- `UPLOAD_SESSION_NOT_FOUND`
+- `UPLOAD_SESSION_EXPIRED`
 - `VALIDATION_ERROR`
 - `NOT_FOUND`
 - `INTERNAL_ERROR`
@@ -206,6 +209,9 @@ Authorization: Bearer <access_token>
 
 ### 5.4 上传
 
+- `POST /api/v1/upload-sessions`
+- `POST /api/v1/upload-sessions/:uploadId/resources/presign`
+- `POST /api/v1/upload-sessions/:uploadId/card`
 - `POST /api/v1/upload/card`
 - `POST /api/v1/upload/box`
 
@@ -214,6 +220,11 @@ Authorization: Bearer <access_token>
 - `GET /api/v1/cards/:cardId`
 - `GET /api/v1/cards/:cardId/open-view`
 - `GET /api/v1/cards/:cardId/status`
+- `GET /api/v1/cards/:cardId/render-status`
+- `GET /api/v1/cards/:cardId/view`
+- `GET /api/v1/cards/:cardId/cover`
+- `GET /api/v1/cards/:cardId/render-cache/:cacheVersion/*`
+- `GET /api/v1/cards/:cardId/cover-cache/:cacheVersion/*`
 - `PATCH /api/v1/cards/:cardId`
 - `DELETE /api/v1/cards/:cardId`
 - `GET /api/v1/users/me/cards`
@@ -269,7 +280,7 @@ Authorization: Bearer <access_token>
 {
   "id": "uuid",
   "title": "卡片标题",
-  "coverUrl": "https://...",
+  "coverUrl": "/api/v1/cards/uuid/cover",
   "coverRatio": "3:4",
   "htmlUrl": "https://.../index.html",
   "status": "ready",
@@ -277,6 +288,12 @@ Authorization: Bearer <access_token>
   "createdAt": "2026-03-25T00:00:00.000Z"
 }
 ```
+
+说明：
+
+- `status = ready` 表示源 `.card` 已保存可用，不表示查看缓存已经生成；
+- `coverUrl` 在卡片场景中是独立封面入口，通常为 `/api/v1/cards/:cardId/cover`；
+- `htmlUrl` 为历史兼容字段，不作为社区前台正式打开入口。
 
 ### 6.3 Card Detail
 
@@ -287,8 +304,11 @@ Authorization: Bearer <access_token>
   "userId": "uuid",
   "roomId": "uuid",
   "title": "卡片标题",
-  "coverUrl": "https://...",
+  "coverUrl": "/api/v1/cards/uuid/cover",
   "htmlUrl": "https://.../index.html",
+  "sourceCardSha256": "sha256",
+  "viewUrl": "/api/v1/cards/uuid/view",
+  "renderStatusUrl": "/api/v1/cards/uuid/render-status",
   "status": "ready",
   "visibility": "public",
   "fileSizeBytes": 1024,
@@ -360,9 +380,18 @@ Authorization: Bearer <access_token>
 {
   "id": "uuid",
   "title": "卡片标题",
-  "coverUrl": "https://...",
+  "coverUrl": "/api/v1/cards/uuid/cover",
   "coverRatio": "3:4",
   "htmlUrl": "https://.../index.html",
+  "viewUrl": "/api/v1/cards/uuid/view",
+  "renderStatusUrl": "/api/v1/cards/uuid/render-status",
+  "viewState": "cache_ready",
+  "renderCache": {
+    "status": "ready",
+    "generatedAt": "2026-03-25T00:00:00.000Z",
+    "lastAccessedAt": "2026-03-25T00:00:00.000Z",
+    "expiresAt": "2026-04-24T00:00:00.000Z"
+  },
   "status": "ready",
   "visibility": "public",
   "user": {
@@ -377,32 +406,244 @@ Authorization: Bearer <access_token>
 }
 ```
 
+`viewState` 当前取值：
+
+- `cache_ready`：当前查看缓存可用；
+- `rendering`：源 `.card` 已保存，查看缓存正在生成或等待生成；
+- `render_error`：最新查看缓存任务失败；
+- `pending` / `processing` / `ready` / `error`：保留卡片源文件状态透传。
+
+`open-view` 不返回完整 `cardMetadata`、`cardStructure` 或资源 manifest。
+
 ## 7. 上传与查看行为
 
-### 7.1 卡片上传
+### 7.1 官方上传会话
 
-`POST /api/v1/upload/card` 当前返回：
+官方本地上传器和其他受信客户端使用上传会话发布卡片。资源直传对象存储，社区 API 只接收处理后的 `.card` 源文件。
+
+#### 7.1.1 创建上传会话
+
+```http
+POST /api/v1/upload-sessions
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+请求：
+
+```json
+{
+  "contentType": "card",
+  "fileName": "demo.card",
+  "roomId": null,
+  "visibility": "public",
+  "idempotencyKey": "client-generated-key",
+  "client": {
+    "name": "Chips Community Uploader Plugin",
+    "version": "0.1.0",
+    "platform": "darwin"
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "data": {
+    "uploadId": "uuid",
+    "resourcePrefix": "users/user-id/uploads/upload-id/resources",
+    "expiresAt": "2026-05-24T00:00:00.000Z"
+  }
+}
+```
+
+#### 7.1.2 申请资源直传地址
+
+```http
+POST /api/v1/upload-sessions/:uploadId/resources/presign
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+请求：
+
+```json
+{
+  "resources": [
+    {
+      "relativePath": "hero.png",
+      "sizeBytes": 2048,
+      "sha256": "sha256",
+      "mimeType": "image/png"
+    }
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "data": {
+    "resources": [
+      {
+        "relativePath": "hero.png",
+        "publicUrl": "https://file.example/chips-card-resources/users/user-id/uploads/upload-id/resources/hero.png",
+        "uploadUrl": "https://s3.example/...",
+        "method": "PUT",
+        "headers": {
+          "content-type": "image/png",
+          "x-amz-meta-chips-sha256": "sha256",
+          "x-amz-meta-chips-upload-session": "uuid"
+        },
+        "expiresAt": "2026-05-24T00:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+客户端必须用响应中的 `method`、`uploadUrl` 和 `headers` 原样 PUT 资源。服务端提交 `.card` 时会 Head 对象并校验大小与元数据摘要。
+
+#### 7.1.3 提交处理后的 `.card`
+
+```http
+POST /api/v1/upload-sessions/:uploadId/card
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+表单字段：
+
+- `file`：处理后的 `.card`；
+- `manifest`：客户端发布 manifest JSON。
+
+响应：
 
 ```json
 {
   "data": {
     "cardId": "uuid",
-    "status": "pending"
+    "status": "ready",
+    "renderStatus": "queued",
+    "renderStatusUrl": "/api/v1/cards/uuid/render-status",
+    "communityUrl": "https://www.chipscard.space/cards/uuid"
   }
 }
 ```
 
-服务端后续会异步完成：
+提交时服务端会校验：
 
-1. 将上传原始 `.card` 写入服务端内部对象存储任务输入区；
-2. 创建 `card_pipeline_jobs` 队列任务；
-3. 由独立 worker 进程执行资源上传 CDN、URL 替换、重新打包 `.card`；
-4. worker 调用 Host 已安装的正式转换插件输出 HTML；
-5. worker 上传 HTML 目录到 CDN，并更新卡片状态。
+- 上传会话归属与过期状态；
+- 已直传资源存在、大小一致、元数据摘要一致；
+- 提交的 `.card` 不再包含本会话外置资源文件；
+- 提交的 `.card` 的 metadata、structure、content 或 cover 中引用了本会话每个资源的 `publicUrl`；
+- `.card` 结构符合卡片文件安全要求。
 
-### 7.2 卡片查看
+### 7.2 网页端兼容上传
 
-当前平台查看卡片时，前台先读取 `GET /api/v1/cards/:cardId/open-view`，再沿正式 Web 插件宿主创建 `com.chips.card-viewer` 会话。最终呈现的是转换插件导出的 HTML 页面本身，而不是社区平台额外包装的一层查看器 UI。
+`POST /api/v1/upload/card` 仍可直接上传 `.card`，用于网页端或调试场景。该接口保存 `.card` 源文件并入队查看缓存与封面缓存任务，不等待渲染完成。
+
+响应：
+
+```json
+{
+  "data": {
+    "cardId": "uuid",
+    "status": "ready",
+    "renderStatus": "queued",
+    "renderStatusUrl": "/api/v1/cards/uuid/render-status"
+  }
+}
+```
+
+### 7.3 卡片查看缓存
+
+`.card` 是永久源文件，服务器渲染结果是派生缓存。当前有两个渲染 profile：
+
+- `community-web`：完整卡片查看缓存；
+- `community-cover`：卡片封面缓存，包含 `.card/cover.html` 与 `.card/cardcover/` 所需资源。
+
+缓存生命周期：
+
+- 缓存生成后 `expiresAt = generatedAt + 30 days`；
+- `GET /api/v1/cards/:cardId/view` 或 `GET /api/v1/cards/:cardId/cover` 命中缓存时，会更新 `lastAccessedAt` 并把 `expiresAt` 续期到最后一次访问后 30 天；
+- Worker 清理 `expiresAt < now` 的 ready 缓存，只删除缓存对象，不删除源 `.card` 和资源服务器正式资源。
+
+#### 7.3.1 查看入口
+
+```http
+GET /api/v1/cards/:cardId/view
+```
+
+行为：
+
+- 缓存命中：权限校验通过后续期缓存，并 `302` 到缓存入口；
+- 缓存缺失：去重创建 `community-web` 渲染任务，返回 `202`；
+- 私有卡片无权限：按 404 处理。
+
+`202` 响应：
+
+```json
+{
+  "data": {
+    "cardId": "uuid",
+    "viewState": "rendering",
+    "renderStatusUrl": "/api/v1/cards/uuid/render-status",
+    "retryAfterSeconds": 3
+  }
+}
+```
+
+#### 7.3.2 封面入口
+
+```http
+GET /api/v1/cards/:cardId/cover
+```
+
+行为：
+
+- 封面缓存命中：权限校验通过后续期缓存，并 `302` 到封面缓存入口；
+- 封面缓存缺失：去重创建 `community-cover` 渲染任务，返回 `202 text/html` 的准备中封面，便于列表 iframe 嵌入。
+
+#### 7.3.3 渲染状态
+
+```http
+GET /api/v1/cards/:cardId/render-status
+```
+
+响应：
+
+```json
+{
+  "data": {
+    "cardId": "uuid",
+    "status": "queued",
+    "viewState": "rendering",
+    "attemptCount": 0,
+    "updatedAt": "2026-05-24T00:00:00.000Z",
+    "viewUrl": "/api/v1/cards/uuid/view",
+    "error": null
+  }
+}
+```
+
+### 7.4 旧上传转换链路说明
+
+旧 `card_pipeline_jobs` / `chips-card-html` 链路已从正式源码归档，并通过迁移删除旧队列表。`htmlUrl` 字段保留为历史字段或缓存入口记录，社区前台正式打开入口是 `viewUrl`；新链路使用 `card_render_jobs`、`card_render_caches`、`chips-card-files`、`chips-card-render-cache*` 与 `chips-card-cover-cache*`。
+
+### 7.5 模块上传器能力
+
+官方无界面上传器模块能力：
+
+```text
+capability: community.card.publish
+method: publish
+mode: job
+```
+
+模块职责是在用户设备上处理 `.card` 内部资源外置、链接替换、重新打包和提交。它通过 Host 正式 `card.unpack`、`card.pack`、`file.*` 能力访问本地文件，通过社区上传会话 API 发布内容，不直接持有对象存储长期密钥。
 
 ## 8. 兼容与范围说明
 

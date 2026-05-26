@@ -104,6 +104,36 @@ export async function uploadFile(params: {
 }
 
 /**
+ * 上传流到对象存储。
+ */
+export async function uploadStream(params: {
+  bucket: BucketName | string;
+  key: string;
+  stream: NodeJS.ReadableStream;
+  contentLength: number;
+  contentType?: string;
+}): Promise<string> {
+  const s3 = getS3Client();
+  const target = toStorageTarget(params.bucket, params.key);
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: target.bucket,
+      Key: target.key,
+      Body: params.stream as any,
+      ContentLength: params.contentLength,
+      ContentType: params.contentType ?? 'application/octet-stream',
+    }),
+  );
+
+  if (!isPublicBucket(params.bucket)) {
+    return '';
+  }
+
+  return buildObjectUrl(params.bucket, params.key);
+}
+
+/**
  * 下载对象存储文件到本地路径
  */
 export async function downloadFile(params: {
@@ -129,11 +159,48 @@ export async function downloadFile(params: {
 }
 
 /**
+ * 获取对象读取流。
+ */
+export async function getObjectStream(params: {
+  bucket: string;
+  key: string;
+  range?: string;
+}): Promise<{
+  body: NodeJS.ReadableStream;
+  contentType?: string;
+  contentLength?: number;
+  etag?: string;
+  lastModified?: Date;
+}> {
+  const s3 = getS3Client();
+  const target = toStorageTarget(params.bucket, params.key);
+  const response = await s3.send(
+    new GetObjectCommand({
+      Bucket: target.bucket,
+      Key: target.key,
+      Range: params.range,
+    }),
+  );
+
+  if (!response.Body) {
+    throw new Error(`Storage object has no body: ${params.bucket}/${params.key}`);
+  }
+
+  return {
+    body: response.Body as NodeJS.ReadableStream,
+    contentType: response.ContentType,
+    contentLength: response.ContentLength,
+    etag: response.ETag,
+    lastModified: response.LastModified,
+  };
+}
+
+/**
  * 上传 Buffer / string 内容到对象存储
  * @returns 对象的公开访问 URL
  */
 export async function uploadBuffer(params: {
-  bucket: PublicBucketName;
+  bucket: BucketName | string;
   key: string;
   body: Buffer | string;
   contentType: string;
@@ -153,6 +220,10 @@ export async function uploadBuffer(params: {
       ContentType: contentType,
     }),
   );
+
+  if (!isPublicBucket(bucket)) {
+    return '';
+  }
 
   return buildObjectUrl(bucket, key);
 }
@@ -217,11 +288,170 @@ export async function objectExists(bucket: string, key: string): Promise<boolean
 }
 
 /**
+ * 读取对象元信息。
+ */
+export async function headObject(params: {
+  bucket: string;
+  key: string;
+}): Promise<{
+  contentLength?: number;
+  contentType?: string;
+  etag?: string;
+  lastModified?: Date;
+  metadata?: Record<string, string>;
+  checksumSha256?: string;
+}> {
+  const s3 = getS3Client();
+  const target = toStorageTarget(params.bucket, params.key);
+  const response = await s3.send(new HeadObjectCommand({ Bucket: target.bucket, Key: target.key }));
+  return {
+    contentLength: response.ContentLength,
+    contentType: response.ContentType,
+    etag: response.ETag,
+    lastModified: response.LastModified,
+    metadata: response.Metadata,
+    checksumSha256: response.ChecksumSHA256,
+  };
+}
+
+/**
  * 构造对象公开访问 URL
  * 生产环境优先使用对象存储自定义 HTTPS 域名。
  */
 export function buildObjectUrl(bucket: PublicBucketName, key: string): string {
   return `${getPublicBucketBaseUrl(bucket)}/${key}`;
+}
+
+function encodeUriPathSegment(segment: string): string {
+  return encodeURIComponent(segment).replace(/[!'()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function encodeCanonicalPath(pathname: string): string {
+  const normalized = pathname.replace(/\/+/g, '/');
+  return normalized
+    .split('/')
+    .map((segment) => encodeUriPathSegment(segment))
+    .join('/')
+    .replace(/^([^/])/, '/$1');
+}
+
+function hmac(key: Buffer | string, value: string): Buffer {
+  return crypto.createHmac('sha256', key).update(value, 'utf-8').digest();
+}
+
+function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value, 'utf-8').digest('hex');
+}
+
+function toAmzDate(date: Date): { amzDate: string; dateStamp: string } {
+  const iso = date.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  return {
+    amzDate: iso,
+    dateStamp: iso.slice(0, 8),
+  };
+}
+
+function buildSigningKey(dateStamp: string): Buffer {
+  const dateKey = hmac(`AWS4${env.S3_SECRET_KEY}`, dateStamp);
+  const regionKey = hmac(dateKey, env.S3_REGION);
+  const serviceKey = hmac(regionKey, 's3');
+  return hmac(serviceKey, 'aws4_request');
+}
+
+function buildPresignTarget(bucket: string, key: string): { url: URL; host: string; canonicalPath: string } {
+  const target = toStorageTarget(bucket, key);
+  const endpoint = new URL(env.S3_ENDPOINT);
+  const endpointPath = endpoint.pathname === '/' ? '' : endpoint.pathname.replace(/\/$/, '');
+
+  if (env.S3_FORCE_PATH_STYLE) {
+    const canonicalPath = `${endpointPath}/${target.bucket}/${target.key}`;
+    return {
+      url: new URL(`${endpoint.origin}${canonicalPath}`),
+      host: endpoint.host,
+      canonicalPath: encodeCanonicalPath(canonicalPath),
+    };
+  }
+
+  const host = `${target.bucket}.${endpoint.host}`;
+  const canonicalPath = `${endpointPath}/${target.key}`;
+  const url = new URL(`${endpoint.protocol}//${host}${canonicalPath}`);
+  return {
+    url,
+    host,
+    canonicalPath: encodeCanonicalPath(canonicalPath),
+  };
+}
+
+/**
+ * 创建 S3 兼容 PUT 预签名 URL。
+ */
+export function createPresignedPutUrl(params: {
+  bucket: BucketName | string;
+  key: string;
+  contentType: string;
+  expiresInSeconds: number;
+  headers?: Record<string, string>;
+}): { url: string; method: 'PUT'; headers: Record<string, string>; publicUrl: string } {
+  const now = new Date();
+  const { amzDate, dateStamp } = toAmzDate(now);
+  const credentialScope = `${dateStamp}/${env.S3_REGION}/s3/aws4_request`;
+  const target = buildPresignTarget(params.bucket, params.key);
+  const headers = Object.fromEntries(
+    Object.entries({
+      'content-type': params.contentType,
+      ...(params.headers ?? {}),
+    }).map(([key, value]) => [key.toLowerCase(), value.trim()]),
+  );
+  const signedHeaderNames = [...new Set([...Object.keys(headers), 'host'])].sort();
+  const signedHeaders = signedHeaderNames.join(';');
+  const query = new URLSearchParams({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${env.S3_ACCESS_KEY}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(params.expiresInSeconds),
+    'X-Amz-SignedHeaders': signedHeaders,
+  });
+
+  const canonicalQuery = [...query.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  const canonicalHeaders = signedHeaderNames
+    .map((headerName) => {
+      const value = headerName === 'host' ? target.host : headers[headerName] ?? '';
+      return `${headerName}:${value.replace(/\s+/g, ' ')}\n`;
+    })
+    .join('');
+  const canonicalRequest = [
+    'PUT',
+    target.canonicalPath,
+    canonicalQuery,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join('\n');
+  const signature = crypto
+    .createHmac('sha256', buildSigningKey(dateStamp))
+    .update(stringToSign, 'utf-8')
+    .digest('hex');
+
+  query.set('X-Amz-Signature', signature);
+  target.url.search = query.toString();
+
+  return {
+    url: target.url.toString(),
+    method: 'PUT',
+    headers,
+    publicUrl: isPublicBucket(params.bucket) ? buildObjectUrl(params.bucket, params.key) : '',
+  };
 }
 
 /**
@@ -232,6 +462,10 @@ export function parseObjectUrl(url: string): { bucket: string; key: string } | n
 
   if (env.S3_PUBLIC_URL) {
     prefixes.unshift(trimTrailingSlash(env.S3_PUBLIC_URL) + '/');
+  }
+
+  if (env.NODE_ENV === 'development') {
+    prefixes.push(trimTrailingSlash(env.S3_ENDPOINT) + '/');
   }
 
   for (const prefix of prefixes) {
@@ -275,6 +509,7 @@ function detectContentType(filePath: string): string {
     '.flac': 'audio/flac',
     '.aac': 'audio/aac',
     '.pdf': 'application/pdf',
+    '.card': 'application/vnd.chips.card+zip',
     '.html': 'text/html; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.js': 'application/javascript; charset=utf-8',

@@ -27,6 +27,34 @@ export const UploadBoxSchema = z.object({
   visibility: z.enum(['public', 'private']).default('public'),
 });
 
+export const CreateUploadSessionSchema = z.object({
+  contentType: z.enum(['card', 'box']),
+  fileName: z.string().min(1).max(500).optional(),
+  roomId: z.string().uuid().optional().nullable(),
+  visibility: z.enum(['public', 'private']).default('public'),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  client: z
+    .object({
+      name: z.string().min(1).max(100).optional(),
+      version: z.string().min(1).max(100).optional(),
+      platform: z.string().min(1).max(100).optional(),
+    })
+    .optional(),
+});
+
+export const PresignUploadResourcesSchema = z.object({
+  resources: z
+    .array(
+      z.object({
+        relativePath: z.string().min(1).max(1000),
+        sizeBytes: z.coerce.number().int().positive(),
+        sha256: z.string().min(32).max(128),
+        mimeType: z.string().min(1).max(200),
+      }),
+    )
+    .max(1000),
+});
+
 export const UpdateCardSchema = z.object({
   roomId: z.string().uuid().nullable().optional(),
   visibility: z.enum(['public', 'private']).optional(),
@@ -52,6 +80,8 @@ export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type UploadCardInput = z.infer<typeof UploadCardSchema>;
 export type UploadBoxInput = z.infer<typeof UploadBoxSchema>;
+export type CreateUploadSessionInput = z.infer<typeof CreateUploadSessionSchema>;
+export type PresignUploadResourcesInput = z.infer<typeof PresignUploadResourcesSchema>;
 export type UpdateCardInput = z.infer<typeof UpdateCardSchema>;
 export type UpdateBoxInput = z.infer<typeof UpdateBoxSchema>;
 export type SearchInput = z.infer<typeof SearchSchema>;

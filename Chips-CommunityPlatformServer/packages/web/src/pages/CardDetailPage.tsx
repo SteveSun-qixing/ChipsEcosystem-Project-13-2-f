@@ -47,7 +47,7 @@ export default function CardDetailPage() {
   }, [cardId, t]);
 
   useEffect(() => {
-    if (!cardId || !card || card.status === 'ready' || card.status === 'error') {
+    if (!cardId || !card || card.viewState === 'cache_ready' || card.viewState === 'render_error' || card.status === 'error') {
       return;
     }
 
@@ -55,7 +55,7 @@ export default function CardDetailPage() {
 
     const poll = async () => {
       try {
-        const status = await cardsApi.getCardStatus(cardId);
+        const status = await cardsApi.getCardRenderStatus(cardId);
         if (cancelled) {
           return;
         }
@@ -64,8 +64,16 @@ export default function CardDetailPage() {
           current
             ? {
                 ...current,
-                status: status.status,
-                htmlUrl: status.htmlUrl,
+                viewState: status.viewState,
+                viewUrl: status.viewUrl,
+                renderStatusUrl: `/api/v1/cards/${cardId}/render-status`,
+                renderCache: {
+                  status: status.status,
+                  generatedAt: null,
+                  lastAccessedAt: null,
+                  expiresAt: null,
+                  errorMessage: status.error?.message ?? null,
+                },
                 updatedAt: status.updatedAt,
               }
             : current,
@@ -88,13 +96,14 @@ export default function CardDetailPage() {
   }, [card, cardId, t]);
 
   const source: DocumentRouteSource | null =
-    cardId && card?.status === 'ready' && card.htmlUrl
+    cardId && card?.status === 'ready' && card.viewState === 'cache_ready' && card.viewUrl
       ? {
           kind: 'community-card',
           cardId,
           title: card.title,
           createdAt: card.createdAt,
-          documentUrl: card.htmlUrl,
+          documentUrl: card.viewUrl,
+          viewUrl: card.viewUrl,
           canonicalUrl: `/cards/${cardId}`,
           ...(card.coverUrl ? { coverUrl: card.coverUrl } : undefined),
           ...(card.coverFragmentUrl ? { coverFragmentUrl: card.coverFragmentUrl } : undefined),
@@ -107,7 +116,12 @@ export default function CardDetailPage() {
     <DocumentPluginRoutePage
       source={source}
       loading={loading}
-      error={error || (card?.status === 'error' ? t('card.errorState') : '')}
+      error={
+        error ||
+        (card?.status === 'error' || card?.viewState === 'render_error'
+          ? card.renderCache?.errorMessage || t('card.errorState')
+          : '')
+      }
       pendingLabel={t('card.notReady')}
       trigger="community-card-route"
     />

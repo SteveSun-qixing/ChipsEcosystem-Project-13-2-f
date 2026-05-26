@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "required": ["cardId", "status", "renderStatus", "renderStatusUrl", "communityUrl", "uploadedResources"],
+  "properties": {
+    "cardId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "renderStatus": {
+      "type": "string"
+    },
+    "renderStatusUrl": {
+      "type": "string"
+    },
+    "communityUrl": {
+      "type": "string"
+    },
+    "processedCardPath": {
+      "type": "string"
+    },
+    "uploadedResources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["relativePath", "publicUrl", "sizeBytes", "sha256", "mimeType"],
+        "properties": {
+          "relativePath": {
+            "type": "string"
+          },
+          "publicUrl": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

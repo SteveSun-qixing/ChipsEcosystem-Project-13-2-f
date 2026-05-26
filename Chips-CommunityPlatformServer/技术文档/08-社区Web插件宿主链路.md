@@ -6,7 +6,7 @@
 
 它描述的是社区服务器自己的正式实现，不额外定义生态公共协议；公共 Host / Bridge / Manifest 口径仍以 `生态共用技术文档/` 为准。
 
-最后核对时间：2026-05-23。
+最后核对时间：2026-05-24。
 
 ## 2. 当前目标
 
@@ -119,10 +119,10 @@
 
 1. 社区前台调用 `GET /api/v1/cards/:cardId/open-view` 读取打开所需轻量字段；
 2. 前端复用 `card-open-view-prefetch` 的内存 Promise 缓存，命中时不重复请求；
-3. 若卡片 `status = ready` 且存在 `htmlUrl`，前台创建 `com.chips.card-viewer` Web 会话；
-4. 启动参数中写入 `webDocumentUrl`；
+3. 若卡片 `status = ready` 且 `viewState = cache_ready` 且存在 `viewUrl`，前台创建 `com.chips.card-viewer` Web 会话；
+4. 启动参数中写入受控查看入口 `documentUrl = viewUrl`；
 5. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
-6. `CardViewer` 用 iframe 承载对象存储中的卡片 HTML 文档；
+6. `CardViewer` 用 iframe 承载社区服务器受控查看入口；该入口命中缓存时会续期并 302 到对象存储中的查看缓存；
 7. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
 8. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
 9. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
@@ -133,7 +133,11 @@
 - `id`
 - `title`
 - `status`
-- `htmlUrl`
+- `htmlUrl`（历史字段，不参与新查看判断）
+- `viewUrl`
+- `renderStatusUrl`
+- `viewState`
+- `renderCache`
 - `coverUrl`
 - `coverRatio`
 - `visibility`
@@ -143,7 +147,7 @@
 
 该接口仍执行与卡片详情一致的可见性判断：公开卡片可匿名读取；私有卡片只允许所有者读取；无权访问时按未找到处理。它不会读取或返回 `cardMetadata`、`cardStructure`。
 
-这项优化只减少打开页首个接口的响应体和等待链路，不改变正式宿主模型：卡片正文仍由 `com.chips.card-viewer` 在社区 Web Host 会话中打开，卡片 HTML 仍作为 `webDocumentUrl` 交给原版 CardViewer。
+这项优化只减少打开页首个接口的响应体和等待链路，不改变正式宿主模型：卡片正文仍由 `com.chips.card-viewer` 在社区 Web Host 会话中打开，社区受控 `viewUrl` 作为 `documentUrl` 交给原版 CardViewer。`viewUrl` 负责权限校验、缓存续期和缓存缺失时重新入队。
 
 当前高度事件遵循生态公共 `DocumentSurfaceResizePayload`：
 

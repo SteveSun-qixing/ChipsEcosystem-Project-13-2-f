@@ -21,6 +21,7 @@ export type DocumentRouteSource =
       title: string;
       createdAt?: string;
       documentUrl: string;
+      viewUrl?: string;
       canonicalUrl?: string;
     } & DocumentRouteCoverFields)
   | ({
@@ -48,6 +49,10 @@ function normalizeDocumentUrl(value: string): string {
   }
 }
 
+function resolveSourceDocumentUrl(source: DocumentRouteSource): string {
+  return ('viewUrl' in source ? source.viewUrl : undefined) || source.documentUrl;
+}
+
 export function DocumentPluginRoutePage({
   source,
   loading,
@@ -66,7 +71,7 @@ export function DocumentPluginRoutePage({
   }, [source?.kind, source && 'cardId' in source ? source.cardId : source && 'boxId' in source ? source.boxId : null]);
 
   useEffect(() => {
-    if (!source || !source.documentUrl || session) {
+    if (!source || !resolveSourceDocumentUrl(source) || session) {
       return;
     }
 
@@ -80,7 +85,7 @@ export function DocumentPluginRoutePage({
         trigger,
         cardSource: {
           ...source,
-          documentUrl: normalizeDocumentUrl(source.documentUrl),
+          documentUrl: normalizeDocumentUrl(resolveSourceDocumentUrl(source)),
         },
       },
     })
@@ -124,7 +129,7 @@ export function DocumentPluginRoutePage({
     );
   }
 
-  if (!source.documentUrl || !session) {
+  if (!resolveSourceDocumentUrl(source) || !session) {
     return (
       <section className="document-plugin-route document-plugin-route--state" aria-live="polite">
         <div className="document-plugin-route__state-panel">

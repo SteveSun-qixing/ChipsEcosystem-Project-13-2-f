@@ -251,7 +251,7 @@ export const BoxService = {
    */
   async enrichCardRefs(
     structure: BoxStructure,
-  ): Promise<(BoxCardRef & { communityCardId?: string; communityHtmlUrl?: string })[]> {
+  ): Promise<(BoxCardRef & { communityCardId?: string; communityViewUrl?: string; communityRenderStatusUrl?: string })[]> {
     const refs = structure.cards ?? [];
     const cardFileIds = [
       ...new Set(refs.map((ref) => ref.card_id).filter((id): id is string => Boolean(id))),
@@ -278,7 +278,8 @@ export const BoxService = {
       return {
         ...ref,
         communityCardId: communityCard?.id,
-        communityHtmlUrl: communityCard?.htmlUrl ?? undefined,
+        communityViewUrl: communityCard ? `/api/v1/cards/${communityCard.id}/view` : undefined,
+        communityRenderStatusUrl: communityCard ? `/api/v1/cards/${communityCard.id}/render-status` : undefined,
       };
     });
   },

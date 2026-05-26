@@ -1,11 +1,12 @@
 import { eq, and, isNull, desc, count, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { cards, type Card, type NewCard } from '../db/schema/cards';
-import { deleteObjectsByPrefix } from '../storage/s3';
+import { deleteObject, deleteObjectsByPrefix, parseObjectUrl } from '../storage/s3';
 import { Bucket } from '../storage/buckets';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
 import type { PaginationInput, UpdateCardInput } from '../schemas/content.schemas';
+import { CardRenderCacheService } from './card-render-cache.service';
 
 export interface PagedResult<T> {
   items: T[];
@@ -24,6 +25,7 @@ export interface CardOpenViewRecord {
   coverUrl: string | null;
   coverRatio: string | null;
   htmlUrl: string | null;
+  sourceCardSha256: string | null;
   cardStructure?: never;
   status: Card['status'];
   visibility: Card['visibility'];
@@ -49,6 +51,42 @@ function getCoverRatioFromMetadata(metadata: unknown): string | null {
 
   const rawRatio = (metadata as { cover_ratio?: unknown }).cover_ratio;
   return typeof rawRatio === 'string' && rawRatio.trim() ? rawRatio.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function extractPublishedResourceUrls(resourceManifest: unknown): string[] {
+  if (!isRecord(resourceManifest)) {
+    return [];
+  }
+
+  const verifiedResources = resourceManifest.verifiedResources;
+  if (!Array.isArray(verifiedResources)) {
+    return [];
+  }
+
+  return verifiedResources
+    .map((resource) => (isRecord(resource) && typeof resource.publicUrl === 'string' ? resource.publicUrl : null))
+    .filter((url): url is string => Boolean(url));
+}
+
+async function deletePublishedResources(resourceManifest: unknown): Promise<void> {
+  const urls = extractPublishedResourceUrls(resourceManifest);
+  const uniqueObjects = new Map<string, { bucket: string; key: string }>();
+
+  for (const url of urls) {
+    const parsed = parseObjectUrl(url);
+    if (!parsed || parsed.bucket !== Bucket.CARD_RESOURCES) {
+      continue;
+    }
+    uniqueObjects.set(`${parsed.bucket}/${parsed.key}`, parsed);
+  }
+
+  await Promise.all(
+    [...uniqueObjects.values()].map((object) => deleteObject(object.bucket, object.key)),
+  );
 }
 
 async function paginateCardSummaries(
@@ -98,16 +136,41 @@ export const CardService = {
     roomId?: string;
     visibility: 'public' | 'private';
     fileSizeBytes: number;
+    title?: string;
+    cardFileId?: string;
+    coverRatio?: string | null;
+    sourceCardBucket?: string;
+    sourceCardKey?: string;
+    sourceCardUrl?: string;
+    sourceCardSha256?: string;
+    cardMetadata?: unknown;
+    cardStructure?: unknown;
+    resourceManifest?: unknown;
+    publishedByClient?: string | null;
+    publishedClientVersion?: string | null;
   }): Promise<Card> {
     const [card] = await db
       .insert(cards)
       .values({
         userId: params.userId,
         roomId: params.roomId ?? null,
-        title: '处理中…',
+        cardFileId: params.cardFileId ?? null,
+        title: params.title ?? '处理中…',
+        coverRatio: params.coverRatio ?? null,
         visibility: params.visibility,
         fileSizeBytes: params.fileSizeBytes,
-        status: 'pending',
+        sourceCardBucket: params.sourceCardBucket ?? null,
+        sourceCardKey: params.sourceCardKey ?? null,
+        sourceCardUrl: params.sourceCardUrl ?? null,
+        sourceCardSha256: params.sourceCardSha256 ?? null,
+        sourceCardStoredAt: params.sourceCardBucket ? new Date() : null,
+        cardMetadata: params.cardMetadata ?? null,
+        cardStructure: params.cardStructure ?? null,
+        resourceManifest: params.resourceManifest ?? null,
+        publishedByClient: params.publishedByClient ?? null,
+        publishedClientVersion: params.publishedClientVersion ?? null,
+        publishedAt: params.sourceCardBucket ? new Date() : null,
+        status: params.sourceCardBucket ? 'ready' : 'pending',
       } as NewCard)
       .returning();
     return card;
@@ -144,10 +207,30 @@ export const CardService = {
       .set({
         ...(patch.roomId !== undefined ? { roomId: patch.roomId } : {}),
         ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+        ...(patch.visibility !== undefined && patch.visibility !== card.visibility
+          ? { htmlUrl: null, coverUrl: null }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(cards.id, cardId))
       .returning();
+
+    if (patch.visibility !== undefined && patch.visibility !== card.visibility) {
+      await CardRenderCacheService.deleteCachesForCard(cardId);
+      await CardRenderCacheService.enqueueForCard({
+        cardId,
+        createdBy: 'manual',
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+        priority: 50,
+      });
+      await CardRenderCacheService.enqueueForCard({
+        cardId,
+        createdBy: 'manual',
+        renderProfile: CardRenderCacheService.coverRenderProfile,
+        priority: 40,
+      });
+    }
+
     return updated;
   },
 
@@ -158,13 +241,17 @@ export const CardService = {
     }
     // 删除 CDN 资源
     await deleteObjectsByPrefix(Bucket.CARD_RESOURCES, `${userId}/${cardId}/`);
-    await deleteObjectsByPrefix(Bucket.CARD_HTML, `${userId}/${cardId}/`);
-    await deleteObjectsByPrefix(Bucket.COVERS, `cards/${userId}/${cardId}/`);
+    await deletePublishedResources(card.resourceManifest);
+    await deleteObjectsByPrefix(Bucket.CARD_FILES, `${userId}/${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.CARD_RENDER_CACHE, `${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.CARD_RENDER_CACHE_PRIVATE, `${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.CARD_COVER_CACHE, `${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.CARD_COVER_CACHE_PRIVATE, `${cardId}/`);
     // 删除数据库记录
     await db.delete(cards).where(eq(cards.id, cardId));
   },
 
-  async markPipelineError(cardId: string, errorMessage: string): Promise<Card> {
+  async markRenderError(cardId: string, errorMessage: string): Promise<Card> {
     const [updated] = await db
       .update(cards)
       .set({
@@ -238,6 +325,9 @@ export const CardService = {
       coverUrl: card.coverUrl,
       coverRatio: card.coverRatio ?? getCoverRatioFromMetadata(card.cardMetadata),
       htmlUrl: card.htmlUrl,
+      sourceCardSha256: card.sourceCardSha256,
+      viewUrl: `/api/v1/cards/${card.id}/view`,
+      renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
       status: card.status,
       visibility: card.visibility,
       fileSizeBytes: card.fileSizeBytes,
@@ -274,6 +364,7 @@ export const CardService = {
         coverUrl: true,
         coverRatio: true,
         htmlUrl: true,
+        sourceCardSha256: true,
         cardStructure: false,
         status: true,
         visibility: true,
@@ -297,6 +388,8 @@ export const CardService = {
       coverUrl: card.coverUrl,
       coverRatio: card.coverRatio,
       htmlUrl: card.htmlUrl,
+      viewUrl: `/api/v1/cards/${card.id}/view`,
+      renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
       status: card.status,
       visibility: card.visibility,
       createdAt: card.createdAt,

@@ -4,15 +4,27 @@ import * as os from 'os';
 import { Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { v4 as uuidv4 } from 'uuid';
-import type { FastifyPluginAsync } from 'fastify';
+import { eq } from 'drizzle-orm';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { CardService } from '../services/card.service';
 import { BoxService } from '../services/box.service';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
-import { UploadCardSchema, UploadBoxSchema } from '../schemas/content.schemas';
+import {
+  CreateUploadSessionSchema,
+  PresignUploadResourcesSchema,
+  UploadCardSchema,
+  UploadBoxSchema,
+} from '../schemas/content.schemas';
 import { env } from '../config/env';
 import { RoomService } from '../services/room.service';
-import { CardPipelineQueueService } from '../services/card-pipeline-queue.service';
+import { uploadFile } from '../storage/s3';
+import { Bucket } from '../storage/buckets';
+import { inspectCardSourceFile } from '../utils/card-file';
+import { CardRenderCacheService } from '../services/card-render-cache.service';
+import { UploadSessionService, type UploadSessionVerifiedResource } from '../services/upload-session.service';
+import { db } from '../db/client';
+import { cards } from '../db/schema/cards';
 
 const MAX_CARD_SIZE = env.MAX_CARD_SIZE_MB * 1024 * 1024;
 const MAX_BOX_SIZE = env.MAX_BOX_SIZE_MB * 1024 * 1024;
@@ -62,6 +74,83 @@ async function writeUploadStreamToTempFile(params: {
 }
 
 const uploadRoutes: FastifyPluginAsync = async (fastify) => {
+  // ─── POST /api/v1/upload-sessions ────────────────────────────────
+
+  fastify.post(
+    '/api/v1/upload-sessions',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const body = CreateUploadSessionSchema.parse(request.body);
+      if (body.roomId) {
+        await RoomService.assertOwnedByUser(body.roomId, request.user!.userId);
+      }
+
+      const session = await UploadSessionService.create(request.user!.userId, body);
+      return reply.status(201).send({
+        data: {
+          uploadId: session.id,
+          resourcePrefix: session.resourcePrefix,
+          expiresAt: session.expiresAt,
+        },
+      });
+    },
+  );
+
+  // ─── POST /api/v1/upload-sessions/:uploadId/resources/presign ────
+
+  fastify.post(
+    '/api/v1/upload-sessions/:uploadId/resources/presign',
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
+      const { uploadId } = request.params as { uploadId: string };
+      const body = PresignUploadResourcesSchema.parse(request.body);
+      const data = await UploadSessionService.presignResources(uploadId, request.user!.userId, body);
+      return { data };
+    },
+  );
+
+  // ─── POST /api/v1/upload-sessions/:uploadId/card ────────────────
+
+  fastify.post(
+    '/api/v1/upload-sessions/:uploadId/card',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { uploadId } = request.params as { uploadId: string };
+      const session = await UploadSessionService.getOwned(uploadId, request.user!.userId);
+      if (session.contentType !== 'card') {
+        throw AppError.badRequest(ErrorCode.VALIDATION_ERROR, 'Upload session is not for card content');
+      }
+      const verifiedResources = await UploadSessionService.verifyResources(session);
+
+      const result = await receiveProcessedCardUpload({
+        request,
+        userId: request.user!.userId,
+        roomId: session.roomId ?? undefined,
+        visibility: session.visibility,
+        uploadSessionId: session.id,
+        clientName: session.clientName,
+        clientVersion: session.clientVersion,
+        verifiedResources,
+      });
+
+      await UploadSessionService.markSourceReady(session.id, {
+        sourceCardBucket: result.sourceCardBucket,
+        sourceCardKey: result.sourceCardKey,
+        sourceCardSha256: result.sourceCardSha256,
+      });
+
+      return reply.status(202).send({
+        data: {
+          cardId: result.cardId,
+          status: 'ready',
+          renderStatus: 'queued',
+          renderStatusUrl: `/api/v1/cards/${result.cardId}/render-status`,
+          communityUrl: `${env.BASE_URL}/cards/${result.cardId}`,
+        },
+      });
+    },
+  );
+
   // ─── POST /api/v1/upload/card ─────────────────────────────────────
 
   fastify.post(
@@ -114,38 +203,25 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
           await RoomService.assertOwnedByUser(opts.roomId, request.user!.userId);
         }
 
-        // 创建卡片数据库记录
-        let card = await CardService.create({
+        const result = await persistProcessedCard({
           userId: request.user!.userId,
           roomId: opts.roomId,
           visibility: opts.visibility,
+          filePath: tempFilePath,
           fileSizeBytes,
+          publishedByClient: 'web',
+          publishedClientVersion: null,
+          resourceManifest: null,
         });
-
-        try {
-          await CardPipelineQueueService.enqueue({
-            cardId: card.id,
-            userId: request.user!.userId,
-            sourceFilePath: tempFilePath,
-          });
-        } catch (queueError) {
-          card = await CardService.markPipelineError(
-            card.id,
-            queueError instanceof Error ? queueError.message : 'Failed to enqueue card pipeline job',
-          );
-          throw new AppError(
-            ErrorCode.CARD_PIPELINE_ERROR,
-            `Failed to enqueue card pipeline job for card ${card.id}`,
-            500,
-          );
-        }
         fs.rmSync(tempFilePath, { force: true });
         tempFilePath = null;
 
         return reply.status(202).send({
           data: {
-            cardId: card.id,
-            status: 'pending',
+            cardId: result.cardId,
+            status: 'ready',
+            renderStatus: 'queued',
+            renderStatusUrl: `/api/v1/cards/${result.cardId}/render-status`,
           },
         });
       } catch (err) {
@@ -240,3 +316,149 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
 };
 
 export default uploadRoutes;
+
+async function receiveProcessedCardUpload(params: {
+  request: FastifyRequest;
+  userId: string;
+  roomId?: string;
+  visibility: 'public' | 'private';
+  uploadSessionId?: string;
+  clientName?: string | null;
+  clientVersion?: string | null;
+  verifiedResources?: UploadSessionVerifiedResource[];
+}): Promise<{
+  cardId: string;
+  sourceCardBucket: string;
+  sourceCardKey: string;
+  sourceCardSha256: string;
+}> {
+  const parts = params.request.parts();
+  let tempFilePath: string | null = null;
+  let fileSizeBytes = 0;
+  let manifest: unknown = null;
+
+  for await (const part of parts) {
+    if (part.type === 'file' && part.fieldname === 'file') {
+      if (!part.filename?.endsWith('.card')) {
+        await drainUploadStream(part.file);
+        throw AppError.badRequest(ErrorCode.FILE_TYPE_INVALID, 'Only .card files are allowed');
+      }
+
+      tempFilePath = createUploadTempFilePath('.card');
+      fileSizeBytes = await writeUploadStreamToTempFile({
+        stream: part.file,
+        tempFilePath,
+        maxSizeBytes: MAX_CARD_SIZE,
+        tooLargeMessage: `Card file must be smaller than ${env.MAX_CARD_SIZE_MB}MB`,
+      });
+    } else if (part.type === 'field' && part.fieldname === 'manifest') {
+      try {
+        manifest = typeof part.value === 'string' ? JSON.parse(part.value) : part.value;
+      } catch {
+        throw AppError.badRequest(ErrorCode.VALIDATION_ERROR, 'Invalid manifest JSON');
+      }
+    }
+  }
+
+  if (!tempFilePath || fileSizeBytes === 0) {
+    throw AppError.badRequest(ErrorCode.VALIDATION_ERROR, 'No file provided');
+  }
+
+  try {
+    return await persistProcessedCard({
+      userId: params.userId,
+      roomId: params.roomId,
+      visibility: params.visibility,
+      filePath: tempFilePath,
+      fileSizeBytes,
+      publishedByClient: params.clientName ?? 'api',
+      publishedClientVersion: params.clientVersion ?? null,
+      resourceManifest: {
+        clientManifest: manifest,
+        verifiedResources: params.verifiedResources ?? [],
+      },
+      verifiedResources: params.verifiedResources ?? [],
+    });
+  } finally {
+    if (tempFilePath) {
+      fs.rmSync(tempFilePath, { force: true });
+    }
+  }
+}
+
+async function persistProcessedCard(params: {
+  userId: string;
+  roomId?: string;
+  visibility: 'public' | 'private';
+  filePath: string;
+  fileSizeBytes: number;
+  publishedByClient: string;
+  publishedClientVersion: string | null;
+  resourceManifest: unknown;
+  verifiedResources?: UploadSessionVerifiedResource[];
+}): Promise<{
+  cardId: string;
+  sourceCardBucket: string;
+  sourceCardKey: string;
+  sourceCardSha256: string;
+}> {
+  const inspection = await inspectCardSourceFile(params.filePath);
+  if (params.verifiedResources && params.verifiedResources.length > 0) {
+    UploadSessionService.assertResourcesMatchCard(inspection, params.verifiedResources);
+  }
+
+  const provisionalCard = await CardService.create({
+    userId: params.userId,
+    roomId: params.roomId,
+    visibility: params.visibility,
+    fileSizeBytes: params.fileSizeBytes,
+    title: inspection.title,
+    cardFileId: inspection.cardFileId,
+    coverRatio: inspection.coverRatio,
+    cardMetadata: inspection.metadata,
+    cardStructure: inspection.structure,
+    resourceManifest: params.resourceManifest,
+    publishedByClient: params.publishedByClient,
+    publishedClientVersion: params.publishedClientVersion,
+  });
+  const sourceCardKey = `${params.userId}/${provisionalCard.id}/source.card`;
+  await uploadFile({
+    bucket: Bucket.CARD_FILES,
+    key: sourceCardKey,
+    filePath: params.filePath,
+    contentType: 'application/vnd.chips.card+zip',
+  });
+
+  await db
+    .update(cards)
+    .set({
+      sourceCardBucket: Bucket.CARD_FILES,
+      sourceCardKey,
+      sourceCardSha256: inspection.sha256,
+      sourceCardStoredAt: new Date(),
+      publishedAt: new Date(),
+      status: 'ready',
+      updatedAt: new Date(),
+    })
+    .where(eq(cards.id, provisionalCard.id));
+
+  await CardRenderCacheService.enqueueForCard({
+    cardId: provisionalCard.id,
+    createdBy: 'upload',
+    renderProfile: CardRenderCacheService.viewRenderProfile,
+    priority: 100,
+  });
+  await CardRenderCacheService.enqueueForCard({
+    cardId: provisionalCard.id,
+    createdBy: 'upload',
+    renderProfile: CardRenderCacheService.coverRenderProfile,
+    priority: 90,
+  });
+
+  return {
+    cardId: provisionalCard.id,
+    sourceCardBucket: Bucket.CARD_FILES,
+    sourceCardKey,
+    sourceCardSha256: inspection.sha256,
+  };
+}

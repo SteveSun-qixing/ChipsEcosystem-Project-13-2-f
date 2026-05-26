@@ -4,10 +4,9 @@ import { db } from '../db/client';
 import { users } from '../db/schema/users';
 import { cards } from '../db/schema/cards';
 import { boxes } from '../db/schema/boxes';
-import { deleteObjectsByPrefix } from '../storage/s3';
-import { Bucket } from '../storage/buckets';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
+import { CardService } from '../services/card.service';
 
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── 所有 admin 路由需要 admin 角色 ──────────────────────────────
@@ -240,9 +239,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       if (!card) {
         throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
       }
-      await deleteObjectsByPrefix(Bucket.CARD_RESOURCES, `${card.userId}/${id}/`);
-      await deleteObjectsByPrefix(Bucket.CARD_HTML, `${card.userId}/${id}/`);
-      await db.delete(cards).where(eq(cards.id, id));
+      await CardService.delete(id, card.userId);
     } else if (type === 'box') {
       const box = await db.query.boxes.findFirst({ where: eq(boxes.id, id) });
       if (!box) {

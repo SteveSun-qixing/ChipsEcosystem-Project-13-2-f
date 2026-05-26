@@ -1,0 +1,12 @@
+{
+  "id": "module-standard",
+  "name": "标准模块插件模板",
+  "description": "面向 Host 共享功能模块场景的标准模块插件模板，内建 capability+method 契约、schema、测试与打包基线。",
+  "version": "1.0.0",
+  "supports": {
+    "sdk": true,
+    "react": false,
+    "themeSystem": false,
+    "i18nSystem": false
+  }
+}

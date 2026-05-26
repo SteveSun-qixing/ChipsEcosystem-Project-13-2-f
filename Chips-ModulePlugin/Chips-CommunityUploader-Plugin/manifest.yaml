@@ -1,0 +1,44 @@
+id: chips.module.chips.community-uploader
+name: Chips Community Uploader
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: 在用户设备上处理 .card 资源外置、链接替换、重新打包并发布到社区服务器的官方上传模块。
+author:
+  name: sevenstars
+  email: chips-community-uploader@example.invalid
+permissions:
+  - card.read
+  - card.write
+  - file.read
+  - file.write
+  - network.request
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: community.card.publish
+      version: "1.0.0"
+      methods:
+        - name: publish
+          mode: job
+          inputSchema: contracts/publish.input.schema.json
+          outputSchema: contracts/publish.output.schema.json
+  consumes: []

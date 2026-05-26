@@ -56,6 +56,16 @@ export interface CardOpenView {
   coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
   htmlUrl: string | null;
+  viewUrl?: string | null;
+  renderStatusUrl?: string | null;
+  viewState?: 'cache_ready' | 'rendering' | 'render_error' | 'pending' | 'processing' | 'ready' | 'error';
+  renderCache?: {
+    status: string;
+    generatedAt: string | null;
+    lastAccessedAt: string | null;
+    expiresAt: string | null;
+    errorMessage?: string | null;
+  } | null;
   status: 'pending' | 'processing' | 'ready' | 'error';
   visibility: 'public' | 'private';
   user?: PublicUserProfile | null;
@@ -68,7 +78,22 @@ export interface CardStatus {
   status: 'pending' | 'processing' | 'ready' | 'error';
   errorMessage: string | null;
   htmlUrl: string | null;
+  viewUrl?: string | null;
+  renderStatusUrl?: string | null;
   updatedAt: string;
+}
+
+export interface CardRenderStatus {
+  cardId: string;
+  status: string;
+  viewState: 'cache_ready' | 'rendering' | 'render_error';
+  attemptCount: number;
+  updatedAt: string;
+  viewUrl: string;
+  error: {
+    code: string;
+    message: string;
+  } | null;
 }
 
 export interface BoxDetail {
@@ -94,7 +119,8 @@ export interface BoxDetail {
     sort_index?: number;
     enabled?: boolean;
     communityCardId?: string;
-    communityHtmlUrl?: string;
+    communityViewUrl?: string;
+    communityRenderStatusUrl?: string;
   }>;
   user?: PublicUserProfile | null;
   createdAt: string;
@@ -175,6 +201,11 @@ export const cardsApi = {
 
   async getCardStatus(cardId: string) {
     const res = await apiClient.get<{ data: CardStatus }>(`/cards/${cardId}/status`);
+    return res.data;
+  },
+
+  async getCardRenderStatus(cardId: string) {
+    const res = await apiClient.get<{ data: CardRenderStatus }>(`/cards/${cardId}/render-status`);
     return res.data;
   },
 

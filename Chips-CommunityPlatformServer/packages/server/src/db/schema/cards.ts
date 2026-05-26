@@ -54,6 +54,33 @@ export const cards = pgTable(
     /** 渲染后 HTML 的 CDN 访问 URL */
     htmlUrl: text('html_url'),
 
+    /** 永久 .card 源文件所在 bucket */
+    sourceCardBucket: text('source_card_bucket'),
+
+    /** 永久 .card 源文件对象 key */
+    sourceCardKey: text('source_card_key'),
+
+    /** 永久 .card 源文件公开或内部 URL */
+    sourceCardUrl: text('source_card_url'),
+
+    /** 永久 .card 源文件 SHA-256 */
+    sourceCardSha256: text('source_card_sha256'),
+
+    /** 永久 .card 源文件保存时间 */
+    sourceCardStoredAt: timestamp('source_card_stored_at', { withTimezone: true }),
+
+    /** 上传发布时的外置资源清单 */
+    resourceManifest: jsonb('resource_manifest'),
+
+    /** 发布客户端名称 */
+    publishedByClient: text('published_by_client'),
+
+    /** 发布客户端版本 */
+    publishedClientVersion: text('published_client_version'),
+
+    /** 发布完成时间 */
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+
     /** 完整 metadata.yaml 内容（结构化 JSON） */
     cardMetadata: jsonb('card_metadata'),
 
@@ -90,6 +117,11 @@ export const cards = pgTable(
       .on(table.visibility, table.status, table.createdAt)
       .desc(),
     cardFileIdIdx: index('cards_card_file_id_idx').on(table.cardFileId),
+    sourceCardSha256Idx: index('cards_source_card_sha256_idx').on(table.sourceCardSha256),
+    sourceCardObjectIdx: index('cards_source_card_object_idx').on(
+      table.sourceCardBucket,
+      table.sourceCardKey,
+    ),
   }),
 );
 

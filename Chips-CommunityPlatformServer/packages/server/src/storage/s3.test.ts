@@ -106,16 +106,16 @@ describe('storage url and bucket mapping', () => {
     });
 
     const url = await storage.uploadBuffer({
-      bucket: 'chips-card-html',
+      bucket: 'chips-card-render-cache',
       key: 'user-1/card-1/index.html',
       body: '<!doctype html>',
       contentType: 'text/html',
     });
 
-    expect(url).toBe('https://file.chipscard.space/chips-card-html/user-1/card-1/index.html');
+    expect(url).toBe('https://file.chipscard.space/chips-card-render-cache/user-1/card-1/index.html');
     expect(sentCommands[0]?.input).toMatchObject({
       Bucket: 'chipscardspace',
-      Key: 'chips-card-html/user-1/card-1/index.html',
+      Key: 'chips-card-render-cache/user-1/card-1/index.html',
       ContentType: 'text/html',
     });
   });
@@ -146,7 +146,7 @@ describe('storage url and bucket mapping', () => {
       fs.writeFileSync(htmlPath, '<!doctype html><title>薯片</title>', 'utf-8');
 
       await storage.uploadFile({
-        bucket: 'chips-card-html',
+        bucket: 'chips-card-render-cache',
         key: 'user-1/card-1/index.html',
         filePath: htmlPath,
       });
@@ -173,6 +173,20 @@ describe('storage url and bucket mapping', () => {
     });
   });
 
+  it('parses development MinIO public URLs back to logical bucket and key', async () => {
+    const { storage } = await loadStorage({
+      NODE_ENV: 'development',
+      S3_ENDPOINT: 'http://localhost:9000',
+    });
+
+    expect(
+      storage.parseObjectUrl('http://localhost:9000/chips-card-resources/users/user-1/uploads/upload-1/resources/photo.png'),
+    ).toEqual({
+      bucket: 'chips-card-resources',
+      key: 'users/user-1/uploads/upload-1/resources/photo.png',
+    });
+  });
+
   it('deletes listed physical keys from the single physical bucket', async () => {
     const { storage, sentCommands } = await loadStorage(
       {
@@ -181,28 +195,28 @@ describe('storage url and bucket mapping', () => {
       },
       [
         {
-          Contents: [{ Key: 'chips-card-html/user-1/card-1/index.html' }],
+          Contents: [{ Key: 'chips-card-render-cache/user-1/card-1/index.html' }],
           IsTruncated: false,
         },
       ],
     );
 
-    await storage.deleteObjectsByPrefix('chips-card-html', 'user-1/card-1/');
+    await storage.deleteObjectsByPrefix('chips-card-render-cache', 'user-1/card-1/');
 
     expect(sentCommands[0]?.input).toMatchObject({
       Bucket: 'chipscardspace',
-      Prefix: 'chips-card-html/user-1/card-1/',
+      Prefix: 'chips-card-render-cache/user-1/card-1/',
     });
     expect(sentCommands[1]?.input).toMatchObject({
       Bucket: 'chipscardspace',
       Delete: {
-        Objects: [{ Key: 'chips-card-html/user-1/card-1/index.html' }],
+        Objects: [{ Key: 'chips-card-render-cache/user-1/card-1/index.html' }],
         Quiet: true,
       },
     });
   });
 
-  it('keeps card pipeline input objects in their private physical bucket', async () => {
+  it('keeps source card files in their private physical bucket', async () => {
     const { storage, sentCommands } = await loadStorage({
       S3_PUBLIC_URL: 'https://file.chipscard.space',
       S3_BUCKET_NAME: 'chipscardspace',
@@ -214,14 +228,14 @@ describe('storage url and bucket mapping', () => {
       fs.writeFileSync(cardPath, 'card-package-bytes');
 
       const url = await storage.uploadFile({
-        bucket: 'chips-card-pipeline-inputs',
+        bucket: 'chips-card-files',
         key: 'user-1/card-1/source.card',
         filePath: cardPath,
       });
 
       expect(url).toBe('');
       expect(sentCommands[0]?.input).toMatchObject({
-        Bucket: 'chips-card-pipeline-inputs',
+        Bucket: 'chips-card-files',
         Key: 'user-1/card-1/source.card',
       });
     } finally {

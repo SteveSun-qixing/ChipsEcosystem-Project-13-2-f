@@ -4,6 +4,7 @@ import { UpdateCardSchema, PaginationSchema } from '../schemas/content.schemas';
 import { UserService } from '../services/user.service';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
+import { CardRenderCacheService } from '../services/card-render-cache.service';
 
 const cardRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── GET /api/v1/cards/:cardId ────────────────────────────────────
@@ -33,9 +34,42 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       const { cardId } = request.params as { cardId: string };
       const card = await CardService.getOpenViewAccessible(cardId, request.user?.userId ?? null);
       const owner = await UserService.findById(card.userId);
+      const renderCache = await CardRenderCacheService.findReadyCache(card.id, {
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+      const coverCache = await CardRenderCacheService.findReadyCache(card.id, {
+        renderProfile: CardRenderCacheService.coverRenderProfile,
+      });
+      const latestJob = renderCache ? null : await CardRenderCacheService.getLatestJob(card.id, {
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+      const viewState = renderCache
+        ? 'cache_ready'
+        : latestJob?.status === 'failed'
+          ? 'render_error'
+          : card.status === 'ready'
+            ? 'rendering'
+            : card.status;
+
       return {
         data: {
           ...CardService.toOpenViewDTO(card),
+          coverUrl: coverCache ? `/api/v1/cards/${card.id}/cover` : card.coverUrl,
+          viewState,
+          renderCache: renderCache
+            ? {
+                status: renderCache.status,
+                generatedAt: renderCache.generatedAt,
+                lastAccessedAt: renderCache.lastAccessedAt,
+                expiresAt: renderCache.expiresAt,
+              }
+            : {
+                status: latestJob?.status === 'failed' ? 'error' : latestJob?.status ?? 'queued',
+                generatedAt: null,
+                lastAccessedAt: null,
+                expiresAt: null,
+                errorMessage: latestJob?.lastError ?? null,
+              },
           user: owner ? UserService.toPublicProfile(owner) : null,
         },
       };
@@ -57,9 +91,180 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
           status: card.status,
           errorMessage: card.errorMessage,
           htmlUrl: card.htmlUrl,
+          viewUrl: `/api/v1/cards/${card.id}/view`,
+          renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
           updatedAt: card.updatedAt,
         },
       };
+    },
+  );
+
+  // ─── GET /api/v1/cards/:cardId/render-status ─────────────────────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/render-status',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request) => {
+      const { cardId } = request.params as { cardId: string };
+      const card = await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const renderCache = await CardRenderCacheService.findReadyCache(card.id, {
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+      const latestJob = renderCache ? null : await CardRenderCacheService.getLatestJob(card.id, {
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+
+      return {
+        data: {
+          cardId: card.id,
+          status: renderCache?.status ?? latestJob?.status ?? 'queued',
+          viewState: renderCache
+            ? 'cache_ready'
+            : latestJob?.status === 'failed'
+              ? 'render_error'
+              : 'rendering',
+          attemptCount: latestJob?.attemptCount ?? 0,
+          updatedAt: renderCache?.updatedAt ?? latestJob?.updatedAt ?? card.updatedAt,
+          viewUrl: `/api/v1/cards/${card.id}/view`,
+          error: latestJob?.lastError
+            ? {
+                code: ErrorCode.CARD_RENDER_ERROR,
+                message: latestJob.lastError,
+              }
+            : null,
+        },
+      };
+    },
+  );
+
+  // ─── GET /api/v1/cards/:cardId/view ──────────────────────────────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/view',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const { cardId } = request.params as { cardId: string };
+      const card = await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const renderCache = await CardRenderCacheService.findReadyCache(card.id, {
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+
+      if (renderCache) {
+        const touched = await CardRenderCacheService.touchCache(renderCache.id);
+        return reply.redirect(touched.entryUrl, 302);
+      }
+
+      await CardRenderCacheService.enqueueForCard({
+        cardId: card.id,
+        createdBy: 'view_miss',
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+        priority: 10,
+      });
+
+      return reply.status(202).send({
+        data: {
+          cardId: card.id,
+          viewState: 'rendering',
+          renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
+          retryAfterSeconds: 3,
+        },
+      });
+    },
+  );
+
+  // ─── GET /api/v1/cards/:cardId/cover ─────────────────────────────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/cover',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const { cardId } = request.params as { cardId: string };
+      const card = await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const coverCache = await CardRenderCacheService.findReadyCache(card.id, {
+        renderProfile: CardRenderCacheService.coverRenderProfile,
+      });
+
+      if (coverCache) {
+        const touched = await CardRenderCacheService.touchCache(coverCache.id);
+        return reply.redirect(touched.entryUrl, 302);
+      }
+
+      await CardRenderCacheService.enqueueForCard({
+        cardId: card.id,
+        createdBy: 'cover_miss',
+        renderProfile: CardRenderCacheService.coverRenderProfile,
+        priority: 20,
+      });
+
+      reply
+        .status(202)
+        .header('content-type', 'text/html; charset=utf-8')
+        .header('retry-after', '3');
+      return reply.send(createCoverPreparingHtml(card.title));
+    },
+  );
+
+  // ─── GET /api/v1/cards/:cardId/render-cache/:cacheVersion/* ───────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/render-cache/:cacheVersion/*',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const { cardId, cacheVersion, '*': assetPath } = request.params as {
+        cardId: string;
+        cacheVersion: string;
+        '*': string;
+      };
+      await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const object = await CardRenderCacheService.streamPrivateCache({
+        cardId,
+        cacheVersion,
+        assetPath,
+        renderProfile: CardRenderCacheService.viewRenderProfile,
+      });
+
+      if (object.contentType) {
+        reply.header('content-type', object.contentType);
+      }
+      if (object.contentLength !== undefined) {
+        reply.header('content-length', String(object.contentLength));
+      }
+      if (object.etag) {
+        reply.header('etag', object.etag);
+      }
+      return reply.send(object.body);
+    },
+  );
+
+  // ─── GET /api/v1/cards/:cardId/cover-cache/:cacheVersion/* ───────
+
+  fastify.get(
+    '/api/v1/cards/:cardId/cover-cache/:cacheVersion/*',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const { cardId, cacheVersion, '*': assetPath } = request.params as {
+        cardId: string;
+        cacheVersion: string;
+        '*': string;
+      };
+      await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const object = await CardRenderCacheService.streamPrivateCache({
+        cardId,
+        cacheVersion,
+        assetPath,
+        renderProfile: CardRenderCacheService.coverRenderProfile,
+      });
+
+      if (object.contentType) {
+        reply.header('content-type', object.contentType);
+      }
+      if (object.contentLength !== undefined) {
+        reply.header('content-length', String(object.contentLength));
+      }
+      if (object.etag) {
+        reply.header('etag', object.etag);
+      }
+      return reply.send(object.body);
     },
   );
 
@@ -132,5 +337,41 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 };
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function createCoverPreparingHtml(title: string): string {
+  const safeTitle = escapeHtmlText(title);
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${safeTitle}</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 100%; min-height: 100%; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: end stretch;
+        padding: clamp(18px, 5vw, 32px);
+        background: linear-gradient(155deg, #f8fbff 0%, #dfeeff 44%, #b7d7ff 100%);
+        color: #101828;
+        font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+      }
+      h1 { margin: 0; font-size: clamp(28px, 7vw, 54px); line-height: 1; }
+    </style>
+  </head>
+  <body>
+    <h1>${safeTitle}</h1>
+  </body>
+</html>`;
+}
 
 export default cardRoutes;

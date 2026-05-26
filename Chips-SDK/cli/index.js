@@ -146,8 +146,8 @@ const printHelp = () => {
       '  e2e         运行端到端测试（工程自行提供 e2e 脚本时调用）',
       '  package     根据 manifest.yaml 和构建产物打包生成 .cpk 插件包',
       '  validate    执行项目级契约校验（配置、清单、产物完整性等）',
-      '  login       在本机保存开发者凭据（为未来线上发布做准备）',
-      '  publish     生成发布包元数据并校验，可对接后续市场服务',
+      '  login       在本机保存开发者发布身份配置',
+      '  publish     生成发布包元数据并校验，可对接后续正式发布系统',
       '  run         在开发环境下启动 Host 并运行应用插件',
       '  version     查看 chipsdev 版本',
       '  help        查看帮助信息'
@@ -671,7 +671,7 @@ const hasProjectVitestConfig = (projectRoot) => {
 const defaultConfigTemplate = () => {
   return `/**
  * Chips Dev 配置文件
- * type: app | card | layout | module | theme | i18n
+ * type: app | card | layout | module | theme
  */
 
 const config = {
@@ -1973,7 +1973,7 @@ const handleLogin = async () => {
 
   await saveJsonFile(configPath, next);
   log({
-    message: '已在本机记录 chipsdev 登录时间（占位本地配置），后续可对接在线市场服务。',
+    message: '已在本机记录 chipsdev 本地发布身份时间，可供后续正式发布系统读取。',
     configPath
   });
 };
@@ -2016,7 +2016,7 @@ const handlePublish = async () => {
 
   log({
     message:
-      '已生成发布元数据（publish-meta.json），可作为对接线上市场服务的输入。',
+      '已生成发布元数据（publish-meta.json），可作为后续正式发布系统的输入。',
     metaPath
   });
 };

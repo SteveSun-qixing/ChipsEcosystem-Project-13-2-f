@@ -10,80 +10,47 @@ CPK是插件包的统一格式，采用ZIP压缩格式，扩展名为cpk。CPK�
 
 ## 目录结构
 
-CPK文件内部包含标准目录结构。根目录包含manifest.yaml清单文件，这是必需的配置文件。代码目录通常命名为dist或build，包含编译后的JavaScript代码。资源目录包含图片、字体等静态资源。不同类型插件的目录结构略有差异。
+CPK 文件内部以包根 `manifest.yaml` 为唯一正式清单源。`chipsdev package` 会把工程根 `manifest.yaml` 写入包根，把构建产物保留在包内 `dist/`，并收集 manifest 显式引用的正式静态资源。五类插件的差异由 manifest 字段、入口和运行时导出契约表达，不通过 `app/`、`card/`、`layout/`、`module/`、`theme/` 这类顶层包裹目录表达。
 
 ### 各类插件标准目录结构
 
+```text
+<plugin>.cpk
+├── manifest.yaml
+├── dist/
+│   └── ...
+└── <manifest 声明的正式资源目录或文件>
 ```
-# 应用插件 (app)
-app/
-├── manifest.yaml
-├── dist/
-│   └── index.html
-├── assets/
-└── preview/
 
-# 卡片插件 (card)
-card/
-├── manifest.yaml
-├── dist/
-│   └── renderer.js
-├── assets/
-└── preview/
+常见资源包括：
 
-# 布局插件 (layout)
-layout/
-├── manifest.yaml
-├── dist/
-│   └── index.js
-├── assets/
-└── preview/
+- `assets/`：应用图标、截图、静态资源；
+- `preview/`：预览资源；
+- `contracts/`：主题契约、模块 schema 或布局契约；
+- 其他由 `manifest.yaml` 显式引用且通过 `chipsdev validate` 校验存在的资源路径。
 
-# 模块插件 (module)
-module/
-├── manifest.yaml
-├── dist/
-│   └── index.js
-├── assets/
-└── preview/
+包内不应包含：
 
-# 主题插件 (theme)
-theme/
-├── manifest.yaml
-├── tokens/
-│   ├── ref.json
-│   ├── sys.json
-│   ├── comp.json
-│   ├── motion.json
-│   └── layout.json
-├── components/
-│   ├── button.css
-│   ├── input.css
-│   └── ...
-├── motions/
-│   └── ...
-├── icons/
-│   └── ...
-├── contracts/
-│   └── theme-interface.contract.json
-├── global.css
-├── preview/
-│   └── thumbnail.png
-└── manifest.yaml
-```
+- `dist/manifest.yaml`、`dist/manifest.yml`、`dist/manifest.json` 等构建副本；
+- 旧 `.cpk` 包；
+- `publish-meta.json` 等发布辅助文件；
+- 与当前插件运行无关的源码、测试报告或任务材料。
 
 ### 主题插件结构说明
 
-根据架构手册第11.5节，主题包必须包含以下标准结构：
+主题包源码工程可以包含 `tokens/`、`styles/`、`icons/`、`contracts/`、`preview/` 等目录，但正式 `.cpk` 仍以包根 `manifest.yaml`、`dist/tokens.json`、`dist/theme.css` 和 manifest 显式引用的契约/资源为准。
 
-- **manifest.yaml**：主题元数据，包含id、name、version、publisher等
-- **tokens/*.json**：token定义文件（五层架构：ref/sys/comp/motion/layout）
-- **components/*.css**：组件样式文件
-- **motions/*.css**：动效定义文件
-- **icons/**：图标资源目录
-- **contracts/theme-interface.contract.json**：主题契约文件，用于校验主题接口点完整性
-- **global.css**：全局样式
-- **preview/**：主题预览资源
+主题包 manifest 的关键字段包括：
+
+- `type: theme`
+- 对象形式 `entry.tokens: dist/tokens.json`
+- 对象形式 `entry.themeCss: dist/theme.css`
+- `themeId`
+- `displayName`
+- `isDefault`
+- `parentTheme`
+- `ui.layout.contract`
+- `ui.layout.minFunctionalSet`
 
 > 注意：一个主题包仅承载一种外观，不在包内区分白天/夜间、light/dark 或其他模式标签；外观切换通过切换 `themeId` 到另一个主题包完成。
 
@@ -91,17 +58,17 @@ theme/
 
 清单文件是插件的入口配置，包含以下字段：
 
-必填字段包括：id是唯一标识符，使用反向域名格式如com.example.my-plugin，name是显示名称，version遵循语义化版本规范，type标识插件类型（app、card、layout、module、theme），entry指定入口文件路径。
+必填字段包括：`id` 是唯一标识符，使用反向域名格式如 `com.example.my-plugin`；`name` 是显示名称；`version` 遵循语义化版本规范；`type` 标识插件类型（`app`、`card`、`layout`、`module`、`theme`）；`entry` 指定入口文件路径或主题入口对象；`permissions` 必须是数组；`runtime.targets` 必须完整声明 `desktop/web/mobile/headless`。
 
 可选字段包括：author作者信息，description功能描述，icon图标文件路径，homepage项目主页，license开源许可证，keywords关键词数组，screenshots截图数组。
 
 依赖字段声明插件依赖。dependencies对象列出依赖的模块和版本范围，peerDependencies列出对宿主环境的依赖。
 
-权限字段声明插件需要的系统能力。permissions数组列出权限名称，如file-access、network-request、clipboard-access等。
+权限字段声明插件需要的系统能力。`permissions` 数组使用点分命名空间，例如 `file.read`、`file.write`、`network.request`、`clipboard.read`、`clipboard.write`、`theme.read`、`zip.manage`。无权限插件也必须写 `permissions: []`。
 
 ## 插件类型
 
-应用插件type字段为app，入口文件是HTML文件。卡片插件type字段为card，入口文件是渲染组件代码。布局插件type字段为layout，入口文件是布局算法代码。模块插件type字段为module，入口文件是模块代码。主题插件type字段为theme，入口文件是CSS文件。
+应用插件 `type` 字段为 `app`，入口文件通常是 `dist/index.html`。卡片插件 `type` 字段为 `card`，入口文件通常是导出基础卡片渲染/编辑契约的 `dist/index.mjs`。布局插件 `type` 字段为 `layout`，入口文件导出 `layoutDefinition`。模块插件 `type` 字段为 `module`，入口文件导出无界面能力模块定义。主题插件 `type` 字段为 `theme`，入口是对象结构 `entry.tokens / entry.themeCss`，不是单个 CSS 字符串。
 
 ## 打包工具
 
@@ -109,7 +76,7 @@ theme/
 
 ## 签名机制
 
-为了确保插件来源可信，CPK支持数字签名。开发者使用私钥对插件包进行签名。系统使用公钥验证签名有效性。未签名或签名无效的插件可能不被允许安装。
+签名属于发布来源治理能力，不是本地开发和本地 `.cpk` 安装的前置条件。当前 Host 运行时把本地开发与本地安装视为 `source = local` 主链路；当 manifest 声明 `source` 且不为 `local` 时，Host 会要求存在 `signature` 字段。完整远端来源、公钥验证、分发审核和公证流程应在发布安全文档中单独冻结，不应写成本地 `chipsdev package -> chips plugin install` 的必经步骤。
 
 ## 安全限制
 
@@ -117,26 +84,19 @@ CPK包内的代码运行在受限环境中。不能访问文件系统超出插�
 
 ## 热插拔支持
 
-CPK设计支持热插拔。插件可以在不重启软件的情况下安装、更新和卸载。
+当前 Host 支持通过 `plugin.install / plugin.enable / plugin.disable / plugin.uninstall` 在工作区内安装、替换、启用、禁用和卸载插件。替换同 ID 插件时，Host 会删除旧安装副本并复制新的已安装副本，保留运行时记录中的旧启用状态。
 
-### 热插拔技术要求
+这不等同于已经冻结远端更新、增量发布或无需任何重启的发布流水线。涉及远端获取、签名校验、运行中插件迁移和失败回滚的能力，必须在后续发布链路文档中单独定义。
 
-根据架构手册热更新架构设计，CPK文件必须满足以下热插拔要求：
+正式工作流仍建议保持：
 
-1. **文件锁定规避**：避免使用独占文件锁，使用原子写入或临时文件机制
-2. **增量更新支持**：支持差异包更新，减少传输和加载时间
-3. **版本兼容声明**：manifest中声明兼容的宿主版本范围
-4. **无状态启动**：插件初始化不依赖上次运行的持久化状态
-5. **资源隔离**：临时资源存储在独立目录，卸载时完整清理
-
-### 热插拔流水线
-
-1. 下载新版本CPK到临时目录
-2. 验证CPK签名和完整性
-3. 停止旧版本插件（触发unload生命周期）
-4. 加载新版本插件（触发load生命周期）
-5. 验证新版本功能正常
-6. 清理旧版本临时文件
+```bash
+chipsdev build
+chipsdev validate
+chipsdev package
+chips plugin install /绝对路径/产物.cpk
+chips plugin enable <pluginId>
+```
 
 ## 大小限制
 
@@ -148,7 +108,7 @@ manifest中的版本字段遵循语义化版本规范。主版本变化通常表
 
 ## 主题契约门禁
 
-根据架构手册第11.7节，主题包必须通过主题契约门禁校验：
+主题包必须通过主题契约门禁校验：
 
 ### 校验项目
 
@@ -159,10 +119,13 @@ manifest中的版本字段遵循语义化版本规范。主版本变化通常表
 
 ### 契约校验工具
 
-系统提供主题契约校验CLI命令：
-- `chips theme validate <theme-cpk>`：执行完整校验流程
-- `chips theme validate --tokens <theme-dir>`：仅校验token完整性
-- `chips theme validate --components <theme-dir>`：仅校验组件接口点
+当前正式命令边界：
+
+- `chipsdev theme inspect [--theme <themeId|path>]`：读取主题包 manifest、entry、contract、min functional set、token 覆盖并输出开发期检查报告；
+- `chipsdev validate`：校验当前主题工程 manifest 引用资源、构建产物和工程契约；
+- `chipsdev theme validate` / `chips theme validate`：对当前工作区内已启用主题逐个执行 `theme.apply + theme.resolve` 运行时门禁。
+
+`chips theme validate` 不接收 `<theme-cpk>`、`--tokens` 或 `--components` 参数。未安装启用的主题包应先通过 `chipsdev package` 生成 `.cpk`，再用 `chips plugin install` / `chips plugin enable` 进入目标工作区。
 
 ### 校验失败处理
 

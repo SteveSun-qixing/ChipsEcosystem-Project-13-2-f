@@ -33,6 +33,14 @@
 - `version`
 - `type`
 - `entry`
+- `permissions`
+- `runtime.targets`
+
+`permissions` 规则：
+
+- 必须是数组；
+- 无权限插件也必须显式写入 `permissions: []`；
+- 权限名采用点分命名空间，例如 `file.read`、`theme.read`、`zip.manage`。
 
 `type` 取值：
 
@@ -223,18 +231,131 @@ runtime:
 
 - 应声明 `runtime.targets`
 - 正式解析依据是 `layout.layoutType`
+- 必须声明 `layout.displayName`
+- 不得声明 `ui.surface`
+- 常见权限基线是 `box.read`、`theme.read`、`i18n.read`
+
+标准布局插件示例：
+
+```yaml
+id: chips.layout.example
+name: 示例布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+layout:
+  layoutType: chips.layout.example
+  displayName: 示例布局
+```
 
 ### 7.3 `module`
 
 - 应声明 `runtime.targets`
 - 正式 provider 契约仍以 `module.provides / module.consumes` 为准
+- `module.apiVersion` 当前为数字版本；
+- `module.runtime` 当前正式值为 `worker`；
+- `module.activation` 当前支持 `onDemand` 与 `eager`；
+- `module.provides[].methods[]` 必须声明稳定 `name`、`mode`，并按需声明 `inputSchema` 与 `outputSchema`；
+- 模块调用其他 capability 时，目标 capability 必须预先声明在 `module.consumes[]` 中。
+
+标准模块插件示例：
+
+```yaml
+id: chips.module.example
+name: 示例模块插件
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+permissions:
+  - file.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: example.process
+      version: 1.0.0
+      methods:
+        - name: run
+          mode: sync
+          inputSchema: contracts/run.input.schema.json
+          outputSchema: contracts/run.output.schema.json
+  consumes:
+    - capability: example.normalize
+      versionRange: ^1.0.0
+```
 
 ### 7.4 `theme`
 
 - 应声明 `runtime.targets`
 - 主题入口继续使用对象结构 `entry.tokens / entry.themeCss`
+- 必须声明 `themeId` 与显示名称字段；
+- `isDefault`、`parentTheme` 按主题继承和默认主题需要声明；
+- 主题契约资产通过 `ui.layout.contract` 与 `ui.layout.minFunctionalSet` 提供给 `chipsdev package` 收集，并由 Host 主题运行时按安装副本读取。
 
-## 8. 应用插件示例
+标准主题插件示例：
+
+```yaml
+id: theme.theme.example
+name: 示例主题
+version: 1.0.0
+type: theme
+entry:
+  tokens: dist/tokens.json
+  themeCss: dist/theme.css
+permissions:
+  - theme.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+themeId: chips.example.theme
+displayName: 示例主题
+isDefault: false
+parentTheme: chips-official.default-theme
+ui:
+  layout:
+    contract: contracts/theme-interface.contract.json
+    minFunctionalSet: contracts/theme-min-functional-set.json
+```
+
+## 8. CLI 与 Host 校验边界
+
+`chipsdev validate` 是工程打包前校验入口，当前至少检查基础字段、`permissions` 数组、完整 `runtime.targets`、应用插件 `ui.surface`、`capabilityFallbacks`、模块 provider 契约和 manifest 声明资产存在性。
+
+Host `plugin.install` 是运行时安装入口，支持传入目录、单个 manifest 文件或 `.cpk` 文件。`.cpk` 会先解包到受控临时目录，再查找 manifest、校验资源并复制为当前工作区 `plugins/<pluginId>` 下的已安装副本。Host 还会解析主题、布局与模块的类型专属字段。开发者不应把源码目录当作 Host 正式运行入口。
+
+## 9. 应用插件示例
 
 ```yaml
 id: chips.photo.viewer
@@ -278,7 +399,7 @@ ui:
     icon: assets/icons/app-icon.png
 ```
 
-## 9. 校验门禁
+## 10. 校验门禁
 
 当前 `chipsdev validate` 已正式校验：
 
@@ -288,7 +409,7 @@ ui:
 4. `capabilityFallbacks` 若提供则必须合法
 5. 非 `app` 插件不得声明 `ui.surface`
 
-## 10. 质量要求
+## 11. 质量要求
 
 1. Manifest 公共字段变化必须同步更新 Host 解析、CLI 校验、Scaffold 模板和共享文档。
 2. 不允许继续把桌面假设直接写死到公共契约里。

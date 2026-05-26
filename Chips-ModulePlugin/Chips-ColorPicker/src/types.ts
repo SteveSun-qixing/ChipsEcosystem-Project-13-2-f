@@ -5,15 +5,70 @@ export interface ColorPickRequest {
   };
 }
 
+export type ColorPaletteRole = "background" | "accent" | "representative";
+
+export interface ColorPaletteEntry {
+  color: string;
+  role: ColorPaletteRole;
+  population: number;
+  lightness: number;
+  chroma: number;
+}
+
+export interface ColorPickMetadata {
+  algorithm: "oklab-kmeans-v1";
+  source?: {
+    imagePath: string;
+    sizeBytes?: number;
+    mtimeMs?: number;
+  };
+  image: {
+    width: number;
+    height: number;
+    format?: string;
+    animated: boolean;
+    pageCount: number;
+    hasAlpha: boolean;
+    orientation?: number;
+  };
+  sample: {
+    width: number;
+    height: number;
+    sampleSize: number;
+    visiblePixelRatio: number;
+    transparentPixelRatio: number;
+    clusterCount: number;
+  };
+}
+
 export interface ColorPickResult {
   backgroundColor: string;
   accentColor: string;
+  palette: ColorPaletteEntry[];
+  metadata: ColorPickMetadata;
 }
 
 export interface DecodedPng {
   width: number;
   height: number;
   pixels: Uint8Array;
+}
+
+export interface DecodedImageInfo {
+  width?: number;
+  height?: number;
+  format?: string;
+  animated?: boolean;
+  pageCount?: number;
+  hasAlpha?: boolean;
+  orientation?: number;
+}
+
+export interface ColorAnalysisSample extends DecodedPng {
+  imagePath?: string;
+  sampleSize?: number;
+  sourceMeta?: HostFileStatLike;
+  imageInfo?: DecodedImageInfo;
 }
 
 export interface HostFileStatLike {

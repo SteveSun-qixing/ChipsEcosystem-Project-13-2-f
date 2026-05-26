@@ -4,7 +4,29 @@ import { sampleImage } from "./image-sampler";
 import type { ColorPickRequest, ColorPickResult, ColorPickerContext } from "./types";
 
 const RESULT_CACHE_LIMIT = 48;
+const MAX_ACTIVE_PICK_TASKS = 2;
 const resultCache = new Map<string, ColorPickResult>();
+let activePickTasks = 0;
+const pickQueue: Array<() => void> = [];
+
+const acquirePickSlot = async (): Promise<() => void> => {
+  if (activePickTasks >= MAX_ACTIVE_PICK_TASKS) {
+    await new Promise<void>((resolve) => {
+      pickQueue.push(resolve);
+    });
+  }
+
+  activePickTasks += 1;
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    activePickTasks = Math.max(0, activePickTasks - 1);
+    pickQueue.shift()?.();
+  };
+};
 
 const rememberResult = (cacheKey: string, result: ColorPickResult): void => {
   resultCache.delete(cacheKey);
@@ -38,39 +60,50 @@ const reportProgress = async (
 };
 
 export const pickImageColors = async (ctx: ColorPickerContext, input: ColorPickRequest): Promise<ColorPickResult> => {
-  const sampled = await sampleImage(ctx, input);
-  const cached = resultCache.get(sampled.cacheKey);
-
-  if (cached) {
-    resultCache.delete(sampled.cacheKey);
-    resultCache.set(sampled.cacheKey, cached);
-    ctx.logger.debug("Returning cached color picking result.", {
-      imagePath: sampled.imagePath,
-      sampleSize: sampled.sampleSize,
-    });
-    await reportProgress(ctx, "completed", 100, "Image color picking completed");
-    return cached;
-  }
-
-  await reportProgress(ctx, "analyze", 80, "Analyzing representative colors");
-
+  const releaseSlot = await acquirePickSlot();
   try {
-    const result = analyzeColorSample(sampled);
-    rememberResult(sampled.cacheKey, result);
-
-    ctx.logger.info("Image color picking completed.", {
-      imagePath: input.imagePath,
-      backgroundColor: result.backgroundColor,
-      accentColor: result.accentColor,
-    });
-
-    await reportProgress(ctx, "completed", 100, "Image color picking completed");
-    return result;
-  } catch (error) {
-    if (error instanceof Error && "code" in error) {
-      throw error;
+    if (ctx.job?.isCancelled() || ctx.job?.signal.aborted) {
+      throw createColorPickerError("COLOR_PICKER_ANALYSIS_FAILED", "Image color picking was cancelled.", {
+        stage: "queued",
+      });
     }
 
-    throw createColorPickerError("COLOR_PICKER_ANALYSIS_FAILED", "Failed to analyze image colors.", undefined, error);
+    const sampled = await sampleImage(ctx, input);
+    const cached = resultCache.get(sampled.cacheKey);
+
+    if (cached) {
+      resultCache.delete(sampled.cacheKey);
+      resultCache.set(sampled.cacheKey, cached);
+      ctx.logger.debug("Returning cached color picking result.", {
+        imagePath: sampled.imagePath,
+        sampleSize: sampled.sampleSize,
+      });
+      await reportProgress(ctx, "completed", 100, "Image color picking completed");
+      return cached;
+    }
+
+    await reportProgress(ctx, "analyze", 80, "Analyzing representative colors");
+
+    try {
+      const result = analyzeColorSample(sampled);
+      rememberResult(sampled.cacheKey, result);
+
+      ctx.logger.info("Image color picking completed.", {
+        imagePath: input.imagePath,
+        backgroundColor: result.backgroundColor,
+        accentColor: result.accentColor,
+      });
+
+      await reportProgress(ctx, "completed", 100, "Image color picking completed");
+      return result;
+    } catch (error) {
+      if (error instanceof Error && "code" in error) {
+        throw error;
+      }
+
+      throw createColorPickerError("COLOR_PICKER_ANALYSIS_FAILED", "Failed to analyze image colors.", undefined, error);
+    }
+  } finally {
+    releaseSlot();
   }
 };

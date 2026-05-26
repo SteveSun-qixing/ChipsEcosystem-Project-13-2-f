@@ -45,6 +45,26 @@ describe("module definition", () => {
     expect(output).toEqual({
       backgroundColor: expect.stringMatching(/^#[0-9a-f]{6}$/),
       accentColor: expect.stringMatching(/^#[0-9a-f]{6}$/),
+      palette: [
+        expect.objectContaining({
+          color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+          role: "background",
+        }),
+        expect.objectContaining({
+          color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+          role: "accent",
+        }),
+      ],
+      metadata: expect.objectContaining({
+        algorithm: "byte-sampling-template-v1",
+        source: expect.objectContaining({
+          imagePath: "/workspace/image.png",
+        }),
+        sample: expect.objectContaining({
+          sampleSize: 48,
+          clusterCount: 2,
+        }),
+      }),
     });
   });
 });

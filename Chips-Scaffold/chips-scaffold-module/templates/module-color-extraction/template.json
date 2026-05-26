@@ -1,7 +1,7 @@
 {
   "id": "module-color-extraction",
   "name": "图像颜色提取模块模板",
-  "description": "面向 image.color.pick 类能力的同步模块模板，默认通过 Host 读取图像二进制并输出稳定的背景色与强调色。",
+  "description": "面向 image.color.pick 类能力的同步模块模板，默认通过 Host 读取图像二进制并输出背景色、强调色、调色板与采样诊断。",
   "version": "1.0.0",
   "extends": "module-image-processing",
   "moduleShape": "color-extraction",

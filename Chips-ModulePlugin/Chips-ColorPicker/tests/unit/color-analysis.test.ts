@@ -60,6 +60,17 @@ describe("analyzeColorSample", () => {
     expect(relativeLuminance(accent)).toBeGreaterThan(relativeLuminance(background));
     expect(relativeLuminance(background)).toBeGreaterThan(0.22);
     expect(relativeLuminance(accent)).toBeGreaterThan(0.45);
+    expect(result.palette[0]).toMatchObject({
+      color: result.backgroundColor,
+      role: "background",
+    });
+    expect(result.palette[1]).toMatchObject({
+      color: result.accentColor,
+      role: "accent",
+    });
+    expect(result.metadata.algorithm).toBe("oklab-kmeans-v1");
+    expect(result.metadata.sample.visiblePixelRatio).toBe(1);
+    expect(result.metadata.sample.transparentPixelRatio).toBe(0);
   });
 
   it("returns two separated neutral colors for grayscale imagery", () => {
@@ -78,5 +89,35 @@ describe("analyzeColorSample", () => {
     expect(relativeLuminance(background)).toBeLessThan(relativeLuminance(accent));
     expect(relativeLuminance(background)).toBeGreaterThan(0.22);
     expect(relativeLuminance(accent)).toBeGreaterThan(0.45);
+  });
+
+  it("ignores transparent pixels and reports alpha coverage diagnostics", () => {
+    const sample = createSample(8, 8, (x, y) => {
+      if (x < 4 && y < 4) {
+        return { r: 42, g: 128, b: 214, a: 255 };
+      }
+      return { r: 255, g: 255, b: 255, a: 0 };
+    });
+
+    const result = analyzeColorSample(sample);
+
+    expect(result.backgroundColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(result.accentColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(result.metadata.sample.visiblePixelRatio).toBe(0.25);
+    expect(result.metadata.sample.transparentPixelRatio).toBe(0.75);
+    expect(result.metadata.sample.clusterCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("fails transparent-only samples with a diagnostic error code", () => {
+    const sample = createSample(4, 4, () => ({ r: 255, g: 255, b: 255, a: 0 }));
+
+    try {
+      analyzeColorSample(sample);
+      throw new Error("expected analyzeColorSample to fail");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "COLOR_PICKER_IMAGE_EMPTY",
+      });
+    }
   });
 });

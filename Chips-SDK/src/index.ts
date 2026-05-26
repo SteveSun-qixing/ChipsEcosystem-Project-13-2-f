@@ -147,6 +147,13 @@ export type {
   ModuleResolveOptions,
   ModuleSyncInvokeResult,
 } from "./api/module";
+export type {
+  ImageColorPaletteEntry,
+  ImageColorPaletteRole,
+  ImageColorPickInput,
+  ImageColorPickMetadata,
+  ImageColorPickOutput,
+} from "./api/image-color";
 export type { WindowApi, WindowConfig, WindowState } from "./api/window";
 export type {
   SurfaceApi,

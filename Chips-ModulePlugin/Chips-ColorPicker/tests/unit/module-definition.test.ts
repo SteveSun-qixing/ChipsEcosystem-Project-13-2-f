@@ -52,6 +52,20 @@ const createPosterPng = async (): Promise<Buffer> => {
     .toBuffer();
 };
 
+const createAnimatedGif = async (): Promise<Buffer> => {
+  const frameA = await sharp({
+    create: {
+      width: 6,
+      height: 6,
+      channels: 4,
+      background: { r: 20, g: 60, b: 180, alpha: 1 },
+    },
+  })
+    .gif()
+    .toBuffer();
+  return frameA;
+};
+
 const createContext = (imageBytes: Uint8Array): ColorPickerContext & { hostInvoke: ReturnType<typeof vi.fn> } => {
   const reportProgress = vi.fn().mockResolvedValue(undefined);
   const statIdentity = statIdentitySeed;
@@ -94,6 +108,25 @@ const createContext = (imageBytes: Uint8Array): ColorPickerContext & { hostInvok
   };
 };
 
+const createMissingContext = (): ColorPickerContext => {
+  return {
+    logger: {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    },
+    host: {
+      invoke: (vi.fn(async (action: string) => {
+        if (action === "file.stat") {
+          return { meta: undefined };
+        }
+        throw new Error(`Unexpected action: ${action}`);
+      }) as unknown) as ColorPickerContext["host"]["invoke"],
+    },
+  };
+};
+
 describe("ColorPicker module definition", () => {
   it("exposes image.color.pick and returns a stable background range plus a vivid accent range", async () => {
     const imageBytes = new Uint8Array(await createPosterPng());
@@ -113,6 +146,31 @@ describe("ColorPicker module definition", () => {
     expect(output.backgroundColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(output.accentColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(output.backgroundColor).not.toBe(output.accentColor);
+    expect(output.palette.length).toBeGreaterThanOrEqual(2);
+    expect(output.palette.length).toBeLessThanOrEqual(8);
+    expect(output.palette[0]).toMatchObject({
+      role: "background",
+      color: output.backgroundColor,
+    });
+    expect(output.palette[1]).toMatchObject({
+      role: "accent",
+      color: output.accentColor,
+    });
+    expect(output.metadata).toMatchObject({
+      algorithm: "oklab-kmeans-v1",
+      source: {
+        imagePath: "/workspace/poster.png",
+        sizeBytes: imageBytes.byteLength,
+      },
+      image: {
+        format: "png",
+        animated: false,
+        pageCount: 1,
+      },
+      sample: {
+        sampleSize: 96,
+      },
+    });
 
     const background = hexToRgb(output.backgroundColor);
     const accent = hexToRgb(output.accentColor);
@@ -164,22 +222,7 @@ describe("ColorPicker module definition", () => {
   });
 
   it("fails when the image file does not exist", async () => {
-    const ctx: ColorPickerContext = {
-      logger: {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-      },
-      host: {
-        invoke: (vi.fn(async (action: string) => {
-          if (action === "file.stat") {
-            return { meta: undefined };
-          }
-          throw new Error(`Unexpected action: ${action}`);
-        }) as unknown) as ColorPickerContext["host"]["invoke"],
-      },
-    };
+    const ctx = createMissingContext();
 
     await expect(
       moduleDefinition.providers[0]!.methods.pick(ctx, {
@@ -188,5 +231,45 @@ describe("ColorPicker module definition", () => {
     ).rejects.toMatchObject({
       code: "COLOR_PICKER_INPUT_NOT_FOUND",
     });
+  });
+
+  it("rejects remote URL inputs before reading files", async () => {
+    const ctx = createMissingContext();
+
+    await expect(
+      moduleDefinition.providers[0]!.methods.pick(ctx, {
+        imagePath: "https://example.invalid/poster.png",
+      }),
+    ).rejects.toMatchObject({
+      code: "COLOR_PICKER_INPUT_INVALID",
+    });
+  });
+
+  it("maps unsupported or damaged image bytes to sampler diagnostics", async () => {
+    const ctx = createContext(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]));
+
+    await expect(
+      moduleDefinition.providers[0]!.methods.pick(ctx, {
+        imagePath: "/workspace/poster.png",
+      }),
+    ).rejects.toMatchObject({
+      code: "COLOR_PICKER_IMAGE_SAMPLE_UNSUPPORTED",
+    });
+  });
+
+  it("reports animated image metadata while sampling a single frame", async () => {
+    const imageBytes = new Uint8Array(await createAnimatedGif());
+    const ctx = createContext(imageBytes);
+
+    const output = await moduleDefinition.providers[0]!.methods.pick(ctx, {
+      imagePath: "file:///workspace/poster.png",
+      options: {
+        sampleSize: 48,
+      },
+    });
+
+    expect(output.metadata.image.format).toBe("gif");
+    expect(output.metadata.image.pageCount).toBeGreaterThanOrEqual(1);
+    expect(output.metadata.source?.imagePath).toBe("/workspace/poster.png");
   });
 });

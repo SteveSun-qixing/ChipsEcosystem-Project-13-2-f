@@ -5,7 +5,6 @@ export type ColorPickerErrorCode =
   | "COLOR_PICKER_IMAGE_SAMPLE_FAILED"
   | "COLOR_PICKER_IMAGE_SAMPLE_INVALID"
   | "COLOR_PICKER_IMAGE_SAMPLE_UNSUPPORTED"
-  | "COLOR_PICKER_PNG_INVALID"
   | "COLOR_PICKER_ANALYSIS_FAILED";
 
 export interface ColorPickerError extends Error {

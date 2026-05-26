@@ -32,7 +32,7 @@ module:
   provides:
     - capability: {{ MODULE_CAPABILITY }}
       version: "1.0.0"
-      description: 从图像中提取背景色与强调色。
+      description: 从图像中提取背景色、强调色、调色板与采样诊断。
       methods:
         - name: pick
           mode: sync

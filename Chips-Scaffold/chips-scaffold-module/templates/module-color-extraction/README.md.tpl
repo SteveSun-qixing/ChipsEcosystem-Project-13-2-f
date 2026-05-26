@@ -24,6 +24,8 @@ npm run package
 
 正式颜色能力的公共契约应沉淀到生态共用技术文档，调用方仍通过 `module.invoke` 接入。
 
+默认输出包含 `backgroundColor`、`accentColor`、`palette` 与 `metadata`。模板内 `metadata.algorithm` 为 `byte-sampling-template-v1`，用于明确它只是无额外依赖的脚手架骨架；正式官方 `image.color.pick` 实现使用 `oklab-kmeans-v1`，以生态公共契约为准。
+
 ## Host 联调
 
 ```bash

@@ -1,5 +1,5 @@
 import { createColorPickerError } from "./errors";
-import type { ColorPickResult, DecodedPng } from "./types";
+import type { ColorAnalysisSample, ColorPaletteEntry, ColorPickMetadata, ColorPickResult, DecodedPng } from "./types";
 
 interface QuantizedPoint {
   r: number;
@@ -192,6 +192,10 @@ const rgbToHex = ({ r, g, b }: RgbColor): string => {
   return `#${roundChannel(r).toString(16).padStart(2, "0")}${roundChannel(g).toString(16).padStart(2, "0")}${roundChannel(b)
     .toString(16)
     .padStart(2, "0")}`;
+};
+
+const roundRatio = (value: number): number => {
+  return Math.round(clamp(value, 0, 1) * 1000) / 1000;
 };
 
 const labDistance = (left: Pick<Cluster, "labL" | "labA" | "labB">, right: Pick<Cluster, "labL" | "labA" | "labB">): number => {
@@ -667,7 +671,122 @@ const ensureFinalSeparation = (backgroundRgb: RgbColor, accentRgb: RgbColor, acc
   });
 };
 
-export const analyzeColorSample = (sample: DecodedPng): ColorPickResult => {
+const inspectAlphaCoverage = (sample: DecodedPng): { visiblePixelRatio: number; transparentPixelRatio: number } => {
+  let visible = 0;
+  let transparent = 0;
+  const total = Math.max(sample.width * sample.height, 1);
+
+  for (let index = 0; index < total; index += 1) {
+    const alpha = (sample.pixels[index * 4 + 3] ?? 0) / 255;
+    if (alpha >= 0.08) {
+      visible += 1;
+    } else {
+      transparent += 1;
+    }
+  }
+
+  return {
+    visiblePixelRatio: roundRatio(visible / total),
+    transparentPixelRatio: roundRatio(transparent / total),
+  };
+};
+
+const createPaletteEntry = (
+  color: string,
+  role: ColorPaletteEntry["role"],
+  cluster: Cluster,
+  totalWeight: number,
+): ColorPaletteEntry => {
+  return {
+    color,
+    role,
+    population: roundRatio(cluster.weight / Math.max(totalWeight, 1e-6)),
+    lightness: roundRatio(cluster.lightness),
+    chroma: Math.round(cluster.chroma * 1000) / 1000,
+  };
+};
+
+const buildPalette = (
+  clusters: Cluster[],
+  totalWeight: number,
+  backgroundCluster: Cluster,
+  accentCluster: Cluster,
+  backgroundColor: string,
+  accentColor: string,
+): ColorPaletteEntry[] => {
+  const entries: ColorPaletteEntry[] = [
+    createPaletteEntry(backgroundColor, "background", backgroundCluster, totalWeight),
+    createPaletteEntry(accentColor, "accent", accentCluster, totalWeight),
+  ];
+
+  for (const cluster of clusters) {
+    if (cluster === backgroundCluster || cluster === accentCluster) {
+      continue;
+    }
+
+    const color = rgbToHex(cluster);
+    if (entries.some((entry) => entry.color.toLowerCase() === color.toLowerCase())) {
+      continue;
+    }
+
+    entries.push(createPaletteEntry(color, "representative", cluster, totalWeight));
+    if (entries.length >= 8) {
+      break;
+    }
+  }
+
+  return entries;
+};
+
+const buildMetadata = (
+  sample: ColorAnalysisSample,
+  clusters: Cluster[],
+): ColorPickMetadata => {
+  const alphaCoverage = inspectAlphaCoverage(sample);
+  const image: ColorPickMetadata["image"] = {
+    width: sample.imageInfo?.width ?? sample.width,
+    height: sample.imageInfo?.height ?? sample.height,
+    animated: sample.imageInfo?.animated ?? false,
+    pageCount: sample.imageInfo?.pageCount ?? 1,
+    hasAlpha: sample.imageInfo?.hasAlpha ?? true,
+  };
+
+  if (sample.imageInfo?.format) {
+    image.format = sample.imageInfo.format;
+  }
+  if (typeof sample.imageInfo?.orientation === "number") {
+    image.orientation = sample.imageInfo.orientation;
+  }
+
+  const metadata: ColorPickMetadata = {
+    algorithm: "oklab-kmeans-v1",
+    image,
+    sample: {
+      width: sample.width,
+      height: sample.height,
+      sampleSize: sample.sampleSize ?? Math.max(sample.width, sample.height),
+      visiblePixelRatio: alphaCoverage.visiblePixelRatio,
+      transparentPixelRatio: alphaCoverage.transparentPixelRatio,
+      clusterCount: clusters.length,
+    },
+  };
+
+  if (sample.imagePath) {
+    metadata.source = {
+      imagePath: sample.imagePath,
+    };
+    if (typeof sample.sourceMeta?.size === "number") {
+      metadata.source.sizeBytes = sample.sourceMeta.size;
+    }
+    if (typeof sample.sourceMeta?.mtimeMs === "number") {
+      metadata.source.mtimeMs = sample.sourceMeta.mtimeMs;
+    }
+  }
+
+  return metadata;
+};
+
+export const analyzeColorSample = (sample: ColorAnalysisSample): ColorPickResult => {
   const points = collectQuantizedPoints(sample);
   const totalWeight = points.reduce((sum, point) => sum + point.weight, 0);
   if (totalWeight <= 0) {
@@ -676,17 +795,21 @@ export const analyzeColorSample = (sample: DecodedPng): ColorPickResult => {
 
   const clusters = clusterPoints(points);
   const backgroundCluster = chooseBackgroundCluster(clusters, totalWeight);
-  const accentCluster = chooseAccentCluster(clusters, backgroundCluster, totalWeight);
+  const accentCluster = chooseAccentCluster(clusters, backgroundCluster, totalWeight) ?? backgroundCluster;
 
   const backgroundRgb = tuneBackgroundColor(backgroundCluster);
   const accentRgb = ensureFinalSeparation(
     backgroundRgb,
-    accentCluster ? tuneAccentColor(accentCluster) : createFallbackAccent(backgroundCluster),
-    accentCluster ?? backgroundCluster,
+    accentCluster === backgroundCluster ? createFallbackAccent(backgroundCluster) : tuneAccentColor(accentCluster),
+    accentCluster,
   );
+  const backgroundColor = rgbToHex(backgroundRgb);
+  const accentColor = rgbToHex(accentRgb);
 
   return {
-    backgroundColor: rgbToHex(backgroundRgb),
-    accentColor: rgbToHex(accentRgb),
+    backgroundColor,
+    accentColor,
+    palette: buildPalette(clusters, totalWeight, backgroundCluster, accentCluster, backgroundColor, accentColor),
+    metadata: buildMetadata(sample, clusters),
   };
 };

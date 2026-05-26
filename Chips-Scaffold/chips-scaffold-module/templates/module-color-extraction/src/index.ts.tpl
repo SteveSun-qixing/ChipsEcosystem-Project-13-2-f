@@ -8,6 +8,36 @@ export interface ColorPickInput {
 export interface ColorPickOutput {
   backgroundColor: string;
   accentColor: string;
+  palette: Array<{
+    color: string;
+    role: "background" | "accent" | "representative";
+    population: number;
+    lightness: number;
+    chroma: number;
+  }>;
+  metadata: {
+    algorithm: "byte-sampling-template-v1";
+    source?: {
+      imagePath: string;
+      sizeBytes?: number;
+      mtimeMs?: number;
+    };
+    image: {
+      width: number;
+      height: number;
+      animated: boolean;
+      pageCount: number;
+      hasAlpha: boolean;
+    };
+    sample: {
+      width: number;
+      height: number;
+      sampleSize: number;
+      visiblePixelRatio: number;
+      transparentPixelRatio: number;
+      clusterCount: number;
+    };
+  };
 }
 
 interface HostFileStat {
@@ -158,6 +188,45 @@ const pickColors = async (ctx: ModuleContext, input: ColorPickInput): Promise<Co
   return {
     backgroundColor: colorFromBytes(bytes, 0, sampleSize),
     accentColor: colorFromBytes(bytes, Math.floor(sampleSize / 2), sampleSize),
+    palette: [
+      {
+        color: colorFromBytes(bytes, 0, sampleSize),
+        role: "background",
+        population: 1,
+        lightness: 0.5,
+        chroma: 0,
+      },
+      {
+        color: colorFromBytes(bytes, Math.floor(sampleSize / 2), sampleSize),
+        role: "accent",
+        population: 1,
+        lightness: 0.75,
+        chroma: 0,
+      },
+    ],
+    metadata: {
+      algorithm: "byte-sampling-template-v1",
+      source: {
+        imagePath,
+        sizeBytes: stat.size,
+        mtimeMs: stat.mtimeMs,
+      },
+      image: {
+        width: 1,
+        height: 1,
+        animated: false,
+        pageCount: 1,
+        hasAlpha: false,
+      },
+      sample: {
+        width: 1,
+        height: 1,
+        sampleSize,
+        visiblePixelRatio: 1,
+        transparentPixelRatio: 0,
+        clusterCount: 2,
+      },
+    },
   };
 };
 

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { readBinaryFile } from "./binary";
 import { asErrorCode, createColorPickerError } from "./errors";
-import type { ColorPickRequest, ColorPickerContext, DecodedPng, HostFileStatLike } from "./types";
+import type { ColorPickRequest, ColorPickerContext, DecodedImageInfo, DecodedPng, HostFileStatLike } from "./types";
 
 const DEFAULT_SAMPLE_SIZE = 96;
 const MIN_SAMPLE_SIZE = 48;
@@ -14,6 +14,8 @@ export interface SampledImage extends DecodedPng {
   cacheKey: string;
   imagePath: string;
   sampleSize: number;
+  sourceMeta: HostFileStatLike;
+  imageInfo: DecodedImageInfo;
 }
 
 const clampSampleSize = (value: number | undefined): number => {
@@ -44,7 +46,13 @@ const normalizeImagePath = (imagePath: string): string => {
     });
   }
 
-  return path.resolve(trimmed);
+  if (!path.isAbsolute(trimmed)) {
+    throw createColorPickerError("COLOR_PICKER_INPUT_INVALID", "imagePath must be an absolute local file path or file:// URL.", {
+      imagePath,
+    });
+  }
+
+  return path.normalize(trimmed);
 };
 
 const sampledImageCache = new Map<string, SampledImage>();
@@ -88,6 +96,12 @@ const ensureSourceFile = async (ctx: ColorPickerContext, imagePath: string): Pro
   return response.meta;
 };
 
+const assertNotCancelled = (ctx: ColorPickerContext, stage: string): void => {
+  if (ctx.job?.isCancelled() || ctx.job?.signal.aborted) {
+    throw createColorPickerError("COLOR_PICKER_ANALYSIS_FAILED", "Image color picking was cancelled.", { stage });
+  }
+};
+
 const reportProgress = async (
   ctx: ColorPickerContext,
   stage: string,
@@ -115,6 +129,7 @@ export const sampleImage = async (ctx: ColorPickerContext, input: ColorPickReque
   const imagePath = normalizeImagePath(input.imagePath);
   const sampleSize = clampSampleSize(input.options?.sampleSize);
 
+  assertNotCancelled(ctx, "prepare");
   await reportProgress(ctx, "prepare", 5, "Validating image input");
   const sourceMeta = await ensureSourceFile(ctx, imagePath);
   const cacheKey = buildSampleCacheKey(imagePath, sampleSize, sourceMeta);
@@ -138,11 +153,23 @@ export const sampleImage = async (ctx: ColorPickerContext, input: ColorPickReque
 
   try {
     await reportProgress(ctx, "sample-image", 35, "Rendering image sample");
+    assertNotCancelled(ctx, "read");
     const imageBytes = await readBinaryFile(ctx, imagePath);
-    const result = await sharp(Buffer.from(imageBytes.buffer, imageBytes.byteOffset, imageBytes.byteLength), {
+    const image = sharp(Buffer.from(imageBytes.buffer, imageBytes.byteOffset, imageBytes.byteLength), {
       animated: false,
       failOn: "error",
-    })
+      limitInputPixels: 268_402_689,
+    });
+    const metadata = await image.metadata();
+    const pageCount = metadata.pages ?? 1;
+    if (pageCount > 1) {
+      ctx.logger.info("Sampling first frame of animated or multi-page image.", {
+        imagePath,
+        pageCount,
+      });
+    }
+    assertNotCancelled(ctx, "decode");
+    const result = await image
       .ensureAlpha()
       .resize(sampleSize, sampleSize, {
         fit: "contain",
@@ -152,7 +179,7 @@ export const sampleImage = async (ctx: ColorPickerContext, input: ColorPickReque
           b: 0,
           alpha: 0,
         },
-        kernel: sharp.kernel.bilinear,
+        kernel: sharp.kernel.linear,
         fastShrinkOnLoad: true,
         withoutEnlargement: true,
       })
@@ -175,6 +202,16 @@ export const sampleImage = async (ctx: ColorPickerContext, input: ColorPickReque
       cacheKey,
       imagePath,
       sampleSize,
+      sourceMeta,
+      imageInfo: {
+        width: metadata.width,
+        height: metadata.height,
+        format: metadata.format,
+        animated: pageCount > 1,
+        pageCount,
+        hasAlpha: metadata.hasAlpha,
+        orientation: metadata.orientation,
+      },
     };
 
     rememberSample(sampled);
@@ -187,6 +224,17 @@ export const sampleImage = async (ctx: ColorPickerContext, input: ColorPickReque
 
     if (error instanceof Error && "code" in error) {
       throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    const unsupported = /unsupported|unknown image format|input buffer contains unsupported image format|vips/i.test(message);
+    if (unsupported) {
+      throw createColorPickerError(
+        "COLOR_PICKER_IMAGE_SAMPLE_UNSUPPORTED",
+        "Source image format is not supported by the color picker sampler.",
+        { imagePath, sampleSize },
+        error,
+      );
     }
 
     throw createColorPickerError(

@@ -2,6 +2,7 @@
   "video-player": {
     "app": {
       "title": "视频播放器",
+      "description": "打开并播放 Host 资源路由传入的视频内容。",
       "localBadge": "本地",
       "remoteBadge": "远端"
     },
@@ -43,7 +44,61 @@
       "currentRate": "{rate} 倍速",
       "buffered": "已缓冲到 {time}",
       "source": "来源",
+      "stage": "视频播放区域",
+      "toolbar": "视频播放控制",
+      "feedback": "播放器状态",
       "unknown": "未知"
+    },
+    "commands": {
+      "openFile": {
+        "title": "打开视频",
+        "description": "从系统文件选择器打开一个视频文件。",
+        "ariaLabel": "打开视频文件"
+      },
+      "saveCopy": {
+        "title": "另存副本",
+        "description": "将当前视频保存为一个副本。",
+        "ariaLabel": "另存当前视频副本"
+      },
+      "togglePlayback": {
+        "title": "播放或暂停",
+        "description": "切换当前视频的播放状态。",
+        "ariaLabel": "播放或暂停视频"
+      },
+      "seekBackward": {
+        "title": "后退 5 秒",
+        "description": "将当前视频后退 5 秒。",
+        "ariaLabel": "视频后退 5 秒"
+      },
+      "seekForward": {
+        "title": "前进 5 秒",
+        "description": "将当前视频前进 5 秒。",
+        "ariaLabel": "视频前进 5 秒"
+      },
+      "toggleMute": {
+        "title": "静音或取消静音",
+        "description": "切换当前视频的静音状态。",
+        "ariaLabel": "静音或取消静音"
+      },
+      "toggleFullscreen": {
+        "title": "切换全屏",
+        "description": "进入或退出视频全屏模式。",
+        "ariaLabel": "切换视频全屏"
+      },
+      "togglePictureInPicture": {
+        "title": "切换画中画",
+        "description": "进入或退出视频画中画模式。",
+        "ariaLabel": "切换视频画中画"
+      },
+      "toggleMorePanel": {
+        "title": "打开或收起更多面板",
+        "description": "显示或隐藏视频信息、字幕和音频面板。",
+        "ariaLabel": "打开或收起更多面板"
+      },
+      "disabled": {
+        "noVideo": "尚未打开视频",
+        "pictureInPicture": "当前宿主不支持画中画"
+      }
     },
     "more": {
       "tabs": {

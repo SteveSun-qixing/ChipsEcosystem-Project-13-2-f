@@ -37,10 +37,14 @@ npm run run
 - 播放 / 暂停、时间轴拖动、前进后退、音量、静音、倍速
 - 全屏、画中画（宿主支持时）
 - 另存视频副本；不支持原地覆盖时自动回退为下载
+- 通过 Host command registry 注册打开、保存、播放控制、全屏、画中画和更多面板命令
 
 ## 目录提示
 
-- `src/App.tsx`：应用入口与启动恢复、资源解析
+- `src/App.tsx`：轻量导出正式根组件
+- `src/app/`：AppRuntime、Scene、Environment、Theme 与应用壳层
+- `src/commands/`：命令 metadata、状态派生、注册和事件分发
+- `src/runtime/`：SDK client、launch context 和主题快照读取
 - `src/components/VideoPlayerStage.tsx`：界面舞台与控制条
 - `src/hooks/useVideoPlayerController.ts`：播放状态与交互控制
 - `src/utils/video-player.ts`：格式、时间、资源能力等纯函数

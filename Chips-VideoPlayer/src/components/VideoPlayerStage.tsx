@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useVideoPlayerController } from "../hooks/useVideoPlayerController";
+import { ChipsIcon } from "@chips/component-library";
+import type { CommandSource, IconDescriptor } from "chips-sdk";
+import {
+  VIDEO_PLAYER_COMMAND_IDS,
+  type VideoPlayerCommandId,
+} from "../commands/video-player-commands";
+import type { VideoPlayerController } from "../hooks/useVideoPlayerController";
 import {
   PLAYBACK_RATES,
   formatDuration,
@@ -14,24 +20,42 @@ import {
 
 interface VideoPlayerStageProps {
   videoSource: VideoSource | null;
+  controller: VideoPlayerController;
   isResolving: boolean;
   isSaving: boolean;
   feedback: ViewerFeedback | null;
-  onOpenFile: () => void | Promise<void>;
-  onSaveVideo: () => void | Promise<void>;
+  isMorePanelOpen: boolean;
+  onMorePanelOpenChange: (open: boolean) => void;
+  onInvokeCommand: (commandId: VideoPlayerCommandId, source: CommandSource) => void | Promise<void>;
   onDropFile: (file: File | null) => void | Promise<void>;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 type MorePanelTab = "info" | "subtitles" | "audio";
 const TOOLBAR_AUTO_HIDE_DELAY_MS = 2200;
+const OPEN_ICON = { name: "folder_open", style: "rounded", decorative: true } satisfies IconDescriptor;
+const PLAY_ICON = { name: "play_arrow", style: "rounded", fill: 1, decorative: true } satisfies IconDescriptor;
+const PAUSE_ICON = { name: "pause", style: "rounded", fill: 1, decorative: true } satisfies IconDescriptor;
+const BACKWARD_ICON = { name: "fast_rewind", style: "rounded", decorative: true } satisfies IconDescriptor;
+const FORWARD_ICON = { name: "fast_forward", style: "rounded", decorative: true } satisfies IconDescriptor;
+const MUTED_ICON = { name: "volume_off", style: "rounded", decorative: true } satisfies IconDescriptor;
+const VOLUME_ICON = { name: "volume_up", style: "rounded", decorative: true } satisfies IconDescriptor;
+const SAVE_ICON = { name: "save", style: "rounded", decorative: true } satisfies IconDescriptor;
+const PICTURE_IN_PICTURE_ICON = {
+  name: "picture_in_picture_alt",
+  style: "rounded",
+  decorative: true,
+} satisfies IconDescriptor;
+const FULLSCREEN_ICON = { name: "fullscreen", style: "rounded", decorative: true } satisfies IconDescriptor;
+const MORE_ICON = { name: "more_horiz", style: "rounded", decorative: true } satisfies IconDescriptor;
+const FILE_HINT_ICON = { name: "video_file", style: "rounded", decorative: true } satisfies IconDescriptor;
 
 function IconButton(props: {
   label: string;
-  icon: React.ReactNode;
+  icon: IconDescriptor;
   active?: boolean;
   disabled?: boolean;
-  buttonRef?: React.RefObject<HTMLButtonElement | null>;
+  buttonRef?: React.Ref<HTMLButtonElement>;
   onClick: () => void | Promise<void>;
 }) {
   const { label, icon, active, disabled, buttonRef, onClick } = props;
@@ -47,123 +71,9 @@ function IconButton(props: {
       disabled={disabled}
     >
       <span className="video-player-icon-button__icon" aria-hidden="true">
-        {icon}
+        <ChipsIcon descriptor={icon} />
       </span>
     </button>
-  );
-}
-
-function OpenIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 7.5h5l1.8 2.2H19.5v7.8a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2z" />
-      <path d="M12 12v6" />
-      <path d="M9.5 15.5 12 18l2.5-2.5" />
-    </svg>
-  );
-}
-
-function PlayIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 6.8c0-1 1.1-1.6 1.9-1.1l8.3 5.2a1.3 1.3 0 0 1 0 2.2l-8.3 5.2A1.3 1.3 0 0 1 8 17.2z" />
-    </svg>
-  );
-}
-
-function PauseIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <rect x="7" y="5.5" width="3.8" height="13" rx="1.4" />
-      <rect x="13.2" y="5.5" width="3.8" height="13" rx="1.4" />
-    </svg>
-  );
-}
-
-function BackwardIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 7 5 12l6 5" />
-      <path d="m19 7-6 5 6 5" />
-    </svg>
-  );
-}
-
-function ForwardIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m13 7 6 5-6 5" />
-      <path d="m5 7 6 5-6 5" />
-    </svg>
-  );
-}
-
-function VolumeIcon(props: { muted: boolean }): React.ReactElement {
-  const { muted } = props;
-
-  return muted ? (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 8 6.7 10.6H4.5v2.8h2.2L10 16z" />
-      <path d="m14.5 9.5 5 5" />
-      <path d="m19.5 9.5-5 5" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 8 6.7 10.6H4.5v2.8h2.2L10 16z" />
-      <path d="M15.3 9.2a4.2 4.2 0 0 1 0 5.6" />
-      <path d="M17.9 6.8a7.6 7.6 0 0 1 0 10.4" />
-    </svg>
-  );
-}
-
-function SaveIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 4.5h9l2 2v13H6.5z" />
-      <path d="M9 4.5v5h6v-5" />
-      <path d="M9 17.5h6" />
-    </svg>
-  );
-}
-
-function PictureInPictureIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4.5" y="6" width="15" height="11.5" rx="1.8" />
-      <rect x="11.5" y="11" width="5.5" height="4.5" rx="1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function FullscreenIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 4.5H4.5V8" />
-      <path d="M16 4.5h3.5V8" />
-      <path d="M4.5 16V19.5H8" />
-      <path d="M19.5 16V19.5H16" />
-    </svg>
-  );
-}
-
-function MoreIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="6.5" cy="12" r="1.7" />
-      <circle cx="12" cy="12" r="1.7" />
-      <circle cx="17.5" cy="12" r="1.7" />
-    </svg>
-  );
-}
-
-function FileHintIcon(): React.ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 4.5h6l4 4v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" />
-      <path d="M14 4.5v4h4" />
-      <path d="M12 11v6" />
-      <path d="m9.5 14.5 2.5 2.5 2.5-2.5" />
-    </svg>
   );
 }
 
@@ -190,19 +100,25 @@ function resolveTrackLabel(
 }
 
 export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactElement {
-  const { videoSource, isResolving, isSaving, feedback, onOpenFile, onSaveVideo, onDropFile, t } = props;
+  const {
+    videoSource,
+    controller,
+    isResolving,
+    isSaving,
+    feedback,
+    isMorePanelOpen,
+    onMorePanelOpenChange,
+    onInvokeCommand,
+    onDropFile,
+    t,
+  } = props;
   const [isDragActive, setIsDragActive] = useState(false);
-  const [isMorePanelOpen, setIsMorePanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MorePanelTab>("info");
   const [isChromeVisible, setIsChromeVisible] = useState(true);
   const dragDepthRef = useRef(0);
   const morePanelRef = useRef<HTMLDivElement | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const hideChromeTimerRef = useRef<number | null>(null);
-  const controller = useVideoPlayerController({
-    sessionKey: videoSource ? `${videoSource.sourceId}:${videoSource.revision}` : null,
-  });
-
   const overlayMessage = controller.errorKey
     ? t(`video-player.errors.${controller.errorKey}`)
     : isResolving
@@ -220,6 +136,7 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
       : t("video-player.app.localBadge")
     : t("video-player.labels.unknown");
   const sourceDisplay = videoSource?.filePath ?? videoSource?.sourceId ?? t("video-player.labels.unknown");
+  const activePanelId = `video-player-panel-${activeTab}`;
   const formatDisplay = videoSource
     ? resolveVideoFormatLabel(videoSource.fileName || videoSource.filePath || videoSource.sourceId, videoSource.mimeType) ||
       t("video-player.labels.unknown")
@@ -243,14 +160,18 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
         return;
       }
 
-      setIsMorePanelOpen(false);
+      onMorePanelOpenChange(false);
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [isMorePanelOpen]);
+  }, [isMorePanelOpen, onMorePanelOpenChange]);
+
+  function invokeCommand(commandId: VideoPlayerCommandId, source: CommandSource = "toolbar"): void {
+    void onInvokeCommand(commandId, source);
+  }
 
   useEffect(() => {
     if (!videoSource) {
@@ -451,6 +372,9 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
         ref={controller.surfaceRef}
         className={`video-player-stage${isDragActive ? " video-player-stage--drag-active" : ""}`}
         tabIndex={0}
+        role="region"
+        aria-label={t("video-player.labels.stage")}
+        aria-describedby={feedback ? "video-player-feedback" : undefined}
         onPointerMove={() => {
           revealChrome();
         }}
@@ -466,7 +390,7 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
         onKeyDown={(event) => {
           if (event.key === "Escape" && isMorePanelOpen) {
             event.preventDefault();
-            setIsMorePanelOpen(false);
+            onMorePanelOpenChange(false);
             return;
           }
 
@@ -503,6 +427,8 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
               ref={controller.videoRef}
               className="video-player-media"
               src={videoSource.resourceUri}
+              title={videoSource.title}
+              aria-label={videoSource.title}
               preload="metadata"
               playsInline
               onClick={() => {
@@ -524,9 +450,13 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
               onError={controller.handleError}
             />
           ) : (
-            <button className="video-player-empty" type="button" onClick={() => void onOpenFile()}>
+            <button
+              className="video-player-empty"
+              type="button"
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.openFile)}
+            >
               <span className="video-player-empty__icon" aria-hidden="true">
-                <FileHintIcon />
+                <ChipsIcon descriptor={FILE_HINT_ICON} />
               </span>
               <span className="video-player-empty__text">
                 {isDragActive ? t("video-player.viewer.dragPromptLine") : t("video-player.viewer.emptyLine")}
@@ -535,7 +465,7 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
           )}
 
           {overlayMessage ? (
-            <div className="video-player-overlay">
+            <div className="video-player-overlay" role={controller.errorKey ? "alert" : "status"} aria-live="polite">
               <div className={`video-player-overlay__card${controller.errorKey ? " video-player-overlay__card--error" : ""}`}>
                 {overlayMessage}
               </div>
@@ -543,13 +473,26 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
           ) : null}
         </div>
 
-        {feedback ? <div className={`video-player-feedback video-player-feedback--${feedback.tone}`}>{feedback.message}</div> : null}
+        {feedback ? (
+          <div
+            id="video-player-feedback"
+            className={`video-player-feedback video-player-feedback--${feedback.tone}`}
+            role={feedback.tone === "error" ? "alert" : "status"}
+            aria-live="polite"
+            aria-label={t("video-player.labels.feedback")}
+          >
+            {feedback.message}
+          </div>
+        ) : null}
 
         {isMorePanelOpen ? (
           <aside
             ref={morePanelRef}
             className="video-player-side-panel"
+            id={activePanelId}
             aria-label={t("video-player.actions.more")}
+            role="tabpanel"
+            aria-labelledby={`video-player-tab-${activeTab}`}
             onPointerMove={() => {
               revealChrome();
             }}
@@ -560,9 +503,11 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
             <div className="video-player-side-panel__tabs" role="tablist">
               <button
                 className={`video-player-side-panel__tab${activeTab === "info" ? " video-player-side-panel__tab--active" : ""}`}
+                id="video-player-tab-info"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "info"}
+                aria-controls="video-player-panel-info"
                 onClick={() => {
                   setActiveTab("info");
                 }}
@@ -571,9 +516,11 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
               </button>
               <button
                 className={`video-player-side-panel__tab${activeTab === "subtitles" ? " video-player-side-panel__tab--active" : ""}`}
+                id="video-player-tab-subtitles"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "subtitles"}
+                aria-controls="video-player-panel-subtitles"
                 onClick={() => {
                   setActiveTab("subtitles");
                 }}
@@ -582,9 +529,11 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
               </button>
               <button
                 className={`video-player-side-panel__tab${activeTab === "audio" ? " video-player-side-panel__tab--active" : ""}`}
+                id="video-player-tab-audio"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "audio"}
+                aria-controls="video-player-panel-audio"
                 onClick={() => {
                   setActiveTab("audio");
                 }}
@@ -599,7 +548,7 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
 
         <section
           className={`video-player-dock${isChromeVisible ? "" : " video-player-dock--hidden"}`}
-          aria-label={t("video-player.app.title")}
+          aria-label={t("video-player.labels.toolbar")}
           onPointerMove={() => {
             revealChrome();
           }}
@@ -622,24 +571,28 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
           />
 
           <div className="video-player-toolbar">
-            <IconButton label={t("video-player.actions.open")} icon={<OpenIcon />} onClick={onOpenFile} />
+            <IconButton
+              label={t("video-player.actions.open")}
+              icon={OPEN_ICON}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.openFile)}
+            />
             <IconButton
               label={controller.isPlaying ? t("video-player.actions.pause") : t("video-player.actions.play")}
-              icon={controller.isPlaying ? <PauseIcon /> : <PlayIcon />}
+              icon={controller.isPlaying ? PAUSE_ICON : PLAY_ICON}
               disabled={!videoSource}
-              onClick={controller.togglePlayback}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.togglePlayback)}
             />
             <IconButton
               label={t("video-player.actions.seekBackward")}
-              icon={<BackwardIcon />}
+              icon={BACKWARD_ICON}
               disabled={!videoSource}
-              onClick={() => controller.seekBy(-5)}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.seekBackward)}
             />
             <IconButton
               label={t("video-player.actions.seekForward")}
-              icon={<ForwardIcon />}
+              icon={FORWARD_ICON}
               disabled={!videoSource}
-              onClick={() => controller.seekBy(5)}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.seekForward)}
             />
 
             <div className="video-player-toolbar__spacer" />
@@ -647,9 +600,9 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
             <div className="video-player-volume">
               <IconButton
                 label={controller.isMuted ? t("video-player.actions.unmute") : t("video-player.actions.mute")}
-                icon={<VolumeIcon muted={controller.isMuted} />}
+                icon={controller.isMuted ? MUTED_ICON : VOLUME_ICON}
                 disabled={!videoSource}
-                onClick={controller.toggleMute}
+                onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.toggleMute)}
               />
 
               <div className="video-player-volume__popover">
@@ -671,9 +624,9 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
 
             <IconButton
               label={t("video-player.actions.save")}
-              icon={<SaveIcon />}
+              icon={SAVE_ICON}
               disabled={!videoSource || isSaving}
-              onClick={onSaveVideo}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.saveCopy)}
             />
             <IconButton
               label={
@@ -681,24 +634,22 @@ export function VideoPlayerStage(props: VideoPlayerStageProps): React.ReactEleme
                   ? t("video-player.actions.exitPictureInPicture")
                   : t("video-player.actions.pictureInPicture")
               }
-              icon={<PictureInPictureIcon />}
+              icon={PICTURE_IN_PICTURE_ICON}
               disabled={!videoSource || !controller.canUsePictureInPicture}
-              onClick={controller.togglePictureInPicture}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.togglePictureInPicture)}
             />
             <IconButton
               label={controller.isFullscreen ? t("video-player.actions.exitFullscreen") : t("video-player.actions.fullscreen")}
-              icon={<FullscreenIcon />}
+              icon={FULLSCREEN_ICON}
               disabled={!videoSource}
-              onClick={controller.toggleFullscreen}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.toggleFullscreen)}
             />
             <IconButton
               label={isMorePanelOpen ? t("video-player.actions.closeMore") : t("video-player.actions.more")}
-              icon={<MoreIcon />}
+              icon={MORE_ICON}
               active={isMorePanelOpen}
               buttonRef={moreButtonRef}
-              onClick={() => {
-                setIsMorePanelOpen((current) => !current);
-              }}
+              onClick={() => invokeCommand(VIDEO_PLAYER_COMMAND_IDS.toggleMorePanel)}
             />
           </div>
         </section>

@@ -2,6 +2,7 @@
   "video-player": {
     "app": {
       "title": "Video Player",
+      "description": "Open and play video content routed by the Host resource service.",
       "localBadge": "Local",
       "remoteBadge": "Remote"
     },
@@ -43,7 +44,61 @@
       "currentRate": "{rate} playback",
       "buffered": "Buffered to {time}",
       "source": "Source",
+      "stage": "Video playback area",
+      "toolbar": "Video playback controls",
+      "feedback": "Player status",
       "unknown": "Unknown"
+    },
+    "commands": {
+      "openFile": {
+        "title": "Open video",
+        "description": "Open a video file from the system file picker.",
+        "ariaLabel": "Open video file"
+      },
+      "saveCopy": {
+        "title": "Save copy",
+        "description": "Save the current video as a copy.",
+        "ariaLabel": "Save a copy of the current video"
+      },
+      "togglePlayback": {
+        "title": "Play or pause",
+        "description": "Toggle playback for the current video.",
+        "ariaLabel": "Play or pause video"
+      },
+      "seekBackward": {
+        "title": "Back 5s",
+        "description": "Seek the current video back by 5 seconds.",
+        "ariaLabel": "Seek video back 5 seconds"
+      },
+      "seekForward": {
+        "title": "Forward 5s",
+        "description": "Seek the current video forward by 5 seconds.",
+        "ariaLabel": "Seek video forward 5 seconds"
+      },
+      "toggleMute": {
+        "title": "Mute or unmute",
+        "description": "Toggle mute for the current video.",
+        "ariaLabel": "Mute or unmute"
+      },
+      "toggleFullscreen": {
+        "title": "Toggle fullscreen",
+        "description": "Enter or exit video fullscreen mode.",
+        "ariaLabel": "Toggle video fullscreen"
+      },
+      "togglePictureInPicture": {
+        "title": "Toggle picture-in-picture",
+        "description": "Enter or exit video picture-in-picture mode.",
+        "ariaLabel": "Toggle video picture-in-picture"
+      },
+      "toggleMorePanel": {
+        "title": "Open or close more panel",
+        "description": "Show or hide the video info, subtitles, and audio panel.",
+        "ariaLabel": "Open or close more panel"
+      },
+      "disabled": {
+        "noVideo": "No video is open",
+        "pictureInPicture": "Picture-in-picture is unavailable in the current host"
+      }
     },
     "more": {
       "tabs": {

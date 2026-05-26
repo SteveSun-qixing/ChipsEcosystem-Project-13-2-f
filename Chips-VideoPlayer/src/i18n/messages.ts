@@ -1,14 +1,6 @@
-import zhCN from "../../i18n/zh-CN.json";
-import enUS from "../../i18n/en-US.json";
+import { localeBundles, resolveLocale } from "./locales";
 
-const MESSAGE_BUNDLES = {
-  "zh-CN": zhCN,
-  "en-US": enUS,
-} satisfies Record<string, Record<string, unknown>>;
-
-export type SupportedLocale = keyof typeof MESSAGE_BUNDLES;
-
-export const DEFAULT_LOCALE: SupportedLocale = "zh-CN";
+export { DEFAULT_LOCALE, FALLBACK_LOCALE, localeBundles, resolveLocale, supportedLocales, type SupportedLocale } from "./locales";
 
 function getByPath(record: Record<string, unknown>, key: string): unknown {
   return key.split(".").reduce<unknown>((current, part) => {
@@ -19,15 +11,8 @@ function getByPath(record: Record<string, unknown>, key: string): unknown {
   }, record);
 }
 
-export function resolveLocale(input: string | null | undefined): SupportedLocale {
-  if (input && input in MESSAGE_BUNDLES) {
-    return input as SupportedLocale;
-  }
-  return DEFAULT_LOCALE;
-}
-
-export function formatMessage(locale: string, key: string, params?: Record<string, string | number>): string {
-  const template = getByPath(MESSAGE_BUNDLES[resolveLocale(locale)], key);
+export function formatMessage(locale: string, key: string, params?: Record<string, string | number | boolean | null | undefined>): string {
+  const template = getByPath(localeBundles[resolveLocale(locale)], key);
   if (typeof template !== "string") {
     return `[[${key}]]`;
   }

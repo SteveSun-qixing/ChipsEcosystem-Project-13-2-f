@@ -12,7 +12,22 @@ interface UseVideoPlayerControllerOptions {
   sessionKey: string | null;
 }
 
-interface VideoPlayerController {
+export interface VideoPlayerSessionResetState {
+  isReady: false;
+  isPlaying: false;
+  isBuffering: false;
+  duration: 0;
+  currentTime: 0;
+  bufferedUntil: 0;
+  videoSize: null;
+  errorKey: null;
+  isPictureInPicture: false;
+  subtitleTracks: [];
+  audioTracks: [];
+  playbackRate: number;
+}
+
+export interface VideoPlayerController {
   surfaceRef: MutableRefObject<HTMLDivElement | null>;
   videoRef: MutableRefObject<HTMLVideoElement | null>;
   isReady: boolean;
@@ -41,7 +56,7 @@ interface VideoPlayerController {
   selectAudioTrack: (nextIndex: number | null) => void;
   toggleFullscreen: () => Promise<void>;
   togglePictureInPicture: () => Promise<void>;
-  handleKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+  handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
   handleLoadedMetadata: (event: SyntheticEvent<HTMLVideoElement>) => void;
   handleCanPlay: () => void;
   handlePlaying: () => void;
@@ -55,17 +70,31 @@ interface VideoPlayerController {
   handleError: () => void;
 }
 
-interface PictureInPictureVideoElement extends HTMLVideoElement {
+type PictureInPictureVideoElement = HTMLVideoElement & {
   requestPictureInPicture?: () => Promise<unknown>;
-}
+};
 
-interface PictureInPictureDocument extends Document {
+type PictureInPictureDocument = Document & {
   pictureInPictureEnabled?: boolean;
   pictureInPictureElement?: Element | null;
   exitPictureInPicture?: () => Promise<void>;
+};
+
+export interface TextTrackLike {
+  kind?: string;
+  label?: string;
+  language?: string;
+  mode?: string;
 }
 
-interface AudioTrackLike {
+export interface TextTrackListLike {
+  length: number;
+  [index: number]: TextTrackLike | undefined;
+  addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+  removeEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+}
+
+export interface AudioTrackLike {
   id?: string;
   kind?: string;
   label?: string;
@@ -73,26 +102,43 @@ interface AudioTrackLike {
   enabled?: boolean;
 }
 
-interface AudioTrackListLike {
+export interface AudioTrackListLike {
   length: number;
-  [index: number]: AudioTrackLike;
+  [index: number]: AudioTrackLike | undefined;
   addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
   removeEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
 }
 
-interface VideoElementWithTracks extends PictureInPictureVideoElement {
+type VideoElementWithAudioTracks = HTMLVideoElement & {
   audioTracks?: AudioTrackListLike;
-}
+};
 
-function resolveInitialRate(): number {
+export function resolveInitialRate(): number {
   return PLAYBACK_RATES.includes(1) ? 1 : PLAYBACK_RATES[0] ?? 1;
 }
 
-function isSubtitleTextTrack(track: TextTrack): boolean {
-  return track.kind === "subtitles" || track.kind === "captions" || track.kind === "";
+export function createVideoPlayerSessionResetState(): VideoPlayerSessionResetState {
+  return {
+    isReady: false,
+    isPlaying: false,
+    isBuffering: false,
+    duration: 0,
+    currentTime: 0,
+    bufferedUntil: 0,
+    videoSize: null,
+    errorKey: null,
+    isPictureInPicture: false,
+    subtitleTracks: [],
+    audioTracks: [],
+    playbackRate: resolveInitialRate(),
+  };
 }
 
-function readSubtitleTracks(video: HTMLVideoElement): VideoTrackOption[] {
+export function isSubtitleTextTrack(track: TextTrackLike): boolean {
+  return track.kind === "subtitles" || track.kind === "captions";
+}
+
+export function readSubtitleTracks(video: { textTracks: TextTrackListLike }): VideoTrackOption[] {
   const { textTracks } = video;
   const subtitleTracks: VideoTrackOption[] = [];
 
@@ -114,7 +160,7 @@ function readSubtitleTracks(video: HTMLVideoElement): VideoTrackOption[] {
   return subtitleTracks;
 }
 
-function readAudioTracks(video: VideoElementWithTracks): VideoTrackOption[] {
+export function readAudioTracks(video: { audioTracks?: AudioTrackListLike }): VideoTrackOption[] {
   const audioTracks = video.audioTracks;
   if (!audioTracks) {
     return [];
@@ -137,6 +183,13 @@ function readAudioTracks(video: VideoElementWithTracks): VideoTrackOption[] {
   }
 
   return resolvedTracks;
+}
+
+export function isSurfaceFullscreen(
+  fullscreenElement: Element | null | undefined,
+  surface: Element | null | undefined,
+): boolean {
+  return Boolean(surface && fullscreenElement === surface);
 }
 
 export function useVideoPlayerController(options: UseVideoPlayerControllerOptions): VideoPlayerController {
@@ -175,7 +228,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
     setBufferedUntil(0);
   }
 
-  function syncTrackState(video: HTMLVideoElement | null): void {
+function syncTrackState(video: HTMLVideoElement | null): void {
     if (!video) {
       setSubtitleTracks([]);
       setAudioTracks([]);
@@ -183,7 +236,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
     }
 
     setSubtitleTracks(readSubtitleTracks(video));
-    setAudioTracks(readAudioTracks(video as VideoElementWithTracks));
+    setAudioTracks(readAudioTracks(video as VideoElementWithAudioTracks));
   }
 
   async function togglePlayback(): Promise<void> {
@@ -276,7 +329,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
   }
 
   function selectAudioTrack(nextIndex: number | null): void {
-    const video = videoRef.current as VideoElementWithTracks | null;
+    const video = videoRef.current as VideoElementWithAudioTracks | null;
     const trackList = video?.audioTracks;
     if (!video || !trackList) {
       return;
@@ -333,7 +386,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
     await video.requestPictureInPicture();
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+  function handleKeyDown(event: KeyboardEvent<HTMLElement>): void {
     const target = event.target as HTMLElement | null;
     if (target && target.closest("input, textarea, select")) {
       return;
@@ -477,18 +530,19 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
       video.pause();
     }
 
-    setIsReady(false);
-    setIsPlaying(false);
-    setIsBuffering(false);
-    setDuration(0);
-    setCurrentTime(0);
-    setBufferedUntil(0);
-    setVideoSize(null);
-    setErrorKey(null);
-    setIsPictureInPicture(false);
-    setSubtitleTracks([]);
-    setAudioTracks([]);
-    setPlaybackRateState(resolveInitialRate());
+    const resetState = createVideoPlayerSessionResetState();
+    setIsReady(resetState.isReady);
+    setIsPlaying(resetState.isPlaying);
+    setIsBuffering(resetState.isBuffering);
+    setDuration(resetState.duration);
+    setCurrentTime(resetState.currentTime);
+    setBufferedUntil(resetState.bufferedUntil);
+    setVideoSize(resetState.videoSize);
+    setErrorKey(resetState.errorKey);
+    setIsPictureInPicture(resetState.isPictureInPicture);
+    setSubtitleTracks(resetState.subtitleTracks);
+    setAudioTracks(resetState.audioTracks);
+    setPlaybackRateState(resetState.playbackRate);
   }, [sessionKey]);
 
   useEffect(() => {
@@ -498,7 +552,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
 
     const handleFullscreenChange = () => {
       const surface = surfaceRef.current;
-      setIsFullscreen(Boolean(surface && document.fullscreenElement === surface));
+      setIsFullscreen(isSurfaceFullscreen(document.fullscreenElement, surface));
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -530,7 +584,7 @@ export function useVideoPlayerController(options: UseVideoPlayerControllerOption
   }, [sessionKey]);
 
   useEffect(() => {
-    const video = videoRef.current as VideoElementWithTracks | null;
+    const video = videoRef.current as VideoElementWithAudioTracks | null;
     if (!video) {
       return;
     }

@@ -73,6 +73,7 @@ test("task015 base control contracts expose button display feedback and input sc
   const avatar = readContract("avatar.contract.json");
   const spinner = readContract("spinner.contract.json");
   const progress = readContract("progress.contract.json");
+  const rating = readContract("rating.contract.json");
   const textField = readContract("text-field.contract.json");
   const textArea = readContract("text-area.contract.json");
   const searchField = readContract("search-field.contract.json");
@@ -96,6 +97,7 @@ test("task015 base control contracts expose button display feedback and input sc
     avatar,
     spinner,
     progress,
+    rating,
     textField,
     textArea,
     searchField,
@@ -129,6 +131,10 @@ test("task015 base control contracts expose button display feedback and input sc
   assert.ok(progress.parts.includes("range"));
   assert.ok(progress.tokens.includes("chips.comp.progress.range.surface.indeterminate"));
   assert.ok(progress.tokens.includes("chips.comp.progress.range.motion.duration"));
+  assert.ok(rating.parts.includes("item"));
+  assert.ok(rating.parts.includes("icon"));
+  assert.ok(rating.tokens.includes("chips.comp.rating.icon.color.heart-active"));
+  assert.ok(rating.a11yConstraints.some((constraint) => constraint.type === "radiogroup-label"));
   assert.ok(textField.parts.includes("control"));
   assert.ok(textField.tokens.includes("chips.comp.text-field.root.border.error"));
   assert.ok(textArea.parts.includes("description"));

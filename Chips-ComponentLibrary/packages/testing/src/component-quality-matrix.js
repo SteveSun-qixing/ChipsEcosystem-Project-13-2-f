@@ -230,6 +230,11 @@ export const CHIPS_COMPONENT_QUALITY_MATRIX = Object.freeze([
       aria({ role: "progressbar", ...label("progress") }, { role: "progressbar", requireLabel: true })
     ]
   }),
+  entry("rating", {
+    a11yFixtures: [
+      aria({ role: "radiogroup", ...label("rating") }, { role: "radiogroup", requireLabel: true })
+    ]
+  }),
   entry("radio", {
     a11yFixtures: [aria({ role: "radio", ...label("radio") }, { role: "radio", requireLabel: true })]
   }),

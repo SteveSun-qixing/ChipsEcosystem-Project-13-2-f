@@ -224,6 +224,7 @@ export interface ChipsIconProps extends Omit<React.HTMLAttributes<HTMLSpanElemen
 export type ChipsTextTone = "default" | "muted" | "accent" | "error";
 export type ChipsTextEmphasis = "regular" | "strong" | "code";
 export type ChipsTextElement = "span" | "p" | "strong" | "em" | "small" | "code" | "div";
+export type ChipsRatingShape = "star" | "heart";
 
 export interface ChipsDisplayTextProps {
   i18n?: I18nTextSource | ((key: string, params?: Record<string, string | number>, fallback?: string) => string);
@@ -494,6 +495,33 @@ export interface ProgressProps extends ChipsDisplayTextProps {
   disabled?: boolean;
   loading?: boolean;
   error?: StandardErrorLike | string | null;
+  onStateChange?: (state: InteractiveState) => void;
+  [key: string]: unknown;
+}
+
+export interface RatingItemLabelDetails {
+  active: boolean;
+  count: number;
+  shape: ChipsRatingShape;
+}
+
+export interface RatingProps extends ChipsDisplayTextProps {
+  value?: number;
+  defaultValue?: number;
+  count?: number;
+  shape?: ChipsRatingShape;
+  readOnly?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  error?: StandardErrorLike | string | null;
+  label?: string;
+  labelKey?: string;
+  labelParams?: Record<string, string | number>;
+  fallbackLabel?: string;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  getItemLabel?: (value: number, details: RatingItemLabelDetails) => string;
+  onValueChange?: (value: number) => void;
   onStateChange?: (state: InteractiveState) => void;
   [key: string]: unknown;
 }
@@ -1824,6 +1852,7 @@ export const ChipsImage: React.ForwardRefExoticComponent<ImageProps & React.RefA
 export const ChipsMedia: React.ForwardRefExoticComponent<MediaProps & React.RefAttributes<HTMLElement>>;
 export const ChipsSpinner: React.ForwardRefExoticComponent<SpinnerProps & React.RefAttributes<HTMLSpanElement>>;
 export const ChipsProgress: React.ForwardRefExoticComponent<ProgressProps & React.RefAttributes<HTMLDivElement>>;
+export const ChipsRating: React.ForwardRefExoticComponent<RatingProps & React.RefAttributes<HTMLDivElement>>;
 export const ChipsTextField: React.ForwardRefExoticComponent<TextFieldProps & React.RefAttributes<HTMLInputElement>>;
 export const ChipsTextArea: React.ForwardRefExoticComponent<TextAreaProps & React.RefAttributes<HTMLTextAreaElement>>;
 export const ChipsSearchField: React.ForwardRefExoticComponent<SearchFieldProps & React.RefAttributes<HTMLInputElement>>;

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
 import {
   buildComponentContract,
   buildLayoutComponentContract,
@@ -35,6 +37,7 @@ import {
   ChipsPanelHeader,
   ChipsPopover,
   ChipsProgress,
+  ChipsRating,
   ChipsRadioGroup,
   ChipsSearchField,
   ChipsSecureField,
@@ -964,7 +967,7 @@ test("ChipsIcon requires a label for non-decorative icons", () => {
 });
 
 test("task015 base control metadata includes second through seventh batches", () => {
-  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 21);
+  assert.equal(TASK015_BASE_CONTROL_COMPONENTS.length, 22);
   assert.deepEqual(
     TASK015_BASE_CONTROL_COMPONENTS.map((item) => item.scope),
     [
@@ -975,6 +978,7 @@ test("task015 base control metadata includes second through seventh batches", ()
       "avatar",
       "spinner",
       "progress",
+      "rating",
       "text-field",
       "text-area",
       "search-field",
@@ -1002,6 +1006,7 @@ test("task015 base control component exports exist", () => {
     ChipsAvatar,
     ChipsSpinner,
     ChipsProgress,
+    ChipsRating,
     ChipsTextField,
     ChipsTextArea,
     ChipsSearchField,
@@ -1115,6 +1120,56 @@ test("ChipsProgress clamps determinate value and separates indeterminate aria", 
   assert.equal(indeterminate.props["data-mode"], "indeterminate");
   assert.equal(indeterminate.props["aria-valuenow"], undefined);
   assert.throws(() => ChipsProgress.render({ value: 1 }, null), /PROGRESS_A11Y_LABEL_REQUIRED/);
+});
+
+test("ChipsRating renders radiogroup items with roving focus semantics", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChipsRating, {
+      value: 3,
+      count: 5,
+      shape: "heart",
+      label: "Rating",
+      getItemLabel: (value) => `Set ${value}`
+    })
+  );
+  const document = new JSDOM(html).window.document;
+  const root = document.querySelector('[data-scope="rating"][data-part="root"]');
+  const items = [...document.querySelectorAll('[data-scope="rating"][data-part="item"]')];
+
+  assert.equal(root?.getAttribute("role"), "radiogroup");
+  assert.equal(root?.getAttribute("data-shape"), "heart");
+  assert.equal(items.length, 5);
+  assert.equal(items[2].getAttribute("aria-checked"), "true");
+  assert.equal(items[2].getAttribute("tabindex"), "0");
+  assert.equal(items[0].querySelector('[data-part="icon"]')?.getAttribute("data-active"), "true");
+  assert.equal(items[4].querySelector('[data-part="icon"]')?.getAttribute("data-active"), "false");
+  assert.equal(items[3].getAttribute("aria-label"), "Set 4");
+  assert.throws(
+    () => renderToStaticMarkup(React.createElement(ChipsRating, { value: 1 })),
+    /RATING_A11Y_LABEL_REQUIRED/
+  );
+});
+
+test("ChipsRating readOnly preserves selected visual state without making items disabled", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ChipsRating, {
+      value: 4,
+      count: 5,
+      readOnly: true,
+      ariaLabelledBy: "score-label"
+    })
+  );
+  const document = new JSDOM(html).window.document;
+  const root = document.querySelector('[data-scope="rating"][data-part="root"]');
+  const items = [...document.querySelectorAll('[data-scope="rating"][data-part="item"]')];
+
+  assert.equal(root?.getAttribute("aria-readonly"), "true");
+  assert.equal(root?.getAttribute("aria-labelledby"), "score-label");
+  assert.equal(items[3].getAttribute("data-state"), "active");
+  assert.equal(items[3].getAttribute("data-active"), "true");
+  assert.equal(items[3].hasAttribute("disabled"), false);
+  assert.equal(items[3].getAttribute("aria-disabled"), null);
+  assert.equal(items[3].getAttribute("tabindex"), "-1");
 });
 
 test("resolveTextInputDescriptor builds shared input a11y state", () => {
@@ -1264,6 +1319,13 @@ test("task015 fifth batch numeric controls publish contract and a11y semantics",
     }),
     true
   );
+  assert.equal(
+    validateComponentA11y("rating", {
+      role: "radiogroup",
+      "aria-label": "Rating"
+    }),
+    true
+  );
 });
 
 test("task015 fifth batch numeric controls reject missing a11y semantics", () => {
@@ -1277,6 +1339,19 @@ test("task015 fifth batch numeric controls reject missing a11y semantics", () =>
   );
   assert.throws(
     () => validateComponentA11y("slider", { role: "slider" }),
+    /Either aria-label or aria-labelledby is required/
+  );
+});
+
+test("ChipsRating contract exposes reusable rating parts and tokens", () => {
+  const rating = buildComponentContract("rating");
+
+  assert.deepEqual(rating.parts, ["root", "label", "item", "icon", "status"]);
+  assert.ok(rating.states.includes("focus"));
+  assert.ok(rating.tokens.includes("chips.comp.rating.item.surface.hover"));
+  assert.ok(rating.tokens.includes("chips.comp.rating.icon.color.heart-active"));
+  assert.throws(
+    () => validateComponentA11y("rating", { role: "radiogroup" }),
     /Either aria-label or aria-labelledby is required/
   );
 });

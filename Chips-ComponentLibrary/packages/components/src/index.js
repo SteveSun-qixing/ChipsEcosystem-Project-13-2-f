@@ -132,6 +132,7 @@ const TEXT_ELEMENT_TAGS = new Set(["span", "p", "strong", "em", "small", "code",
 const TEXT_TONES = new Set(["default", "muted", "accent", "error"]);
 const TEXT_EMPHASIS = new Set(["regular", "strong", "code"]);
 const CONTROL_TONES = new Set(["neutral", "accent", "success", "warning", "error"]);
+const RATING_SHAPES = new Set(["star", "heart"]);
 const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
 const IMAGE_FIT_VALUES = new Set(["cover", "contain", "fill", "none", "scale-down"]);
 const MEDIA_KINDS = new Set(["audio", "video", "generic"]);
@@ -152,6 +153,10 @@ function normalizeTextEmphasis(emphasis) {
 
 function normalizeControlTone(tone) {
   return CONTROL_TONES.has(tone) ? tone : "neutral";
+}
+
+function normalizeRatingShape(shape) {
+  return RATING_SHAPES.has(shape) ? shape : "star";
 }
 
 function normalizeAvatarShape(shape) {
@@ -1420,6 +1425,22 @@ export const COMPONENT_TOKEN_MAP = {
     "chips.comp.progress.status.color.error",
     "chips.comp.progress.focus.outline"
   ],
+  rating: [
+    "chips.comp.rating.root.gap",
+    "chips.comp.rating.item.size",
+    "chips.comp.rating.item.radius",
+    "chips.comp.rating.item.surface.idle",
+    "chips.comp.rating.item.surface.hover",
+    "chips.comp.rating.item.surface.active",
+    "chips.comp.rating.item.surface.disabled",
+    "chips.comp.rating.icon.color.idle",
+    "chips.comp.rating.icon.color.active",
+    "chips.comp.rating.icon.color.heart-active",
+    "chips.comp.rating.icon.color.disabled",
+    "chips.comp.rating.label.color",
+    "chips.comp.rating.status.color.error",
+    "chips.comp.rating.focus.outline"
+  ],
   "text-field": [
     "chips.comp.text-field.root.radius",
     "chips.comp.text-field.root.surface.idle",
@@ -2091,6 +2112,12 @@ export function buildComponentContract(component) {
       scope: "progress",
       parts: ["root", "track", "range", "label", "value", "status"],
       states: TASK015_BASE_CONTROL_STATES
+    },
+    rating: {
+      component: "rating",
+      scope: "rating",
+      parts: ["root", "label", "item", "icon", "status"],
+      states: [...INTERACTIVE_STATE_PRIORITY]
     },
     "text-field": {
       component: "text-field",
@@ -4675,6 +4702,242 @@ export const ChipsProgress = React.forwardRef((props, ref) => {
 });
 
 ChipsProgress.displayName = "ChipsProgress";
+
+function resolveRatingItemDescriptor(shape, active) {
+  const name = shape === "heart" ? "favorite" : "star";
+  return {
+    name,
+    decorative: true,
+    fill: active ? 1 : 0,
+    wght: active ? 500 : 400
+  };
+}
+
+function normalizeRatingCount(count) {
+  const value = Number(count);
+  if (!Number.isFinite(value)) {
+    return 5;
+  }
+  return Math.min(Math.max(Math.trunc(value), 1), 10);
+}
+
+function normalizeRatingValue(value, count) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  return Math.min(Math.max(Math.round(numeric), 0), count);
+}
+
+export const ChipsRating = React.forwardRef((props, ref) => {
+  const {
+    value,
+    defaultValue = 0,
+    count = 5,
+    shape = "star",
+    readOnly = false,
+    disabled = false,
+    loading = false,
+    error = null,
+    label,
+    labelKey,
+    labelParams,
+    fallbackLabel,
+    ariaLabel,
+    ariaLabelledBy,
+    getItemLabel,
+    i18n,
+    onValueChange,
+    onStateChange,
+    onDiagnostic,
+    ...rest
+  } = props;
+
+  const normalizedCount = normalizeRatingCount(count);
+  const normalizedShape = normalizeRatingShape(shape);
+  const [currentValue, setCurrentValue] = useControllableState({
+    value: value === undefined ? undefined : normalizeRatingValue(value, normalizedCount),
+    defaultValue: normalizeRatingValue(defaultValue, normalizedCount),
+    onChange: onValueChange
+  });
+  const normalizedValue = normalizeRatingValue(currentValue, normalizedCount);
+  const normalizedError = normalizeError(error);
+  const disabledByState = disabled || loading;
+  const { interaction, handlers } = useInteractiveState(disabledByState);
+  const state = resolveInteractiveState({
+    disabled: disabledByState,
+    loading,
+    error: normalizedError,
+    interaction
+  });
+  const resolvedLabel = resolveAccessibleText({
+    value: label || ariaLabel || rest["aria-label"],
+    key: labelKey,
+    params: labelParams,
+    fallback: fallbackLabel,
+    i18n,
+    onDiagnostic
+  });
+  const resolvedAriaLabelledBy = isNonEmptyString(ariaLabelledBy || rest["aria-labelledby"])
+    ? String(ariaLabelledBy || rest["aria-labelledby"]).trim()
+    : undefined;
+
+  if (!resolvedLabel && !resolvedAriaLabelledBy) {
+    throw new Error("RATING_A11Y_LABEL_REQUIRED");
+  }
+
+  const [focusedIndex, setFocusedIndex] = React.useState(() => Math.max(normalizedValue - 1, 0));
+
+  React.useEffect(() => {
+    setFocusedIndex(Math.max(normalizedValue - 1, 0));
+  }, [normalizedValue, normalizedCount]);
+
+  React.useEffect(() => {
+    if (typeof onStateChange === "function") {
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  const commitValue = (nextValue, event) => {
+    const next = normalizeRatingValue(nextValue, normalizedCount);
+    if (disabledByState || readOnly) {
+      event?.preventDefault?.();
+      return;
+    }
+    setCurrentValue(next);
+  };
+
+  const focusAndCommit = (nextIndex, event) => {
+    const next = Math.min(Math.max(nextIndex, 0), normalizedCount - 1);
+    setFocusedIndex(next);
+    commitValue(next + 1, event);
+  };
+
+  const handleRootKeyDown = (event) => {
+    if (disabledByState || readOnly) {
+      return;
+    }
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      focusAndCommit(focusedIndex + 1, event);
+      return;
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusAndCommit(focusedIndex - 1, event);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusAndCommit(0, event);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      focusAndCommit(normalizedCount - 1, event);
+    }
+  };
+
+  const itemLabel = (itemValue, active) => {
+    if (typeof getItemLabel === "function") {
+      return getItemLabel(itemValue, {
+        active,
+        count: normalizedCount,
+        shape: normalizedShape
+      });
+    }
+    return `${itemValue} / ${normalizedCount}`;
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      ...createScopeAttributes("rating", "root", state),
+      ...handlers,
+      ref,
+      role: "radiogroup",
+      "aria-label": resolvedLabel || undefined,
+      "aria-labelledby": resolvedAriaLabelledBy,
+      "aria-disabled": disabledByState ? "true" : undefined,
+      "aria-readonly": readOnly ? "true" : undefined,
+      "aria-invalid": normalizedError ? "true" : undefined,
+      "data-value": String(normalizedValue),
+      "data-count": String(normalizedCount),
+      "data-shape": normalizedShape,
+      "data-readonly": String(readOnly),
+      onKeyDown: handleRootKeyDown
+    },
+    resolvedLabel
+      ? React.createElement(
+          "span",
+          createScopeAttributes("rating", "label", state),
+          resolvedLabel
+        )
+      : null,
+    Array.from({ length: normalizedCount }, (_, index) => {
+      const itemValue = index + 1;
+      const selected = itemValue === normalizedValue;
+      const active = itemValue <= normalizedValue;
+      const itemState = disabledByState
+        ? "disabled"
+        : selected
+          ? "active"
+          : state;
+      const itemDisabled = disabledByState;
+      const itemTabIndex = readOnly
+        ? -1
+        : index === focusedIndex && !itemDisabled
+          ? 0
+          : -1;
+
+      return React.createElement(
+        "button",
+        {
+          ...createScopeAttributes("rating", "item", itemState),
+          key: itemValue,
+          type: "button",
+          role: "radio",
+          disabled: itemDisabled,
+          "aria-checked": String(selected),
+          "aria-disabled": itemDisabled ? "true" : undefined,
+          "aria-label": itemLabel(itemValue, active),
+          "data-selected": String(selected),
+          "data-active": String(active),
+          tabIndex: itemTabIndex,
+          onFocus: () => setFocusedIndex(index),
+          onClick: (event) => commitValue(itemValue, event)
+        },
+        React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("rating", "icon", itemState),
+            "data-active": String(active)
+          },
+          React.createElement(ChipsIcon, {
+            descriptor: resolveRatingItemDescriptor(normalizedShape, active)
+          })
+        )
+      );
+    }),
+    normalizedError
+      ? React.createElement(
+          "span",
+          {
+            ...createScopeAttributes("rating", "status", state),
+            ...createAriaStatusProps({ live: "assertive" })
+          },
+          normalizedError.message
+        )
+      : null
+  );
+});
+
+ChipsRating.displayName = "ChipsRating";
 
 function resolveInputDescriptor(params = {}) {
   const {
@@ -15872,6 +16135,14 @@ export function validateComponentA11y(component, props) {
     return true;
   }
 
+  if (component === "rating") {
+    assertAriaProps(props, {
+      role: "radiogroup",
+      requireLabel: true
+    });
+    return true;
+  }
+
   if (component === "text-field" || component === "text-area") {
     assertAriaProps(props, {
       requireLabel: true
@@ -16358,6 +16629,12 @@ export const TASK015_BASE_CONTROL_COMPONENTS = [
     scope: "progress",
     parts: ["root", "track", "range", "label", "value", "status"],
     states: TASK015_BASE_CONTROL_STATES
+  }),
+  createComponentMeta({
+    name: "ChipsRating",
+    scope: "rating",
+    parts: ["root", "label", "item", "icon", "status"],
+    states: [...INTERACTIVE_STATE_PRIORITY]
   }),
   createComponentMeta({
     name: "ChipsTextField",

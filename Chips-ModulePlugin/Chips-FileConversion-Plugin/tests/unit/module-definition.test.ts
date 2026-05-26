@@ -41,6 +41,14 @@ const createContext = (
       return { ack: true };
     }
 
+    if (action === "file.move") {
+      const sourcePath = payload?.sourcePath as string;
+      const destPath = payload?.destPath as string;
+      fileStats[destPath] = fileStats[sourcePath] ?? { isFile: true };
+      delete fileStats[sourcePath];
+      return { ack: true };
+    }
+
     throw new Error(`Unexpected host action: ${action}`);
   });
 
@@ -90,23 +98,25 @@ describe("file conversion module", () => {
     const ctx = createContext(fileStats);
     const invoke = vi.mocked(ctx.module.invoke);
     invoke.mockImplementation(async (started) => {
-      fileStats["/workspace/output.zip"] = { isFile: true };
+      const output = started.input.output as { path: string; packageMode: string; overwrite: boolean };
       expect(started).toEqual({
         capability: "converter.card.to-html",
         method: "convert",
         input: {
           cardFile: "/workspace/demo.card",
           output: {
-            path: "/workspace/output.zip",
+            path: output.path,
             packageMode: "zip",
             overwrite: false,
           },
         },
       });
+      expect(output.path).not.toBe("/workspace/output.zip");
+      fileStats[output.path] = { isFile: true };
       return {
         mode: "sync",
         output: {
-          outputPath: "/workspace/output.zip",
+          outputPath: output.path,
           entryFile: "index.html",
           warnings: [{ code: "HTML_WARN", message: "minor issue" }],
         },
@@ -115,6 +125,10 @@ describe("file conversion module", () => {
 
     const result = await convert?.(ctx, request);
 
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.move", {
+      sourcePath: expect.stringContaining("/final/output.zip"),
+      destPath: "/workspace/output.zip",
+    });
     expect(result).toEqual({
       sourceType: "card",
       targetType: "html",
@@ -175,20 +189,22 @@ describe("file conversion module", () => {
         };
       })
       .mockImplementationOnce(async (started) => {
+        const outputFile = started.input.outputFile as string;
         expect(started).toEqual({
           capability: "converter.html.to-pdf",
           method: "convert",
           input: {
             htmlDir: temporaryHtmlDir,
-            outputFile: "/workspace/output.pdf",
+            outputFile,
             options: { pageSize: "A4" },
           },
         });
-        fileStats["/workspace/output.pdf"] = { isFile: true };
+        expect(outputFile).not.toBe("/workspace/output.pdf");
+        fileStats[outputFile] = { isFile: true };
         return {
           mode: "sync",
           output: {
-            outputFile: "/workspace/output.pdf",
+            outputFile,
           },
         };
       });
@@ -199,6 +215,10 @@ describe("file conversion module", () => {
       path: temporaryHtmlRoot,
       options: { recursive: true },
     });
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.move", {
+      sourcePath: expect.stringContaining("/final/output.pdf"),
+      destPath: "/workspace/output.pdf",
+    });
     expect(ctx.host.invoke).toHaveBeenLastCalledWith("file.delete", {
       path: temporaryHtmlRoot,
       options: { recursive: true },
@@ -207,6 +227,10 @@ describe("file conversion module", () => {
       sourceType: "card",
       targetType: "pdf",
       outputPath: "/workspace/output.pdf",
+      artifacts: [
+        { type: "html-directory", path: temporaryHtmlDir },
+        { type: "pdf", path: "/workspace/output.pdf" },
+      ],
       pipeline: [
         { capability: "converter.card.to-html", method: "convert" },
         { capability: "converter.html.to-pdf", method: "convert" },
@@ -240,12 +264,13 @@ describe("file conversion module", () => {
         },
       })
       .mockImplementationOnce(async () => {
-        fileStats["/workspace/output.pdf"] = { isFile: true };
+        const invokeInput = vi.mocked(ctx.module.invoke).mock.calls[0]?.[0]?.input as { outputFile: string };
+        fileStats[invokeInput.outputFile] = { isFile: true };
         return {
           jobId: "child-job-1",
           status: "completed",
           output: {
-            outputFile: "/workspace/output.pdf",
+            outputFile: invokeInput.outputFile,
           },
         };
       });
@@ -259,8 +284,12 @@ describe("file conversion module", () => {
       input: {
         htmlDir: "/workspace",
         entryFile: "index.html",
-        outputFile: "/workspace/output.pdf",
+        outputFile: expect.stringContaining("/final/output.pdf"),
       },
+    });
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.move", {
+      sourcePath: expect.stringContaining("/final/output.pdf"),
+      destPath: "/workspace/output.pdf",
     });
     expect(result).toMatchObject({
       sourceType: "html",
@@ -272,6 +301,230 @@ describe("file conversion module", () => {
       stage: "render-pdf",
       percent: 41,
       message: "still rendering",
+    });
+  });
+
+  it("maps missing downstream providers to a file conversion pipeline error", async () => {
+    const request: FileConvertRequest = {
+      source: { type: "html", path: "/workspace/index.html" },
+      target: { type: "pdf" },
+      output: { path: "/workspace/output.pdf" },
+    };
+    const ctx = createContext({
+      "/workspace/index.html": { isFile: true },
+    });
+    vi.mocked(ctx.module.invoke).mockRejectedValue({
+      code: "MODULE_PROVIDER_NOT_FOUND",
+      message: "No matching module provider was found",
+    });
+
+    await expect(convert?.(ctx, request)).rejects.toMatchObject({
+      code: "CONVERTER_PIPELINE_PROVIDER_MISSING",
+      details: {
+        capability: "converter.html.to-pdf",
+        method: "convert",
+      },
+      retryable: false,
+    });
+  });
+
+  it("maps permission failures without losing the required permission details", async () => {
+    const request: FileConvertRequest = {
+      source: { type: "html", path: "/workspace/index.html" },
+      target: { type: "image" },
+      output: { path: "/workspace/output.png" },
+    };
+    const ctx = createContext({
+      "/workspace/index.html": { isFile: true },
+    });
+    vi.mocked(ctx.module.invoke).mockRejectedValue({
+      code: "PERMISSION_DENIED",
+      message: "module.invoke permission is required",
+      details: {
+        permission: {
+          required: ["module.invoke"],
+          granted: ["module.read"],
+        },
+      },
+    });
+
+    await expect(convert?.(ctx, request)).rejects.toMatchObject({
+      code: "CONVERTER_PIPELINE_PERMISSION_DENIED",
+      details: {
+        capability: "converter.html.to-image",
+        cause: {
+          details: {
+            permission: {
+              required: ["module.invoke"],
+              granted: ["module.read"],
+            },
+          },
+        },
+      },
+      retryable: false,
+    });
+  });
+
+  it("keeps the existing final output until all staged steps succeed", async () => {
+    const request: FileConvertRequest = {
+      source: { type: "card", path: "/workspace/demo.card" },
+      target: { type: "image" },
+      output: { path: "/workspace/output.png", overwrite: true },
+    };
+    const fileStats: Record<string, MutableFileStat | undefined> = {
+      "/workspace/demo.card": { isFile: true },
+      "/workspace/output.png": { isFile: true, size: 42 },
+    };
+    const ctx = createContext(fileStats);
+    let temporaryHtmlRoot = "";
+    vi.mocked(ctx.module.invoke)
+      .mockImplementationOnce(async (started) => {
+        const output = started.input.output as { path: string };
+        temporaryHtmlRoot = output.path.replace(/\/html$/, "");
+        fileStats[output.path] = { isDirectory: true };
+        return {
+          mode: "sync",
+          output: {
+            outputPath: output.path,
+            entryFile: "index.html",
+          },
+        };
+      })
+      .mockRejectedValueOnce({
+        code: "CONVERTER_IMAGE_RENDER_FAILED",
+        message: "Host image rendering failed",
+      });
+
+    await expect(convert?.(ctx, request)).rejects.toMatchObject({
+      code: "CONVERTER_IMAGE_RENDER_FAILED",
+    });
+    expect(fileStats["/workspace/output.png"]).toEqual({ isFile: true, size: 42 });
+    expect(ctx.host.invoke).not.toHaveBeenCalledWith("file.delete", {
+      path: "/workspace/output.png",
+      options: expect.anything(),
+    });
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.delete", {
+      path: temporaryHtmlRoot,
+      options: { recursive: true },
+    });
+  });
+
+  it("backs up and replaces existing final output only during the commit phase", async () => {
+    const request: FileConvertRequest = {
+      source: { type: "html", path: "/workspace/index.html" },
+      target: { type: "pdf" },
+      output: { path: "/workspace/output.pdf", overwrite: true },
+    };
+    const fileStats: Record<string, MutableFileStat | undefined> = {
+      "/workspace/index.html": { isFile: true },
+      "/workspace/output.pdf": { isFile: true, size: 11 },
+    };
+    const ctx = createContext(fileStats);
+    let stagedOutputFile = "";
+    vi.mocked(ctx.module.invoke).mockImplementation(async (started) => {
+      stagedOutputFile = started.input.outputFile as string;
+      expect(stagedOutputFile).not.toBe("/workspace/output.pdf");
+      expect(fileStats["/workspace/output.pdf"]).toEqual({ isFile: true, size: 11 });
+      fileStats[stagedOutputFile] = { isFile: true, size: 99 };
+      return {
+        mode: "sync",
+        output: {
+          outputFile: stagedOutputFile,
+        },
+      };
+    });
+
+    const result = await convert?.(ctx, request);
+
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.move", {
+      sourcePath: "/workspace/output.pdf",
+      destPath: expect.stringContaining("/backup/output.pdf"),
+    });
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.move", {
+      sourcePath: stagedOutputFile,
+      destPath: "/workspace/output.pdf",
+    });
+    expect(fileStats["/workspace/output.pdf"]).toEqual({ isFile: true, size: 99 });
+    expect(result).toMatchObject({
+      outputPath: "/workspace/output.pdf",
+      artifacts: [{ type: "pdf", path: "/workspace/output.pdf" }],
+    });
+  });
+
+  it("maps backup failures during overwrite commit to output commit errors", async () => {
+    const request: FileConvertRequest = {
+      source: { type: "html", path: "/workspace/index.html" },
+      target: { type: "pdf" },
+      output: { path: "/workspace/output.pdf", overwrite: true },
+    };
+    const fileStats: Record<string, MutableFileStat | undefined> = {
+      "/workspace/index.html": { isFile: true },
+      "/workspace/output.pdf": { isFile: true, size: 11 },
+    };
+    const ctx = createContext(fileStats);
+    const hostInvoke = vi.mocked(ctx.host.invoke);
+
+    vi.mocked(ctx.module.invoke).mockImplementation(async (started) => {
+      const stagedOutputFile = started.input.outputFile as string;
+      fileStats[stagedOutputFile] = { isFile: true, size: 99 };
+      return {
+        mode: "sync",
+        output: {
+          outputFile: stagedOutputFile,
+        },
+      };
+    });
+
+    hostInvoke.mockImplementation(async (action: string, payload?: Record<string, unknown>) => {
+      if (action === "file.move" && payload?.sourcePath === "/workspace/output.pdf") {
+        throw Object.assign(new Error("backup denied"), {
+          code: "SERVICE_PERMISSION_DENIED",
+        });
+      }
+      if (action === "file.stat") {
+        const filePath = payload?.path as string;
+        const meta = fileStats[filePath];
+        if (!meta) {
+          throw new Error(`ENOENT: ${filePath}`);
+        }
+        return { meta };
+      }
+      if (action === "file.mkdir") {
+        const filePath = payload?.path as string;
+        fileStats[filePath] = { isDirectory: true };
+        return { ack: true };
+      }
+      if (action === "file.delete") {
+        const filePath = payload?.path as string;
+        delete fileStats[filePath];
+        return { ack: true };
+      }
+      if (action === "file.move") {
+        const sourcePath = payload?.sourcePath as string;
+        const destPath = payload?.destPath as string;
+        fileStats[destPath] = fileStats[sourcePath] ?? { isFile: true };
+        delete fileStats[sourcePath];
+        return { ack: true };
+      }
+      throw new Error(`Unexpected host action: ${action}`);
+    });
+
+    await expect(convert?.(ctx, request)).rejects.toMatchObject({
+      code: "CONVERTER_OUTPUT_COMMIT_FAILED",
+      details: {
+        outputPath: "/workspace/output.pdf",
+        stagedOutputPath: expect.stringContaining("/final/output.pdf"),
+        stagedBackupOutputPath: expect.stringContaining("/backup/output.pdf"),
+        phase: "backup",
+        cause: {
+          code: "SERVICE_PERMISSION_DENIED",
+        },
+      },
+    });
+    expect(fileStats["/workspace/output.pdf"]).toEqual({ isFile: true, size: 11 });
+    expect(hostInvoke).not.toHaveBeenCalledWith("file.move", {
+      sourcePath: expect.stringContaining("/final/output.pdf"),
+      destPath: "/workspace/output.pdf",
     });
   });
 

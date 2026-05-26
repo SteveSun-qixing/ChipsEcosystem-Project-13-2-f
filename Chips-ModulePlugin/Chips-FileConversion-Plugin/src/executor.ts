@@ -48,13 +48,11 @@ const toWarnings = (value: unknown): FileConvertWarning[] => {
     if (!record || typeof record.code !== "string" || typeof record.message !== "string") {
       return [];
     }
-    return [
-      {
-        code: record.code,
-        message: record.message,
-        details: record.details,
-      },
-    ];
+    return [{
+      code: record.code,
+      message: record.message,
+      ...(typeof record.details !== "undefined" ? { details: record.details } : {}),
+    }];
   });
 };
 
@@ -107,7 +105,7 @@ const safeStat = async (ctx: FileModuleContext, filePath: string): Promise<FileS
   }
 };
 
-const ensureOutputReady = async (
+const assertFinalOutputWritable = async (
   ctx: FileModuleContext,
   outputPath: string,
   overwrite: boolean,
@@ -120,11 +118,6 @@ const ensureOutputReady = async (
   if (!overwrite) {
     throw createConversionError("CONVERTER_OUTPUT_EXISTS", `Output already exists: ${outputPath}`, { outputPath });
   }
-
-  await ctx.host.invoke("file.delete", {
-    path: outputPath,
-    options: { recursive: true },
-  });
 };
 
 const ensureSourceExists = async (ctx: FileModuleContext, sourcePath: string): Promise<FileStatLike> => {
@@ -145,6 +138,32 @@ const normalizeThrowable = (step: PlannedStep, error: unknown): Error => {
   const message = typeof record?.message === "string" ? record.message : undefined;
   if (code?.startsWith("CONVERTER_")) {
     return createConversionError(code, message ?? "Child module failed.", record?.details, record?.retryable === true);
+  }
+
+  if (code === "MODULE_PROVIDER_NOT_FOUND") {
+    return createConversionError(
+      "CONVERTER_PIPELINE_PROVIDER_MISSING",
+      message ?? `No provider is available for ${step.capability}.`,
+      {
+        capability: step.capability,
+        method: step.method,
+        cause: record,
+      },
+      false,
+    );
+  }
+
+  if (code === "MODULE_CAPABILITY_NOT_DECLARED" || code === "PERMISSION_DENIED" || code === "SERVICE_PERMISSION_DENIED") {
+    return createConversionError(
+      "CONVERTER_PIPELINE_PERMISSION_DENIED",
+      message ?? `Permission denied while invoking ${step.capability}.`,
+      {
+        capability: step.capability,
+        method: step.method,
+        cause: record,
+      },
+      false,
+    );
   }
 
   return createConversionError(
@@ -276,7 +295,7 @@ const toArtifact = (step: PlannedStep, output: unknown): FileConvertArtifact => 
     const htmlOutput = record as CardToHtmlResultLike;
     return {
       type: step.outputKind,
-      path: rawPath,
+      path: step.finalOutputPath ?? rawPath,
       entryFile: typeof htmlOutput.entryFile === "string" ? htmlOutput.entryFile : undefined,
       mimeType: step.outputKind === "html-zip" ? "application/zip" : "text/html",
     };
@@ -285,7 +304,7 @@ const toArtifact = (step: PlannedStep, output: unknown): FileConvertArtifact => 
   if (step.outputKind === "pdf") {
     return {
       type: "pdf",
-      path: rawPath,
+      path: step.finalOutputPath ?? rawPath,
       mimeType: "application/pdf",
     };
   }
@@ -294,7 +313,7 @@ const toArtifact = (step: PlannedStep, output: unknown): FileConvertArtifact => 
   const format = imageOutput.format ?? "png";
   return {
     type: "image",
-    path: rawPath,
+    path: step.finalOutputPath ?? rawPath,
     mimeType: `image/${format}`,
   };
 };
@@ -312,11 +331,13 @@ const ensureArtifactExists = async (
   step: PlannedStep,
   artifact: FileConvertArtifact,
 ): Promise<void> => {
-  const stat = await safeStat(ctx, artifact.path);
+  const statPath = step.stagedOutputPath ?? artifact.path;
+  const stat = await safeStat(ctx, statPath);
   if (!stat) {
     throw createConversionError("CONVERTER_PIPELINE_STEP_FAILED", "Child module did not produce its declared artifact.", {
       capability: step.capability,
       artifact,
+      stagedOutputPath: step.stagedOutputPath,
     });
   }
 
@@ -337,6 +358,89 @@ const ensureArtifactExists = async (
   }
 };
 
+const findPublishedStep = (plan: ConversionPlan): PlannedStep | undefined => {
+  return plan.steps.find((step) => step.publishArtifact === true);
+};
+
+const createOutputCommitError = (
+  plan: ConversionPlan,
+  error: unknown,
+  phase: "backup" | "publish",
+): Error => {
+  return createConversionError(
+    "CONVERTER_OUTPUT_COMMIT_FAILED",
+    `Failed to commit converted output: ${plan.request.output.path}`,
+    {
+      outputPath: plan.request.output.path,
+      stagedOutputPath: plan.stagedFinalOutputPath,
+      stagedBackupOutputPath: plan.stagedBackupOutputPath,
+      phase,
+      cause: error,
+    },
+  );
+};
+
+const commitStagedFinalOutput = async (
+  ctx: FileModuleContext,
+  plan: ConversionPlan,
+): Promise<void> => {
+  if (!plan.stagedFinalOutputPath) {
+    return;
+  }
+
+  await throwIfCancelled(ctx);
+  await reportProgress(ctx, "cleanup", 97, "Committing final output");
+
+  let backupCreated = false;
+  const publishedStep = findPublishedStep(plan);
+  if (plan.request.output.overwrite) {
+    const existing = await safeStat(ctx, plan.request.output.path);
+    if (existing) {
+      if (!plan.stagedBackupOutputPath) {
+        throw createConversionError("CONVERTER_PIPELINE_STEP_FAILED", "Overwrite requires a staged backup path.", {
+          outputPath: plan.request.output.path,
+        });
+      }
+      try {
+        await ctx.host.invoke("file.move", {
+          sourcePath: plan.request.output.path,
+          destPath: plan.stagedBackupOutputPath,
+        });
+      } catch (error) {
+        throw createOutputCommitError(plan, error, "backup");
+      }
+      backupCreated = true;
+    }
+  }
+
+  try {
+    await ctx.host.invoke("file.move", {
+      sourcePath: plan.stagedFinalOutputPath,
+      destPath: plan.request.output.path,
+    });
+  } catch (error) {
+    if (backupCreated && plan.stagedBackupOutputPath) {
+      try {
+        await ctx.host.invoke("file.move", {
+          sourcePath: plan.stagedBackupOutputPath,
+          destPath: plan.request.output.path,
+        });
+      } catch (restoreError) {
+        ctx.logger.error("Failed to restore previous output after publish failure.", {
+          outputPath: plan.request.output.path,
+          backupPath: plan.stagedBackupOutputPath,
+          error: restoreError,
+        });
+      }
+    }
+    throw createOutputCommitError(plan, error, "publish");
+  }
+
+  if (publishedStep) {
+    publishedStep.stagedOutputPath = undefined;
+  }
+};
+
 export const executePlan = async (
   ctx: FileModuleContext,
   plan: ConversionPlan,
@@ -349,11 +453,25 @@ export const executePlan = async (
   }));
 
   await ensureSourceExists(ctx, plan.request.source.path);
-  await ensureOutputReady(ctx, plan.request.output.path, plan.request.output.overwrite);
+  await assertFinalOutputWritable(ctx, plan.request.output.path, plan.request.output.overwrite);
 
   if (plan.temporaryHtmlRoot) {
     await ctx.host.invoke("file.mkdir", {
       path: plan.temporaryHtmlRoot,
+      options: { recursive: true },
+    });
+  }
+
+  if (plan.stagedFinalOutputDir) {
+    await ctx.host.invoke("file.mkdir", {
+      path: plan.stagedFinalOutputDir,
+      options: { recursive: true },
+    });
+  }
+
+  if (plan.stagedBackupOutputDir) {
+    await ctx.host.invoke("file.mkdir", {
+      path: plan.stagedBackupOutputDir,
       options: { recursive: true },
     });
   }
@@ -367,6 +485,7 @@ export const executePlan = async (
       artifacts.push(artifact);
     }
 
+    await commitStagedFinalOutput(ctx, plan);
     await reportProgress(ctx, "cleanup", 98);
 
     return {

@@ -29,7 +29,9 @@
 - 对外统一提供 `converter.file.convert/convert` 异步任务方法。
 - 支持 `card -> html`、`card -> pdf`、`card -> image`、`html -> pdf`、`html -> image` 五条正式流水线。
 - `card -> pdf/image` 会先生成临时 HTML 目录，再继续调用原子模块完成最终导出。
+- 所有最终交付物先写入同级临时目录，全部步骤成功后再通过 Host `file.move` 发布到 `output.path`；覆盖已有输出时先备份旧文件，发布失败会尝试恢复旧输出。
 - 子模块如果返回异步任务，本模块会统一轮询 `module.job.get`，并在父任务取消时联动取消子任务。
+- 下游 provider 缺失会归一为 `CONVERTER_PIPELINE_PROVIDER_MISSING`，模块依赖未声明或权限不足会归一为 `CONVERTER_PIPELINE_PERMISSION_DENIED`，并保留 Host 返回的机器可读诊断。
 - 下游正式能力口径已收口为：
   - `card -> html` 透传 `themeId / locale` 到 Host `card.render`
   - `html -> pdf` 使用 Host `platform.renderHtmlToPdf`

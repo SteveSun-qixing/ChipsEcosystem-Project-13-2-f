@@ -152,6 +152,9 @@ export interface PlannedStep {
   capability: "converter.card.to-html" | "converter.html.to-pdf" | "converter.html.to-image";
   method: "convert";
   input: Record<string, unknown>;
+  finalOutputPath?: string;
+  stagedOutputPath?: string;
+  publishArtifact?: boolean;
   progressStart: number;
   progressEnd: number;
   outputKind: FileConvertArtifact["type"];
@@ -164,6 +167,10 @@ export interface ConversionPlan {
   steps: PlannedStep[];
   temporaryHtmlDir?: string;
   temporaryHtmlRoot?: string;
+  stagedBackupOutputDir?: string;
+  stagedBackupOutputPath?: string;
+  stagedFinalOutputDir?: string;
+  stagedFinalOutputPath?: string;
 }
 
 export interface CardToHtmlResultLike {

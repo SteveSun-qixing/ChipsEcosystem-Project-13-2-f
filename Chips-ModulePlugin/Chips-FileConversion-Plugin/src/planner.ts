@@ -217,6 +217,18 @@ const createTemporaryHtmlRoot = (outputPath: string): string => {
   return joinPath(dirname(outputPath), `.chips-file-conversion-${createUuid()}`);
 };
 
+const createTemporaryOutputRoot = (outputPath: string): string => {
+  return joinPath(dirname(outputPath), `.chips-file-conversion-output-${createUuid()}`);
+};
+
+const getStagedBackupOutputPath = (temporaryRoot: string, outputPath: string): string => {
+  return joinPath(temporaryRoot, "backup", basename(outputPath));
+};
+
+const getStagedFinalOutputPath = (temporaryHtmlRoot: string, outputPath: string): string => {
+  return joinPath(temporaryHtmlRoot, "final", basename(outputPath));
+};
+
 export const planConversion = (
   request: NormalizedConvertRequest,
   htmlSource: NormalizedHtmlSource | undefined,
@@ -226,6 +238,14 @@ export const planConversion = (
   const cardToHtmlOptions = buildCardToHtmlOptions(htmlOptions, request);
   const htmlToPdfOptions = buildHtmlToPdfOptions(request);
   const htmlToImageOptions = buildHtmlToImageOptions(request);
+  const targetIsFinalArtifact = request.target.type === "html" || request.source.type === "html";
+  const temporaryOutputRoot = targetIsFinalArtifact ? createTemporaryOutputRoot(request.output.path) : undefined;
+  const stagedBackupOutputDir = temporaryOutputRoot ? joinPath(temporaryOutputRoot, "backup") : undefined;
+  const stagedBackupOutputPath = temporaryOutputRoot
+    ? getStagedBackupOutputPath(temporaryOutputRoot, request.output.path)
+    : undefined;
+  const stagedOutputDir = temporaryOutputRoot ? joinPath(temporaryOutputRoot, "final") : undefined;
+  const stagedOutputPath = temporaryOutputRoot ? getStagedFinalOutputPath(temporaryOutputRoot, request.output.path) : undefined;
 
   if (request.source.type === "card" && request.target.type === "html") {
     steps.push({
@@ -239,14 +259,25 @@ export const planConversion = (
       input: {
         cardFile: request.source.path,
         output: {
-          path: request.output.path,
+          path: stagedOutputPath ?? request.output.path,
           packageMode: request.options.html.packageMode,
           overwrite: request.output.overwrite,
         },
         ...(cardToHtmlOptions ? { options: cardToHtmlOptions } : {}),
       },
+      finalOutputPath: request.output.path,
+      stagedOutputPath,
+      publishArtifact: true,
     });
-    return { request, steps };
+    return {
+      request,
+      steps,
+      temporaryHtmlRoot: temporaryOutputRoot,
+      stagedBackupOutputDir,
+      stagedBackupOutputPath,
+      stagedFinalOutputDir: stagedOutputDir,
+      stagedFinalOutputPath: stagedOutputPath,
+    };
   }
 
   if (request.source.type === "html") {
@@ -266,11 +297,22 @@ export const planConversion = (
         input: {
           htmlDir: htmlSource.htmlDir,
           entryFile: htmlSource.entryFile,
-          outputFile: request.output.path,
+          outputFile: stagedOutputPath ?? request.output.path,
           ...(htmlToPdfOptions ? { options: htmlToPdfOptions } : {}),
         },
+        finalOutputPath: request.output.path,
+        stagedOutputPath,
+        publishArtifact: true,
       });
-      return { request, steps };
+      return {
+        request,
+        steps,
+        temporaryHtmlRoot: temporaryOutputRoot,
+        stagedBackupOutputDir,
+        stagedBackupOutputPath,
+        stagedFinalOutputDir: stagedOutputDir,
+        stagedFinalOutputPath: stagedOutputPath,
+      };
     }
 
     if (request.target.type === "image") {
@@ -285,16 +327,31 @@ export const planConversion = (
         input: {
           htmlDir: htmlSource.htmlDir,
           entryFile: htmlSource.entryFile,
-          outputFile: request.output.path,
+          outputFile: stagedOutputPath ?? request.output.path,
           ...(htmlToImageOptions ? { options: htmlToImageOptions } : {}),
         },
+        finalOutputPath: request.output.path,
+        stagedOutputPath,
+        publishArtifact: true,
       });
-      return { request, steps };
+      return {
+        request,
+        steps,
+        temporaryHtmlRoot: temporaryOutputRoot,
+        stagedBackupOutputDir,
+        stagedBackupOutputPath,
+        stagedFinalOutputDir: stagedOutputDir,
+        stagedFinalOutputPath: stagedOutputPath,
+      };
     }
   }
 
   const temporaryHtmlRoot = createTemporaryHtmlRoot(request.output.path);
   const temporaryHtmlDir = joinPath(temporaryHtmlRoot, "html");
+  const stagedHtmlBackupOutputDir = joinPath(temporaryHtmlRoot, "backup");
+  const stagedHtmlBackupOutputPath = getStagedBackupOutputPath(temporaryHtmlRoot, request.output.path);
+  const stagedFinalOutputDir = joinPath(temporaryHtmlRoot, "final");
+  const stagedFinalOutputPath = getStagedFinalOutputPath(temporaryHtmlRoot, request.output.path);
 
   steps.push({
     capability: CARD_TO_HTML_CAPABILITY,
@@ -326,11 +383,23 @@ export const planConversion = (
       defaultStage: "render-pdf",
       input: {
         htmlDir: temporaryHtmlDir,
-        outputFile: request.output.path,
+        outputFile: stagedFinalOutputPath,
         ...(htmlToPdfOptions ? { options: htmlToPdfOptions } : {}),
       },
+      finalOutputPath: request.output.path,
+      stagedOutputPath: stagedFinalOutputPath,
+      publishArtifact: true,
     });
-    return { request, steps, temporaryHtmlDir, temporaryHtmlRoot };
+    return {
+      request,
+      steps,
+      temporaryHtmlDir,
+      temporaryHtmlRoot,
+      stagedBackupOutputDir: stagedHtmlBackupOutputDir,
+      stagedBackupOutputPath: stagedHtmlBackupOutputPath,
+      stagedFinalOutputDir,
+      stagedFinalOutputPath,
+    };
   }
 
   if (request.target.type === "image") {
@@ -344,11 +413,23 @@ export const planConversion = (
       defaultStage: "render-image",
       input: {
         htmlDir: temporaryHtmlDir,
-        outputFile: request.output.path,
+        outputFile: stagedFinalOutputPath,
         ...(htmlToImageOptions ? { options: htmlToImageOptions } : {}),
       },
+      finalOutputPath: request.output.path,
+      stagedOutputPath: stagedFinalOutputPath,
+      publishArtifact: true,
     });
-    return { request, steps, temporaryHtmlDir, temporaryHtmlRoot };
+    return {
+      request,
+      steps,
+      temporaryHtmlDir,
+      temporaryHtmlRoot,
+      stagedBackupOutputDir: stagedHtmlBackupOutputDir,
+      stagedBackupOutputPath: stagedHtmlBackupOutputPath,
+      stagedFinalOutputDir,
+      stagedFinalOutputPath,
+    };
   }
 
   throw createConversionError("CONVERTER_PIPELINE_NOT_FOUND", "No pipeline matches the requested conversion.", {

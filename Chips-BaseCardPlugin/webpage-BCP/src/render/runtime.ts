@@ -36,6 +36,7 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
           config,
           resolveResourceUrl: ctx.resolveResourceUrl,
           releaseResourceUrl: ctx.releaseResourceUrl,
+          openResource: ctx.openResource,
         }),
       ),
     );

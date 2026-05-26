@@ -87,6 +87,6 @@ describe("createSrcDocDocument", () => {
     expect(dom.window.document.documentElement.style.getPropertyValue("--chips-webpage-card-virtual-vh")).toBe("7.2px");
     expect((dom.window as typeof dom.window & { __CHIPS_TEST_INNER_HEIGHT__?: number }).__CHIPS_TEST_INNER_HEIGHT__).toBe(720);
     await waitForVisualFrame(dom);
-    dom.window.close();
+    await waitForVisualFrame(dom);
   });
 });

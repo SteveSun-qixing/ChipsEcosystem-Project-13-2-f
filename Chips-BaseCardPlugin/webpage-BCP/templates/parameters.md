@@ -2,7 +2,7 @@
 
 - `card_type`: 固定为 `WebPageCard`
 - `source_type`: `url` 或 `bundle`
-- `source_url`: 当来源为网址时使用
+- `source_url`: 当来源为远程网址时使用，只允许 `http/https`
 - `bundle_root`: 当来源为网页包时，指向卡片根目录中的网页文件夹
 - `entry_file`: 网页入口文件，当前正式要求为 `index.html`
 - `resource_paths`: 网页包内所有已导入文件的卡片根目录相对路径

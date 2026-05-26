@@ -49,6 +49,34 @@ describe("webpage basecard schema", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors.source_url).toContain("网页地址");
+    expect(result.errors.source_url).toBe("webpage.validation.sourceUrl");
+  });
+
+  it("rejects file urls as remote webpage sources", () => {
+    const result = validateBasecardConfig(
+      normalizeBasecardConfig({
+        card_type: "WebPageCard",
+        source_type: "url",
+        source_url: "file:///Users/demo/index.html",
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.source_url).toBe("webpage.validation.sourceUrl");
+  });
+
+  it("requires bundled resource manifests to include index.html", () => {
+    const result = validateBasecardConfig(
+      normalizeBasecardConfig({
+        card_type: "WebPageCard",
+        source_type: "bundle",
+        bundle_root: "site",
+        entry_file: "index.html",
+        resource_paths: ["site/assets/app.js"],
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.resource_paths).toBe("webpage.validation.resourcePathsEntry");
   });
 });

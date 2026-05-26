@@ -5,6 +5,9 @@
   "view.load_failed": "Failed to load the webpage.",
   "view.invalid_url": "The webpage URL is invalid.",
   "view.bundle_failed": "Failed to load the webpage bundle.",
+  "view.open_source": "Open source",
+  "view.open_url_title": "Open webpage URL",
+  "view.open_bundle_title": "Open webpage bundle entry",
   "editor.section_current": "Current source",
   "editor.current_empty": "No webpage source selected yet.",
   "editor.current_url": "Displaying a remote webpage URL.",
@@ -41,8 +44,15 @@
   "editor.url_applied": "Webpage URL updated.",
   "editor.source_cleared": "Webpage source cleared.",
   "editor.import_success": "Webpage bundle imported.",
-  "editor.invalid_url": "Enter a valid http(s) or file URL.",
+  "editor.invalid_url": "Enter a valid http(s) webpage URL.",
   "editor.import_unsupported": "The current host does not provide webpage bundle import.",
   "editor.import_failed": "Failed to import the webpage ZIP package.",
-  "editor.clear_failed": "Failed to remove previous webpage bundle resources."
+  "editor.clear_failed": "Failed to remove previous webpage bundle resources.",
+  "webpage.validation.cardType": "The card type must be WebPageCard.",
+  "webpage.validation.sourceUrl": "The webpage URL must be a valid http(s) URL.",
+  "webpage.validation.entryFile": "The webpage bundle entry file must be index.html.",
+  "webpage.validation.resourcePathsEntry": "The webpage bundle resource manifest must include the entry file.",
+  "webpage.validation.displayMode": "The webpage basecard display mode must be fixed or free.",
+  "webpage.validation.fixedRatio": "The webpage basecard fixed ratio must be 7:16.",
+  "webpage.validation.maxHeightRatio": "The webpage basecard max height ratio must be 20."
 }

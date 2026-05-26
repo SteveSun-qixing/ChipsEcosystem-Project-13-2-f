@@ -14,6 +14,10 @@ export function normalizeRelativeCardResourcePath(value: unknown): string | unde
     return undefined;
   }
 
+  if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(normalized) || normalized.includes("?") || normalized.includes("#")) {
+    return undefined;
+  }
+
   const segments = normalized.split("/").filter(Boolean);
   if (segments.length === 0 || segments.some((segment) => segment === "." || segment === "..")) {
     return undefined;
@@ -40,7 +44,7 @@ export function validateWebpageUrl(value: string): boolean {
 
   try {
     const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "file:";
+    return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
   }

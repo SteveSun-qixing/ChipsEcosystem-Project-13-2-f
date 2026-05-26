@@ -19,6 +19,8 @@ describe("webpage basecard entry", () => {
       resource_paths: [
         "site/index.html",
         "./site/assets/app.js",
+        "https://example.com/blocked.css",
+        "site/app.css?version=1",
         "site/index.html",
       ],
       display_mode: "fixed",

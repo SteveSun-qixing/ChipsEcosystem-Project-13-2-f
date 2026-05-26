@@ -39,6 +39,16 @@ function setInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function clickSegmentedOption(root: HTMLElement, selector: string): void {
+  const marker = root.querySelector(selector);
+  const button = marker?.closest("button") as HTMLButtonElement | null;
+  if (!button) {
+    throw new Error(`未找到分段控件选项：${selector}`);
+  }
+
+  button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+}
+
 describe("createBasecardEditorRoot", () => {
   const mountedRoots: DisposableRoot[] = [];
 
@@ -80,11 +90,10 @@ describe("createBasecardEditorRoot", () => {
     mountedRoots.push(root);
     document.body.appendChild(root);
 
-    const urlModeButton = root.querySelector('[data-source-mode="url"]') as HTMLButtonElement | null;
-    urlModeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    clickSegmentedOption(root, '[data-source-mode="url"]');
     await flushAsyncWork();
 
-    const urlInput = root.querySelector(".chips-webpage-editor__url-field") as HTMLInputElement | null;
+    const urlInput = root.querySelector(".chips-webpage-editor__url-field input") as HTMLInputElement | null;
     if (!urlInput) {
       throw new Error("未找到网页地址输入区域");
     }
@@ -109,15 +118,13 @@ describe("createBasecardEditorRoot", () => {
     expect(root.querySelector(".chips-webpage-editor__url-field")).not.toBeNull();
     expect(root.querySelector(".chips-webpage-editor__dropzone")).toBeNull();
 
-    const bundleModeButton = root.querySelector('[data-source-mode="bundle"]') as HTMLButtonElement | null;
-    bundleModeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    clickSegmentedOption(root, '[data-source-mode="bundle"]');
     await flushAsyncWork();
 
     expect(root.querySelector(".chips-webpage-editor__url-field")).toBeNull();
     expect(root.querySelector(".chips-webpage-editor__dropzone")).not.toBeNull();
 
-    const urlModeButton = root.querySelector('[data-source-mode="url"]') as HTMLButtonElement | null;
-    urlModeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    clickSegmentedOption(root, '[data-source-mode="url"]');
     await flushAsyncWork();
 
     expect(root.querySelector(".chips-webpage-editor__url-field")).not.toBeNull();
@@ -135,15 +142,13 @@ describe("createBasecardEditorRoot", () => {
     mountedRoots.push(root);
     document.body.appendChild(root);
 
-    const freeButton = root.querySelector('[data-display-mode="free"]') as HTMLButtonElement | null;
-    freeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    clickSegmentedOption(root, '[data-display-mode="free"]');
     await flushAsyncWork();
 
     expect(lastConfig.display_mode).toBe("free");
     expect(lastConfig.fixed_ratio).toBe("7:16");
 
-    const fixedButton = root.querySelector('[data-display-mode="fixed"]') as HTMLButtonElement | null;
-    fixedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    clickSegmentedOption(root, '[data-display-mode="fixed"]');
     await flushAsyncWork();
 
     expect(lastConfig.display_mode).toBe("fixed");
@@ -200,6 +205,24 @@ describe("createBasecardEditorRoot", () => {
       file,
       preferredRootDir: "webpage-bundle",
       entryFile: "index.html",
+      include: {
+        mimeTypes: expect.arrayContaining([
+          "text/html",
+          "text/css",
+          "application/javascript",
+          "image/png",
+          "font/woff2",
+        ]),
+        extensions: expect.arrayContaining([
+          ".html",
+          ".css",
+          ".js",
+          ".png",
+          ".woff2",
+        ]),
+      },
+      stripSingleRootDir: true,
+      excludeSystemArtifacts: true,
     });
     expect(deleteResource).toHaveBeenCalledTimes(2);
     expect(lastConfig.source_type).toBe("bundle");

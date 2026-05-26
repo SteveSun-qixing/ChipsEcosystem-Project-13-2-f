@@ -5,6 +5,9 @@
   "view.load_failed": "网页加载失败。",
   "view.invalid_url": "网页地址不合法。",
   "view.bundle_failed": "网页压缩包加载失败。",
+  "view.open_source": "打开来源",
+  "view.open_url_title": "打开网页链接",
+  "view.open_bundle_title": "打开网页包入口",
   "editor.section_current": "当前来源",
   "editor.current_empty": "还没有选择网页来源。",
   "editor.current_url": "当前显示的是远程网页链接。",
@@ -41,8 +44,15 @@
   "editor.url_applied": "网页地址已更新。",
   "editor.source_cleared": "网页来源已清除。",
   "editor.import_success": "网页压缩包导入成功。",
-  "editor.invalid_url": "请输入合法的 http(s) 或 file 网页地址。",
+  "editor.invalid_url": "请输入合法的 http(s) 网页地址。",
   "editor.import_unsupported": "当前宿主未提供网页压缩包导入能力。",
   "editor.import_failed": "网页压缩包导入失败。",
-  "editor.clear_failed": "旧网页包资源清理失败。"
+  "editor.clear_failed": "旧网页包资源清理失败。",
+  "webpage.validation.cardType": "卡片类型必须为 WebPageCard。",
+  "webpage.validation.sourceUrl": "网页地址必须是合法的 http(s) 地址。",
+  "webpage.validation.entryFile": "网页包入口文件必须为 index.html。",
+  "webpage.validation.resourcePathsEntry": "网页包资源清单必须包含入口文件。",
+  "webpage.validation.displayMode": "网页基础卡片显示模式必须为 fixed 或 free。",
+  "webpage.validation.fixedRatio": "网页基础卡片固定比例必须为 7:16。",
+  "webpage.validation.maxHeightRatio": "网页基础卡片最大高度阈值必须为 20。"
 }

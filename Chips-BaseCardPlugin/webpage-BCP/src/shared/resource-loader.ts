@@ -414,15 +414,27 @@ export function applyViewportPayloadToDocument(doc: Document, payload: WebpageVi
   root.setAttribute("data-chips-webpage-card-fixed-ratio", normalizedPayload.fixedRatio);
   root.setAttribute("data-chips-webpage-card-scroll-mode", normalizedPayload.scrollMode ? "true" : "false");
 
-  const frameWindow = doc.defaultView as (Window & Record<string, unknown>) | null;
+  const frameWindow = doc.defaultView as (
+    Window &
+    typeof globalThis & {
+      [WEBPAGE_VIEWPORT_GLOBAL_KEY]?: WebpageViewportPayload;
+    }
+  ) | null;
   if (!frameWindow) {
     return;
   }
 
   frameWindow[WEBPAGE_VIEWPORT_GLOBAL_KEY] = normalizedPayload;
   try {
-    const CustomEventCtor = frameWindow.CustomEvent ?? CustomEvent;
-    frameWindow.dispatchEvent(new CustomEventCtor(WEBPAGE_VIEWPORT_EVENT, { detail: normalizedPayload }));
+    const CustomEventCtor =
+      typeof frameWindow.CustomEvent === "function"
+        ? frameWindow.CustomEvent
+        : typeof CustomEvent === "function"
+          ? CustomEvent
+          : undefined;
+    if (CustomEventCtor) {
+      frameWindow.dispatchEvent(new CustomEventCtor(WEBPAGE_VIEWPORT_EVENT, { detail: normalizedPayload }));
+    }
   } catch {
     // Ignore custom event failures in minimal environments.
   }

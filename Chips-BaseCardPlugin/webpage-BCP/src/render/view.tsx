@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChipsButton, ChipsIcon } from "@chips/component-library";
+import type { BasecardOpenResourceInput } from "../index";
 import type { BasecardConfig } from "../schema/card-config";
 import { createTranslator } from "../shared/i18n";
 import {
@@ -257,6 +259,36 @@ export const VIEW_STYLE_TEXT = `
   color: var(--chips-sys-color-error, #d92d20);
 }
 
+.chips-webpage-card__toolbar {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.chips-webpage-card__open-button {
+  pointer-events: auto;
+}
+
+.chips-webpage-card__open-button[data-scope="button"][data-part="root"] {
+  min-height: 34px;
+  border: 1px solid var(--chips-sys-color-outline, rgba(15, 23, 42, 0.18));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 86%, transparent 14%);
+  color: var(--chips-sys-color-on-surface, #111827);
+  padding: 0 10px;
+  backdrop-filter: blur(10px);
+}
+
+.chips-webpage-card__open-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .chips-webpage-card__loading {
   font-size: 14px;
   line-height: 1.6;
@@ -267,12 +299,14 @@ export interface WebpageCardViewProps {
   config: BasecardConfig;
   resolveResourceUrl?: (resourcePath: string) => Promise<string>;
   releaseResourceUrl?: (resourcePath: string) => Promise<void> | void;
+  openResource?: (input: BasecardOpenResourceInput) => void;
 }
 
 export function WebpageCardView({
   config,
   resolveResourceUrl,
   releaseResourceUrl,
+  openResource,
 }: WebpageCardViewProps) {
   const t = useMemo(
     () => createTranslator(typeof navigator !== "undefined" ? navigator.language : "zh-CN"),
@@ -292,6 +326,8 @@ export function WebpageCardView({
   const hasUrlSource = config.source_type === "url" && Boolean(config.source_url?.trim());
   const hasBundleSource = config.source_type === "bundle" && Boolean(config.bundle_root?.trim());
   const validUrl = hasUrlSource ? validateWebpageUrl(config.source_url ?? "") : false;
+  const bundleEntryPath = getBundleEntryPath(config);
+  const canOpenSource = Boolean(openResource) && ((hasUrlSource && validUrl) || Boolean(bundleEntryPath));
   const viewportPayload = useMemo(
     // Free mode may grow the outer iframe to the measured content height, but the embedded page
     // must keep receiving a stable viewport height to avoid measurement feedback loops.
@@ -396,6 +432,46 @@ export function WebpageCardView({
     };
   }, [bundleSrcDoc, config.source_url, hasBundleSource, hasUrlSource, validUrl]);
 
+  const openCurrentSource = () => {
+    if (!openResource) {
+      return;
+    }
+
+    if (hasUrlSource && validUrl && config.source_url) {
+      openResource({
+        resourceId: config.source_url.trim(),
+        mimeType: "text/html",
+        title: t("view.open_url_title"),
+        payload: {
+          kind: "chips.webpage-card",
+          version: "1.0.0",
+          cardType: config.card_type,
+          sourceType: "url",
+          url: config.source_url.trim(),
+        },
+      });
+      return;
+    }
+
+    if (bundleEntryPath) {
+      openResource({
+        resourceId: bundleEntryPath,
+        mimeType: "text/html",
+        title: t("view.open_bundle_title"),
+        fileName: config.entry_file ?? "index.html",
+        payload: {
+          kind: "chips.webpage-card",
+          version: "1.0.0",
+          cardType: config.card_type,
+          sourceType: "bundle",
+          bundleRoot: config.bundle_root ?? "",
+          entryFile: config.entry_file ?? "index.html",
+          resourcePaths: config.resource_paths,
+        },
+      });
+    }
+  };
+
   useEffect(() => {
     if (!iframeSource) {
       if (hasUrlSource && !validUrl) {
@@ -452,7 +528,7 @@ export function WebpageCardView({
       mutationObserver?.disconnect();
       resizeObserver?.disconnect();
       if (frameWindow) {
-        frameWindow.removeEventListener("resize", applyMeasurement);
+        frameWindow.removeEventListener("resize", applyFrameResize);
       }
       intervalId = 0;
       mutationObserver = null;
@@ -500,6 +576,10 @@ export function WebpageCardView({
       setLayoutHeight(nextLayout.height);
     }
 
+    const applyFrameResize = () => {
+      applyMeasurement();
+    };
+
     const attachToFrameDocument = () => {
       clearObservers();
       const accessibleDocument = getAccessibleFrameDocument(frameElement);
@@ -535,7 +615,7 @@ export function WebpageCardView({
 
       try {
         frameWindow = frameElement.contentWindow;
-        frameWindow?.addEventListener("resize", applyMeasurement);
+        frameWindow?.addEventListener("resize", applyFrameResize);
       } catch {
         frameWindow = null;
       }
@@ -618,6 +698,25 @@ export function WebpageCardView({
             title="webpage-card-frame"
           />
         ) : null}
+
+        {canOpenSource && (
+          <div className="chips-webpage-card__toolbar" data-webpage-open-source="true">
+            <ChipsButton
+              type="button"
+              className="chips-webpage-card__open-button"
+              aria-label={t("view.open_source")}
+              onPress={(event) => {
+                event.stopPropagation();
+                openCurrentSource();
+              }}
+            >
+              <span className="chips-webpage-card__open-content">
+                <ChipsIcon descriptor={{ name: "open_in_new", decorative: true }} size={16} />
+                <span>{t("view.open_source")}</span>
+              </span>
+            </ChipsButton>
+          </div>
+        )}
 
         {status === "loading" && (
           <div className="chips-webpage-card__message chips-webpage-card__loading">

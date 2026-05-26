@@ -76,6 +76,44 @@ describe("mountBasecardView", () => {
     cleanup();
   });
 
+  it("routes remote webpage open intent through openResource", async () => {
+    const container = document.createElement("div");
+    const openResource = vi.fn();
+    document.body.appendChild(container);
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        source_type: "url",
+        source_url: "https://example.com/page",
+      }),
+      openResource,
+    });
+
+    await flushAsyncWork();
+
+    const openButton = container.querySelector('[data-webpage-open-source="true"] button') as HTMLButtonElement | null;
+    if (!openButton) {
+      throw new Error("未找到网页打开按钮");
+    }
+
+    openButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "https://example.com/page",
+      mimeType: "text/html",
+      title: "打开网页链接",
+      payload: {
+        kind: "chips.webpage-card",
+        version: "1.0.0",
+        cardType: "WebPageCard",
+        sourceType: "url",
+        url: "https://example.com/page",
+      },
+    });
+    cleanup();
+  });
+
   it("loads bundled index.html and injects a base href into srcdoc", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -99,6 +137,50 @@ describe("mountBasecardView", () => {
     expect(srcDoc).toContain("<main>bundle</main>");
     expect(srcDoc).toContain("chips:webpage-card:viewport");
     expect(srcDoc).toContain("--chips-webpage-card-viewport-width");
+    cleanup();
+  });
+
+  it("routes bundled webpage entry open intent through openResource", async () => {
+    const container = document.createElement("div");
+    const openResource = vi.fn();
+    document.body.appendChild(container);
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        source_type: "bundle",
+        bundle_root: "web-bundle",
+        entry_file: "index.html",
+        resource_paths: ["web-bundle/index.html", "web-bundle/assets/app.js"],
+      }),
+      resolveResourceUrl: async () => "file:///workspace/card/web-bundle/index.html",
+      openResource,
+    });
+
+    await flushAsyncWork();
+
+    const openButton = container.querySelector('[data-webpage-open-source="true"] button') as HTMLButtonElement | null;
+    if (!openButton) {
+      throw new Error("未找到网页包打开按钮");
+    }
+
+    openButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "web-bundle/index.html",
+      mimeType: "text/html",
+      title: "打开网页包入口",
+      fileName: "index.html",
+      payload: {
+        kind: "chips.webpage-card",
+        version: "1.0.0",
+        cardType: "WebPageCard",
+        sourceType: "bundle",
+        bundleRoot: "web-bundle",
+        entryFile: "index.html",
+        resourcePaths: ["web-bundle/index.html", "web-bundle/assets/app.js"],
+      },
+    });
     cleanup();
   });
 

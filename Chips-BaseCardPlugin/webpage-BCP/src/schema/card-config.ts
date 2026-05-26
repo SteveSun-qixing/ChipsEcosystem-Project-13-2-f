@@ -83,29 +83,36 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
   const errors: Record<string, string> = {};
 
   if (config.card_type !== "WebPageCard") {
-    errors.card_type = "card_type 必须为 WebPageCard";
+    errors.card_type = "webpage.validation.cardType";
   }
 
   if (config.source_type === "url" && isNonEmptyString(config.source_url) && !validateWebpageUrl(config.source_url)) {
-    errors.source_url = "网页地址不合法";
+    errors.source_url = "webpage.validation.sourceUrl";
   }
 
   if (config.source_type === "bundle") {
-    if (isNonEmptyString(config.bundle_root) && !isNonEmptyString(config.entry_file)) {
-      errors.entry_file = "网页包入口文件不能为空";
+    if (isNonEmptyString(config.bundle_root) && config.entry_file !== "index.html") {
+      errors.entry_file = "webpage.validation.entryFile";
+    }
+
+    if (isNonEmptyString(config.bundle_root)) {
+      const entryPath = `${config.bundle_root}/index.html`;
+      if (!config.resource_paths.includes(entryPath)) {
+        errors.resource_paths = "webpage.validation.resourcePathsEntry";
+      }
     }
   }
 
   if (config.display_mode !== "fixed" && config.display_mode !== "free") {
-    errors.display_mode = "网页基础卡片显示模式必须为 fixed 或 free";
+    errors.display_mode = "webpage.validation.displayMode";
   }
 
   if (config.fixed_ratio !== "7:16") {
-    errors.fixed_ratio = "网页基础卡片固定比例必须为 7:16";
+    errors.fixed_ratio = "webpage.validation.fixedRatio";
   }
 
   if (config.max_height_ratio !== 20) {
-    errors.max_height_ratio = "网页基础卡片最大高度阈值必须为 20";
+    errors.max_height_ratio = "webpage.validation.maxHeightRatio";
   }
 
   return {

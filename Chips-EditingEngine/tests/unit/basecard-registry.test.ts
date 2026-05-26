@@ -55,11 +55,20 @@ afterEach(async () => {
 describe('basecard registry', () => {
   it('creates richtext starter content through the descriptor for new base cards', () => {
     expect(createInitialBasecardConfig('RichTextCard', 'base-1')).toMatchObject({
-      card_type: 'RichTextCard',
+      card_type: 'base.richtext',
       content_format: 'markdown',
       content_source: 'inline',
-      content_text: '123456789',
+      content_text: '# 富文本\n\n开始写点什么。',
       locale: 'zh-CN',
+      markdown_capabilities: {
+        commonmark: true,
+        gfm: true,
+        math: true,
+        highlight: true,
+        underline: true,
+        superscript: true,
+        subscript: true,
+      },
     });
   });
 

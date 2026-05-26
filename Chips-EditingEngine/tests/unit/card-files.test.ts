@@ -231,12 +231,21 @@ describe('unpacked .card files', () => {
       id: 'intro',
       type: 'base.richtext',
       data: {
-        card_type: 'RichTextCard',
+        card_type: 'base.richtext',
         content_format: 'markdown',
         content_source: 'inline',
         content_text: '# Intro\n\nHello Chips.',
         locale: 'zh-CN',
         theme: '',
+        markdown_capabilities: {
+          commonmark: true,
+          gfm: true,
+          math: true,
+          highlight: true,
+          underline: true,
+          superscript: true,
+          subscript: true,
+        },
       },
     });
 
@@ -252,7 +261,7 @@ describe('unpacked .card files', () => {
     expect(persistedStructure.structure).toHaveLength(1);
     expect(persistedStructure.structure[0]?.type).toBe('base.richtext');
     expect(persistedIntro).toMatchObject({
-      card_type: 'RichTextCard',
+      card_type: 'base.richtext',
       content_format: 'markdown',
       content_source: 'inline',
       content_text: '已更新',
@@ -429,7 +438,7 @@ describe('unpacked .card files', () => {
     expect(latestCard?.persistedRevision).toBe(2);
     expect(latestCard?.isPersisting).toBe(false);
     expect(persistedIntro).toMatchObject({
-      card_type: 'RichTextCard',
+      card_type: 'base.richtext',
       content_format: 'markdown',
       content_source: 'inline',
       content_text: 'second',
@@ -465,7 +474,7 @@ describe('unpacked .card files', () => {
 
     const persistedIntro = yaml.parse(files.get('/workspace/demo.card/content/intro.yaml') ?? '');
     expect(persistedIntro).toMatchObject({
-      card_type: 'RichTextCard',
+      card_type: 'base.richtext',
       content_format: 'markdown',
       content_source: 'inline',
       content_text: '只更新内存中的草稿',

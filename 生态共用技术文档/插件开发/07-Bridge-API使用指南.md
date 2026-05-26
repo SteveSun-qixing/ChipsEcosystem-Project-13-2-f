@@ -1,60 +1,252 @@
-# Bridge API使用指南
+# Bridge API 使用指南
 
-## 概述
+## 文档定位
 
-Bridge API是插件访问系统能力的标准接口。本文介绍如何在插件开发中高效使用Bridge API。
+本文说明页面侧 `window.chips.*` 的低层使用方式。应用插件业务代码应优先使用 `chips-sdk` 和组件库环境 Provider；只有在 SDK 尚未封装、需要调试低层 route、或编写共享运行时适配层时，才直接使用裸 Bridge。
 
-## 初始化
+正式调用顺序：
 
-在使用Bridge API前，需要确认API已正确加载。Bridge API通过window.chips全局对象暴露。
+1. React 官方应用优先使用 `@chips/component-library` 的 `ChipsEnvironmentProvider`、`useChipsClient`、`useChipsTheme`、`useChipsI18n`、`useChipsSurface` 等入口。
+2. 非 React 或领域服务封装优先使用 `chips-sdk` 的 `createClient()` 与 domain API。
+3. 需要低层访问时使用 `window.chips` 的 convenience 子域。
+4. convenience 子域未覆盖的正式 Host 服务动作，使用 `window.chips.invoke("namespace.action", payload)`。
 
-检查API是否可用的代码应该在插件初始化时执行。如果API不可用，应该显示友好的错误提示。
+SDK、Bridge 与 Host 的边界是稳定架构红线：SDK 只做类型化封装和调用辅助，不承载 Host runtime 主实现；Host 是唯一运行时承载。
 
-## 调用方式
+## 1. 初始化与可用性
 
-Bridge API使用统一的调用模式。invoke方法用于发起请求，语法是 `window.chips.invoke(action, payload?)`。
+Host 托管的插件页面由 preload 注入 `window.chips`。页面不得直接访问 Node.js、Electron 或 Host 内部包。
 
-action 使用 `namespace.action` 形式指定目标服务动作，例如 `card.render`、`box.openView`、`file.read`、`theme.apply`。payload 参数是请求数据对象。
+```ts
+const bridge = window.chips;
 
-invoke方法返回Promise对象。建议使用async/await语法处理异步调用，使代码更简洁易读。
+if (!bridge) {
+  throw new Error("当前页面未运行在薯片 Host Bridge 环境中");
+}
+```
 
-## 文件操作
+应用代码通常不需要手写上述检查，而是创建 SDK client：
 
-file子域提供文件系统操作能力。
+```ts
+import { createClient } from "chips-sdk";
 
-读取文件使用file.read方法，传入文件路径。返回文件内容字符串或Buffer。文件不存在时抛出错误。
+const client = createClient();
+```
 
-写入文件使用file.write方法，传入文件路径和内容。文件不存在时会创建文件。写入成功返回操作结果。
+`createClient()` 会在插件环境中自动使用 `window.chips`；在普通 `node/browser` 环境且没有自定义 `transport` 时，实际调用会抛出 `BRIDGE_UNAVAILABLE` 标准错误。
 
-文件操作支持配置选项。encoding指定字符编码，默认utf-8。flag指定打开模式，如w写入、a追加等。
+## 2. 核心调用入口
 
-## 事件监听
+低层 route 调用入口是：
 
-on方法用于订阅系统事件。
+```ts
+window.chips.invoke(action, payload?)
+```
 
-事件类型使用命名空间格式，如card.created表示卡片创建事件。回调函数接收事件对象作为参数。
+`action` 使用 `namespace.action` 形式，例如：
 
-事件监听应该在插件初始化时设置，并在插件销毁时取消。`window.chips.on(event, handler)` 返回取消订阅函数。`window.chips.once(event, handler)` 也返回取消订阅函数，回调最多触发一次，触发前调用取消函数后不得再触发。
+- `file.read`
+- `resource.open`
+- `card.render`
+- `box.openView`
+- `surface.open`
+- `command.register`
+- `platform.getCapabilities`
 
-页面向 Host 发出事件时使用 `window.chips.emit(event, data?)`。该方法返回 `Promise<void>`；如果 Host 或传输层拒绝事件，Promise 会 reject 标准错误对象。
+需要注意两层返回结构：
 
-## 错误处理
+- `window.chips.invoke("namespace.action", payload)` 返回 Host route 的原始响应 envelope。
+- `chips-sdk` domain API 和 `window.chips.surface/dialog/command/...` convenience 子域会把常用 envelope 解包成页面更容易消费的值。
 
-所有API调用都可能抛出错误。错误对象采用统一标准格式，包含以下字段：
+示例：低层读取文本文件时消费 `file.read` 的 route envelope。
 
-```typescript
+```ts
+const result = await window.chips.invoke<{ content: string }>("file.read", {
+  path: "/tmp/demo.card/metadata.yaml",
+  options: { encoding: "utf-8" },
+});
+
+const metadataYaml = result.content;
+```
+
+业务代码中更推荐使用 SDK：
+
+```ts
+const metadataYaml = await client.file.read("/tmp/demo.card/metadata.yaml", {
+  encoding: "utf-8",
+});
+```
+
+## 3. 当前正式子域
+
+当前 `window.chips` 正式暴露以下 convenience 子域：
+
+| 子域 | 用途 |
+|---|---|
+| `window` | 桌面窗口兼容别名 |
+| `dialog` | 文件选择、保存、消息、确认 |
+| `plugin` | 插件查询、启停、安装、快捷方式、应用启动 |
+| `clipboard` | 剪贴板读写 |
+| `shell` | 桌面 Shell 兼容别名 |
+| `surface` | 跨平台界面容器主语义 |
+| `command` | 命令注册、查询、状态和调度 |
+| `transfer` | 打开路径、外链、定位文件、分享 |
+| `association` | 文件关联、URL 打开入口治理 |
+| `platform` | 平台信息、能力快照、屏幕、电源、preload 辅助 |
+| `notification` | 系统通知 |
+| `tray` | 托盘 |
+| `shortcut` | 系统全局快捷键 |
+| `ipc` | 本地高性能 IPC 通道 |
+
+`file / resource / card / box / zip / module` 等服务域不是 `window.chips.file.*` 这类直接子域。它们应通过 `chips-sdk` domain API，或通过 `window.chips.invoke("namespace.action", payload)` 访问。
+
+## 4. Surface 与启动上下文
+
+`surface` 是应用插件界面容器的主语义。Desktop 当前映射为窗口，但应用代码不得依赖 `BrowserWindow` 或 Electron 私有对象。
+
+```ts
+const opened = await window.chips.surface.open({
+  kind: "window",
+  target: {
+    type: "plugin",
+    pluginId: "com.chips.example",
+    launchParams: { source: "command" },
+  },
+  presentation: {
+    title: "示例应用",
+    width: 1200,
+    height: 800,
+    resizable: true,
+  },
+});
+```
+
+等价低层调用：
+
+```ts
+const result = await window.chips.invoke<{ surface: unknown }>("surface.open", {
+  request: {
+    target: { type: "plugin", pluginId: "com.chips.example" },
+  },
+});
+```
+
+权限口径：
+
+- `surface.*` route 的服务级权限是 `window.control`。
+- `surface.open` 当 `target.type === "plugin"` 时，Host 额外要求 `plugin.manage`。
+
+应用启动后通过 preload 辅助入口读取上下文：
+
+```ts
+const launchContext = window.chips.platform.getLaunchContext?.();
+```
+
+当前正式字段：
+
+```ts
+{
+  pluginId?: string;
+  sessionId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  kind?: "window" | "tab" | "route" | "modal" | "sheet" | "fullscreen";
+  presentation?: SurfacePresentation;
+  surfaceContext?: {
+    surfaceId?: string;
+    sceneId: string;
+    pluginId?: string;
+    sessionId?: string;
+    kind: "window" | "tab" | "route" | "modal" | "sheet" | "fullscreen";
+    presentation: SurfacePresentation;
+    launchParams?: Record<string, unknown>;
+    documentContext?: {
+      documentId: string;
+      title?: string;
+      url?: string;
+    };
+    commandContext?: {
+      commandId: string;
+      source?: string;
+      payload?: Record<string, unknown>;
+    };
+  };
+  launchParams: Record<string, unknown>;
+}
+```
+
+`platform.getLaunchContext()` 和 `platform.getPathForFile(file)` 是 preload 暴露的页面辅助入口，不是 Host route manifest 中的 `platform.*` route。SDK 的 `client.platform.getLaunchContext()` 与 `client.platform.getPathForFile(file)` 会复用这两个辅助入口。
+
+## 5. Command 子域
+
+菜单、工具栏、快捷键、命令面板和上下文菜单必须共用 Host command registry。
+
+```ts
+await window.chips.command.register({
+  commandId: "com.chips.example.open",
+  titleKey: "example.commands.open.title",
+  descriptionKey: "example.commands.open.description",
+  ariaLabelKey: "example.commands.open.ariaLabel",
+  icon: { name: "folder_open", style: "rounded" },
+  scope: { kind: "app", appId: "com.chips.example" },
+  permission: ["file.read"],
+  handlerId: "open",
+  menuPlacement: [{ menuId: "file", groupId: "open", order: 10 }],
+  toolbarPlacement: [{ toolbarId: "main", groupId: "primary", order: 10 }],
+});
+```
+
+强制规则：
+
+- 文案只能使用 `titleKey / descriptionKey / ariaLabelKey`，不得写 `title / description / ariaLabel / label` 原始文本。
+- `icon` 是运行时 `IconDescriptor`，不等同于 `manifest.ui.launcher.icon`。
+- `handlerId` 是插件侧处理器标识，业务函数不得通过 Bridge 传给 Host。
+- 普通应用默认使用 `app` scope；注册 `global` scope 需要 `command.manage`。
+- `shortcut` 是当前 Host 托管 surface 内的命令快捷键，不等同于 `platform.shortcut*` 系统全局快捷键。
+
+Host 校验通过后发出 `command.invoked` 事件，插件侧根据 `handlerId / ownerPluginId / ownerSessionId` 执行业务处理。应用模板推荐通过 SDK `client.command.*` 和组件库 `ChipsCommandProvider` 接入，而不是在业务组件里直接操作 Bridge。
+
+## 6. 事件监听与发送
+
+监听事件：
+
+```ts
+const dispose = window.chips.on("theme.changed", (event) => {
+  console.log(event);
+});
+
+dispose();
+```
+
+规则：
+
+- `on(event, handler)` 返回取消订阅函数。
+- `once(event, handler)` 也返回取消订阅函数，handler 最多触发一次。
+- 事件命名使用点语义，例如 `theme.changed`、`surface.opened`、`command.invoked`。
+- 不使用冒号或短横线事件名。
+
+页面向 Host 发送事件使用：
+
+```ts
+await window.chips.emit("plugin.ready", { ready: true });
+```
+
+当前 Desktop `emit` 是发送型事件入口，不表示业务动作已经被 Host 确认处理。需要请求响应、权限校验结果或业务返回值时，应使用 `invoke()` 或 SDK domain API。
+
+## 7. 标准错误处理
+
+Bridge、SDK 与 Host route 统一使用标准错误对象：
+
+```ts
 interface StandardError {
-  code: string;           // 错误码
-  message: string;        // 错误描述
-  messageKey?: string;    // 多语言文案 key
-  details?: unknown;      // 详细信息
-  retryable?: boolean;    // 是否可重试
-  requestId?: string;     // 请求唯一标识
-  traceId?: string;       // 链路追踪标识
+  code: string;
+  message: string;
+  messageKey?: string;
+  details?: unknown;
+  retryable?: boolean;
+  requestId?: string;
+  traceId?: string;
   permission?: {
-    domain?: string;
-    action?: string;
-    resource?: string;
     required: string[];
     granted: string[];
     messageKey?: string;
@@ -65,88 +257,65 @@ interface StandardError {
 }
 ```
 
-权限不足时，调用方应优先读取 `permission.required / permission.granted` 判断缺失权限，并使用 `messageKey` 交给多语言系统展示文案；不要通过解析 `message` 判断权限。
+权限不足时，调用方应读取 `permission.required / permission.granted / messageKey`，不要解析 `message` 文本。
 
-### 错误码体系
-
-错误码按层级分类：
-
-**Bridge 层错误 (BRIDGE_*)**：
-- `BRIDGE_TIMEOUT`：请求超时
-- `BRIDGE_UNAVAILABLE`：Bridge 不可用
-- `BRIDGE_INVALID_PAYLOAD`：载荷格式错误
-
-**Service 层错误 (SERVICE_*)**：
-- `SERVICE_FILE_NOT_FOUND`：文件不存在
-- `SERVICE_FILE_PERMISSION_DENIED`：文件权限被拒绝
-- `SERVICE_THEME_NOT_FOUND`：主题不存在
-- `SERVICE_I18N_KEY_MISSING`：国际化 key 不存在
-- `SERVICE_PLUGIN_INVALID`：插件无效
-- `SERVICE_PERMISSION_DENIED`：权限不足
-
-**Runtime 层错误 (RUNTIME_*)**：
-- `RUNTIME_RETRY_EXHAUSTED`：重试次数耗尽
-- `RUNTIME_CIRCUIT_OPEN`：熔断器开启
-- `RUNTIME_ROUTE_TIMEOUT`：路由超时
-
-### 错误处理建议
-
-建议使用 try-catch 捕获错误，并向用户提供友好的错误提示：
-
-```typescript
+```ts
 try {
-  const result = await window.chips.invoke('theme.apply', { id: 'chips-official.default-theme' });
+  await window.chips.invoke("file.read", { path: "/private/demo.card" });
 } catch (error) {
-  if (error.retryable) {
-    // 显示可重试提示
-    console.log('操作失败，是否重试？');
-  } else {
-    // 显示永久错误提示
-    console.error(error.message);
+  const standard = error as StandardError;
+  if (standard.code === "PERMISSION_DENIED") {
+    console.warn(standard.permission?.required);
   }
-  // 记录错误日志
-  window.chips.invoke('log.write', { level: 'error', error });
 }
 ```
 
-## 性能优化
+常见错误：
 
-批量操作减少API调用次数。使用Promise.all并行执行独立的请求。
+- `BRIDGE_UNAVAILABLE`：当前环境没有可用 Bridge。
+- `BRIDGE_SCOPE_UNAVAILABLE`：当前 Bridge 不支持 scoped 调用。
+- `BRIDGE_TIMEOUT`：SDK 侧调用超时。
+- `ROUTE_TIMEOUT`：Host route 超时。
+- `PERMISSION_DENIED`：调用方缺少所需权限。
+- `RUNTIME_CIRCUIT_OPEN`：Host route 熔断。
 
-缓存频繁访问的数据。使用storage API缓存请求结果，避免重复网络请求。
+SDK 会对 `retryable === true` 的错误按配置重试；权限错误不会自动重试。
 
-合理设置请求超时。使用timeout选项防止请求无限等待。
+## 8. 权限与 Manifest
 
-## 安全考虑
+插件必须在 `manifest.yaml` 中声明实际使用的权限。权限由 Host route manifest 和 Host 服务实现共同校验。
 
-永远不要将敏感信息存储在客户端。使用系统提供的凭证管理服务。
+示例：
 
-验证用户输入后再发送给API。防止注入攻击。
+```yaml
+permissions:
+  - file.read
+  - theme.read
+  - i18n.read
+  - command.read
+  - command.write
+  - command.invoke
+  - window.control
+```
 
-遵循最小权限原则。只请求实际需要的权限。
+注意：
 
-## 调试技巧
+- `surface.open(target=plugin)` 除 `window.control` 外还需要 `plugin.manage`。
+- 命令注册、状态更新和注销需要 `command.write`；命令调用需要 `command.invoke`。
+- 跨 owner 管理 command 或注册全局 command 需要 `command.manage`。
+- `platform.getLaunchContext()` 和 `platform.getPathForFile()` 是 preload 辅助入口，不通过 route manifest 追加权限；但后续读取文件、打开资源或执行平台动作仍按对应 route 权限校验。
 
-使用开发者工具查看API调用日志。日志包含请求参数和响应数据。
+## 9. 性能与安全建议
 
-使用断点调试跟踪API调用流程。观察数据在各个环节的变化。
+- 独立 Host 调用可以用 `Promise.all` 并行，但不要把有顺序依赖的写操作并行化。
+- 缓存应放在应用自身状态、Host 配置服务或明确的业务存储里，不要假设存在通用 `storage API`。
+- 不要在页面侧保存敏感凭证；需要凭证治理时使用 Host 凭证服务。
+- 所有用户输入在发送到 Bridge 前先做业务校验。
+- 组件卸载、surface 关闭或插件停用时，应取消事件订阅、释放资源 URL、停止定时器并清理本地 handler。
 
-模拟API响应进行单元测试。隔离依赖加速测试。
+## 10. 调试与测试
 
-## TypeScript支持
-
-TypeScript项目可以使用类型定义文件获得代码补全。类型定义文件chips.d.ts包含所有API的类型声明。
-
-类型定义包括ChipsBridge接口定义所有可用方法，各服务接口定义具体方法，请求和响应类型定义。
-
-建议在开发时启用严格模式 catches更多潜在问题。
-
-## 最佳实践
-
-封装常用的API调用为工具函数。减少重复代码，提高可维护性。
-
-使用配置对象传递参数而非位置参数。提高代码可读性。
-
-记录API调用的日志。便于问题排查和性能分析。
-
-优雅处理边界情况如网络中断、超时等。提高插件健壮性。
+- 应用单元测试优先使用 `chips-sdk/testing` 的 mock Host 与 mock client。
+- 组件库 Provider 场景可使用组件库测试环境注入 mock client。
+- 需要验证真实 route 时，运行目标项目的正式 `npm test`、`npm run validate`、`chipsdev run`、`chipsdev package` 等脚本。
+- TypeScript 项目优先从 `chips-sdk` 消费公开类型；生态内部需要低层 Bridge 类型时，以 Host `packages/bridge-api` 当前 `ChipsBridge` 形状为准。

@@ -37,9 +37,44 @@ npm install
 
 ## 初始化
 
-使用SDK前需要初始化。创建客户端实例，传入配置选项如服务器地址、认证信息等。初始化会建立与服务的连接。
+使用 SDK 前创建客户端实例。SDK 当前不通过服务器地址或认证信息建立连接；它只选择一个可用 transport：
 
-客户端实例是 SDK 的核心入口，通过实例调用各种功能方法。
+1. 显式传入 `transport` 时，SDK 使用该自定义 transport；
+2. 未传入 `transport` 且运行在 Host 插件环境时，SDK 自动使用 `window.chips` Bridge；
+3. 普通 `node/browser` 环境没有 `transport` 且没有 `window.chips` 时，实际调用会抛出 `BRIDGE_UNAVAILABLE` 标准错误。
+
+客户端实例是 SDK 的核心入口，通过实例调用各种 domain API：
+
+```ts
+import { createClient } from "chips-sdk";
+
+const client = createClient({
+  environment: "auto",
+  timeoutMs: 5_000,
+  retries: 1,
+});
+```
+
+当前正式配置项：
+
+```ts
+interface ClientConfig {
+  environment?: "auto" | "plugin" | "browser" | "node";
+  transport?: (action: string, payload: unknown) => Promise<unknown>;
+  bridgeScope?: { token: string };
+  timeoutMs?: number;
+  retries?: 0 | 1 | 2 | 3;
+  logger?: SdkLogger;
+}
+```
+
+说明：
+
+- `bridgeScope` 只用于模块插件等受控嵌入式运行时访问 scoped Bridge；普通应用插件默认不使用。
+- SDK 会解包常见 Host route envelope，例如 `surface.open -> surface`、`platform.getInfo -> info`、`file.stat -> meta`。
+- SDK 会归一 Host / Bridge 标准错误，并保留 `messageKey / requestId / traceId / permission`。
+- `timeoutMs` 是 SDK 侧调用超时；Host route 自身仍有 route manifest 中的正式超时。
+- `retries` 只对 `retryable === true` 的错误生效；权限错误不会自动重试。
 
 React 应用应把 SDK client 注入组件库环境 Provider，而不是在每个页面里重复手写 Host 接线：
 
@@ -262,6 +297,15 @@ SDK 的 `client.platform` 对 Host `platform.*` 系统能力提供正式封装�
 当前封装包括：
 
 ```typescript
+client.platform.getInfo(): Promise<PlatformInfo>
+client.platform.getCapabilities(): Promise<PlatformCapabilitySnapshot>
+client.platform.getScreenInfo(): Promise<PlatformScreenInfo>
+client.platform.listScreens(): Promise<PlatformScreenInfo[]>
+client.platform.powerGetState(): Promise<PlatformPowerState>
+client.platform.powerSetPreventSleep(prevent: boolean): Promise<boolean>
+client.platform.openExternal(url: string): Promise<void>
+client.platform.renderHtmlToPdf(request: PlatformRenderHtmlToPdfRequest): Promise<PlatformRenderHtmlToPdfResult>
+client.platform.renderHtmlToImage(request: PlatformRenderHtmlToImageRequest): Promise<PlatformRenderHtmlToImageResult>
 client.platform.clipboardRead(format?: "text" | "image" | "files"): Promise<PlatformClipboardPayload>
 client.platform.clipboardWrite(data: PlatformClipboardPayload, format?: "text" | "image" | "files"): Promise<void>
 client.platform.openFile(options?: PlatformDialogFileOptions): Promise<string[] | null>
@@ -285,14 +329,20 @@ client.platform.ipcSend(channelId: string, payload: string, options?: { encoding
 client.platform.ipcReceive(channelId: string, options?: { timeoutMs?: number }): Promise<PlatformIpcMessage>
 client.platform.ipcCloseChannel(channelId: string): Promise<void>
 client.platform.ipcListChannels(): Promise<PlatformIpcChannelInfo[]>
+client.platform.getPathForFile(file: unknown): string
+client.platform.getLaunchContext(): PlatformLaunchContext
 ```
 
 使用边界：
 
+- `getInfo / getCapabilities / getScreenInfo / listScreens / power* / renderHtml*` 通过 Host `platform.*` route 返回 route envelope，SDK 对调用方解包为直接业务值；
+- `getLaunchContext()` 与 `getPathForFile(file)` 是 preload 页面辅助入口，不是 Host route manifest 中的 `platform.*` route；
+- `renderHtmlToPdf` 与 `renderHtmlToImage` 需要 `platform.read / file.read / file.write`；
+- `openExternal`、shell 和 transfer 类能力应在业务层做好来源校验和用户确认；
 - `notificationShow(options.icon)`、`traySet(options.icon)` 使用操作系统壳层图标路径或宿主原生可解析资源，不接收运行时 `IconDescriptor`；
 - `shortcutRegister` 默认触发 `platform.shortcut.triggered` 事件，也可以传入自定义 `eventName`；
 - IPC payload 使用字符串传输，`encoding` 只允许 `utf8 | base64`；
-- shell/openExternal 类能力应在业务层做好来源校验和用户确认。
+- `platform.shortcut*` 是系统全局快捷键链路，应用菜单、工具栏和 surface 内快捷键应优先使用 `client.command.*`。
 
 ## 资源打开路由
 
@@ -446,6 +496,8 @@ const targetPath = launchContext.launchParams.targetPath;
 
 正式建议：
 
+- `getLaunchContext()` 当前会归一 `pluginId / sessionId / sceneId / surfaceId / kind / presentation / surfaceContext / launchParams`；
+- `surfaceContext` 是 App / Scene / surface 运行模型的正式上下文，包含 `sceneId / surfaceId / pluginId / sessionId / kind / presentation / launchParams / documentContext / commandContext`；
 - 优先读取 `launchParams.resourceOpen`；
 - 在文件查看器类场景下，可继续把 `targetPath` 作为兼容回退；
 - 不要要求上游应用显式传递自己的插件 ID。
@@ -1257,14 +1309,6 @@ client.platform.getPathForFile(file: unknown): string
 - 该能力用于把拖拽或文件选择得到的 `File` 对象解析为本地路径；
 - Electron Host 环境会直接复用 `window.chips.platform.getPathForFile`；
 - 非支持环境返回空字符串，调用方应把空字符串视为“当前环境不支持该能力”。
-
-## 认证授权
-
-需要认证的接口需要处理授权。
-
-登录接口获取访问令牌。传入用户名和密码，返回访问令牌和刷新令牌。
-
-在后续请求中携带访问令牌。通常通过配置客户端实例的auth选项自动处理令牌刷新。
 
 ## 错误处理
 

@@ -151,7 +151,7 @@ L7 面向业务代码的正式调用顺序：
 - `surface.open(target=plugin)` 已走正式插件会话主链路
 - `plugin.launch` 保留为 app 插件兼容入口，并复用同一底层实现
 - `window.open` 继续存在，但它是桌面窗口别名，不再承担新的跨平台插件生命周期语义
-- `platform.getLaunchContext()` 会返回 `surfaceContext`，应用通过它获得 App / Scene 运行上下文
+- `platform.getLaunchContext()` 会返回 `pluginId / sessionId / sceneId / surfaceId / kind / presentation / surfaceContext / launchParams`；应用通过 `surfaceContext` 获得 App / Scene / surface 运行上下文，不解析命令行、Electron 私有对象或 Host 内部窗口状态
 
 ## 6. 统一事件语义
 

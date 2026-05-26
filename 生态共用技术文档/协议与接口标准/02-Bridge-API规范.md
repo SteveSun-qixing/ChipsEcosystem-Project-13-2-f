@@ -47,7 +47,7 @@ Bridge 核心入口冻结为：
 
 - `on` 返回取消订阅函数，调用后不得再触发该 handler；
 - `once` 也返回取消订阅函数，handler 最多触发一次，触发前取消后不得再触发；
-- `emit / emitScoped` 必须返回 `Promise<void>`，传输层或 Host 拒绝事件时必须 reject 标准错误对象；
+- `emit / emitScoped` 必须返回 `Promise<void>`；当前 Desktop 实现是发送型事件入口，不表达业务动作已经被 Host 确认处理；传输层可报告的错误必须归一为标准错误对象；
 - Bridge 不得吞掉上游错误 envelope，`messageKey / requestId / traceId / permission` 必须原样透传给 SDK 或页面侧调用方。
 
 ### 2.2 当前正式子域
@@ -89,7 +89,14 @@ Bridge 核心入口冻结为：
 interface SurfaceOpenRequest {
   kind?: "window" | "tab" | "route" | "modal" | "sheet" | "fullscreen";
   target:
-    | { type: "plugin"; pluginId: string; url?: string; launchParams?: Record<string, unknown> }
+    | {
+        type: "plugin";
+        pluginId: string;
+        url?: string;
+        sessionId?: string;
+        permissions?: string[];
+        launchParams?: Record<string, unknown>;
+      }
     | { type: "url"; url: string }
     | { type: "document"; documentId: string; title?: string; url?: string };
   presentation?: {
@@ -100,6 +107,7 @@ interface SurfaceOpenRequest {
     alwaysOnTop?: boolean;
     chrome?: WindowChromeOptions;
   };
+  context?: SurfaceContext;
 }
 ```
 
@@ -230,17 +238,28 @@ interface CommandDefinition {
 - `listScreens()`
 - `powerGetState()`
 - `powerSetPreventSleep(prevent)`
+- `openExternal(url)`
 - `renderHtmlToPdf(...)`
 - `renderHtmlToImage(...)`
 
-Bridge 返回结构说明：
+返回结构说明：
 
-- `platform.getInfo()` 直接返回 `{ hostKind, platform, arch, release }`
-- `platform.getCapabilities()` 直接返回结构化能力快照
-- `platform.getScreenInfo()` 返回单个 `screen`
-- `platform.listScreens()` 返回 `screens[]`
+- `window.chips.platform.getInfo()` convenience 调用返回解包后的 `{ hostKind, platform, arch, release }`；低层 `window.chips.invoke("platform.getInfo", {})` 返回 `{ info }` route envelope。
+- `window.chips.platform.getCapabilities()` convenience 调用返回结构化能力快照；低层 `invoke("platform.getCapabilities", {})` 返回 `{ capabilities }`。
+- `window.chips.platform.getScreenInfo()` convenience 调用返回单个 screen；低层 `invoke("platform.getScreenInfo", {})` 返回 `{ screen }`。
+- `window.chips.platform.listScreens()` convenience 调用返回 `screens[]`；低层 `invoke("platform.listScreens", {})` 返回 `{ screens }`。
+- `window.chips.platform.openExternal(url)` convenience 调用返回 `void`；低层 `invoke("platform.openExternal", { url })` 返回 `{ ack: true }`。
 
 `getCapabilities()` 不再返回旧的字符串数组。
+
+### 6.1 Preload 页面辅助入口
+
+Desktop preload 还会在 `window.chips.platform` 下暴露两个页面辅助入口：
+
+- `getLaunchContext()`：读取当前插件页面启动上下文；
+- `getPathForFile(file)`：在支持环境中把拖拽或文件选择得到的 `File` 对象解析为本地路径。
+
+这两个入口由 preload 提供，不是 Host route manifest 中的 `platform.*` route。SDK 的 `client.platform.getLaunchContext()` 和 `client.platform.getPathForFile(file)` 会复用这两个辅助入口。
 
 ## 7. Legacy 子域说明
 
@@ -300,11 +319,48 @@ window.chips.platform.getLaunchContext()
 {
   pluginId?: string;
   sessionId?: string;
+  sceneId?: string;
+  surfaceId?: string;
+  kind?: "window" | "tab" | "route" | "modal" | "sheet" | "fullscreen";
+  presentation?: {
+    title?: string;
+    width?: number;
+    height?: number;
+    resizable?: boolean;
+    alwaysOnTop?: boolean;
+    chrome?: WindowChromeOptions;
+  };
+  surfaceContext?: {
+    surfaceId?: string;
+    sceneId: string;
+    pluginId?: string;
+    sessionId?: string;
+    kind: "window" | "tab" | "route" | "modal" | "sheet" | "fullscreen";
+    presentation: {
+      title?: string;
+      width?: number;
+      height?: number;
+      resizable?: boolean;
+      alwaysOnTop?: boolean;
+      chrome?: WindowChromeOptions;
+    };
+    launchParams?: Record<string, unknown>;
+    documentContext?: {
+      documentId: string;
+      title?: string;
+      url?: string;
+    };
+    commandContext?: {
+      commandId: string;
+      source?: string;
+      payload?: Record<string, unknown>;
+    };
+  };
   launchParams: Record<string, unknown>;
 }
 ```
 
-应用插件必须通过该入口读取真实启动来源，不得解析命令行或 Electron 私有对象。
+应用插件必须通过该入口读取真实启动来源，不得解析命令行、Electron 私有对象或 Host 内部窗口状态。`sceneId / surfaceId / kind / presentation / surfaceContext` 是 App / Scene / surface 运行模型的正式上下文；`launchParams` 承载资源打开、命令打开、文件关联或开发运行等业务启动参数。
 
 ## 9. 事件规范
 

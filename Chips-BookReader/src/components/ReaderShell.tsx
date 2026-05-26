@@ -118,6 +118,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isChromeVisible, setIsChromeVisible] = useState(false);
   const [activePanel, setActivePanel] = useState<OverlayPanel | null>(null);
+  const [panelRestoreElement, setPanelRestoreElement] = useState<HTMLElement | null>(null);
   const [pendingBoundary, setPendingBoundary] = useState<ReadingBoundary | null>(null);
   const [pendingBookmark, setPendingBookmark] = useState<Bookmark | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -417,6 +418,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
 
   useEffect(() => {
     setActivePanel(null);
+    setPanelRestoreElement(null);
     setIsChromeVisible(false);
     setPendingBoundary(null);
     setPendingBookmark(null);
@@ -546,6 +548,9 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
   }, [isSearching, searchProgress, searchQuery, searchResults.length, t]);
 
   function openPanel(panel: OverlayPanel): void {
+    if (activePanel !== panel) {
+      setPanelRestoreElement(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    }
     setActivePanel((current) => (current === panel ? null : panel));
     setIsChromeVisible(true);
   }
@@ -701,6 +706,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
           <ContentsPanel
             book={book}
             currentSectionIndex={currentSectionIndex}
+            restoreFocusElement={panelRestoreElement}
             onSelectSection={(sectionIndex, fragment) => {
               setActivePanel(null);
               onSelectSection(sectionIndex, fragment);
@@ -716,6 +722,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
             onOpenFile={onOpenFile}
             onOpenUrl={onOpenUrl}
             onInvokeCommand={(commandId, payload) => invokeReaderCommand(commandId, "toolbar", payload)}
+            restoreFocusElement={panelRestoreElement}
             onClose={() => setActivePanel(null)}
             t={t}
           />
@@ -726,6 +733,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
             preferences={preferences}
             onUpdatePreferences={onUpdatePreferences}
             onInvokeCommand={(commandId) => invokeReaderCommand(commandId, "toolbar")}
+            restoreFocusElement={panelRestoreElement}
             onClose={() => setActivePanel(null)}
             t={t}
           />
@@ -738,6 +746,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
             isSearching={isSearching}
             statusLabel={searchStatusLabel}
             activeResultKey={selectedSearchResult ? createSearchResultKey(selectedSearchResult) : null}
+            restoreFocusElement={panelRestoreElement}
             onQueryChange={setSearchQuery}
             onSelectResult={handleSearchResult}
             onClose={() => setActivePanel(null)}
@@ -749,6 +758,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
           <BookmarkPanel
             bookmarks={bookmarks}
             activeBookmarkId={currentBookmark?.id ?? null}
+            restoreFocusElement={panelRestoreElement}
             onGoToBookmark={handleOpenBookmark}
             onRemoveBookmark={removeBookmark}
             onClose={() => setActivePanel(null)}

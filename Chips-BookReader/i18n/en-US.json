@@ -83,13 +83,17 @@
       "results": "{count} result(s) found",
       "noResults": "No matches found",
       "searching": "Searching section {current} / {total}...",
-      "matchesInSection": "{count} match(es)"
+      "matchesInSection": "{count} match(es)",
+      "resultLabel": "Search result: {section}, {excerpt}"
     },
     "bookmarks": {
       "empty": "No bookmarks yet",
       "count": "{count} bookmark(s)",
       "pageLabel": "Page {page}",
-      "scrollLabel": "At {percentage}%"
+      "scrollLabel": "At {percentage}%",
+      "untitledSection": "Untitled Section",
+      "openLabel": "Open bookmark: {section}, {position}, created at {createdAt}",
+      "removeLabel": "Remove bookmark: {section}, {position}"
     },
     "feedback": {
       "bookmarkAdded": "Bookmark added",

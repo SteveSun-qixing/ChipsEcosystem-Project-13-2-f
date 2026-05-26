@@ -83,13 +83,17 @@
       "results": "找到 {count} 个结果",
       "noResults": "没有找到匹配的内容",
       "searching": "正在搜索 第 {current} / {total} 章...",
-      "matchesInSection": "{count} 个匹配"
+      "matchesInSection": "{count} 个匹配",
+      "resultLabel": "搜索结果：{section}，{excerpt}"
     },
     "bookmarks": {
       "empty": "还没有书签",
       "count": "共 {count} 个书签",
       "pageLabel": "第 {page} 页",
-      "scrollLabel": "{percentage}% 处"
+      "scrollLabel": "{percentage}% 处",
+      "untitledSection": "未命名章节",
+      "openLabel": "打开书签：{section}，{position}，创建于 {createdAt}",
+      "removeLabel": "删除书签：{section}，{position}"
     },
     "feedback": {
       "bookmarkAdded": "已添加书签",

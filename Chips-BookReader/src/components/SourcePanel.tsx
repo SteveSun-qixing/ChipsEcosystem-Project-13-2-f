@@ -8,12 +8,13 @@ export interface SourcePanelProps {
   onOpenFile: () => void | Promise<void>;
   onOpenUrl: (url: string) => void | Promise<void>;
   onInvokeCommand?: (commandId: BookReaderCommandId, payload?: Record<string, unknown>) => void | Promise<void>;
+  restoreFocusElement?: HTMLElement | null;
   onClose: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export function SourcePanel(props: SourcePanelProps): React.ReactElement {
-  const { initialUrl, onOpenFile, onOpenUrl, onInvokeCommand, onClose, t } = props;
+  const { initialUrl, onOpenFile, onOpenUrl, onInvokeCommand, restoreFocusElement, onClose, t } = props;
   const [value, setValue] = useState(initialUrl);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export function SourcePanel(props: SourcePanelProps): React.ReactElement {
       onClose={onClose}
       className="book-reader-panel--source"
       variant="dialog"
+      restoreFocusElement={restoreFocusElement}
       t={t}
     >
       <div className="book-reader-source">

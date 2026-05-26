@@ -6,6 +6,7 @@ import { PanelShell } from "./PanelShell";
 
 export interface PreferencesPanelProps {
   preferences: ReaderPreferences;
+  restoreFocusElement?: HTMLElement | null;
   onUpdatePreferences: (prefs: ReaderPreferences) => void;
   onInvokeCommand?: (commandId: BookReaderCommandId) => void | Promise<void>;
   onClose: () => void;
@@ -13,7 +14,7 @@ export interface PreferencesPanelProps {
 }
 
 export function PreferencesPanel(props: PreferencesPanelProps): React.ReactElement {
-  const { preferences, onUpdatePreferences, onInvokeCommand, onClose, t } = props;
+  const { preferences, restoreFocusElement, onUpdatePreferences, onInvokeCommand, onClose, t } = props;
 
   function updateReadingMode(mode: ReaderPreferences["readingMode"]): void {
     if (onInvokeCommand) {
@@ -34,6 +35,7 @@ export function PreferencesPanel(props: PreferencesPanelProps): React.ReactEleme
       eyebrow={t("book-reader.labels.appName")}
       onClose={onClose}
       className="book-reader-panel--preferences"
+      restoreFocusElement={restoreFocusElement}
       t={t}
     >
       <div className="book-reader-preferences">

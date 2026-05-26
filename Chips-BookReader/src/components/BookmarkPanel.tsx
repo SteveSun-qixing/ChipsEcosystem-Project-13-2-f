@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createKeyboardMap, createRovingTabIndex, getRovingTabIndexProps } from "@chips/a11y";
 import type { Bookmark } from "../hooks/useBookmarks";
 import { PanelShell } from "./PanelShell";
 
 export interface BookmarkPanelProps {
   bookmarks: Bookmark[];
   activeBookmarkId?: string | null;
+  restoreFocusElement?: HTMLElement | null;
   onGoToBookmark: (bookmark: Bookmark) => void;
   onRemoveBookmark: (id: string) => void;
   onClose: () => void;
@@ -23,16 +25,59 @@ function formatBookmarkPosition(bookmark: Bookmark, t: BookmarkPanelProps["t"]):
   });
 }
 
-export function BookmarkPanel(props: BookmarkPanelProps): React.ReactElement {
-  const { bookmarks, activeBookmarkId, onGoToBookmark, onRemoveBookmark, onClose, t } = props;
+const BOOKMARKS_KEYBOARD_MAP = createKeyboardMap({
+  next: "ArrowDown",
+  previous: "ArrowUp",
+  first: "Home",
+  last: "End",
+});
 
-  const groups = bookmarks.reduce<Map<string, Bookmark[]>>((map, bookmark) => {
-    const title = bookmark.sectionTitle || "Untitled";
-    const bucket = map.get(title) ?? [];
-    bucket.push(bookmark);
-    map.set(title, bucket);
-    return map;
-  }, new Map());
+interface BookmarkRow {
+  id: string;
+}
+
+export function BookmarkPanel(props: BookmarkPanelProps): React.ReactElement {
+  const { bookmarks, activeBookmarkId, restoreFocusElement, onGoToBookmark, onRemoveBookmark, onClose, t } = props;
+  const bookmarkRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  const groups = useMemo(() => {
+    return bookmarks.reduce<Map<string, Bookmark[]>>((map, bookmark) => {
+      const title = bookmark.sectionTitle || t("book-reader.bookmarks.untitledSection");
+      const bucket = map.get(title) ?? [];
+      bucket.push(bookmark);
+      map.set(title, bucket);
+      return map;
+    }, new Map());
+  }, [bookmarks, t]);
+  const bookmarkRows = useMemo<BookmarkRow[]>(() => {
+    return Array.from(groups.values()).flatMap((sectionBookmarks) =>
+      sectionBookmarks
+        .slice()
+        .sort((left, right) => right.createdAt - left.createdAt)
+        .map((bookmark) => ({
+          id: bookmark.id,
+        })),
+    );
+  }, [groups]);
+  const [activeRovingId, setActiveRovingId] = useState<string | null>(activeBookmarkId ?? null);
+  const activeBookmarkExists = activeBookmarkId ? bookmarkRows.some((row) => row.id === activeBookmarkId) : false;
+  const roving = useMemo(
+    () => createRovingTabIndex(bookmarkRows, {
+      activeId: activeRovingId ?? activeBookmarkId,
+      selectedId: activeBookmarkExists ? activeBookmarkId : undefined,
+      orientation: "vertical",
+      loop: false,
+    }),
+    [activeBookmarkExists, activeBookmarkId, activeRovingId, bookmarkRows],
+  );
+
+  useEffect(() => {
+    setActiveRovingId(activeBookmarkId ?? bookmarkRows[0]?.id ?? null);
+  }, [activeBookmarkId, bookmarkRows]);
+
+  function focusBookmark(rowId: string): void {
+    bookmarkRefs.current.get(rowId)?.focus();
+  }
 
   return (
     <PanelShell
@@ -40,6 +85,7 @@ export function BookmarkPanel(props: BookmarkPanelProps): React.ReactElement {
       eyebrow={t("book-reader.labels.appName")}
       onClose={onClose}
       className="book-reader-panel--bookmarks"
+      restoreFocusElement={restoreFocusElement}
       t={t}
     >
       <div className="book-reader-bookmarks">
@@ -54,28 +100,71 @@ export function BookmarkPanel(props: BookmarkPanelProps): React.ReactElement {
               {sectionBookmarks
                 .slice()
                 .sort((left, right) => right.createdAt - left.createdAt)
-                .map((bookmark) => (
-                  <article
-                    key={bookmark.id}
-                    className={`book-reader-bookmarks__item${activeBookmarkId === bookmark.id ? " book-reader-bookmarks__item--active" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className="book-reader-bookmarks__open"
-                      onClick={() => onGoToBookmark(bookmark)}
+                .map((bookmark) => {
+                  const rovingItem = roving.items.find((item) => item.id === bookmark.id);
+                  const tabIndexProps = getRovingTabIndexProps(rovingItem);
+                  const positionLabel = formatBookmarkPosition(bookmark, t);
+                  const createdAtLabel = new Date(bookmark.createdAt).toLocaleString();
+
+                  return (
+                    <article
+                      key={bookmark.id}
+                      className={`book-reader-bookmarks__item${activeBookmarkId === bookmark.id ? " book-reader-bookmarks__item--active" : ""}`}
                     >
-                      <strong>{formatBookmarkPosition(bookmark, t)}</strong>
-                      <span>{new Date(bookmark.createdAt).toLocaleString()}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="book-reader-bookmarks__remove"
-                      onClick={() => onRemoveBookmark(bookmark.id)}
-                    >
-                      {t("book-reader.actions.removeBookmark")}
-                    </button>
-                  </article>
-                ))}
+                      <button
+                        ref={(element) => {
+                          if (element) {
+                            bookmarkRefs.current.set(bookmark.id, element);
+                          } else {
+                            bookmarkRefs.current.delete(bookmark.id);
+                          }
+                        }}
+                        type="button"
+                        className="book-reader-bookmarks__open"
+                        tabIndex={tabIndexProps.tabIndex}
+                        data-active={tabIndexProps["data-active"]}
+                        aria-current={activeBookmarkId === bookmark.id ? "true" : undefined}
+                        aria-label={t("book-reader.bookmarks.openLabel", {
+                          section: sectionTitle,
+                          position: positionLabel,
+                          createdAt: createdAtLabel,
+                        })}
+                        onClick={() => onGoToBookmark(bookmark)}
+                        onFocus={() => setActiveRovingId(bookmark.id)}
+                        onKeyDown={(event) => {
+                          const nextIndex = roving.getIndexByKey(event.nativeEvent, {
+                            keyboardMap: BOOKMARKS_KEYBOARD_MAP,
+                            orientation: "vertical",
+                            loop: false,
+                          });
+
+                          if (nextIndex >= 0) {
+                            event.preventDefault();
+                            const nextRow = roving.items[nextIndex]?.item;
+                            if (nextRow) {
+                              setActiveRovingId(nextRow.id);
+                              focusBookmark(nextRow.id);
+                            }
+                          }
+                        }}
+                      >
+                        <strong>{positionLabel}</strong>
+                        <span>{createdAtLabel}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="book-reader-bookmarks__remove"
+                        aria-label={t("book-reader.bookmarks.removeLabel", {
+                          section: sectionTitle,
+                          position: positionLabel,
+                        })}
+                        onClick={() => onRemoveBookmark(bookmark.id)}
+                      >
+                        {t("book-reader.actions.removeBookmark")}
+                      </button>
+                    </article>
+                  );
+                })}
             </div>
           </section>
         ))}

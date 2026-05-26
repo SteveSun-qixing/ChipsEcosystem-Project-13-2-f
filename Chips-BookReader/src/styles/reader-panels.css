@@ -105,6 +105,11 @@
   gap: 8px;
 }
 
+.book-reader-nav__tree {
+  display: grid;
+  gap: 8px;
+}
+
 .book-reader-nav__branch {
   display: grid;
   gap: 8px;

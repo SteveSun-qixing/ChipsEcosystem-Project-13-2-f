@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createKeyboardMap, createRovingTabIndex, getRovingTabIndexProps } from "@chips/a11y";
 import type { SearchResult } from "../engine/search-engine";
 import { PanelShell } from "./PanelShell";
 
@@ -8,6 +9,7 @@ export interface SearchPanelProps {
   isSearching: boolean;
   statusLabel?: string | null;
   activeResultKey?: string | null;
+  restoreFocusElement?: HTMLElement | null;
   onQueryChange: (query: string) => void;
   onSelectResult: (result: SearchResult) => void;
   onClose: () => void;
@@ -18,6 +20,17 @@ function createResultKey(result: SearchResult): string {
   return `${result.sectionIndex}:${result.matchOffset}:${result.matchLength}:${result.query}`;
 }
 
+const SEARCH_RESULTS_KEYBOARD_MAP = createKeyboardMap({
+  next: "ArrowDown",
+  previous: "ArrowUp",
+  first: "Home",
+  last: "End",
+});
+
+interface SearchResultRow {
+  id: string;
+}
+
 export function SearchPanel(props: SearchPanelProps): React.ReactElement {
   const {
     query,
@@ -25,18 +38,48 @@ export function SearchPanel(props: SearchPanelProps): React.ReactElement {
     isSearching,
     statusLabel,
     activeResultKey,
+    restoreFocusElement,
     onQueryChange,
     onSelectResult,
     onClose,
     t,
   } = props;
+  const resultRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  const groups = results.reduce<Map<string, SearchResult[]>>((map, result) => {
-    const bucket = map.get(result.sectionTitle) ?? [];
-    bucket.push(result);
-    map.set(result.sectionTitle, bucket);
-    return map;
-  }, new Map());
+  const groups = useMemo(() => {
+    return results.reduce<Map<string, SearchResult[]>>((map, result) => {
+      const bucket = map.get(result.sectionTitle) ?? [];
+      bucket.push(result);
+      map.set(result.sectionTitle, bucket);
+      return map;
+    }, new Map());
+  }, [results]);
+  const resultRows = useMemo<SearchResultRow[]>(() => {
+    return Array.from(groups.values()).flatMap((sectionResults) =>
+      sectionResults.map((result) => ({
+        id: createResultKey(result),
+      })),
+    );
+  }, [groups]);
+  const [activeRovingId, setActiveRovingId] = useState<string | null>(activeResultKey ?? null);
+  const selectedResultExists = activeResultKey ? resultRows.some((row) => row.id === activeResultKey) : false;
+  const roving = useMemo(
+    () => createRovingTabIndex(resultRows, {
+      activeId: activeRovingId ?? activeResultKey,
+      selectedId: selectedResultExists ? activeResultKey : undefined,
+      orientation: "vertical",
+      loop: false,
+    }),
+    [activeResultKey, activeRovingId, resultRows, selectedResultExists],
+  );
+
+  useEffect(() => {
+    setActiveRovingId(activeResultKey ?? resultRows[0]?.id ?? null);
+  }, [activeResultKey, resultRows]);
+
+  function focusResult(rowId: string): void {
+    resultRefs.current.get(rowId)?.focus();
+  }
 
   return (
     <PanelShell
@@ -44,6 +87,8 @@ export function SearchPanel(props: SearchPanelProps): React.ReactElement {
       eyebrow={t("book-reader.actions.search")}
       onClose={onClose}
       className="book-reader-panel--search"
+      restoreFocusElement={restoreFocusElement}
+      focusOnMount={false}
       t={t}
     >
       <div className="book-reader-search">
@@ -82,12 +127,45 @@ export function SearchPanel(props: SearchPanelProps): React.ReactElement {
               <div className="book-reader-search__items">
                 {sectionResults.map((result) => {
                   const resultKey = createResultKey(result);
+                  const rovingItem = roving.items.find((item) => item.id === resultKey);
+                  const tabIndexProps = getRovingTabIndexProps(rovingItem);
                   return (
                     <button
+                      ref={(element) => {
+                        if (element) {
+                          resultRefs.current.set(resultKey, element);
+                        } else {
+                          resultRefs.current.delete(resultKey);
+                        }
+                      }}
                       key={resultKey}
                       type="button"
                       className={`book-reader-search__item${activeResultKey === resultKey ? " book-reader-search__item--active" : ""}`}
+                      tabIndex={tabIndexProps.tabIndex}
+                      data-active={tabIndexProps["data-active"]}
+                      aria-current={activeResultKey === resultKey ? "true" : undefined}
+                      aria-label={t("book-reader.search.resultLabel", {
+                        section: result.sectionTitle,
+                        excerpt: result.excerpt,
+                      })}
                       onClick={() => onSelectResult(result)}
+                      onFocus={() => setActiveRovingId(resultKey)}
+                      onKeyDown={(event) => {
+                        const nextIndex = roving.getIndexByKey(event.nativeEvent, {
+                          keyboardMap: SEARCH_RESULTS_KEYBOARD_MAP,
+                          orientation: "vertical",
+                          loop: false,
+                        });
+
+                        if (nextIndex >= 0) {
+                          event.preventDefault();
+                          const nextRow = roving.items[nextIndex]?.item;
+                          if (nextRow) {
+                            setActiveRovingId(nextRow.id);
+                            focusResult(nextRow.id);
+                          }
+                        }
+                      }}
                     >
                       <span>{result.excerpt}</span>
                     </button>

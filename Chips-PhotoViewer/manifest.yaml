@@ -29,10 +29,14 @@ capabilities:
 
 permissions:
   - resource.read
+  - file.read
   - file.write
   - platform.read
   - theme.read
   - i18n.read
+  - command.read
+  - command.write
+  - command.invoke
 
 runtime:
   targets:

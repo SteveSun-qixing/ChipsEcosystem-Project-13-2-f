@@ -1,4 +1,16 @@
 import React, { useRef, useState } from "react";
+import {
+  ChipsMenuBar,
+  ChipsToolbar,
+  type ChipsCommandAdapter,
+  type ChipsCommandProviderProps,
+  type ChipsCommandView,
+} from "@chips/component-library";
+import type { CommandInvocationContext } from "chips-sdk";
+import {
+  PHOTO_VIEWER_COMMAND_HANDLER_IDS,
+  type PhotoViewerCommandStatus,
+} from "../commands/photo-viewer-commands";
 import { usePhotoViewerCamera } from "../hooks/usePhotoViewerCamera";
 import type { ImageDimensions } from "../utils/image-viewer";
 
@@ -31,51 +43,63 @@ interface PhotoViewerStageProps {
   imageDimensions: ImageDimensions | null;
   sequenceCount: number;
   currentImageIndex: number;
+  commandAdapter?: ChipsCommandAdapter;
+  commandViews?: ChipsCommandView[];
+  commandI18n?: ChipsCommandProviderProps["i18n"];
+  commandInvocationContext?: CommandInvocationContext;
+  commandMenuDescriptors?: Array<{ menuId: string; label: string }>;
+  commandRegistrationPhase?: "idle" | "registering" | "ready" | "error";
+  commandRegistrationErrorCode?: string | null;
+  lastInvokedCommand?: PhotoViewerCommandStatus | null;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
-function PhotoViewerDock(props: {
-  isImageReady: boolean;
-  isSaving: boolean;
-  zoomMode: "fit" | "manual";
-  manualScale: number;
+function PhotoViewerCommandDock(props: {
   sequenceCount: number;
   currentImageIndex: number;
-  onOpenFile: () => void | Promise<void>;
-  onSaveImage: () => void | Promise<void>;
-  onPreviousImage: () => void;
-  onNextImage: () => void;
-  onZoom: (direction: "in" | "out") => void;
-  onFit: () => void;
-  onActualSize: () => void;
+  commandAdapter?: ChipsCommandAdapter;
+  commandViews: ChipsCommandView[];
+  commandI18n?: ChipsCommandProviderProps["i18n"];
+  commandInvocationContext?: CommandInvocationContext;
+  commandMenuDescriptors: Array<{ menuId: string; label: string }>;
+  commandRegistrationPhase: "idle" | "registering" | "ready" | "error";
+  commandRegistrationErrorCode: string | null;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const {
-    isImageReady,
-    isSaving,
-    zoomMode,
-    manualScale,
     sequenceCount,
     currentImageIndex,
-    onOpenFile,
-    onSaveImage,
-    onPreviousImage,
-    onNextImage,
-    onZoom,
-    onFit,
-    onActualSize,
+    commandAdapter,
+    commandViews,
+    commandI18n,
+    commandInvocationContext,
+    commandMenuDescriptors,
+    commandRegistrationPhase,
+    commandRegistrationErrorCode,
     t,
   } = props;
   const hasSequence = sequenceCount > 1;
 
   return (
-    <div className="photo-viewer-toolbar" role="toolbar" aria-label={t("photo-viewer.app.title")}>
-      <button className="photo-viewer-button" type="button" onClick={() => void onOpenFile()}>
-        {t("photo-viewer.actions.open")}
-      </button>
-      <button className="photo-viewer-button" type="button" onClick={onPreviousImage} disabled={!hasSequence || currentImageIndex <= 0}>
-        {t("photo-viewer.actions.previous")}
-      </button>
+    <div className="photo-viewer-command-dock" data-command-phase={commandRegistrationPhase}>
+      <ChipsMenuBar
+        adapter={commandAdapter}
+        commands={commandViews}
+        menus={commandMenuDescriptors}
+        i18n={commandI18n}
+        ariaLabel={t("photo-viewer.commands.menu.ariaLabel")}
+        invocationContext={commandInvocationContext}
+        disabled={commandRegistrationPhase === "error"}
+      />
+      <ChipsToolbar
+        adapter={commandAdapter}
+        commands={commandViews}
+        toolbarId="viewer"
+        i18n={commandI18n}
+        ariaLabel={t("photo-viewer.commands.toolbar.ariaLabel")}
+        invocationContext={commandInvocationContext}
+        disabled={commandRegistrationPhase === "error"}
+      />
       {hasSequence ? (
         <span className="photo-viewer-sequence" aria-live="polite">
           {t("photo-viewer.viewer.sequencePosition", {
@@ -84,39 +108,11 @@ function PhotoViewerDock(props: {
           })}
         </span>
       ) : null}
-      <button
-        className="photo-viewer-button"
-        type="button"
-        onClick={onNextImage}
-        disabled={!hasSequence || currentImageIndex >= sequenceCount - 1}
-      >
-        {t("photo-viewer.actions.next")}
-      </button>
-      <button className="photo-viewer-button" type="button" onClick={() => onZoom("out")} disabled={!isImageReady}>
-        {t("photo-viewer.actions.zoomOut")}
-      </button>
-      <button className="photo-viewer-button" type="button" onClick={() => onZoom("in")} disabled={!isImageReady}>
-        {t("photo-viewer.actions.zoomIn")}
-      </button>
-      <button
-        className={`photo-viewer-button${zoomMode === "fit" ? " photo-viewer-button--active" : ""}`}
-        type="button"
-        onClick={onFit}
-        disabled={!isImageReady}
-      >
-        {t("photo-viewer.actions.fit")}
-      </button>
-      <button
-        className={`photo-viewer-button${zoomMode === "manual" && manualScale === 1 ? " photo-viewer-button--active" : ""}`}
-        type="button"
-        onClick={onActualSize}
-        disabled={!isImageReady}
-      >
-        {t("photo-viewer.actions.actualSize")}
-      </button>
-      <button className="photo-viewer-button" type="button" onClick={() => void onSaveImage()} disabled={!isImageReady || isSaving}>
-        {t("photo-viewer.actions.save")}
-      </button>
+      {commandRegistrationErrorCode ? (
+        <span role="status" className="photo-viewer-command-status">
+          {commandRegistrationErrorCode}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -138,15 +134,74 @@ export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactEleme
     imageDimensions,
     sequenceCount,
     currentImageIndex,
+    commandAdapter,
+    commandViews = [],
+    commandI18n,
+    commandInvocationContext,
+    commandMenuDescriptors = [],
+    commandRegistrationPhase = "idle",
+    commandRegistrationErrorCode = null,
+    lastInvokedCommand = null,
     t,
   } = props;
   const [isDragActive, setIsDragActive] = useState(false);
   const dragDepthRef = useRef(0);
+  const handledInvocationRef = useRef<string | null>(null);
   const camera = usePhotoViewerCamera({
     imageDimensions,
     isImageLoaded,
     sessionKey: imageSource ? `${imageSource.sourceId}:${imageSource.revision}` : null,
   });
+
+  React.useEffect(() => {
+    if (!lastInvokedCommand) {
+      return;
+    }
+
+    const invocationKey =
+      lastInvokedCommand.invocationId ??
+      `${lastInvokedCommand.commandId}:${lastInvokedCommand.source}`;
+    if (handledInvocationRef.current === invocationKey) {
+      return;
+    }
+    handledInvocationRef.current = invocationKey;
+
+    switch (lastInvokedCommand.handlerId) {
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.openFile:
+        void onOpenFile();
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.saveImage:
+        void onSaveImage();
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.previousImage:
+        onPreviousImage();
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.nextImage:
+        onNextImage();
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.zoomOut:
+        camera.handleZoom("out");
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.zoomIn:
+        camera.handleZoom("in");
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.fitToWindow:
+        camera.setFitMode();
+        break;
+      case PHOTO_VIEWER_COMMAND_HANDLER_IDS.actualSize:
+        camera.setActualSize();
+        break;
+      default:
+        break;
+    }
+  }, [
+    camera,
+    lastInvokedCommand,
+    onNextImage,
+    onOpenFile,
+    onPreviousImage,
+    onSaveImage,
+  ]);
 
   return (
     <div className="photo-viewer-shell">
@@ -182,6 +237,9 @@ export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactEleme
                 camera.isPanningImage ? " photo-viewer-viewport--panning" : ""
               }`}
               ref={camera.viewportRef}
+              role="group"
+              aria-label={t("photo-viewer.viewer.viewportLabel")}
+              tabIndex={0}
               onPointerDown={camera.handlePointerDown}
               onPointerMove={camera.handlePointerMove}
               onPointerUp={camera.handlePointerUp}
@@ -236,22 +294,26 @@ export function PhotoViewerStage(props: PhotoViewerStageProps): React.ReactEleme
         ) : null}
 
         <div className="photo-viewer-chrome">
-          {feedback ? <div className={`photo-viewer-feedback photo-viewer-feedback--${feedback.tone}`}>{feedback.message}</div> : null}
+          {feedback ? (
+            <div
+              className={`photo-viewer-feedback photo-viewer-feedback--${feedback.tone}`}
+              role={feedback.tone === "error" ? "alert" : "status"}
+              aria-live={feedback.tone === "error" ? "assertive" : "polite"}
+            >
+              {feedback.message}
+            </div>
+          ) : null}
 
-          <PhotoViewerDock
-            isImageReady={Boolean(imageSource && isImageLoaded)}
-            isSaving={isSaving}
-            zoomMode={camera.zoomMode}
-            manualScale={camera.manualScale}
+          <PhotoViewerCommandDock
             sequenceCount={sequenceCount}
             currentImageIndex={currentImageIndex}
-            onOpenFile={onOpenFile}
-            onSaveImage={onSaveImage}
-            onPreviousImage={onPreviousImage}
-            onNextImage={onNextImage}
-            onZoom={camera.handleZoom}
-            onFit={camera.setFitMode}
-            onActualSize={camera.setActualSize}
+            commandAdapter={commandAdapter}
+            commandViews={commandViews}
+            commandI18n={commandI18n}
+            commandInvocationContext={commandInvocationContext}
+            commandMenuDescriptors={commandMenuDescriptors}
+            commandRegistrationPhase={commandRegistrationPhase}
+            commandRegistrationErrorCode={commandRegistrationErrorCode}
             t={t}
           />
         </div>

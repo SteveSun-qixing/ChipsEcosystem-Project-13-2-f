@@ -4,6 +4,71 @@
       "title": "图片查看器",
       "subtitle": "薯片生态内的轻量图片查看入口，只负责打开、缩放和保存图片。"
     },
+    "scenes": {
+      "empty": {
+        "title": "空图片查看场景"
+      },
+      "image": {
+        "title": "图片查看场景"
+      }
+    },
+    "commands": {
+      "menu": {
+        "ariaLabel": "图片查看器菜单",
+        "file": "文件",
+        "view": "查看",
+        "navigate": "导航"
+      },
+      "toolbar": {
+        "ariaLabel": "图片查看器工具栏"
+      },
+      "disabled": {
+        "noImage": "当前没有已加载图片",
+        "saving": "图片正在保存",
+        "noPreviousImage": "当前已经是第一张图片",
+        "noNextImage": "当前已经是最后一张图片"
+      },
+      "openFile": {
+        "title": "打开图片",
+        "description": "从本地文件系统选择一张图片。",
+        "ariaLabel": "打开图片"
+      },
+      "saveImage": {
+        "title": "保存图片",
+        "description": "将当前图片保存为一个副本。",
+        "ariaLabel": "保存当前图片"
+      },
+      "previousImage": {
+        "title": "上一张",
+        "description": "在图片序列中查看上一张图片。",
+        "ariaLabel": "查看上一张图片"
+      },
+      "nextImage": {
+        "title": "下一张",
+        "description": "在图片序列中查看下一张图片。",
+        "ariaLabel": "查看下一张图片"
+      },
+      "zoomOut": {
+        "title": "缩小",
+        "description": "缩小当前图片。",
+        "ariaLabel": "缩小当前图片"
+      },
+      "zoomIn": {
+        "title": "放大",
+        "description": "放大当前图片。",
+        "ariaLabel": "放大当前图片"
+      },
+      "fitToWindow": {
+        "title": "适应窗口",
+        "description": "让当前图片适应查看窗口。",
+        "ariaLabel": "让图片适应窗口"
+      },
+      "actualSize": {
+        "title": "实际大小",
+        "description": "按原始像素比例显示当前图片。",
+        "ariaLabel": "按实际大小显示图片"
+      }
+    },
     "actions": {
       "open": "打开图片",
       "save": "保存图片",
@@ -22,6 +87,7 @@
       "emptyPrompt": "拖动或者点击导入图片",
       "dragPrompt": "松开导入图片",
       "loading": "正在加载图片…",
+      "viewportLabel": "图片查看区域",
       "resolutionLabel": "分辨率",
       "zoomLabel": "缩放比例",
       "pathLabel": "当前路径",

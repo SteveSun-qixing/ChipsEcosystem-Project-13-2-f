@@ -4,6 +4,71 @@
       "title": "Photo Viewer",
       "subtitle": "A lightweight Chips image viewer focused only on opening, zooming, and saving images."
     },
+    "scenes": {
+      "empty": {
+        "title": "Empty photo viewer scene"
+      },
+      "image": {
+        "title": "Image viewer scene"
+      }
+    },
+    "commands": {
+      "menu": {
+        "ariaLabel": "Photo viewer menu",
+        "file": "File",
+        "view": "View",
+        "navigate": "Navigate"
+      },
+      "toolbar": {
+        "ariaLabel": "Photo viewer toolbar"
+      },
+      "disabled": {
+        "noImage": "No loaded image",
+        "saving": "Image is being saved",
+        "noPreviousImage": "This is the first image",
+        "noNextImage": "This is the last image"
+      },
+      "openFile": {
+        "title": "Open Image",
+        "description": "Choose an image from the local file system.",
+        "ariaLabel": "Open image"
+      },
+      "saveImage": {
+        "title": "Save Image",
+        "description": "Save the current image as a copy.",
+        "ariaLabel": "Save current image"
+      },
+      "previousImage": {
+        "title": "Previous",
+        "description": "View the previous image in the sequence.",
+        "ariaLabel": "View previous image"
+      },
+      "nextImage": {
+        "title": "Next",
+        "description": "View the next image in the sequence.",
+        "ariaLabel": "View next image"
+      },
+      "zoomOut": {
+        "title": "Zoom Out",
+        "description": "Zoom out of the current image.",
+        "ariaLabel": "Zoom out current image"
+      },
+      "zoomIn": {
+        "title": "Zoom In",
+        "description": "Zoom into the current image.",
+        "ariaLabel": "Zoom into current image"
+      },
+      "fitToWindow": {
+        "title": "Fit Window",
+        "description": "Fit the current image inside the viewer window.",
+        "ariaLabel": "Fit image to window"
+      },
+      "actualSize": {
+        "title": "Actual Size",
+        "description": "Show the current image at its original pixel scale.",
+        "ariaLabel": "Show image at actual size"
+      }
+    },
     "actions": {
       "open": "Open Image",
       "save": "Save Image",
@@ -22,6 +87,7 @@
       "emptyPrompt": "Drag or click to import an image",
       "dragPrompt": "Release to import image",
       "loading": "Loading image...",
+      "viewportLabel": "Image viewing area",
       "resolutionLabel": "Resolution",
       "zoomLabel": "Zoom",
       "pathLabel": "Current Path",

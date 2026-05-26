@@ -26,6 +26,19 @@ export function resolveLocale(input: string | null | undefined): SupportedLocale
   return DEFAULT_LOCALE;
 }
 
+export function resolveLocaleDirection(locale: string | null | undefined): "ltr" | "rtl" {
+  const normalized = resolveLocale(locale);
+  return normalized === "zh-CN" || normalized === "en-US" ? "ltr" : "ltr";
+}
+
+export function translateLocalKey(
+  key: string,
+  locale: string | null | undefined,
+  params?: Record<string, string | number>,
+): string {
+  return formatMessage(resolveLocale(locale), key, params);
+}
+
 export function formatMessage(locale: string, key: string, params?: Record<string, string | number>): string {
   const template = getByPath(MESSAGE_BUNDLES[resolveLocale(locale)], key);
   if (typeof template !== "string") {

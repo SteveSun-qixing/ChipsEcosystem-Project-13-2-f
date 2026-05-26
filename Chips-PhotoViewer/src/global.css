@@ -1,5 +1,17 @@
 :root {
   color-scheme: light;
+  --photo-viewer-surface: var(--chips-sys-color-surface, #ffffff);
+  --photo-viewer-canvas: var(--chips-sys-color-canvas, var(--photo-viewer-surface));
+  --photo-viewer-on-surface: var(--chips-sys-color-on-surface, #111111);
+  --photo-viewer-muted: color-mix(in srgb, var(--photo-viewer-on-surface) 62%, transparent);
+  --photo-viewer-subtle: color-mix(in srgb, var(--photo-viewer-on-surface) 10%, transparent);
+  --photo-viewer-border: var(--chips-sys-color-border-subtle, color-mix(in srgb, var(--photo-viewer-on-surface) 14%, transparent));
+  --photo-viewer-feedback-surface: color-mix(in srgb, var(--photo-viewer-surface) 92%, transparent);
+  --photo-viewer-danger: var(--chips-sys-color-error, var(--chips-sys-color-danger, #d92d20));
+  --photo-viewer-success: var(--chips-sys-color-success, #15803d);
+  --photo-viewer-radius-pill: var(--chips-sys-radius-pill, 999px);
+  --photo-viewer-shadow-floating: var(--chips-sys-shadow-floating, 0 16px 38px rgba(15, 23, 42, 0.12));
+  --photo-viewer-focus-ring: var(--chips-sys-focus-ring, 0 0 0 3px color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 28%, transparent));
 }
 
 * {
@@ -23,7 +35,7 @@ html,
 body {
   position: fixed;
   inset: 0;
-  background: #ffffff;
+  background: var(--photo-viewer-canvas);
 }
 
 #root {
@@ -33,7 +45,7 @@ body {
 
 body {
   font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
-  color: #111111;
+  color: var(--photo-viewer-on-surface);
 }
 
 button,
@@ -47,12 +59,13 @@ button {
   cursor: pointer;
 }
 
+.photo-viewer-app,
 .photo-viewer-shell {
   position: absolute;
   inset: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #ffffff;
+  background: var(--photo-viewer-canvas);
 }
 
 .photo-viewer-stage {
@@ -61,18 +74,18 @@ button {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #ffffff;
+  background: var(--photo-viewer-canvas);
 }
 
 .photo-viewer-stage--drag-active {
-  background: #f5f7fb;
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #2563eb) 8%, var(--photo-viewer-canvas));
 }
 
 .photo-viewer-frame {
   position: absolute;
   inset: 0;
   padding: 0;
-  background: #ffffff;
+  background: var(--photo-viewer-canvas);
 }
 
 .photo-viewer-empty,
@@ -84,13 +97,19 @@ button {
 .photo-viewer-empty {
   border: 0;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--photo-viewer-surface) 72%, transparent);
   display: grid;
   place-items: center;
   padding: 24px;
-  color: rgba(17, 17, 17, 0.58);
+  color: var(--photo-viewer-muted);
   font-size: 15px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--photo-viewer-surface) 70%, transparent);
+}
+
+.photo-viewer-empty:focus-visible,
+.photo-viewer-viewport:focus-visible {
+  outline: 0;
+  box-shadow: var(--photo-viewer-focus-ring);
 }
 
 .photo-viewer-viewport {
@@ -98,7 +117,7 @@ button {
   overflow: hidden;
   border-radius: 0;
   border: 0;
-  background: #ffffff;
+  background: var(--photo-viewer-canvas);
   touch-action: none;
   overscroll-behavior: none;
 }
@@ -148,11 +167,11 @@ button {
 
 .photo-viewer-overlay__text {
   padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: rgba(17, 17, 17, 0.64);
+  border-radius: var(--photo-viewer-radius-pill);
+  background: var(--photo-viewer-feedback-surface);
+  color: var(--photo-viewer-muted);
   font-size: 14px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--photo-viewer-shadow-floating);
 }
 
 .photo-viewer-chrome {
@@ -169,25 +188,25 @@ button {
   transform: translateX(-50%);
   max-width: min(calc(100vw - 48px), 560px);
   padding: 7px 11px;
-  border-radius: 999px;
+  border-radius: var(--photo-viewer-radius-pill);
   font-size: 12px;
   line-height: 1.4;
-  background: rgba(17, 17, 17, 0.08);
-  color: rgba(17, 17, 17, 0.84);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  background: var(--photo-viewer-subtle);
+  color: var(--photo-viewer-on-surface);
+  box-shadow: var(--photo-viewer-shadow-floating);
 }
 
 .photo-viewer-feedback--error {
-  background: rgba(217, 45, 32, 0.1);
-  color: #d92d20;
+  background: color-mix(in srgb, var(--photo-viewer-danger) 10%, var(--photo-viewer-surface));
+  color: var(--photo-viewer-danger);
 }
 
 .photo-viewer-feedback--success {
-  background: rgba(22, 163, 74, 0.1);
-  color: #15803d;
+  background: color-mix(in srgb, var(--photo-viewer-success) 10%, var(--photo-viewer-surface));
+  color: var(--photo-viewer-success);
 }
 
-.photo-viewer-toolbar {
+.photo-viewer-command-dock {
   position: absolute;
   left: 50%;
   bottom: 20px;
@@ -195,42 +214,17 @@ button {
   transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 8px;
-  max-width: min(calc(100vw - 32px), 760px);
+  max-width: min(calc(100vw - 32px), 860px);
   padding: 10px 12px;
-  border: 1px solid rgba(17, 17, 17, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--photo-viewer-border);
+  border-radius: var(--photo-viewer-radius-pill);
+  background: color-mix(in srgb, var(--photo-viewer-surface) 92%, transparent);
+  box-shadow: var(--photo-viewer-shadow-floating);
   backdrop-filter: blur(20px) saturate(1.15);
   pointer-events: auto;
-}
-
-.photo-viewer-button {
-  min-height: 32px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid rgba(17, 17, 17, 0.14);
-  background: rgba(255, 255, 255, 0.88);
-  color: #111111;
-  font-size: 12px;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
-}
-
-.photo-viewer-button:hover:not(:disabled) {
-  background: rgba(17, 17, 17, 0.03);
-  transform: translateY(-1px);
-}
-
-.photo-viewer-button:disabled {
-  opacity: 0.48;
-  cursor: not-allowed;
-}
-
-.photo-viewer-button--active {
-  background: rgba(17, 17, 17, 0.08);
-  border-color: rgba(17, 17, 17, 0.18);
 }
 
 .photo-viewer-sequence {
@@ -240,14 +234,20 @@ button {
   min-height: 32px;
   min-width: 56px;
   padding: 0 8px;
-  color: rgba(17, 17, 17, 0.66);
+  color: var(--photo-viewer-muted);
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
 
+.photo-viewer-command-status {
+  color: var(--photo-viewer-danger);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 @media (max-width: 860px) {
-  .photo-viewer-toolbar {
+  .photo-viewer-command-dock {
     bottom: 14px;
     gap: 6px;
     max-width: calc(100vw - 20px);

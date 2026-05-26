@@ -379,4 +379,25 @@ describe("createBasecardEditorRoot", () => {
     expect(coverImage?.getAttribute("src")).toBe("file:///tmp/demo-cover.jpg");
     expect(resolveCount).toBe(3);
   });
+
+  it("releases editor preview resource urls when the editor is disposed", async () => {
+    const releaseResourceUrl = vi.fn();
+    const root = createBasecardEditorRoot({
+      initialConfig: {
+        ...initialConfig,
+        audio_file: "tracks/demo.mp3",
+        album_cover: "covers/demo.jpg",
+      },
+      onChange: () => undefined,
+      resolveResourceUrl: async (resourcePath) => `blob:file:///${resourcePath}`,
+      releaseResourceUrl,
+    }) as HTMLElement & { __chipsDispose?: () => void };
+
+    await flushAsyncWork();
+
+    root.__chipsDispose?.();
+
+    expect(releaseResourceUrl).toHaveBeenCalledWith("tracks/demo.mp3");
+    expect(releaseResourceUrl).toHaveBeenCalledWith("covers/demo.jpg");
+  });
 });

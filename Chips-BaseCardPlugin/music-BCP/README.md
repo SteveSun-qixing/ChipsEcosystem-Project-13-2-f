@@ -1,6 +1,6 @@
 # 音乐基础卡片插件
 
-音乐基础卡片插件（`chips.basecard.music`）用于在复合卡片中保存和展示音频资源。插件基于基础卡片脚手架初始化，并按图片基础卡片的正式架构接入了卡片根目录资源链路、编辑面板、查看态与测试体系。
+音乐基础卡片插件（`chips.basecard.music`）用于在复合卡片中保存和展示音频资源。插件基于基础卡片脚手架初始化，并按新基础卡片契约接入了卡片根目录资源链路、组件库控件、编辑面板、查看态与测试体系。
 
 当前正式入口契约为：
 
@@ -12,6 +12,7 @@
 ## 当前能力
 
 - 查看态以长条音乐卡片展示专辑封面、歌曲名、歌手与补充信息。
+- 查看态封面和空态使用 `@chips/component-library` 的 `ChipsImage` / `ChipsEmptyState`，视觉继续消费主题 token。
 - 查看态取消右侧播放图标与操作按钮，整张卡片直接承担点击打开行为。
 - 若未上传专辑封面，查看态与编辑态都会回退到插件内置的默认占位封面图。
 - 点击查看态卡片时，会把音频资源打开请求交给内核统一路由到音乐播放器。
@@ -27,6 +28,7 @@
   - 在未先上传音频时，歌曲名、专辑名、语种、流派等可选字段仍可先行编辑并正式输出配置
   - 编辑面板改为与视频基础卡片一致的“分组标题 + 列表行 + 资源预览项”结构
   - 资源存在时显示预览项，缺失时切换为上传面，适配窄窗口与移动端比例编辑面板
+  - 编辑表单、音频预览、状态进度、团队工具栏、错误态和按钮接入 `ChipsForm`、`ChipsMedia`、`ChipsProgress`、`ChipsToolbar`、`ChipsErrorState` 与 `ChipsButton`
 - 多语言：
   - `zh-CN`
   - `en-US`
@@ -42,6 +44,7 @@
   - `resolveResourceUrl(...)`
   - `releaseResourceUrl(...)`
   - `deleteResource(...)`
+  - `convertTiffToPng(...)`
 
 ## 配置模型
 
@@ -68,7 +71,7 @@ language: "日语"
 genre: "流行"
 ```
 
-正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/music-BCP/src/schema/card-config.ts)。
+正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/music-BCP/src/schema/card-config.ts)。
 
 ## 目录结构
 
@@ -99,14 +102,17 @@ music-BCP/
 在插件目录执行：
 
 ```bash
-chipsdev lint
-chipsdev test
-chipsdev build
-chipsdev validate
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run package
+npm run verify
 ```
 
 ## 相关文档
 
-- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/music-BCP/docs/requirements/01-需求规格说明书.md)
-- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/music-BCP/docs/technical/01-架构设计.md)
-- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/music-BCP/docs/technical/02-数据模型设计.md)
+- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/music-BCP/docs/requirements/01-需求规格说明书.md)
+- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/music-BCP/docs/technical/01-架构设计.md)
+- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/music-BCP/docs/technical/02-数据模型设计.md)

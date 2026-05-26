@@ -16,7 +16,19 @@ export interface EmbeddedAudioMetadata {
 }
 
 function toUint8Array(input: ArrayBuffer | Uint8Array): Uint8Array {
-  return input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (input instanceof Uint8Array) {
+    const buffer = new ArrayBuffer(input.byteLength);
+    const output = new Uint8Array(buffer);
+    output.set(input);
+    return output;
+  }
+
+  return new Uint8Array(input.slice(0));
+}
+
+function ownedSlice(bytes: Uint8Array, start?: number, end?: number): Uint8Array {
+  const sliced = bytes.slice(start, end);
+  return toUint8Array(sliced);
 }
 
 function readUInt32BE(bytes: Uint8Array, offset: number): number {
@@ -32,14 +44,14 @@ function readUInt64BE(bytes: Uint8Array, offset: number): number {
 }
 
 function readUInt24BE(bytes: Uint8Array, offset: number): number {
-  return (bytes[offset] << 16) | (bytes[offset + 1] << 8) | bytes[offset + 2];
+  return ((bytes[offset] ?? 0) << 16) | ((bytes[offset + 1] ?? 0) << 8) | (bytes[offset + 2] ?? 0);
 }
 
 function readSyncSafeInt(bytes: Uint8Array, offset: number): number {
-  return ((bytes[offset] & 0x7f) << 21)
-    | ((bytes[offset + 1] & 0x7f) << 14)
-    | ((bytes[offset + 2] & 0x7f) << 7)
-    | (bytes[offset + 3] & 0x7f);
+  return (((bytes[offset] ?? 0) & 0x7f) << 21)
+    | (((bytes[offset + 1] ?? 0) & 0x7f) << 14)
+    | (((bytes[offset + 2] ?? 0) & 0x7f) << 7)
+    | ((bytes[offset + 3] ?? 0) & 0x7f);
 }
 
 function decodeIso88591(bytes: Uint8Array): string {
@@ -127,7 +139,7 @@ function stripUnsynchronization(bytes: Uint8Array): Uint8Array {
   const cleaned: number[] = [];
 
   for (let index = 0; index < bytes.length; index += 1) {
-    const current = bytes[index];
+    const current = bytes[index] ?? 0;
     const next = bytes[index + 1];
     cleaned.push(current);
 
@@ -136,7 +148,10 @@ function stripUnsynchronization(bytes: Uint8Array): Uint8Array {
     }
   }
 
-  return Uint8Array.from(cleaned);
+  const buffer = new ArrayBuffer(cleaned.length);
+  const output = new Uint8Array(buffer);
+  output.set(cleaned);
+  return output;
 }
 
 function mergePreferredText(current: string | undefined, next: string | undefined): string | undefined {
@@ -262,7 +277,7 @@ function parseId3v2(bytes: Uint8Array): EmbeddedAudioMetadata {
   const version = bytes[3] ?? 0;
   const flags = bytes[5] ?? 0;
   const tagSize = readSyncSafeInt(bytes, 6);
-  let tagBody = bytes.slice(10, 10 + tagSize);
+  let tagBody = ownedSlice(bytes, 10, 10 + tagSize);
 
   if ((flags & 0x80) !== 0) {
     tagBody = stripUnsynchronization(tagBody);

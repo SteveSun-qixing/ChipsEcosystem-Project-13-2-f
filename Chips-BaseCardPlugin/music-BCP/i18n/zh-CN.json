@@ -69,5 +69,7 @@
   "music.editor.errors.delete_failed": "资源删除请求提交失败，请稍后重试。",
   "music.editor.errors.audio_import_failed": "音频导入或元数据解析失败。",
   "music.editor.errors.cover_import_failed": "封面导入失败。",
-  "music.editor.errors.lyrics_import_failed": "歌词导入失败。"
+  "music.editor.errors.lyrics_import_failed": "歌词导入失败。",
+  "music.editor.errors.operation_failed": "操作失败",
+  "music.editor.errors.validation_failed": "配置需要调整"
 }

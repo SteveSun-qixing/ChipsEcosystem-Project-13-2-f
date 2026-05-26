@@ -50,7 +50,7 @@ describe("music basecard schema", () => {
       release_date: "",
     });
 
-    expect(basecardDefinition.collectResourcePaths(normalized)).toEqual([
+    expect(basecardDefinition.collectResourcePaths(normalized as unknown as Record<string, unknown>)).toEqual([
       "tracks/demo.mp3",
       "covers/demo.jpg",
       "lyrics/demo.lrc",

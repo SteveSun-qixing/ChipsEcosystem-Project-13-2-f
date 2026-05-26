@@ -117,7 +117,7 @@ describe("mountBasecardView", () => {
 
     await flushViewEffects();
 
-    const coverImage = container.querySelector(".chips-music-card__cover-image") as HTMLImageElement | null;
+    const coverImage = container.querySelector(".chips-music-card__cover-image img") as HTMLImageElement | null;
     expect(coverImage?.getAttribute("src")).toContain("music-cover-placeholder");
 
     dispose();
@@ -211,7 +211,7 @@ describe("mountBasecardView", () => {
     dispose();
   });
 
-  it("does not proactively release bridge-backed blob resource urls while the host runtime still owns them", async () => {
+  it("releases bridge-backed resource urls on view cleanup", async () => {
     const container = document.createElement("div");
     const releaseResourceUrl = vi.fn();
 
@@ -236,12 +236,13 @@ describe("mountBasecardView", () => {
 
     await flushViewEffects();
 
-    const coverImage = container.querySelector(".chips-music-card__cover-image") as HTMLImageElement | null;
+    const coverImage = container.querySelector(".chips-music-card__cover-image img") as HTMLImageElement | null;
     expect(coverImage?.getAttribute("src")).toBe("blob:file:///cover.png");
     expect(releaseResourceUrl).not.toHaveBeenCalled();
 
     dispose();
 
-    expect(releaseResourceUrl).not.toHaveBeenCalled();
+    expect(releaseResourceUrl).toHaveBeenCalledWith("tracks/demo.mp3");
+    expect(releaseResourceUrl).toHaveBeenCalledWith("cover.png");
   });
 });

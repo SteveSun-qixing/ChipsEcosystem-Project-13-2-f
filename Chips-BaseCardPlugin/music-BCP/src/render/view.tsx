@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ChipsEmptyState, ChipsImage } from "@chips/component-library";
 import type { MusicCardOpenPayload, MusicCardOpenResource } from "chips-sdk";
 import type { BasecardConfig } from "../schema/card-config";
 import { DEFAULT_MUSIC_COVER_URL } from "../shared/default-cover";
@@ -68,6 +69,13 @@ export const VIEW_STYLE_TEXT = `
 
 .chips-music-card__cover-image {
   display: block;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.chips-music-card__cover-image [data-scope="image"][data-part="media"] {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -123,15 +131,18 @@ export const VIEW_STYLE_TEXT = `
 }
 
 .chips-music-card__empty {
-  display: grid;
-  place-items: center;
   min-height: 108px;
-  padding: 20px;
   border-radius: 20px;
   border: 1px dashed var(--chips-comp-card-shell-border-color, rgba(15, 23, 42, 0.14));
   color: var(--chips-sys-color-on-surface-variant, #64748b);
   background: var(--chips-sys-color-surface, #ffffff);
   text-align: center;
+}
+
+.chips-music-card__empty [data-scope="empty-state"][data-part="root"] {
+  min-height: 106px;
+  padding: 20px;
+  background: transparent;
 }
 
 @media (max-width: 560px) {
@@ -257,6 +268,7 @@ function MetaItem(props: { children: React.ReactNode }) {
 function useResolvedResourceUrl(
   resourcePath: string,
   resolveResourceUrl?: (resourcePath: string) => Promise<string>,
+  releaseResourceUrl?: (resourcePath: string) => Promise<void> | void,
 ): string {
   const [resolvedUrl, setResolvedUrl] = useState("");
 
@@ -285,8 +297,9 @@ function useResolvedResourceUrl(
 
     return () => {
       cancelled = true;
+      void Promise.resolve(releaseResourceUrl?.(normalizedPath)).catch(() => undefined);
     };
-  }, [resolveResourceUrl, resourcePath]);
+  }, [releaseResourceUrl, resolveResourceUrl, resourcePath]);
 
   return resolvedUrl;
 }
@@ -294,13 +307,17 @@ function useResolvedResourceUrl(
 export function MusicBasecardView({
   config,
   resolveResourceUrl,
+  releaseResourceUrl,
   openResource,
 }: MusicBasecardViewProps) {
   const locale = typeof navigator !== "undefined" ? navigator.language : "zh-CN";
   const t = createTranslator(locale);
-  const audioUrl = useResolvedResourceUrl(config.audio_file, resolveResourceUrl);
-  const coverUrl = useResolvedResourceUrl(config.album_cover, resolveResourceUrl);
-  const lyricsUrl = useResolvedResourceUrl(config.lyrics_file, resolveResourceUrl);
+  const componentI18n = {
+    t,
+  };
+  const audioUrl = useResolvedResourceUrl(config.audio_file, resolveResourceUrl, releaseResourceUrl);
+  const coverUrl = useResolvedResourceUrl(config.album_cover, resolveResourceUrl, releaseResourceUrl);
+  const lyricsUrl = useResolvedResourceUrl(config.lyrics_file, resolveResourceUrl, releaseResourceUrl);
   const displayCoverUrl = coverUrl || DEFAULT_MUSIC_COVER_URL;
   const displayTitle = deriveDisplayTitle(config) || t("music.view.untitled");
   const artistLabel = derivePrimaryArtist(config) || t("music.view.artistFallback");
@@ -324,11 +341,13 @@ export function MusicBasecardView({
   const content = (
     <>
       <div className="chips-music-card__cover" aria-hidden="true">
-        <img
+        <ChipsImage
           src={displayCoverUrl}
-          alt=""
+          alt={displayTitle}
+          decorative
           className="chips-music-card__cover-image"
-          draggable={false}
+          fit="cover"
+          loadingStrategy="lazy"
         />
       </div>
 
@@ -351,7 +370,14 @@ export function MusicBasecardView({
   if (!normalizeRelativeCardResourcePath(config.audio_file)) {
     return (
       <div className="chips-music-card">
-        <div className="chips-music-card__empty">{t("music.view.empty")}</div>
+        <div className="chips-music-card__empty">
+          <ChipsEmptyState
+            ariaLabel={t("music.view.empty")}
+            title={t("music.view.untitled")}
+            description={t("music.view.empty")}
+            i18n={componentI18n}
+          />
+        </div>
       </div>
     );
   }

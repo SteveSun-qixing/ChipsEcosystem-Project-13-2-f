@@ -253,9 +253,14 @@ export function upsertSingerRole(
   const existingIndex = cloned.findIndex((role) => isSingerRole(role.role));
 
   if (existingIndex >= 0) {
+    const existingRole = cloned[existingIndex];
+    if (!existingRole) {
+      return cloned;
+    }
+
     cloned[existingIndex] = {
-      ...cloned[existingIndex],
-      role: cloned[existingIndex].role || "歌手",
+      ...existingRole,
+      role: existingRole.role || "歌手",
       people: normalizedPeople,
     };
     return cloned;

@@ -69,5 +69,7 @@
   "music.editor.errors.delete_failed": "Submitting the resource deletion request failed. Please try again.",
   "music.editor.errors.audio_import_failed": "Audio import or embedded metadata parsing failed.",
   "music.editor.errors.cover_import_failed": "Cover import failed.",
-  "music.editor.errors.lyrics_import_failed": "Lyrics import failed."
+  "music.editor.errors.lyrics_import_failed": "Lyrics import failed.",
+  "music.editor.errors.operation_failed": "Operation failed",
+  "music.editor.errors.validation_failed": "Configuration needs attention"
 }

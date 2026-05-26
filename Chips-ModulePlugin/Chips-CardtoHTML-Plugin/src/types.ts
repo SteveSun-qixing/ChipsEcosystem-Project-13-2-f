@@ -49,6 +49,9 @@ export interface CardRenderView {
   sessionId: string;
   semanticHash: string;
   target: string;
+  contentFiles?: string[];
+  diagnostics?: unknown[];
+  consistency?: unknown;
 }
 
 export interface HostFileStatLike {

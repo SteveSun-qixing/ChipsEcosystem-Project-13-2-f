@@ -104,6 +104,7 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
 
 - `index.html` 只负责复合卡片壳层与 iframe `src` 引用，不再保留大体积 `srcdoc`，也不再继续引用 render session 内部的 `./nodes/*`
 - sibling HTML 文件名优先复用 `data-node-id`，便于排查与长期稳定产物命名
+- sibling HTML 文件名必须在整次转换内全局唯一；当不同基础卡片使用重复 `data-node-id`，或 Host 输出同时存在 `iframe[src]` 与旧口径 `iframe[srcdoc]` 时，模块在保留基础 stem 的前提下追加递增序号，避免后写覆盖前写
 - 转换结束后必须释放 `card.render` 返回的 render session，避免 Host 渲染临时目录泄漏
 
 ## 6. 导出展示壳层
@@ -130,6 +131,7 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
 - 请求级 `themeId / locale`
 - 输出模式、入口文件与 manifest 文件名
 - 资源包含情况与计数
+- Host `card.render` 返回的 `diagnostics`、`consistency` 与 `contentFiles`
 - 生成时警告列表
 
 `includeManifest=false` 时：

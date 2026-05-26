@@ -6,6 +6,10 @@ import type { CardToHtmlContext } from "../../src/types";
 const createContext = (
   invokeImpl: (action: string, payload?: Record<string, unknown>) => Promise<unknown>,
 ): CardToHtmlContext => {
+  const hostInvoke = vi.fn(async (action: string, payload?: Record<string, unknown>) => {
+    return invokeImpl(action, payload);
+  }) as unknown as CardToHtmlContext["host"]["invoke"];
+
   return {
     logger: {
       debug: vi.fn(),
@@ -14,7 +18,7 @@ const createContext = (
       error: vi.fn(),
     },
     host: {
-      invoke: vi.fn(invokeImpl),
+      invoke: hostInvoke,
     },
     job: {
       id: "job-1",
@@ -555,6 +559,217 @@ describe("card to html module", () => {
     });
     expect(hostInvoke).toHaveBeenCalledWith("card.releaseRenderSession", {
       sessionId: "render-session-managed",
+    });
+  });
+
+  it("allocates stable sibling html names without collisions across iframe sources", async () => {
+    const outputDir = path.resolve("/tmp/export-html-mixed");
+    const cardRoot = path.resolve("/tmp/card-source-mixed");
+    const firstDocumentPath = path.join("/tmp/render-session-mixed", "nodes", "first.html");
+    const renderedBody = [
+      "<!doctype html>",
+      "<html lang=\"zh-CN\">",
+      "<body>",
+      '<iframe data-node-id="duplicate" src="./nodes/first.html"></iframe>',
+      '<iframe data-node-id="duplicate" srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;base href=&quot;file:///tmp/card-source-mixed/&quot; /&gt;&lt;/head&gt;&lt;body&gt;second&lt;/body&gt;&lt;/html&gt;"></iframe>',
+      "</body>",
+      "</html>",
+    ].join("");
+    const firstNodeHtml = [
+      "<!doctype html>",
+      "<html>",
+      '<head><base href="file:///tmp/card-source-mixed/" /></head>',
+      "<body>first</body>",
+      "</html>",
+    ].join("");
+
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        if (payload?.path === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "card.render") {
+        return {
+          view: {
+            title: "Mixed Duplicate Demo",
+            body: renderedBody,
+            documentUrl: "chips-render://session/render-session-mixed/index.html",
+            sessionId: "render-session-mixed",
+            semanticHash: "semantic-mixed-duplicate",
+            target: "offscreen-render",
+          },
+        };
+      }
+
+      if (action === "card.resolveDocumentPath") {
+        switch (payload?.documentUrl) {
+          case "chips-render://session/render-session-mixed/nodes/first.html":
+            return { path: firstDocumentPath };
+          case "file:///tmp/card-source-mixed/":
+            return { path: cardRoot };
+          default:
+            throw new Error(`Unexpected document url: ${String(payload?.documentUrl)}`);
+        }
+      }
+
+      if (action === "file.read" && payload?.path === firstDocumentPath) {
+        return { content: firstNodeHtml };
+      }
+
+      if (action === "file.list") {
+        return {
+          entries: [
+            { path: path.join(cardRoot, ".card"), isFile: false, isDirectory: true },
+            { path: path.join(cardRoot, ".card", "metadata.yaml"), isFile: true, isDirectory: false },
+          ],
+        };
+      }
+
+      return { ack: true };
+    });
+
+    const result = await moduleDefinition.providers[0]!.methods.convert(ctx, {
+      cardFile: path.resolve("/tmp/demo.card"),
+      output: {
+        path: outputDir,
+        packageMode: "directory",
+      },
+    });
+
+    expect(result.assetCount).toBe(1);
+
+    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "index.html"),
+      content: expect.stringContaining('src="./duplicate.html"'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "index.html"),
+      content: expect.stringContaining('src="./duplicate-2.html"'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "duplicate.html"),
+      content: expect.stringContaining("first"),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "duplicate-2.html"),
+      content: expect.stringContaining("second"),
+    });
+  });
+
+  it("records Host render diagnostics in the conversion manifest", async () => {
+    const outputDir = path.resolve("/tmp/export-html-diagnostics");
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        if (payload?.path === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "card.render") {
+        return {
+          view: {
+            title: "Diagnostics Demo",
+            body: "<html><body>diagnostics</body></html>",
+            documentUrl: "chips-render://session/render-session-diagnostics/index.html",
+            sessionId: "render-session-diagnostics",
+            semanticHash: "semantic-diagnostics",
+            target: "offscreen-render",
+            contentFiles: ["index.html", "nodes/basecard.html"],
+            diagnostics: [
+              {
+                nodeId: "basecard",
+                severity: "info",
+                code: "RENDER_PIPELINE_OK",
+                message: "Rendered",
+              },
+            ],
+            consistency: {
+              passed: true,
+            },
+          },
+        };
+      }
+
+      return { ack: true };
+    });
+
+    await moduleDefinition.providers[0]!.methods.convert(ctx, {
+      cardFile: path.resolve("/tmp/demo.card"),
+      output: {
+        path: outputDir,
+        packageMode: "directory",
+      },
+    });
+
+    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "conversion-manifest.json"),
+      content: expect.stringContaining("\"renderDiagnostics\""),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "conversion-manifest.json"),
+      content: expect.stringContaining("\"RENDER_PIPELINE_OK\""),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "conversion-manifest.json"),
+      content: expect.stringContaining("\"renderConsistency\""),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "conversion-manifest.json"),
+      content: expect.stringContaining("\"nodes/basecard.html\""),
+    });
+  });
+
+  it("cleans partial output when cancellation is observed after output preparation", async () => {
+    const outputDir = path.resolve("/tmp/export-html-cancelled");
+    const abortController = new AbortController();
+    let outputDirExists = false;
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        if (payload?.path === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (payload?.path === outputDir && outputDirExists) {
+          return { meta: { isFile: false, isDirectory: true } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "file.mkdir" && payload?.path === outputDir) {
+        outputDirExists = true;
+        abortController.abort();
+        return { ack: true };
+      }
+
+      return { ack: true };
+    });
+    ctx.job = {
+      id: "job-cancelled",
+      signal: abortController.signal,
+      reportProgress: vi.fn().mockResolvedValue(undefined),
+      isCancelled: vi.fn(() => abortController.signal.aborted),
+    };
+
+    await expect(
+      moduleDefinition.providers[0]!.methods.convert(ctx, {
+        cardFile: path.resolve("/tmp/demo.card"),
+        output: {
+          path: outputDir,
+          packageMode: "directory",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "CONVERTER_JOB_CANCELLED",
+    });
+
+    expect(ctx.host.invoke).toHaveBeenCalledWith("file.delete", {
+      path: outputDir,
+      options: { recursive: true },
     });
   });
 });

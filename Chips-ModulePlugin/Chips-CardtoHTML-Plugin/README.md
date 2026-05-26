@@ -29,6 +29,8 @@
 
 - `directory`：写出 `index.html`，按需写出 `assets/content/` 与 `conversion-manifest.json`。
 - `zip`：先构建同结构目录，再通过 `zip.compress` 打包为最终 ZIP。
+- 复合卡片中的基础卡片 iframe 会外置为同级 HTML 文件；文件名优先采用 `data-node-id`，遇到重复节点或混合 `iframe[src]` / `iframe[srcdoc]` 时自动追加序号，避免覆盖。
+- `conversion-manifest.json` 会记录 Host `card.render` 返回的 `diagnostics`、`consistency` 与 `contentFiles`，供下游模块和排查工具保留渲染诊断语义。
 - `includeAssets=false` 只允许目录态直接导出，结果会保留原始 `file://` 引用并返回警告。
 - `includeManifest=false` 会省略 `conversion-manifest.json`，仅适用于不再进入下游转换链路的直接 HTML 导出。
 

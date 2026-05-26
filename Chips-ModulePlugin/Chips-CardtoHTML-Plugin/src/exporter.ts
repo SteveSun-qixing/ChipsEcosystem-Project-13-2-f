@@ -333,10 +333,27 @@ const toSafeFileStem = (value: string, fallback: string): string => {
   return normalized.length > 0 ? normalized : fallback;
 };
 
-const allocateFrameFileName = (attrs: string, frameIndex: number): string => {
-  const nodeIdMatch = attrs.match(/\bdata-node-id="([^"]+)"/i);
-  const fileStem = toSafeFileStem(nodeIdMatch?.[1] ?? "", `frame-${frameIndex}`);
-  return `${fileStem}.html`;
+const createFrameFileAllocator = () => {
+  const usedFileNames = new Set<string>();
+  let frameIndex = 0;
+
+  return (attrs: string): string => {
+    frameIndex += 1;
+
+    const nodeIdMatch = attrs.match(/\bdata-node-id="([^"]+)"/i);
+    const baseStem = toSafeFileStem(nodeIdMatch?.[1] ?? "", `frame-${frameIndex}`);
+    let candidateStem = baseStem;
+    let duplicateIndex = 2;
+
+    while (usedFileNames.has(`${candidateStem}.html`)) {
+      candidateStem = `${baseStem}-${duplicateIndex}`;
+      duplicateIndex += 1;
+    }
+
+    const fileName = `${candidateStem}.html`;
+    usedFileNames.add(fileName);
+    return fileName;
+  };
 };
 
 const readTextFile = async (ctx: CardToHtmlContext, filePath: string): Promise<string> => {
@@ -345,7 +362,7 @@ const readTextFile = async (ctx: CardToHtmlContext, filePath: string): Promise<s
     options: { encoding: "utf-8" },
   });
   if (typeof response.content !== "string") {
-    throw createCardToHtmlError("CONVERTER_OUTPUT_WRITE_FAILED", `Host returned non-text content for ${filePath}.`, {
+    throw createCardToHtmlError("CONVERTER_HTML_ASSET_REWRITE_FAILED", `Host returned non-text content for ${filePath}.`, {
       filePath,
     });
   }
@@ -436,8 +453,12 @@ const extractAssetRoot = async (
   const resolvedByUrl = new Map(references.map((reference) => [reference.rawUrl, reference.resolvedPath]));
   const baseRootCandidates = [...new Set(baseHrefUrls.map((value) => resolvedByUrl.get(value)).filter((value): value is string => Boolean(value)))];
   if (baseRootCandidates.length === 1) {
+    const [rootPath] = baseRootCandidates;
+    if (!rootPath) {
+      return undefined;
+    }
     return {
-      rootPath: baseRootCandidates[0],
+      rootPath,
       baseHrefUrls,
       references,
     };
@@ -563,12 +584,12 @@ const externalizeIframeSrcdocDocuments = async (
   copiedAssetRoots: Set<string>,
   buildRoot: string,
   outputPathReference: string,
+  allocateFrameFileName: (attrs: string) => string,
 ): Promise<{ html: string; frameFiles: Array<{ fileName: string; content: string }>; copiedFiles: number }> => {
   const frameFiles: Array<{ fileName: string; content: string }> = [];
   const pattern = new RegExp(IFRAME_SRCDOC_PATTERN.source, IFRAME_SRCDOC_PATTERN.flags);
   let rewrittenHtml = "";
   let lastIndex = 0;
-  let frameIndex = 0;
   let copiedFiles = 0;
 
   while (true) {
@@ -579,13 +600,12 @@ const externalizeIframeSrcdocDocuments = async (
 
     rewrittenHtml += html.slice(lastIndex, match.index);
     lastIndex = match.index + match[0].length;
-    frameIndex += 1;
 
     const beforeAttrs = match[1] ?? "";
     const srcdoc = match[2] ?? "";
     const afterAttrs = match[3] ?? "";
     const attrs = `${beforeAttrs} ${afterAttrs}`;
-    const fileName = allocateFrameFileName(attrs, frameIndex);
+    const fileName = allocateFrameFileName(attrs);
     const frameContent = decodeHtmlEntities(srcdoc);
     const rewrittenFrame = await rewriteOfflineHtmlDocument(
       ctx,
@@ -626,12 +646,12 @@ const externalizeIframeSrcDocuments = async (
   copiedAssetRoots: Set<string>,
   buildRoot: string,
   outputPathReference: string,
+  allocateFrameFileName: (attrs: string) => string,
 ): Promise<{ html: string; frameFiles: Array<{ fileName: string; content: string }>; copiedFiles: number }> => {
   const frameFiles: Array<{ fileName: string; content: string }> = [];
   const pattern = new RegExp(IFRAME_SRC_PATTERN.source, IFRAME_SRC_PATTERN.flags);
   let rewrittenHtml = "";
   let lastIndex = 0;
-  let frameIndex = 0;
   let copiedFiles = 0;
 
   while (true) {
@@ -642,7 +662,6 @@ const externalizeIframeSrcDocuments = async (
 
     rewrittenHtml += html.slice(lastIndex, match.index);
     lastIndex = match.index + match[0].length;
-    frameIndex += 1;
 
     const beforeAttrs = match[1] ?? "";
     const rawSrc = match[2] ?? "";
@@ -655,7 +674,7 @@ const externalizeIframeSrcDocuments = async (
       continue;
     }
 
-    const fileName = allocateFrameFileName(attrs, frameIndex);
+    const fileName = allocateFrameFileName(attrs);
     const frameContent = await readTextFile(ctx, toNativePath(resolvedFramePath, outputPathReference));
     const rewrittenFrame = await rewriteOfflineHtmlDocument(
       ctx,
@@ -687,7 +706,8 @@ const externalizeIframeSrcDocuments = async (
 };
 
 const isCardToHtmlError = (value: unknown): value is Error & { code: string } => {
-  return value instanceof Error && typeof (value as { code?: unknown }).code === "string" && (value as { code: string }).code.startsWith("CONVERTER_");
+  const code = value instanceof Error ? (value as unknown as { code?: unknown }).code : undefined;
+  return typeof code === "string" && code.startsWith("CONVERTER_");
 };
 
 const normalizeRequest = (input: CardToHtmlRequest): NormalizedCardToHtmlRequest => {
@@ -829,6 +849,11 @@ const renderCardHtml = async (
   const sessionId = asString(response.view.sessionId);
   const semanticHash = asString(response.view.semanticHash);
   const target = asString(response.view.target);
+  const contentFiles = Array.isArray(response.view.contentFiles)
+    ? response.view.contentFiles.filter((item): item is string => typeof item === "string")
+    : undefined;
+  const diagnostics = Array.isArray(response.view.diagnostics) ? response.view.diagnostics : undefined;
+  const consistency = response.view.consistency;
 
   if (!title || !body || !documentUrl || !sessionId || !semanticHash || !target) {
     throw createCardToHtmlError("CONVERTER_HTML_RENDER_FAILED", "card.render response is missing required view fields.", {
@@ -843,6 +868,9 @@ const renderCardHtml = async (
     sessionId,
     semanticHash,
     target,
+    ...(contentFiles ? { contentFiles } : {}),
+    ...(diagnostics ? { diagnostics } : {}),
+    ...(typeof consistency !== "undefined" ? { consistency } : {}),
   };
 };
 
@@ -939,6 +967,11 @@ const createConversionManifest = (
       root: request.options.includeAssets ? CONTENT_ASSET_DIR : null,
       count: assetCount,
     },
+    diagnostics: {
+      renderDiagnostics: renderView.diagnostics ?? [],
+      ...(typeof renderView.consistency !== "undefined" ? { renderConsistency: renderView.consistency } : {}),
+      ...(renderView.contentFiles ? { contentFiles: renderView.contentFiles } : {}),
+    },
     warnings,
   };
 };
@@ -1022,6 +1055,7 @@ export const convertCardToHtml = async (
   const warnings: CardToHtmlWarning[] = [];
   const cleanupPaths: string[] = [];
   let renderSessionId: string | undefined;
+  let outputPathPrepared = false;
 
   await reportProgress(ctx, "prepare", 5, "Preparing card to HTML conversion");
   await ensureCardSourceExists(ctx, request.cardFile);
@@ -1037,16 +1071,20 @@ export const convertCardToHtml = async (
     cleanupPaths.push(dirnameNormalized(buildRoot));
   }
 
-  await ensureDirectory(ctx, toNativePath(buildRoot, request.output.path));
-
-  let failureStage: "render-html" | "rewrite-assets" | "write-output" | "package-html" = "render-html";
+  let failureStage: "render-html" | "rewrite-assets" | "write-output" | "package-html" = "write-output";
   try {
+    await ensureDirectory(ctx, toNativePath(buildRoot, request.output.path));
+    outputPathPrepared = true;
+    throwIfCancelled(ctx);
+
+    failureStage = "render-html";
     await reportProgress(ctx, "render-html", 25, "Rendering card through Host card.render");
     const renderView = await renderCardHtml(ctx, request);
     renderSessionId = renderView.sessionId;
     let htmlBody = applyExportPresentationShell(renderView.body);
     let assetCount = 0;
     const copiedAssetRoots = new Set<string>();
+    const allocateFrameFileName = createFrameFileAllocator();
 
     failureStage = "rewrite-assets";
     await reportProgress(ctx, "rewrite-assets", 55, "Rewriting card asset paths and copying resources");
@@ -1067,6 +1105,7 @@ export const convertCardToHtml = async (
       copiedAssetRoots,
       buildRoot,
       request.output.path,
+      allocateFrameFileName,
     );
     htmlBody = externalizedSrcFrames.html;
     assetCount += externalizedSrcFrames.copiedFiles;
@@ -1079,6 +1118,7 @@ export const convertCardToHtml = async (
       copiedAssetRoots,
       buildRoot,
       request.output.path,
+      allocateFrameFileName,
     );
     htmlBody = externalizedSrcdocFrames.html;
     assetCount += externalizedSrcdocFrames.copiedFiles;
@@ -1139,11 +1179,14 @@ export const convertCardToHtml = async (
       ...(warnings.length > 0 ? { warnings } : {}),
     };
   } catch (error) {
+    if (outputPathPrepared) {
+      await deletePathIfExists(ctx, request.output.path);
+    }
+
     if (isCardToHtmlError(error)) {
       throw error;
     }
 
-    await deletePathIfExists(ctx, request.output.path);
     throw normalizeUnexpectedError(failureStage, error);
   } finally {
     if (renderSessionId) {

@@ -9,6 +9,7 @@
     "test": "chipsdev test",
     "lint": "chipsdev lint",
     "validate": "chipsdev validate",
+    "package": "chipsdev package",
     "e2e": "node ./tests/e2e/run-packaged-plugin.cjs"
   },
   "devDependencies": {

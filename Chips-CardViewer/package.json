@@ -11,7 +11,8 @@
     "build": "chipsdev build",
     "test": "chipsdev test",
     "lint": "chipsdev lint",
-    "validate": "chipsdev validate"
+    "validate": "chipsdev validate",
+    "package": "chipsdev package"
   },
   "dependencies": {
     "react": "^18.2.0",

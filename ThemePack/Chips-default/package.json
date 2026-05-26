@@ -8,6 +8,7 @@
     "build:css": "tsx src/build-css.ts",
     "build:contracts": "tsx src/build-contracts.ts",
     "build": "npm run build:tokens && npm run build:contracts && npm run build:css",
+    "package": "chipsdev package",
     "validate:theme": "tsx src/validate-theme.ts",
     "test": "vitest run",
     "test:watch": "vitest"

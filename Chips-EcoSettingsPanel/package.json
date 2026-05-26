@@ -10,6 +10,7 @@
     "test": "chipsdev test",
     "lint": "chipsdev lint",
     "validate": "chipsdev validate",
+    "package": "chipsdev package",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate"
   },
   "dependencies": {

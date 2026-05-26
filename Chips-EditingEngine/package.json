@@ -9,7 +9,8 @@
     "build": "chipsdev build",
     "test": "chipsdev test",
     "lint": "chipsdev lint",
-    "validate": "chipsdev validate"
+    "validate": "chipsdev validate",
+    "package": "chipsdev package"
   },
   "dependencies": {
     "@chips/a11y": "0.1.0",

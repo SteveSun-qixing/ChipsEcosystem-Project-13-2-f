@@ -1,0 +1,1864 @@
+{
+  "generatedAt": "2026-05-26T00:00:00+08:00",
+  "testingSpaceRoot": "ProductFinishedProductTestingSpace",
+  "summary": {
+    "totalFiles": 76,
+    "includedRegressionFiles": 68,
+    "archivedFiles": 6,
+    "byCategory": {
+      "system-metadata": 1,
+      "workspace-rule": 1,
+      "card": 21,
+      "image": 23,
+      "archived": 6,
+      "web-directory-asset": 3,
+      "web-archive": 1,
+      "video": 1,
+      "audio": 1,
+      "ebook": 1,
+      "image-archive": 1,
+      "food-source-image": 15,
+      "box": 1
+    },
+    "includedByCategory": {
+      "card": 21,
+      "image": 23,
+      "web-directory-asset": 3,
+      "web-archive": 1,
+      "video": 1,
+      "audio": 1,
+      "ebook": 1,
+      "image-archive": 1,
+      "food-source-image": 15,
+      "box": 1
+    }
+  },
+  "materials": [
+    {
+      "path": ".DS_Store",
+      "sizeBytes": 6148,
+      "extension": null,
+      "category": "system-metadata",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "系统元数据文件，不属于用户素材。"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "sizeBytes": 727,
+      "extension": ".md",
+      "category": "workspace-rule",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "测试空间规则文件，不属于用户素材。"
+      ]
+    },
+    {
+      "path": "Markdown语法测试.card",
+      "sizeBytes": 3976,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 5,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "O4QAbAHj9k",
+        "name": "Markdown语法测试",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.richtext",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 1,
+      "manifestResourceCount": 1,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "一个美食菜单.card",
+      "sizeBytes": 18690599,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 16,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "ZKm6BosT0O",
+        "name": "一个美食菜单",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 11,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "吊带袜天使1.card",
+      "sizeBytes": 409635,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 10,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "Qj7SEBm9jH",
+        "name": "吊带袜天使1",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "2:1",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 5,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "图片.jpg",
+      "sizeBytes": 781072,
+      "extension": ".jpg",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "富文本基础卡片.card",
+      "sizeBytes": 16563567,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 19,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "bbdj4h9kz4",
+        "name": "富文本基础卡片",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.music",
+        "base.richtext",
+        "ImageCard",
+        "MusicCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.music",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 3,
+      "manifestResourceCount": 13,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/generated-box-samples/.gitignore",
+      "sizeBytes": 14,
+      "extension": null,
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/package.json",
+      "sizeBytes": 689,
+      "extension": ".json",
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/scripts/generate-box-samples.mjs",
+      "sizeBytes": 9597,
+      "extension": ".mjs",
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/测试箱子.box",
+      "sizeBytes": 2370,
+      "extension": ".box",
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/美食笔记.card",
+      "sizeBytes": 17282464,
+      "extension": ".card",
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "归档/2026-04-06-旧箱子样例与生成链路/薯片生态简介.card",
+      "sizeBytes": 12619,
+      "extension": ".card",
+      "category": "archived",
+      "includeInRegression": false,
+      "assignedTask": null,
+      "expectedEntry": "",
+      "operations": [],
+      "notes": [
+        "归档素材仅作历史参考，不纳入任务056首轮正式通过项。"
+      ]
+    },
+    {
+      "path": "昙花/index.html",
+      "sizeBytes": 13832,
+      "extension": ".html",
+      "category": "web-directory-asset",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "webpage base card, resource.open",
+      "operations": [
+        "resource.open",
+        "webpage-card.package",
+        "file-conversion.inspect"
+      ],
+      "notes": []
+    },
+    {
+      "path": "昙花/script.js",
+      "sizeBytes": 7748,
+      "extension": ".js",
+      "category": "web-directory-asset",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "webpage base card, resource.open",
+      "operations": [
+        "resource.open",
+        "webpage-card.package",
+        "file-conversion.inspect"
+      ],
+      "notes": []
+    },
+    {
+      "path": "昙花/styles.css",
+      "sizeBytes": 32775,
+      "extension": ".css",
+      "category": "web-directory-asset",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "webpage base card, resource.open",
+      "operations": [
+        "resource.open",
+        "webpage-card.package",
+        "file-conversion.inspect"
+      ],
+      "notes": []
+    },
+    {
+      "path": "昙花网页.zip",
+      "sizeBytes": 15120,
+      "extension": ".zip",
+      "category": "web-archive",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "webpage base card, resource.open",
+      "operations": [
+        "resource.open",
+        "webpage-card.package",
+        "file-conversion.inspect"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 4,
+        "storeMode": false
+      },
+      "topEntries": [
+        "昙花/",
+        "昙花/index.html",
+        "昙花/styles.css",
+        "昙花/script.js"
+      ]
+    },
+    {
+      "path": "测试视频.mp4",
+      "sizeBytes": 35667371,
+      "extension": ".mp4",
+      "category": "video",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "VideoPlayer, video base card",
+      "operations": [
+        "resource.open",
+        "video-player.open",
+        "file-conversion.inspect"
+      ],
+      "notes": []
+    },
+    {
+      "path": "测试音频-专辑封面.png",
+      "sizeBytes": 178987,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "测试音频.mp3",
+      "sizeBytes": 10770718,
+      "extension": ".mp3",
+      "category": "audio",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "MusicPlayer, music base card",
+      "operations": [
+        "resource.open",
+        "music-player.open",
+        "file-conversion.inspect"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书.epub",
+      "sizeBytes": 2858045,
+      "extension": ".epub",
+      "category": "ebook",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "BookReader, book base card",
+      "operations": [
+        "resource.open",
+        "book-reader.open",
+        "book-card.payload"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片.zip",
+      "sizeBytes": 27416307,
+      "extension": ".zip",
+      "category": "image-archive",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer image sequence, book base card",
+      "operations": [
+        "resource.open",
+        "photo-viewer.image-sequence",
+        "book-card.archive"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 22,
+        "storeMode": false
+      },
+      "topEntries": [
+        "电子书图片/",
+        "电子书图片/リコリス・リコイル　Gluttony days - 001.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 002.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 003.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 004.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 005.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 006.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 007.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 008.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 009.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 010.png",
+        "电子书图片/リコリス・リコイル　Gluttony days - 011.png"
+      ]
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 001.png",
+      "sizeBytes": 5421229,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 002.png",
+      "sizeBytes": 4326217,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 003.png",
+      "sizeBytes": 1348601,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 004.png",
+      "sizeBytes": 4547557,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 005.png",
+      "sizeBytes": 2556369,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 006.png",
+      "sizeBytes": 1932837,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 007.png",
+      "sizeBytes": 175493,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 008.png",
+      "sizeBytes": 150217,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 009.png",
+      "sizeBytes": 553175,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 010.png",
+      "sizeBytes": 838467,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 011.png",
+      "sizeBytes": 434186,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 012.png",
+      "sizeBytes": 614179,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 013.png",
+      "sizeBytes": 583838,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 014.png",
+      "sizeBytes": 475685,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 015.png",
+      "sizeBytes": 538936,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 016.png",
+      "sizeBytes": 454510,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 017.png",
+      "sizeBytes": 531423,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 018.png",
+      "sizeBytes": 471080,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 019.png",
+      "sizeBytes": 538529,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 020.png",
+      "sizeBytes": 558309,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "电子书图片/リコリス・リコイル　Gluttony days - 021.png",
+      "sizeBytes": 549731,
+      "extension": ".png",
+      "category": "image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "视频音乐卡片.card",
+      "sizeBytes": 46582475,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 10,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "N3uNTRCWKm",
+        "name": "富文本基础卡片",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.music",
+        "base.richtext",
+        "base.video",
+        "MusicCard",
+        "RichTextCard",
+        "VideoCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.music",
+        "chips.basecard.richtext",
+        "chips.basecard.video"
+      ],
+      "contentFileCount": 3,
+      "manifestResourceCount": 4,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-01-点心百宝盒.card",
+      "sizeBytes": 3209709,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "zkPsoUpeyt",
+        "name": "美食卡片：点心百宝盒",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-02-咖喱香料剧场.card",
+      "sizeBytes": 3156309,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "giDu3g6xo8",
+        "name": "美食卡片：咖喱香料剧场",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-03-意面卷起的风景.card",
+      "sizeBytes": 3712558,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "dPgyxE9N1B",
+        "name": "美食卡片：意面卷起的风景",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-04-面包清晨图鉴.card",
+      "sizeBytes": 3394163,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "Z2KY1yhVgJ",
+        "name": "美食卡片：面包清晨图鉴",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-05-丼饭一碗宇宙.card",
+      "sizeBytes": 3459698,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "WOeGf6zjNm",
+        "name": "美食卡片：丼饭一碗宇宙",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-06-寿司色彩案内.card",
+      "sizeBytes": 3348136,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "4sPyva3qhn",
+        "name": "美食卡片：寿司色彩案内",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-07-炸物金色音阶.card",
+      "sizeBytes": 3422741,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "ZRjdYtGiSu",
+        "name": "美食卡片：炸物金色音阶",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-08-果实甜度地图.card",
+      "sizeBytes": 3182475,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "u3Njrym5N9",
+        "name": "美食卡片：果实甜度地图",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-09-汤物暖流笔记.card",
+      "sizeBytes": 3405959,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "VDcBNl6HeZ",
+        "name": "美食卡片：汤物暖流笔记",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-10-洋食怀旧餐盘.card",
+      "sizeBytes": 3584980,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "wWriOcfY3o",
+        "name": "美食卡片：洋食怀旧餐盘",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-11-町中華热锅气.card",
+      "sizeBytes": 3686879,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "6FNfO9TAmk",
+        "name": "美食卡片：町中華热锅气",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-12-锅物围坐计划.card",
+      "sizeBytes": 3441787,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "8s8dbQPDFM",
+        "name": "美食卡片：锅物围坐计划",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-13-饮品清爽菜单.card",
+      "sizeBytes": 2987429,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "BxoLnctesn",
+        "name": "美食卡片：饮品清爽菜单",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-14-鱼介鲜味小港.card",
+      "sizeBytes": 3485473,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "EdmYns4vAL",
+        "name": "美食卡片：鱼介鲜味小港",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食卡片成品/美食卡片-15-面类热气路线.card",
+      "sizeBytes": 3635089,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 8,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "QCBb6rAlMB",
+        "name": "美食卡片：面类热气路线",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.image",
+        "base.richtext",
+        "ImageCard",
+        "RichTextCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.image",
+        "chips.basecard.richtext"
+      ],
+      "contentFileCount": 2,
+      "manifestResourceCount": 3,
+      "coverEntry": ".card/cover.html"
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろおやつ_137015330_p0.png",
+      "sizeBytes": 1602568,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろカレー_136645395_p0.png",
+      "sizeBytes": 1575880,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろスパゲッティ_137353687_p0.png",
+      "sizeBytes": 1853952,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろパン_137538352_p0.png",
+      "sizeBytes": 1694813,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ丼_137984243_p0.png",
+      "sizeBytes": 1727597,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ寿司_138550026_p0.png",
+      "sizeBytes": 1671807,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ揚げ物_138823106_p0.png",
+      "sizeBytes": 1709129,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ果実_138445035_p0.png",
+      "sizeBytes": 1589017,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ汁物_138299658_p0.png",
+      "sizeBytes": 1700723,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ洋食_138989588_p0.png",
+      "sizeBytes": 1790247,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ町中華_138948566_p0.png",
+      "sizeBytes": 1841165,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ鍋_136535906_p0.png",
+      "sizeBytes": 1718655,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ飲み物_138712505_p0.png",
+      "sizeBytes": 1491473,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ魚介料理_138743657_p0.png",
+      "sizeBytes": 1740477,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食图片/一色十秋_いろいろ麺類_136771789_p0.png",
+      "sizeBytes": 1815276,
+      "extension": ".png",
+      "category": "food-source-image",
+      "includeInRegression": true,
+      "assignedTask": "056.03",
+      "expectedEntry": "PhotoViewer, image base card, ColorPicker",
+      "operations": [
+        "resource.open",
+        "photo-viewer.open",
+        "color.extract"
+      ],
+      "notes": []
+    },
+    {
+      "path": "美食网格箱子.box",
+      "sizeBytes": 1745749,
+      "extension": ".box",
+      "category": "box",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host box services, CardViewer, EditingEngine, box layout plugin",
+      "operations": [
+        "box.validate",
+        "box.inspect",
+        "box.openView",
+        "box.renderLayoutFrame",
+        "box.renderLayoutEditor",
+        "box.renderEntryCover",
+        "box.openEntry",
+        "box.unpack",
+        "box.pack",
+        "box.revalidate"
+      ],
+      "notes": [
+        "箱子条目仍包含源工作区 file:// URL，自动化回归应使用临时派生副本改写到当前 worktree。"
+      ],
+      "zip": {
+        "entryCount": 5,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "3UQ4tF5Eze",
+        "name": "美食网格箱子",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "activeLayoutType": "chips.layout.grid"
+      },
+      "activeLayoutType": "chips.layout.grid",
+      "entryCount": 15,
+      "enabledEntryCount": 15,
+      "snapshotContentTypes": [
+        "chips/card"
+      ],
+      "oldWorkspaceUrlCount": 15,
+      "requiresCurrentWorktreeUrlPreparation": true
+    },
+    {
+      "path": "集大成者.card",
+      "sizeBytes": 78192105,
+      "extension": ".card",
+      "category": "card",
+      "includeInRegression": true,
+      "assignedTask": "056.02",
+      "expectedEntry": "Host card services, CardViewer, EditingEngine",
+      "operations": [
+        "card.validate",
+        "card.readInfo",
+        "card.renderCover",
+        "card.render",
+        "card.renderEditor",
+        "card.unpack",
+        "card.pack",
+        "card.revalidate"
+      ],
+      "notes": [],
+      "zip": {
+        "entryCount": 31,
+        "storeMode": true,
+        "requiredEntriesPresent": true
+      },
+      "metadata": {
+        "id": "6NMYAE3c0i",
+        "name": "集大成者",
+        "standardsVersion": "1.0.0",
+        "coverRatio": "3:4",
+        "theme": ""
+      },
+      "cardTypes": [
+        "base.book",
+        "base.image",
+        "base.music",
+        "base.richtext",
+        "base.score",
+        "base.video",
+        "BookCard",
+        "ImageCard",
+        "MusicCard",
+        "RichTextCard",
+        "ScoreCard",
+        "VideoCard"
+      ],
+      "pluginIds": [
+        "chips.basecard.book",
+        "chips.basecard.image",
+        "chips.basecard.music",
+        "chips.basecard.richtext",
+        "chips.basecard.score",
+        "chips.basecard.video"
+      ],
+      "contentFileCount": 6,
+      "manifestResourceCount": 22,
+      "coverEntry": ".card/cover.html"
+    }
+  ]
+}

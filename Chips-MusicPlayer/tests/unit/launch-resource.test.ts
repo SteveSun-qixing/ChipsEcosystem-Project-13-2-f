@@ -1,5 +1,23 @@
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveLaunchAudioTarget, resolveLaunchWorkspacePath } from "../../src/utils/launch-resource";
+
+const workspaceRoot = resolve(__dirname, "../../..");
+const testingSpaceRoot = resolve(workspaceRoot, "ProductFinishedProductTestingSpace");
+
+function requireFileMaterial(relativePath: string): string {
+  const filePath = resolve(testingSpaceRoot, relativePath);
+  if (!existsSync(filePath)) {
+    throw new Error(`真实素材缺失：${filePath}`);
+  }
+
+  if (!statSync(filePath).isFile()) {
+    throw new Error(`真实素材不是文件：${filePath}`);
+  }
+
+  return filePath;
+}
 
 describe("resolveLaunchAudioTarget", () => {
   it("优先使用 resourceOpen.filePath 恢复本地音频", () => {
@@ -190,5 +208,93 @@ describe("resolveLaunchAudioTarget", () => {
         },
       }),
     ).toBe("/tmp/chips-host-workspace");
+  });
+
+  it("通过正式资源打开上下文接收真实音频并保留音乐卡片封面上下文", () => {
+    const audioPath = requireFileMaterial("测试音频.mp3");
+    const coverPath = requireFileMaterial("测试音频-专辑封面.png");
+
+    expect(
+      resolveLaunchAudioTarget({
+        launchParams: {
+          trigger: "resource-open-service",
+          targetPath: "/tmp/stale-audio.mp3",
+          resourceOpen: {
+            intent: "view",
+            resourceId: audioPath,
+            filePath: audioPath,
+            fileName: "测试音频.mp3",
+            mimeType: "audio/mpeg",
+            title: "真实音频回归",
+            matchedCapability: "resource-handler:view:audio/*",
+            payload: {
+              kind: "chips.music-card",
+              version: "1.0.0",
+              cardType: "base.music",
+              config: {
+                card_type: "MusicCard",
+                theme: "",
+                audio_file: "测试音频.mp3",
+                music_name: "真实音频回归",
+                album_cover: "测试音频-专辑封面.png",
+                lyrics_file: "",
+                production_team: [
+                  {
+                    id: "performer",
+                    role: "演出",
+                    people: ["Chips QA"],
+                  },
+                ],
+                release_date: "2026-05-26",
+                album_name: "成品测试空间",
+                language: "中文",
+                genre: "Regression",
+              },
+              resources: {
+                audio: {
+                  resourceId: audioPath,
+                  relativePath: "测试音频.mp3",
+                  fileName: "测试音频.mp3",
+                  mimeType: "audio/mpeg",
+                },
+                cover: {
+                  resourceId: coverPath,
+                  relativePath: "测试音频-专辑封面.png",
+                  fileName: "测试音频-专辑封面.png",
+                  mimeType: "image/png",
+                },
+              },
+              display: {
+                title: "真实音频回归",
+                artist: "Chips QA",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: audioPath,
+      filePath: audioPath,
+      fileName: "测试音频.mp3",
+      mimeType: "audio/mpeg",
+      title: "真实音频回归",
+      musicCard: expect.objectContaining({
+        kind: "chips.music-card",
+        resources: expect.objectContaining({
+          audio: expect.objectContaining({
+            resourceId: audioPath,
+            relativePath: "测试音频.mp3",
+          }),
+          cover: expect.objectContaining({
+            resourceId: coverPath,
+            relativePath: "测试音频-专辑封面.png",
+          }),
+        }),
+        display: {
+          title: "真实音频回归",
+          artist: "Chips QA",
+        },
+      }),
+    });
   });
 });

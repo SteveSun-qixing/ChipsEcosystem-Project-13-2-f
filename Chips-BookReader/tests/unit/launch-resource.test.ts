@@ -1,5 +1,23 @@
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveLaunchBookTarget } from "../../src/utils/launch-resource";
+
+const workspaceRoot = resolve(__dirname, "../../..");
+const testingSpaceRoot = resolve(workspaceRoot, "ProductFinishedProductTestingSpace");
+
+function requireFileMaterial(relativePath: string): string {
+  const filePath = resolve(testingSpaceRoot, relativePath);
+  if (!existsSync(filePath)) {
+    throw new Error(`真实素材缺失：${filePath}`);
+  }
+
+  if (!statSync(filePath).isFile()) {
+    throw new Error(`真实素材不是文件：${filePath}`);
+  }
+
+  return filePath;
+}
 
 describe("resolveLaunchBookTarget", () => {
   it("优先使用 resourceOpen.filePath 恢复本地电子书", () => {
@@ -112,6 +130,80 @@ describe("resolveLaunchBookTarget", () => {
       title: "Book Card Title",
       author: "Book Author",
       relativePath: "books/book.pdf",
+    });
+  });
+
+  it("通过正式资源打开上下文接收成品测试空间真实 EPUB", () => {
+    const epubPath = requireFileMaterial("电子书.epub");
+
+    expect(
+      resolveLaunchBookTarget({
+        launchParams: {
+          trigger: "resource-open-service",
+          targetPath: "/tmp/stale-book.epub",
+          resourceOpen: {
+            intent: "view",
+            resourceId: epubPath,
+            filePath: epubPath,
+            fileName: "电子书.epub",
+            mimeType: "application/epub+zip",
+            title: "真实 EPUB 回归",
+            matchedCapability: "resource-handler:view:application/epub+zip",
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: epubPath,
+      filePath: epubPath,
+      fileName: "电子书.epub",
+      mimeType: "application/epub+zip",
+      title: "真实 EPUB 回归",
+    });
+  });
+
+  it("通过电子书基础卡片 payload 接收真实 EPUB 展示上下文", () => {
+    const epubPath = requireFileMaterial("电子书.epub");
+
+    expect(
+      resolveLaunchBookTarget({
+        launchParams: {
+          trigger: "resource-open-service",
+          targetPath: "/tmp/stale-book.epub",
+          resourceOpen: {
+            intent: "view",
+            resourceId: epubPath,
+            filePath: epubPath,
+            fileName: "电子书.epub",
+            mimeType: "application/epub+zip",
+            payload: {
+              kind: "chips.book-card",
+              version: "1.0.0",
+              cardType: "base.book",
+              mode: "ebook",
+              resources: {
+                book: {
+                  resourceId: epubPath,
+                  relativePath: "电子书.epub",
+                  fileName: "电子书.epub",
+                  mimeType: "application/epub+zip",
+                },
+              },
+              display: {
+                title: "真实 EPUB 书籍卡片",
+                author: "Chips QA",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: epubPath,
+      filePath: epubPath,
+      fileName: "电子书.epub",
+      mimeType: "application/epub+zip",
+      title: "真实 EPUB 书籍卡片",
+      author: "Chips QA",
+      relativePath: "电子书.epub",
     });
   });
 });

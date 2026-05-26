@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import { Buffer } from "node:buffer";
+import { Blob as NodeBlob } from "node:buffer";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadReadableBook } from "../../src/domain/book/virtual-book";
 import { renderSectionDocument } from "../../src/domain/epub/markup";
@@ -17,6 +20,21 @@ const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
 const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
 const ZIP_EOCD_SIGNATURE = 0x06054b50;
 const encoder = new TextEncoder();
+const workspaceRoot = resolve(__dirname, "../../..");
+const testingSpaceRoot = resolve(workspaceRoot, "ProductFinishedProductTestingSpace");
+
+function requireFileMaterial(relativePath: string): string {
+  const filePath = resolve(testingSpaceRoot, relativePath);
+  if (!existsSync(filePath)) {
+    throw new Error(`真实素材缺失：${filePath}`);
+  }
+
+  if (!statSync(filePath).isFile()) {
+    throw new Error(`真实素材不是文件：${filePath}`);
+  }
+
+  return filePath;
+}
 
 function writeUInt16LE(value: number): Buffer {
   const buffer = Buffer.alloc(2);
@@ -298,6 +316,44 @@ describe("书籍阅读器基础流程真实回归", () => {
     });
     expect(epub3.sections.map((section) => section.title)).toEqual(["Start"]);
     expect(epub3.navigation[0]?.label).toBe("Start");
+  });
+
+  it("加载成品测试空间真实 EPUB 并解析目录、章节与封面资源", async () => {
+    const originalBlob = globalThis.Blob;
+    globalThis.Blob = NodeBlob as typeof Blob;
+    const epubPath = requireFileMaterial("电子书.epub");
+    try {
+      const book = await loadReadableBook({
+        bytes: readFileSync(epubPath),
+        source: createBookSourceDescriptor({
+          sourceId: epubPath,
+          filePath: epubPath,
+          fileName: "电子书.epub",
+          mimeType: "application/epub+zip",
+          title: "真实 EPUB 回归",
+        }),
+      });
+
+      expect(book.source).toMatchObject({
+        sourceId: epubPath,
+        filePath: epubPath,
+        fileName: "电子书.epub",
+        mimeType: "application/epub+zip",
+        format: "epub",
+        isRemote: false,
+      });
+      expect(book.metadata.title).toBeTruthy();
+      expect(book.sections.length).toBeGreaterThan(0);
+      expect(book.navigation.length).toBeGreaterThan(0);
+
+      const firstSection = book.sections[0];
+      expect(firstSection?.path).toBeTruthy();
+      const rendered = await renderSectionDocument(book, firstSection?.path ?? "");
+      expect(rendered.html).toContain('data-chips-app="book-reader.chapter"');
+      expect(rendered.html.length).toBeGreaterThan(100);
+    } finally {
+      globalThis.Blob = originalBlob;
+    }
   });
 
   it("加载并渲染 PDF / TXT / Markdown / FB2 / RTF 最小样本", async () => {

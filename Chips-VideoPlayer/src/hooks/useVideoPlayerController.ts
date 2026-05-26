@@ -4,12 +4,14 @@ import {
   clampPlaybackTime,
   clampVolume,
   resolveMediaErrorKey,
+  type VideoPlaybackOpenHints,
   type VideoTrackOption,
   type VideoDimensions,
 } from "../utils/video-player";
 
 interface UseVideoPlayerControllerOptions {
   sessionKey: string | null;
+  playbackHints?: VideoPlaybackOpenHints;
 }
 
 export interface VideoPlayerSessionResetState {
@@ -193,7 +195,7 @@ export function isSurfaceFullscreen(
 }
 
 export function useVideoPlayerController(options: UseVideoPlayerControllerOptions): VideoPlayerController {
-  const { sessionKey } = options;
+  const { playbackHints, sessionKey } = options;
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -517,12 +519,23 @@ function syncTrackState(video: HTMLVideoElement | null): void {
       return;
     }
 
-    video.volume = 0.85;
-    video.playbackRate = resolveInitialRate();
-    video.muted = false;
-    setVolume(0.85);
-    setIsMuted(false);
-  }, [sessionKey]);
+    const nextVolume = playbackHints?.muted ? 0 : 0.85;
+    const nextPlaybackRate = playbackHints?.playbackRate ?? resolveInitialRate();
+    video.volume = nextVolume;
+    video.playbackRate = nextPlaybackRate;
+    video.muted = playbackHints?.muted === true;
+    video.loop = playbackHints?.loop === true;
+    if (playbackHints && playbackHints.startTime > 0) {
+      video.currentTime = playbackHints.startTime;
+    }
+    setVolume(nextVolume);
+    setIsMuted(video.muted);
+    setPlaybackRateState(nextPlaybackRate);
+    setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
+    if (playbackHints?.autoplay) {
+      void video.play().catch(() => undefined);
+    }
+  }, [playbackHints, sessionKey]);
 
   useEffect(() => {
     const video = videoRef.current;

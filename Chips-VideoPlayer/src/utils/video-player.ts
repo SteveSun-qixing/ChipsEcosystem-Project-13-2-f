@@ -1,9 +1,20 @@
+import type { VideoCardOpenPayload } from "chips-sdk";
+
 export interface LaunchVideoTarget {
   sourceId: string;
   filePath?: string;
   fileName?: string;
   mimeType?: string;
   title?: string;
+  videoCard?: VideoCardOpenPayload;
+}
+
+export interface VideoPlaybackOpenHints {
+  autoplay: boolean;
+  loop: boolean;
+  muted: boolean;
+  playbackRate: number;
+  startTime: number;
 }
 
 export interface VideoSource {
@@ -16,6 +27,7 @@ export interface VideoSource {
   extension?: string;
   revision: number;
   isRemote: boolean;
+  playbackHints?: VideoPlaybackOpenHints;
 }
 
 export interface ViewerFeedback {
@@ -47,6 +59,14 @@ export interface VideoChromeVisibilityState {
 export const SUPPORTED_VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".m4v", ".ogv", ".ogg"];
 export const SUPPORTED_VIDEO_EXTENSION_LABEL = SUPPORTED_VIDEO_EXTENSIONS.join(" ");
 export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
+
+const DEFAULT_PLAYBACK_OPEN_HINTS: VideoPlaybackOpenHints = {
+  autoplay: false,
+  loop: false,
+  muted: false,
+  playbackRate: 1,
+  startTime: 0,
+};
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   ".mp4": "video/mp4",
@@ -90,6 +110,23 @@ export function resolveFileName(value: string): string {
 
 export function resolveVideoTitle(target: LaunchVideoTarget): string {
   return target.title?.trim() || target.fileName?.trim() || resolveFileName(target.filePath ?? target.sourceId) || target.sourceId;
+}
+
+export function normalizeVideoPlaybackOpenHints(input?: VideoCardOpenPayload["playback"]): VideoPlaybackOpenHints {
+  if (!input) {
+    return { ...DEFAULT_PLAYBACK_OPEN_HINTS };
+  }
+
+  const playbackRate = PLAYBACK_RATES.includes(input.playbackRate) ? input.playbackRate : DEFAULT_PLAYBACK_OPEN_HINTS.playbackRate;
+  const startTime = Number.isFinite(input.startTime) ? Math.max(0, input.startTime) : DEFAULT_PLAYBACK_OPEN_HINTS.startTime;
+
+  return {
+    autoplay: input.autoplay === true,
+    loop: input.loop === true,
+    muted: input.muted === true,
+    playbackRate,
+    startTime,
+  };
 }
 
 export function inferVideoMimeType(value: string): string | undefined {

@@ -29,6 +29,7 @@ import {
   SUPPORTED_VIDEO_EXTENSION_LABEL,
   isDirectPlayableUri,
   isSupportedVideoResource,
+  normalizeVideoPlaybackOpenHints,
   resolveFileName,
   resolveVideoTitle,
   type LaunchVideoTarget,
@@ -201,6 +202,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   const launchHandledRef = React.useRef(false);
   const controller = useVideoPlayerController({
     sessionKey: videoSource ? `${videoSource.sourceId}:${videoSource.revision}` : null,
+    playbackHints: videoSource?.playbackHints,
   });
 
   const permissions = useMemo<VideoPlayerRuntimePermissions>(() => ({
@@ -307,6 +309,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
         extension: undefined,
         revision: Date.now(),
         isRemote: !resolvedFilePath,
+        ...(target.videoCard ? { playbackHints: normalizeVideoPlaybackOpenHints(target.videoCard.playback) } : undefined),
       });
       logger.info("视频资源已准备完成", {
         sourceId: resolvedSourceId,

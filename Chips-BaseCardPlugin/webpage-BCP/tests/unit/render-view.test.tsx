@@ -1,8 +1,40 @@
 // @vitest-environment jsdom
 
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountBasecardView } from "../../src/render/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
+
+const workspaceRoot = resolve(__dirname, "../../../..");
+const testingSpaceRoot = resolve(workspaceRoot, "ProductFinishedProductTestingSpace");
+
+function requireMaterial(relativePath: string): string {
+  const filePath = resolve(testingSpaceRoot, relativePath);
+  if (!existsSync(filePath)) {
+    throw new Error(`真实素材缺失：${filePath}`);
+  }
+
+  return filePath;
+}
+
+function requireFileMaterial(relativePath: string): string {
+  const filePath = requireMaterial(relativePath);
+  if (!statSync(filePath).isFile()) {
+    throw new Error(`真实素材不是文件：${filePath}`);
+  }
+
+  return filePath;
+}
+
+function requireDirectoryMaterial(relativePath: string): string {
+  const dirPath = requireMaterial(relativePath);
+  if (!statSync(dirPath).isDirectory()) {
+    throw new Error(`真实素材不是目录：${dirPath}`);
+  }
+
+  return dirPath;
+}
 
 function createConfig(overrides?: Partial<BasecardConfig>): BasecardConfig {
   return {
@@ -179,6 +211,80 @@ describe("mountBasecardView", () => {
         bundleRoot: "web-bundle",
         entryFile: "index.html",
         resourcePaths: ["web-bundle/index.html", "web-bundle/assets/app.js"],
+      },
+    });
+    cleanup();
+  });
+
+  it("使用真实网页包目录渲染入口并通过 openResource 暴露 text/html 打开意图", async () => {
+    const webpageArchivePath = requireFileMaterial("昙花网页.zip");
+    expect(statSync(webpageArchivePath).size).toBeGreaterThan(0);
+
+    const webpageDir = requireDirectoryMaterial("昙花");
+    const indexPath = requireFileMaterial("昙花/index.html");
+    const scriptPath = requireFileMaterial("昙花/script.js");
+    const stylesPath = requireFileMaterial("昙花/styles.css");
+    const indexHtml = readFileSync(indexPath, "utf-8");
+
+    const container = document.createElement("div");
+    const openResource = vi.fn();
+    document.body.appendChild(container);
+
+    (globalThis as typeof globalThis & { chips?: { invoke?: unknown } }).chips = {
+      invoke: vi.fn(async (action: string, input: { path?: string }) => {
+        expect(action).toBe("file.read");
+        expect(input.path).toBe(indexPath);
+        return { content: indexHtml };
+      }),
+    };
+
+    const cleanup = mountBasecardView({
+      container,
+      config: createConfig({
+        source_type: "bundle",
+        bundle_root: "昙花",
+        entry_file: "index.html",
+        resource_paths: ["昙花/index.html", "昙花/styles.css", "昙花/script.js"],
+      }),
+      resolveResourceUrl: async (resourcePath) => {
+        if (resourcePath === "昙花/index.html") {
+          return `file://${indexPath}`;
+        }
+        throw new Error(`测试未期望解析资源：${resourcePath}`);
+      },
+      openResource,
+    });
+
+    await flushAsyncWork();
+
+    const frame = container.querySelector("iframe");
+    const srcDoc = frame?.getAttribute("srcdoc") ?? "";
+    expect(webpageDir).toContain("ProductFinishedProductTestingSpace");
+    expect(scriptPath).toContain("script.js");
+    expect(stylesPath).toContain("styles.css");
+    expect(srcDoc).toContain(`<base href="${new URL(`file://${webpageDir}/`).href}" />`);
+    expect(srcDoc).toContain("chips:webpage-card:viewport");
+
+    const openButton = container.querySelector('[data-webpage-open-source="true"] button') as HTMLButtonElement | null;
+    if (!openButton) {
+      throw new Error("未找到网页包打开按钮");
+    }
+
+    openButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(openResource).toHaveBeenCalledWith({
+      resourceId: "昙花/index.html",
+      mimeType: "text/html",
+      title: "打开网页包入口",
+      fileName: "index.html",
+      payload: {
+        kind: "chips.webpage-card",
+        version: "1.0.0",
+        cardType: "WebPageCard",
+        sourceType: "bundle",
+        bundleRoot: "昙花",
+        entryFile: "index.html",
+        resourcePaths: ["昙花/index.html", "昙花/styles.css", "昙花/script.js"],
       },
     });
     cleanup();

@@ -9,6 +9,7 @@ import {
   isDirectPlayableUri,
   isSupportedVideoResource,
   resolveFileName,
+  normalizeVideoPlaybackOpenHints,
   resolveVideoFormatLabel,
   resolveVideoTitle,
   shouldAutoHideChrome,
@@ -48,6 +49,40 @@ describe("video player utilities", () => {
     expect(resolveVideoFormatLabel("chips-resource://video/1", "video/x-m4v")).toBe("M4V");
     expect(formatResolution({ width: 1920, height: 1080 })).toBe("1920 × 1080");
     expect(formatResolution(null)).toBe("");
+  });
+
+  it("normalizes video-card playback hints for player startup", () => {
+    expect(
+      normalizeVideoPlaybackOpenHints({
+        autoplay: true,
+        loop: true,
+        muted: true,
+        playbackRate: 1.25,
+        startTime: 12,
+      }),
+    ).toEqual({
+      autoplay: true,
+      loop: true,
+      muted: true,
+      playbackRate: 1.25,
+      startTime: 12,
+    });
+
+    expect(
+      normalizeVideoPlaybackOpenHints({
+        autoplay: true,
+        loop: false,
+        muted: false,
+        playbackRate: 1.1,
+        startTime: -3,
+      }),
+    ).toEqual({
+      autoplay: true,
+      loop: false,
+      muted: false,
+      playbackRate: 1,
+      startTime: 0,
+    });
   });
 
   it("only auto hides the toolbar in uninterrupted playback state", () => {

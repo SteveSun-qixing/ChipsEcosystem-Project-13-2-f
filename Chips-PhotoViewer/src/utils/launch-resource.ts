@@ -92,7 +92,7 @@ export function resolveLaunchImageTarget(launchContext: PlatformLaunchContext): 
   const directTargetPath = readNonEmptyString(launchParams.targetPath);
   const resourceFilePath = readNonEmptyString(resourceOpen?.filePath);
   const resourceId = readNonEmptyString(resourceOpen?.resourceId);
-  const sourceId = directTargetPath ?? resourceFilePath ?? resourceId;
+  const sourceId = resourceFilePath ?? directTargetPath ?? resourceId;
   if (!sourceId) {
     return null;
   }
@@ -101,7 +101,7 @@ export function resolveLaunchImageTarget(launchContext: PlatformLaunchContext): 
     images: [
       {
         sourceId,
-        filePath: directTargetPath ?? resourceFilePath,
+        filePath: resourceFilePath ?? directTargetPath,
         fileName: readNonEmptyString(resourceOpen?.fileName) ?? resolveFileName(sourceId),
         mimeType: readNonEmptyString(resourceOpen?.mimeType),
         title: readNonEmptyString(resourceOpen?.title),

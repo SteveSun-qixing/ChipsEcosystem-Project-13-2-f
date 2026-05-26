@@ -48,3 +48,11 @@ npm run validate
 
 - 不为当前格式写死不可扩展分支；以能力发现和管线描述为核心。
 - 本任务开发前必须重新核对模块运行时内部调用协议和当前插件代码。
+
+## 8. 完成记录
+
+- 2026-05-26：完成 FileConversion 编排模块迁移与事务发布语义收口。
+- 工作日志：`07-工作日志/任务048-FileConversion模块插件迁移-20260526.md`
+- 复核证据：`manifest.yaml` 已声明 `type: module`、`converter.file.convert/convert` job 能力、输入/输出 schema，并通过 `module.consumes` 声明 CardToHTML、HtmlToPDF、HtmlToImage 依赖能力；当前 `package.json` 提供 `lint/test/build/validate` 正式脚本。
+- 验证：`npx tsc --noEmit`、`npm test -- --run`、`npm run lint`、`npm run build`、`npm run validate` 已通过。
+- 提交记录：`2cdbeeb0 完善任务048文件转换编排事务发布语义`。

@@ -47,3 +47,11 @@ npm run validate
 
 - `sharp` 已是当前插件依赖；新增图像依赖仍需先决策。
 - 本任务开发前必须重新核对图像颜色提取模块能力契约和当前插件代码。
+
+## 8. 完成记录
+
+- 2026-05-26：完成 ColorPicker 图像颜色提取模块迁移收口。
+- 工作日志：`07-工作日志/任务047-ColorPicker模块插件迁移-20260526.md`
+- 复核证据：`manifest.yaml` 已声明 `type: module`、`image.color.pick/pick` sync 能力与输入/输出 schema；当前 `package.json` 提供 `lint/test/build/validate` 正式脚本。
+- 验证：`npx tsc --noEmit`、`npm test -- --run`、`npm run lint`、`npm run build`、`npm run validate`、模块脚手架验证链路与 `Chips-SDK npm test` 已通过。
+- 提交记录：`1e3eba26 完成任务047 ColorPicker模块插件迁移收口`。

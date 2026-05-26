@@ -47,3 +47,11 @@ npm run validate
 
 - 如 Host 缺少正式导出能力，先登记工单，不在模块中临时内置第二套运行时。
 - 本任务开发前必须重新核对 HTML 导出链路和当前插件代码。
+
+## 8. 完成记录
+
+- 2026-05-26：完成 HtmlToImage 原子导出模块迁移收口。
+- 工作日志：`07-工作日志/任务049-HtmlToImage模块插件迁移-20260526.md`
+- 复核证据：`manifest.yaml` 已声明 `type: module`、`converter.html.to-image/convert` job 能力与输入/输出 schema；当前 `package.json` 提供 `lint/test/build/validate` 正式脚本。
+- 验证：`npm run lint`、`npm test`、`npm run build`、`npm run validate` 已通过；任务050收口时已追加 Host `html to image` 集成测试复核。
+- 提交记录：`7850343e 完成任务049与任务050导出模块迁移收口`。

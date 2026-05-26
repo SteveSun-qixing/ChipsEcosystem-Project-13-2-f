@@ -47,3 +47,11 @@ npm run validate
 
 - 本模块是无界面能力，不创建应用窗口。
 - 本任务开发前必须重新核对模块能力契约、卡片渲染链路和当前插件代码。
+
+## 8. 完成记录
+
+- 2026-05-26：完成 CardToHTML 原子转换模块迁移收口。
+- 工作日志：`07-工作日志/任务046-CardToHTML模块插件迁移-20260526.md`
+- 复核证据：`manifest.yaml` 已声明 `type: module`、`converter.card.to-html/convert` job 能力与输入/输出 schema；当前 `package.json` 提供 `lint/test/build/validate` 正式脚本。
+- 验证：`npx tsc --noEmit`、`npm test -- --run`、`npm run lint`、`npm run build`、`npm run validate` 已通过。
+- 提交记录：`b5058a2f 完成任务046 CardToHTML模块插件迁移收口`。

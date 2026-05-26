@@ -48,3 +48,11 @@ npm run e2e
 
 - 如 Host 缺少正式 PDF 导出能力，先登记工单，不做临时内置方案。
 - 本任务开发前必须重新核对 HTML/PDF 导出能力契约和当前插件代码。
+
+## 8. 完成记录
+
+- 2026-05-26：完成 HtmlToPDF 原子导出模块迁移、Host/PAL 正式 PDF 导出能力与打包态 e2e 收口。
+- 工作日志：`07-工作日志/任务050-HtmlToPDF模块插件迁移-20260526.md`
+- 复核证据：`manifest.yaml` 已声明 `type: module`、`converter.html.to-pdf/convert` job 能力与输入/输出 schema；当前 `package.json` 提供 `lint/test/build/validate/e2e` 正式脚本。
+- 验证：`npx tsc --noEmit`、`npm run lint`、`npm test`、`npm run build`、`npm run validate`、`npm run e2e` 已通过；`Chips-Host` build、相关 html export 集成测试与 `test:contract` 已通过；`Chips-SDK` platform html export 聚焦测试已通过。
+- 提交记录：`7850343e 完成任务049与任务050导出模块迁移收口`。

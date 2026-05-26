@@ -62,7 +62,7 @@
 
 ## 4. 状态模型
 
-`useChipsState` 用于页面本地 UI 状态，例如当前筛选、选中项、面板开合、临时输入值。它返回的 `binding` 可直接交给控件：
+`useChipsState` 用于页面本地 UI 状态，例如当前筛选、选中项、面板开合、草稿输入值。它返回的 `binding` 可直接交给控件：
 
 ```tsx
 const title = useChipsState("Draft", { name: "title" });

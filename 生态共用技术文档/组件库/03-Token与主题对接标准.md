@@ -247,7 +247,7 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.loading-boundary.skeleton.motion.easing`
 - `chips.comp.loading-boundary.skeleton.motion.reduced-duration`
 
-这些 token 通过 component contract 的 `motionConstraints[].tokenKeys` 进入 required token 集合；主题缺失时必须阻断主题应用。`prefers-reduced-motion: reduce` 下不允许保留无限位移或闪烁动画，应降级为静态状态或低强度状态反馈。
+这些 token 通过 component contract 的 `motionConstraints[].tokenKeys` 进入主题 contract public view 的 required token 集合；主题缺失时必须阻断主题应用。`reports/quality-gate/component-quality-coverage-latest.json` 中的 `requiredTokenCount` 是 `@chips/testing` 对 raw contract `tokens/requiredTokens` 的覆盖统计，不额外合并 motion constraint tokenKeys；官方主题包 artifact、`ThemeContractView` 与主题应用门禁必须合并这两类 required token 来源。`prefers-reduced-motion: reduce` 下不允许保留无限位移或闪烁动画，应降级为静态状态或低强度状态反馈。
 
 ### 3.1 布局 token 基线
 

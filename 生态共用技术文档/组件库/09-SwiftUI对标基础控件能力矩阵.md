@@ -44,7 +44,7 @@
 | 反馈控件 | Progress | `ChipsProgress` | 已落地 | `progress` | 需要 determinate/indeterminate 与 progressbar 语义 |
 | 反馈控件 | Rating / Gauge 相邻能力 | `ChipsRating` | 已落地 | `rating` | 用于有限项评分展示和选择，维持 radiogroup/radio、键盘与 IconDescriptor 语义 |
 | 反馈控件 | Spinner | `ChipsSpinner` | 已落地 | `spinner` | 需要 status 语义与 motion token |
-| 反馈控件 | Skeleton | `ChipsSkeleton` | 已落地 | `skeleton` | 维持加载占位闭环 |
+| 反馈控件 | Skeleton | `ChipsSkeleton` | 已落地 | `skeleton` | 维持骨架加载闭环 |
 | 反馈控件 | EmptyState | `ChipsEmptyState` | 已落地 | `empty-state` | 维持空态展示闭环 |
 | 反馈控件 | ErrorState | `ChipsErrorState` | 已落地 | `error-state` | 维持静态错误展示、详情和动作入口，不能等同错误边界 |
 

@@ -411,6 +411,21 @@ chipsdev plugin enable chips.layout.my-grid-layout
 - `module`
 - `theme`
 
+`chipsdev create app <targetDir>` 会创建标准应用插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、App/Scene/surface/commands 入口、`i18n`、预览冒烟与质量报告脚本，并预置以下脚本：
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run preview:smoke
+npm run quality:gate
+npm run verify
+```
+
+其中 `verify` 串联 `lint/typecheck/test/build/validate/preview:smoke/quality:gate`。应用模板当前不声明 `package` npm 脚本；需要生成应用 `.cpk` 时使用 `chipsdev package` 或后续在应用工程中显式添加等价脚本。应用真实窗口联调以 `chipsdev run` 为主，运行时必须通过 Host surface、Bridge、SDK、主题系统和多语言系统接线。
+
 `chipsdev create card <targetDir>` 会创建标准基础卡片插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`src/render`、`src/editor`、`src/schema`、`src/shared`、`i18n`、`templates`、`tests` 与必要静态资源，并预置以下脚本：
 
 ```bash
@@ -439,7 +454,21 @@ npm run verify
 
 其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。生成工程的 `package` 脚本会输出 `.cpk`，布局插件没有独立的 `chipsdev run` 窗口入口；正式联调必须安装并启用该 `.cpk`，再由箱子查看器、编辑器或其他正式 `.box` 消费应用通过 Host 加载。重新构建并重新打包同一 `pluginId` 后，需要再次执行 `chipsdev plugin install`，让开发工作区替换旧安装副本。
 
-`chipsdev create theme <targetDir>` 会创建标准主题包插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`tokens/ref|sys|motion|layout|comp`、`styles`、`contracts`、`icons/variablefont`、`preview`、`src`、`tests` 与 README，并预置以下脚本：
+`chipsdev create module <targetDir>` 会创建标准功能模块插件工程。默认模板为 `module-standard`，也可以通过 `--template` 选择文件转换、HTML 渲染、图像处理、编排等专用模板。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`contracts/*.schema.json`、`src/index.ts`、`tests` 与 README，并预置以下脚本：
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run package
+npm run verify
+```
+
+其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。模块插件没有窗口入口，真实联调必须通过 `chipsdev module invoke` 或安装启用后由应用/SDK 的模块服务调用；模块之间依赖只通过 `manifest.module.consumes` 与 Host 注入的 `ctx.module.invoke(...)` 建立，不允许跨目录直接 import。
+
+`chipsdev create theme <targetDir>` 会创建标准主题包插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`tokens/ref.json`、`tokens/sys.json`、`tokens/motion.json`、`tokens/layout.json`、`tokens/comp/*.json`、`styles`、`contracts`、`icons/variablefont`、`preview`、`src`、`tests` 与 README，并预置以下脚本：
 
 ```bash
 npm run build

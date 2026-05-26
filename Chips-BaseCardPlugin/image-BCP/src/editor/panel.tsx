@@ -1,10 +1,14 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { ChipsIcon } from "@chips/component-library";
+import { ChipsButton, ChipsForm, ChipsIcon } from "@chips/component-library";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type {
+  BasecardArchiveImportRequest,
+  BasecardArchiveImportResult,
   BasecardResourceImportRequest,
   BasecardResourceImportResult,
+  BasecardTiffToPngRequest,
+  BasecardTiffToPngResult,
 } from "../index";
 import {
   defaultBasecardConfig,
@@ -25,8 +29,10 @@ import {
   getInternalResourcePaths,
   getRemovedInternalResourcePaths,
   getSpacingMetrics,
+  isTiffImageFile,
   normalizeRelativeCardResourcePath,
   sanitizeImportedFileName,
+  toPngOutputPath,
   validateImageFormat,
   validateImageUrl,
 } from "../shared/utils";
@@ -39,7 +45,13 @@ export interface BasecardEditorProps {
   importResource?: (
     input: BasecardResourceImportRequest,
   ) => Promise<BasecardResourceImportResult>;
+  importArchiveBundle?: (
+    input: BasecardArchiveImportRequest,
+  ) => Promise<BasecardArchiveImportResult>;
   deleteResource?: (resourcePath: string) => Promise<void>;
+  convertTiffToPng?: (
+    input: BasecardTiffToPngRequest,
+  ) => Promise<BasecardTiffToPngResult>;
 }
 
 type EditorRoot = HTMLElement & {
@@ -94,7 +106,7 @@ type LayoutCardDefinition = {
 };
 
 const HISTORY_LIMIT = 100;
-const INPUT_ACCEPT_VALUE = "image/jpeg,image/png,image/gif,image/webp,image/svg+xml";
+const INPUT_ACCEPT_VALUE = "image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/tiff,.tif,.tiff";
 const IMAGE_GRID_COLUMNS = 3;
 const IMAGE_GRID_GAP = 12;
 const FALLBACK_TILE_SIZE = 96;
@@ -447,6 +459,61 @@ html, body {
   font: inherit;
 }
 
+.chips-image-editor__details-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.88)),
+    var(--chips-sys-color-surface, #ffffff);
+}
+
+.chips-image-editor__details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chips-image-editor__details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.chips-image-editor__details-field {
+  display: grid;
+  gap: 8px;
+}
+
+.chips-image-editor__details-control {
+  display: grid;
+  gap: 8px;
+}
+
+.chips-image-editor__details-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #075985;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chips-image-editor__details-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .chips-image-editor__text-input::placeholder {
   color: rgba(148, 163, 184, 0.92);
 }
@@ -645,6 +712,19 @@ html, body {
 .chips-image-editor__image-tile[data-dragging="false"]:hover {
   border-color: rgba(37, 99, 235, 0.28);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+}
+
+.chips-image-editor__image-tile[data-selected="true"] {
+  border-color: rgba(37, 99, 235, 0.62);
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.12),
+    0 14px 28px rgba(15, 23, 42, 0.1);
+}
+
+.chips-image-editor__image-tile:focus-visible {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.68);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 .chips-image-editor__image-placeholder-tile {
@@ -931,6 +1011,16 @@ function syncAvailablePath(path: string, occupied: Set<string>): string {
   return candidate;
 }
 
+function getPreferredImagePath(file: File, occupiedPaths: Set<string>): string {
+  const preferredPath = sanitizeImportedFileName(file.name);
+  const normalizedPath = isTiffImageFile(file) ? toPngOutputPath(preferredPath) : preferredPath;
+  return syncAvailablePath(normalizedPath, occupiedPaths);
+}
+
+function getPreferredSourcePath(file: File, preferredPath: string): string {
+  return isTiffImageFile(file) ? sanitizeImportedFileName(file.name) : preferredPath;
+}
+
 function replaceResourcePath(
   config: BasecardConfig,
   fromPath: string,
@@ -1043,7 +1133,9 @@ function ImageGridItem(props: {
   placeholderText: string;
   dragging: boolean;
   onPreviewError: (image: ImageItem) => void;
+  onSelect: (imageId: string) => void;
   onPointerDown: (imageId: string, event: React.PointerEvent<HTMLDivElement>) => void;
+  selected: boolean;
   tileRef?: (node: HTMLDivElement | null) => void;
   style?: React.CSSProperties;
 }) {
@@ -1053,7 +1145,9 @@ function ImageGridItem(props: {
     placeholderText,
     dragging,
     onPreviewError,
+    onSelect,
     onPointerDown,
+    selected,
     tileRef,
     style,
   } = props;
@@ -1064,8 +1158,20 @@ function ImageGridItem(props: {
       style={style}
       className="chips-image-editor__image-tile"
       data-dragging={dragging ? "true" : "false"}
+      data-selected={selected ? "true" : "false"}
+      role="button"
+      tabIndex={0}
       onPointerDown={(event) => {
         onPointerDown(image.id, event);
+      }}
+      onClick={() => {
+        onSelect(image.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(image.id);
+        }
       }}
     >
       {previewUrl ? (
@@ -1175,7 +1281,9 @@ function ImageCardEditor(props: BasecardEditorProps) {
   const [dragOverlay, setDragOverlay] = useState<DragOverlayState | null>(null);
   const [isDeleteZoneOver, setIsDeleteZoneOver] = useState(false);
   const [showUploader, setShowUploader] = useState(initial.images.length === 0);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(initial.images[0]?.id ?? null);
   const [urlInput, setUrlInput] = useState("");
+  const [replaceUrlInput, setReplaceUrlInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -1330,6 +1438,60 @@ function ImageCardEditor(props: BasecardEditorProps) {
 
   function cloneCurrentConfig(): BasecardConfig {
     return cloneConfig(configRef.current);
+  }
+
+  async function importFileToCardRoot(
+    file: File,
+    occupiedPaths: Set<string>,
+  ): Promise<{ resourcePath: string; previewFile?: File }> {
+    if (!validateImageFormat(file.type) && !isTiffImageFile(file)) {
+      throw new Error(t("error.unsupported_format"));
+    }
+
+    const preferredPath = getPreferredImagePath(file, occupiedPaths);
+    let resourcePath = preferredPath;
+
+    if (props.importResource) {
+      const result = await props.importResource({
+        file,
+        preferredPath: getPreferredSourcePath(file, preferredPath),
+      });
+      resourcePath = normalizeRelativeCardResourcePath(result.path) ?? preferredPath;
+    }
+
+    if (isTiffImageFile(file)) {
+      if (!props.importResource) {
+        throw new Error(t("error.import_resource_unavailable"));
+      }
+
+      if (!props.convertTiffToPng) {
+        throw new Error(t("error.tiff_conversion_unavailable"));
+      }
+
+      const outputPath = syncAvailablePath(toPngOutputPath(resourcePath), occupiedPaths);
+      const converted = await props.convertTiffToPng({
+        resourcePath,
+        outputPath,
+        overwrite: false,
+      });
+      const convertedPath = normalizeRelativeCardResourcePath(converted.path) ?? outputPath;
+      if (resourcePath !== convertedPath) {
+        await props.deleteResource?.(resourcePath).catch(() => undefined);
+      }
+      resourcePath = convertedPath;
+    }
+
+    occupiedPaths.add(resourcePath);
+    if (!isTiffImageFile(file)) {
+      importedFilesRef.current.set(resourcePath, file);
+    }
+
+    await ensurePreviewForPath(resourcePath, isTiffImageFile(file) ? undefined : file);
+
+    return {
+      resourcePath,
+      previewFile: isTiffImageFile(file) ? undefined : file,
+    };
   }
 
   function rewriteConfigResourcePath(fromPath: string, toPath: string): void {
@@ -1517,6 +1679,27 @@ function ImageCardEditor(props: BasecardEditorProps) {
     void syncResourceChain(previousConfig, nextConfig);
   }
 
+  function selectImage(imageId: string | null): void {
+    setSelectedImageId(imageId);
+    setReplaceUrlInput("");
+  }
+
+  function updateImageFields(
+    imageId: string,
+    patch: Partial<Pick<ImageItem, "alt" | "title">>,
+  ): void {
+    const nextConfig = cloneCurrentConfig();
+    nextConfig.images = nextConfig.images.map((image) => (
+      image.id === imageId
+        ? {
+            ...image,
+            ...patch,
+          }
+        : image
+    ));
+    commitConfigUpdate(nextConfig, { pushHistory: true });
+  }
+
   function updateLayoutOptions(nextOptions: Partial<LayoutOptions>): void {
     const nextConfig = cloneCurrentConfig();
     nextConfig.layout_options = {
@@ -1538,6 +1721,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
     configRef.current = cloneConfig(nextConfig);
     setConfig(configRef.current);
     setShowUploader(configRef.current.images.length === 0);
+    setSelectedImageId(configRef.current.images[0]?.id ?? null);
     props.onChange(cloneConfig(configRef.current));
     void syncResourceChain(currentConfig, configRef.current);
   }
@@ -1553,6 +1737,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
     configRef.current = cloneConfig(nextConfig);
     setConfig(configRef.current);
     setShowUploader(configRef.current.images.length === 0);
+    setSelectedImageId(configRef.current.images[0]?.id ?? null);
     props.onChange(cloneConfig(configRef.current));
     void syncResourceChain(currentConfig, configRef.current);
   }
@@ -1577,31 +1762,8 @@ function ImageCardEditor(props: BasecardEditorProps) {
         continue;
       }
 
-      if (!validateImageFormat(file.type)) {
-        nextMessages.push(
-          `${file.name}: ${t("error.unsupported_format")}`,
-        );
-        continue;
-      }
-
       try {
-        const preferredPath = sanitizeImportedFileName(file.name);
-        let resourcePath = preferredPath;
-
-        if (props.importResource) {
-          const result = await props.importResource({
-            file,
-            preferredPath,
-          });
-          resourcePath =
-            normalizeRelativeCardResourcePath(result.path) ?? preferredPath;
-        } else {
-          resourcePath = syncAvailablePath(preferredPath, occupiedPaths);
-        }
-
-        occupiedPaths.add(resourcePath);
-        importedFilesRef.current.set(resourcePath, file);
-        await ensurePreviewForPath(resourcePath, file);
+        const { resourcePath } = await importFileToCardRoot(file, occupiedPaths);
 
         importedImages.push({
           id: generateImageId(),
@@ -1631,6 +1793,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
     nextConfig.images = nextConfig.images.concat(importedImages);
     const finalizedConfig = applySmartDefaults(nextConfig, previousCount);
     commitConfigUpdate(finalizedConfig, { pushHistory: true });
+    setSelectedImageId(importedImages[0]?.id ?? finalizedConfig.images[0]?.id ?? null);
     setShowUploader(false);
   }
 
@@ -1656,6 +1819,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
     });
     const finalizedConfig = applySmartDefaults(nextConfig, previousCount);
     commitConfigUpdate(finalizedConfig, { pushHistory: true });
+    setSelectedImageId(finalizedConfig.images[finalizedConfig.images.length - 1]?.id ?? null);
     setUrlInput("");
     setShowUploader(false);
     emitMessages([]);
@@ -1665,6 +1829,10 @@ function ImageCardEditor(props: BasecardEditorProps) {
     const nextConfig = cloneCurrentConfig();
     nextConfig.images = nextConfig.images.filter((image) => image.id !== imageId);
     commitConfigUpdate(nextConfig, { pushHistory: true });
+    if (selectedImageId === imageId) {
+      setSelectedImageId(nextConfig.images[0]?.id ?? null);
+      setReplaceUrlInput("");
+    }
     if (nextConfig.images.length === 0) {
       setShowUploader(true);
     }
@@ -1674,6 +1842,8 @@ function ImageCardEditor(props: BasecardEditorProps) {
     const nextConfig = cloneCurrentConfig();
     nextConfig.images = [];
     commitConfigUpdate(nextConfig, { pushHistory: true });
+    setSelectedImageId(null);
+    setReplaceUrlInput("");
     setShowUploader(true);
   }
 
@@ -1690,6 +1860,78 @@ function ImageCardEditor(props: BasecardEditorProps) {
       clampInsertIndex(targetIndex, nextConfig.images.length - 1),
     );
     commitConfigUpdate(nextConfig, { pushHistory: true });
+  }
+
+  async function handleReplaceWithFiles(imageId: string, files: readonly File[]): Promise<void> {
+    const file = files[0];
+    if (!file) {
+      return;
+    }
+
+    const currentConfig = cloneCurrentConfig();
+    const targetImage = currentConfig.images.find((image) => image.id === imageId);
+    if (!targetImage) {
+      return;
+    }
+
+    const occupiedPaths = new Set(
+      getInternalResourcePaths(currentConfig).filter((path) => path !== targetImage.file_path),
+    );
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const { resourcePath } = await importFileToCardRoot(file, occupiedPaths);
+      const nextConfig = cloneCurrentConfig();
+      nextConfig.images = nextConfig.images.map((image) => (
+        image.id === imageId
+          ? {
+              ...image,
+              source: "file",
+              file_path: resourcePath,
+              url: undefined,
+            }
+          : image
+      ));
+      commitConfigUpdate(nextConfig, { pushHistory: true });
+      setSelectedImageId(imageId);
+      setReplaceUrlInput("");
+      emitMessages([]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitMessages([`${file.name}: ${t("error.replace_failed")} (${message})`]);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  }
+
+  function handleReplaceWithUrl(imageId: string): void {
+    const trimmedUrl = replaceUrlInput.trim();
+    if (!trimmedUrl) {
+      return;
+    }
+
+    if (!validateImageUrl(trimmedUrl)) {
+      emitMessages([t("error.invalid_url")]);
+      return;
+    }
+
+    const nextConfig = cloneCurrentConfig();
+    nextConfig.images = nextConfig.images.map((image) => (
+      image.id === imageId
+        ? {
+            ...image,
+            source: "url",
+            file_path: undefined,
+            url: trimmedUrl,
+          }
+        : image
+    ));
+    commitConfigUpdate(nextConfig, { pushHistory: true });
+    setSelectedImageId(imageId);
+    setReplaceUrlInput("");
+    emitMessages([]);
   }
 
   function setTileRef(imageId: string, node: HTMLDivElement | null): void {
@@ -2016,6 +2258,7 @@ function ImageCardEditor(props: BasecardEditorProps) {
   const dragPreviewPortalTarget =
     typeof document !== "undefined" ? document.body : null;
   const gridSlots: GridSlot[] = [];
+  const selectedImage = config.images.find((image) => image.id === selectedImageId) ?? config.images[0];
 
   visibleImages.forEach((image, index) => {
     if (gridPreviewIndex === index) {
@@ -2372,7 +2615,9 @@ function ImageCardEditor(props: BasecardEditorProps) {
                           onPreviewError={(imageItem) => {
                             void refreshPreview(imageItem);
                           }}
+                          onSelect={selectImage}
                           onPointerDown={handleTilePointerDown}
+                          selected={selectedImage?.id === image.id}
                           tileRef={(node) => {
                             setTileRef(image.id, node);
                           }}
@@ -2383,6 +2628,116 @@ function ImageCardEditor(props: BasecardEditorProps) {
                 </div>
               </div>
             )}
+
+            {selectedImage ? (
+              <ChipsForm
+                className="chips-image-editor__details-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                }}
+              >
+                <div className="chips-image-editor__details-header">
+                  <div className="chips-image-editor__section-copy">
+                    <div className="chips-image-editor__section-title">
+                      {t("editor.image_details_title")}
+                    </div>
+                    <div className="chips-image-editor__section-hint">
+                      {t("editor.image_details_hint")}
+                    </div>
+                  </div>
+                  <span className="chips-image-editor__details-source">
+                    {selectedImage.source === "file"
+                      ? t("editor.source_file")
+                      : t("editor.source_url")}
+                  </span>
+                </div>
+
+                <div className="chips-image-editor__details-grid">
+                  <ChipsForm.Field
+                    className="chips-image-editor__details-field"
+                    name="image-title"
+                  >
+                    <ChipsForm.Label className="chips-image-editor__field-label">
+                      {t("editor.image_title")}
+                    </ChipsForm.Label>
+                    <ChipsForm.Control className="chips-image-editor__details-control">
+                      <input
+                        className="chips-image-editor__text-input"
+                        type="text"
+                        value={selectedImage.title ?? ""}
+                        placeholder={t("editor.image_title_placeholder")}
+                        onChange={(event) => {
+                          updateImageFields(selectedImage.id, {
+                            title: event.currentTarget.value,
+                          });
+                        }}
+                      />
+                    </ChipsForm.Control>
+                  </ChipsForm.Field>
+
+                  <ChipsForm.Field
+                    className="chips-image-editor__details-field"
+                    name="image-alt"
+                  >
+                    <ChipsForm.Label className="chips-image-editor__field-label">
+                      {t("editor.image_alt")}
+                    </ChipsForm.Label>
+                    <ChipsForm.Control className="chips-image-editor__details-control">
+                      <input
+                        className="chips-image-editor__text-input"
+                        type="text"
+                        value={selectedImage.alt ?? ""}
+                        placeholder={t("editor.image_alt_placeholder")}
+                        onChange={(event) => {
+                          updateImageFields(selectedImage.id, {
+                            alt: event.currentTarget.value,
+                          });
+                        }}
+                      />
+                    </ChipsForm.Control>
+                  </ChipsForm.Field>
+                </div>
+
+                <div className="chips-image-editor__details-actions">
+                  <label className="chips-image-editor__ghost-button">
+                    <input
+                      type="file"
+                      accept={INPUT_ACCEPT_VALUE}
+                      hidden={true}
+                      onChange={(event) => {
+                        const nextFiles = Array.from(event.target.files ?? []);
+                        event.currentTarget.value = "";
+                        void handleReplaceWithFiles(selectedImage.id, nextFiles);
+                      }}
+                    />
+                    {t("editor.replace_file")}
+                  </label>
+                  <input
+                    className="chips-image-editor__text-input chips-image-editor__url-field"
+                    type="text"
+                    value={replaceUrlInput}
+                    placeholder={t("editor.replace_url_placeholder")}
+                    onChange={(event) => {
+                      setReplaceUrlInput(event.currentTarget.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleReplaceWithUrl(selectedImage.id);
+                      }
+                    }}
+                  />
+                  <ChipsButton
+                    type="button"
+                    onPress={() => {
+                      handleReplaceWithUrl(selectedImage.id);
+                    }}
+                  >
+                    {t("editor.replace_by_url")}
+                  </ChipsButton>
+                </div>
+              </ChipsForm>
+            ) : null}
 
             {showUploader || config.images.length === 0 ? (
               <div ref={uploaderRef} className="chips-image-editor__embedded-uploader">

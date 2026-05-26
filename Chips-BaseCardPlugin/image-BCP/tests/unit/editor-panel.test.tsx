@@ -190,7 +190,7 @@ describe("createBasecardEditorRoot", () => {
     document.body.appendChild(root);
 
     const urlInput = root.querySelector(
-      ".chips-image-editor__url-field",
+      ".chips-image-editor__embedded-uploader .chips-image-editor__url-field",
     ) as HTMLInputElement | null;
     const addButton = Array.from(root.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("通过链接添加"),
@@ -288,6 +288,69 @@ describe("createBasecardEditorRoot", () => {
     expect(deleteResource).toHaveBeenCalledWith("photo.png");
   });
 
+  it("converts imported TIFF resources to PNG through the formal host bridge", async () => {
+    let lastConfig = createConfig();
+    const importResource = vi.fn(async ({ preferredPath }: { preferredPath?: string }) => ({
+      path: preferredPath ?? "scan.tiff",
+    }));
+    const convertTiffToPng = vi.fn(async ({
+      outputPath,
+    }: {
+      outputPath: string;
+      resourcePath: string;
+      overwrite?: boolean;
+    }) => ({
+      path: outputPath,
+      mimeType: "image/png" as const,
+      sourceMimeType: "image/tiff" as const,
+    }));
+    const resolveResourceUrl = vi.fn(async (resourcePath: string) => `blob:${resourcePath}`);
+    const deleteResource = vi.fn(async () => undefined);
+
+    const root = createBasecardEditorRoot({
+      initialConfig: createConfig(),
+      onChange: (next) => {
+        lastConfig = next;
+      },
+      importResource,
+      convertTiffToPng,
+      resolveResourceUrl,
+      deleteResource,
+    }) as DisposableRoot;
+    mountedRoots.push(root);
+    document.body.appendChild(root);
+
+    const addInput = root.querySelectorAll("input[type='file']")[0] as HTMLInputElement | undefined;
+    if (!addInput) {
+      throw new Error("未找到上传输入框");
+    }
+
+    const file = new File(["tiff-bytes"], "scan.tiff", { type: "image/tiff" });
+    Object.defineProperty(addInput, "files", {
+      configurable: true,
+      value: [file],
+    });
+    addInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await flushAsyncWork();
+
+    expect(importResource).toHaveBeenCalledWith({
+      file,
+      preferredPath: "scan.tiff",
+    });
+    expect(convertTiffToPng).toHaveBeenCalledWith({
+      resourcePath: "scan.tiff",
+      outputPath: "scan.png",
+      overwrite: false,
+    });
+    expect(deleteResource).toHaveBeenCalledWith("scan.tiff");
+    expect(resolveResourceUrl).toHaveBeenCalledWith("scan.png");
+    expect(lastConfig.images[0]).toMatchObject({
+      source: "file",
+      file_path: "scan.png",
+    });
+  });
+
   it("resolves existing file resources for thumbnail preview", async () => {
     const resolveResourceUrl = vi.fn(async (resourcePath: string) => `blob:${resourcePath}`);
     const root = createBasecardEditorRoot({
@@ -365,7 +428,7 @@ describe("createBasecardEditorRoot", () => {
     document.body.appendChild(root);
 
     const urlInput = root.querySelector(
-      ".chips-image-editor__url-field",
+      ".chips-image-editor__embedded-uploader .chips-image-editor__url-field",
     ) as HTMLInputElement | null;
     const addButton = Array.from(root.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("通过链接添加"),
@@ -464,7 +527,7 @@ describe("createBasecardEditorRoot", () => {
     await flushAsyncWork();
 
     const urlInput = root.querySelector(
-      ".chips-image-editor__url-field",
+      ".chips-image-editor__embedded-uploader .chips-image-editor__url-field",
     ) as HTMLInputElement | null;
     if (!urlInput) {
       throw new Error("未找到 URL 输入区域");
@@ -546,34 +609,170 @@ describe("createBasecardEditorRoot", () => {
     expect(lastConfig.images[1]?.id).toBe("image-1");
   });
 
-  it("hides per-image metadata forms and keeps the formal spacing options", async () => {
+  it("edits selected image title and alternative text while keeping formal spacing options", async () => {
+    let lastConfig = createConfig({
+      images: [
+        {
+          id: "image-1",
+          source: "url",
+          url: "https://example.com/1.png",
+        },
+        {
+          id: "image-2",
+          source: "url",
+          url: "https://example.com/2.png",
+        },
+      ],
+      layout_type: "grid",
+    });
+
     const root = createBasecardEditorRoot({
-      initialConfig: createConfig({
-        images: [
-          {
-            id: "image-1",
-            source: "url",
-            url: "https://example.com/1.png",
-          },
-          {
-            id: "image-2",
-            source: "url",
-            url: "https://example.com/2.png",
-          },
-        ],
-        layout_type: "grid",
-      }),
-      onChange: () => undefined,
+      initialConfig: lastConfig,
+      onChange: (next) => {
+        lastConfig = next;
+      },
     }) as DisposableRoot;
     mountedRoots.push(root);
     document.body.appendChild(root);
 
     await flushAsyncWork();
 
-    expect(root.textContent).not.toContain("图片标题");
-    expect(root.textContent).not.toContain("替代文本");
+    expect(root.textContent).toContain("图片标题");
+    expect(root.textContent).toContain("替代文本");
     expect(root.textContent).toContain("零间距");
     expect(root.querySelector(".chips-image-editor__toolbar")).toBeNull();
+
+    const [titleInput, altInput] = Array.from(
+      root.querySelectorAll(".chips-image-editor__details-form input[type='text']"),
+    ) as HTMLInputElement[];
+    if (!titleInput || !altInput) {
+      throw new Error("未找到图片详情输入框");
+    }
+
+    setTextInputValue(titleInput, "封面标题");
+    await flushAsyncWork();
+    setTextInputValue(altInput, "封面替代文本");
+    await flushAsyncWork();
+
+    expect(lastConfig.images[0]).toMatchObject({
+      id: "image-1",
+      title: "封面标题",
+      alt: "封面替代文本",
+    });
+  });
+
+  it("replaces the selected image with a URL and removes the previous local resource", async () => {
+    let lastConfig = createConfig({
+      images: [
+        {
+          id: "image-1",
+          source: "file",
+          file_path: "cover.png",
+          title: "Cover",
+          alt: "Cover",
+        },
+      ],
+      layout_type: "single",
+    });
+    const deleteResource = vi.fn(async () => undefined);
+
+    const root = createBasecardEditorRoot({
+      initialConfig: lastConfig,
+      onChange: (next) => {
+        lastConfig = next;
+      },
+      resolveResourceUrl: vi.fn(async (resourcePath: string) => `blob:${resourcePath}`),
+      deleteResource,
+    }) as DisposableRoot;
+    mountedRoots.push(root);
+    document.body.appendChild(root);
+
+    await flushAsyncWork();
+
+    const replaceUrlInput = root.querySelector(
+      ".chips-image-editor__details-actions .chips-image-editor__url-field",
+    ) as HTMLInputElement | null;
+    const replaceButton = Array.from(root.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("替换链接"),
+    ) as HTMLButtonElement | undefined;
+    if (!replaceUrlInput || !replaceButton) {
+      throw new Error("未找到替换链接控件");
+    }
+
+    setTextInputValue(replaceUrlInput, "https://example.com/replaced.png");
+    replaceButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushAsyncWork();
+
+    expect(lastConfig.images[0]).toMatchObject({
+      id: "image-1",
+      source: "url",
+      url: "https://example.com/replaced.png",
+      title: "Cover",
+      alt: "Cover",
+    });
+    expect(lastConfig.images[0]?.file_path).toBeUndefined();
+    expect(deleteResource).toHaveBeenCalledWith("cover.png");
+  });
+
+  it("replaces the selected image with an imported file through the resource bridge", async () => {
+    let lastConfig = createConfig({
+      images: [
+        {
+          id: "image-1",
+          source: "url",
+          url: "https://example.com/original.png",
+          title: "Original",
+          alt: "Original alt",
+        },
+      ],
+      layout_type: "single",
+    });
+    const importResource = vi.fn(async ({ preferredPath }: { preferredPath?: string }) => ({
+      path: preferredPath ?? "replacement.png",
+    }));
+    const resolveResourceUrl = vi.fn(async (resourcePath: string) => `blob:${resourcePath}`);
+
+    const root = createBasecardEditorRoot({
+      initialConfig: lastConfig,
+      onChange: (next) => {
+        lastConfig = next;
+      },
+      importResource,
+      resolveResourceUrl,
+    }) as DisposableRoot;
+    mountedRoots.push(root);
+    document.body.appendChild(root);
+
+    await flushAsyncWork();
+
+    const replaceInput = root.querySelector(
+      ".chips-image-editor__details-actions input[type='file']",
+    ) as HTMLInputElement | null;
+    if (!replaceInput) {
+      throw new Error("未找到替换文件输入框");
+    }
+
+    const file = new File(["replacement-bytes"], "replacement.webp", { type: "image/webp" });
+    Object.defineProperty(replaceInput, "files", {
+      configurable: true,
+      value: [file],
+    });
+    replaceInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushAsyncWork();
+
+    expect(importResource).toHaveBeenCalledWith({
+      file,
+      preferredPath: "replacement.webp",
+    });
+    expect(resolveResourceUrl).toHaveBeenCalledWith("replacement.webp");
+    expect(lastConfig.images[0]).toMatchObject({
+      id: "image-1",
+      source: "file",
+      file_path: "replacement.webp",
+      title: "Original",
+      alt: "Original alt",
+    });
+    expect(lastConfig.images[0]?.url).toBeUndefined();
   });
 
   it("updates spacing mode using the two formal spacing choices", async () => {

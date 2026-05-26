@@ -97,6 +97,6 @@ describe("image basecard schema", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors["images.0.url"]).toContain("URL");
+    expect(result.errors["images.0.url"]).toBe("image.validation.urlInvalid");
   });
 });

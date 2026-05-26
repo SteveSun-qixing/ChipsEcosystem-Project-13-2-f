@@ -142,32 +142,32 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
   const errors: Record<string, string> = {};
 
   if (config.card_type !== "ImageCard") {
-    errors.card_type = "card_type 必须为 ImageCard";
+    errors.card_type = "image.validation.cardType";
   }
 
   config.images.forEach((image, index) => {
     if (!isNonEmptyString(image.id)) {
-      errors[`images.${index}.id`] = "图片 ID 不能为空";
+      errors[`images.${index}.id`] = "image.validation.imageIdRequired";
     }
 
     if (image.source === "file") {
       if (!isNonEmptyString(image.file_path)) {
-        errors[`images.${index}.file_path`] = "本地图片必须提供 file_path";
+        errors[`images.${index}.file_path`] = "image.validation.filePathRequired";
       }
     } else if (image.source === "url") {
       if (!isNonEmptyString(image.url)) {
-        errors[`images.${index}.url`] = "远程图片必须提供 url";
+        errors[`images.${index}.url`] = "image.validation.urlRequired";
       } else if (!validateImageUrl(image.url)) {
-        errors[`images.${index}.url`] = "图片 URL 不合法";
+        errors[`images.${index}.url`] = "image.validation.urlInvalid";
       }
     } else {
-      errors[`images.${index}.source`] = "source 必须为 file 或 url";
+      errors[`images.${index}.source`] = "image.validation.source";
     }
   });
 
   const layoutOptions = config.layout_options ?? defaultLayoutOptions;
   if (layoutOptions.single_width_percent && (layoutOptions.single_width_percent < 10 || layoutOptions.single_width_percent > 100)) {
-    errors.layout_options_single_width_percent = "单图宽度必须在 10 到 100 之间";
+    errors.layout_options_single_width_percent = "image.validation.singleWidthPercent";
   }
 
   if (
@@ -175,7 +175,7 @@ export function validateBasecardConfig(config: BasecardConfig): ConfigValidation
     layoutOptions.spacing_mode !== "none" &&
     layoutOptions.spacing_mode !== "comfortable"
   ) {
-    errors.layout_options_spacing_mode = "图片间距模式必须为 none 或 comfortable";
+    errors.layout_options_spacing_mode = "image.validation.spacingMode";
   }
 
   return {

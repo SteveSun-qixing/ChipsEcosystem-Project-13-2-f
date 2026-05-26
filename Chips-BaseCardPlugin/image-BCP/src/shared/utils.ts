@@ -8,6 +8,7 @@ export const ACCEPTED_IMAGE_MIME_TYPES = [
   "image/gif",
   "image/webp",
   "image/svg+xml",
+  "image/tiff",
 ] as const;
 
 export function isNonEmptyString(value: unknown): value is string {
@@ -81,6 +82,24 @@ export function validateImageUrl(value: string): boolean {
 
 export function validateImageFormat(mimeType: string, acceptedFormats = ACCEPTED_IMAGE_MIME_TYPES): boolean {
   return acceptedFormats.includes(mimeType as (typeof ACCEPTED_IMAGE_MIME_TYPES)[number]);
+}
+
+export function isTiffImageFile(file: File): boolean {
+  const lowerName = file.name.trim().toLowerCase();
+  return file.type === "image/tiff" || lowerName.endsWith(".tif") || lowerName.endsWith(".tiff");
+}
+
+export function toPngOutputPath(resourcePath: string): string {
+  const normalizedPath = normalizeRelativeCardResourcePath(resourcePath) ?? "image";
+  if (/\.(tif|tiff)$/i.test(normalizedPath)) {
+    return normalizedPath.replace(/\.(tif|tiff)$/i, ".png");
+  }
+
+  if (/\.[^/.]+$/.test(normalizedPath)) {
+    return normalizedPath.replace(/\.[^/.]+$/, ".png");
+  }
+
+  return `${normalizedPath}.png`;
 }
 
 export function getEffectiveLayoutType(config: BasecardConfig): LayoutType {

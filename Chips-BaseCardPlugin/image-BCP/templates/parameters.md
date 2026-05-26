@@ -1,6 +1,6 @@
 # 图片基础卡片配置参数说明
 
-本文件说明 [default-card-config.yaml](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/templates/default-card-config.yaml) 中各字段的正式含义与填写约束。
+本文件说明 [default-card-config.yaml](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/templates/default-card-config.yaml) 中各字段的正式含义与填写约束。
 
 - `card_type`
   - 固定为 `"ImageCard"`。
@@ -14,15 +14,16 @@
   - 当 `source = file` 时必填。
   - 记录相对于卡片根目录的资源路径，例如 `cover.png`。
   - 不允许写入 `blob:`、`data:`、绝对路径或 `../` 形式的越级路径。
+  - TIFF 导入后只记录宿主转换得到的 PNG 路径，例如 `scan.png`，不记录源 `.tif/.tiff`。
 - `images[*].url`
   - 当 `source = url` 时必填。
   - 只允许 `http:`、`https:` 或 `data:image/*`。
 - `images[*].title`
   - 可选图片标题。
-  - 当前编辑器图片网格不提供逐张标题编辑入口，如需写入需通过正式配置生成链路处理。
+  - 编辑器图片详情区提供逐张标题编辑入口，查看态点击打开资源时会优先作为资源标题提示传出。
 - `images[*].alt`
   - 可选无障碍替代文本。
-  - 当前编辑器图片网格不提供逐张替代文本编辑入口，如需写入需通过正式配置生成链路处理。
+  - 编辑器图片详情区提供逐张替代文本编辑入口，查看态会写入 `img.alt`。
 - `layout_type`
   - 正式布局类型，可选：
     - `single`

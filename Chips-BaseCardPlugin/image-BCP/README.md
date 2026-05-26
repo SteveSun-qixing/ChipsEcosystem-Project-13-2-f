@@ -20,6 +20,7 @@
 - 当图片数量小于等于 1 时，渲染态自动使用单图布局。
 - 编辑态支持：
   - 本地图片导入
+  - TIFF 图片通过宿主 `convertTiffToPng(...)` 转换为 PNG 后写入正式配置
   - 外部 URL 添加
   - 3 列无限缩略图列表
   - 缩略图表面不显示名称和操作按钮
@@ -27,6 +28,8 @@
   - 鼠标旁显示浮动缩略图拖拽预览
   - 拖拽到底部固定删除区删除图片
   - 末尾灰色加号卡片展开底部添加区域
+  - 选中图片后编辑标题与替代文本
+  - 选中图片后通过本地文件或外部 URL 替换当前图片
   - 清空全部
   - 撤销 / 重做
   - 单图 / 多图分场景布局配置
@@ -44,9 +47,11 @@
 - 插件不会把图片写入 `content/`、`images/` 等子目录，也不会把 `blob:`、`data:`、系统绝对路径写回配置。
 - 编辑态所有本地文件导入、预览解析、资源释放、资源删除都通过宿主资源桥完成：
   - `importResource(...)`
+  - `convertTiffToPng(...)`
   - `resolveResourceUrl(...)`
   - `releaseResourceUrl(...)`
   - `deleteResource(...)`
+- TIFF 导入链路先把源文件作为卡片根目录资源导入，再请求宿主转换为 PNG；正式配置只保存最终 PNG 相对路径，源 TIFF 不进入 `images[*].file_path`。
 - 插件本身不设置图片数量上限和图片大小上限。
 
 ## 配置模型
@@ -73,7 +78,7 @@ layout_options:
   spacing_mode: "comfortable"
 ```
 
-正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/src/schema/card-config.ts)。
+正式类型定义见 [src/schema/card-config.ts](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/src/schema/card-config.ts)。
 
 ## 目录结构
 
@@ -103,8 +108,13 @@ image-BCP/
 在插件目录执行：
 
 ```bash
-npx tsc --noEmit -p tsconfig.json
-npx vitest run tests/unit/schema.test.ts tests/unit/render-view.test.tsx tests/unit/editor-panel.test.tsx tests/integration/card-flow.test.ts
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run validate
+npm run package
+npm run verify
 ```
 
 如果需要本地开发服务：
@@ -115,7 +125,7 @@ npm run dev
 
 ## 相关文档
 
-- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/docs/requirements/01-需求规格说明书.md)
-- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/docs/technical/01-架构设计.md)
-- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/docs/technical/02-数据模型设计.md)
-- 开发计划：[docs/development/00-开发计划总览.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f/Chips-BaseCardPlugin/image-BCP/docs/development/00-开发计划总览.md)
+- 需求规格：[docs/requirements/01-需求规格说明书.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/docs/requirements/01-需求规格说明书.md)
+- 架构设计：[docs/technical/01-架构设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/docs/technical/01-架构设计.md)
+- 数据模型：[docs/technical/02-数据模型设计.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/docs/technical/02-数据模型设计.md)
+- 开发计划：[docs/development/00-开发计划总览.md](/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-worktree-20260523-161048/Chips-BaseCardPlugin/image-BCP/docs/development/00-开发计划总览.md)

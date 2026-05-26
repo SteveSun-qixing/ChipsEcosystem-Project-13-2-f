@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBasecardEditorRoot } from "../../src/editor/panel";
+import { renderBasecardEditor } from "../../src/index";
 import { mountBasecardView } from "../../src/render/runtime";
 import type { BasecardConfig } from "../../src/schema/card-config";
 
@@ -32,6 +33,7 @@ async function flushAsyncWork(): Promise<void> {
 
 describe("image basecard integration flow", () => {
   let editorRoot: DisposableRoot | null = null;
+  let editorCleanup: (() => void) | null = null;
   let viewCleanup: (() => void) | null = null;
 
   beforeEach(() => {
@@ -45,6 +47,8 @@ describe("image basecard integration flow", () => {
     editorRoot?.__chipsDispose?.();
     editorRoot?.remove();
     editorRoot = null;
+    editorCleanup?.();
+    editorCleanup = null;
     viewCleanup?.();
     viewCleanup = null;
     document.body.innerHTML = "";
@@ -102,5 +106,73 @@ describe("image basecard integration flow", () => {
     expect(currentConfig.images).toHaveLength(1);
     expect(currentConfig.images[0]?.file_path).toBe("gallery-shot.webp");
     expect(viewContainer.querySelector("img")?.getAttribute("src")).toBe("gallery-shot.webp");
+  }, 15000);
+
+  it("forwards TIFF conversion from the formal editor entry to the mounted editor", async () => {
+    const editorContainer = document.createElement("div");
+    document.body.appendChild(editorContainer);
+
+    let currentConfig = createConfig();
+    const importedPaths: string[] = [];
+    const convertedInputs: Array<{
+      outputPath: string;
+      overwrite?: boolean;
+      resourcePath: string;
+    }> = [];
+    const deletedPaths: string[] = [];
+
+    editorCleanup = renderBasecardEditor({
+      container: editorContainer,
+      initialConfig: currentConfig,
+      onChange: (next) => {
+        currentConfig = next;
+      },
+      importResource: async ({ preferredPath }) => {
+        const path = preferredPath ?? "scan.tiff";
+        importedPaths.push(path);
+        return { path };
+      },
+      convertTiffToPng: async (input) => {
+        convertedInputs.push(input);
+        return {
+          path: input.outputPath,
+          mimeType: "image/png",
+          sourceMimeType: "image/tiff",
+        };
+      },
+      resolveResourceUrl: async (resourcePath) => `blob:${resourcePath}`,
+      deleteResource: async (resourcePath) => {
+        deletedPaths.push(resourcePath);
+      },
+    });
+
+    const addInput = editorContainer.querySelectorAll(
+      "input[type='file']",
+    )[0] as HTMLInputElement | undefined;
+    if (!addInput) {
+      throw new Error("未找到上传输入框");
+    }
+
+    const file = new File(["tiff-bytes"], "scan.tiff", {
+      type: "image/tiff",
+    });
+    Object.defineProperty(addInput, "files", {
+      configurable: true,
+      value: [file],
+    });
+    addInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    await flushAsyncWork();
+
+    expect(importedPaths).toEqual(["scan.tiff"]);
+    expect(convertedInputs).toEqual([
+      {
+        resourcePath: "scan.tiff",
+        outputPath: "scan.png",
+        overwrite: false,
+      },
+    ]);
+    expect(deletedPaths).toContain("scan.tiff");
+    expect(currentConfig.images[0]?.file_path).toBe("scan.png");
   }, 15000);
 });

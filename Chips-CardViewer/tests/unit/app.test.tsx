@@ -11,7 +11,13 @@ import { CardWindow } from "../../src/components/CardWindow";
 import { localeBundles, supportedLocales, translateLocalKey } from "../../src/i18n/messages";
 import { chipsClient } from "../../src/runtime/chips-client";
 import { CARD_VIEWER_COMMAND_IDS } from "../../src/commands/card-viewer-commands";
-import { expectRealDocumentFixturesAvailable, realDocumentFixtures } from "../fixtures/real-documents";
+import {
+  allRealDocumentPaths,
+  expectAllRealDocumentsAvailable,
+  expectRealDocumentFixturesAvailable,
+  formatRealDocumentPath,
+  realDocumentFixtures,
+} from "../fixtures/real-documents";
 
 type Listener<T> = (payload: T) => void;
 
@@ -352,6 +358,38 @@ describe("App（卡片查看器根组件）", () => {
 
     expect(container.textContent).toContain("当前只支持打开 .card 或 .box 文件。");
     expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
+  });
+
+  it("逐个消费任务056清单中的真实卡片与箱子素材，并统一交给 Host 文档窗口", async () => {
+    expectAllRealDocumentsAvailable();
+
+    for (const filePath of allRealDocumentPaths) {
+      await act(async () => {
+        root.unmount();
+      });
+      appRuntimeMock.reset();
+      appRuntimeMock.setLaunchParams({
+        trigger: "file-association",
+        targetPath: filePath,
+      });
+      container.innerHTML = "";
+      root = createRoot(container);
+
+      await act(async () => {
+        root.render(<App />);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(
+        appRuntimeMock.client.document.window.render,
+        formatRealDocumentPath(filePath),
+      ).toHaveBeenLastCalledWith({
+        filePath,
+        locale: "zh-CN",
+        mode: "view",
+      });
+    }
   });
 
   it("从 webDocumentUrl 启动上下文恢复托管文档，并保持语言与主题事件同步到壳层和内容 iframe", async () => {

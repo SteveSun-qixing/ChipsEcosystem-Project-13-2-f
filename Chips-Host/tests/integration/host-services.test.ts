@@ -27,6 +27,57 @@ const writeText = async (filePath: string, content: string): Promise<void> => {
 
 const workspaceRoot = path.resolve(__dirname, '../../..');
 const finishedProductSpaceRoot = path.join(workspaceRoot, 'ProductFinishedProductTestingSpace');
+const officialBaseCardPluginManifests = [
+  'Chips-BaseCardPlugin/book-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/hyperlink-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/image-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/music-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/richtext-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/score-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/video-BCP/manifest.yaml',
+  'Chips-BaseCardPlugin/webpage-BCP/manifest.yaml',
+];
+const officialBoxLayoutPluginManifests = [
+  'Chips-BoxLayoutPlugin/grid-BLP/manifest.yaml',
+  'Chips-BoxLayoutPlugin/list-BLP/manifest.yaml',
+];
+const officialDocumentAppPluginManifests = [
+  'Chips-CardViewer/manifest.yaml',
+];
+
+const isArchivedTestingSpacePath = (filePath: string): boolean => {
+  const relativePath = path.relative(finishedProductSpaceRoot, filePath);
+  return relativePath === '归档' || relativePath.startsWith(`归档${path.sep}`);
+};
+
+const collectFinishedProductFiles = async (extension: '.card' | '.box'): Promise<string[]> => {
+  const files: string[] = [];
+  const visit = async (directory: string): Promise<void> => {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextPath = path.join(directory, entry.name);
+      if (isArchivedTestingSpacePath(nextPath)) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await visit(nextPath);
+        continue;
+      }
+      if (entry.isFile() && nextPath.endsWith(extension)) {
+        files.push(nextPath);
+      }
+    }
+  };
+  await visit(finishedProductSpaceRoot);
+  return files.sort((left, right) => left.localeCompare(right));
+};
+
+const displayFinishedProductPath = (filePath: string): string =>
+  path.relative(finishedProductSpaceRoot, filePath).split(path.sep).join('/');
+
+const expectManagedDocumentUrl = (documentUrl: string, label?: string): void => {
+  expect(documentUrl, label).toMatch(/^(chips-render:\/\/|file:\/\/)/);
+};
 
 const installAndEnablePluginFromWorkspace = async (relativeManifestPath: string): Promise<string> => {
   const installed = await runtime.invoke<{ pluginId: string }>('plugin.install', {
@@ -34,6 +85,18 @@ const installAndEnablePluginFromWorkspace = async (relativeManifestPath: string)
   });
   await runtime.invoke('plugin.enable', { pluginId: installed.pluginId });
   return installed.pluginId;
+};
+
+const installOfficialCardAndBoxPlugins = async (): Promise<void> => {
+  for (const manifestPath of officialDocumentAppPluginManifests) {
+    await installAndEnablePluginFromWorkspace(manifestPath);
+  }
+  for (const manifestPath of officialBaseCardPluginManifests) {
+    await installAndEnablePluginFromWorkspace(manifestPath);
+  }
+  for (const manifestPath of officialBoxLayoutPluginManifests) {
+    await installAndEnablePluginFromWorkspace(manifestPath);
+  }
 };
 
 const prepareTask055RealBoxFixture = async (): Promise<string> => {
@@ -60,6 +123,8 @@ const prepareTask055RealBoxFixture = async (): Promise<string> => {
   await zip.compress(extractedDir, preparedBoxFile);
   return preparedBoxFile;
 };
+
+const prepareTask056RealBoxFixture = prepareTask055RealBoxFixture;
 
 const appRuntimeYamlLines = [
   'runtime:',
@@ -1123,6 +1188,267 @@ describe('Host services integration', () => {
     await expect(runtime.invoke('box.releaseRenderSession', { sessionId: boxEditor.view.sessionId })).resolves.toMatchObject({ ack: true });
     await expect(runtime.invoke('box.closeView', { sessionId: openedBox.sessionId })).resolves.toMatchObject({ ack: true });
   }, 60_000);
+
+  it('regresses all task056 real .card and .box materials through Host card and box service routes', async () => {
+    await installOfficialCardAndBoxPlugins();
+
+    const cardFiles = await collectFinishedProductFiles('.card');
+    const boxFiles = await collectFinishedProductFiles('.box');
+    expect(cardFiles.map(displayFinishedProductPath)).toEqual([
+      'Markdown语法测试.card',
+      '一个美食菜单.card',
+      '吊带袜天使1.card',
+      '富文本基础卡片.card',
+      '视频音乐卡片.card',
+      '美食卡片成品/美食卡片-01-点心百宝盒.card',
+      '美食卡片成品/美食卡片-02-咖喱香料剧场.card',
+      '美食卡片成品/美食卡片-03-意面卷起的风景.card',
+      '美食卡片成品/美食卡片-04-面包清晨图鉴.card',
+      '美食卡片成品/美食卡片-05-丼饭一碗宇宙.card',
+      '美食卡片成品/美食卡片-06-寿司色彩案内.card',
+      '美食卡片成品/美食卡片-07-炸物金色音阶.card',
+      '美食卡片成品/美食卡片-08-果实甜度地图.card',
+      '美食卡片成品/美食卡片-09-汤物暖流笔记.card',
+      '美食卡片成品/美食卡片-10-洋食怀旧餐盘.card',
+      '美食卡片成品/美食卡片-11-町中華热锅气.card',
+      '美食卡片成品/美食卡片-12-锅物围坐计划.card',
+      '美食卡片成品/美食卡片-13-饮品清爽菜单.card',
+      '美食卡片成品/美食卡片-14-鱼介鲜味小港.card',
+      '美食卡片成品/美食卡片-15-面类热气路线.card',
+      '集大成者.card',
+    ]);
+    expect(boxFiles.map(displayFinishedProductPath)).toEqual(['美食网格箱子.box']);
+
+    for (const cardFile of cardFiles) {
+      const label = displayFinishedProductPath(cardFile);
+      await expect(runtime.invoke('card.validate', { cardFile }), label).resolves.toEqual({
+        valid: true,
+        errors: [],
+      });
+
+      const info = await runtime.invoke<{
+        info: {
+          info: {
+            status?: { state: string; valid: boolean; exists: boolean };
+            metadata?: { name?: string; cardId?: string; coverRatio?: string };
+            cover?: { title: string; resourceUrl: string; mimeType: string; ratio?: string };
+          };
+        };
+      }>('card.readInfo', {
+        cardFile,
+        fields: ['status', 'metadata', 'cover'],
+      });
+      expect(info.info.info.status, label).toMatchObject({
+        state: 'ready',
+        exists: true,
+        valid: true,
+      });
+      expect(info.info.info.metadata?.name, label).toBeTruthy();
+      expect(info.info.info.metadata?.cardId, label).toMatch(/^[0-9a-zA-Z]{10}$/);
+      expect(info.info.info.metadata?.coverRatio, label).toMatch(/^\d+(\.\d+)?:\d+(\.\d+)?$/);
+      expect(info.info.info.cover, label).toMatchObject({
+        title: info.info.info.metadata?.name,
+        mimeType: 'text/html',
+      });
+      expect(info.info.info.cover?.resourceUrl, label).toBeTruthy();
+
+      const cover = await runtime.invoke<{
+        view: { title: string; coverUrl: string; mimeType?: string; ratio?: string };
+      }>('card.renderCover', { cardFile });
+      expect(cover.view.title, label).toBe(info.info.info.metadata?.name);
+      expect(cover.view.coverUrl, label).toBeTruthy();
+      expect(cover.view.ratio, label).toBe(info.info.info.metadata?.coverRatio);
+
+      const rendered = await runtime.invoke<{
+        view: {
+          title: string;
+          body: string;
+          documentUrl: string;
+          sessionId: string;
+          contentFiles: string[];
+          diagnostics: Array<{ severity: string }>;
+          qualityGate: { passed: boolean; blockingCount: number };
+        };
+      }>('card.render', {
+        cardFile,
+        options: {
+          target: 'card-iframe',
+          verifyConsistency: true,
+        },
+      });
+      expect(rendered.view.title, label).toBe(info.info.info.metadata?.name);
+      expectManagedDocumentUrl(rendered.view.documentUrl, label);
+      expect(rendered.view.contentFiles.length, label).toBeGreaterThan(0);
+      expect(rendered.view.diagnostics, label).toEqual([]);
+      expect(rendered.view.qualityGate, label).toMatchObject({
+        passed: true,
+        blockingCount: 0,
+      });
+      expect(rendered.view.body, label).toContain('chips-composite');
+      await expect(
+        runtime.invoke('card.releaseRenderSession', { sessionId: rendered.view.sessionId }),
+        label,
+      ).resolves.toMatchObject({ ack: true });
+    }
+
+    const boxFile = await prepareTask056RealBoxFixture();
+    await expect(runtime.invoke('box.validate', { boxFile })).resolves.toEqual({
+      validationResult: { valid: true, errors: [] },
+    });
+
+    const boxCover = await runtime.invoke<{
+      view: { title: string; coverUrl: string; mimeType: string; ratio?: string };
+    }>('box.renderCover', { boxFile });
+    expect(boxCover.view).toMatchObject({
+      title: '美食网格箱子',
+      mimeType: 'text/html',
+      ratio: '3:4',
+    });
+    expect(boxCover.view.coverUrl).toBeTruthy();
+
+    const inspection = await runtime.invoke<{
+      inspection: {
+        metadata: { name: string; activeLayoutType: string };
+        content: { layoutConfigs: Record<string, Record<string, unknown>> };
+        entries: Array<{ entryId: string; url: string; enabled: boolean }>;
+      };
+    }>('box.inspect', { boxFile });
+    expect(inspection.inspection.metadata).toMatchObject({
+      name: '美食网格箱子',
+      activeLayoutType: 'chips.layout.grid',
+    });
+    expect(inspection.inspection.entries).toHaveLength(15);
+    expect(inspection.inspection.entries.every((entry) => (
+      entry.enabled === true
+      && entry.url.startsWith(pathToFileURL(`${finishedProductSpaceRoot}${path.sep}`).href)
+    ))).toBe(true);
+
+    const normalizedConfig = await runtime.invoke<{ config: Record<string, unknown> }>('box.normalizeLayoutConfig', {
+      layoutType: 'chips.layout.grid',
+      config: inspection.inspection.content.layoutConfigs['chips.layout.grid'] ?? {},
+    });
+    const initialQuery = await runtime.invoke<{ query?: Record<string, unknown> }>('box.getLayoutInitialQuery', {
+      layoutType: 'chips.layout.grid',
+      config: normalizedConfig.config,
+    });
+    const openedBox = await runtime.invoke<{
+      sessionId: string;
+      box: { name: string; activeLayoutType: string };
+      initialView: { total: number; items: Array<{ entryId: string }> };
+    }>('box.openView', {
+      boxFile,
+      layoutType: 'chips.layout.grid',
+      initialQuery: initialQuery.query,
+    });
+    expect(openedBox.box).toMatchObject({
+      name: '美食网格箱子',
+      activeLayoutType: 'chips.layout.grid',
+    });
+    expect(openedBox.initialView.total).toBe(15);
+    expect(openedBox.initialView.items).toHaveLength(15);
+
+    const listed = await runtime.invoke<{
+      page: { total: number; items: Array<{ entryId: string; snapshot?: { contentType?: string; title?: string } }> };
+    }>('box.listEntries', {
+      sessionId: openedBox.sessionId,
+      query: { limit: 15 },
+    });
+    expect(listed.page.total).toBe(15);
+    expect(listed.page.items).toHaveLength(15);
+    expect(listed.page.items.every((entry) => entry.snapshot?.contentType === 'chips/card')).toBe(true);
+
+    const firstEntryId = listed.page.items[0]?.entryId;
+    expect(firstEntryId).toBeTypeOf('string');
+    const detail = await runtime.invoke<{
+      items: Array<{
+        entryId: string;
+        detail: {
+          documentInfo?: { status?: { state?: string; valid?: boolean }; metadata?: { name?: string } };
+          coverDescriptor?: { title?: string; mimeType?: string };
+        };
+      }>;
+    }>('box.readEntryDetail', {
+      sessionId: openedBox.sessionId,
+      entryIds: [firstEntryId],
+      fields: ['documentInfo', 'coverDescriptor', 'status'],
+    });
+    expect(detail.items).toHaveLength(1);
+    expect(detail.items[0]?.detail.documentInfo?.status).toMatchObject({
+      state: 'ready',
+      valid: true,
+    });
+    expect(detail.items[0]?.detail.documentInfo?.metadata?.name).toBeTruthy();
+
+    const entryCover = await runtime.invoke<{
+      view: { title: string; coverUrl: string; mimeType: string; ratio?: string };
+    }>('box.renderEntryCover', {
+      sessionId: openedBox.sessionId,
+      entryId: firstEntryId,
+    });
+    expect(entryCover.view).toMatchObject({
+      title: detail.items[0]?.detail.documentInfo?.metadata?.name,
+      mimeType: 'text/html',
+      ratio: '3:4',
+    });
+    expect(entryCover.view.coverUrl).toBeTruthy();
+
+    const renderedBox = await runtime.invoke<{
+      view: { title: string; layoutType: string; pluginId: string; documentUrl: string; sessionId: string };
+    }>('box.renderLayoutFrame', {
+      layoutType: 'chips.layout.grid',
+      sessionId: openedBox.sessionId,
+      box: openedBox.box,
+      initialView: openedBox.initialView,
+      config: normalizedConfig.config,
+    });
+    expect(renderedBox.view).toMatchObject({
+      title: '美食网格箱子',
+      layoutType: 'chips.layout.grid',
+      pluginId: 'chips.layout.grid',
+    });
+    expectManagedDocumentUrl(renderedBox.view.documentUrl);
+
+    const boxEditor = await runtime.invoke<{
+      view: { title: string; layoutType: string; pluginId: string; documentUrl: string; sessionId: string };
+    }>('box.renderLayoutEditor', {
+      layoutType: 'chips.layout.grid',
+      entries: inspection.inspection.entries,
+      initialConfig: normalizedConfig.config,
+    });
+    expect(boxEditor.view).toMatchObject({
+      layoutType: 'chips.layout.grid',
+      pluginId: 'chips.layout.grid',
+    });
+
+    const openedEntry = await runtime.invoke<{
+      result: { mode: string; documentType?: string; pluginId?: string; windowId?: string };
+    }>('box.openEntry', {
+      sessionId: openedBox.sessionId,
+      entryId: firstEntryId,
+    });
+    expect(openedEntry.result).toMatchObject({
+      mode: 'document-window',
+      documentType: 'card',
+      pluginId: 'com.chips.card-viewer',
+    });
+    expect(openedEntry.result.windowId).toBeTruthy();
+
+    const unpackedBoxDir = path.join(workspace, 'task056-real-box-unpacked');
+    await expect(runtime.invoke('box.unpack', { boxFile, outputDir: unpackedBoxDir })).resolves.toMatchObject({
+      outputDir: unpackedBoxDir,
+    });
+    const repackedBoxFile = path.join(workspace, 'task056-real-box-repacked.box');
+    await expect(runtime.invoke('box.pack', { boxDir: unpackedBoxDir, outputPath: repackedBoxFile })).resolves.toMatchObject({
+      boxFile: repackedBoxFile,
+    });
+    await expect(runtime.invoke('box.validate', { boxFile: repackedBoxFile })).resolves.toEqual({
+      validationResult: { valid: true, errors: [] },
+    });
+
+    await expect(runtime.invoke('box.releaseRenderSession', { sessionId: renderedBox.view.sessionId })).resolves.toMatchObject({ ack: true });
+    await expect(runtime.invoke('box.releaseRenderSession', { sessionId: boxEditor.view.sessionId })).resolves.toMatchObject({ ack: true });
+    await expect(runtime.invoke('box.closeView', { sessionId: openedBox.sessionId })).resolves.toMatchObject({ ack: true });
+  }, 120_000);
 
   it('creates window records via window service', async () => {
     const opened = await runtime.invoke<{ window: { id: string; chrome?: { backgroundColor?: string } } }>('window.open', {

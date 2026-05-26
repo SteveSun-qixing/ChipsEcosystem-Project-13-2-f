@@ -1,5 +1,13 @@
 # 任务054：开放项目 Thorium 长期同化评估
 
+## 状态
+
+- 状态：已完成
+- 完成日期：2026-05-26
+- 评估报告：`项目日志与笔记/task022-优化薯片组件库和主题系统/08-草稿笔记/任务054-Thorium长期同化评估报告-20260526.md`
+- 工作日志：`项目日志与笔记/task022-优化薯片组件库和主题系统/07-工作日志/任务054-开放项目Thorium长期同化评估-20260526.md`
+- 结论：Thorium 适合作为阅读器长期能力地图与复杂 Web 项目同化样本，不适合未经拆解直接并入 Host、BookReader 或 book-BCP。后续应按 Host 能力、模块插件、BookReader 应用 UI、book-BCP 资源卡片和公共契约分别吸收。
+
 ## 1. 任务目标
 
 使用 `OpenSourceProjectHandlingFolder/thorium-reader-develop` 评估大型阅读器项目同化难度，为阅读器、电子书基础卡片和长期复杂 Web 项目吸收提供路线。

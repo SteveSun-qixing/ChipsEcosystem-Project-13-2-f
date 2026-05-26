@@ -4,6 +4,10 @@ import {
   type PlatformLaunchContext
 } from './create-bridge';
 import type { SurfaceContext, SurfaceKind, SurfacePresentation } from '../../packages/pal/src';
+import {
+  normalizeThemeCssForBrowser,
+  normalizeThemeTokenValueForBrowser
+} from '../shared/theme-css-units';
 
 const CHIPS_BRIDGE_CONTEXT_ARG_PREFIX = '--chips-bridge-context=';
 
@@ -161,7 +165,8 @@ const applyThemeVariables = (target: any, variables: Record<string, unknown>): v
     if (typeof tokenValue !== 'string' && typeof tokenValue !== 'number') {
       continue;
     }
-    target.style.setProperty(`--${tokenKey.replaceAll('.', '-')}`, String(tokenValue));
+    const browserValue = normalizeThemeTokenValueForBrowser(tokenValue);
+    target.style.setProperty(`--${tokenKey.replaceAll('.', '-')}`, String(browserValue));
   }
 };
 
@@ -202,7 +207,7 @@ const syncThemeToDocument = async (): Promise<void> => {
 
   const root = document.documentElement;
   const styleEl = ensureThemeStyleElement(document);
-  styleEl.textContent = cssResult.css;
+  styleEl.textContent = normalizeThemeCssForBrowser(cssResult.css);
   root.setAttribute(THEME_ID_ATTRIBUTE, current.themeId);
   root.setAttribute(THEME_VERSION_ATTRIBUTE, current.version);
   applyThemeVariables(root, resolved.tokens);

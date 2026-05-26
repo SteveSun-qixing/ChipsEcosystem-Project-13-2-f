@@ -7,6 +7,10 @@ import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
 import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import { parseYamlLite } from '../../../src/shared/yaml-lite';
+import {
+  createThemeCssVariableDeclarations,
+  normalizeThemeCssForBrowser
+} from '../../../src/shared/theme-css-units';
 import { createId } from '../../../src/shared/utils';
 import { CardPacker } from '../../card-packer/src';
 import { evaluateRenderQualityGate } from '../../unified-rendering/src';
@@ -713,9 +717,7 @@ const normalizeRichTextRuntimeConfig = (
 };
 
 const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
-  const declarations = Object.entries(theme.tokens)
-    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
-    .map(([key, value]) => `  --${key.replaceAll('.', '-')}: ${String(value)};`);
+  const declarations = createThemeCssVariableDeclarations(theme.tokens);
 
   if (declarations.length === 0) {
     return ':root {}';
@@ -725,7 +727,10 @@ const createThemeVariablesCss = (theme: ThemeSnapshot): string => {
 };
 
 const joinStyleBlocks = (...blocks: Array<string | undefined>): string => {
-  return blocks.map((block) => block?.trim() ?? '').filter((block) => block.length > 0).join('\n\n');
+  return blocks
+    .map((block) => normalizeThemeCssForBrowser(block?.trim() ?? ''))
+    .filter((block) => block.length > 0)
+    .join('\n\n');
 };
 
 const createBasecardThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {

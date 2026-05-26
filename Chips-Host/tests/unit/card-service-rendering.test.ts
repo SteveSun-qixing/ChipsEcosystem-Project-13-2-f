@@ -688,6 +688,9 @@ describe('CardService rendering', () => {
   it('renders formal base card documents that keep resource resolution in the single-card runtime', async () => {
     const cardDir = await createImageCardDirectory();
     const themeContext = await loadThemeRenderContext();
+    themeContext.theme.tokens['chips.layout.gap.md'] = '12cpx';
+    themeContext.theme.tokens['chips.layout.size.navigation.primary.min'] = '160cpx';
+    themeContext.themeCssText = '[data-scope="basecard"] { gap: 12cpx; min-inline-size: 160cpx; }';
     const workspace = await createTempDir('chips-card-runtime-');
     const runtime = new PluginRuntime(workspace, {
       locale: 'zh-CN',
@@ -732,6 +735,11 @@ describe('CardService rendering', () => {
     expect(view.body).toContain('renderBasecardView');
     expect(view.body).toContain('const resolveResourceUrl = async (resourcePath) =>');
     expect(view.body).toContain('assets/hero.png');
+    expect(view.body).toContain('--chips-layout-gap-md: 1.171875vw;');
+    expect(view.body).toContain('--chips-layout-size-navigation-primary-min: 15.625vw;');
+    expect(view.body).toContain('gap: 1.171875vw; min-inline-size: 15.625vw;');
+    expect(view.body).not.toContain('12cpx');
+    expect(view.body).not.toContain('160cpx');
   }, CARD_RENDER_TEST_TIMEOUT_MS);
 
   it('stitches composite image cards from single-card runtime documents instead of pre-rendered static html', async () => {

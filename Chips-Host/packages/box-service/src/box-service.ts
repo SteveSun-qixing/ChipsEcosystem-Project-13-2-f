@@ -5,6 +5,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
+import {
+  createThemeCssVariableDeclarations,
+  normalizeThemeCssForBrowser
+} from '../../../src/shared/theme-css-units';
 import { createId } from '../../../src/shared/utils';
 import type { PluginRecord, PluginRuntime } from '../../../src/runtime';
 import type { CardInfoField, CardReadInfoResult } from '../../card-info-service/src';
@@ -543,12 +547,9 @@ const isPathWithinRoot = (rootDir: string, absolutePath: string): boolean => {
 };
 
 const createBoxLayoutThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
-  const declarations = Object.entries(theme.tokens ?? {})
-    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
-    .map(([name, value]) => `  --${name.replaceAll('.', '-')}: ${String(value)};`)
-    .join('\n');
+  const declarations = createThemeCssVariableDeclarations(theme.tokens ?? {}).join('\n');
 
-  return [
+  return normalizeThemeCssForBrowser([
     ':root {',
     declarations,
     '}',
@@ -556,16 +557,13 @@ const createBoxLayoutThemeCss = (theme: ThemeSnapshot, extraCssText?: string): s
     'body { min-width: 0; color: var(--chips-sys-color-on-surface, #111111); }',
     '#chips-box-layout-root { width: 100%; min-height: 100%; box-sizing: border-box; }',
     extraCssText ?? '',
-  ].join('\n');
+  ].join('\n'));
 };
 
 const createBoxLayoutEditorThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
-  const declarations = Object.entries(theme.tokens ?? {})
-    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
-    .map(([name, value]) => `  --${name.replaceAll('.', '-')}: ${String(value)};`)
-    .join('\n');
+  const declarations = createThemeCssVariableDeclarations(theme.tokens ?? {}).join('\n');
 
-  return [
+  return normalizeThemeCssForBrowser([
     ':root {',
     declarations,
     '}',
@@ -573,7 +571,7 @@ const createBoxLayoutEditorThemeCss = (theme: ThemeSnapshot, extraCssText?: stri
     'body { min-width: 0; min-height: 0; color: var(--chips-sys-color-on-surface, #111111); overflow: hidden; }',
     '#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }',
     extraCssText ?? '',
-  ].join('\n');
+  ].join('\n'));
 };
 
 const createBoxLayoutViewDocument = (options: {

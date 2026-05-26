@@ -107,6 +107,8 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 
 布局原语只通过 token、CSS 变量和 `data-scope/data-part/data-state` 接收视觉实现；主题包不得通过选择业务页面结构或组件私有 DOM 层级来覆盖它们。
 
+布局 token 可以使用生态逻辑单位 `cpx` 表达设计基准尺寸。主题包源码、`dist/theme.css` 和 `dist/tokens.json` 可以保留 `cpx`；Host 将主题 CSS 与 token 变量注入应用窗口、卡片 iframe 或箱子布局 iframe 前，统一按 1024 设计基准转换为浏览器可识别的响应式长度。组件库和业务插件只消费 CSS 变量，不应在组件实现或业务样式中把布局 token 手动固化为 `px`。
+
 基础展示控件 token 是任务015基础控件矩阵的第一批正式契约，默认主题和暗色主题必须覆盖：
 
 - `chips.comp.text.*`

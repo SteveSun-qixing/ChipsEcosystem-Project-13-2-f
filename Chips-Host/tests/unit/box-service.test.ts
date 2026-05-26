@@ -493,14 +493,23 @@ describe('BoxService', () => {
       initialConfig: {},
       theme: {
         id: 'theme.test',
-        tokens: {},
+        tokens: {
+          'chips.layout.gap.md': '12cpx',
+          'chips.layout.size.navigation.primary.min': '160cpx',
+        },
       },
+      themeCssText: '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
     });
 
     const documentPath = fileURLToPath(rendered.documentUrl);
     const body = await fs.readFile(documentPath, 'utf-8');
     expect(body).toContain('html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }');
     expect(body).toContain('#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }');
+    expect(body).toContain('--chips-layout-gap-md: 1.171875vw;');
+    expect(body).toContain('--chips-layout-size-navigation-primary-min: 15.625vw;');
+    expect(body).toContain('gap: 1.171875vw; min-inline-size: 15.625vw;');
+    expect(body).not.toContain('12cpx');
+    expect(body).not.toContain('160cpx');
 
     await service.releaseRenderSession(rendered.sessionId);
   });
@@ -581,8 +590,12 @@ describe('BoxService', () => {
       config: {},
       theme: {
         id: 'theme.test',
-        tokens: {},
+        tokens: {
+          'chips.layout.gap.md': '12cpx',
+          'chips.layout.size.navigation.primary.min': '160cpx',
+        },
       },
+      themeCssText: '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
     });
 
     expect(rendered.documentUrl.startsWith('chips-render://session/')).toBe(true);
@@ -591,6 +604,11 @@ describe('BoxService', () => {
 
     const body = await fs.readFile(documentPath ?? '', 'utf-8');
     expect(body).toContain('frame-src about: file: http: https: blob: chips-render:');
+    expect(body).toContain('--chips-layout-gap-md: 1.171875vw;');
+    expect(body).toContain('--chips-layout-size-navigation-primary-min: 15.625vw;');
+    expect(body).toContain('gap: 1.171875vw; min-inline-size: 15.625vw;');
+    expect(body).not.toContain('12cpx');
+    expect(body).not.toContain('160cpx');
 
     await service.releaseRenderSession(rendered.sessionId);
   });

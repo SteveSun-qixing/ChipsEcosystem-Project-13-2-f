@@ -306,6 +306,7 @@ const sanitizeFlatComponentPackage = async (flatPackagePath: string): Promise<vo
     });
 
     await sanitizePackagePayload(payloadPath, bomPath);
+    await removePackageMetadataEntries(expandedDir);
 
     if (!(await pathExists(packageInfoPath))) {
       return;
@@ -408,6 +409,7 @@ const sanitizeFlatProductArchive = async (archivePath: string): Promise<void> =>
     });
 
     await sanitizeDistributionFile(distributionPath);
+    await removePackageMetadataEntries(expandedDir);
 
     await fs.rm(archivePath, { force: true });
     await execFile('pkgutil', ['--flatten', expandedDir, archivePath], {

@@ -27,6 +27,26 @@ const write = async (targetPath: string, value: string): Promise<void> => {
   await fs.writeFile(targetPath, value, 'utf-8');
 };
 
+const collectInstallerMetadataEntries = async (rootPath: string): Promise<string[]> => {
+  const entries = await fs.readdir(rootPath, { withFileTypes: true });
+  const found: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(rootPath, entry.name);
+    if (entry.name.startsWith('._') || entry.name === '.DS_Store' || entry.name === 'CodeResources') {
+      found.push(path.relative(rootPath, entryPath));
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      const nested = await collectInstallerMetadataEntries(entryPath);
+      found.push(...nested.map((item) => path.join(entry.name, item)));
+    }
+  }
+
+  return found.sort();
+};
+
 beforeEach(async () => {
   dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(0);
   workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-installer-workspace-'));
@@ -593,6 +613,10 @@ describe('macOS installer builder', () => {
       expect(stdout).toContain('./Applications/Chips.app/Contents/MacOS/Chips');
       expect(stdout).not.toMatch(/(^|\/)\._/m);
       expect(stdout).not.toContain('/.DS_Store');
+
+      const expandedInstallerPath = path.join(outputDir, 'expanded-installer');
+      await execFile('pkgutil', ['--expand', installerPath, expandedInstallerPath]);
+      await expect(collectInstallerMetadataEntries(expandedInstallerPath)).resolves.toEqual([]);
     },
     60_000
   );

@@ -87,6 +87,12 @@
 3. 组装 `Chips.app`；
 4. 生成 `.pkg` 安装包。
 
+构建过程中会对安装器产物做元数据净化：
+
+1. 复制 Electron 模板和内置插件后，移除 `_CodeSignature`、`CodeResources`、`.DS_Store`、`._*` 等复制元数据；
+2. component pkg 生成后展开 `Payload`，移除 payload 内的 `._*`、`.DS_Store`、`CodeResources`，并重新生成 gzip payload 与 BOM；
+3. component pkg 和最终 product archive flatten 前会递归清理展开包目录，避免 `Scripts/._postinstall` 等非 payload 元数据残留。
+
 对可选内置插件的处理规则是：
 
 1. 若工程目录存在，则纳入构建与打包；
@@ -161,3 +167,4 @@
 3. 安装器在内置图片查看器存在时注册图片文档类型；
 4. 安装器在图片查看器缺失时跳过注册且仍可正常打包；
 5. 内置图片查看器缺失时 Host 启动引导不报错。
+6. 真实 macOS `.pkg` 产物的 payload 与展开包目录均不含 `._*`、`.DS_Store`、`CodeResources`。

@@ -1708,7 +1708,12 @@ describe("createClient", () => {
       transport: async (action, payload) => {
         calls.push({ action, payload });
         if (action === "platform.renderHtmlToPdf") {
-          return { outputFile: "/tmp/demo.pdf", pageCount: 2 };
+          return {
+            outputFile: "/tmp/demo.pdf",
+            pageCount: 2,
+            byteLength: 4096,
+            diagnostics: [{ code: "HTML_EXPORT_READY_TIMEOUT" }],
+          };
         }
         if (action === "platform.renderHtmlToImage") {
           return { outputFile: "/tmp/demo.png", width: 800, height: 600, format: "png" };
@@ -1721,8 +1726,27 @@ describe("createClient", () => {
       client.platform.renderHtmlToPdf({
         htmlDir: "/tmp/html",
         outputFile: "/tmp/demo.pdf",
+        options: {
+          pageSize: "A4",
+          printBackground: true,
+          preferCSSPageSize: true,
+          headerFooter: {
+            enabled: true,
+            footerTemplate: "<span class=\"pageNumber\"></span>",
+          },
+          wait: {
+            timeoutMs: 12000,
+            quietMs: 200,
+            waitForImages: true,
+          },
+        },
       }),
-    ).resolves.toEqual({ outputFile: "/tmp/demo.pdf", pageCount: 2 });
+    ).resolves.toEqual({
+      outputFile: "/tmp/demo.pdf",
+      pageCount: 2,
+      byteLength: 4096,
+      diagnostics: [{ code: "HTML_EXPORT_READY_TIMEOUT" }],
+    });
 
     await expect(
       client.platform.renderHtmlToImage({
@@ -1740,6 +1764,20 @@ describe("createClient", () => {
         payload: {
           htmlDir: "/tmp/html",
           outputFile: "/tmp/demo.pdf",
+          options: {
+            pageSize: "A4",
+            printBackground: true,
+            preferCSSPageSize: true,
+            headerFooter: {
+              enabled: true,
+              footerTemplate: "<span class=\"pageNumber\"></span>",
+            },
+            wait: {
+              timeoutMs: 12000,
+              quietMs: 200,
+              waitForImages: true,
+            },
+          },
         },
       },
       {

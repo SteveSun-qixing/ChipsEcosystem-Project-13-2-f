@@ -11,6 +11,9 @@
     "outputFile": {
       "type": "string"
     },
+    "overwrite": {
+      "type": "boolean"
+    },
     "options": {
       "type": "object",
       "properties": {
@@ -24,6 +27,9 @@
         "printBackground": {
           "type": "boolean"
         },
+        "preferCSSPageSize": {
+          "type": "boolean"
+        },
         "marginMm": {
           "type": "object",
           "properties": {
@@ -31,6 +37,29 @@
             "right": { "type": "number" },
             "bottom": { "type": "number" },
             "left": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "headerFooter": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "headerTemplate": { "type": "string" },
+            "footerTemplate": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "wait": {
+          "type": "object",
+          "properties": {
+            "timeoutMs": { "type": "number", "exclusiveMinimum": 0 },
+            "quietMs": { "type": "number", "exclusiveMinimum": 0 },
+            "resourceTimeoutMs": { "type": "number", "exclusiveMinimum": 0 },
+            "compositeTimeoutMs": { "type": "number", "exclusiveMinimum": 0 },
+            "waitForFonts": { "type": "boolean" },
+            "waitForImages": { "type": "boolean" },
+            "waitForFrames": { "type": "boolean" },
+            "waitForCompositeReady": { "type": "boolean" }
           },
           "additionalProperties": false
         }

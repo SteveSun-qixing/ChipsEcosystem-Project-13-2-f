@@ -130,6 +130,36 @@ const createHtmlFixture = async (baseDir) => {
     "<!doctype html><html><head><meta charset=\"utf-8\"><title>HTML to PDF E2E</title></head><body><main><h1>HTML to PDF</h1><p>Packaged module verification fixture.</p></main></body></html>",
     "utf-8",
   );
+  await fsp.writeFile(
+    path.join(htmlDir, "conversion-manifest.json"),
+    JSON.stringify(
+      {
+        schemaVersion: "1.0.0",
+        type: "card-to-html",
+        generatedAt: new Date(0).toISOString(),
+        source: {
+          title: "HTML to PDF E2E",
+          semanticHash: "fixture-semantic-hash",
+          locale: "zh-CN",
+          themeId: "chips-default",
+        },
+        output: {
+          entryFile: "index.html",
+          manifestFile: "conversion-manifest.json",
+        },
+        diagnostics: {
+          renderDiagnostics: [],
+          renderConsistency: {
+            status: "passed",
+          },
+          contentFiles: ["index.html"],
+        },
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
   return htmlDir;
 };
 
@@ -198,11 +228,19 @@ const main = async () => {
           options: {
             pageSize: "A4",
             printBackground: true,
+            preferCSSPageSize: true,
             marginMm: {
               top: 12,
               right: 12,
               bottom: 12,
               left: 12,
+            },
+            wait: {
+              timeoutMs: 12000,
+              quietMs: 120,
+              waitForImages: true,
+              waitForFrames: true,
+              waitForCompositeReady: true,
             },
           },
         },
@@ -234,6 +272,7 @@ const main = async () => {
             outputFile,
             outputSize: (await fsp.stat(outputFile)).size,
             pageCount: finalJob.output?.pageCount,
+            byteLength: finalJob.output?.byteLength,
             workspacePath,
           },
           null,

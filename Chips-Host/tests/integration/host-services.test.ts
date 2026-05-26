@@ -623,6 +623,7 @@ describe('Host services integration', () => {
     const outputFile = path.join(workspace, 'exported.pdf');
     const htmlDir = path.join(workspace, 'html-export-pdf');
     const executedScripts: string[] = [];
+    const printOptions: Record<string, unknown>[] = [];
     await fs.mkdir(htmlDir, { recursive: true });
     await fs.writeFile(path.join(htmlDir, 'index.html'), '<!doctype html><html><body><h1>PDF</h1></body></html>', 'utf-8');
 
@@ -630,9 +631,12 @@ describe('Host services integration', () => {
       public webContents = {
         executeJavaScript: async (code: string) => {
           executedScripts.push(code);
-          return true;
+          return [{ code: 'HTML_EXPORT_READY_TIMEOUT' }];
         },
-        printToPDF: async () => Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n%%EOF', 'latin1'),
+        printToPDF: async (options: Record<string, unknown>) => {
+          printOptions.push(options);
+          return Buffer.from('%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n%%EOF', 'latin1');
+        },
         capturePage: async () => {
           throw new Error('not used');
         },
@@ -666,19 +670,43 @@ describe('Host services integration', () => {
       BrowserWindow: MockBrowserWindow
     };
 
-    const result = await runtime.invoke<{ outputFile: string; pageCount?: number }>('platform.renderHtmlToPdf', {
+    const result = await runtime.invoke<{ outputFile: string; pageCount?: number; byteLength?: number; diagnostics?: unknown[] }>('platform.renderHtmlToPdf', {
       htmlDir,
-      outputFile
+      outputFile,
+      options: {
+        pageSize: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+        headerFooter: {
+          enabled: true,
+          footerTemplate: '<span class="pageNumber"></span>'
+        },
+        wait: {
+          timeoutMs: 12000,
+          quietMs: 120,
+          waitForImages: true
+        }
+      }
     });
 
     const written = await fs.readFile(outputFile);
     expect(result.outputFile).toBe(outputFile);
     expect(result.pageCount).toBe(1);
+    expect(result.byteLength).toBe(written.byteLength);
+    expect(result.diagnostics).toEqual([{ code: 'HTML_EXPORT_READY_TIMEOUT' }]);
     expect(written.toString('latin1')).toContain('%PDF-1.7');
+    expect(printOptions[0]).toMatchObject({
+      pageSize: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      footerTemplate: '<span class="pageNumber"></span>'
+    });
     expect(executedScripts.some((code) => code.includes('.chips-composite__frame'))).toBe(true);
     expect(executedScripts.some((code) => code.includes('frame.loading = "eager"'))).toBe(true);
     expect(executedScripts.some((code) => code.includes('chipsCompositeReady'))).toBe(true);
     expect(executedScripts.some((code) => code.includes('frame.dataset.renderReady === "true"'))).toBe(true);
+    expect(executedScripts.some((code) => code.includes('"timeoutMs":12000'))).toBe(true);
   });
 
   it('exports local html to image through formal platform action', async () => {

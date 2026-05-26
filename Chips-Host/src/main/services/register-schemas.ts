@@ -511,6 +511,9 @@ const validatePlatformRenderHtmlToPdfRequest: SchemaValidator = (input: unknown)
       if (typeof input.options.printBackground !== 'undefined' && typeof input.options.printBackground !== 'boolean') {
         errors.push('options.printBackground must be a boolean when provided');
       }
+      if (typeof input.options.preferCSSPageSize !== 'undefined' && typeof input.options.preferCSSPageSize !== 'boolean') {
+        errors.push('options.preferCSSPageSize must be a boolean when provided');
+      }
 
       if (typeof input.options.marginMm !== 'undefined') {
         if (!isRecord(input.options.marginMm)) {
@@ -520,6 +523,36 @@ const validatePlatformRenderHtmlToPdfRequest: SchemaValidator = (input: unknown)
           validateOptionalFiniteNumber(input.options.marginMm.right, 'options.marginMm.right', errors);
           validateOptionalFiniteNumber(input.options.marginMm.bottom, 'options.marginMm.bottom', errors);
           validateOptionalFiniteNumber(input.options.marginMm.left, 'options.marginMm.left', errors);
+        }
+      }
+
+      if (typeof input.options.headerFooter !== 'undefined') {
+        if (!isRecord(input.options.headerFooter)) {
+          errors.push('options.headerFooter must be an object');
+        } else {
+          if (typeof input.options.headerFooter.enabled !== 'undefined' && typeof input.options.headerFooter.enabled !== 'boolean') {
+            errors.push('options.headerFooter.enabled must be a boolean when provided');
+          }
+          validateOptionalString(input.options.headerFooter.headerTemplate, 'options.headerFooter.headerTemplate', errors);
+          validateOptionalString(input.options.headerFooter.footerTemplate, 'options.headerFooter.footerTemplate', errors);
+        }
+      }
+
+      if (typeof input.options.wait !== 'undefined') {
+        if (!isRecord(input.options.wait)) {
+          errors.push('options.wait must be an object');
+        } else {
+          for (const key of ['timeoutMs', 'quietMs', 'resourceTimeoutMs', 'compositeTimeoutMs'] as const) {
+            validateOptionalFiniteNumber(input.options.wait[key], `options.wait.${key}`, errors);
+            if (typeof input.options.wait[key] === 'number' && input.options.wait[key] <= 0) {
+              errors.push(`options.wait.${key} must be greater than 0 when provided`);
+            }
+          }
+          for (const key of ['waitForFonts', 'waitForImages', 'waitForFrames', 'waitForCompositeReady'] as const) {
+            if (typeof input.options.wait[key] !== 'undefined' && typeof input.options.wait[key] !== 'boolean') {
+              errors.push(`options.wait.${key} must be a boolean when provided`);
+            }
+          }
         }
       }
     }

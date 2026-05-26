@@ -3,10 +3,12 @@ import type {
   HostFileStatLike,
   HtmlConversionManifest,
   HtmlToImageContext,
+  HtmlToImageDiagnostics,
   HtmlToImageRequest,
   HtmlToImageResult,
   ImageBackground,
   ImageFormat,
+  ImageWaitUntil,
   NormalizedHtmlToImageRequest,
 } from "./types";
 
@@ -14,6 +16,7 @@ const DEFAULT_ENTRY_FILE = "index.html";
 const MANIFEST_FILE = "conversion-manifest.json";
 const VALID_FORMATS = new Set<ImageFormat>(["png", "jpeg", "webp"]);
 const VALID_BACKGROUNDS = new Set<ImageBackground>(["transparent", "white", "theme"]);
+const VALID_WAIT_UNTIL = new Set<ImageWaitUntil>(["managed"]);
 const WINDOWS_ROOT_PATTERN = /^[A-Za-z]:[\\/]/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -40,7 +43,47 @@ const toFileStat = (value: unknown): HostFileStatLike | undefined => {
   return {
     isFile: typeof value.isFile === "boolean" ? value.isFile : undefined,
     isDirectory: typeof value.isDirectory === "boolean" ? value.isDirectory : undefined,
+    size: typeof value.size === "number" && Number.isFinite(value.size) ? value.size : undefined,
+    mtimeMs: typeof value.mtimeMs === "number" && Number.isFinite(value.mtimeMs) ? value.mtimeMs : undefined,
   };
+};
+
+const toWarnings = (value: unknown): HtmlToImageWarning[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.code !== "string" || typeof item.message !== "string") {
+      return [];
+    }
+    return [{
+      code: item.code,
+      message: item.message,
+      ...(typeof item.details !== "undefined" ? { details: item.details } : {}),
+    }];
+  });
+};
+
+const uniqueWarnings = (warnings: HtmlToImageWarning[]): HtmlToImageWarning[] => {
+  const seen = new Set<string>();
+  return warnings.filter((warning) => {
+    const key = JSON.stringify([warning.code, warning.message, warning.details ?? null]);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
+const asStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const strings = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return strings.length > 0 ? strings : undefined;
 };
 
 const detectSeparator = (value: string): "/" | "\\" => {
@@ -63,6 +106,38 @@ const joinPath = (basePath: string, relativePath: string): string => {
     return trimmedBase;
   }
   return `${trimmedBase}${separator}${relativeSegments.join(separator)}`;
+};
+
+const dirname = (filePath: string): string => {
+  const normalized = filePath.replace(/[\\/]+$/, "");
+  const lastSeparatorIndex = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  if (lastSeparatorIndex < 0) {
+    return ".";
+  }
+
+  const rootMatch = normalized.match(/^[A-Za-z]:/);
+  if (lastSeparatorIndex === 0) {
+    return normalized.startsWith("/") || normalized.startsWith("\\") ? detectSeparator(filePath) : ".";
+  }
+  if (rootMatch && lastSeparatorIndex === rootMatch[0].length) {
+    return `${rootMatch[0]}${detectSeparator(filePath)}`;
+  }
+  return normalized.slice(0, lastSeparatorIndex);
+};
+
+const basename = (filePath: string): string => {
+  return splitSegments(filePath).at(-1) ?? filePath;
+};
+
+const randomId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `fallback-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+};
+
+const createTemporaryOutputFile = (outputFile: string): string => {
+  return joinPath(dirname(outputFile), `.chips-html-to-image-${randomId()}-${basename(outputFile)}`);
 };
 
 const normalizeRelativeEntryFile = (entryFile: string): string => {
@@ -111,6 +186,109 @@ const safeStat = async (ctx: HtmlToImageContext, filePath: string): Promise<Host
   }
 };
 
+const deletePathIfExists = async (ctx: HtmlToImageContext, targetPath: string): Promise<void> => {
+  const stat = await safeStat(ctx, targetPath);
+  if (!stat) {
+    return;
+  }
+
+  try {
+    await ctx.host.invoke("file.delete", {
+      path: targetPath,
+      options: { recursive: true },
+    });
+  } catch {
+    // Best-effort cleanup. The main error path should preserve the original failure.
+  }
+};
+
+const ensureOutputReady = async (
+  ctx: HtmlToImageContext,
+  outputFile: string,
+  overwrite: boolean,
+): Promise<void> => {
+  const stat = await safeStat(ctx, outputFile);
+  if (!stat) {
+    return;
+  }
+
+  if (!stat.isFile) {
+    throw createHtmlToImageError("CONVERTER_OUTPUT_EXISTS", `Output path already exists and is not a file: ${outputFile}`, {
+      outputFile,
+    });
+  }
+
+  if (!overwrite) {
+    throw createHtmlToImageError("CONVERTER_OUTPUT_EXISTS", `Output already exists: ${outputFile}`, {
+      outputFile,
+    });
+  }
+};
+
+const commitStagedOutput = async (
+  ctx: HtmlToImageContext,
+  stagedOutputFile: string,
+  outputFile: string,
+  overwrite: boolean,
+): Promise<void> => {
+  const existing = await safeStat(ctx, outputFile);
+  if (existing && !existing.isFile) {
+    throw createHtmlToImageError("CONVERTER_OUTPUT_EXISTS", `Output path already exists and is not a file: ${outputFile}`, {
+      outputFile,
+    });
+  }
+  if (existing && !overwrite) {
+    throw createHtmlToImageError("CONVERTER_OUTPUT_EXISTS", `Output already exists: ${outputFile}`, {
+      outputFile,
+    });
+  }
+
+  const backupFile = existing?.isFile ? createTemporaryOutputFile(outputFile) : undefined;
+  if (backupFile) {
+    try {
+      await ctx.host.invoke("file.move", {
+        sourcePath: outputFile,
+        destPath: backupFile,
+      });
+    } catch (error) {
+      throw createHtmlToImageError("CONVERTER_OUTPUT_WRITE_FAILED", "Failed to stage existing image output for overwrite.", {
+        outputFile,
+        backupFile,
+        cause: error,
+      });
+    }
+  }
+
+  try {
+    await ctx.host.invoke("file.move", {
+      sourcePath: stagedOutputFile,
+      destPath: outputFile,
+    });
+  } catch (error) {
+    if (backupFile) {
+      try {
+        await ctx.host.invoke("file.move", {
+          sourcePath: backupFile,
+          destPath: outputFile,
+        });
+      } catch {
+        // Preserve the original commit failure while surfacing backup location in details.
+      }
+    }
+
+    throw createHtmlToImageError("CONVERTER_OUTPUT_WRITE_FAILED", "Failed to commit image output.", {
+      stagedOutputFile,
+      outputFile,
+      backupFile,
+      cause: error,
+    });
+  }
+
+  if (backupFile) {
+    await deletePathIfExists(ctx, backupFile);
+  }
+};
+
 const reportProgress = async (
   ctx: HtmlToImageContext,
   stage: string,
@@ -129,7 +307,7 @@ const throwIfCancelled = (ctx: HtmlToImageContext): void => {
     return;
   }
   if (ctx.job.signal.aborted || ctx.job.isCancelled()) {
-    throw createHtmlToImageError("CONVERTER_PIPELINE_CANCELLED", "HTML to image conversion was cancelled.");
+    throw createHtmlToImageError("CONVERTER_JOB_CANCELLED", "HTML to image conversion was cancelled.");
   }
 };
 
@@ -178,18 +356,27 @@ const normalizeInput = (input: HtmlToImageRequest): NormalizedHtmlToImageRequest
     );
   }
 
-  const entryFile = input.entryFile ? normalizeRelativeEntryFile(input.entryFile) : DEFAULT_ENTRY_FILE;
+  const waitUntil = input.options?.waitUntil ?? "managed";
+  if (!VALID_WAIT_UNTIL.has(waitUntil)) {
+    throw createHtmlToImageError("CONVERTER_INPUT_INVALID", "options.waitUntil must be managed.", {
+      waitUntil,
+    });
+  }
+
+  const entryFile = input.entryFile ? normalizeRelativeEntryFile(input.entryFile) : undefined;
 
   return {
     htmlDir,
     entryFile,
     outputFile,
+    overwrite: input.overwrite === true,
     options: {
       format,
       ...(typeof width === "number" ? { width } : {}),
       ...(typeof height === "number" ? { height } : {}),
       ...(typeof scaleFactor === "number" ? { scaleFactor } : {}),
       background,
+      waitUntil,
     },
   };
 };
@@ -260,19 +447,49 @@ const readManifest = async (ctx: HtmlToImageContext, htmlDir: string): Promise<H
     });
   }
 
+  const output = isRecord(parsed.output) ? parsed.output : undefined;
+  const assets = isRecord(parsed.assets) ? parsed.assets : undefined;
+  const diagnostics = isRecord(parsed.diagnostics) ? parsed.diagnostics : undefined;
+
   return {
     schemaVersion: asString(parsed.schemaVersion),
     type: "card-to-html",
     generatedAt: asString(parsed.generatedAt),
-    output: isRecord(parsed.output)
+    output: output
       ? {
-          entryFile: asString(parsed.output.entryFile),
+          entryFile: asString(output.entryFile),
           manifestFile:
-            parsed.output.manifestFile === null
+            output.manifestFile === null
               ? null
-              : asString(parsed.output.manifestFile),
+              : asString(output.manifestFile),
         }
       : undefined,
+    source: isRecord(parsed.source)
+      ? {
+          cardFile: asString(parsed.source.cardFile),
+          title: asString(parsed.source.title),
+          semanticHash: asString(parsed.source.semanticHash),
+          requestedThemeId:
+            parsed.source.requestedThemeId === null ? null : asString(parsed.source.requestedThemeId),
+          requestedLocale:
+            parsed.source.requestedLocale === null ? null : asString(parsed.source.requestedLocale),
+        }
+      : undefined,
+    assets: assets
+      ? {
+          included: typeof assets.included === "boolean" ? assets.included : undefined,
+          root: assets.root === null ? null : asString(assets.root),
+          count: typeof assets.count === "number" && Number.isFinite(assets.count) ? assets.count : undefined,
+        }
+      : undefined,
+    diagnostics: diagnostics
+      ? {
+          renderDiagnostics: Array.isArray(diagnostics.renderDiagnostics) ? diagnostics.renderDiagnostics : undefined,
+          renderConsistency: diagnostics.renderConsistency,
+          contentFiles: asStringArray(diagnostics.contentFiles),
+        }
+      : undefined,
+    warnings: toWarnings(parsed.warnings),
   };
 };
 
@@ -301,11 +518,7 @@ const normalizeRequestWithManifest = async (
   await ensureDirectoryExists(ctx, request.htmlDir);
   const manifest = await readManifest(ctx, request.htmlDir);
 
-  const resolvedEntryFile = await ensureEntryFileExists(
-    ctx,
-    request.htmlDir,
-    request.entryFile ?? manifest.output?.entryFile ?? DEFAULT_ENTRY_FILE,
-  );
+  const resolvedEntryFile = await ensureEntryFileExists(ctx, request.htmlDir, request.entryFile ?? manifest.output?.entryFile ?? DEFAULT_ENTRY_FILE);
 
   const warnings: HtmlToImageWarning[] = [];
   let background = request.options.background;
@@ -324,7 +537,7 @@ const normalizeRequestWithManifest = async (
 
   return {
     manifest,
-    warnings,
+    warnings: uniqueWarnings([...(manifest.warnings ?? []), ...warnings]),
     request: {
       ...request,
       entryFile: resolvedEntryFile,
@@ -336,7 +549,7 @@ const normalizeRequestWithManifest = async (
   };
 };
 
-const normalizeHostResult = (result: unknown, warnings: HtmlToImageWarning[]): HtmlToImageResult => {
+const normalizeHostResult = (result: unknown): Omit<HtmlToImageResult, "warnings" | "diagnostics"> & { warnings?: HtmlToImageWarning[] } => {
   if (!isRecord(result)) {
     throw createHtmlToImageError("CONVERTER_IMAGE_CAPTURE_FAILED", "Host image export returned an invalid result.", {
       result,
@@ -364,7 +577,53 @@ const normalizeHostResult = (result: unknown, warnings: HtmlToImageWarning[]): H
     format,
     ...(typeof width === "number" ? { width } : {}),
     ...(typeof height === "number" ? { height } : {}),
-    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(toWarnings(result.warnings).length > 0 ? { warnings: toWarnings(result.warnings) } : {}),
+  };
+};
+
+const getMimeType = (format: ImageFormat): string => {
+  return format === "jpeg" ? "image/jpeg" : `image/${format}`;
+};
+
+const createDiagnostics = (
+  request: NormalizedHtmlToImageRequest,
+  manifest: HtmlConversionManifest,
+  result: Omit<HtmlToImageResult, "warnings" | "diagnostics">,
+  outputStat: HostFileStatLike,
+): HtmlToImageDiagnostics => {
+  return {
+    html: {
+      manifestFile: MANIFEST_FILE,
+      ...(manifest.schemaVersion ? { schemaVersion: manifest.schemaVersion } : {}),
+      ...(manifest.generatedAt ? { generatedAt: manifest.generatedAt } : {}),
+      entryFile: request.entryFile ?? DEFAULT_ENTRY_FILE,
+      type: "card-to-html",
+    },
+    resources: {
+      ...(typeof manifest.assets?.included === "boolean" ? { assetsIncluded: manifest.assets.included } : {}),
+      ...(typeof manifest.assets?.root !== "undefined" ? { assetRoot: manifest.assets.root } : {}),
+      ...(typeof manifest.assets?.count === "number" ? { assetCount: manifest.assets.count } : {}),
+      ...(manifest.diagnostics?.contentFiles ? { contentFiles: manifest.diagnostics.contentFiles } : {}),
+      ...(manifest.diagnostics?.renderDiagnostics ? { renderDiagnostics: manifest.diagnostics.renderDiagnostics } : {}),
+      ...(typeof manifest.diagnostics?.renderConsistency !== "undefined"
+        ? { renderConsistency: manifest.diagnostics.renderConsistency }
+        : {}),
+      ...(manifest.warnings && manifest.warnings.length > 0 ? { upstreamWarnings: manifest.warnings } : {}),
+    },
+    render: {
+      hostAction: "platform.renderHtmlToImage",
+      waitUntil: request.options.waitUntil,
+      background: request.options.background,
+      ...(typeof request.options.scaleFactor === "number" ? { scaleFactor: request.options.scaleFactor } : {}),
+    },
+    output: {
+      file: result.outputFile,
+      ...(typeof outputStat.size === "number" ? { sizeBytes: outputStat.size } : {}),
+      ...(typeof result.width === "number" ? { width: result.width } : {}),
+      ...(typeof result.height === "number" ? { height: result.height } : {}),
+      format: result.format,
+      mimeType: getMimeType(result.format),
+    },
   };
 };
 
@@ -394,6 +653,27 @@ const mapHostError = (error: unknown, request: NormalizedHtmlToImageRequest): Ht
     });
   }
 
+  if (code === "INVALID_ARGUMENT" || code === "MODULE_SCHEMA_INVALID") {
+    return createHtmlToImageError("CONVERTER_INPUT_INVALID", message, {
+      hostCode: code,
+      cause: error,
+    });
+  }
+
+  if (code === "ROUTE_TIMEOUT" || code === "MODULE_TIMEOUT") {
+    return createHtmlToImageError("CONVERTER_IMAGE_RENDER_TIMEOUT", message, {
+      hostCode: code,
+      cause: error,
+    }, true);
+  }
+
+  if (code === "EACCES" || code === "EPERM" || code === "PAL_FS_WRITE_FAILED") {
+    return createHtmlToImageError("CONVERTER_OUTPUT_WRITE_FAILED", message, {
+      hostCode: code,
+      cause: error,
+    });
+  }
+
   return createHtmlToImageError("CONVERTER_IMAGE_CAPTURE_FAILED", message, {
     hostCode: code,
     cause: error,
@@ -405,16 +685,20 @@ export const convertHtmlToImage = async (
   input: HtmlToImageRequest,
 ): Promise<HtmlToImageResult> => {
   let normalizedInput: NormalizedHtmlToImageRequest | undefined;
+  let temporaryOutputFile: string | undefined;
   try {
     normalizedInput = normalizeInput(input);
     await reportProgress(ctx, "prepare", 5, "Preparing HTML to image conversion");
     throwIfCancelled(ctx);
 
     const { request, warnings, manifest } = await normalizeRequestWithManifest(ctx, normalizedInput);
+    await ensureOutputReady(ctx, request.outputFile, request.overwrite);
+    temporaryOutputFile = createTemporaryOutputFile(request.outputFile);
     ctx.logger.info("HTML to image input validated", {
       htmlDir: request.htmlDir,
       entryFile: request.entryFile,
       outputFile: request.outputFile,
+      temporaryOutputFile,
       manifestType: manifest.type,
       format: request.options.format,
     });
@@ -425,7 +709,7 @@ export const convertHtmlToImage = async (
     const hostResult = await ctx.host.invoke<unknown>("platform.renderHtmlToImage", {
       htmlDir: request.htmlDir,
       entryFile: request.entryFile,
-      outputFile: request.outputFile,
+      outputFile: temporaryOutputFile,
       options: {
         format: request.options.format,
         ...(typeof request.options.width === "number" ? { width: request.options.width } : {}),
@@ -436,10 +720,43 @@ export const convertHtmlToImage = async (
     });
 
     throwIfCancelled(ctx);
-    const result = normalizeHostResult(hostResult, warnings);
+    const hostOutput = normalizeHostResult(hostResult);
+    const temporaryOutputStat = await safeStat(ctx, hostOutput.outputFile);
+    if (!temporaryOutputStat?.isFile) {
+      throw createHtmlToImageError("CONVERTER_OUTPUT_NOT_FOUND", `Output image was not written: ${hostOutput.outputFile}`, {
+        outputFile: hostOutput.outputFile,
+      });
+    }
+
+    await reportProgress(ctx, "cleanup", 90, "Committing image output");
+    await commitStagedOutput(ctx, hostOutput.outputFile, request.outputFile, request.overwrite);
+    temporaryOutputFile = undefined;
+
+    const outputStat = await safeStat(ctx, request.outputFile);
+    if (!outputStat?.isFile) {
+      throw createHtmlToImageError("CONVERTER_OUTPUT_NOT_FOUND", `Output image was not written: ${request.outputFile}`, {
+        outputFile: request.outputFile,
+      });
+    }
+
+    const resultBase = {
+      ...hostOutput,
+      outputFile: request.outputFile,
+    };
+    const mergedWarnings = uniqueWarnings([...warnings, ...(hostOutput.warnings ?? [])]);
+    const diagnostics = createDiagnostics(request, manifest, resultBase, outputStat);
+    const result: HtmlToImageResult = {
+      ...resultBase,
+      ...(mergedWarnings.length > 0 ? { warnings: mergedWarnings } : {}),
+      diagnostics,
+    };
     await reportProgress(ctx, "completed", 100, "HTML to image conversion completed");
     return result;
   } catch (error) {
+    if (temporaryOutputFile) {
+      await deletePathIfExists(ctx, temporaryOutputFile);
+    }
+
     if (isHtmlToImageError(error) && error.code.startsWith("CONVERTER_")) {
       throw error;
     }
@@ -450,9 +767,11 @@ export const convertHtmlToImage = async (
         htmlDir: "",
         entryFile: DEFAULT_ENTRY_FILE,
         outputFile: "",
+        overwrite: false,
         options: {
           format: "png",
           background: "transparent",
+          waitUntil: "managed",
         },
       },
     );

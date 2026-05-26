@@ -1,12 +1,42 @@
 {
   "type": "object",
-  "required": ["outputFile"],
+  "required": ["outputFile", "entryFile", "mimeType"],
   "properties": {
     "outputFile": {
       "type": "string"
     },
+    "entryFile": {
+      "type": "string"
+    },
+    "mimeType": {
+      "type": "string",
+      "const": "application/pdf"
+    },
     "pageCount": {
       "type": "integer"
+    },
+    "byteLength": {
+      "type": "number"
+    },
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "type": "string" },
+        "generatedAt": { "type": "string" },
+        "semanticHash": { "type": "string" },
+        "locale": { "type": "string" },
+        "themeId": { "type": "string" },
+        "renderDiagnostics": { "type": "array" },
+        "renderConsistency": {},
+        "contentFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "diagnostics": {
+      "type": "array"
     },
     "warnings": {
       "type": "array",

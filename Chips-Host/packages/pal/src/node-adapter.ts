@@ -2004,16 +2004,36 @@ const countPdfPages = (buffer: Buffer): number | undefined => {
   return matches && matches.length > 0 ? matches.length : undefined;
 };
 
+const buildHtmlExportWaitOptions = (options: RenderHtmlToPdfRequest['options'] | RenderHtmlToImageRequest['options'] | undefined): Record<string, unknown> => {
+  const wait = 'wait' in (options ?? {}) ? (options as RenderHtmlToPdfRequest['options'])?.wait : undefined;
+  return {
+    timeoutMs: asPositiveFiniteNumber(wait?.timeoutMs) ?? 10000,
+    quietMs: asPositiveFiniteNumber(wait?.quietMs) ?? 80,
+    resourceTimeoutMs: asPositiveFiniteNumber(wait?.resourceTimeoutMs) ?? 3000,
+    compositeTimeoutMs: asPositiveFiniteNumber(wait?.compositeTimeoutMs) ?? 8000,
+    waitForFonts: wait?.waitForFonts !== false,
+    waitForImages: wait?.waitForImages !== false,
+    waitForFrames: wait?.waitForFrames !== false,
+    waitForCompositeReady: wait?.waitForCompositeReady !== false
+  };
+};
+
 const waitForExportDocumentReady = async (browserWindow: {
   webContents: { executeJavaScript?: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> };
-}): Promise<void> => {
+}, options?: RenderHtmlToPdfRequest['options'] | RenderHtmlToImageRequest['options']): Promise<unknown[]> => {
   if (typeof browserWindow.webContents.executeJavaScript !== 'function') {
-    return;
+    return [{
+      code: 'HTML_EXPORT_READY_SCRIPT_UNAVAILABLE',
+      message: 'Host runtime cannot execute HTML export readiness probes.'
+    }];
   }
 
-  await browserWindow.webContents.executeJavaScript(
+  const waitOptions = buildHtmlExportWaitOptions(options);
+  return browserWindow.webContents.executeJavaScript<unknown[]>(
     [
       'new Promise((resolve) => {',
+      `  const waitOptions = ${JSON.stringify(waitOptions)};`,
+      '  const diagnostics = [];',
       '  let settled = false;',
       '  const finish = () => {',
       '    if (settled) { return; }',
@@ -2021,22 +2041,29 @@ const waitForExportDocumentReady = async (browserWindow: {
       '    const raf = typeof window.requestAnimationFrame === "function"',
       '      ? window.requestAnimationFrame.bind(window)',
       '      : (callback) => window.setTimeout(callback, 0);',
-      '    raf(() => raf(() => resolve(true)));',
+      '    raf(() => raf(() => resolve(diagnostics)));',
       '  };',
-      '  const waitImages = Promise.all(Array.from(document.images || []).map((image) => {',
+      '  const waitImages = !waitOptions.waitForImages ? Promise.resolve() : Promise.all(Array.from(document.images || []).map((image) => {',
       '    if (image.complete) { return Promise.resolve(); }',
       '    return new Promise((done) => {',
       '      image.addEventListener("load", () => done(undefined), { once: true });',
-      '      image.addEventListener("error", () => done(undefined), { once: true });',
+      '      image.addEventListener("error", () => {',
+      '        diagnostics.push({ code: "HTML_EXPORT_IMAGE_LOAD_FAILED", message: "Image failed before export.", details: { src: image.currentSrc || image.src || null } });',
+      '        done(undefined);',
+      '      }, { once: true });',
+      '      window.setTimeout(() => {',
+      '        diagnostics.push({ code: "HTML_EXPORT_IMAGE_LOAD_TIMEOUT", message: "Image did not settle before export.", details: { src: image.currentSrc || image.src || null } });',
+      '        done(undefined);',
+      '      }, waitOptions.resourceTimeoutMs);',
       '    });',
       '  }));',
-      '  const waitFonts = document.fonts && typeof document.fonts.ready?.then === "function"',
+      '  const waitFonts = !waitOptions.waitForFonts ? Promise.resolve() : document.fonts && typeof document.fonts.ready?.then === "function"',
       '    ? document.fonts.ready',
       '    : Promise.resolve();',
       '  const waitWindowLoad = document.readyState === "complete"',
       '    ? Promise.resolve()',
       '    : new Promise((done) => window.addEventListener("load", () => done(undefined), { once: true }));',
-      '  const frameList = Array.from(document.querySelectorAll(".chips-composite__frame"));',
+      '  const frameList = Array.from(document.querySelectorAll("iframe, .chips-composite__frame"));',
       '  const compositeBodyDataset = document.body?.dataset;',
       '  for (const frame of frameList) {',
       '    try {',
@@ -2051,8 +2078,14 @@ const waitForExportDocumentReady = async (browserWindow: {
       '      return;',
       '    }',
       '    frame.addEventListener("load", finishFrame, { once: true });',
-      '    frame.addEventListener("error", finishFrame, { once: true });',
-      '    window.setTimeout(finishFrame, 3000);',
+      '    frame.addEventListener("error", () => {',
+      '      diagnostics.push({ code: "HTML_EXPORT_FRAME_LOAD_FAILED", message: "Frame failed before export.", details: { src: frame.getAttribute("src") } });',
+      '      finishFrame();',
+      '    }, { once: true });',
+      '    window.setTimeout(() => {',
+      '      diagnostics.push({ code: "HTML_EXPORT_FRAME_LOAD_TIMEOUT", message: "Frame did not settle before export.", details: { src: frame.getAttribute("src") } });',
+      '      finishFrame();',
+      '    }, waitOptions.resourceTimeoutMs);',
       '  })));',
       '  const isCompositeSettled = () => {',
       '    if (frameList.length === 0) {',
@@ -2064,7 +2097,7 @@ const waitForExportDocumentReady = async (browserWindow: {
       '    const framesReady = frameList.every((frame) => frame.dataset.loaded === "true" && frame.dataset.renderReady === "true");',
       '    return ready && framesReady && quietForMs >= 180;',
       '  };',
-      '  const waitCompositeSettled = frameList.length === 0',
+      '  const waitCompositeSettled = !waitOptions.waitForCompositeReady || frameList.length === 0',
       '    ? Promise.resolve()',
       '    : new Promise((done) => {',
       '        const startedAt = Date.now();',
@@ -2073,7 +2106,8 @@ const waitForExportDocumentReady = async (browserWindow: {
       '            window.setTimeout(() => done(undefined), 120);',
       '            return;',
       '          }',
-      '          if (Date.now() - startedAt >= 8000) {',
+      '          if (Date.now() - startedAt >= waitOptions.compositeTimeoutMs) {',
+      '            diagnostics.push({ code: "HTML_EXPORT_COMPOSITE_READY_TIMEOUT", message: "Composite readiness did not settle before export.", details: { frameCount: frameList.length } });',
       '            done(undefined);',
       '            return;',
       '          }',
@@ -2088,13 +2122,23 @@ const waitForExportDocumentReady = async (browserWindow: {
       '        scheduleCheck();',
       '      });',
       '  Promise.all([waitWindowLoad, waitImages, waitFonts, waitFrames, waitCompositeSettled])',
-      '    .then(() => window.setTimeout(finish, 80))',
-      '    .catch(() => window.setTimeout(finish, 80));',
-      '  window.setTimeout(finish, 10000);',
+      '    .then(() => window.setTimeout(finish, waitOptions.quietMs))',
+      '    .catch((error) => {',
+      '      diagnostics.push({ code: "HTML_EXPORT_READY_WAIT_FAILED", message: String(error?.message || error || "Ready wait failed.") });',
+      '      window.setTimeout(finish, waitOptions.quietMs);',
+      '    });',
+      '  window.setTimeout(() => {',
+      '    diagnostics.push({ code: "HTML_EXPORT_READY_TIMEOUT", message: "HTML export readiness timed out.", details: { timeoutMs: waitOptions.timeoutMs } });',
+      '    finish();',
+      '  }, waitOptions.timeoutMs);',
       '})'
     ].join('\n'),
     true
-  );
+  ).catch((error) => [{
+    code: 'HTML_EXPORT_READY_SCRIPT_FAILED',
+    message: error instanceof Error ? error.message : 'Host runtime readiness probe failed.',
+    details: { cause: error }
+  }]);
 };
 
 const measureExportDocumentBounds = async (browserWindow: {
@@ -2168,7 +2212,7 @@ class NodeOffscreenRender implements PALOffscreenRender {
 
     try {
       await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
-      await waitForExportDocumentReady(browserWindow);
+      const diagnostics = await waitForExportDocumentReady(browserWindow, input.options);
 
       if (typeof browserWindow.webContents.printToPDF !== 'function') {
         throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose printToPDF');
@@ -2179,6 +2223,10 @@ class NodeOffscreenRender implements PALOffscreenRender {
         pageSize: input.options?.pageSize ?? 'A4',
         landscape: input.options?.landscape === true,
         printBackground: input.options?.printBackground !== false,
+        preferCSSPageSize: input.options?.preferCSSPageSize === true,
+        displayHeaderFooter: input.options?.headerFooter?.enabled === true,
+        headerTemplate: input.options?.headerFooter?.headerTemplate,
+        footerTemplate: input.options?.headerFooter?.footerTemplate,
         margins: marginMm
           ? {
               top: (marginMm.top ?? 0) / 25.4,
@@ -2192,7 +2240,9 @@ class NodeOffscreenRender implements PALOffscreenRender {
       await fs.writeFile(resolved.outputFile, pdfBuffer);
       return {
         outputFile: resolved.outputFile,
-        pageCount: countPdfPages(pdfBuffer)
+        pageCount: countPdfPages(pdfBuffer),
+        byteLength: pdfBuffer.byteLength,
+        ...(diagnostics.length > 0 ? { diagnostics } : {})
       };
     } finally {
       if (!browserWindow.isDestroyed()) {
@@ -2229,7 +2279,7 @@ class NodeOffscreenRender implements PALOffscreenRender {
 
     try {
       await Promise.resolve(browserWindow.loadURL(pathToFileURL(resolved.entryPath).href));
-      await waitForExportDocumentReady(browserWindow);
+      await waitForExportDocumentReady(browserWindow, input.options);
 
       if (typeof browserWindow.webContents.capturePage !== 'function') {
         throw createError('PLATFORM_UNSUPPORTED', 'Current Electron runtime does not expose capturePage');
@@ -2243,7 +2293,7 @@ class NodeOffscreenRender implements PALOffscreenRender {
         asPositiveFiniteNumber(input.options?.scaleFactor) ?? 1
       );
       browserWindow.setSize(viewport.width, viewport.height);
-      await waitForExportDocumentReady(browserWindow);
+      await waitForExportDocumentReady(browserWindow, input.options);
 
       const settledBounds = await measureExportDocumentBounds(browserWindow);
       const settledViewport = resolveExportViewport(
@@ -2259,7 +2309,7 @@ class NodeOffscreenRender implements PALOffscreenRender {
       if (settledViewport.width !== viewport.width || settledViewport.height !== viewport.height) {
         viewport = settledViewport;
         browserWindow.setSize(viewport.width, viewport.height);
-        await waitForExportDocumentReady(browserWindow);
+        await waitForExportDocumentReady(browserWindow, input.options);
       }
 
       const image = await browserWindow.webContents.capturePage({

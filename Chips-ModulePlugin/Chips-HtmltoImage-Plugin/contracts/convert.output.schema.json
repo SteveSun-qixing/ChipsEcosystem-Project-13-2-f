@@ -30,6 +30,78 @@
         },
         "additionalProperties": true
       }
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["html", "render", "output"],
+      "properties": {
+        "html": {
+          "type": "object",
+          "required": ["manifestFile", "entryFile", "type"],
+          "properties": {
+            "manifestFile": { "type": "string", "const": "conversion-manifest.json" },
+            "schemaVersion": { "type": "string" },
+            "generatedAt": { "type": "string" },
+            "entryFile": { "type": "string" },
+            "type": { "type": "string", "const": "card-to-html" }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "assetsIncluded": { "type": "boolean" },
+            "assetRoot": { "type": ["string", "null"] },
+            "assetCount": { "type": "number" },
+            "contentFiles": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "renderDiagnostics": {
+              "type": "array"
+            },
+            "renderConsistency": {},
+            "upstreamWarnings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                  "code": { "type": "string" },
+                  "message": { "type": "string" }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "render": {
+          "type": "object",
+          "required": ["hostAction", "waitUntil", "background"],
+          "properties": {
+            "hostAction": { "type": "string", "const": "platform.renderHtmlToImage" },
+            "waitUntil": { "type": "string", "const": "managed" },
+            "background": { "type": "string", "enum": ["transparent", "white", "theme"] },
+            "scaleFactor": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "output": {
+          "type": "object",
+          "required": ["file", "format", "mimeType"],
+          "properties": {
+            "file": { "type": "string" },
+            "sizeBytes": { "type": "number" },
+            "width": { "type": "number" },
+            "height": { "type": "number" },
+            "format": { "type": "string", "enum": ["png", "jpeg", "webp"] },
+            "mimeType": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

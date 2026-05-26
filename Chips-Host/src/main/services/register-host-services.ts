@@ -5284,15 +5284,37 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               pageSize?: 'A4' | 'A3' | 'Letter' | 'Legal';
               landscape?: boolean;
               printBackground?: boolean;
+              preferCSSPageSize?: boolean;
               marginMm?: {
                 top?: number;
                 right?: number;
                 bottom?: number;
                 left?: number;
               };
+              headerFooter?: {
+                enabled?: boolean;
+                headerTemplate?: string;
+                footerTemplate?: string;
+              };
+              wait?: {
+                timeoutMs?: number;
+                quietMs?: number;
+                resourceTimeoutMs?: number;
+                compositeTimeoutMs?: number;
+                waitForFonts?: boolean;
+                waitForImages?: boolean;
+                waitForFrames?: boolean;
+                waitForCompositeReady?: boolean;
+              };
             };
           },
-          { outputFile: string; pageCount?: number }
+          {
+            outputFile: string;
+            pageCount?: number;
+            byteLength?: number;
+            diagnostics?: unknown[];
+            warnings?: Array<{ code: string; message: string; details?: unknown }>;
+          }
         >(
           'platform.renderHtmlToPdf',
           ['platform.read', 'file.read', 'file.write'],

@@ -11,6 +11,9 @@
     "outputFile": {
       "type": "string"
     },
+    "overwrite": {
+      "type": "boolean"
+    },
     "options": {
       "type": "object",
       "properties": {
@@ -30,6 +33,10 @@
         "background": {
           "type": "string",
           "enum": ["transparent", "white", "theme"]
+        },
+        "waitUntil": {
+          "type": "string",
+          "enum": ["managed"]
         }
       },
       "additionalProperties": false

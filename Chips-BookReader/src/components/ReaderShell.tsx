@@ -1,4 +1,11 @@
-import React, { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChipsCommandPalette,
+  ChipsCommandProvider,
+  ChipsMenuBar,
+  ChipsToolbar,
+} from "@chips/component-library";
+import type { Client, CommandInvocationContext, CommandSource } from "chips-sdk";
 import type { EpubBook, EpubThemePalette, RenderedSectionDocument } from "../domain/epub/types";
 import type { SearchResult } from "../engine/search-engine";
 import { SearchEngine } from "../engine/search-engine";
@@ -7,7 +14,19 @@ import { useBookmarks, type Bookmark } from "../hooks/useBookmarks";
 import { useReaderEngine } from "../hooks/useReaderEngine";
 import { useReaderInteraction } from "../hooks/useReaderInteraction";
 import { useReaderProgress } from "../hooks/useReaderProgress";
-import type { ReaderFeedback, ReaderPreferences } from "../utils/book-reader";
+import { useBookReaderCommands } from "../commands/useBookReaderCommands";
+import {
+  BOOK_READER_COMMAND_HANDLER_IDS,
+  createBookReaderCommandInvocationContext,
+  type BookReaderCommandId,
+  type BookReaderCommandRuntimeState,
+} from "../commands/book-reader-commands";
+import {
+  clampContentWidth,
+  clampFontScale,
+  type ReaderFeedback,
+  type ReaderPreferences,
+} from "../utils/book-reader";
 import { BookmarkPanel } from "./BookmarkPanel";
 import { ContentsPanel } from "./ContentsPanel";
 import { EmptyState } from "./EmptyState";
@@ -66,6 +85,8 @@ export interface ReaderShellProps {
   onUpdatePreferences: (next: ReaderPreferences) => void;
   onDropFiles: (files: File[]) => void | Promise<void>;
   onOpenExternalLink: (url: string) => void | Promise<void>;
+  commandClient?: Client;
+  commandContext?: CommandInvocationContext;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -88,6 +109,8 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
     onUpdatePreferences,
     onDropFiles,
     onOpenExternalLink,
+    commandClient,
+    commandContext,
     t,
   } = props;
 
@@ -189,6 +212,64 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
     feedback?.tone === "error"
       ? feedback
       : localFeedback ?? feedback;
+  const commandRuntimeState = useMemo<BookReaderCommandRuntimeState>(() => ({
+    hasBook: Boolean(book),
+    activePanel,
+    hasCurrentBookmark: Boolean(currentBookmark),
+    readingMode: preferences.readingMode,
+    isBusy: isViewerBusy,
+    canPreviousSection: currentSectionIndex > 0,
+    canNextSection: currentSectionIndex < sectionCount - 1,
+  }), [
+    activePanel,
+    book,
+    currentBookmark,
+    currentSectionIndex,
+    isViewerBusy,
+    preferences.readingMode,
+    sectionCount,
+  ]);
+  const baseCommandContext = useMemo(
+    () => createBookReaderCommandInvocationContext({
+      pluginId: commandContext?.pluginId,
+      sceneId: commandContext?.sceneId,
+      surfaceId: typeof commandContext?.surfaceId === "string" ? commandContext.surfaceId : null,
+      documentId: book?.source.sourceId ?? commandContext?.documentId as string | undefined,
+      componentId: "book-reader.reader-shell",
+    }),
+    [
+      book?.source.sourceId,
+      commandContext?.documentId,
+      commandContext?.pluginId,
+      commandContext?.sceneId,
+      commandContext?.surfaceId,
+    ],
+  );
+  const commands = useBookReaderCommands({
+    client: commandClient,
+    invocationContext: baseCommandContext,
+    runtimeState: commandRuntimeState,
+  });
+  const {
+    adapter: commandAdapter,
+    commandViews,
+    phase: commandPhase,
+    errorCode: commandErrorCode,
+    invocationContext: commandInvocationContext,
+    invokeCommand,
+    registerHandler,
+  } = commands;
+  const invokeReaderCommand = useCallback(
+    (
+      commandId: BookReaderCommandId,
+      source: CommandSource = "api",
+      payload?: Record<string, unknown>,
+      contextPatch?: CommandInvocationContext,
+    ) => {
+      void invokeCommand(commandId, source, payload, contextPatch);
+    },
+    [invokeCommand],
+  );
 
   useReaderInteraction({
     book,
@@ -199,6 +280,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
     sectionIndexByPath,
     onNavigate: handleNavigate,
     onNavigateBoundary: handleNavigateBoundary,
+    onInvokeCommand: (commandId) => invokeReaderCommand(commandId, "shortcut"),
     onToggleChrome: () => {
       setIsChromeVisible((current) => !current);
     },
@@ -214,6 +296,110 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
     onOpenExternalLink,
     onUpdatePreferences,
   });
+
+  useEffect(() => {
+    const unregisterHandlers = [
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.openSourcePanel, () => {
+        openPanel("source");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.openFile, () => {
+        void onOpenFile();
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.openUrl, (status) => {
+        const url = typeof status.payload?.url === "string" ? status.payload.url.trim() : "";
+        if (url) {
+          void onOpenUrl(url);
+        }
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.toggleContents, () => {
+        openPanel("contents");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.toggleSearch, () => {
+        openPanel("search");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.toggleBookmarks, () => {
+        openPanel("bookmarks");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.togglePreferences, () => {
+        openPanel("preferences");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.closePanel, () => {
+        setActivePanel(null);
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.previousPage, () => {
+        handleNavigate("previous");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.nextPage, () => {
+        handleNavigate("next");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.previousSection, () => {
+        if (currentSectionIndex > 0) {
+          setPendingBoundary("end");
+          onStepSection(-1);
+        }
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.nextSection, () => {
+        if (currentSectionIndex < sectionCount - 1) {
+          setPendingBoundary("start");
+          onStepSection(1);
+        }
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.goSectionStart, () => {
+        handleNavigateBoundary("start");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.goSectionEnd, () => {
+        handleNavigateBoundary("end");
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.decreaseFont, () => {
+        onUpdatePreferences({
+          ...preferences,
+          fontScale: clampFontScale(preferences.fontScale - 0.1),
+        });
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.increaseFont, () => {
+        onUpdatePreferences({
+          ...preferences,
+          fontScale: clampFontScale(preferences.fontScale + 0.1),
+        });
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.narrowContent, () => {
+        onUpdatePreferences({
+          ...preferences,
+          contentWidth: clampContentWidth(preferences.contentWidth - 40),
+        });
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.widenContent, () => {
+        onUpdatePreferences({
+          ...preferences,
+          contentWidth: clampContentWidth(preferences.contentWidth + 40),
+        });
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.toggleBookmark, () => {
+        handleToggleBookmark();
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.readingModePaginated, () => {
+        onUpdatePreferences({ ...preferences, readingMode: "paginated" });
+      }),
+      registerHandler(BOOK_READER_COMMAND_HANDLER_IDS.readingModeScroll, () => {
+        onUpdatePreferences({ ...preferences, readingMode: "scroll" });
+      }),
+    ];
+
+    return () => {
+      for (const unregister of unregisterHandlers) {
+        unregister();
+      }
+    };
+  }, [
+    currentSectionIndex,
+    onOpenFile,
+    onOpenUrl,
+    onStepSection,
+    onUpdatePreferences,
+    preferences,
+    registerHandler,
+    sectionCount,
+  ]);
 
   useEffect(() => {
     if (!localFeedback || localFeedback.tone === "error") {
@@ -449,7 +635,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
     }
   }
 
-  return (
+  const shell = (
     <main
       className={`book-reader-shell${isDragActive ? " book-reader-shell--dragActive" : ""}`}
       onDragEnter={(event) => {
@@ -494,9 +680,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
                   activePanel={activePanel}
                   progress={progress}
                   hasCurrentBookmark={Boolean(currentBookmark)}
-                  onNavigate={handleNavigate}
-                  onTogglePanel={openPanel}
-                  onToggleBookmark={handleToggleBookmark}
+                  onInvokeCommand={(commandId) => invokeReaderCommand(commandId, "toolbar")}
                   t={t}
                 />
                 <ProgressBar progress={progress} onSeek={seekToFraction} t={t} />
@@ -508,6 +692,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
             onOpenSource={() => {
               openPanel("source");
             }}
+            onInvokeCommand={(commandId) => invokeReaderCommand(commandId, "api")}
             t={t}
           />
         )}
@@ -530,6 +715,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
             initialUrl=""
             onOpenFile={onOpenFile}
             onOpenUrl={onOpenUrl}
+            onInvokeCommand={(commandId, payload) => invokeReaderCommand(commandId, "toolbar", payload)}
             onClose={() => setActivePanel(null)}
             t={t}
           />
@@ -539,6 +725,7 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
           <PreferencesPanel
             preferences={preferences}
             onUpdatePreferences={onUpdatePreferences}
+            onInvokeCommand={(commandId) => invokeReaderCommand(commandId, "toolbar")}
             onClose={() => setActivePanel(null)}
             t={t}
           />
@@ -572,5 +759,60 @@ export function ReaderShell(props: ReaderShellProps): React.ReactElement {
         <FeedbackToast feedback={displayedFeedback} />
       </div>
     </main>
+  );
+
+  return (
+    <ChipsCommandProvider
+      adapter={commandAdapter ?? undefined}
+      commands={commandViews}
+      i18n={t}
+      query={{ includeDisabled: true }}
+    >
+      <div
+        className="book-reader-commandChrome"
+        data-command-phase={commandPhase}
+      >
+        <ChipsMenuBar
+          adapter={commandAdapter ?? undefined}
+          commands={commandViews}
+          menus={[
+            { menuId: "file", label: t("book-reader.commands.menu.file") },
+            { menuId: "edit", label: t("book-reader.commands.menu.edit") },
+            { menuId: "view", label: t("book-reader.commands.menu.view") },
+            { menuId: "navigate", label: t("book-reader.commands.menu.navigate") },
+            { menuId: "bookmarks", label: t("book-reader.commands.menu.bookmarks") },
+          ]}
+          i18n={t}
+          ariaLabel={t("book-reader.commands.menu.ariaLabel")}
+          invocationContext={commandInvocationContext}
+          disabled={commandPhase === "error"}
+        />
+        <ChipsToolbar
+          adapter={commandAdapter ?? undefined}
+          commands={commandViews}
+          toolbarId="reader"
+          i18n={t}
+          ariaLabel={t("book-reader.commands.toolbar.ariaLabel")}
+          invocationContext={commandInvocationContext}
+          disabled={commandPhase === "error"}
+        />
+        <ChipsCommandPalette
+          adapter={commandAdapter ?? undefined}
+          commands={commandViews}
+          i18n={t}
+          commandQuery={{ includeDisabled: true }}
+          invocationContext={commandInvocationContext}
+          ariaLabel={t("book-reader.commands.palette.ariaLabel")}
+          inputPlaceholder={t("book-reader.commands.palette.placeholder")}
+          disabled={commandPhase === "error"}
+        />
+        {commandErrorCode ? (
+          <span role="status" className="book-reader-commandChrome__status">
+            {commandErrorCode}
+          </span>
+        ) : null}
+      </div>
+      {shell}
+    </ChipsCommandProvider>
   );
 }

@@ -559,6 +559,14 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
       onUpdatePreferences={updatePreferences}
       onDropFiles={dropFiles}
       onOpenExternalLink={(url) => client.platform.openExternal(url)}
+      commandClient={client}
+      commandContext={{
+        pluginId: environment.pluginId,
+        sceneId: environment.hostSceneId,
+        surfaceId: environment.surfaceId ?? undefined,
+        documentId: book?.source.sourceId,
+        componentId: "book-reader.reader-shell",
+      }}
       t={t}
     />
   ), [
@@ -579,6 +587,9 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     stepSection,
     t,
     updatePreferences,
+    environment.hostSceneId,
+    environment.pluginId,
+    environment.surfaceId,
   ]);
 
   const value = React.useMemo<BookReaderRuntimeValue>(() => ({

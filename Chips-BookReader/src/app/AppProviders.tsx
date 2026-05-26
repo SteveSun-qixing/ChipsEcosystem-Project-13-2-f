@@ -17,6 +17,9 @@ import { DEFAULT_THEME_STATE, readDocumentThemeState } from "../runtime/theme-ru
 import { AppRuntimeProvider } from "./AppRuntimeProvider";
 
 const BOOK_READER_PERMISSIONS = [
+  "command.read",
+  "command.write",
+  "command.invoke",
   "resource.read",
   "file.read",
   "platform.read",

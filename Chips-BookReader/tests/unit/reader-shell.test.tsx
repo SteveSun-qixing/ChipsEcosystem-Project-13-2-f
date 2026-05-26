@@ -9,7 +9,11 @@ import type { EpubBook } from "../../src/domain/epub/types";
 import type { ReaderPreferences } from "../../src/utils/book-reader";
 
 vi.mock("@chips/component-library", () => ({
+  ChipsCommandPalette: () => <div data-book-reader-command-palette="true" />,
+  ChipsCommandProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ChipsIcon: () => <span data-book-reader-icon="true" />,
+  ChipsMenuBar: () => <nav data-book-reader-menu="true" />,
+  ChipsToolbar: () => <div data-book-reader-toolbar="true" />,
 }));
 
 const DEFAULT_PREFERENCES: ReaderPreferences = {

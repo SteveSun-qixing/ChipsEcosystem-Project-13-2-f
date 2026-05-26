@@ -3,6 +3,7 @@ import { InteractionManager } from "../interaction/interaction-manager";
 import type { PageDirection, ReadingBoundary } from "../engine/types";
 import type { DocumentController } from "../engine/document-controller";
 import type { EpubBook } from "../domain/epub/types";
+import type { BookReaderCommandId } from "../commands/book-reader-commands";
 import {
   clampContentWidth,
   clampFontScale,
@@ -18,6 +19,7 @@ export interface UseReaderInteractionParams {
   sectionIndexByPath: Map<string, number>;
   onNavigate: (direction: PageDirection) => void;
   onNavigateBoundary: (boundary: ReadingBoundary) => void;
+  onInvokeCommand?: (commandId: BookReaderCommandId) => void;
   onToggleChrome: () => void;
   onClosePanel: () => void;
   onSelectSection: (sectionIndex: number, fragment?: string) => void;
@@ -44,6 +46,7 @@ export function useReaderInteraction(params: UseReaderInteractionParams): void {
       callbacks: {
         onNavigate: (direction) => latestRef.current.onNavigate(direction),
         onNavigateBoundary: (boundary) => latestRef.current.onNavigateBoundary(boundary),
+        onInvokeCommand: (commandId) => latestRef.current.onInvokeCommand?.(commandId),
         onToggleChrome: () => latestRef.current.onToggleChrome(),
         onClosePanel: () => latestRef.current.onClosePanel(),
         onOpenLink: (href, isExternal) => {

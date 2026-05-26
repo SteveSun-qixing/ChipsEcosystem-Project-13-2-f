@@ -1,16 +1,32 @@
 import React from "react";
+import type { BookReaderCommandId } from "../commands/book-reader-commands";
+import { BOOK_READER_COMMAND_IDS } from "../commands/book-reader-commands";
 import type { ReaderPreferences } from "../utils/book-reader";
 import { PanelShell } from "./PanelShell";
 
 export interface PreferencesPanelProps {
   preferences: ReaderPreferences;
   onUpdatePreferences: (prefs: ReaderPreferences) => void;
+  onInvokeCommand?: (commandId: BookReaderCommandId) => void | Promise<void>;
   onClose: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export function PreferencesPanel(props: PreferencesPanelProps): React.ReactElement {
-  const { preferences, onUpdatePreferences, onClose, t } = props;
+  const { preferences, onUpdatePreferences, onInvokeCommand, onClose, t } = props;
+
+  function updateReadingMode(mode: ReaderPreferences["readingMode"]): void {
+    if (onInvokeCommand) {
+      void onInvokeCommand(
+        mode === "paginated"
+          ? BOOK_READER_COMMAND_IDS.readingModePaginated
+          : BOOK_READER_COMMAND_IDS.readingModeScroll,
+      );
+      return;
+    }
+
+    onUpdatePreferences({ ...preferences, readingMode: mode });
+  }
 
   return (
     <PanelShell
@@ -29,7 +45,7 @@ export function PreferencesPanel(props: PreferencesPanelProps): React.ReactEleme
                 key={mode}
                 type="button"
                 className={`book-reader-chip${preferences.readingMode === mode ? " book-reader-chip--active" : ""}`}
-                onClick={() => onUpdatePreferences({ ...preferences, readingMode: mode })}
+                onClick={() => updateReadingMode(mode)}
               >
                 {t(`book-reader.labels.${mode}`)}
               </button>

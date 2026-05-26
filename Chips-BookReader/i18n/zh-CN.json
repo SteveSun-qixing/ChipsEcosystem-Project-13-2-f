@@ -94,6 +94,135 @@
     "feedback": {
       "bookmarkAdded": "已添加书签",
       "bookmarkRemoved": "已移除书签"
+    },
+    "commands": {
+      "menu": {
+        "ariaLabel": "书籍阅读器菜单",
+        "file": "文件",
+        "edit": "编辑",
+        "view": "视图",
+        "navigate": "导航",
+        "bookmarks": "书签"
+      },
+      "toolbar": {
+        "ariaLabel": "阅读器工具栏"
+      },
+      "palette": {
+        "ariaLabel": "书籍阅读器命令面板",
+        "placeholder": "搜索阅读命令..."
+      },
+      "disabled": {
+        "busy": "阅读器正在处理书籍。",
+        "noBook": "请先打开一本书。",
+        "noPanel": "当前没有打开的面板。",
+        "noPreviousSection": "已经位于第一章。",
+        "noNextSection": "已经位于最后一章。"
+      },
+      "openSourcePanel": {
+        "title": "导入或打开书籍",
+        "description": "打开书籍来源面板。",
+        "ariaLabel": "打开书籍来源面板"
+      },
+      "openFile": {
+        "title": "打开本地电子书",
+        "description": "从本地文件系统选择电子书。",
+        "ariaLabel": "打开本地电子书"
+      },
+      "openUrl": {
+        "title": "打开电子书链接",
+        "description": "从远程链接载入电子书。",
+        "ariaLabel": "打开电子书链接"
+      },
+      "toggleContents": {
+        "title": "切换目录",
+        "description": "打开或关闭目录面板。",
+        "ariaLabel": "切换目录面板"
+      },
+      "toggleSearch": {
+        "title": "搜索书籍",
+        "description": "打开或关闭全文搜索面板。",
+        "ariaLabel": "搜索书籍内容"
+      },
+      "toggleBookmarks": {
+        "title": "打开书签",
+        "description": "打开或关闭书签面板。",
+        "ariaLabel": "打开书签面板"
+      },
+      "togglePreferences": {
+        "title": "阅读偏好",
+        "description": "打开或关闭阅读偏好面板。",
+        "ariaLabel": "打开阅读偏好"
+      },
+      "closePanel": {
+        "title": "关闭当前面板",
+        "description": "关闭当前打开的阅读器面板。",
+        "ariaLabel": "关闭当前面板"
+      },
+      "previousPage": {
+        "title": "上一页",
+        "description": "移动到上一页或上一段阅读位置。",
+        "ariaLabel": "上一页"
+      },
+      "nextPage": {
+        "title": "下一页",
+        "description": "移动到下一页或下一段阅读位置。",
+        "ariaLabel": "下一页"
+      },
+      "previousSection": {
+        "title": "上一章",
+        "description": "跳转到上一章。",
+        "ariaLabel": "上一章"
+      },
+      "nextSection": {
+        "title": "下一章",
+        "description": "跳转到下一章。",
+        "ariaLabel": "下一章"
+      },
+      "goSectionStart": {
+        "title": "章节开头",
+        "description": "跳转到当前章节开头。",
+        "ariaLabel": "跳转到章节开头"
+      },
+      "goSectionEnd": {
+        "title": "章节结尾",
+        "description": "跳转到当前章节结尾。",
+        "ariaLabel": "跳转到章节结尾"
+      },
+      "decreaseFont": {
+        "title": "减小字号",
+        "description": "降低阅读字号。",
+        "ariaLabel": "减小字号"
+      },
+      "increaseFont": {
+        "title": "增大字号",
+        "description": "提高阅读字号。",
+        "ariaLabel": "增大字号"
+      },
+      "narrowContent": {
+        "title": "缩窄版心",
+        "description": "减小阅读内容宽度。",
+        "ariaLabel": "缩窄版心"
+      },
+      "widenContent": {
+        "title": "放宽版心",
+        "description": "增加阅读内容宽度。",
+        "ariaLabel": "放宽版心"
+      },
+      "toggleBookmark": {
+        "title": "切换当前书签",
+        "description": "添加或移除当前位置的书签。",
+        "ariaLabel": "切换当前书签"
+      },
+      "readingModePaginated": {
+        "title": "翻页阅读",
+        "description": "切换到分页阅读模式。",
+        "ariaLabel": "切换到翻页阅读"
+      },
+      "readingModeScroll": {
+        "title": "滚动阅读",
+        "description": "切换到滚动阅读模式。",
+        "ariaLabel": "切换到滚动阅读"
+      }
     }
   }
 }

@@ -48,6 +48,9 @@ capabilities:
   - file-handler:.docx
 
 permissions:
+  - command.read
+  - command.write
+  - command.invoke
   - resource.read
   - file.read
   - platform.read

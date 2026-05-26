@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from "react";
+import type { BookReaderCommandId } from "../commands/book-reader-commands";
+import { BOOK_READER_COMMAND_IDS } from "../commands/book-reader-commands";
 import { PanelShell } from "./PanelShell";
 
 export interface SourcePanelProps {
   initialUrl: string;
   onOpenFile: () => void | Promise<void>;
   onOpenUrl: (url: string) => void | Promise<void>;
+  onInvokeCommand?: (commandId: BookReaderCommandId, payload?: Record<string, unknown>) => void | Promise<void>;
   onClose: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export function SourcePanel(props: SourcePanelProps): React.ReactElement {
-  const { initialUrl, onOpenFile, onOpenUrl, onClose, t } = props;
+  const { initialUrl, onOpenFile, onOpenUrl, onInvokeCommand, onClose, t } = props;
   const [value, setValue] = useState(initialUrl);
 
   useEffect(() => {
@@ -28,14 +31,29 @@ export function SourcePanel(props: SourcePanelProps): React.ReactElement {
     >
       <div className="book-reader-source">
         <p className="book-reader-source__copy">{t("book-reader.empty.description")}</p>
-        <button type="button" className="book-reader-primaryButton" onClick={() => void onOpenFile()}>
+        <button
+          type="button"
+          className="book-reader-primaryButton"
+          onClick={() => {
+            if (onInvokeCommand) {
+              void onInvokeCommand(BOOK_READER_COMMAND_IDS.openFile);
+              return;
+            }
+            void onOpenFile();
+          }}
+        >
           {t("book-reader.actions.openFile")}
         </button>
         <form
           className="book-reader-sourceForm"
           onSubmit={(event) => {
             event.preventDefault();
-            void onOpenUrl(value.trim());
+            const url = value.trim();
+            if (onInvokeCommand) {
+              void onInvokeCommand(BOOK_READER_COMMAND_IDS.openUrl, { url });
+              return;
+            }
+            void onOpenUrl(url);
           }}
         >
           <label className="book-reader-sourceForm__label" htmlFor="book-reader-source-url">

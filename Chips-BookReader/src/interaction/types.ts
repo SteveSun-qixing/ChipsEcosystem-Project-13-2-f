@@ -1,5 +1,6 @@
 import type { DocumentController } from "../engine/document-controller";
 import type { PageDirection, ReadingBoundary, ReadingMode } from "../engine/types";
+import type { BookReaderCommandId } from "../commands/book-reader-commands";
 
 export type InteractionIntent =
   | { type: "navigate"; direction: PageDirection }
@@ -15,6 +16,7 @@ export type InteractionIntent =
 export interface InteractionCallbacks {
   onNavigate: (direction: PageDirection) => void;
   onNavigateBoundary: (boundary: ReadingBoundary) => void;
+  onInvokeCommand?: (commandId: BookReaderCommandId) => void;
   onToggleChrome: () => void;
   onClosePanel: () => void;
   onOpenLink: (href: string, isExternal: boolean) => void;

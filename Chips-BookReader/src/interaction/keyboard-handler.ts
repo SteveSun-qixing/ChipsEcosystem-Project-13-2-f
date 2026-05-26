@@ -1,3 +1,4 @@
+import { BOOK_READER_COMMAND_IDS, type BookReaderCommandId } from "../commands/book-reader-commands";
 import type { InteractionCallbacks, InteractionIntent } from "./types";
 
 function isEditableTarget(target: Element | null): boolean {
@@ -24,6 +25,12 @@ export class KeyboardHandler {
       }
 
       keyboardEvent.preventDefault();
+
+      const commandId = this.resolveCommandId(intent);
+      if (commandId && this.callbacks.onInvokeCommand) {
+        this.callbacks.onInvokeCommand(commandId);
+        return;
+      }
 
       switch (intent.type) {
         case "navigate":
@@ -93,6 +100,31 @@ export class KeyboardHandler {
         return { type: "close-panel" };
       default:
         return { type: "none" };
+    }
+  }
+
+  private resolveCommandId(intent: InteractionIntent): BookReaderCommandId | null {
+    switch (intent.type) {
+      case "navigate":
+        return intent.direction === "next"
+          ? BOOK_READER_COMMAND_IDS.nextPage
+          : BOOK_READER_COMMAND_IDS.previousPage;
+      case "navigate-boundary":
+        return intent.boundary === "end"
+          ? BOOK_READER_COMMAND_IDS.goSectionEnd
+          : BOOK_READER_COMMAND_IDS.goSectionStart;
+      case "close-panel":
+        return BOOK_READER_COMMAND_IDS.closePanel;
+      case "adjust-font":
+        return intent.delta > 0
+          ? BOOK_READER_COMMAND_IDS.increaseFont
+          : BOOK_READER_COMMAND_IDS.decreaseFont;
+      case "adjust-width":
+        return intent.delta > 0
+          ? BOOK_READER_COMMAND_IDS.widenContent
+          : BOOK_READER_COMMAND_IDS.narrowContent;
+      default:
+        return null;
     }
   }
 }

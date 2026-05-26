@@ -1,10 +1,11 @@
 import React from "react";
-import type { IconDescriptor } from "chips-sdk";
 import type { EpubBook, EpubSection } from "../domain/epub/types";
-import type { PageDirection, ReadingProgress } from "../engine/types";
+import type { ReadingProgress } from "../engine/types";
+import type { BookReaderCommandId, BookReaderOverlayPanel } from "../commands/book-reader-commands";
+import { BOOK_READER_COMMAND_IDS } from "../commands/book-reader-commands";
 import { ControlButton } from "./ControlButton";
 
-export type OverlayPanel = "source" | "contents" | "preferences" | "search" | "bookmarks";
+export type OverlayPanel = BookReaderOverlayPanel;
 
 export interface ReaderChromeProps {
   book: EpubBook;
@@ -14,23 +15,9 @@ export interface ReaderChromeProps {
   activePanel: OverlayPanel | null;
   progress: ReadingProgress | null;
   hasCurrentBookmark: boolean;
-  onNavigate: (direction: PageDirection) => void;
-  onTogglePanel: (panel: OverlayPanel) => void;
-  onToggleBookmark: () => void;
+  onInvokeCommand: (commandId: BookReaderCommandId) => void | Promise<void>;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
-
-const ICONS = {
-  source: { name: "folder_open", decorative: true } satisfies IconDescriptor,
-  contents: { name: "menu_book", decorative: true } satisfies IconDescriptor,
-  search: { name: "search", decorative: true } satisfies IconDescriptor,
-  bookmarks: { name: "bookmarks", decorative: true } satisfies IconDescriptor,
-  bookmark: { name: "bookmark", decorative: true } satisfies IconDescriptor,
-  bookmarkBorder: { name: "bookmark_border", decorative: true } satisfies IconDescriptor,
-  preferences: { name: "tune", decorative: true } satisfies IconDescriptor,
-  previous: { name: "chevron_left", decorative: true } satisfies IconDescriptor,
-  next: { name: "chevron_right", decorative: true } satisfies IconDescriptor,
-} as const;
 
 export function ReaderChrome(props: ReaderChromeProps): React.ReactElement {
   const {
@@ -41,9 +28,7 @@ export function ReaderChrome(props: ReaderChromeProps): React.ReactElement {
     activePanel,
     progress,
     hasCurrentBookmark,
-    onNavigate,
-    onTogglePanel,
-    onToggleBookmark,
+    onInvokeCommand,
     t,
   } = props;
 
@@ -83,14 +68,14 @@ export function ReaderChrome(props: ReaderChromeProps): React.ReactElement {
       <div className="book-reader-chrome__navigation">
         <ControlButton
           label={t("book-reader.actions.previousPage")}
-          icon={ICONS.previous}
-          onClick={() => onNavigate("previous")}
+          icon={{ name: "chevron_left", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.previousPage)}
           variant="nav"
         />
         <ControlButton
           label={t("book-reader.actions.nextPage")}
-          icon={ICONS.next}
-          onClick={() => onNavigate("next")}
+          icon={{ name: "chevron_right", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.nextPage)}
           variant="nav"
         />
       </div>
@@ -98,38 +83,38 @@ export function ReaderChrome(props: ReaderChromeProps): React.ReactElement {
       <div className="book-reader-chrome__dock">
         <ControlButton
           label={t("book-reader.actions.openLibrary")}
-          icon={ICONS.source}
-          onClick={() => onTogglePanel("source")}
+          icon={{ name: "folder_open", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.openSourcePanel)}
           active={activePanel === "source"}
         />
         <ControlButton
           label={t("book-reader.actions.toggleToc")}
-          icon={ICONS.contents}
-          onClick={() => onTogglePanel("contents")}
+          icon={{ name: "menu_book", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.toggleContents)}
           active={activePanel === "contents"}
         />
         <ControlButton
           label={t("book-reader.actions.toggleSearch")}
-          icon={ICONS.search}
-          onClick={() => onTogglePanel("search")}
+          icon={{ name: "search", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.toggleSearch)}
           active={activePanel === "search"}
         />
         <ControlButton
           label={t("book-reader.actions.toggleBookmark")}
-          icon={hasCurrentBookmark ? ICONS.bookmark : ICONS.bookmarkBorder}
-          onClick={onToggleBookmark}
+          icon={{ name: hasCurrentBookmark ? "bookmark" : "bookmark_border", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.toggleBookmark)}
           active={hasCurrentBookmark}
         />
         <ControlButton
           label={t("book-reader.actions.openBookmarks")}
-          icon={ICONS.bookmarks}
-          onClick={() => onTogglePanel("bookmarks")}
+          icon={{ name: "bookmarks", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.toggleBookmarks)}
           active={activePanel === "bookmarks"}
         />
         <ControlButton
           label={t("book-reader.actions.openPreferences")}
-          icon={ICONS.preferences}
-          onClick={() => onTogglePanel("preferences")}
+          icon={{ name: "tune", decorative: true }}
+          onClick={() => onInvokeCommand(BOOK_READER_COMMAND_IDS.togglePreferences)}
           active={activePanel === "preferences"}
         />
       </div>

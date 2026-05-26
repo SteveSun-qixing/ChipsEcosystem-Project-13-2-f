@@ -1,8 +1,24 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
+import {
+  ChipsCheckbox,
+  ChipsForm,
+  ChipsNumberInput,
+  ChipsSegmentedControl,
+  ChipsSelect,
+} from "@chips/component-library";
 import { FrameRegionEditor } from "./frame-region-editor";
-import type { LayoutConfig, SortMode } from "../schema/layout-config";
+import {
+  normalizeLayoutConfig,
+  visibleFieldKeys,
+  type CoverSize,
+  type GroupMode,
+  type LayoutConfig,
+  type RowDensity,
+  type SortMode,
+  type VisibleFieldKey,
+} from "../schema/layout-config";
 import type { BoxEntrySnapshot, ResolvedRuntimeResource } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 
@@ -21,14 +37,36 @@ export type LayoutEditorRoot = HTMLElement & {
 };
 
 function updateConfig(config: LayoutConfig, patch: Partial<LayoutConfig["props"]>): LayoutConfig {
-  return {
+  return normalizeLayoutConfig({
     ...config,
     props: {
       ...config.props,
       ...patch,
     },
-  };
+  });
 }
+
+function toggleVisibleField(config: LayoutConfig, field: VisibleFieldKey, checked: boolean): VisibleFieldKey[] {
+  const current = new Set(config.props.visibleFields);
+  if (checked) {
+    current.add(field);
+  } else {
+    current.delete(field);
+  }
+
+  if (current.size === 0) {
+    current.add("createdAt");
+  }
+
+  return visibleFieldKeys.filter((item) => current.has(item));
+}
+
+const visibleFieldMessageKeys: Record<VisibleFieldKey, Parameters<typeof getLayoutMessage>[1]> = {
+  createdAt: "editor.field_created_at",
+  summary: "editor.field_summary",
+  tags: "editor.field_tags",
+  type: "editor.field_type",
+};
 
 const shellStyle: React.CSSProperties = {
   position: "relative",
@@ -59,6 +97,12 @@ const bodyStyle: React.CSSProperties = {
   padding: "14px 16px 42px",
 };
 
+const fieldListStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px 14px",
+};
+
 export function LayoutEditorPanel({
   entries,
   config,
@@ -68,60 +112,148 @@ export function LayoutEditorPanel({
   deleteBoxAsset,
   onChange,
 }: LayoutEditorPanelProps) {
+  const t = (key: Parameters<typeof getLayoutMessage>[1]) => getLayoutMessage(locale, key);
+
   return (
     <div data-scope="chips-list-layout-editor" style={shellStyle}>
       <div data-part="body" style={bodyStyle}>
-        <section style={{ display: "grid", gap: "14px" }}>
-          <div style={{ display: "grid", gap: "6px" }}>
-            <strong style={{ fontSize: "15px", color: "#0f172a" }}>
-              {getLayoutMessage(locale, "editor.section.layout")}
-            </strong>
-            <span style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.6 }}>
-              {getLayoutMessage(locale, "editor.auto_list_hint")}
-            </span>
-          </div>
+        <ChipsForm.Root aria-label={t("editor.section.layout")}>
+          <ChipsForm.Section
+            title={t("editor.section.layout")}
+            description={t("editor.auto_list_hint")}
+          >
+            <ChipsForm.Field name="sortMode">
+              <ChipsForm.Label>{t("editor.sort_mode")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <ChipsSelect
+                  value={config.props.sortMode}
+                  options={[
+                    { value: "manual", label: t("editor.sort_manual") },
+                    { value: "name-asc", label: t("editor.sort_name_asc") },
+                    { value: "name-desc", label: t("editor.sort_name_desc") },
+                  ]}
+                  onValueChange={(value) => {
+                    onChange(updateConfig(config, {
+                      sortMode: value as SortMode,
+                    }));
+                  }}
+                />
+              </ChipsForm.Control>
+              <ChipsForm.Hint>
+                {config.props.sortMode === "manual"
+                  ? t("editor.sort_manual_hint")
+                  : t("editor.sort_runtime_hint")}
+              </ChipsForm.Hint>
+            </ChipsForm.Field>
 
-          <label style={{ display: "grid", gap: "8px" }}>
-            <span style={{ fontSize: "13px", color: "#334155" }}>
-              {getLayoutMessage(locale, "editor.sort_mode")}
-            </span>
-            <select
-              value={config.props.sortMode}
-              style={{
-                borderRadius: "12px",
-                border: "1px solid rgba(148,163,184,0.24)",
-                background: "#ffffff",
-                padding: "10px 12px",
-                fontSize: "13px",
-                color: "#0f172a",
-              }}
-              onChange={(event) => {
-                onChange(updateConfig(config, {
-                  sortMode: event.currentTarget.value as SortMode,
-                }));
-              }}
-            >
-              <option value="manual">{getLayoutMessage(locale, "editor.sort_manual")}</option>
-              <option value="name-asc">{getLayoutMessage(locale, "editor.sort_name_asc")}</option>
-              <option value="name-desc">{getLayoutMessage(locale, "editor.sort_name_desc")}</option>
-            </select>
-          </label>
+            <ChipsForm.Field name="rowDensity">
+              <ChipsForm.Label>{t("editor.row_density")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <ChipsSegmentedControl
+                  value={config.props.rowDensity}
+                  ariaLabel={t("editor.row_density")}
+                  options={[
+                    { value: "compact", label: t("editor.row_density_compact") },
+                    { value: "comfortable", label: t("editor.row_density_comfortable") },
+                    { value: "spacious", label: t("editor.row_density_spacious") },
+                  ]}
+                  onValueChange={(value) => {
+                    onChange(updateConfig(config, {
+                      rowDensity: value as RowDensity,
+                    }));
+                  }}
+                />
+              </ChipsForm.Control>
+            </ChipsForm.Field>
 
-          <span style={{ fontSize: "12px", color: "#64748b", lineHeight: 1.6 }}>
-            {config.props.sortMode === "manual"
-              ? getLayoutMessage(locale, "editor.sort_manual_hint")
-              : getLayoutMessage(locale, "editor.sort_runtime_hint")}
-          </span>
-          <span style={{ fontSize: "12px", color: "#64748b" }}>
-            {getLayoutMessage(locale, "editor.entry_count").replace("{count}", String(entries.length))}
-          </span>
-        </section>
+            <ChipsForm.Field name="coverSize">
+              <ChipsForm.Label>{t("editor.cover_size")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <ChipsSegmentedControl
+                  value={config.props.coverSize}
+                  ariaLabel={t("editor.cover_size")}
+                  options={[
+                    { value: "compact", label: t("editor.cover_size_compact") },
+                    { value: "regular", label: t("editor.cover_size_regular") },
+                    { value: "large", label: t("editor.cover_size_large") },
+                  ]}
+                  onValueChange={(value) => {
+                    onChange(updateConfig(config, {
+                      coverSize: value as CoverSize,
+                    }));
+                  }}
+                />
+              </ChipsForm.Control>
+            </ChipsForm.Field>
+
+            <ChipsForm.Field name="groupMode">
+              <ChipsForm.Label>{t("editor.group_mode")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <ChipsSelect
+                  value={config.props.groupMode}
+                  options={[
+                    { value: "none", label: t("editor.group_none") },
+                    { value: "type", label: t("editor.group_type") },
+                    { value: "tag", label: t("editor.group_tag") },
+                  ]}
+                  onValueChange={(value) => {
+                    onChange(updateConfig(config, {
+                      groupMode: value as GroupMode,
+                    }));
+                  }}
+                />
+              </ChipsForm.Control>
+            </ChipsForm.Field>
+
+            <ChipsForm.Field name="visibleFields">
+              <ChipsForm.Label>{t("editor.visible_fields")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <div style={fieldListStyle}>
+                  {visibleFieldKeys.map((field) => (
+                    <ChipsCheckbox
+                      key={field}
+                      checked={config.props.visibleFields.includes(field)}
+                      label={t(visibleFieldMessageKeys[field])}
+                      onCheckedChange={(checked) => {
+                        onChange(updateConfig(config, {
+                          visibleFields: toggleVisibleField(config, field, checked),
+                        }));
+                      }}
+                    />
+                  ))}
+                </div>
+              </ChipsForm.Control>
+            </ChipsForm.Field>
+
+            <ChipsForm.Field name="pageSize">
+              <ChipsForm.Label>{t("editor.page_size")}</ChipsForm.Label>
+              <ChipsForm.Control>
+                <ChipsNumberInput
+                  value={config.props.pageSize}
+                  min={20}
+                  max={240}
+                  step={20}
+                  largeStep={40}
+                  ariaLabel={t("editor.page_size")}
+                  onValueChange={(value) => {
+                    onChange(updateConfig(config, {
+                      pageSize: typeof value === "number" ? value : 120,
+                    }));
+                  }}
+                />
+              </ChipsForm.Control>
+              <ChipsForm.Hint>
+                {t("editor.entry_count").replace("{count}", String(entries.length))}
+              </ChipsForm.Hint>
+            </ChipsForm.Field>
+          </ChipsForm.Section>
+        </ChipsForm.Root>
 
         <FrameRegionEditor
           region={config.props.background}
           locale={locale}
-          title={getLayoutMessage(locale, "editor.background_title")}
-          description={getLayoutMessage(locale, "editor.background_desc")}
+          title={t("editor.background_title")}
+          description={t("editor.background_desc")}
           previewRatio="16:9"
           previewMinHeight="180px"
           preferredAssetPrefix="assets/layouts/list/background"
@@ -138,8 +270,8 @@ export function LayoutEditorPanel({
         <FrameRegionEditor
           region={config.props.topRegion}
           locale={locale}
-          title={getLayoutMessage(locale, "editor.top_region_title")}
-          description={getLayoutMessage(locale, "editor.top_region_desc")}
+          title={t("editor.top_region_title")}
+          description={t("editor.top_region_desc")}
           previewRatio="16:5"
           previewMinHeight="160px"
           preferredAssetPrefix="assets/layouts/list/top-region"

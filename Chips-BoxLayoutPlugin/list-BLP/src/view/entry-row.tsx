@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { EmbeddedDocumentFrame } from "@chips/component-library";
+import { ChipsCheckbox, EmbeddedDocumentFrame } from "@chips/component-library";
+import type { VisibleFieldKey } from "../schema/layout-config";
 import type { BoxEntryCoverView, BoxEntrySnapshot, BoxLayoutRuntime } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 
@@ -16,6 +17,9 @@ function resolveEntryKindLabel(entry: BoxEntrySnapshot, locale?: string): string
   if (entry.snapshot.contentType === "chips/box") {
     return getLayoutMessage(locale, "layout.entry_type_box");
   }
+  if (entry.snapshot.contentType && entry.snapshot.contentType !== "chips/card") {
+    return entry.snapshot.contentType;
+  }
   return getLayoutMessage(locale, "layout.entry_type_card");
 }
 
@@ -30,16 +34,33 @@ function resolveAspectRatio(entry: BoxEntrySnapshot, coverView?: BoxEntryCoverVi
   return "3:4";
 }
 
+function resolveEntryTags(entry: BoxEntrySnapshot): string[] {
+  return (entry.snapshot.tags ?? [])
+    .map((tag) => Array.isArray(tag) ? tag.join(" / ") : tag)
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+}
+
 export function EntryRow({
   entry,
   runtime,
   locale,
   createdAt,
+  visibleFields,
+  selected,
+  active,
+  rowDomId,
+  onToggleSelected,
 }: {
   entry: BoxEntrySnapshot;
   runtime: BoxLayoutRuntime;
   locale?: string;
   createdAt?: string;
+  visibleFields: VisibleFieldKey[];
+  selected: boolean;
+  active: boolean;
+  rowDomId: string;
+  onToggleSelected(entryId: string, selected: boolean): void;
 }) {
   const [coverState, setCoverState] = useState<CoverState>(() => ({
     status: entry.snapshot.cover?.mode === "none" ? "idle" : "loading",
@@ -64,6 +85,11 @@ export function EntryRow({
     }).format(date);
     return getLayoutMessage(locale, "layout.created_at").replace("{date}", formatted);
   }, [createdAt, locale]);
+  const tags = useMemo(() => resolveEntryTags(entry), [entry]);
+  const showCreatedAt = visibleFields.includes("createdAt");
+  const showSummary = visibleFields.includes("summary") && typeof entry.snapshot.summary === "string" && entry.snapshot.summary.trim().length > 0;
+  const showTags = visibleFields.includes("tags") && tags.length > 0;
+  const showType = visibleFields.includes("type");
 
   useEffect(() => {
     if (entry.snapshot.cover?.mode === "none") {
@@ -96,7 +122,30 @@ export function EntryRow({
   };
 
   return (
-    <article data-list-entry data-entry-id={entry.entryId}>
+    <article
+      id={rowDomId}
+      data-list-entry
+      data-entry-id={entry.entryId}
+      data-selected={selected ? "true" : "false"}
+      data-active={active ? "true" : "false"}
+      role="option"
+      aria-selected={selected ? "true" : "false"}
+    >
+      <div
+        data-list-selection
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <ChipsCheckbox
+          checked={selected}
+          label={getLayoutMessage(locale, "layout.select_entry").replace("{title}", title)}
+          onCheckedChange={(nextSelected) => {
+            onToggleSelected(entry.entryId, nextSelected);
+          }}
+        />
+      </div>
+
       <div data-list-cover-shell style={{ aspectRatio: resolveAspectRatio(entry, coverState.view).replace(":", " / ") }}>
         {coverState.status === "ready" && coverState.view?.coverUrl ? (
           <EmbeddedDocumentFrame
@@ -121,7 +170,24 @@ export function EntryRow({
         <button type="button" data-list-entry-title onClick={openEntry}>
           {title}
         </button>
-        <span data-list-entry-date>{createdAtLabel}</span>
+        <div data-list-entry-meta>
+          {showType ? (
+            <span data-list-entry-chip>{kindLabel}</span>
+          ) : null}
+          {showCreatedAt ? (
+            <span data-list-entry-date>{createdAtLabel}</span>
+          ) : null}
+        </div>
+        {showSummary ? (
+          <p data-list-entry-summary>{entry.snapshot.summary}</p>
+        ) : null}
+        {showTags ? (
+          <div data-list-entry-tags aria-label={getLayoutMessage(locale, "layout.tags_label")}>
+            {tags.map((tag) => (
+              <span key={tag} data-list-entry-tag>{tag}</span>
+            ))}
+          </div>
+        ) : null}
       </div>
     </article>
   );

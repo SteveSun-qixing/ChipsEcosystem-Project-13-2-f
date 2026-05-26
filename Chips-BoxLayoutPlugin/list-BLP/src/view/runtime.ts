@@ -16,7 +16,7 @@ export function mountLayoutView(options: MountLayoutViewOptions): () => void {
   const root: Root = createRoot(options.container);
   root.render(
     React.createElement(LayoutViewPage, {
-      entries: options.initialView.items,
+      initialView: options.initialView,
       config: options.config,
       runtime: options.runtime,
       locale: options.locale,

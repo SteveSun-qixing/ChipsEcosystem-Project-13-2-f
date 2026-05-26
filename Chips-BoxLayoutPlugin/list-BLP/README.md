@@ -12,8 +12,26 @@
 
 - 查看态以等高列表行展示箱子条目；
 - 每行左侧渲染正式条目封面；
-- 每行右侧显示条目名称和创建日期；
-- 排序、背景区域和顶部标题区域沿用官方布局插件通用配置链路。
+- 每行右侧显示条目名称，并可按配置展示创建日期、摘要、标签和类型；
+- 支持行密度、封面尺寸、排序、分组、分页数量、背景区域和顶部标题区域；
+- 查看态通过 `initialView` 首屏渲染，并按需调用 `runtime.listEntries` 加载后续页；
+- 条目封面只通过 `runtime.renderEntryCover` 获取，点击或键盘 Enter 激活时只调用 `runtime.openEntry`；
+- 支持键盘上下导航、Home/End、Space 多选、批量选择和清除选择；
+- 空态、错误态、表单、选择、复选框、分段控件和分页按钮使用 `@chips/component-library`。
+
+## 布局配置
+
+`contracts/layout-config.schema.json` 与 `src/schema/layout-config.ts` 共同定义正式配置：
+
+- `sortMode`: `manual | name-asc | name-desc`
+- `rowDensity`: `compact | comfortable | spacious`
+- `coverSize`: `compact | regular | large`
+- `visibleFields`: `createdAt | summary | tags | type`
+- `groupMode`: `none | type | tag`
+- `pageSize`: `20..240`
+- `background` / `topRegion`: `none | image | html`
+
+布局自有图片资源只保存 `assets/` 相对路径，并同步到 `assetRefs`。
 
 ## 目录说明
 
@@ -39,8 +57,8 @@
 ## 常用命令
 
 ```bash
-npm run build
-npm run test
 npm run lint
+npm test
+npm run build
 npm run validate
 ```

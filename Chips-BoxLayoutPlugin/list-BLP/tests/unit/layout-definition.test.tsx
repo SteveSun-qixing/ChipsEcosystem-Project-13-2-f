@@ -75,6 +75,7 @@ describe("layoutDefinition", () => {
             },
           ],
           total: 1,
+          nextCursor: "cursor-2",
         },
         config: layoutDefinition.createDefaultConfig(),
         runtime: {
@@ -93,6 +94,8 @@ describe("layoutDefinition", () => {
     });
 
     expect(container.textContent).toContain("Demo Card");
+    expect(container.querySelector('[role="listbox"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="data-grid"][data-part="toolbar"]')).toBeTruthy();
     const tile = container.querySelector('[data-entry-id="entry-1"]');
     expect(tile).toBeTruthy();
     expect(tile?.querySelector('[data-list-entry-title]')?.textContent).toBe("Demo Card");
@@ -104,6 +107,7 @@ describe("layoutDefinition", () => {
       fields: ["documentInfo"],
     });
     expect(renderEntryCover).toHaveBeenCalledWith("entry-1");
+    expect(container.textContent).toContain("已选择 0 个条目");
     tile?.querySelector('[data-list-entry-title]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(openEntry).toHaveBeenCalledWith("entry-1");
     await act(async () => {
@@ -209,7 +213,7 @@ describe("layoutDefinition", () => {
     expect(titles).toEqual(["Alpha", "Beta"]);
   });
 
-  it("renders editor without exposing numeric row controls", async () => {
+  it("renders editor with component library controls and complete list options", async () => {
     const container = document.createElement("div");
     container.style.overflow = "visible";
     document.body.appendChild(container);
@@ -226,9 +230,16 @@ describe("layoutDefinition", () => {
       });
     });
 
-    expect(container.querySelector('select')).toBeTruthy();
+    expect(container.querySelector('[data-scope="select"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="segmented-control"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="checkbox"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-scope="number-input"][data-part="root"]')).toBeTruthy();
     expect(container.querySelector('input[type="number"]')).toBeNull();
     expect(container.textContent).toContain("等高行");
+    expect(container.textContent).toContain("行密度");
+    expect(container.textContent).toContain("封面尺寸");
+    expect(container.textContent).toContain("显示字段");
+    expect(container.textContent).toContain("分页数量");
     expect(container.style.display).toBe("flex");
     expect(container.style.overflow).toBe("hidden");
     expect(container.querySelector('[data-chips-list-layout-editor-root="true"]')).toBeTruthy();
@@ -242,6 +253,129 @@ describe("layoutDefinition", () => {
       cleanup?.();
     });
     expect(container.style.overflow).toBe("visible");
+  });
+
+  it("supports keyboard selection and paginated runtime loading", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const listEntries = vi.fn().mockResolvedValue({
+      items: [
+        {
+          entryId: "entry-3",
+          url: "file:///tmp/c.card",
+          enabled: true,
+          snapshot: {
+            title: "Gamma",
+            cover: {
+              mode: "none",
+            },
+            contentType: "chips/card",
+          },
+        },
+      ],
+      total: 3,
+    });
+    const openEntry = vi.fn().mockResolvedValue({
+      mode: "document-window",
+      documentType: "card",
+      windowId: "window-3",
+    });
+
+    await act(async () => {
+      layoutDefinition.renderView({
+        container,
+        sessionId: "session-page",
+        box: {
+          boxId: "box-page",
+          boxFile: "/tmp/page.box",
+          name: "Page Box",
+          activeLayoutType: "chips.layout.list",
+          availableLayouts: ["chips.layout.list"],
+        },
+        initialView: {
+          items: [
+            {
+              entryId: "entry-1",
+              url: "file:///tmp/a.card",
+              enabled: true,
+              snapshot: {
+                title: "Alpha",
+                summary: "First summary",
+                tags: ["Design"],
+                cover: {
+                  mode: "none",
+                },
+                contentType: "chips/card",
+              },
+            },
+            {
+              entryId: "entry-2",
+              url: "file:///tmp/b.box",
+              enabled: true,
+              snapshot: {
+                title: "Beta",
+                tags: ["Design"],
+                cover: {
+                  mode: "none",
+                },
+                contentType: "chips/box",
+              },
+            },
+          ],
+          total: 3,
+          nextCursor: "cursor-2",
+        },
+        config: layoutDefinition.normalizeConfig({
+          props: {
+            rowDensity: "compact",
+            coverSize: "large",
+            visibleFields: ["type", "summary", "tags"],
+            groupMode: "tag",
+            pageSize: 20,
+          },
+        }),
+        runtime: {
+          listEntries,
+          readEntryDetail: vi.fn().mockResolvedValue([]),
+          renderEntryCover: vi.fn(),
+          resolveEntryResource: vi.fn(),
+          readBoxAsset: vi.fn(),
+          prefetchEntries: vi.fn().mockResolvedValue(undefined),
+          openEntry,
+        },
+        locale: "zh-CN",
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-scope="chips-box-list-layout"]')?.getAttribute("data-density")).toBe("compact");
+    expect(container.querySelector('[data-scope="chips-box-list-layout"]')?.getAttribute("data-cover-size")).toBe("large");
+    expect(container.textContent).toContain("Design");
+    expect(container.textContent).toContain("First summary");
+
+    const list = container.querySelector('[role="listbox"]');
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      list?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    });
+    expect(container.textContent).toContain("已选择 1 个条目");
+
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(openEntry).toHaveBeenCalledWith("entry-2");
+
+    const loadMoreButton = container.querySelector('[data-layout-pagination] button');
+    await act(async () => {
+      loadMoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(listEntries).toHaveBeenCalledWith({
+      cursor: "cursor-2",
+      limit: 20,
+    });
+    expect(container.textContent).toContain("Gamma");
   });
 
   it("keeps the layout shell visible when the box has no entries", async () => {

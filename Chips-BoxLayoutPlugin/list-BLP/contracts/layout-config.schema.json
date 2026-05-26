@@ -10,12 +10,47 @@
     },
     "props": {
       "type": "object",
-      "required": ["sortMode", "background", "topRegion"],
+      "required": [
+        "sortMode",
+        "rowDensity",
+        "coverSize",
+        "visibleFields",
+        "groupMode",
+        "pageSize",
+        "background",
+        "topRegion"
+      ],
       "additionalProperties": false,
       "properties": {
         "sortMode": {
           "type": "string",
           "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "rowDensity": {
+          "type": "string",
+          "enum": ["compact", "comfortable", "spacious"]
+        },
+        "coverSize": {
+          "type": "string",
+          "enum": ["compact", "regular", "large"]
+        },
+        "visibleFields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["createdAt", "summary", "tags", "type"]
+          }
+        },
+        "groupMode": {
+          "type": "string",
+          "enum": ["none", "type", "tag"]
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 240
         },
         "background": {
           "$ref": "#/$defs/frameRegion"

@@ -4,7 +4,7 @@ import { mountLayoutView } from "./view/runtime";
 import {
   createDefaultLayoutConfig,
   normalizeLayoutConfig,
-  validateLayoutConfig,
+  validateLayoutConfigInput,
 } from "./schema/layout-config";
 import type { LayoutConfig } from "./schema/layout-config";
 import type {
@@ -80,13 +80,19 @@ export const layoutDefinition: BoxLayoutDefinition = {
     return normalizeLayoutConfig(input) as unknown as Record<string, unknown>;
   },
   validateConfig(config) {
-    return validateLayoutConfig(
-      normalizeLayoutConfig(config)
-    );
+    return validateLayoutConfigInput(config);
   },
   getInitialQuery(config) {
+    const normalizedConfig = normalizeLayoutConfig(config);
+    const sort = normalizedConfig.props.sortMode === "name-asc"
+      ? { key: "title", direction: "asc" as const }
+      : normalizedConfig.props.sortMode === "name-desc"
+        ? { key: "title", direction: "desc" as const }
+        : undefined;
+
     return {
-      limit: 120,
+      limit: normalizedConfig.props.pageSize,
+      ...(sort ? { sort } : {}),
     };
   },
   renderView(ctx) {

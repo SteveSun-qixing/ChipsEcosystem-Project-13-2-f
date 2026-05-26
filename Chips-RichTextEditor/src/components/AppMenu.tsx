@@ -1,34 +1,48 @@
 import React from "react";
-import { ChipsIcon } from "@chips/component-library";
-
-export type AppMenuAction = "new" | "open" | "save" | "save-as" | "info";
+import {
+  ChipsIcon,
+  resolveCommandMenuGroups,
+  type ChipsCommandProviderProps,
+  type ChipsCommandView,
+  type ChipsResolvedCommandView,
+} from "@chips/component-library";
 
 export interface AppMenuSection {
   id: string;
   title: string;
-  items: Array<{
-    action: AppMenuAction;
-    label: string;
-    iconName: string;
-    disabled?: boolean;
-  }>;
+  menuId: string;
 }
 
 interface AppMenuProps {
   open: boolean;
   buttonLabel: string;
+  commands: ChipsCommandView[];
+  i18n: ChipsCommandProviderProps["i18n"];
   sections: AppMenuSection[];
   onToggle: () => void;
-  onAction: (action: AppMenuAction) => void;
+  onCommand: (command: ChipsResolvedCommandView) => void;
+}
+
+function resolveSectionCommands(
+  commands: ChipsCommandView[],
+  menuId: string,
+  i18n: ChipsCommandProviderProps["i18n"],
+): ChipsResolvedCommandView[] {
+  return resolveCommandMenuGroups(commands, {
+    menuId,
+    i18n,
+  }).flatMap((group) => group.items);
 }
 
 export const AppMenu = React.forwardRef<HTMLDivElement, AppMenuProps>(function AppMenu(
   {
     open,
     buttonLabel,
+    commands,
+    i18n,
     sections,
     onToggle,
-    onAction,
+    onCommand,
   },
   ref,
 ): React.ReactElement {
@@ -52,17 +66,19 @@ export const AppMenu = React.forwardRef<HTMLDivElement, AppMenuProps>(function A
             <section key={section.id} className="rte-app-menu__section">
               <h2 className="rte-app-menu__title">{section.title}</h2>
               <div className="rte-app-menu__items">
-                {section.items.map((item) => (
+                {resolveSectionCommands(commands, section.menuId, i18n).map((item) => (
                   <button
-                    key={item.action}
+                    key={item.commandId}
                     type="button"
                     role="menuitem"
                     className="rte-app-menu__item"
                     disabled={item.disabled}
-                    onClick={() => onAction(item.action)}
+                    aria-label={item.ariaLabel}
+                    data-command-id={item.commandId}
+                    onClick={() => onCommand(item)}
                   >
                     <span className="rte-app-menu__item-icon" aria-hidden="true">
-                      <ChipsIcon descriptor={{ name: item.iconName, decorative: true }} size={18} />
+                      {item.icon ? <ChipsIcon descriptor={{ ...item.icon, decorative: true }} size={18} /> : null}
                     </span>
                     <span className="rte-app-menu__item-label">{item.label}</span>
                   </button>

@@ -62,12 +62,23 @@ export function normalizeRelativeResourcePath(input: string | null | undefined):
     return null;
   }
 
-  const normalized = input.replace(/\\/g, "/").trim().replace(/^\.?\//, "");
+  const normalized = input.replace(/\\/g, "/").trim();
   if (!normalized) {
     return null;
   }
 
-  const segments = splitPath(normalized);
+  if (
+    /^[a-z][a-z0-9+.-]*:/i.test(normalized)
+    || normalized.startsWith("//")
+    || normalized.startsWith("/")
+    || normalized.includes("?")
+    || normalized.includes("#")
+  ) {
+    return null;
+  }
+
+  const withoutPrefix = normalized.replace(/^\.?\//, "");
+  const segments = splitPath(withoutPrefix);
   if (segments.length === 0 || segments.some((segment) => segment === "." || segment === "..")) {
     return null;
   }

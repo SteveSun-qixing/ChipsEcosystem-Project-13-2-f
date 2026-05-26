@@ -1,6 +1,7 @@
 import type { Client } from "chips-sdk";
 import yaml from "yaml";
 import {
+  assertCompositeRichTextCardFiles,
   buildCompositeRichTextCardFiles,
   collectCompositeRichTextResourcePaths,
   parseCompositeRichTextCard,
@@ -12,7 +13,6 @@ import {
   deletePath,
   ensureDirRecursive,
   ensureParentDir,
-  listFiles,
   movePath,
   pathExists,
   readTextFile,
@@ -73,25 +73,22 @@ function guessMimeType(resourcePath: string): string {
 async function buildResourceManifest(
   client: Client,
   cardRootDir: string,
+  resourcePaths: string[],
 ): Promise<CompositeCardResourceManifestEntry[]> {
-  const entries = await listFiles(client, cardRootDir, { recursive: true });
   const resources: CompositeCardResourceManifestEntry[] = [];
 
-  for (const entry of entries) {
-    if (entry.isDirectory) {
+  for (const resourcePath of Array.from(new Set(resourcePaths))) {
+    const relativePath = resourcePath.replace(/\\/g, "/").trim();
+    if (
+      !relativePath
+      || relativePath.startsWith(".card/")
+      || relativePath.startsWith("content/")
+      || relativePath.startsWith("/")
+    ) {
       continue;
     }
 
-    const normalizedPath = entry.path.replace(/\\/g, "/");
-    const relativePath = normalizedPath.startsWith(`${cardRootDir}/`)
-      ? normalizedPath.slice(cardRootDir.length + 1)
-      : normalizedPath;
-
-    if (!relativePath || relativePath.startsWith(".card/") || relativePath.startsWith("content/")) {
-      continue;
-    }
-
-    const fileStat = await statFile(client, entry.path);
+    const fileStat = await statFile(client, joinPath(cardRootDir, relativePath));
     resources.push({
       path: relativePath,
       size: fileStat.size,
@@ -101,6 +98,35 @@ async function buildResourceManifest(
 
   resources.sort((left, right) => left.path.localeCompare(right.path));
   return resources;
+}
+
+async function assertRichTextCardDirectory(client: Client, cardRootDir: string): Promise<void> {
+  const metadataYaml = await readTextFile(client, joinPath(cardRootDir, ".card", "metadata.yaml"));
+  const structureYaml = await readTextFile(client, joinPath(cardRootDir, ".card", "structure.yaml"));
+  const coverHtml = await readTextFile(client, joinPath(cardRootDir, ".card", "cover.html"));
+  const structure = yaml.parse(structureYaml) as { structure?: Array<{ id?: unknown }>; manifest?: { resources?: Array<{ path?: unknown }> } } | null;
+  const baseCardId = Array.isArray(structure?.structure) && typeof structure.structure[0]?.id === "string"
+    ? structure.structure[0].id
+    : "";
+
+  const contentYaml = baseCardId
+    ? await readTextFile(client, joinPath(cardRootDir, "content", `${baseCardId}.yaml`))
+    : "";
+
+  assertCompositeRichTextCardFiles({
+    metadataYaml,
+    structureYaml,
+    contentYaml,
+    coverHtml,
+  });
+
+  const resources = Array.isArray(structure?.manifest?.resources) ? structure.manifest.resources : [];
+  for (const resource of resources) {
+    if (typeof resource.path !== "string") {
+      continue;
+    }
+    await statFile(client, joinPath(cardRootDir, resource.path));
+  }
 }
 
 async function writeReferencedResources(
@@ -219,9 +245,10 @@ export async function saveRichTextCompositeCard(
     await writeTextFile(client, joinPath(stageDir, ".card", "cover.html"), emptyBuild.coverHtml);
     await writeTextFile(client, joinPath(stageDir, "content", `${nextDocument.baseCardId}.yaml`), emptyBuild.contentYaml);
 
-    const resourceManifest = await buildResourceManifest(client, stageDir);
+    const resourceManifest = await buildResourceManifest(client, stageDir, resourcePaths);
     const finalBuild = buildCompositeRichTextCardFiles(nextDocument, resourceManifest);
     await writeTextFile(client, joinPath(stageDir, ".card", "structure.yaml"), finalBuild.structureYaml);
+    await assertRichTextCardDirectory(client, stageDir);
 
     const cardFile = await client.card.pack(stageDir, input.targetFilePath);
 

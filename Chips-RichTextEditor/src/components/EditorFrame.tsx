@@ -30,9 +30,9 @@ export function EditorFrame(props: EditorFrameProps): React.ReactElement {
 
   useEffect(() => {
     let released = false;
-    let disposeReady = () => undefined;
-    let disposeChange = () => undefined;
-    let disposeError = () => undefined;
+    let disposeReady: () => void = () => undefined;
+    let disposeChange: () => void = () => undefined;
+    let disposeError: () => void = () => undefined;
     let disposeRender: (() => Promise<void>) | null = null;
 
     const host = hostRef.current;
@@ -46,7 +46,7 @@ export function EditorFrame(props: EditorFrameProps): React.ReactElement {
     void props.client.card.editorPanel.render({
       cardType: "base.richtext",
       baseCardId: props.sessionKey,
-      initialConfig: props.initialConfig,
+      initialConfig: props.initialConfig as unknown as Record<string, unknown>,
       resources: props.resources,
     }).then((result) => {
       if (released) {

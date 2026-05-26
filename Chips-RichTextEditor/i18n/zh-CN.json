@@ -15,6 +15,7 @@
     "saveSuccess": "卡片文件已保存到 {path}",
     "saveCancelled": "已取消保存",
     "saveFailed": "保存卡片文件失败",
+    "cardStructureInvalid": "当前内容不符合卡片文件结构，已阻止保存。",
     "openFailed": "打开卡片文件失败",
     "newDocumentReady": "已创建新的富文本卡片草稿",
     "editorLoading": "正在装载富文本基础卡片编辑器…",
@@ -30,14 +31,81 @@
     "resourceUnavailable": "当前资源尚未写入正式工作目录，保存后会自动收口。",
     "launchOpenRecovered": "已根据启动上下文恢复目标卡片",
     "initialDraftTitle": "开始书写",
+    "filePathEmpty": "尚未保存到文件",
+    "commandRegistrationFailed": "命令注册失败：{code}",
+    "editorCommandOwned": "该编辑命令由富文本基础卡片编辑器接管。",
     "menuButtonLabel": "打开操作菜单",
     "menuGroupFile": "文件",
     "menuGroupInfo": "信息",
+    "menuGroupView": "查看",
+    "menuGroupEdit": "编辑",
+    "menuGroupFormat": "格式",
     "menuActionNew": "新建",
     "menuActionOpen": "打开",
     "menuActionSave": "保存",
     "menuActionSaveAs": "另存为",
     "menuActionInfo": "当前信息",
+    "commands": {
+      "new": {
+        "title": "新建",
+        "description": "创建一个新的富文本卡片草稿。",
+        "ariaLabel": "新建富文本卡片"
+      },
+      "open": {
+        "title": "打开",
+        "description": "打开已有的 .card 富文本卡片文件。",
+        "ariaLabel": "打开富文本卡片文件"
+      },
+      "save": {
+        "title": "保存",
+        "description": "保存当前富文本卡片文件。",
+        "ariaLabel": "保存当前富文本卡片"
+      },
+      "saveAs": {
+        "title": "另存为",
+        "description": "选择路径并保存当前富文本卡片副本。",
+        "ariaLabel": "另存当前富文本卡片"
+      },
+      "export": {
+        "title": "导出",
+        "description": "导出当前复合卡片文件。",
+        "ariaLabel": "导出当前复合卡片"
+      },
+      "preview": {
+        "title": "预览",
+        "description": "用系统默认方式打开已保存的卡片文件。",
+        "ariaLabel": "预览已保存卡片"
+      },
+      "info": {
+        "title": "当前信息",
+        "description": "查看当前复合卡片、正文和运行时信息。",
+        "ariaLabel": "查看当前文稿信息"
+      },
+      "undo": {
+        "title": "撤销",
+        "description": "撤销编辑器内的上一步输入操作。",
+        "ariaLabel": "撤销输入"
+      },
+      "redo": {
+        "title": "重做",
+        "description": "重做编辑器内的输入操作。",
+        "ariaLabel": "重做输入"
+      },
+      "find": {
+        "title": "查找",
+        "description": "在编辑器内查找正文内容。",
+        "ariaLabel": "查找正文"
+      },
+      "format": {
+        "title": "格式",
+        "description": "打开编辑器内的富文本格式动作。",
+        "ariaLabel": "打开格式动作"
+      },
+      "disabled": {
+        "needsSavedFile": "需要先保存当前卡片文件",
+        "editorOwned": "由富文本编辑器内部接管"
+      }
+    },
     "infoDialogTitle": "当前文稿信息",
     "infoDialogDescription": "显示当前复合卡片、富文本正文与运行时状态。",
     "infoClose": "关闭",

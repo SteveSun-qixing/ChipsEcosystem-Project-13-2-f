@@ -6,4 +6,3 @@ export function useChipsBridge(): any {
   }
   return bridge;
 }
-

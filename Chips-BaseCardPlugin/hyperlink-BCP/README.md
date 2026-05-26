@@ -6,10 +6,15 @@
 
 本插件工程实现了一个基础卡片插件（`type: card`），用于在复合卡片中插入一个可点击的新页面跳转链接。
 
-查看态会把链接渲染为一个全宽长条形按钮，文本靠左，按钮只使用简单描边轮廓和主题 token。点击有效链接时，插件优先通过基础卡片 `openResource` 链路交给卡片查看器调用 Host `resource.open`，最终由系统默认浏览器打开。编辑态提供两个输入框：
+查看态会把链接渲染为一个全宽链接条目，文本靠左，并展示目标域名、描述、可选图标和安全提示。点击有效链接时，插件只通过基础卡片 `openResource` 链路交给外层容器调用 Host `resource.open`，最终由 Host 统一决定应用路由、系统打开或外链打开。宿主未注入 `openResource` 时，链接降级为静态不可打开状态，不在基础卡片 iframe 内直接调用系统浏览器。编辑态提供：
 
 - `anchor_text`：锚文本；
 - `url`：链接，必须是有效的 `http` 或 `https` 地址。
+- `description`：可选描述；
+- `icon_url`：可选图标 URL，必须是有效的 `http` 或 `https` 地址；
+- `open_mode`：打开方式偏好，作为 `resource.open` payload 透传；
+- `display_density`：查看态显示密度；
+- `show_security_hint`：是否显示安全提示。
 
 ## 项目结构
 
@@ -80,7 +85,8 @@ npm run dev
 - React 渲染与编辑运行时
 - `normalizeBasecardConfig()` / `validateBasecardConfig()` 统一归一与校验基线
 - `renderBasecardView()` / `renderBasecardEditor()` / `basecardDefinition` 正式入口
-- `card_type/theme/locale/anchor_text/url` 正式配置模型
+- `card_type/theme/locale/anchor_text/url/description/icon_url/open_mode/display_density/show_security_hint` 正式配置模型
+- `http/https` 协议白名单、凭据 URL 阻断、HTTP 风险提示和 Host 打开能力缺失降级
 
 ## 正式入口契约
 
@@ -103,3 +109,10 @@ npm run dev
 
 - Host 会在渲染阶段向基础卡片插件注入 `themeCssText`，运行时会把该样式挂载到渲染容器中；
 - 基础卡片插件不得自行硬编码整套卡片主题色板，视觉风格应优先来自当前生效主题包。
+- 编辑态使用 `@chips/component-library` 的正式表单、输入、分段选择、开关、按钮、徽标和提示组件；用户可见文案均来自 `i18n/`。
+
+## 资源打开边界
+
+- 查看态有效链接点击只调用宿主 `openResource(...)`。
+- `openResource(...)` payload 使用 `kind: "chips.hyperlink-card"`、`version: "1.0.0"`、`cardType: "base.hyperlink"`，并透传 `openMode`、`displayDensity`、`sourceUrl`、`securityLevel` 和 `securityReason`。
+- 插件不调用 `transfer.openExternal`、`platform.openExternal`、`window.open`，不硬编码目标应用，不直接访问 Host 内部服务。

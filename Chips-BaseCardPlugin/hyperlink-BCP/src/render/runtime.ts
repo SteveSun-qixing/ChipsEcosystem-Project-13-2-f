@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { BasecardRenderContext } from "../index";
-import type { BasecardConfig } from "../schema/card-config";
+import { normalizeBasecardConfig, type BasecardConfig } from "../schema/card-config";
 import { BasecardView, VIEW_STYLE_TEXT } from "./view";
 
 type MountState = {
@@ -26,13 +26,14 @@ export function mountBasecardView(ctx: BasecardRenderContext): () => void {
   };
 
   flushSync(() => {
+    const normalizedConfig = normalizeBasecardConfig(config as unknown as Record<string, unknown>);
     state.root.render(
       React.createElement(
         React.Fragment,
         null,
         React.createElement("style", null, `${themeCssText ?? ""}\n${VIEW_STYLE_TEXT}`),
         React.createElement(BasecardView, {
-          config: config as BasecardConfig,
+          config: normalizedConfig as BasecardConfig,
           openResource: ctx.openResource,
         }),
       ),

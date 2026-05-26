@@ -4,7 +4,7 @@ import {
   normalizeBasecardConfig,
   validateBasecardConfig,
 } from "../../src/schema/card-config";
-import { validateHyperlinkUrl } from "../../src/shared/utils";
+import { analyzeHyperlinkUrl, validateHyperlinkUrl } from "../../src/shared/utils";
 
 describe("basecard schema", () => {
   it("exports the formal basecard definition contract", () => {
@@ -24,12 +24,19 @@ describe("basecard schema", () => {
       card_type: "HyperlinkCard",
       anchor_text: "  Chips  ",
       url: "  https://example.com/docs  ",
+      description: "  Docs  ",
+      icon_url: "  https://example.com/favicon.png  ",
     });
 
     expect(normalized).toMatchObject({
       card_type: "HyperlinkCard",
       anchor_text: "Chips",
       url: "https://example.com/docs",
+      description: "Docs",
+      icon_url: "https://example.com/favicon.png",
+      open_mode: "external-browser",
+      display_density: "comfortable",
+      show_security_hint: true,
       locale: "zh-CN",
       theme: "",
     });
@@ -41,6 +48,23 @@ describe("basecard schema", () => {
     expect(validateHyperlinkUrl("javascript:alert(1)")).toBe(false);
     expect(validateHyperlinkUrl("file:///tmp/demo.html")).toBe(false);
     expect(validateHyperlinkUrl("example.com")).toBe(false);
+  });
+
+  it("classifies security status and blocks credential URLs", () => {
+    expect(analyzeHyperlinkUrl("https://example.com").reason).toBe("secure");
+    expect(analyzeHyperlinkUrl("http://example.com").reason).toBe("insecure-http");
+    expect(analyzeHyperlinkUrl("https://user:pass@example.com").reason).toBe("credentials-blocked");
+
+    const result = validateBasecardConfig(
+      normalizeBasecardConfig({
+        card_type: "HyperlinkCard",
+        anchor_text: "Credential link",
+        url: "https://user:pass@example.com",
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.url).toBe("hyperlink.validation.urlCredentialsBlocked");
   });
 
   it("rejects empty anchor text and missing links", () => {
@@ -68,5 +92,19 @@ describe("basecard schema", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors.url).toBe("hyperlink.validation.urlInvalid");
+  });
+
+  it("rejects invalid optional icon URLs", () => {
+    const result = validateBasecardConfig(
+      normalizeBasecardConfig({
+        card_type: "HyperlinkCard",
+        anchor_text: "Chips",
+        url: "https://example.com",
+        icon_url: "file:///tmp/icon.png",
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.icon_url).toBe("hyperlink.validation.iconUrlInvalid");
   });
 });

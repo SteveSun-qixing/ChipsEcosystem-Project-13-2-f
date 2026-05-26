@@ -3,3 +3,8 @@ theme: ""
 locale: "zh-CN"
 anchor_text: "薯片生态"
 url: "https://example.com"
+description: "薯片生态相关页面"
+icon_url: ""
+open_mode: "external-browser"
+display_density: "comfortable"
+show_security_hint: true

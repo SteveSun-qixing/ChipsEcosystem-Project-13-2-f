@@ -1,0 +1,43 @@
+id: chips.module.module.standard
+name: Module Standard
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: 基于 chips-scaffold-module 生成的标准模块插件。
+author:
+  name: sevenstars
+  email: module-standard@example.invalid
+permissions: []
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: module.module.standard
+      version: "1.0.0"
+      methods:
+        - name: run
+          mode: sync
+          inputSchema: contracts/run.input.schema.json
+          outputSchema: contracts/run.output.schema.json
+        - name: runAsync
+          mode: job
+          inputSchema: contracts/runAsync.input.schema.json
+          outputSchema: contracts/runAsync.output.schema.json
+  consumes: []

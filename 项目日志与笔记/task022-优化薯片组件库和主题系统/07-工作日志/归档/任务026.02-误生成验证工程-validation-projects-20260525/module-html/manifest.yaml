@@ -1,0 +1,43 @@
+id: chips.module.module.html
+name: Module Html
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: HTML 渲染导出无界面模块插件。
+author:
+  name: sevenstars
+  email: module-html@example.invalid
+permissions:
+  - file.read
+  - file.write
+  - platform.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: module.module.html
+      version: "1.0.0"
+      description: 将目录态 HTML 渲染导出为 PDF 或图片。
+      methods:
+        - name: convert
+          mode: job
+          inputSchema: contracts/convert.input.schema.json
+          outputSchema: contracts/convert.output.schema.json
+  consumes: []

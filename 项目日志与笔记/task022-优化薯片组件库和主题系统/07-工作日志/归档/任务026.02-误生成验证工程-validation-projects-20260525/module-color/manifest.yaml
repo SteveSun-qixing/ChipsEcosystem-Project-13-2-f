@@ -1,0 +1,41 @@
+id: chips.module.module.color
+name: Module Color
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: 图像颜色提取无界面模块插件。
+author:
+  name: sevenstars
+  email: module-color@example.invalid
+permissions:
+  - file.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: module.module.color
+      version: "1.0.0"
+      description: 从图像中提取背景色与强调色。
+      methods:
+        - name: pick
+          mode: sync
+          inputSchema: contracts/pick.input.schema.json
+          outputSchema: contracts/pick.output.schema.json
+  consumes: []

@@ -504,3 +504,70 @@
   font-size: 12px;
   line-height: 1.4;
 }
+
+[data-scope="rating"][data-part="root"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--chips-comp-rating-root-gap, var(--chips-layout-gap-xs));
+  color: var(--chips-comp-rating-label-color);
+}
+
+[data-scope="rating"][data-part="label"] {
+  color: var(--chips-comp-rating-label-color);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+[data-scope="rating"][data-part="item"] {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--chips-comp-rating-item-size);
+  block-size: var(--chips-comp-rating-item-size);
+  border: 0;
+  border-radius: var(--chips-comp-rating-item-radius, var(--chips-base-radius-md));
+  background-color: var(--chips-comp-rating-item-surface-idle);
+  color: var(--chips-comp-rating-icon-color-idle);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background-color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    color var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out),
+    box-shadow var(--chips-motion-duration-fast, 150ms) var(--chips-motion-easing-standard, ease-out);
+}
+
+[data-scope="rating"][data-part="item"]:hover {
+  background-color: var(--chips-comp-rating-item-surface-hover);
+}
+
+[data-scope="rating"][data-part="item"][data-active="true"],
+[data-scope="rating"][data-part="item"][data-state="active"] {
+  background-color: var(--chips-comp-rating-item-surface-active);
+  color: var(--chips-comp-rating-icon-color-active);
+}
+
+[data-scope="rating"][data-part="root"][data-shape="heart"] [data-part="item"][data-active="true"],
+[data-scope="rating"][data-part="root"][data-shape="heart"] [data-part="item"][data-state="active"] {
+  color: var(--chips-comp-rating-icon-color-heart-active);
+}
+
+[data-scope="rating"][data-part="item"]:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 var(--chips-base-layout-focus-outline-width) var(--chips-comp-rating-focus-outline);
+}
+
+[data-scope="rating"][data-part="item"]:disabled {
+  background-color: var(--chips-comp-rating-item-surface-disabled);
+  color: var(--chips-comp-rating-icon-color-disabled);
+  cursor: not-allowed;
+}
+
+[data-scope="rating"][data-part="icon"] {
+  color: currentColor;
+}
+
+[data-scope="rating"][data-part="status"] {
+  color: var(--chips-comp-rating-status-color-error);
+  font-size: 12px;
+  line-height: 1.4;
+}

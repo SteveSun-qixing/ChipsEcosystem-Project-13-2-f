@@ -2,12 +2,15 @@
   color-scheme: light;
 
   /* 将五层 token 映射到全局外观基线 */
-  background-color: var(--chips-sys-color-surface, #ffffff);
-  color: var(--chips-sys-color-on-surface, #111111);
+  background-color: var(--chips-ref-color-gray-50, #f6f7fa);
+  color: var(--chips-sys-color-on-surface, #20242c);
 
   /* 便于 CSS 使用的常用派生变量（基于 ref/sys 层） */
-  --chips-base-radius-sm: var(--chips-ref-radius-sm, 6px);
-  --chips-base-radius-md: var(--chips-ref-radius-md, 10px);
+  --chips-base-radius-xs: var(--chips-ref-radius-xs, 8px);
+  --chips-base-radius-sm: var(--chips-ref-radius-sm, 10px);
+  --chips-base-radius-md: var(--chips-ref-radius-md, 12px);
+  --chips-base-radius-control: var(--chips-ref-radius-control, 14px);
+  --chips-base-radius-pill: var(--chips-ref-radius-pill, 999px);
   --chips-base-space-1: var(--chips-layout-gap-xs, 4cpx);
   --chips-base-space-2: var(--chips-ref-space-2, 8px);
   --chips-base-space-3: var(--chips-ref-space-3, 12px);
@@ -16,6 +19,65 @@
   --chips-base-layout-gap: var(--chips-layout-gap-md, 12cpx);
   --chips-base-layout-focus-outline-width: var(--chips-layout-focus-outline-width, 1px);
   --chips-base-layout-focus-outline-offset: var(--chips-layout-focus-outline-offset, 2px);
+  --chips-base-border-subtle: color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 9.5%, transparent);
+  --chips-base-border-strong: color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 16%, transparent);
+  --chips-base-border-hover: color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 24%, transparent);
+  --chips-base-surface-muted: var(--chips-ref-color-gray-75, #f8fafc);
+  --chips-base-surface-window: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 84%, transparent);
+  --chips-base-surface-control: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 86%, transparent);
+  --chips-base-surface-recessed: color-mix(in srgb, var(--chips-ref-color-gray-75, #f8fafc) 82%, transparent);
+  --chips-base-edge-top: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 50%, transparent);
+  --chips-base-edge-left: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 32%, transparent);
+  --chips-base-edge-bottom: color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 5.2%, transparent);
+  --chips-base-text-muted: var(--chips-ref-color-gray-500, #667085);
+  --chips-base-control-height: var(--chips-layout-density-comfortable, 40cpx);
+  --chips-base-control-height-compact: var(--chips-layout-density-compact, 32cpx);
+  --chips-base-shadow-control:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 50%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4%, transparent),
+    0 2px 7px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 5%, transparent);
+  --chips-base-shadow-control-hover:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 56%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4.5%, transparent),
+    0 3px 9px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 6.5%, transparent);
+  --chips-base-shadow-recessed:
+    inset 0 1px 3px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 10%, transparent),
+    0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 95%, transparent);
+  --chips-base-shadow-card:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 54%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 5.2%, transparent),
+    0 8px 18px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 6%, transparent),
+    0 1px 4px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4%, transparent);
+  --chips-base-shadow-card-hover:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 5.8%, transparent),
+    0 10px 22px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 7.2%, transparent),
+    0 2px 6px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4.5%, transparent);
+  --chips-base-shadow-panel:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 58%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 6%, transparent),
+    0 8px 18px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 7.5%, transparent),
+    0 1px 5px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4.5%, transparent);
+  --chips-base-shadow-float:
+    inset 0 1px 0 color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 56%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 6.5%, transparent),
+    0 12px 28px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 9%, transparent),
+    0 2px 8px color-mix(in srgb, var(--chips-sys-color-on-surface, #20242c) 4.5%, transparent);
+  --chips-base-shadow-sm: var(--chips-base-shadow-control);
+  --chips-base-shadow-md: var(--chips-base-shadow-float);
+  --chips-base-shadow-lg: var(--chips-base-shadow-float);
+  --chips-base-focus-ring: 0 0 0 4px color-mix(in srgb, var(--chips-sys-color-primary, #2f6feb) 10%, transparent);
+  --chips-base-selected-ring: 0 0 0 3px color-mix(in srgb, var(--chips-sys-color-primary, #2f6feb) 8%, transparent);
+  --chips-base-aurora-refraction:
+    linear-gradient(
+      90deg,
+      rgba(78, 151, 255, 0),
+      rgba(78, 151, 255, 0.72),
+      rgba(72, 220, 205, 0.58),
+      rgba(255, 206, 92, 0.42),
+      rgba(226, 92, 165, 0.52),
+      rgba(126, 112, 255, 0)
+    );
   --chips-base-icon-color: var(--chips-comp-icon-root-color, var(--chips-sys-icon-color, var(--chips-sys-color-on-surface, currentColor)));
   --chips-base-icon-size: var(--chips-comp-icon-root-size, var(--chips-sys-icon-size, 1em));
   --chips-base-icon-fill: var(--chips-comp-icon-root-fill, var(--chips-sys-icon-fill, 0));
@@ -33,9 +95,13 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   background-color: inherit;
   color: inherit;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 让所有基于 data-scope 的组件在盒模型与排版上保持一致 */
@@ -43,6 +109,12 @@ body {
 [data-scope] {
   box-sizing: border-box;
   font-family: inherit;
+}
+
+[data-scope] *,
+[data-scope] *::before,
+[data-scope] *::after {
+  box-sizing: inherit;
 }
 
 [data-scope="icon"][data-part="root"] {

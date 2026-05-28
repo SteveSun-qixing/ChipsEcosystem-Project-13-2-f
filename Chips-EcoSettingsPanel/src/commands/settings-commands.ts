@@ -2,6 +2,7 @@ import type { CommandDefinitionInput, CommandInvokedEvent, CommandSource } from 
 import type { ChipsCommandView } from "@chips/component-library";
 import { appConfig } from "../../config/app-config";
 import { sceneDefinitions, type SettingsSceneId } from "../app/scene-registry";
+import { getSettingsSceneIconName } from "../app/settings-scene-icons";
 
 export const SETTINGS_COMMAND_IDS = Object.fromEntries(
   sceneDefinitions.map((scene) => [scene.id, `${appConfig.appId}.scene.${scene.id}`]),
@@ -18,7 +19,7 @@ export const settingsCommandDefinitions: CommandDefinitionInput[] = sceneDefinit
   titleKey: scene.titleKey,
   descriptionKey: scene.summaryKey,
   ariaLabelKey: scene.titleKey,
-  icon: { name: resolveSceneIcon(scene.id), style: "rounded" },
+  icon: { name: getSettingsSceneIconName(scene.id), style: "rounded" },
   scope: { kind: "app", appId: appConfig.appId },
   handlerId: SETTINGS_COMMAND_HANDLER_IDS[scene.id],
   menuPlacement: [{ menuId: "settings", groupId: "sections", order: (index + 1) * 10 }],
@@ -36,31 +37,6 @@ export interface SettingsCommandStatus {
   sceneId: SettingsSceneId;
   source: CommandSource;
   invocationId?: string;
-}
-
-function resolveSceneIcon(sceneId: SettingsSceneId): string {
-  switch (sceneId) {
-    case "themes":
-      return "palette";
-    case "theme-diagnostics":
-      return "rule_settings";
-    case "languages":
-      return "translate";
-    case "app-plugins":
-      return "apps";
-    case "card-plugins":
-      return "dashboard_customize";
-    case "layout-plugins":
-      return "view_quilt";
-    case "module-plugins":
-      return "extension";
-    case "component-gallery":
-      return "widgets";
-    case "preview-quality":
-      return "speed";
-    default:
-      return "settings";
-  }
 }
 
 export function getSceneIdFromHandlerId(handlerId: string | undefined): SettingsSceneId | null {

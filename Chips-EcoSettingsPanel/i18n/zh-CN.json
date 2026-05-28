@@ -13,6 +13,14 @@
       "ariaLabel": "设置菜单",
       "mobileLabel": "当前分类",
       "mobileAriaLabel": "移动端设置分类切换",
+      "searchAriaLabel": "搜索设置分类",
+      "searchPlaceholder": "搜索",
+      "searchClear": "清除搜索",
+      "categories": {
+        "personalization": "个人化",
+        "plugins": "插件",
+        "developer": "开发者"
+      },
       "themes": {
         "title": "主题管理",
         "summary": "安装、切换、卸载主题包"
@@ -71,6 +79,7 @@
       "notAvailable": "暂无",
       "open": "打开",
       "details": "详情",
+      "back": "返回",
       "close": "关闭"
     },
     "errors": {
@@ -132,6 +141,16 @@
         "publisher": "发布者",
         "installPath": "安装路径"
       },
+      "detail": {
+        "title": "主题详情：{name}",
+        "description": "查看主题身份、安装路径和运行时状态，并执行卸载等低频治理操作。",
+        "groups": {
+          "identity": "基础信息",
+          "identityDescription": "用于识别主题包身份和来源的核心字段。",
+          "installation": "安装信息",
+          "installationDescription": "Host 返回的主题包安装位置和长路径信息。"
+        }
+      },
       "badges": {
         "current": "当前生效",
         "enabled": "可切换",
@@ -181,6 +200,10 @@
         "locale": "语言代码",
         "nativeName": "原生名称"
       },
+      "detail": {
+        "title": "语言详情：{name}",
+        "description": "查看语言代码、原生名称和当前启用状态。"
+      },
       "badges": {
         "current": "当前语言",
         "available": "可切换"
@@ -215,8 +238,7 @@
         "rebuildShortcut": "重建快捷方式",
         "revealShortcut": "显示位置",
         "removeShortcut": "移除快捷方式",
-        "launch": "启动",
-        "createDesktopShortcut": "创建桌面快捷方式"
+        "launch": "启动"
       },
       "dropzone": {
         "title": "将应用插件包拖到此处即可安装",
@@ -234,6 +256,18 @@
         "installPath": "安装路径",
         "installedAt": "安装时间",
         "shortcut": "快捷方式"
+      },
+      "detail": {
+        "title": "应用插件详情：{name}",
+        "description": "查看应用插件的完整治理信息，并管理快捷方式、启停和卸载等低频操作。",
+        "groups": {
+          "identity": "基础信息",
+          "identityDescription": "用于识别应用插件身份、版本和 Host 能力声明的核心字段。",
+          "installation": "安装信息",
+          "installationDescription": "Host 返回的安装时间与插件包位置。",
+          "shortcut": "系统入口",
+          "shortcutDescription": "由 Host 统一创建和检查的桌面或启动台入口。"
+        }
       },
       "badges": {
         "enabled": "已启用",
@@ -311,6 +345,18 @@
         "capabilities": "能力标记",
         "installPath": "安装路径"
       },
+      "detail": {
+        "title": "卡片插件详情：{name}",
+        "description": "查看卡片插件的完整治理信息，并执行卸载等低频操作。",
+        "groups": {
+          "identity": "基础信息",
+          "identityDescription": "用于识别卡片插件身份、版本和卡片类型的核心字段。",
+          "capabilities": "能力信息",
+          "capabilitiesDescription": "Host 治理记录中声明的卡片能力标记。",
+          "installation": "安装信息",
+          "installationDescription": "Host 返回的卡片插件包安装位置。"
+        }
+      },
       "badges": {
         "enabled": "已启用",
         "disabled": "已停用"
@@ -367,6 +413,18 @@
         "capabilities": "能力标记",
         "installPath": "安装路径"
       },
+      "detail": {
+        "title": "布局插件详情：{name}",
+        "description": "查看布局插件的完整治理信息，并执行卸载等低频操作。",
+        "groups": {
+          "identity": "基础信息",
+          "identityDescription": "用于识别布局插件身份、版本和布局类型的核心字段。",
+          "capabilities": "能力信息",
+          "capabilitiesDescription": "Host 治理记录中声明的布局能力标记。",
+          "installation": "安装信息",
+          "installationDescription": "Host 返回的布局插件包安装位置。"
+        }
+      },
       "badges": {
         "enabled": "已启用",
         "disabled": "已停用"
@@ -422,6 +480,18 @@
         "identity": "模块能力",
         "capabilities": "能力标记",
         "installPath": "安装路径"
+      },
+      "detail": {
+        "title": "模块插件详情：{name}",
+        "description": "查看模块插件的完整治理信息，并执行卸载等低频操作。",
+        "groups": {
+          "identity": "基础信息",
+          "identityDescription": "用于识别模块插件身份、版本和模块能力的核心字段。",
+          "capabilities": "能力信息",
+          "capabilitiesDescription": "Host 治理记录中声明的模块能力标记。",
+          "installation": "安装信息",
+          "installationDescription": "Host 返回的模块插件包安装位置。"
+        }
       },
       "badges": {
         "enabled": "已启用",

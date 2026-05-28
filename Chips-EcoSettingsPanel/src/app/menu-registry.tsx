@@ -24,6 +24,7 @@ export interface MenuRegistration {
   id: MenuId;
   titleKey: string;
   summaryKey: string;
+  categoryKey: string;
   order: number;
   render: () => ReactElement;
 }
@@ -33,6 +34,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "themes",
     titleKey: "settingsPanel.menu.themes.title",
     summaryKey: "settingsPanel.menu.themes.summary",
+    categoryKey: "settingsPanel.menu.categories.personalization",
     order: 10,
     render: () => <ThemePage />,
   },
@@ -40,6 +42,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "languages",
     titleKey: "settingsPanel.menu.languages.title",
     summaryKey: "settingsPanel.menu.languages.summary",
+    categoryKey: "settingsPanel.menu.categories.personalization",
     order: 30,
     render: () => <LanguagePage />,
   },
@@ -47,6 +50,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "theme-diagnostics",
     titleKey: "settingsPanel.menu.themeDiagnostics.title",
     summaryKey: "settingsPanel.menu.themeDiagnostics.summary",
+    categoryKey: "settingsPanel.menu.categories.personalization",
     order: 20,
     render: () => <ThemeDiagnosticsPage />,
   },
@@ -54,6 +58,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "app-plugins",
     titleKey: "settingsPanel.menu.appPlugins.title",
     summaryKey: "settingsPanel.menu.appPlugins.summary",
+    categoryKey: "settingsPanel.menu.categories.plugins",
     order: 40,
     render: () => <AppPluginsPage />,
   },
@@ -61,6 +66,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "card-plugins",
     titleKey: "settingsPanel.menu.cardPlugins.title",
     summaryKey: "settingsPanel.menu.cardPlugins.summary",
+    categoryKey: "settingsPanel.menu.categories.plugins",
     order: 50,
     render: () => <CardPluginsPage />,
   },
@@ -68,6 +74,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "layout-plugins",
     titleKey: "settingsPanel.menu.layoutPlugins.title",
     summaryKey: "settingsPanel.menu.layoutPlugins.summary",
+    categoryKey: "settingsPanel.menu.categories.plugins",
     order: 60,
     render: () => <LayoutPluginsPage />,
   },
@@ -75,6 +82,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "module-plugins",
     titleKey: "settingsPanel.menu.modulePlugins.title",
     summaryKey: "settingsPanel.menu.modulePlugins.summary",
+    categoryKey: "settingsPanel.menu.categories.plugins",
     order: 70,
     render: () => <ModulePluginsPage />,
   },
@@ -82,6 +90,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "component-gallery",
     titleKey: "settingsPanel.menu.gallery.title",
     summaryKey: "settingsPanel.menu.gallery.summary",
+    categoryKey: "settingsPanel.menu.categories.developer",
     order: 80,
     render: () => <ComponentGalleryPage />,
   },
@@ -89,6 +98,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     id: "preview-quality",
     titleKey: "settingsPanel.menu.previewQuality.title",
     summaryKey: "settingsPanel.menu.previewQuality.summary",
+    categoryKey: "settingsPanel.menu.categories.developer",
     order: 90,
     render: () => <PreviewQualityPage />,
   },

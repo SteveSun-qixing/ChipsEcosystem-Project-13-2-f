@@ -7,6 +7,7 @@ export interface SettingsSceneDefinition {
   titleKey: string;
   descriptionKey: string;
   summaryKey: string;
+  categoryKey: string;
   render: () => React.ReactElement;
 }
 
@@ -15,6 +16,7 @@ export const sceneDefinitions: SettingsSceneDefinition[] = MENU_REGISTRY.map((en
   titleKey: entry.titleKey,
   descriptionKey: entry.summaryKey,
   summaryKey: entry.summaryKey,
+  categoryKey: entry.categoryKey,
   render: entry.render,
 }));
 

@@ -13,6 +13,14 @@
       "ariaLabel": "Settings menu",
       "mobileLabel": "Current section",
       "mobileAriaLabel": "Mobile settings section switcher",
+      "searchAriaLabel": "Search settings sections",
+      "searchPlaceholder": "Search",
+      "searchClear": "Clear search",
+      "categories": {
+        "personalization": "Personalization",
+        "plugins": "Plugins",
+        "developer": "Developer"
+      },
       "themes": {
         "title": "Themes",
         "summary": "Install, switch, and remove theme packages"
@@ -71,6 +79,7 @@
       "notAvailable": "N/A",
       "open": "Open",
       "details": "Details",
+      "back": "Back",
       "close": "Close"
     },
     "errors": {
@@ -132,6 +141,16 @@
         "publisher": "Publisher",
         "installPath": "Install path"
       },
+      "detail": {
+        "title": "Theme details: {name}",
+        "description": "Review theme identity, install path, runtime state, and less frequent governance actions such as removal.",
+        "groups": {
+          "identity": "Identity",
+          "identityDescription": "Core fields used to identify the theme package and its source.",
+          "installation": "Installation",
+          "installationDescription": "Host-sourced theme package location and long path details."
+        }
+      },
       "badges": {
         "current": "Current",
         "enabled": "Enabled",
@@ -181,6 +200,10 @@
         "locale": "Locale",
         "nativeName": "Native name"
       },
+      "detail": {
+        "title": "Language details: {name}",
+        "description": "Review the locale code, native name, and active state."
+      },
       "badges": {
         "current": "Current",
         "available": "Available"
@@ -215,8 +238,7 @@
         "rebuildShortcut": "Rebuild Shortcut",
         "revealShortcut": "Reveal",
         "removeShortcut": "Remove Shortcut",
-        "launch": "Launch",
-        "createDesktopShortcut": "Create Desktop Shortcut"
+        "launch": "Launch"
       },
       "dropzone": {
         "title": "Drop an app plugin package here to install",
@@ -234,6 +256,18 @@
         "installPath": "Install path",
         "installedAt": "Installed at",
         "shortcut": "Shortcut"
+      },
+      "detail": {
+        "title": "App plugin details: {name}",
+        "description": "Review complete app plugin governance information and manage shortcuts, enablement, and removal.",
+        "groups": {
+          "identity": "Identity",
+          "identityDescription": "Core fields used to identify the app plugin, version, and Host capability claims.",
+          "installation": "Installation",
+          "installationDescription": "Host-sourced install time and plugin package location.",
+          "shortcut": "System Entry",
+          "shortcutDescription": "Desktop or Launchpad entry created and checked by Host governance."
+        }
       },
       "badges": {
         "enabled": "Enabled",
@@ -311,6 +345,18 @@
         "capabilities": "Capabilities",
         "installPath": "Install path"
       },
+      "detail": {
+        "title": "Card plugin details: {name}",
+        "description": "Review complete card plugin governance information and less frequent actions such as removal.",
+        "groups": {
+          "identity": "Identity",
+          "identityDescription": "Core fields used to identify the card plugin, version, and card type.",
+          "capabilities": "Capabilities",
+          "capabilitiesDescription": "Card capability markers declared in the Host governance record.",
+          "installation": "Installation",
+          "installationDescription": "Host-sourced card plugin package location."
+        }
+      },
       "badges": {
         "enabled": "Enabled",
         "disabled": "Disabled"
@@ -367,6 +413,18 @@
         "capabilities": "Capabilities",
         "installPath": "Install path"
       },
+      "detail": {
+        "title": "Layout plugin details: {name}",
+        "description": "Review complete layout plugin governance information and less frequent actions such as removal.",
+        "groups": {
+          "identity": "Identity",
+          "identityDescription": "Core fields used to identify the layout plugin, version, and layout type.",
+          "capabilities": "Capabilities",
+          "capabilitiesDescription": "Layout capability markers declared in the Host governance record.",
+          "installation": "Installation",
+          "installationDescription": "Host-sourced layout plugin package location."
+        }
+      },
       "badges": {
         "enabled": "Enabled",
         "disabled": "Disabled"
@@ -422,6 +480,18 @@
         "identity": "Module capability",
         "capabilities": "Capabilities",
         "installPath": "Install path"
+      },
+      "detail": {
+        "title": "Module plugin details: {name}",
+        "description": "Review complete module plugin governance information and less frequent actions such as removal.",
+        "groups": {
+          "identity": "Identity",
+          "identityDescription": "Core fields used to identify the module plugin, version, and module capability.",
+          "capabilities": "Capabilities",
+          "capabilitiesDescription": "Module capability markers declared in the Host governance record.",
+          "installation": "Installation",
+          "installationDescription": "Host-sourced module plugin package location."
+        }
       },
       "badges": {
         "enabled": "Enabled",

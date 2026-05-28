@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   Client,
@@ -173,7 +175,7 @@ describe("App (标准应用插件根组件)", () => {
     expect(App).toBeTypeOf("function");
   }, 15000);
 
-  it("渲染桌面导航和窄屏菜单切换器结构", async () => {
+  it("渲染单一主导航和窄屏菜单切换器结构", async () => {
     const { App } = await import("../../src/App");
     const markup = renderToStaticMarkup(<App />);
 
@@ -182,9 +184,61 @@ describe("App (标准应用插件根组件)", () => {
     expect(markup).toContain("settings-nav-list");
     expect(markup).toContain("settings-mobile-nav");
     expect(markup).toContain("settingsPanel.menu.mobileLabel");
+    expect(markup).not.toContain("settings-command-row");
+    expect(markup).not.toContain("data-scope=\"command-palette\"");
+    expect(markup).not.toContain("data-scope=\"menu-bar\"");
+    expect(markup).not.toContain("data-scope=\"toolbar\"");
     expect(markup).toContain("settingsPanel.menu.themes.title");
     expect(markup).toContain("settingsPanel.menu.themeDiagnostics.title");
     expect(markup).toContain("settingsPanel.menu.previewQuality.title");
     expect(markup).not.toContain("settings-sidebar__runtime");
   }, 15000);
+
+  it("主导航图标应使用已确认的 Material Symbols 语义名", async () => {
+    const { App } = await import("../../src/App");
+    const { SETTINGS_SCENE_ICONS } = await import("../../src/app/settings-scene-icons");
+    const { settingsCommandDefinitions } = await import("../../src/commands/settings-commands");
+    const supportedIconNames = new Set([
+      "palette",
+      "rule_settings",
+      "translate",
+      "apps",
+      "dashboard_customize",
+      "view_quilt",
+      "extension",
+      "widgets",
+      "speed",
+    ]);
+    const unsupportedIconNames = ["paintbrush", "character", "rectangle_stack", "macwindow"];
+    const markup = renderToStaticMarkup(<App />);
+
+    Object.values(SETTINGS_SCENE_ICONS).forEach((icon) => {
+      expect(supportedIconNames.has(icon.name)).toBe(true);
+      expect("color" in icon).toBe(false);
+    });
+
+    settingsCommandDefinitions.forEach((command) => {
+      expect(supportedIconNames.has(command.icon?.name ?? "")).toBe(true);
+      expect(command.icon?.style).toBe("rounded");
+    });
+
+    unsupportedIconNames.forEach((iconName) => {
+      expect(markup).not.toContain(iconName);
+    });
+    expect(markup).not.toContain("--settings-nav-icon-accent");
+  }, 15000);
+
+  it("设置面板私有样式不得恢复旧蓝色按钮菜单和表格覆盖层", () => {
+    const stylesPath = fileURLToPath(new URL("../../src/app/styles.css", import.meta.url));
+    const styles = readFileSync(stylesPath, "utf-8");
+
+    expect(styles).not.toContain("--settings-nav-icon-accent");
+    expect(styles).not.toContain("settings-card-grid--bento");
+    expect(styles).not.toContain("table[role=\"grid\"]");
+    expect(styles).not.toContain("thead");
+    expect(styles).not.toContain("tbody");
+    expect(styles).not.toContain("#0a6cff");
+    expect(styles).not.toContain("#f5f5f7");
+    expect(styles).not.toContain("SF Pro Display");
+  });
 });

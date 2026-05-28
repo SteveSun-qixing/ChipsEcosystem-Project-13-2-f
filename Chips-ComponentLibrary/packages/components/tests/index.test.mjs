@@ -1887,6 +1887,51 @@ test("DataGrid exposes formal compound parts", () => {
   assert.equal(typeof ChipsDataGrid.Pagination.render, "function");
 });
 
+test("DataGrid compound rendering does not warn for its internal grid container key", () => {
+  const originalError = console.error;
+  const errors = [];
+  console.error = (...args) => {
+    errors.push(args.map((arg) => String(arg)).join(" "));
+  };
+
+  try {
+    renderToStaticMarkup(
+      React.createElement(
+        ChipsDataGrid.Root,
+        { ariaLabel: "Governance list" },
+        [
+          React.createElement(
+            ChipsDataGrid.Header,
+            { key: "header" },
+            React.createElement(
+              ChipsDataGrid.Cell,
+              { key: "name", header: true, columnKey: "name" },
+              "Name"
+            )
+          ),
+          React.createElement(
+            "div",
+            { key: "body", role: "rowgroup" },
+            React.createElement(
+              ChipsDataGrid.Row,
+              { key: "plugin-1", rowId: "plugin-1" },
+              React.createElement(
+                ChipsDataGrid.Cell,
+                { key: "plugin-1-name", columnKey: "name" },
+                "Plugin"
+              )
+            )
+          )
+        ]
+      )
+    );
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(errors.some((message) => message.includes("Each child in a list should have a unique")), false);
+});
+
 test("Tree exposes formal compound parts", () => {
   assert.equal(ChipsTree.Root, ChipsTree);
   assert.equal(typeof ChipsTree.Item.render, "function");

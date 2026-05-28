@@ -12325,6 +12325,7 @@ const DataGridRoot = React.forwardRef((props, ref) => {
     React.createElement(
       "div",
       {
+        key: "grid",
         role: "grid",
         tabIndex: 0,
         "aria-label": gridLabelProps["aria-label"] || ariaLabel,

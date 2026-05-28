@@ -26,7 +26,7 @@ interface CardGridProps {
   children: React.ReactNode;
 }
 
-interface BentoCardGridProps {
+interface ShowcaseCardGridProps {
   children: React.ReactNode;
 }
 
@@ -101,11 +101,11 @@ export function CardGrid({ minItemSize = "260px", children }: CardGridProps): Re
   );
 }
 
-export function BentoCardGrid({ children }: BentoCardGridProps): React.ReactElement {
+export function ShowcaseCardGrid({ children }: ShowcaseCardGridProps): React.ReactElement {
   return (
     <ChipsGrid
-      className="settings-card-grid settings-card-grid--bento"
-      columns={12}
+      className="settings-card-grid settings-card-grid--showcase"
+      minItemSize="260px"
       gap="var(--chips-layout-gap-md, 16px)"
     >
       {children}
@@ -115,7 +115,7 @@ export function BentoCardGrid({ children }: BentoCardGridProps): React.ReactElem
 
 export function CardGridItem({ emphasis = "standard", children }: CardGridItemProps): React.ReactElement {
   return (
-    <article className="settings-card-grid__item" data-emphasis={emphasis}>
+    <article className="settings-card-grid__item" data-grid-emphasis={emphasis}>
       {children}
     </article>
   );

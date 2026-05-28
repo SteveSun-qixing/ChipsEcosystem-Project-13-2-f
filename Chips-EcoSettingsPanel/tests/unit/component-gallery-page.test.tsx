@@ -35,11 +35,12 @@ describe("ComponentGalleryPage", () => {
     expect(markup).toContain("settings-page-stack");
     expect(markup).toContain("settings-page-section");
     expect(markup).toContain("settings-card-grid");
-    expect(markup).toContain("settings-card-grid--bento");
+    expect(markup).toContain("settings-card-grid--showcase");
     expect(markup).toContain("settingsPanel.gallery.groups.foundation");
     expect(markup).toContain("settingsPanel.gallery.groups.systemUx");
     expect(markup).not.toContain("gallery-page");
     expect(markup).not.toContain("gallery-bento-grid");
+    expect(markup).not.toContain("settings-card-grid--bento");
     expect(markup).not.toContain("settingsPanel.gallery.subtitle");
     expect(markup).not.toContain("#FFFFFF");
     expect(markup).not.toContain("#0A6CFF");

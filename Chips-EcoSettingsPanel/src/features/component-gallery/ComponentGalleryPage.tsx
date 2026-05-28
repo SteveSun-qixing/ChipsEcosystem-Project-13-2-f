@@ -1,7 +1,7 @@
 import React from "react";
 import { ChipsCardShell, ChipsTag } from "@chips/component-library";
 import { useI18n } from "../../app/providers/I18nProvider";
-import { BentoCardGrid, CardDescription, CardGridItem, PageSection, PageStack } from "../../shared/ui/PageLayout";
+import { CardDescription, CardGridItem, PageSection, PageStack, ShowcaseCardGrid } from "../../shared/ui/PageLayout";
 import { PageFrame } from "../../shared/ui/PageFrame";
 import { getComponentGroups } from "./registry";
 
@@ -20,7 +20,7 @@ export function ComponentGalleryPage(): React.ReactElement {
             description={t(group.descriptionKey)}
             meta={<ChipsTag label={t("settingsPanel.gallery.sectionCount", { count: group.items.length })} />}
           >
-            <BentoCardGrid>
+            <ShowcaseCardGrid>
               {group.items.map((item) => {
                 const Preview = item.preview;
                 return (
@@ -36,7 +36,7 @@ export function ComponentGalleryPage(): React.ReactElement {
                   </CardGridItem>
                 );
               })}
-            </BentoCardGrid>
+            </ShowcaseCardGrid>
           </PageSection>
         ))}
       </PageStack>

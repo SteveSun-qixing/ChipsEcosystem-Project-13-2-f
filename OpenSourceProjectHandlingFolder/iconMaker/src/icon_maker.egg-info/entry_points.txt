@@ -1,0 +1,3 @@
+[console_scripts]
+icon-maker = icon_maker.cli:main
+icon-maker-gui = icon_maker.gui:main

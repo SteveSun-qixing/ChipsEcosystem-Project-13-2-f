@@ -14,11 +14,23 @@
   - 动效：`chips.motion.*`；
   - 布局密度：`chips.layout.*`；
   - 少量派生变量在 `styles/base.css` 中声明（例如 `--chips-base-radius-md`），仅作为本主题内部复用。
-- **简约优雅**：整体采用浅色基线 + 单主色（蓝色），阴影和圆角克制，避免复杂渐变与炫技动画。
+- **系统级冷白与微体积**：整体采用冷白底面、白色控件片、弱边框、顶部高光、底部暗边和多层柔阴影表达层级；蓝色只用于焦点、选中和必要强调，避免默认按钮与侧栏菜单全部染蓝。
 - **无头组件适配**：组件库只输出结构与状态，本主题只负责：
   - 背景 / 边框 / 文本颜色；
   - 间距 / 圆角；
-  - 基础过渡与聚焦样式。
+  - 基础过渡、浮层投影与聚焦样式。
+
+`styles/base.css` 允许声明仅供本主题 CSS 内部复用的派生变量，例如：
+
+- `--chips-base-border-subtle`：弱边框和分隔线；
+- `--chips-base-surface-muted`：弱背景；
+- `--chips-base-control-height` / `--chips-base-control-height-compact`：控件高度基线；
+- `--chips-base-shadow-sm/md/lg`：浮层和容器投影；
+- `--chips-base-focus-ring`：统一浅蓝焦点外环。
+- `--chips-base-shadow-control/card/panel/float`：从 `样式标准示范.html` 抽象出的控件片、内容片层、面板和浮层投影。
+- `--chips-base-surface-window/control/recessed`：从样式标准示范抽象出的窗口、控件片和内凹输入表面。
+
+这些变量不属于公共 `chips.*` token，不进入主题契约；对外仍以 `chips.ref/sys/comp/motion/layout` 为正式数据来源。
 
 ---
 
@@ -77,6 +89,9 @@
 
 - 结构：
   - `data-scope="button" data-part="root|label|spinner|status"`
+- 视觉语义：
+  - 组件库当前未声明 `primary` / `secondary` 等按钮 variant，因此默认主题不能把所有 `button` 渲染为蓝色主按钮；
+  - 默认按钮是白色控件片，蓝色只用于 focus ring 或由调用方通过更高层作用域显式覆盖 token。
 - 核心 token：
   - `chips.comp.button.root.radius`
   - `chips.comp.button.root.surface.idle|hover|active|disabled`
@@ -86,14 +101,18 @@
 
 ```css
 [data-scope="button"][data-part="root"] {
+  border: 1px solid var(--chips-base-border-subtle);
   border-radius: var(--chips-comp-button-root-radius, var(--chips-base-radius-md));
   background-color: var(--chips-comp-button-root-surface-idle);
   color: var(--chips-comp-button-label-color-idle);
+  min-block-size: var(--chips-base-control-height);
+  box-shadow: var(--chips-base-shadow-control);
 }
 
 [data-scope="button"][data-part="root"][data-state="hover"],
 [data-scope="button"][data-part="root"]:hover {
   background-color: var(--chips-comp-button-root-surface-hover, var(--chips-comp-button-root-surface-idle));
+  box-shadow: var(--chips-base-shadow-control-hover);
 }
 
 [data-scope="button"][data-part="root"][data-state="disabled"],
@@ -104,7 +123,8 @@
 
 [data-scope="button"][data-part="root"][data-state="focus"],
 [data-scope="button"][data-part="root"]:focus-visible {
-  outline: 2px solid var(--chips-comp-button-focus-outline);
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-button-focus-outline);
+  box-shadow: var(--chips-base-focus-ring);
 }
 ```
 
@@ -125,11 +145,13 @@
   border-radius: var(--chips-comp-input-root-radius, var(--chips-base-radius-md));
   background-color: var(--chips-comp-input-root-surface-idle);
   border: 1px solid var(--chips-comp-input-root-border-idle);
+  box-shadow: var(--chips-base-shadow-recessed);
 }
 
 [data-scope="input"][data-part="root"][data-state="focus"],
 [data-scope="input"][data-part="root"]:focus-within {
   background-color: var(--chips-comp-input-root-surface-focus, var(--chips-comp-input-root-surface-idle));
+  box-shadow: var(--chips-base-focus-ring), var(--chips-base-shadow-recessed);
 }
 
 [data-scope="input"][data-part="control"] {
@@ -156,7 +178,15 @@
 
 `tree` 在本主题中对齐任务016 Compound contract：只消费 `root / item / branch / leaf / disclosure / label / group / status` 公开 part，不依赖旧 `node / toggle / children`。树项基础视觉统一使用 `chips.comp.tree.item.*`，展开折叠入口使用 `chips.comp.tree.disclosure.color`，子树引导线使用 `chips.comp.tree.group.guide.color`。节点选中视觉必须匹配 `data-selected="true"`，层级缩进通过组件输出的 `--chips-tree-level` 与 `chips.comp.tree.branch.indent` token 计算。
 
+输入类控件在本主题中统一以 `--chips-base-control-height` 控制主体高度；`search-field / secure-field / combo-box / number-input` 的图标、清除按钮、可见性按钮和增减按钮使用绝对定位，但定位基于控件高度和 `:has(> [data-part="label"])` 修正有标签场景，不依赖固定 `14px` 文本高度。
+
+菜单、Popover、Dialog、CommandPalette、日期/时间弹层统一使用 `--chips-base-shadow-float` 与 `--chips-base-border-subtle` 表达层级，并通过 `backdrop-filter`、顶部高光和底部暗边形成克制液态浮层。列表型选中态优先使用浅蓝背景，强主色只保留给表单焦点、开关/单选/复选选中和进度范围。
+
 `navigation-split-view` 在本主题中对齐任务016.07 Compound contract：只消费 `root / sidebar / content / detail / divider / status` 公开 part，不复用 `split-view` 的 `primary / secondary` 主题入口。导航侧栏最小宽度使用 `chips.layout.size.navigation-primary-min`，中间内容栏使用 `chips.layout.size.split-secondary-min`，分割线厚度和焦点环继续消费 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
+
+设置面板一类应用应通过 `navigation-split-view + section + data-grid/tree/virtual-list + form` 组合形成 macOS 设置式结构。主题包提供冷白底面、半透侧栏、白色内容片层和浅蓝选中态；业务应用不得用自定义蓝色按钮列表绕开 `button / toggle-button / navigation-split-view` 的主题 token。列表对齐由组件结构和业务 grid/flex 列控制，主题 CSS 只负责固定控件高度、热区、内边距和视觉层级。
+
+`box` 是基础布局原语，不默认输出边框、阴影和浮卡高光；需要内容片层时应使用 `section / card-shell / data-grid / tree / dock-panel / tool-window / empty-state` 等更明确的组件 scope，避免页面出现卡片套卡片。
 
 命令消费组件在本主题中作为正式组件覆盖：`toolbar` 消费 `root / group / item / icon / label / shortcut / status`，`menu-bar` 消费 `root / menu / content / group / item / shortcut / status`，`context-menu` 消费 `root / trigger / content / group / item / shortcut / status`，`shortcut` 消费 `root / key / separator`。这些组件不能只依赖 `command-palette` 或浏览器默认按钮样式，主题 CSS 必须显式命中对应 `data-scope`。
 
@@ -190,6 +220,8 @@
 ```
 
 `styles/motions.css` 提供 `fade / overlay / menu / scene / list / drag / theme` 公共 motion class 和等价 `data-motion` 入口。`prefers-reduced-motion: reduce` 下关闭非必要动画、位移和缩放，只保留焦点、颜色和状态反馈。
+
+反馈组件中的 `skeleton` 可以在本主题 CSS 中使用轻量 shimmer keyframes；该动画必须绑定 `chips.comp.skeleton.item.motion.*` 并在 `prefers-reduced-motion: reduce` 下关闭。
 
 ### 5.2 布局密度
 

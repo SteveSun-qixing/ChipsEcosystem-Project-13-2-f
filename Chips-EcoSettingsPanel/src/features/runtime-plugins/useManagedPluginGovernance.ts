@@ -34,7 +34,6 @@ export function useManagedPluginGovernance(type: GovernedPluginType, messages: M
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<SettingsPanelError | null>(null);
   const [activeActionId, setActiveActionId] = React.useState<string | null>(null);
-  const [dropActive, setDropActive] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
@@ -88,7 +87,6 @@ export function useManagedPluginGovernance(type: GovernedPluginType, messages: M
   }, [installFromPath, messages.pickerFilterKey, messages.pickerTitleKey, service, t, type]);
 
   const installFromDroppedFiles = React.useCallback(async (files: File[]) => {
-    setDropActive(false);
     const firstFile = files[0];
     if (!firstFile) {
       return;
@@ -189,7 +187,5 @@ export function useManagedPluginGovernance(type: GovernedPluginType, messages: M
     refresh,
     feedback: feedback.items,
     dismissFeedback: feedback.remove,
-    dropActive,
-    setDropActive,
   };
 }

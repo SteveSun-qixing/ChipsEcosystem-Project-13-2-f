@@ -1,17 +1,73 @@
 import React from "react";
 import { ChipsButton, ChipsEmptyState } from "@chips/component-library";
+import type { LanguageGovernanceRecord } from "../../shared/runtime/settings-runtime-service";
 import { useI18n } from "../../app/providers/I18nProvider";
-import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
 import { NotificationStack } from "../../shared/ui/NotificationStack";
 import { PageFrame } from "../../shared/ui/PageFrame";
-import { RecordDetailDialog } from "../../shared/ui/RecordDetailDialog";
 import { SectionStateBoundary } from "../../shared/ui/SectionStateBoundary";
+import { SettingsDetailPage } from "../../shared/ui/SettingsDetailPage";
+import { SettingsRecordItem, SettingsRecordList } from "../../shared/ui/SettingsRecordList";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { useLanguageGovernance } from "./useLanguageGovernance";
+
+function LanguageStatus({ language }: { language: LanguageGovernanceRecord }): React.ReactElement {
+  const { t } = useI18n();
+  return language.current ? (
+    <StatusBadge tone="positive" label={t("settingsPanel.languages.badges.current")} />
+  ) : (
+    <StatusBadge tone="neutral" label={t("settingsPanel.languages.badges.available")} />
+  );
+}
 
 export function LanguagePage(): React.ReactElement {
   const { t } = useI18n();
   const { languages, loading, error, activeLocale, switchLocale, refresh, feedback, dismissFeedback } = useLanguageGovernance();
+  const [selectedLocale, setSelectedLocale] = React.useState<string | null>(null);
+  const selectedLanguage = languages.find((language) => language.locale === selectedLocale) ?? null;
+
+  React.useEffect(() => {
+    if (selectedLocale && !selectedLanguage) {
+      setSelectedLocale(null);
+    }
+  }, [selectedLanguage, selectedLocale]);
+
+  if (selectedLanguage) {
+    const busy = activeLocale === selectedLanguage.locale;
+
+    return (
+      <>
+        <NotificationStack
+          ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+          items={feedback}
+          onDismiss={(item) => dismissFeedback(item.id)}
+        />
+        <SettingsDetailPage
+          title={t("settingsPanel.languages.detail.title", { name: selectedLanguage.displayName })}
+          description={t("settingsPanel.languages.detail.description")}
+          backLabel={t("settingsPanel.common.back")}
+          onBack={() => setSelectedLocale(null)}
+          status={<div className="governance-status"><LanguageStatus language={selectedLanguage} /></div>}
+          primaryActions={
+            <div className="action-row">
+              <ChipsButton disabled={busy || selectedLanguage.current} onPress={() => void switchLocale(selectedLanguage.locale)}>
+                {t("settingsPanel.languages.actions.apply")}
+              </ChipsButton>
+            </div>
+          }
+          fields={[
+            { label: t("settingsPanel.languages.fields.locale"), value: selectedLanguage.locale },
+            { label: t("settingsPanel.languages.fields.nativeName"), value: selectedLanguage.nativeName },
+            {
+              label: t("settingsPanel.languages.columns.status"),
+              value: selectedLanguage.current
+                ? t("settingsPanel.languages.badges.current")
+                : t("settingsPanel.languages.badges.available"),
+            },
+          ]}
+        />
+      </>
+    );
+  }
 
   return (
     <PageFrame title={t("settingsPanel.languages.title")}>
@@ -35,62 +91,38 @@ export function LanguagePage(): React.ReactElement {
             description={t("settingsPanel.languages.empty.description")}
           />
         ) : (
-          <GovernanceList
+          <SettingsRecordList
             ariaLabel={t("settingsPanel.languages.listAriaLabel")}
-            columns={[
-              { id: "language", label: t("settingsPanel.languages.columns.language"), width: "minmax(0, 2.4fr)" },
-              { id: "status", label: t("settingsPanel.languages.columns.status"), width: "minmax(0, 1fr)" },
-              { id: "meta", label: t("settingsPanel.languages.columns.meta"), width: "minmax(0, 1.4fr)" },
-              { id: "actions", label: t("settingsPanel.languages.columns.actions"), width: "auto", align: "end" },
-            ]}
           >
             {languages.map((language) => {
               const busy = activeLocale === language.locale;
 
               return (
-                <GovernanceListRow key={language.locale}>
-                  <GovernanceListCell label={t("settingsPanel.languages.columns.language")}>
-                    <div className="governance-item">
-                      <div className="governance-item__title">{language.displayName}</div>
-                      <div className="governance-item__summary">{language.nativeName}</div>
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t("settingsPanel.languages.columns.status")}>
-                    <div className="governance-status">
-                      {language.current ? (
-                        <StatusBadge tone="positive" label={t("settingsPanel.languages.badges.current")} />
-                      ) : (
-                        <StatusBadge tone="neutral" label={t("settingsPanel.languages.badges.available")} />
-                      )}
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t("settingsPanel.languages.columns.meta")}>
-                    <div className="governance-meta">
+                <SettingsRecordItem
+                  key={language.locale}
+                  id={language.locale}
+                  title={language.displayName}
+                  summary={language.nativeName}
+                  status={<LanguageStatus language={language} />}
+                  meta={
+                    <>
                       <span>{t("settingsPanel.languages.fields.locale")}: {language.locale}</span>
                       <span>{t("settingsPanel.languages.fields.nativeName")}: {language.nativeName}</span>
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t("settingsPanel.languages.columns.actions")} align="end">
-                    <div className="action-row action-row--tight">
-                      <RecordDetailDialog
-                        triggerLabel={t("settingsPanel.common.details")}
-                        title={t("settingsPanel.languages.dialogs.detailTitle", { name: language.displayName })}
-                        description={t("settingsPanel.languages.dialogs.detailDescription")}
-                        fields={[
-                          { label: t("settingsPanel.languages.fields.locale"), value: language.locale },
-                          { label: t("settingsPanel.languages.fields.nativeName"), value: language.nativeName },
-                          { label: t("settingsPanel.languages.columns.status"), value: language.current ? t("settingsPanel.languages.badges.current") : t("settingsPanel.languages.badges.available") },
-                        ]}
-                      />
+                    </>
+                  }
+                  actions={
+                    <>
                       <ChipsButton disabled={busy || language.current} onPress={() => void switchLocale(language.locale)}>
                         {t("settingsPanel.languages.actions.apply")}
                       </ChipsButton>
-                    </div>
-                  </GovernanceListCell>
-                </GovernanceListRow>
+                    </>
+                  }
+                  detailLabel={t("settingsPanel.common.details")}
+                  onOpenDetail={() => setSelectedLocale(language.locale)}
+                />
               );
             })}
-          </GovernanceList>
+          </SettingsRecordList>
         )}
       </SectionStateBoundary>
     </PageFrame>

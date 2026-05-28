@@ -30,7 +30,7 @@ vi.mock("../../src/features/themes/useThemeGovernance", () => ({
           installPath: "/themes/demo",
           installedAt: 1,
           publisher: "Chips",
-          isDefault: false,
+          isDefault: true,
         },
       ],
       loading: false,
@@ -45,8 +45,6 @@ vi.mock("../../src/features/themes/useThemeGovernance", () => ({
       refresh: async () => undefined,
       feedback: [],
       dismissFeedback: () => undefined,
-      dropActive: false,
-      setDropActive: () => undefined,
     };
   },
 }));
@@ -62,8 +60,12 @@ describe("ThemePage", () => {
 
     expect(markup).toContain("data-scope=\"data-grid\"");
     expect(markup).toContain("settings-governance-list");
-    expect(markup).toContain("settingsPanel.themes.columns.theme");
+    expect(markup).toContain("settings-record-list");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("chips.theme-demo");
+    expect(markup).toContain("settingsPanel.themes.badges.default");
+    expect(markup).not.toContain("settings-drop-zone");
+    expect(markup).not.toContain('data-scope="dialog"');
+    expect(markup).not.toContain("settingsPanel.themes.actions.uninstall");
   }, 15000);
 });

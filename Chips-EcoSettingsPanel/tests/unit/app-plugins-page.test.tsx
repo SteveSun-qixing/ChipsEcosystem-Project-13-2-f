@@ -53,8 +53,6 @@ vi.mock("../../src/features/app-plugins/useAppPluginGovernance", () => ({
       refresh: async () => undefined,
       feedback: [],
       dismissFeedback: () => undefined,
-      dropActive: false,
-      setDropActive: () => undefined,
     };
   },
 }));
@@ -70,14 +68,17 @@ describe("AppPluginsPage", () => {
 
     expect(markup).toContain("data-scope=\"data-grid\"");
     expect(markup).toContain("settings-governance-list");
+    expect(markup).toContain("settings-record-list");
     expect(markup).toContain("settingsPanel.appPlugins.badges.currentApp");
     expect(markup).toContain("settingsPanel.appPlugins.selfManaged.description");
     expect(markup).toContain("disabled");
     expect(markup).toContain("settingsPanel.appPlugins.actions.launch");
-    expect(markup).toContain("settingsPanel.appPlugins.actions.createDesktopShortcut");
     expect(markup).not.toContain("settingsPanel.appPlugins.columns.meta");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("settingsPanel.appPlugins.actions.disable");
-    expect(markup).toContain("settingsPanel.appPlugins.actions.uninstall");
+    expect(markup).not.toContain("settings-drop-zone");
+    expect(markup).not.toContain("settingsPanel.appPlugins.actions.uninstall");
+    expect(markup).not.toContain("settingsPanel.appPlugins.actions.removeShortcut");
+    expect(markup).not.toContain('data-scope="dialog"');
   }, 15000);
 });

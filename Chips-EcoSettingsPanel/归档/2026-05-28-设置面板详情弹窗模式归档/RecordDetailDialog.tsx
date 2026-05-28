@@ -1,6 +1,6 @@
 import React from "react";
 import { ChipsBox, ChipsDialog } from "@chips/component-library";
-import { useI18n } from "../../app/providers/I18nProvider";
+import { useI18n } from "../../src/app/providers/I18nProvider";
 
 export interface DetailField {
   label: string;

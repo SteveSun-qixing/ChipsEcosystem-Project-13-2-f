@@ -1,19 +1,35 @@
 import React from "react";
-import type { GovernedPluginType } from "../../shared/runtime/settings-runtime-service";
+import type { GovernedPluginType, PluginGovernanceRecord } from "../../shared/runtime/settings-runtime-service";
 import { ChipsButton, ChipsEmptyState } from "@chips/component-library";
 import { useI18n } from "../../app/providers/I18nProvider";
-import { DropZone } from "../../shared/ui/DropZone";
-import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
+import { useWindowFileDrop } from "../../shared/hooks/useWindowFileDrop";
 import { NotificationStack } from "../../shared/ui/NotificationStack";
 import { PageFrame } from "../../shared/ui/PageFrame";
-import { RecordDetailDialog } from "../../shared/ui/RecordDetailDialog";
 import { SectionStateBoundary } from "../../shared/ui/SectionStateBoundary";
+import { SettingsDetailPage } from "../../shared/ui/SettingsDetailPage";
+import { SettingsRecordItem, SettingsRecordList } from "../../shared/ui/SettingsRecordList";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { WindowDropOverlay } from "../../shared/ui/WindowDropOverlay";
 import { useManagedPluginGovernance } from "./useManagedPluginGovernance";
 
 interface ManagedPluginPageProps {
   type: GovernedPluginType;
   translationBaseKey: "settingsPanel.cardPlugins" | "settingsPanel.layoutPlugins" | "settingsPanel.modulePlugins";
+}
+
+function ManagedPluginStatus({
+  plugin,
+  translationBaseKey,
+}: {
+  plugin: PluginGovernanceRecord;
+  translationBaseKey: ManagedPluginPageProps["translationBaseKey"];
+}): React.ReactElement {
+  const { t } = useI18n();
+  return plugin.enabled ? (
+    <StatusBadge tone="positive" label={t(`${translationBaseKey}.badges.enabled`)} />
+  ) : (
+    <StatusBadge tone="neutral" label={t(`${translationBaseKey}.badges.disabled`)} />
+  );
 }
 
 export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPageProps): React.ReactElement {
@@ -30,8 +46,6 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
     refresh,
     feedback,
     dismissFeedback,
-    dropActive,
-    setDropActive,
   } = useManagedPluginGovernance(type, {
     listErrorKey: `settingsPanel.errors.${type}PluginList`,
     installErrorKey: `settingsPanel.errors.${type}PluginInstall`,
@@ -51,6 +65,108 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
     confirmMessageKey: `${translationBaseKey}.dialogs.uninstallMessage`,
     confirmDetailKey: `${translationBaseKey}.dialogs.uninstallDetail`,
   });
+  const [selectedPluginId, setSelectedPluginId] = React.useState<string | null>(null);
+  const selectedPlugin = plugins.find((plugin) => plugin.pluginId === selectedPluginId) ?? null;
+  const dropActive = useWindowFileDrop({ onDropFiles: installFromDroppedFiles });
+
+  React.useEffect(() => {
+    if (selectedPluginId && !selectedPlugin) {
+      setSelectedPluginId(null);
+    }
+  }, [selectedPlugin, selectedPluginId]);
+
+  const resolvePluginTypeLabel = React.useCallback((plugin: PluginGovernanceRecord) => {
+    const capabilityLabel = plugin.capabilities.length > 0
+      ? plugin.capabilities.join(", ")
+      : t("settingsPanel.common.notAvailable");
+
+    if (plugin.type === "card") {
+      return plugin.cardTypes.length > 0
+        ? plugin.cardTypes.join(", ")
+        : t("settingsPanel.common.notAvailable");
+    }
+
+    if (plugin.type === "layout") {
+      return plugin.layoutType ?? t("settingsPanel.common.notAvailable");
+    }
+
+    return capabilityLabel;
+  }, [t]);
+
+  if (selectedPlugin) {
+    const busy = activeActionId === selectedPlugin.pluginId;
+    const capabilityLabel = selectedPlugin.capabilities.length > 0
+      ? selectedPlugin.capabilities.join(", ")
+      : t("settingsPanel.common.notAvailable");
+    const pluginTypeLabel = resolvePluginTypeLabel(selectedPlugin);
+
+    return (
+      <>
+        <NotificationStack
+          ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+          items={feedback}
+          onDismiss={(item) => dismissFeedback(item.id)}
+        />
+        <WindowDropOverlay
+          active={dropActive}
+          title={t(`${translationBaseKey}.dropzone.title`)}
+          description={t(`${translationBaseKey}.dropzone.description`)}
+        />
+        <SettingsDetailPage
+          title={t(`${translationBaseKey}.detail.title`, { name: selectedPlugin.displayName ?? selectedPlugin.name })}
+          description={selectedPlugin.description ?? t(`${translationBaseKey}.detail.description`)}
+          backLabel={t("settingsPanel.common.back")}
+          onBack={() => setSelectedPluginId(null)}
+          status={
+            <div className="governance-status">
+              <ManagedPluginStatus plugin={selectedPlugin} translationBaseKey={translationBaseKey} />
+            </div>
+          }
+          primaryActions={
+            <div className="action-row">
+              <ChipsButton disabled={busy} onPress={() => void togglePluginEnabled(selectedPlugin)}>
+                {selectedPlugin.enabled
+                  ? t(`${translationBaseKey}.actions.disable`)
+                  : t(`${translationBaseKey}.actions.enable`)}
+              </ChipsButton>
+            </div>
+          }
+          secondaryActions={
+            <div className="action-row">
+              <ChipsButton disabled={busy} onPress={() => void uninstallPlugin(selectedPlugin)}>
+                {t(`${translationBaseKey}.actions.uninstall`)}
+              </ChipsButton>
+            </div>
+          }
+          fieldGroups={[
+            {
+              title: t(`${translationBaseKey}.detail.groups.identity`),
+              description: t(`${translationBaseKey}.detail.groups.identityDescription`),
+              fields: [
+                { label: t(`${translationBaseKey}.fields.pluginId`), value: selectedPlugin.pluginId },
+                { label: t(`${translationBaseKey}.fields.version`), value: selectedPlugin.version },
+                { label: t(`${translationBaseKey}.fields.identity`), value: pluginTypeLabel },
+              ],
+            },
+            {
+              title: t(`${translationBaseKey}.detail.groups.capabilities`),
+              description: t(`${translationBaseKey}.detail.groups.capabilitiesDescription`),
+              fields: [
+                { label: t(`${translationBaseKey}.fields.capabilities`), value: capabilityLabel },
+              ],
+            },
+            {
+              title: t(`${translationBaseKey}.detail.groups.installation`),
+              description: t(`${translationBaseKey}.detail.groups.installationDescription`),
+              fields: [
+                { label: t(`${translationBaseKey}.fields.installPath`), value: selectedPlugin.installPath },
+              ],
+            },
+          ]}
+        />
+      </>
+    );
+  }
 
   return (
     <PageFrame
@@ -62,14 +178,11 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
         items={feedback}
         onDismiss={(item) => dismissFeedback(item.id)}
       />
-      <div onDragEnter={() => setDropActive(true)} onDragLeave={() => setDropActive(false)}>
-        <DropZone
-          title={t(`${translationBaseKey}.dropzone.title`)}
-          description={t(`${translationBaseKey}.dropzone.description`)}
-          active={dropActive}
-          onDropFiles={installFromDroppedFiles}
-        />
-      </div>
+      <WindowDropOverlay
+        active={dropActive}
+        title={t(`${translationBaseKey}.dropzone.title`)}
+        description={t(`${translationBaseKey}.dropzone.description`)}
+      />
       <SectionStateBoundary
         loading={loading}
         error={error}
@@ -87,77 +200,41 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
             onAction={installWithFilePicker}
           />
         ) : (
-          <GovernanceList
+          <SettingsRecordList
             ariaLabel={t(`${translationBaseKey}.listAriaLabel`)}
-            columns={[
-              { id: "plugin", label: t(`${translationBaseKey}.columns.plugin`), width: "minmax(0, 2.6fr)" },
-              { id: "status", label: t(`${translationBaseKey}.columns.status`), width: "minmax(0, 1.1fr)" },
-              { id: "meta", label: t(`${translationBaseKey}.columns.meta`), width: "minmax(0, 1.8fr)" },
-              { id: "actions", label: t(`${translationBaseKey}.columns.actions`), width: "auto", align: "end" },
-            ]}
           >
             {plugins.map((plugin) => {
               const busy = activeActionId === plugin.pluginId;
-              const capabilityLabel = plugin.capabilities.length > 0
-                ? plugin.capabilities.join(", ")
-                : t("settingsPanel.common.notAvailable");
-              const pluginTypeLabel = plugin.type === "card"
-                ? plugin.cardTypes.join(", ")
-                : plugin.type === "layout"
-                  ? plugin.layoutType ?? t("settingsPanel.common.notAvailable")
-                  : capabilityLabel;
+              const pluginTypeLabel = resolvePluginTypeLabel(plugin);
 
               return (
-                <GovernanceListRow key={plugin.pluginId}>
-                  <GovernanceListCell label={t(`${translationBaseKey}.columns.plugin`)}>
-                    <div className="governance-item">
-                      <div className="governance-item__title">{plugin.displayName ?? plugin.name}</div>
-                      <div className="governance-item__summary">{plugin.description ?? plugin.pluginId}</div>
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t(`${translationBaseKey}.columns.status`)}>
-                    <div className="governance-status">
-                      {plugin.enabled ? (
-                        <StatusBadge tone="positive" label={t(`${translationBaseKey}.badges.enabled`)} />
-                      ) : (
-                        <StatusBadge tone="neutral" label={t(`${translationBaseKey}.badges.disabled`)} />
-                      )}
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t(`${translationBaseKey}.columns.meta`)}>
-                    <div className="governance-meta">
+                <SettingsRecordItem
+                  key={plugin.pluginId}
+                  id={plugin.pluginId}
+                  title={plugin.displayName ?? plugin.name}
+                  summary={plugin.description ?? plugin.pluginId}
+                  status={<ManagedPluginStatus plugin={plugin} translationBaseKey={translationBaseKey} />}
+                  meta={
+                    <>
                       <span>{t(`${translationBaseKey}.fields.version`)}: {plugin.version}</span>
                       <span>{t(`${translationBaseKey}.fields.identity`)}: {pluginTypeLabel}</span>
-                    </div>
-                  </GovernanceListCell>
-                  <GovernanceListCell label={t(`${translationBaseKey}.columns.actions`)} align="end">
-                    <div className="action-row action-row--tight">
-                      <RecordDetailDialog
-                        triggerLabel={t("settingsPanel.common.details")}
-                        title={t(`${translationBaseKey}.dialogs.detailTitle`, { name: plugin.name })}
-                        description={t(`${translationBaseKey}.dialogs.detailDescription`)}
-                        fields={[
-                          { label: t(`${translationBaseKey}.fields.pluginId`), value: plugin.pluginId },
-                          { label: t(`${translationBaseKey}.fields.version`), value: plugin.version },
-                          { label: t(`${translationBaseKey}.fields.identity`), value: pluginTypeLabel },
-                          { label: t(`${translationBaseKey}.fields.capabilities`), value: capabilityLabel },
-                          { label: t(`${translationBaseKey}.fields.installPath`), value: plugin.installPath },
-                        ]}
-                      />
+                    </>
+                  }
+                  actions={
+                    <>
                       <ChipsButton disabled={busy} onPress={() => void togglePluginEnabled(plugin)}>
                         {plugin.enabled
                           ? t(`${translationBaseKey}.actions.disable`)
                           : t(`${translationBaseKey}.actions.enable`)}
                       </ChipsButton>
-                      <ChipsButton disabled={busy} onPress={() => void uninstallPlugin(plugin)}>
-                        {t(`${translationBaseKey}.actions.uninstall`)}
-                      </ChipsButton>
-                    </div>
-                  </GovernanceListCell>
-                </GovernanceListRow>
+                    </>
+                  }
+                  detailLabel={t("settingsPanel.common.details")}
+                  onOpenDetail={() => setSelectedPluginId(plugin.pluginId)}
+                />
               );
             })}
-          </GovernanceList>
+          </SettingsRecordList>
         )}
       </SectionStateBoundary>
     </PageFrame>

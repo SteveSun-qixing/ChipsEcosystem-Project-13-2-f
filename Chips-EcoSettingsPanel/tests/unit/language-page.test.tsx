@@ -48,8 +48,9 @@ describe("LanguagePage", () => {
 
     expect(markup).toContain("data-scope=\"data-grid\"");
     expect(markup).toContain("settings-governance-list");
-    expect(markup).toContain("settingsPanel.languages.columns.language");
+    expect(markup).toContain("settings-record-list");
     expect(markup).toContain("settingsPanel.common.details");
     expect(markup).toContain("zh-CN");
+    expect(markup).not.toContain('data-scope="dialog"');
   }, 15000);
 });

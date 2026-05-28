@@ -3,13 +3,13 @@
     "comp": {
       "select": {
         "trigger": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.control}",
           "surface": {
-            "idle": "{chips.sys.color.surface}",
+            "idle": "{chips.ref.color.gray-75}",
             "focus": "{chips.sys.color.surface}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}"
+            "idle": "{chips.ref.color.gray-200}"
           }
         },
         "content": {
@@ -18,8 +18,8 @@
         },
         "option": {
           "surface": {
-            "highlighted": "{chips.sys.color.surface}",
-            "selected": "{chips.sys.color.primary}"
+            "highlighted": "{chips.ref.color.gray-50}",
+            "selected": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"

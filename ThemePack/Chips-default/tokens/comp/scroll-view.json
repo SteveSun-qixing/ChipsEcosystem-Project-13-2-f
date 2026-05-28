@@ -9,7 +9,7 @@
           "surface": "transparent"
         },
         "scrollbar": {
-          "thumb": "{chips.sys.color.on-surface}"
+          "thumb": "{chips.ref.color.gray-200}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

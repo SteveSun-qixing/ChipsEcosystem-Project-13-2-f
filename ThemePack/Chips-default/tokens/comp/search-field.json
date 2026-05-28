@@ -3,14 +3,14 @@
     "comp": {
       "search-field": {
         "root": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.control}",
           "surface": {
-            "idle": "{chips.sys.color.surface}",
+            "idle": "{chips.ref.color.gray-75}",
             "focus": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.surface}"
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}",
+            "idle": "{chips.ref.color.gray-200}",
             "focus": "{chips.sys.color.primary}",
             "error": "{chips.sys.color.error}"
           }
@@ -22,17 +22,17 @@
           "color": "{chips.sys.color.on-surface}"
         },
         "placeholder": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "description": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "icon": {
           "color": "{chips.sys.color.on-surface}"
         },
         "clear": {
           "color": {
-            "idle": "{chips.sys.color.on-surface}",
+            "idle": "{chips.ref.color.gray-500}",
             "hover": "{chips.sys.color.primary}"
           }
         },

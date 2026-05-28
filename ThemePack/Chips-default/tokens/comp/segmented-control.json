@@ -3,24 +3,24 @@
     "comp": {
       "segmented-control": {
         "root": {
-          "radius": "{chips.sys.radius.container}",
-          "surface": "{chips.sys.color.surface}",
-          "border": "{chips.sys.color.on-surface}"
+          "radius": "{chips.ref.radius.control}",
+          "surface": "{chips.ref.color.gray-75}",
+          "border": "{chips.ref.color.gray-200}"
         },
         "item": {
           "surface": {
             "idle": "transparent",
             "hover": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}",
-            "selected": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "active": "{chips.ref.color.blue-50}",
+            "selected": "{chips.sys.color.surface}",
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "label": {
           "color": {
             "idle": "{chips.sys.color.on-surface}",
-            "selected": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.on-surface}"
+            "selected": "{chips.sys.color.primary}",
+            "disabled": "{chips.ref.color.gray-400}"
           }
         },
         "indicator": {

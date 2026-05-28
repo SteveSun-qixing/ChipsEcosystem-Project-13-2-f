@@ -5,7 +5,7 @@
         "root": {
           "color": {
             "default": "{chips.sys.color.on-surface}",
-            "muted": "{chips.sys.color.on-surface}",
+            "muted": "{chips.ref.color.gray-600}",
             "accent": "{chips.sys.color.primary}",
             "error": "{chips.sys.color.error}"
           },

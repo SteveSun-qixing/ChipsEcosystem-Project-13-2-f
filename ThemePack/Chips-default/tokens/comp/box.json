@@ -5,7 +5,7 @@
         "root": {
           "surface": "{chips.sys.color.surface}",
           "border": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.ref.color.gray-200}"
           },
           "radius": "{chips.sys.radius.container}"
         },

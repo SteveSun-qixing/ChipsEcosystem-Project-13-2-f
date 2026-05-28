@@ -7,10 +7,10 @@
         },
         "item": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.surface}",
-            "selected": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "idle": "{chips.ref.color.gray-50}",
+            "hover": "{chips.ref.color.gray-50}",
+            "selected": "{chips.ref.color.blue-50}",
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
@@ -23,11 +23,11 @@
           "indent": "{chips.layout.gap.md}"
         },
         "disclosure": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-600}"
         },
         "group": {
           "guide": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.ref.color.gray-200}"
           }
         },
         "status": {

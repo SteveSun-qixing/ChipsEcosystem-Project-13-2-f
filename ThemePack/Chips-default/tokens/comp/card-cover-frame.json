@@ -11,7 +11,7 @@
         "status": {
           "color": {
             "error": "{chips.sys.color.error}",
-            "normal": "{chips.sys.color.on-surface}"
+            "normal": "{chips.ref.color.gray-500}"
           }
         }
       }

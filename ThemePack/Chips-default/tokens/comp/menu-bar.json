@@ -8,12 +8,12 @@
         "menu": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.surface}"
+            "hover": "{chips.ref.color.gray-75}"
           }
         },
         "item": {
           "surface": {
-            "hover": "{chips.sys.color.surface}"
+            "hover": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
@@ -24,7 +24,7 @@
           }
         },
         "shortcut": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

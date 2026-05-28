@@ -7,7 +7,7 @@
           "surface": {
             "idle": "{chips.sys.color.surface}",
             "focus": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.surface}"
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "border": {
             "idle": "{chips.ref.color.gray-200}",
@@ -26,7 +26,7 @@
         },
         "trigger": {
           "color": {
-            "idle": "{chips.ref.color.gray-700}",
+            "idle": "{chips.ref.color.gray-600}",
             "hover": "{chips.sys.color.primary}"
           }
         },
@@ -39,7 +39,7 @@
         },
         "nav": {
           "color": {
-            "idle": "{chips.ref.color.gray-700}",
+            "idle": "{chips.ref.color.gray-600}",
             "hover": "{chips.sys.color.primary}"
           }
         },
@@ -47,24 +47,24 @@
           "gap": "{chips.layout.gap.xs}"
         },
         "week-header": {
-          "color": "{chips.ref.color.gray-600}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "cell": {
           "surface": {
             "idle": "transparent",
-            "hover": "{chips.ref.color.blue-100}",
-            "selected": "{chips.sys.color.primary}",
+            "hover": "{chips.ref.color.blue-50}",
+            "selected": "{chips.ref.color.blue-50}",
             "today": "{chips.ref.color.blue-50}",
             "disabled": "transparent"
           },
           "text": {
             "idle": "{chips.sys.color.on-surface}",
-            "selected": "{chips.ref.color.gray-0}",
+            "selected": "{chips.sys.color.primary}",
             "muted": "{chips.ref.color.gray-500}"
           }
         },
         "description": {
-          "color": "{chips.ref.color.gray-600}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "status": {
           "color": {

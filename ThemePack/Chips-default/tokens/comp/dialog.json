@@ -22,7 +22,7 @@
           "gap": "{chips.ref.space.2}"
         },
         "close": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

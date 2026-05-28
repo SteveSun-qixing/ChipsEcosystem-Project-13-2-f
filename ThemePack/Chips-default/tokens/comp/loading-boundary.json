@@ -3,15 +3,15 @@
     "comp": {
       "loading-boundary": {
         "root": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "fallback": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "skeleton": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           },
           "motion": {
             "duration": "{chips.motion.duration.slow}",

@@ -7,15 +7,15 @@
         },
         "item": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "idle": "{chips.ref.color.gray-50}",
+            "active": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
           }
         },
         "scrollbar": {
-          "thumb": "{chips.sys.color.on-surface}"
+          "thumb": "{chips.ref.color.gray-200}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

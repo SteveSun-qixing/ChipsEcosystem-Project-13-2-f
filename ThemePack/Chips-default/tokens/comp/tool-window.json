@@ -6,7 +6,7 @@
           "surface": "{chips.sys.color.surface}"
         },
         "header": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "body": {
           "surface": "{chips.sys.color.surface}"
@@ -14,7 +14,7 @@
         "control": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           }
         },
         "status": {

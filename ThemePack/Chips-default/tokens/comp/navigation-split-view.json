@@ -15,7 +15,7 @@
           "surface": "{chips.sys.color.surface}"
         },
         "divider": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-200}"
         },
         "status": {
           "color": {

@@ -10,10 +10,10 @@
         },
         "item": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "idle": "{chips.ref.color.gray-50}",
+            "hover": "{chips.ref.color.gray-50}",
+            "active": "{chips.ref.color.blue-50}",
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"

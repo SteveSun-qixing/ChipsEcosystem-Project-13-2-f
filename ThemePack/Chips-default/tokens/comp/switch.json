@@ -3,11 +3,11 @@
     "comp": {
       "switch": {
         "track": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.pill}",
           "surface": {
-            "off": "{chips.sys.color.surface}",
+            "off": "{chips.ref.color.gray-50}",
             "on": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "thumb": {

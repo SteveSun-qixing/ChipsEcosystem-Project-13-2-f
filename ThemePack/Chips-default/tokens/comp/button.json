@@ -3,18 +3,18 @@
     "comp": {
       "button": {
         "root": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.control}",
           "surface": {
-            "idle": "{chips.sys.color.primary}",
-            "hover": "{chips.sys.color.primary}",
-            "active": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "idle": "{chips.sys.color.surface}",
+            "hover": "{chips.ref.color.gray-75}",
+            "active": "{chips.ref.color.gray-100}",
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "label": {
           "color": {
-            "idle": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.on-surface}"
+            "idle": "{chips.sys.color.on-surface}",
+            "disabled": "{chips.ref.color.gray-400}"
           }
         },
         "focus": {

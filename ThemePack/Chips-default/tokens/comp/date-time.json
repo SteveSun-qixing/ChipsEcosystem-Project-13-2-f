@@ -7,7 +7,7 @@
             "idle": "{chips.sys.color.surface}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}",
+            "idle": "{chips.ref.color.gray-200}",
             "error": "{chips.sys.color.error}"
           },
           "text": {

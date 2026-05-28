@@ -7,7 +7,7 @@
           "surface": {
             "idle": "{chips.sys.color.surface}",
             "focus": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.surface}"
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "border": {
             "idle": "{chips.ref.color.gray-200}",
@@ -26,7 +26,7 @@
         },
         "trigger": {
           "color": {
-            "idle": "{chips.ref.color.gray-700}",
+            "idle": "{chips.ref.color.gray-600}",
             "hover": "{chips.sys.color.primary}"
           }
         },
@@ -37,8 +37,8 @@
         "option": {
           "surface": {
             "idle": "transparent",
-            "highlighted": "{chips.ref.color.blue-100}",
-            "selected": "{chips.sys.color.primary}",
+            "highlighted": "{chips.ref.color.blue-50}",
+            "selected": "{chips.ref.color.blue-50}",
             "disabled": "transparent"
           },
           "text": {
@@ -46,7 +46,7 @@
           }
         },
         "description": {
-          "color": "{chips.ref.color.gray-600}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "status": {
           "color": {

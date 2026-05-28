@@ -4,24 +4,24 @@
       "media": {
         "root": {
           "radius": "{chips.sys.radius.container}",
-          "surface": "{chips.sys.color.surface}",
+          "surface": "{chips.ref.color.gray-50}",
           "border": "{chips.sys.color.primary}"
         },
         "content": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "controls": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "control": {
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           },
           "color": "{chips.sys.color.on-surface}"
         },
         "caption": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "status": {
           "color": {

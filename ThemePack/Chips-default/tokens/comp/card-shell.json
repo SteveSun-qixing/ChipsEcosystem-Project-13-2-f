@@ -6,16 +6,16 @@
           "surface": "{chips.sys.color.surface}"
         },
         "header": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-75}"
         },
         "content": {
           "surface": "{chips.sys.color.surface}"
         },
         "footer": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-75}"
         },
         "border": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-200}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

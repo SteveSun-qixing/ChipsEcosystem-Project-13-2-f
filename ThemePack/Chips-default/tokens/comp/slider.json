@@ -10,10 +10,10 @@
         },
         "track": {
           "height": "6px",
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.pill}",
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.surface}"
+            "idle": "{chips.ref.color.gray-150}",
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "range": {
@@ -24,12 +24,12 @@
         },
         "thumb": {
           "size": "18px",
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.pill}",
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "hover": "{chips.ref.color.gray-50}",
+            "active": "{chips.ref.color.blue-50}",
+            "disabled": "{chips.ref.color.gray-100}"
           },
           "border": {
             "idle": "{chips.sys.color.primary}",
@@ -37,7 +37,7 @@
           }
         },
         "value": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-600}"
         },
         "status": {
           "color": {

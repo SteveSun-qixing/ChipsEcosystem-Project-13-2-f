@@ -3,27 +3,27 @@
     "comp": {
       "toggle-button": {
         "root": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.control}",
           "surface": {
             "idle": "{chips.sys.color.surface}",
-            "hover": "{chips.sys.color.primary}",
-            "active": "{chips.sys.color.primary}",
-            "pressed": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "hover": "{chips.ref.color.gray-75}",
+            "active": "{chips.ref.color.blue-50}",
+            "pressed": "{chips.ref.color.blue-50}",
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "label": {
           "color": {
             "idle": "{chips.sys.color.on-surface}",
-            "pressed": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.on-surface}"
+            "pressed": "{chips.sys.color.primary}",
+            "disabled": "{chips.ref.color.gray-400}"
           }
         },
         "icon": {
           "color": {
-            "idle": "{chips.sys.color.on-surface}",
-            "pressed": "{chips.sys.color.surface}",
-            "disabled": "{chips.sys.color.on-surface}"
+            "idle": "{chips.ref.color.gray-500}",
+            "pressed": "{chips.sys.color.primary}",
+            "disabled": "{chips.ref.color.gray-400}"
           }
         },
         "focus": {

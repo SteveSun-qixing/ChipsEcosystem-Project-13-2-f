@@ -3,7 +3,7 @@
     "comp": {
       "empty-state": {
         "root": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-50}"
         },
         "icon": {
           "color": "{chips.sys.color.primary}"
@@ -12,11 +12,11 @@
           "color": "{chips.sys.color.on-surface}"
         },
         "description": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "action": {
           "surface": {
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           }
         },
         "focus": {

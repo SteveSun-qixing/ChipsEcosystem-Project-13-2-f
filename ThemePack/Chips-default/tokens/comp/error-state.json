@@ -16,15 +16,15 @@
           "color": "{chips.sys.color.on-surface}"
         },
         "description": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "details": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "action": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "idle": "{chips.ref.color.gray-50}",
+            "active": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"

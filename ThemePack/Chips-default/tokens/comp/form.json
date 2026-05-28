@@ -8,7 +8,7 @@
         "section": {
           "gap": "{chips.ref.space.3}",
           "divider": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.ref.color.gray-200}"
           }
         },
         "field": {
@@ -25,12 +25,12 @@
             "idle": "{chips.sys.color.surface}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}",
+            "idle": "{chips.ref.color.gray-200}",
             "error": "{chips.sys.color.error}"
           }
         },
         "hint": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "error": {
           "color": "{chips.sys.color.error}"

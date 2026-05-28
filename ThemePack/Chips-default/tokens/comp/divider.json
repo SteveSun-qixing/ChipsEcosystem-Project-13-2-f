@@ -3,11 +3,11 @@
     "comp": {
       "divider": {
         "root": {
-          "color": "{chips.sys.color.on-surface}",
+          "color": "{chips.ref.color.gray-200}",
           "thickness": "{chips.layout.divider.thickness}"
         },
         "label": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-200}"
         }
       }
     }

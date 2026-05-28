@@ -7,20 +7,20 @@
         },
         "item": {
           "surface": {
-            "idle": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "idle": "{chips.ref.color.gray-75}",
+            "active": "{chips.ref.color.blue-50}"
           }
         },
         "message": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "action": {
           "surface": {
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           }
         },
         "close": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

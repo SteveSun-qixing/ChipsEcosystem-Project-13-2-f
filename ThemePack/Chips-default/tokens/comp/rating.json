@@ -10,7 +10,7 @@
           "radius": "{chips.sys.radius.container}",
           "surface": {
             "idle": "transparent",
-            "hover": "{chips.sys.color.surface}",
+            "hover": "{chips.ref.color.gray-50}",
             "active": "transparent",
             "disabled": "transparent"
           }

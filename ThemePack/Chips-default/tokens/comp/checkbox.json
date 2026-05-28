@@ -5,9 +5,9 @@
         "control": {
           "radius": "{chips.ref.radius.sm}",
           "surface": {
-            "unchecked": "{chips.sys.color.surface}",
+            "unchecked": "{chips.ref.color.gray-50}",
             "checked": "{chips.sys.color.primary}",
-            "disabled": "{chips.sys.color.surface}"
+            "disabled": "{chips.ref.color.gray-100}"
           }
         },
         "indicator": {

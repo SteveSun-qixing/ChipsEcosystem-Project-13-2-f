@@ -3,13 +3,13 @@
     "comp": {
       "input": {
         "root": {
-          "radius": "{chips.sys.radius.container}",
+          "radius": "{chips.ref.radius.control}",
           "surface": {
-            "idle": "{chips.sys.color.surface}",
+            "idle": "{chips.ref.color.gray-75}",
             "focus": "{chips.sys.color.surface}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}",
+            "idle": "{chips.ref.color.gray-200}",
             "error": "{chips.sys.color.error}"
           }
         },
@@ -17,7 +17,7 @@
           "color": "{chips.sys.color.on-surface}"
         },
         "placeholder": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         }
       }
     }

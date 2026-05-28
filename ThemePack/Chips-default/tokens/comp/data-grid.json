@@ -6,11 +6,11 @@
           "surface": "{chips.sys.color.surface}"
         },
         "toolbar": {
-          "surface": "{chips.sys.color.surface}",
+          "surface": "{chips.ref.color.gray-75}",
           "gap": "{chips.layout.gap.sm}"
         },
         "header": {
-          "surface": "{chips.sys.color.surface}",
+          "surface": "{chips.ref.color.gray-75}",
           "text": {
             "color": "{chips.sys.color.on-surface}"
           },
@@ -22,7 +22,7 @@
           "surface": {
             "idle": "{chips.sys.color.surface}",
             "hover": "{chips.ref.color.gray-50}",
-            "selected": "{chips.sys.color.primary}"
+            "selected": "{chips.ref.color.blue-50}"
           }
         },
         "cell": {
@@ -31,11 +31,11 @@
           }
         },
         "pagination": {
-          "surface": "{chips.sys.color.surface}",
+          "surface": "{chips.ref.color.gray-75}",
           "gap": "{chips.layout.gap.sm}"
         },
         "border": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-200}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

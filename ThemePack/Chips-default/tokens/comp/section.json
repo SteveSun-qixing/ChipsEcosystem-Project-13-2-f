@@ -6,22 +6,22 @@
           "surface": "{chips.sys.color.surface}"
         },
         "header": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-75}"
         },
         "title": {
           "color": "{chips.sys.color.on-surface}"
         },
         "description": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "content": {
           "surface": "{chips.sys.color.surface}"
         },
         "footer": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.ref.color.gray-75}"
         },
         "divider": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-200}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

@@ -8,8 +8,8 @@
         },
         "item": {
           "surface": {
-            "hover": "{chips.sys.color.surface}",
-            "active": "{chips.sys.color.primary}"
+            "hover": "{chips.ref.color.gray-50}",
+            "active": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
@@ -17,11 +17,11 @@
         },
         "group": {
           "label": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.ref.color.gray-500}"
           }
         },
         "separator": {
-          "color": "{chips.sys.color.on-surface}",
+          "color": "{chips.ref.color.gray-200}",
           "thickness": "{chips.layout.divider.thickness}"
         },
         "focus": {

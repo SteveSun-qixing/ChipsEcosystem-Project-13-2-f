@@ -10,12 +10,12 @@
             "idle": "{chips.sys.color.surface}"
           },
           "border": {
-            "idle": "{chips.sys.color.on-surface}"
+            "idle": "{chips.ref.color.gray-200}"
           }
         },
         "item": {
           "surface": {
-            "active": "{chips.sys.color.primary}"
+            "active": "{chips.ref.color.blue-50}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
@@ -23,11 +23,11 @@
         },
         "group": {
           "label": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.ref.color.gray-500}"
           }
         },
         "shortcut": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.ref.color.gray-500}"
         },
         "focus": {
           "outline": "{chips.sys.color.primary}"

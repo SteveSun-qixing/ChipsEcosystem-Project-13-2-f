@@ -4,13 +4,13 @@
       "popover": {
         "trigger": {
           "surface": {
-            "idle": "{chips.sys.color.surface}"
+            "idle": "{chips.ref.color.gray-50}"
           }
         },
         "content": {
           "radius": "{chips.sys.radius.container}",
           "surface": "{chips.sys.color.surface}",
-          "border": "{chips.sys.color.on-surface}"
+          "border": "{chips.ref.color.gray-200}"
         },
         "arrow": {
           "surface": "{chips.sys.color.surface}"

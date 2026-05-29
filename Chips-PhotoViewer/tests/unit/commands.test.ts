@@ -3,6 +3,7 @@ import {
   PHOTO_VIEWER_COMMAND_IDS,
   applyPhotoViewerCommandState,
   createPhotoViewerCommandStates,
+  createPhotoViewerDisplayCommandViews,
   photoViewerCommandDefinitions,
   photoViewerCommandViews,
 } from "../../src/commands/photo-viewer-commands";
@@ -55,5 +56,15 @@ describe("photo viewer commands", () => {
     expect(previous?.diagnostic?.enabled).toBe(true);
     expect(next?.state?.enabled).toBe(false);
     expect(next?.disabledReasonKey).toBe("photo-viewer.commands.disabled.noNextImage");
+  });
+
+  it("keeps command shortcuts registered while removing them from viewer chrome", () => {
+    expect(photoViewerCommandDefinitions.every((command) => command.shortcut)).toBe(true);
+
+    const displayCommands = createPhotoViewerDisplayCommandViews(photoViewerCommandViews);
+    expect(displayCommands).toHaveLength(photoViewerCommandViews.length);
+    for (const command of displayCommands) {
+      expect(command.shortcut).toBeUndefined();
+    }
   });
 });

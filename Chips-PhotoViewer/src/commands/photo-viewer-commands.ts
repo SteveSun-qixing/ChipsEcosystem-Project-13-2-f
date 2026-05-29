@@ -185,6 +185,13 @@ export const photoViewerCommandDefinitions: CommandDefinitionInput[] = [
 
 export const photoViewerCommandViews = photoViewerCommandDefinitions as unknown as ChipsCommandView[];
 
+export function createPhotoViewerDisplayCommandViews(commands: ChipsCommandView[]): ChipsCommandView[] {
+  return commands.map((command) => {
+    const { shortcut: _hiddenShortcut, ...displayCommand } = command;
+    return displayCommand;
+  });
+}
+
 export function createPhotoViewerCommandStates(
   runtime: PhotoViewerCommandRuntimeState,
 ): Record<PhotoViewerCommandId, CommandState> {

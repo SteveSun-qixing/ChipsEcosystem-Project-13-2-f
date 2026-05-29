@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import {
   ChipsMenuBar,
-  ChipsToolbar,
+  ChipsIconButton,
+  resolveCommandToolbarItems,
   type ChipsCommandAdapter,
   type ChipsCommandProviderProps,
   type ChipsCommandView,
+  type ChipsResolvedCommandView,
 } from "@chips/component-library";
 import type { CommandInvocationContext } from "chips-sdk";
 import {
@@ -54,13 +56,49 @@ interface PhotoViewerStageProps {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
+function PhotoViewerToolbarButton(props: {
+  command: ChipsResolvedCommandView;
+  disabled: boolean;
+  commandAdapter?: ChipsCommandAdapter;
+  commandInvocationContext?: Record<string, unknown>;
+}) {
+  const { command, disabled, commandAdapter, commandInvocationContext } = props;
+  const tooltipId = React.useId();
+  const isDisabled = disabled || command.disabled;
+  const invokeToolbarCommand = () => {
+    if (isDisabled || !commandAdapter) {
+      return;
+    }
+    void commandAdapter.invokeCommand(command.commandId, {}, {
+      source: "toolbar",
+      context: commandInvocationContext,
+    });
+  };
+
+  return (
+    <span className="photo-viewer-toolbar-button">
+      <ChipsIconButton
+        descriptor={command.icon}
+        disabled={isDisabled}
+        ariaLabel={command.ariaLabel}
+        aria-describedby={tooltipId}
+        data-command-id={command.commandId}
+        onPress={invokeToolbarCommand}
+      />
+      <span id={tooltipId} role="tooltip" className="photo-viewer-toolbar-tooltip">
+        {command.label}
+      </span>
+    </span>
+  );
+}
+
 function PhotoViewerCommandDock(props: {
   sequenceCount: number;
   currentImageIndex: number;
   commandAdapter?: ChipsCommandAdapter;
   commandViews: ChipsCommandView[];
   commandI18n?: ChipsCommandProviderProps["i18n"];
-  commandInvocationContext?: CommandInvocationContext;
+  commandInvocationContext?: Record<string, unknown>;
   commandMenuDescriptors: Array<{ menuId: string; label: string }>;
   commandRegistrationPhase: "idle" | "registering" | "ready" | "error";
   commandRegistrationErrorCode: string | null;
@@ -79,40 +117,92 @@ function PhotoViewerCommandDock(props: {
     t,
   } = props;
   const hasSequence = sequenceCount > 1;
+  const toolbarItems = resolveCommandToolbarItems(commandViews, {
+    toolbarId: "viewer",
+    i18n: commandI18n,
+  });
+  const toolbarGroupLabels: Record<string, string> = {
+    file: t("photo-viewer.commands.menu.file"),
+    sequence: t("photo-viewer.commands.menu.navigate"),
+    zoom: t("photo-viewer.commands.menu.view"),
+  };
+  const preferredToolbarGroupOrder = ["file", "sequence", "zoom"];
+  const toolbarGroups = toolbarItems.reduce<Map<string, ChipsResolvedCommandView[]>>((groups, command) => {
+    const groupId = typeof command.groupId === "string" ? command.groupId : "default";
+    const groupCommands = groups.get(groupId) ?? [];
+    groupCommands.push(command);
+    groups.set(groupId, groupCommands);
+    return groups;
+  }, new Map());
+  const toolbarGroupIds = [
+    ...preferredToolbarGroupOrder.filter((groupId) => toolbarGroups.has(groupId)),
+    ...Array.from(toolbarGroups.keys()).filter((groupId) => !preferredToolbarGroupOrder.includes(groupId)),
+  ];
+  const disabled = commandRegistrationPhase === "error";
+  const renderToolbarButton = (command: ChipsResolvedCommandView) => (
+    <PhotoViewerToolbarButton
+      key={command.commandId}
+      command={command}
+      disabled={disabled}
+      commandAdapter={commandAdapter}
+      commandInvocationContext={commandInvocationContext}
+    />
+  );
+  const renderToolbarGroup = (groupId: string, label: string, commands: ChipsResolvedCommandView[]) => {
+    if (commands.length === 0) {
+      return null;
+    }
+
+    return (
+      <div
+        key={groupId}
+        className="photo-viewer-command-group"
+        data-group-id={groupId}
+        role="group"
+        aria-label={label}
+      >
+        {commands.map(renderToolbarButton)}
+      </div>
+    );
+  };
 
   return (
     <div className="photo-viewer-command-dock" data-command-phase={commandRegistrationPhase}>
-      <ChipsMenuBar
-        adapter={commandAdapter}
-        commands={commandViews}
-        menus={commandMenuDescriptors}
-        i18n={commandI18n}
-        ariaLabel={t("photo-viewer.commands.menu.ariaLabel")}
-        invocationContext={commandInvocationContext}
-        disabled={commandRegistrationPhase === "error"}
-      />
-      <ChipsToolbar
-        adapter={commandAdapter}
-        commands={commandViews}
-        toolbarId="viewer"
-        i18n={commandI18n}
-        ariaLabel={t("photo-viewer.commands.toolbar.ariaLabel")}
-        invocationContext={commandInvocationContext}
-        disabled={commandRegistrationPhase === "error"}
-      />
-      {hasSequence ? (
-        <span className="photo-viewer-sequence" aria-live="polite">
-          {t("photo-viewer.viewer.sequencePosition", {
-            current: currentImageIndex + 1,
-            total: sequenceCount,
-          })}
-        </span>
-      ) : null}
-      {commandRegistrationErrorCode ? (
-        <span role="status" className="photo-viewer-command-status">
-          {commandRegistrationErrorCode}
-        </span>
-      ) : null}
+      <div className="photo-viewer-command-menu">
+        <ChipsMenuBar
+          adapter={commandAdapter}
+          commands={commandViews}
+          menus={commandMenuDescriptors}
+          i18n={commandI18n}
+          ariaLabel={t("photo-viewer.commands.menu.ariaLabel")}
+          invocationContext={commandInvocationContext}
+          disabled={disabled}
+        />
+      </div>
+      <div
+        className="photo-viewer-command-toolbar"
+        role="toolbar"
+        aria-label={t("photo-viewer.commands.toolbar.ariaLabel")}
+      >
+        {toolbarGroupIds.map((groupId) =>
+          renderToolbarGroup(groupId, toolbarGroupLabels[groupId] ?? groupId, toolbarGroups.get(groupId) ?? []),
+        )}
+      </div>
+      <div className="photo-viewer-command-meta">
+        {hasSequence ? (
+          <span className="photo-viewer-sequence" aria-live="polite">
+            {t("photo-viewer.viewer.sequencePosition", {
+              current: currentImageIndex + 1,
+              total: sequenceCount,
+            })}
+          </span>
+        ) : null}
+        {commandRegistrationErrorCode ? (
+          <span role="status" className="photo-viewer-command-status">
+            {commandRegistrationErrorCode}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

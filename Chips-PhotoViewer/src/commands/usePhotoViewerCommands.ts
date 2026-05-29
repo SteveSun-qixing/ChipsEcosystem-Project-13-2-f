@@ -6,6 +6,7 @@ import {
   applyPhotoViewerCommandState,
   createPhotoViewerCommandStates,
   createPhotoViewerCommandStatus,
+  createPhotoViewerDisplayCommandViews,
   getPhotoViewerCommandHandlerId,
   isPhotoViewerCommandInvokedEvent,
   photoViewerCommandDefinitions,
@@ -86,7 +87,10 @@ export function usePhotoViewerCommands(
   );
 
   const commands = useMemo(
-    () => applyPhotoViewerCommandState(photoViewerCommandViews, commandStateMap),
+    () =>
+      createPhotoViewerDisplayCommandViews(
+        applyPhotoViewerCommandState(photoViewerCommandViews, commandStateMap),
+      ),
     [commandStateMap],
   );
 

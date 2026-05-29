@@ -360,6 +360,24 @@ describe("App（卡片查看器根组件）", () => {
     expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
   });
 
+  it("进入卡片或箱子查看态后不渲染顶部菜单栏和工具栏", async () => {
+    expectRealDocumentFixturesAvailable(["foodGridBox"]);
+    appRuntimeMock.setLaunchParams({
+      trigger: "file-association",
+      targetPath: realDocumentFixtures.foodGridBox,
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-chips-app="card-viewer.command-row"]')).toBeNull();
+    expect(container.querySelector('[data-scope="menu-bar"]')).toBeNull();
+    expect(container.querySelector('[data-scope="toolbar"]')).toBeNull();
+  });
+
   it("逐个消费任务056清单中的真实卡片与箱子素材，并统一交给 Host 文档窗口", async () => {
     expectAllRealDocumentsAvailable();
 

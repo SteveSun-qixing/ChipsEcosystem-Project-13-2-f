@@ -17,11 +17,6 @@ export function AppShell(): React.ReactElement {
   const commands = useCardViewerCommands();
   const handledInvocationRef = React.useRef<string | null>(null);
 
-  const commandMenuDescriptors = React.useMemo(
-    () => [{ menuId: "file", label: runtime.t("card-viewer.commands.menu.file") }],
-    [runtime],
-  );
-
   React.useEffect(() => {
     if (!commands.lastInvoked) {
       return;
@@ -59,16 +54,6 @@ export function AppShell(): React.ReactElement {
       <CardViewerShell
         surfaceMode={runtime.surfaceMode}
         content={content}
-        commandAdapter={commands.adapter}
-        commandViews={cardViewerCommandViews}
-        commandI18n={runtime.t}
-        commandInvocationContext={commands.invocationContext}
-        commandMenuDescriptors={commandMenuDescriptors}
-        commandRegistrationPhase={commands.phase}
-        commandRegistrationErrorCode={commands.errorCode}
-        showCommandChrome={runtime.openedTarget !== null}
-        toolbarAriaLabel={runtime.t("card-viewer.commands.toolbar.ariaLabel")}
-        menuAriaLabel={runtime.t("card-viewer.commands.menu.ariaLabel")}
       />
     </ChipsCommandProvider>
   );

@@ -40,13 +40,15 @@
 }
 
 .card-viewer-dropzone__file-mark {
-  width: 64px;
+  min-width: 132px;
   height: 64px;
+  padding-inline: var(--chips-sys-layout-space-md, 16px);
   border-radius: var(--chips-sys-radius-md, 20px);
   display: grid;
   place-items: center;
-  font-size: var(--chips-sys-typography-title-size, 28px);
+  font-size: var(--chips-sys-typography-title-size, 24px);
   line-height: 1;
+  white-space: nowrap;
   background:
     color-mix(in srgb, var(--chips-sys-color-primary, #246bff) 14%, var(--chips-sys-color-surface, #ffffff));
   color: var(--chips-sys-color-primary, #246bff);

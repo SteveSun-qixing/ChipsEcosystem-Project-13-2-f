@@ -58,6 +58,11 @@ describe("theme build pipeline", () => {
     expect(themeCss).not.toContain('data-scope="dialog"][data-part="title"');
     expect(themeCss).not.toContain("--chips-comp-dialog-title-color");
     expect(themeCss).toContain("var(--chips-layout-size-grid-min-item");
+    expect(themeCss).toContain('[data-scope="select"][data-part="root"]');
+    expect(themeCss).toContain("grid-template-columns: minmax(0, max-content)");
+    expect(themeCss).toContain("inset-block-start: calc(100% + var(--chips-select-content-gutter");
+    expect(themeCss).toContain("z-index: var(--chips-layout-z-index-overlay, 1000)");
+    expect(themeCss).toContain("overscroll-behavior: contain");
     await expect(
       fs.access(path.join(projectRoot, "dist", "icons", "variablefont", "MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2"))
     ).resolves.toBeUndefined();

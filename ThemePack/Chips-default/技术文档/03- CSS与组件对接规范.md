@@ -180,7 +180,7 @@
 
 输入类控件在本主题中统一以 `--chips-base-control-height` 控制主体高度；`search-field / secure-field / combo-box / number-input` 的图标、清除按钮、可见性按钮和增减按钮使用绝对定位，但定位基于控件高度和 `:has(> [data-part="label"])` 修正有标签场景，不依赖固定 `14px` 文本高度。
 
-菜单、Popover、Dialog、CommandPalette、日期/时间弹层统一使用 `--chips-base-shadow-float` 与 `--chips-base-border-subtle` 表达层级，并通过 `backdrop-filter`、顶部高光和底部暗边形成克制液态浮层。列表型选中态优先使用浅蓝背景，强主色只保留给表单焦点、开关/单选/复选选中和进度范围。
+菜单、Popover、Dialog、CommandPalette、Select、日期/时间弹层统一使用 `--chips-base-shadow-float` 与 `--chips-base-border-subtle` 表达层级，并通过 `backdrop-filter`、顶部高光和底部暗边形成克制液态浮层。`Select.Content` 在本主题中作为锚定触发器下方的绝对定位 listbox 浮层呈现，消费 `--chips-select-content-gutter / --chips-select-content-min-inline-size / --chips-select-content-max-block-size` 控制间距、宽度和滚动边界，不进入普通文档流。列表型选中态优先使用浅蓝背景，强主色只保留给表单焦点、开关/单选/复选选中和进度范围。
 
 `navigation-split-view` 在本主题中对齐任务016.07 Compound contract：只消费 `root / sidebar / content / detail / divider / status` 公开 part，不复用 `split-view` 的 `primary / secondary` 主题入口。导航侧栏最小宽度使用 `chips.layout.size.navigation-primary-min`，中间内容栏使用 `chips.layout.size.split-secondary-min`，分割线厚度和焦点环继续消费 `chips.layout.divider.*` 与 `chips.layout.focus.*`。
 

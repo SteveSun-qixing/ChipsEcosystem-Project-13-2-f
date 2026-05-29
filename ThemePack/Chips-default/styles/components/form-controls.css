@@ -175,8 +175,12 @@
 /* Select */
 
 [data-scope="select"][data-part="root"] {
-  display: inline-flex;
-  align-items: center;
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content);
+  align-items: stretch;
+  justify-items: stretch;
+  vertical-align: top;
 }
 
 [data-scope="select"][data-part="trigger"] {
@@ -186,8 +190,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--chips-base-space-2);
+  inline-size: 100%;
   min-inline-size: 120px;
   min-block-size: var(--chips-base-control-height);
+  box-sizing: border-box;
   padding-inline: var(--chips-base-space-3);
   padding-block: var(--chips-base-space-2);
   border-radius: var(--chips-comp-select-trigger-radius, var(--chips-base-radius-md));
@@ -222,10 +228,19 @@
 }
 
 [data-scope="select"][data-part="content"] {
-  position: relative;
-  overflow: hidden;
+  position: absolute;
+  z-index: var(--chips-layout-z-index-overlay, 1000);
+  inset-block-start: calc(100% + var(--chips-select-content-gutter, var(--chips-base-space-1)));
+  inset-inline-start: 0;
+  min-inline-size: var(--chips-select-content-min-inline-size, 100%);
+  max-inline-size: min(360px, calc(100vw - 24px));
+  max-block-size: var(--chips-select-content-max-block-size, min(280px, calc(100vh - 24px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 4px 0;
+  box-sizing: border-box;
   list-style: none;
   border-radius: var(--chips-comp-select-content-radius, var(--chips-base-radius-md));
   background-color: var(--chips-comp-select-content-surface, var(--chips-sys-color-surface));

@@ -1,0 +1,116 @@
+id: chips.module.chips.iconmaker.plugin
+name: Chips IconMaker CLI
+version: 0.1.0
+type: module
+entry: dist/index.mjs
+description: 图标工坊命令行生成模块，用于将图片转换为 PNG、ICO 与 ICNS 图标文件。
+author:
+  name: Chips
+  email: dev@chips.local
+permissions:
+  - platform.read
+  - file.read
+  - file.write
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+module:
+  apiVersion: 1
+  runtime: worker
+  activation: onDemand
+  provides:
+    - capability: iconmaker.icon.generate
+      version: "1.0.0"
+      description: 将本地图片转换为指定尺寸的图标文件。
+      methods:
+        - name: generate
+          mode: job
+          inputSchema: contracts/generate.input.schema.json
+          outputSchema: contracts/generate.output.schema.json
+  consumes: []
+cli:
+  commands:
+    - commandPath: iconmaker generate
+      target:
+        type: module
+        pluginId: chips.module.chips.iconmaker.plugin
+        capability: iconmaker.icon.generate
+        method: generate
+        timeoutMs: 60000
+      titleKey: iconmaker.cli.generate.title
+      descriptionKey: iconmaker.cli.generate.description
+      permissions:
+        - platform.read
+        - file.read
+        - file.write
+      arguments:
+        - name: input
+          position: 0
+          type: path
+          required: true
+          mapsTo: inputPath
+          path:
+            kind: file
+            exists: true
+            extensions: [png, jpg, jpeg, webp, gif, svg]
+          ui:
+            control: pathInput
+            placeholderKey: iconmaker.cli.generate.input.placeholder
+      options:
+        - name: output
+          short: o
+          type: path
+          required: true
+          mapsTo: outputDir
+          path:
+            kind: directory
+            role: output
+            create: true
+            overwrite: overwrite
+          ui:
+            control: pathInput
+            placeholderKey: iconmaker.cli.generate.output.placeholder
+        - name: formats
+          short: f
+          type: stringList
+          default: [png, ico, icns]
+          choices: [png, ico, icns]
+          multiple: true
+          mapsTo: formats
+          ui:
+            control: multiSelect
+            choices: [png, ico, icns]
+        - name: size
+          short: s
+          type: integer
+          default: 256
+          mapsTo: size
+          validation:
+            min: 16
+            max: 1024
+          ui:
+            control: slider
+            min: 16
+            max: 1024
+            step: 1
+      output:
+        mode: human
+        json: supported
+        artifacts:
+          - output.files
+      job:
+        wait: true
+        cancelOnInterrupt: true

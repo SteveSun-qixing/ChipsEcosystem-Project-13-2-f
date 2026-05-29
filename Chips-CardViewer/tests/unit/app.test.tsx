@@ -495,6 +495,36 @@ describe("App（卡片查看器根组件）", () => {
     expect(container.querySelector('[data-chips-app="card-viewer.cover"]')).toBeNull();
   });
 
+  it("查看态左上角返回按钮会取消当前查看并回到首页", async () => {
+    expectRealDocumentFixturesAvailable(["foodGridBox"]);
+    appRuntimeMock.setLaunchParams({
+      trigger: "file-association",
+      targetPath: realDocumentFixtures.foodGridBox,
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeInstanceOf(HTMLDivElement);
+    const backButton = Array.from(container.querySelectorAll("button"))
+      .find((element) => element.getAttribute("aria-label") === "返回首页");
+    expect(backButton).toBeInstanceOf(HTMLButtonElement);
+    expect(backButton?.classList.contains("card-viewer-shell__floating-action--back")).toBe(true);
+
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeNull();
+    expect(container.textContent).toContain("拖入卡片或箱子文件");
+    expect(Array.from(container.querySelectorAll("button"))
+      .some((element) => element.getAttribute("aria-label") === "返回首页")).toBe(false);
+  });
+
   it("拒绝当前尚未支持的远程 cardSource", async () => {
     appRuntimeMock.setLaunchParams({
       trigger: "community-open-view",

@@ -53,6 +53,13 @@ function resolveSourceDocumentUrl(source: DocumentRouteSource): string {
   return ('viewUrl' in source ? source.viewUrl : undefined) || source.documentUrl;
 }
 
+function resolveSourceId(source: DocumentRouteSource | null): string | null {
+  if (!source) {
+    return null;
+  }
+  return source.kind === 'community-card' ? source.cardId : source.boxId;
+}
+
 export function DocumentPluginRoutePage({
   source,
   loading,
@@ -68,7 +75,7 @@ export function DocumentPluginRoutePage({
   useEffect(() => {
     setSession(null);
     setSessionError('');
-  }, [source?.kind, source && 'cardId' in source ? source.cardId : source && 'boxId' in source ? source.boxId : null]);
+  }, [source?.kind, resolveSourceId(source)]);
 
   useEffect(() => {
     if (!source || !resolveSourceDocumentUrl(source) || session) {

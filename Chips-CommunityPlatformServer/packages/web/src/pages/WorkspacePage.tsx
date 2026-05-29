@@ -36,12 +36,12 @@ export default function WorkspacePage() {
     );
   }, []);
 
-  const pollCardUntilSettled = useCallback(
+  const pollCardRenderUntilSettled = useCallback(
     async (cardId: string) => {
       for (let attempt = 0; attempt < 80; attempt += 1) {
-        const status = await cardsApi.getCardStatus(cardId);
+        const status = await cardsApi.getCardRenderStatus(cardId);
 
-        if (status.status === 'ready' || status.status === 'error') {
+        if (status.viewState === 'cache_ready' || status.viewState === 'render_error') {
           return status;
         }
 
@@ -82,9 +82,9 @@ export default function WorkspacePage() {
           detailMessage: t('workspace.processingHint'),
         });
 
-        const cardStatus = await pollCardUntilSettled(uploadResult.cardId);
+        const cardStatus = await pollCardRenderUntilSettled(uploadResult.cardId);
 
-        if (cardStatus.status === 'ready') {
+        if (cardStatus.viewState === 'cache_ready') {
           updateQueueItem(item.localId, {
             status: 'success',
             progress: 100,
@@ -97,7 +97,7 @@ export default function WorkspacePage() {
         updateQueueItem(item.localId, {
           status: 'error',
           progress: 100,
-          errorMessage: cardStatus.errorMessage || t('workspace.statusError'),
+          errorMessage: cardStatus.error?.message || t('workspace.statusError'),
           resultHref: `/cards/${uploadResult.cardId}`,
         });
         return;
@@ -129,7 +129,7 @@ export default function WorkspacePage() {
         detailMessage: t('workspace.successBox'),
       });
     },
-    [pollCardUntilSettled, t, updateQueueItem],
+    [pollCardRenderUntilSettled, t, updateQueueItem],
   );
 
   useEffect(() => {

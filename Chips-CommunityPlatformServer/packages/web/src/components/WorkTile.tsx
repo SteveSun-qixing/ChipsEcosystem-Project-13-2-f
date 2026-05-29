@@ -16,7 +16,6 @@ interface WorkTileProps {
 export function WorkTile({ item, manageMode = false, selected = false, onToggleSelection }: WorkTileProps) {
   const { t } = useAppPreferences();
   const isCard = item.type === 'card';
-  const selectable = manageMode;
   const coverStyle = getWorkCoverStyle(item.coverRatio) as CSSProperties;
   const rootRef = useRef<HTMLAnchorElement | HTMLButtonElement | null>(null);
   const setRootRef = (node: HTMLAnchorElement | HTMLButtonElement | null) => {

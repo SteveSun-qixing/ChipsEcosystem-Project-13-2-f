@@ -55,9 +55,8 @@ export interface CardOpenView {
   coverFragmentUrl?: string | null;
   coverRenderMode?: 'fragment-shadow' | 'iframe' | null;
   coverRatio: string | null;
-  htmlUrl: string | null;
-  viewUrl?: string | null;
-  renderStatusUrl?: string | null;
+  viewUrl: string;
+  renderStatusUrl: string;
   viewState?: 'cache_ready' | 'rendering' | 'render_error' | 'pending' | 'processing' | 'ready' | 'error';
   renderCache?: {
     status: string;
@@ -151,6 +150,20 @@ interface PaginatedEnvelope<T> {
   pagination: Pagination;
 }
 
+interface UploadSessionResponse {
+  uploadId: string;
+  resourcePrefix: string;
+  expiresAt: string;
+}
+
+interface CardUploadResponse {
+  cardId: string;
+  status: string;
+  renderStatus?: string;
+  renderStatusUrl?: string;
+  communityUrl?: string;
+}
+
 async function fetchAllPages<T>(
   loader: (page: number, pageSize: number) => Promise<PaginatedEnvelope<T>>,
   pageSize = 100,
@@ -176,13 +189,28 @@ export const cardsApi = {
     options: { roomId?: string; visibility?: 'public' | 'private' },
     onProgress?: (pct: number) => void,
   ) {
+    const session = await apiClient.post<{ data: UploadSessionResponse }>('/upload-sessions', {
+      contentType: 'card',
+      fileName: file.name,
+      roomId: options.roomId ?? null,
+      visibility: options.visibility ?? 'public',
+      client: {
+        name: 'ccps-web-workspace',
+        version: '1.0.0',
+        platform: 'web',
+      },
+    });
     const fd = new FormData();
     fd.append('file', file);
-    if (options.roomId) fd.append('roomId', options.roomId);
-    if (options.visibility) fd.append('visibility', options.visibility);
+    fd.append('manifest', JSON.stringify({
+      client: 'ccps-web-workspace',
+      mode: 'source-card-submit',
+      resources: [],
+      resourcePrefix: session.data.resourcePrefix,
+    }));
 
-    const res = await apiClient.upload<{ data: { cardId: string; status: string } }>(
-      '/upload/card',
+    const res = await apiClient.upload<{ data: CardUploadResponse }>(
+      `/upload-sessions/${session.data.uploadId}/card`,
       fd,
       onProgress,
     );

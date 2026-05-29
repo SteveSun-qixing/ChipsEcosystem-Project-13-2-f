@@ -8,6 +8,14 @@ import { getErrorMessage } from '../lib/ui';
 
 const CARD_STATUS_POLL_MS = 2000;
 
+function resolveCardDocumentUrl(card: CardOpenView): string | null {
+  return card.viewState === 'cache_ready' ? card.viewUrl ?? null : null;
+}
+
+function isCardViewReady(card: CardOpenView): boolean {
+  return card.viewState === 'cache_ready' && Boolean(resolveCardDocumentUrl(card));
+}
+
 export default function CardDetailPage() {
   const { t } = useAppPreferences();
   const { cardId } = useParams<{ cardId: string }>();
@@ -47,7 +55,7 @@ export default function CardDetailPage() {
   }, [cardId, t]);
 
   useEffect(() => {
-    if (!cardId || !card || card.viewState === 'cache_ready' || card.viewState === 'render_error' || card.status === 'error') {
+    if (!cardId || !card || isCardViewReady(card) || card.status === 'error') {
       return;
     }
 
@@ -95,15 +103,16 @@ export default function CardDetailPage() {
     };
   }, [card, cardId, t]);
 
+  const documentUrl = card ? resolveCardDocumentUrl(card) : null;
   const source: DocumentRouteSource | null =
-    cardId && card?.status === 'ready' && card.viewState === 'cache_ready' && card.viewUrl
+    cardId && card && isCardViewReady(card) && documentUrl
       ? {
           kind: 'community-card',
           cardId,
           title: card.title,
           createdAt: card.createdAt,
-          documentUrl: card.viewUrl,
-          viewUrl: card.viewUrl,
+          documentUrl,
+          viewUrl: documentUrl,
           canonicalUrl: `/cards/${cardId}`,
           ...(card.coverUrl ? { coverUrl: card.coverUrl } : undefined),
           ...(card.coverFragmentUrl ? { coverFragmentUrl: card.coverFragmentUrl } : undefined),

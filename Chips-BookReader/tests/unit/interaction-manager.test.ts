@@ -110,4 +110,29 @@ describe("InteractionManager", () => {
     vi.setSystemTime(new Date("2026-04-19T00:00:00.500Z"));
     expect(manager.canNavigate()).toBe(true);
   });
+
+  it("章节 iframe 获得焦点后仍会用键盘事件触发完整阅读导航", () => {
+    const callbacks = createCallbacks();
+    const manager = new InteractionManager({
+      callbacks,
+      getReadingMode: () => "paginated",
+      getController: () => null,
+      hasActivePanel: () => false,
+    });
+
+    manager.attachToFrame(document);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "PageDown",
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(callbacks.onNavigate).toHaveBeenCalledTimes(1);
+    expect(callbacks.onNavigate).toHaveBeenLastCalledWith("next");
+
+    manager.destroy();
+  });
 });

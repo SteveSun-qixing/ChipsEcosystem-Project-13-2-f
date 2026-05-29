@@ -24,6 +24,7 @@ describe("PreviewQualityPage", () => {
 
     expect(PREVIEW_QUALITY_ENTRIES).toHaveLength(10);
     expect(markup).toContain("settingsPanel.previewQuality.title");
+    expect(markup).not.toContain("settingsPanel.previewQuality.subtitle");
     expect(markup).toContain("settings-summary-panel");
     expect(markup).toContain("settings-card-grid");
     expect(markup).not.toContain("preview-quality-page");

@@ -24,7 +24,7 @@ export function PreviewQualityPage(): React.ReactElement {
   const { t } = useI18n();
 
   return (
-    <PageFrame title={t("settingsPanel.previewQuality.title")} subtitle={t("settingsPanel.previewQuality.subtitle")}>
+    <PageFrame title={t("settingsPanel.previewQuality.title")}>
       <PageStack>
         <SummaryPanel
           ariaLabel={t("settingsPanel.previewQuality.summary.ariaLabel")}

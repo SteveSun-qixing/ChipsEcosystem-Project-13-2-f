@@ -139,6 +139,7 @@ export function AppPluginsPage(): React.ReactElement {
       <>
         <NotificationStack
           ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+          closeButtonLabel={t("settingsPanel.common.close")}
           items={feedback}
           onDismiss={(item) => dismissFeedback(item.id)}
         />
@@ -230,6 +231,7 @@ export function AppPluginsPage(): React.ReactElement {
     >
       <NotificationStack
         ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+        closeButtonLabel={t("settingsPanel.common.close")}
         items={feedback}
         onDismiss={(item) => dismissFeedback(item.id)}
       />

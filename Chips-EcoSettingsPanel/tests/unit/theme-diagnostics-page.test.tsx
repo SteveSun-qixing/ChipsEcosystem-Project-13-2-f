@@ -91,6 +91,7 @@ describe("ThemeDiagnosticsPage", () => {
     const markup = renderToStaticMarkup(<ThemeDiagnosticsPage />);
 
     expect(markup).toContain("settingsPanel.themeDiagnostics.title");
+    expect(markup).not.toContain("settingsPanel.themeDiagnostics.subtitle");
     expect(markup).toContain("chips.theme-demo");
     expect(markup).toContain("client.theme.contract.get");
     expect(markup).toContain("client.theme.resolve");
@@ -98,6 +99,7 @@ describe("ThemeDiagnosticsPage", () => {
     expect(markup).toContain("settings-summary-panel");
     expect(markup).toContain("settings-metric-card__value");
     expect(markup).toContain("settings-chain-item");
+    expect(markup).toContain("theme-diagnostics-components");
     expect(markup).toContain("data-scope=\"data-grid\"");
     expect(markup).toContain("settings-governance-list");
     expect(markup).not.toContain("diagnostics-page");

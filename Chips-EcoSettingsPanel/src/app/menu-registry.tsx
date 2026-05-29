@@ -47,14 +47,6 @@ const MENU_ENTRIES: MenuRegistration[] = [
     render: () => <LanguagePage />,
   },
   {
-    id: "theme-diagnostics",
-    titleKey: "settingsPanel.menu.themeDiagnostics.title",
-    summaryKey: "settingsPanel.menu.themeDiagnostics.summary",
-    categoryKey: "settingsPanel.menu.categories.personalization",
-    order: 20,
-    render: () => <ThemeDiagnosticsPage />,
-  },
-  {
     id: "app-plugins",
     titleKey: "settingsPanel.menu.appPlugins.title",
     summaryKey: "settingsPanel.menu.appPlugins.summary",
@@ -87,11 +79,19 @@ const MENU_ENTRIES: MenuRegistration[] = [
     render: () => <ModulePluginsPage />,
   },
   {
+    id: "theme-diagnostics",
+    titleKey: "settingsPanel.menu.themeDiagnostics.title",
+    summaryKey: "settingsPanel.menu.themeDiagnostics.summary",
+    categoryKey: "settingsPanel.menu.categories.developer",
+    order: 80,
+    render: () => <ThemeDiagnosticsPage />,
+  },
+  {
     id: "component-gallery",
     titleKey: "settingsPanel.menu.gallery.title",
     summaryKey: "settingsPanel.menu.gallery.summary",
     categoryKey: "settingsPanel.menu.categories.developer",
-    order: 80,
+    order: 90,
     render: () => <ComponentGalleryPage />,
   },
   {
@@ -99,7 +99,7 @@ const MENU_ENTRIES: MenuRegistration[] = [
     titleKey: "settingsPanel.menu.previewQuality.title",
     summaryKey: "settingsPanel.menu.previewQuality.summary",
     categoryKey: "settingsPanel.menu.categories.developer",
-    order: 90,
+    order: 100,
     render: () => <PreviewQualityPage />,
   },
 ];

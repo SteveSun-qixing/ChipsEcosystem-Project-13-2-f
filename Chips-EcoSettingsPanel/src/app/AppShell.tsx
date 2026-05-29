@@ -168,7 +168,11 @@ export function AppShell(): React.ReactElement {
               />
               <ChipsText className="settings-mobile-nav__summary" as="p" text={t(activeScene.summaryKey)} tone="muted" />
             </ChipsBox>
-            <NotificationStack ariaLabel={t("settingsPanel.feedback.ariaLabel")} items={feedbackItems} />
+            <NotificationStack
+              ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+              closeButtonLabel={t("settingsPanel.common.close")}
+              items={feedbackItems}
+            />
             {!ready ? (
               <ChipsLoadingBoundary
                 loading

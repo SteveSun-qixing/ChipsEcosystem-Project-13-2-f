@@ -240,5 +240,7 @@ describe("App (标准应用插件根组件)", () => {
     expect(styles).not.toContain("#0a6cff");
     expect(styles).not.toContain("#f5f5f7");
     expect(styles).not.toContain("SF Pro Display");
+    expect(styles).not.toContain("color-scheme: light");
+    expect(styles).toContain("--settings-surface-base: var(--chips-sys-color-canvas");
   });
 });

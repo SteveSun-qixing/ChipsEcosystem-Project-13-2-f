@@ -1,5 +1,5 @@
 import React from "react";
-import { ChipsNotification } from "@chips/component-library";
+import { ChipsToast } from "@chips/component-library";
 
 export interface FeedbackItem {
   id: string;
@@ -13,21 +13,26 @@ export interface FeedbackItem {
 interface NotificationStackProps {
   ariaLabel: string;
   items: FeedbackItem[];
+  closeButtonLabel?: string;
   onDismiss?: (item: FeedbackItem) => void;
 }
 
-export function NotificationStack({ ariaLabel, items, onDismiss }: NotificationStackProps): React.ReactElement | null {
+export function NotificationStack({ ariaLabel, closeButtonLabel, items, onDismiss }: NotificationStackProps): React.ReactElement | null {
   if (items.length === 0) {
     return null;
   }
 
   return (
-    <ChipsNotification
-      ariaLabel={ariaLabel}
-      items={items}
-      onDismiss={(item) => {
-        onDismiss?.(item as FeedbackItem);
-      }}
-    />
+    <div className="settings-feedback-toast">
+      <ChipsToast
+        ariaLabel={ariaLabel}
+        closeButtonLabel={closeButtonLabel}
+        entries={items}
+        placement="top-center"
+        onDismiss={(item) => {
+          onDismiss?.(item as FeedbackItem);
+        }}
+      />
+    </div>
   );
 }

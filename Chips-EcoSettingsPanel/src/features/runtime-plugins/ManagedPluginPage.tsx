@@ -104,6 +104,7 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
       <>
         <NotificationStack
           ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+          closeButtonLabel={t("settingsPanel.common.close")}
           items={feedback}
           onDismiss={(item) => dismissFeedback(item.id)}
         />
@@ -175,6 +176,7 @@ export function ManagedPluginPage({ type, translationBaseKey }: ManagedPluginPag
     >
       <NotificationStack
         ariaLabel={t("settingsPanel.feedback.ariaLabel")}
+        closeButtonLabel={t("settingsPanel.common.close")}
         items={feedback}
         onDismiss={(item) => dismissFeedback(item.id)}
       />

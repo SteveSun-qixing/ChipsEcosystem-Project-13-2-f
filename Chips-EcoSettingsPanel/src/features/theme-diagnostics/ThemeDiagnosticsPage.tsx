@@ -4,7 +4,7 @@ import type { ThemeDiagnosticStatus } from "chips-sdk";
 import { useI18n } from "../../app/providers/I18nProvider";
 import { GovernanceList, GovernanceListCell, GovernanceListRow } from "../../shared/ui/GovernanceList";
 import { PageFrame } from "../../shared/ui/PageFrame";
-import { CardGrid, CardGridItem, MetricCard, PageStack, SummaryPanel } from "../../shared/ui/PageLayout";
+import { CardGrid, CardGridItem, MetricCard, PageSection, PageStack, SummaryPanel } from "../../shared/ui/PageLayout";
 import { SectionStateBoundary } from "../../shared/ui/SectionStateBoundary";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { useThemeDiagnostics } from "./useThemeDiagnostics";
@@ -35,24 +35,21 @@ function diagnosticTone(diagnostic: ThemeDiagnosticRowViewModel): "neutral" | "p
 }
 
 function ThemeChain({ diagnostics }: { diagnostics: ThemeDiagnosticsViewModel }): React.ReactElement {
-  const { t } = useI18n();
   return (
-    <ChipsCardShell title={t("settingsPanel.themeDiagnostics.chain.title")}>
-      <CardGrid minItemSize="220px">
-        {diagnostics.chain.map((entry) => (
-          <CardGridItem key={`${entry.order}:${entry.id}`}>
-            <div className="settings-chain-item">
-              <span className="settings-chain-item__order">{entry.order + 1}</span>
-              <span className="settings-chain-item__body">
-                <strong>{entry.displayName}</strong>
-                <ChipsText as="span" text={entry.id} tone="muted" />
-              </span>
-              <ChipsText as="span" text={entry.version} tone="muted" />
-            </div>
-          </CardGridItem>
-        ))}
-      </CardGrid>
-    </ChipsCardShell>
+    <CardGrid minItemSize="220px">
+      {diagnostics.chain.map((entry) => (
+        <CardGridItem key={`${entry.order}:${entry.id}`}>
+          <div className="settings-chain-item">
+            <span className="settings-chain-item__order">{entry.order + 1}</span>
+            <span className="settings-chain-item__body">
+              <strong>{entry.displayName}</strong>
+              <ChipsText as="span" text={entry.id} tone="muted" />
+            </span>
+            <ChipsText as="span" text={entry.version} tone="muted" />
+          </div>
+        </CardGridItem>
+      ))}
+    </CardGrid>
   );
 }
 
@@ -190,59 +187,66 @@ function ThemeDiagnosticsContent({ diagnostics }: { diagnostics: ThemeDiagnostic
 
   return (
     <PageStack>
-      <ThemeDiagnosticsSummary diagnostics={diagnostics} />
+      <PageSection title={t("settingsPanel.themeDiagnostics.summary.ariaLabel")} titleId="theme-diagnostics-summary">
+        <div className="settings-theme-diagnostics-summary-group">
+          <ThemeDiagnosticsSummary diagnostics={diagnostics} />
+          <ThemeDiagnosticsMetrics diagnostics={diagnostics} />
+        </div>
+      </PageSection>
 
-      <ThemeDiagnosticsMetrics diagnostics={diagnostics} />
+      <PageSection title={t("settingsPanel.themeDiagnostics.chain.title")} titleId="theme-diagnostics-chain">
+        <ThemeChain diagnostics={diagnostics} />
+      </PageSection>
 
-      <ThemeChain diagnostics={diagnostics} />
-
-      <GovernanceList
-        ariaLabel={t("settingsPanel.themeDiagnostics.components.ariaLabel")}
-        columns={[
-          { id: "component", label: t("settingsPanel.themeDiagnostics.components.columns.component"), width: "minmax(0, 2fr)" },
-          { id: "coverage", label: t("settingsPanel.themeDiagnostics.components.columns.coverage"), width: "minmax(0, 1.2fr)" },
-          { id: "tokens", label: t("settingsPanel.themeDiagnostics.components.columns.tokens"), width: "minmax(0, 1.4fr)" },
-          { id: "status", label: t("settingsPanel.themeDiagnostics.components.columns.status"), width: "auto", align: "end" },
-        ]}
-      >
-        {diagnostics.components.slice(0, 12).map((component) => (
-          <GovernanceListRow key={component.id}>
-            <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.component")}>
-              <div className="governance-item">
-                <div className="governance-item__title">{component.component}</div>
-                <div className="governance-item__summary">
-                  {t("settingsPanel.themeDiagnostics.components.scope", { scope: component.scope })}
+      <PageSection title={t("settingsPanel.themeDiagnostics.components.ariaLabel")} titleId="theme-diagnostics-components">
+        <GovernanceList
+          ariaLabel={t("settingsPanel.themeDiagnostics.components.ariaLabel")}
+          columns={[
+            { id: "component", label: t("settingsPanel.themeDiagnostics.components.columns.component"), width: "minmax(0, 2fr)" },
+            { id: "coverage", label: t("settingsPanel.themeDiagnostics.components.columns.coverage"), width: "minmax(0, 1.2fr)" },
+            { id: "tokens", label: t("settingsPanel.themeDiagnostics.components.columns.tokens"), width: "minmax(0, 1.4fr)" },
+            { id: "status", label: t("settingsPanel.themeDiagnostics.components.columns.status"), width: "auto", align: "end" },
+          ]}
+        >
+          {diagnostics.components.slice(0, 12).map((component) => (
+            <GovernanceListRow key={component.id}>
+              <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.component")}>
+                <div className="governance-item">
+                  <div className="governance-item__title">{component.component}</div>
+                  <div className="governance-item__summary">
+                    {t("settingsPanel.themeDiagnostics.components.scope", { scope: component.scope })}
+                  </div>
                 </div>
-              </div>
-            </GovernanceListCell>
-            <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.coverage")}>
-              <span>{formatPercent(component.requiredCoverage)}</span>
-            </GovernanceListCell>
-            <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.tokens")}>
-              <div className="governance-meta">
-                <span>{t("settingsPanel.themeDiagnostics.components.requiredTokens", {
-                  missing: component.missingRequiredTokenCount,
-                  total: component.requiredTokenCount,
-                })}</span>
-                <span>{t("settingsPanel.themeDiagnostics.components.partsStates", {
-                  parts: component.partsCount,
-                  states: component.statesCount,
-                })}</span>
-              </div>
-            </GovernanceListCell>
-            <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.status")} align="end">
-              <StatusBadge
-                tone={statusTone(component.status)}
-                label={t(`settingsPanel.themeDiagnostics.status.${component.status}`)}
-              />
-            </GovernanceListCell>
-          </GovernanceListRow>
-        ))}
-      </GovernanceList>
+              </GovernanceListCell>
+              <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.coverage")}>
+                <span>{formatPercent(component.requiredCoverage)}</span>
+              </GovernanceListCell>
+              <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.tokens")}>
+                <div className="governance-meta">
+                  <span>{t("settingsPanel.themeDiagnostics.components.requiredTokens", {
+                    missing: component.missingRequiredTokenCount,
+                    total: component.requiredTokenCount,
+                  })}</span>
+                  <span>{t("settingsPanel.themeDiagnostics.components.partsStates", {
+                    parts: component.partsCount,
+                    states: component.statesCount,
+                  })}</span>
+                </div>
+              </GovernanceListCell>
+              <GovernanceListCell label={t("settingsPanel.themeDiagnostics.components.columns.status")} align="end">
+                <StatusBadge
+                  tone={statusTone(component.status)}
+                  label={t(`settingsPanel.themeDiagnostics.status.${component.status}`)}
+                />
+              </GovernanceListCell>
+            </GovernanceListRow>
+          ))}
+        </GovernanceList>
+      </PageSection>
 
-      <ChipsCardShell title={t("settingsPanel.themeDiagnostics.diagnostics.title")}>
+      <PageSection title={t("settingsPanel.themeDiagnostics.diagnostics.title")} titleId="theme-diagnostics-diagnostics">
         <DiagnosticList diagnostics={diagnostics.diagnostics} />
-      </ChipsCardShell>
+      </PageSection>
     </PageStack>
   );
 }
@@ -254,7 +258,6 @@ export function ThemeDiagnosticsPage(): React.ReactElement {
   return (
     <PageFrame
       title={t("settingsPanel.themeDiagnostics.title")}
-      subtitle={t("settingsPanel.themeDiagnostics.subtitle")}
       actions={<ChipsButton onPress={() => void refresh()}>{t("settingsPanel.themeDiagnostics.actions.refresh")}</ChipsButton>}
     >
       <SectionStateBoundary

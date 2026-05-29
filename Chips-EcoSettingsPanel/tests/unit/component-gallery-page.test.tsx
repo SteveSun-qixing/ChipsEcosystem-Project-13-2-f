@@ -28,16 +28,22 @@ describe("ComponentGalleryPage", () => {
     vi.resetModules();
   });
 
-  it("renders shared page sections for every formal component group", async () => {
+  it("renders a flat gallery for every formal component preview", async () => {
     const { ComponentGalleryPage } = await import("../../src/features/component-gallery/ComponentGalleryPage");
+    const { getComponentGroups } = await import("../../src/features/component-gallery/registry");
     const markup = renderToStaticMarkup(<ComponentGalleryPage />);
+    const componentCount = getComponentGroups().flatMap((group) => group.items).length;
 
     expect(markup).toContain("settings-page-stack");
-    expect(markup).toContain("settings-page-section");
     expect(markup).toContain("settings-card-grid");
     expect(markup).toContain("settings-card-grid--showcase");
-    expect(markup).toContain("settingsPanel.gallery.groups.foundation");
-    expect(markup).toContain("settingsPanel.gallery.groups.systemUx");
+    expect(markup.match(/settings-card-grid__item/g)?.length).toBe(componentCount);
+    expect(markup).not.toContain("settings-page-section");
+    expect(markup).not.toContain("settings-card-description");
+    expect(markup).not.toContain("gallery-parts");
+    expect(markup).not.toContain("settingsPanel.gallery.groups.foundation");
+    expect(markup).not.toContain("settingsPanel.gallery.groups.systemUx");
+    expect(markup).not.toContain("settingsPanel.gallery.preview.panelHeader.subtitle");
     expect(markup).not.toContain("gallery-page");
     expect(markup).not.toContain("gallery-bento-grid");
     expect(markup).not.toContain("settings-card-grid--bento");

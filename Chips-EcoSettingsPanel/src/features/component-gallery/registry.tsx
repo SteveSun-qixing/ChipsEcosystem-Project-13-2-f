@@ -537,7 +537,6 @@ function PanelHeaderPreview(): React.ReactElement {
     <PreviewShell>
       <ChipsPanelHeader
         title={t("settingsPanel.gallery.preview.panelHeader.title")}
-        subtitle={t("settingsPanel.gallery.preview.panelHeader.subtitle")}
         actions={<ChipsButton>{t("settingsPanel.gallery.preview.panelHeader.action")}</ChipsButton>}
       />
     </PreviewShell>

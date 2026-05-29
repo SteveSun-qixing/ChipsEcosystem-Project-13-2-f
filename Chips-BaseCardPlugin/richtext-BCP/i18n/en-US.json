@@ -17,12 +17,6 @@
   "basecard.validation.bodyRequired": "Content is required.",
   "basecard.validation.importUnavailable": "The current host cannot persist Markdown files.",
   "basecard.status.loading": "Loading rich text content…",
-  "basecard.status.ready": "Content is valid",
-  "basecard.status.invalid": "Needs attention",
   "basecard.status.loadFailed": "Failed to load rich text content",
-  "basecard.status.renderFailed": "Failed to render rich text content",
-  "basecard.storage.inline": "Inline in content config",
-  "basecard.storage.file": "Markdown file in card root",
-  "basecard.meta.storage": "Storage: {mode} · Characters: {count}",
-  "basecard.meta.characters": "Characters: {count}/{limit}"
+  "basecard.status.renderFailed": "Failed to render rich text content"
 }

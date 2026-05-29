@@ -17,12 +17,6 @@
   "basecard.validation.bodyRequired": "内容不能为空。",
   "basecard.validation.importUnavailable": "当前宿主未提供 Markdown 文件保存能力。",
   "basecard.status.loading": "正在加载富文本内容…",
-  "basecard.status.ready": "内容有效",
-  "basecard.status.invalid": "需要修正",
   "basecard.status.loadFailed": "富文本内容加载失败",
-  "basecard.status.renderFailed": "富文本内容渲染失败",
-  "basecard.storage.inline": "内容配置内联",
-  "basecard.storage.file": "卡片根目录 Markdown 文件",
-  "basecard.meta.storage": "存储方式：{mode} · 正文字数：{count}",
-  "basecard.meta.characters": "正文字数：{count}/{limit}"
+  "basecard.status.renderFailed": "富文本内容渲染失败"
 }

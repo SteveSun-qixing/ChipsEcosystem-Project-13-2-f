@@ -55,7 +55,7 @@ describe("createBasecardEditorRoot (Milkdown)", () => {
       expect(button.childElementCount).toBe(1);
     });
     expect(root.querySelector(".chips-basecard-editor__editor-host .ProseMirror")?.textContent).toContain("初始内容");
-    expect(root.querySelector(".chips-basecard-editor__statusbar")?.textContent).toContain("正文字数");
+    expect(root.querySelector(".chips-basecard-editor__statusbar")).toBeNull();
     expect(root.querySelector(".chips-basecard-editor__react-icon")).not.toBeNull();
   });
 

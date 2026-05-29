@@ -27,7 +27,6 @@ import {
   bootEditingEngine,
   subscribeInstalledBasecardRefresh,
 } from '../runtime/boot-actions';
-import { HeaderBar } from '../components/HeaderBar/HeaderBar';
 import { EditingEngineCommandProvider } from '../commands/EditingEngineCommandProvider';
 
 const EngineSettingsDialog = lazy(() => import('../components/EngineSettings/EngineSettingsDialog').then(m => ({ default: m.EngineSettingsDialog })));
@@ -382,29 +381,28 @@ export function WorkspaceScene(): React.ReactElement {
 
   return (
     <EditingEngineCommandProvider openSettings={openSettings} t={t}>
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
-      <HeaderBar />
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        {currentLayout === 'infinite-canvas' ? (
-          <InfiniteCanvas
-            onDropCreate={handleCanvasDropCreate}
-            resolveDropTarget={handleResolveCanvasDropTarget}
-          />
-        ) : (
-          <Workbench />
-        )}
-        <Dock onOpenSettings={openSettings} />
-      </div>
+      <div style={{ height: '100vh', width: '100vw', overflow: 'hidden' }}>
+        <div style={{ height: '100%', position: 'relative', overflow: 'hidden' }}>
+          {currentLayout === 'infinite-canvas' ? (
+            <InfiniteCanvas
+              onDropCreate={handleCanvasDropCreate}
+              resolveDropTarget={handleResolveCanvasDropTarget}
+            />
+          ) : (
+            <Workbench />
+          )}
+          <Dock onOpenSettings={openSettings} />
+        </div>
 
-      {settingsVisible && (
-        <Suspense fallback={null}>
-          <EngineSettingsDialog
-            visible={settingsVisible}
-            onClose={closeSettings}
-          />
-        </Suspense>
-      )}
-    </div>
+        {settingsVisible && (
+          <Suspense fallback={null}>
+            <EngineSettingsDialog
+              visible={settingsVisible}
+              onClose={closeSettings}
+            />
+          </Suspense>
+        )}
+      </div>
     </EditingEngineCommandProvider>
   );
 }

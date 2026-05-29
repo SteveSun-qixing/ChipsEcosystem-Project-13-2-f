@@ -32,6 +32,16 @@ const DEFAULT_OPTIONS: Required<WindowManagerOptions> = {
     tileGap: 20,
 };
 
+function omitUndefinedOptions<T extends Record<string, unknown>>(options?: Partial<T>): Partial<T> {
+    if (!options) {
+        return {};
+    }
+
+    return Object.fromEntries(
+        Object.entries(options).filter(([, value]) => value !== undefined),
+    ) as Partial<T>;
+}
+
 export type WindowManagerState = {
     windows: AnyWindowConfig[];
     focusedWindowId: string | null;
@@ -101,14 +111,15 @@ export class WindowManager {
         const windowId = generateScopedId('card-window');
         const position = this.getNextPosition();
         const zIndex = this.getMaxZIndex() + 1;
+        const normalizedOptions = omitUndefinedOptions(options);
 
         const config: CardWindowConfig = {
             id: windowId,
             type: 'card',
-            title: options?.title || 'Untitled Card',
+            title: normalizedOptions.title || 'Untitled Card',
             cardId,
-            position: options?.position ?? position,
-            size: options?.size ?? this.options.defaultCardWindowSize,
+            position: normalizedOptions.position ?? position,
+            size: normalizedOptions.size ?? this.options.defaultCardWindowSize,
             state: 'normal',
             zIndex,
             isEditing: false,
@@ -116,7 +127,7 @@ export class WindowManager {
             draggable: true,
             closable: true,
             minimizable: true,
-            ...options,
+            ...normalizedOptions,
         };
 
         this.setWindows([...this.state.windows, config]);
@@ -134,22 +145,23 @@ export class WindowManager {
         const windowId = generateScopedId('box-window');
         const position = this.getNextPosition();
         const zIndex = this.getMaxZIndex() + 1;
+        const normalizedOptions = omitUndefinedOptions(options);
 
         const config: BoxWindowConfig = {
             id: windowId,
             type: 'box',
-            title: options?.title || 'Untitled Box',
+            title: normalizedOptions.title || 'Untitled Box',
             boxId,
             boxPath,
-            position: options?.position ?? position,
-            size: options?.size ?? this.options.defaultBoxWindowSize,
+            position: normalizedOptions.position ?? position,
+            size: normalizedOptions.size ?? this.options.defaultBoxWindowSize,
             state: 'normal',
             zIndex,
             resizable: true,
             draggable: true,
             closable: true,
             minimizable: true,
-            ...options,
+            ...normalizedOptions,
         };
 
         this.setWindows([...this.state.windows, config]);
@@ -166,23 +178,24 @@ export class WindowManager {
         const windowId = generateScopedId('tool-window');
         const position = this.getNextPosition();
         const zIndex = this.getMaxZIndex() + 1;
+        const normalizedOptions = omitUndefinedOptions(options);
 
         const config: ToolWindowConfig = {
             id: windowId,
             type: 'tool',
-            title: options?.title || component,
+            title: normalizedOptions.title || component,
             component,
-            position: options?.position ?? position,
-            size: options?.size ?? this.options.defaultToolWindowSize,
+            position: normalizedOptions.position ?? position,
+            size: normalizedOptions.size ?? this.options.defaultToolWindowSize,
             state: 'normal',
             zIndex,
-            icon: options?.icon,
+            icon: normalizedOptions.icon,
             resizable: true,
             draggable: true,
             closable: true,
             minimizable: true,
             dockable: true,
-            ...options,
+            ...normalizedOptions,
         };
 
         this.setWindows([...this.state.windows, config]);

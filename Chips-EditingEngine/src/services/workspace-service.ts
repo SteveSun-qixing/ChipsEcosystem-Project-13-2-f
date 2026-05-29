@@ -6,6 +6,7 @@ import { generateId62 } from '../utils/id';
 import type { WorkspaceState, WorkspaceFile } from '../types/workspace';
 import { boxDocumentService, DEFAULT_BOX_LAYOUT_TYPE } from './box-document-service';
 import yaml from 'yaml';
+import type { FileStat } from 'chips-sdk';
 
 export interface WorkspaceOpenOptions {
     windowPosition?: { x: number; y: number };
@@ -18,15 +19,41 @@ const HOST_RUNTIME_ROOT_ENTRIES = new Set([
     'plugin-runtime.json',
     'plugin-shortcuts.json',
     'route-manifest.json',
+    'route-descriptor-manifest.json',
     'credentials.enc.json',
     'config.json',
     'config.workspace.json',
     'config.system.json',
     'host-state.json',
+    'electron-user-data',
 ]);
 
 function joinPath(...parts: string[]): string {
     return parts.filter(Boolean).join('/').replace(/\\/g, '/').replace(/\/+/g, '/');
+}
+
+function isAbsolutePath(path: string): boolean {
+    return path.startsWith('/') || /^[A-Za-z]:\//.test(path);
+}
+
+function resolveListedEntryPath(basePath: string, entryPath: string): string {
+    const normalizedEntryPath = entryPath.replace(/\\/g, '/');
+    if (isAbsolutePath(normalizedEntryPath)) {
+        return normalizedEntryPath;
+    }
+    return joinPath(basePath, normalizedEntryPath);
+}
+
+function normalizeComparablePath(path: string): string {
+    const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
+    if (normalized.length > 1 && normalized.endsWith('/')) {
+        return normalized.slice(0, -1);
+    }
+    return normalized;
+}
+
+function pathsEqual(left: string, right: string): boolean {
+    return normalizeComparablePath(left) === normalizeComparablePath(right);
 }
 
 function stripExtension(name: string, ext: string): string {
@@ -161,14 +188,13 @@ export class WorkspaceService {
     async buildTree(basePath: string): Promise<WorkspaceFile[]> {
         const entries = await fileService.list(basePath);
         const result: WorkspaceFile[] = [];
-        const isWorkspaceRoot = basePath === this.state.rootPath;
+        const isWorkspaceRoot = pathsEqual(basePath, this.state.rootPath);
 
         for (const entry of entries) {
-            const fileName = entry.path.split('/').pop() || '';
+            const entryPath = resolveListedEntryPath(basePath, entry.path);
+            const fileName = entryPath.split('/').pop() || '';
             if (fileName.startsWith('.')) continue;
             if (isWorkspaceRoot && HOST_RUNTIME_ROOT_ENTRIES.has(fileName)) continue;
-
-            const entryPath = entry.path;
 
             try {
                 const stat = await fileService.stat(entryPath);
@@ -177,17 +203,7 @@ export class WorkspaceService {
                     const cardMetaPath = joinPath(entryPath, '.card/metadata.yaml');
 
                     if (await fileService.exists(cardMetaPath)) {
-                        const metadata = await this.readMetadata(cardMetaPath);
-                        const cardId = (metadata?.card_id as string) ?? fileName.replace(/\.card$/i, '');
-                        const cardName = (metadata?.name as string) ?? fileName;
-                        result.push({
-                            id: cardId,
-                            name: `${stripExtension(cardName, '.card')}.card`,
-                            path: entryPath,
-                            type: 'card',
-                            createdAt: (metadata?.created_at as string) || new Date(stat.mtimeMs).toISOString(),
-                            modifiedAt: (metadata?.modified_at as string) || new Date(stat.mtimeMs).toISOString(),
-                        });
+                        result.push(await this.createWorkspaceCardFile(entryPath, stat));
                         continue;
                     }
 
@@ -215,15 +231,7 @@ export class WorkspaceService {
                         modifiedAt: new Date(stat.mtimeMs).toISOString(),
                     });
                 } else if (lower.endsWith('.box')) {
-                    const metadata = await this.readBoxMetadata(entryPath);
-                    result.push({
-                        id: metadata?.boxId ?? entryPath,
-                        name: `${stripExtension(metadata?.name ?? fileName, '.box')}.box`,
-                        path: entryPath,
-                        type: 'box',
-                        createdAt: metadata?.createdAt ?? new Date(stat.mtimeMs).toISOString(),
-                        modifiedAt: metadata?.modifiedAt ?? new Date(stat.mtimeMs).toISOString(),
-                    });
+                    result.push(await this.createWorkspaceBoxFile(entryPath, stat));
                 }
             } catch (e) {
                 console.warn(`[WorkspaceService] Failed to process ${entryPath}`, e);
@@ -259,13 +267,89 @@ export class WorkspaceService {
 
     findFileByPath(list: WorkspaceFile[], targetPath: string): WorkspaceFile | undefined {
         for (const file of list) {
-            if (file.path === targetPath) return file;
+            if (pathsEqual(file.path, targetPath)) return file;
             if (file.children) {
                 const found = this.findFileByPath(file.children, targetPath);
                 if (found) return found;
             }
         }
         return undefined;
+    }
+
+    private async createWorkspaceCardFile(cardPath: string, stat?: FileStat): Promise<WorkspaceFile> {
+        const normalizedCardPath = normalizeComparablePath(cardPath);
+        const fileName = normalizedCardPath.split('/').pop() || '';
+        const cardStat = stat ?? await fileService.stat(normalizedCardPath);
+        const metadata = await this.readMetadata(joinPath(normalizedCardPath, '.card/metadata.yaml'));
+        const cardId = (metadata?.card_id as string) ?? fileName.replace(/\.card$/i, '');
+        const cardName = (metadata?.name as string) ?? fileName;
+
+        return {
+            id: cardId,
+            name: `${stripExtension(cardName, '.card')}.card`,
+            path: normalizedCardPath,
+            type: 'card',
+            createdAt: (metadata?.created_at as string) || new Date(cardStat.mtimeMs).toISOString(),
+            modifiedAt: (metadata?.modified_at as string) || new Date(cardStat.mtimeMs).toISOString(),
+        };
+    }
+
+    private async createWorkspaceBoxFile(boxPath: string, stat?: FileStat): Promise<WorkspaceFile> {
+        const normalizedBoxPath = normalizeComparablePath(boxPath);
+        const fileName = normalizedBoxPath.split('/').pop() || '';
+        const boxStat = stat ?? await fileService.stat(normalizedBoxPath);
+        const metadata = await this.readBoxMetadata(normalizedBoxPath);
+
+        return {
+            id: metadata?.boxId ?? normalizedBoxPath,
+            name: `${stripExtension(metadata?.name ?? fileName, '.box')}.box`,
+            path: normalizedBoxPath,
+            type: 'box',
+            createdAt: metadata?.createdAt ?? new Date(boxStat.mtimeMs).toISOString(),
+            modifiedAt: metadata?.modifiedAt ?? new Date(boxStat.mtimeMs).toISOString(),
+        };
+    }
+
+    private upsertWorkspaceFile(list: WorkspaceFile[], file: WorkspaceFile): boolean {
+        for (let index = 0; index < list.length; index += 1) {
+            const current = list[index];
+            if (current.id === file.id || pathsEqual(current.path, file.path)) {
+                list[index] = file;
+                return true;
+            }
+
+            if (current.children && this.upsertWorkspaceFile(current.children, file)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private registerCreatedWorkspaceFile(parentPath: string, file: WorkspaceFile): void {
+        if (this.upsertWorkspaceFile(this.state.files, file)) {
+            this.eventEmitter.emit('workspace:refreshed', { files: this.state.files });
+            return;
+        }
+
+        if (pathsEqual(parentPath, this.state.rootPath)) {
+            this.state.files.push(file);
+            this.eventEmitter.emit('workspace:refreshed', { files: this.state.files });
+            return;
+        }
+
+        const parent = this.findFileByPath(this.state.files, parentPath);
+        if (parent?.type === 'folder') {
+            parent.children = parent.children ?? [];
+            if (!this.upsertWorkspaceFile(parent.children, file)) {
+                parent.children.push(file);
+            }
+            this.eventEmitter.emit('workspace:refreshed', { files: this.state.files });
+            return;
+        }
+
+        this.state.files.push(file);
+        this.eventEmitter.emit('workspace:refreshed', { files: this.state.files });
     }
 
     async createCard(
@@ -277,6 +361,10 @@ export class WorkspaceService {
     ): Promise<WorkspaceFile> {
         const id = cardId || generateId62();
         const parent = parentPath || this.state.rootPath;
+        if (!parent) {
+            throw new Error('当前工作区未绑定，无法创建卡片。');
+        }
+
         const initializer = createCardInitializer({ workspaceRoot: parent });
 
         const result = await initializer.createCard(id, name, initialContent);
@@ -285,7 +373,11 @@ export class WorkspaceService {
         }
 
         await this.refresh();
-        const file = this.getFile(id);
+        let file = this.getFile(id) || this.findFileByPath(this.state.files, result.cardPath);
+        if (!file) {
+            file = await this.createWorkspaceCardFile(result.cardPath);
+            this.registerCreatedWorkspaceFile(parent, file);
+        }
         if (file) {
             this.eventEmitter.emit('workspace:file-created', { file, content: initialContent, openOptions });
             return file;
@@ -313,7 +405,11 @@ export class WorkspaceService {
         );
 
         await this.refresh();
-        const file = this.getFile(created.metadata.boxId) || this.findFileByPath(this.state.files, created.boxFile);
+        let file = this.getFile(created.metadata.boxId) || this.findFileByPath(this.state.files, created.boxFile);
+        if (!file) {
+            file = await this.createWorkspaceBoxFile(created.boxFile);
+            this.registerCreatedWorkspaceFile(parent, file);
+        }
         if (file) {
             this.eventEmitter.emit('workspace:file-created', {
                 file,

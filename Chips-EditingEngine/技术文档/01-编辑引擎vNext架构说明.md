@@ -24,7 +24,7 @@ src/main.tsx
 - `AppRuntimeProvider` 持有唯一 SDK client、Host launch context、组件库 Environment client、主题 Provider 和语言事件同步。
 - `launch-context.ts` 合并 `surfaceContext.launchParams` 与顶层 `launchParams`，并以 `surfaceContext.sceneId/surfaceId` 优先。
 - `boot-actions.ts` 负责基础卡片注册表同步、语言初始化、工作区初始化和默认工具窗口创建。
-- `WorkspaceScene` 承载当前编辑器工作区场景，包括 Header、InfiniteCanvas、Workbench、Dock、设置弹窗、卡片/箱子窗口分发和拖拽落点。
+- `WorkspaceScene` 承载当前编辑器工作区场景，包括 InfiniteCanvas、Workbench、Dock、设置弹窗、卡片/箱子窗口分发和拖拽落点；应用窗口顶部不再挂载独立 Header 工具栏。
 
 ## 3. 命令系统
 
@@ -32,7 +32,8 @@ src/main.tsx
 
 - `editing-engine-commands.ts` 定义稳定 command id、handler id、scope、permission、菜单/工具栏位置、快捷键和运行态 state。
 - `EditingEngineCommandProvider.tsx` 注册 Host command registry，并把 `ChipsCommandProvider` 注入组件树。
-- HeaderBar、FileManager、Dock、HistoryPanel 等 UI 只消费 command view 或 `invokeCommand(...)`。
+- FileManager、Dock、HistoryPanel 等 UI 只消费 command view 或 `invokeCommand(...)`。
+- 应用窗口顶部不再发布 `workspace` 工具栏；工具栏 placement 只保留给文件管理器等具体工具面板。
 
 约束：
 

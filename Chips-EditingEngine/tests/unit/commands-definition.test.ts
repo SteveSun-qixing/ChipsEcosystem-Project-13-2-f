@@ -81,14 +81,14 @@ describe('editing engine command definitions', () => {
     expect(handlerIds.size).toBe(editingEngineCommandDefinitions.length);
   });
 
-  it('publishes menu, toolbar and shortcut placements from the same definitions', () => {
+  it('publishes menu, scoped toolbar and shortcut placements from the same definitions', () => {
     const byId = new Map(editingEngineCommandDefinitions.map((definition) => [definition.commandId, definition]));
 
     expect(byId.get(EDITING_ENGINE_COMMAND_IDS.fileNewCard)?.menuPlacement).toEqual(
       expect.arrayContaining([expect.objectContaining({ menuId: 'file', groupId: 'create', order: 10 })]),
     );
     expect(byId.get(EDITING_ENGINE_COMMAND_IDS.fileNewCard)?.toolbarPlacement).toEqual(
-      expect.arrayContaining([expect.objectContaining({ toolbarId: 'workspace', groupId: 'create', order: 10 })]),
+      expect.arrayContaining([expect.objectContaining({ toolbarId: 'file-manager', groupId: 'create', order: 10 })]),
     );
     expect(byId.get(EDITING_ENGINE_COMMAND_IDS.fileNewCard)?.shortcut).toEqual(
       expect.objectContaining({ accelerator: 'Mod+N', preventDefault: true }),
@@ -101,6 +101,11 @@ describe('editing engine command definitions', () => {
 
     expect(byId.get(EDITING_ENGINE_COMMAND_IDS.viewToggleTheme)?.permission).toBe('theme.write');
     expect(byId.get(EDITING_ENGINE_COMMAND_IDS.editUndo)?.permission).toBe('command.invoke');
+
+    const workspaceToolbarCommands = editingEngineCommandDefinitions.filter((definition) =>
+      definition.toolbarPlacement?.some((placement) => placement.toolbarId === 'workspace'),
+    );
+    expect(workspaceToolbarCommands).toEqual([]);
   });
 
   it('derives runtime state without replacing the internal undo and redo history manager', () => {

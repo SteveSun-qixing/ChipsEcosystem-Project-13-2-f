@@ -127,7 +127,7 @@ export const fileService = {
 
     async list(dir: string, options?: FileListOptions): Promise<FileEntry[]> {
         const result = await getChipsClient().file.list(dir, options);
-        const entries = (result as any)?.entries ?? result;
+        const entries = Array.isArray(result) ? result : (result as any)?.entries;
         return Array.isArray(entries) ? entries : [];
     },
 

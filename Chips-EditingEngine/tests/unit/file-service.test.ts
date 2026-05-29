@@ -3,18 +3,44 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const readMock = vi.fn();
+const listMock = vi.fn();
 
 vi.mock('../../src/services/bridge-client', () => ({
   getChipsClient: () => ({
     file: {
       read: readMock,
+      list: listMock,
     },
   }),
 }));
 
-describe('fileService.readBinary', () => {
+describe('fileService', () => {
   afterEach(() => {
     readMock.mockReset();
+    listMock.mockReset();
+  });
+
+  it('returns SDK file.list arrays without reading the Array.entries iterator', async () => {
+    const entries = [
+      { path: '/workspace/demo.card', isFile: false, isDirectory: true },
+      { path: '/workspace/demo.box', isFile: true, isDirectory: false },
+    ];
+    listMock.mockResolvedValue(entries);
+
+    const { fileService } = await import('../../src/services/file-service');
+    await expect(fileService.list('/workspace')).resolves.toEqual(entries);
+    expect(listMock).toHaveBeenCalledWith('/workspace', undefined);
+  });
+
+  it('returns Host file.list object payloads', async () => {
+    const entries = [
+      { path: '/workspace/demo.card', isFile: false, isDirectory: true },
+    ];
+    listMock.mockResolvedValue({ entries });
+
+    const { fileService } = await import('../../src/services/file-service');
+    await expect(fileService.list('/workspace', { recursive: true })).resolves.toEqual(entries);
+    expect(listMock).toHaveBeenCalledWith('/workspace', { recursive: true });
   });
 
   it('decodes base64 binary payloads without relying on Buffer', async () => {

@@ -51,7 +51,7 @@ const openByPlugin = async (
     launchParams.cardSource = {
       kind: 'local-file',
       documentKind: mode,
-      filePath: targetPath,
+      filePath: targetPath
     };
   } else {
     launchParams.targetPath = targetPath;

@@ -1,5 +1,5 @@
 import React from "react";
-import { ChipsCommandProvider } from "@chips/component-library";
+import { ChipsCommandProvider, ChipsIcon } from "@chips/component-library";
 import {
   CARD_VIEWER_COMMAND_HANDLER_IDS,
   CARD_VIEWER_COMMAND_IDS,
@@ -35,6 +35,32 @@ export function AppShell(): React.ReactElement {
     }
   }, [commands.lastInvoked, runtime]);
 
+  const action = runtime.openedTarget && runtime.canViewCover ? (
+    <button
+      type="button"
+      className="card-viewer-shell__floating-action"
+      onClick={runtime.viewerMode === "cover" ? runtime.showContent : runtime.showCover}
+      aria-label={
+        runtime.viewerMode === "cover"
+          ? runtime.t("card-viewer.actions.viewContent")
+          : runtime.t("card-viewer.actions.viewCover")
+      }
+      title={
+        runtime.viewerMode === "cover"
+          ? runtime.t("card-viewer.actions.viewContent")
+          : runtime.t("card-viewer.actions.viewCover")
+      }
+    >
+      <ChipsIcon
+        descriptor={{
+          name: runtime.viewerMode === "cover" ? "article" : "image",
+          decorative: true,
+        }}
+        size={22}
+      />
+    </button>
+  ) : null;
+
   const content =
     runtime.openedTarget === null ? (
       <EmptyScene onOpenFile={() => commands.invokeCommand(CARD_VIEWER_COMMAND_IDS.openFile, "api")} />
@@ -54,6 +80,7 @@ export function AppShell(): React.ReactElement {
       <CardViewerShell
         surfaceMode={runtime.surfaceMode}
         content={content}
+        action={action}
       />
     </ChipsCommandProvider>
   );

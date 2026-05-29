@@ -4,11 +4,13 @@ import "./CardViewerShell.css";
 interface CardViewerShellProps {
   surfaceMode: "immersive" | "document";
   content: React.ReactNode;
+  action?: React.ReactNode;
 }
 
 export function CardViewerShell({
   surfaceMode,
   content,
+  action,
 }: CardViewerShellProps) {
   return (
     <div
@@ -30,6 +32,7 @@ export function CardViewerShell({
       >
         {children}
       </main>
+      {action}
     </div>
   );
 }

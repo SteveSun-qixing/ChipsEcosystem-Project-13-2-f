@@ -10,6 +10,7 @@ import { App } from "../../src/App";
 import { CardWindow } from "../../src/components/CardWindow";
 import { localeBundles, supportedLocales, translateLocalKey } from "../../src/i18n/messages";
 import { chipsClient } from "../../src/runtime/chips-client";
+import { parseCardViewerSource } from "../../src/types/viewer-source";
 import { CARD_VIEWER_COMMAND_IDS } from "../../src/commands/card-viewer-commands";
 import {
   allRealDocumentPaths,
@@ -68,6 +69,42 @@ const appRuntimeMock = vi.hoisted(() => {
   const registeredCommands: string[] = [];
 
   const client = {
+    card: {
+      readInfo: vi.fn(async (cardFile: string) => ({
+        cardFile,
+        info: {
+          metadata: {
+            raw: {
+              name: "测试卡片",
+            },
+            name: "测试卡片",
+            createdAt: "2026-05-01T00:00:00.000Z",
+          },
+          cover: {
+            title: "测试卡片封面",
+            resourceUrl: "chips-render://cover/card.html",
+            mimeType: "text/html" as const,
+            ratio: "3:4",
+          },
+        },
+      })),
+    },
+    box: {
+      readMetadata: vi.fn(async () => ({
+        chipStandardsVersion: "1.0.0",
+        boxId: "box-1",
+        name: "测试箱子",
+        activeLayoutType: "chips.layout.grid",
+        availableLayouts: ["chips.layout.grid"],
+        createdAt: "2026-05-02T00:00:00.000Z",
+      })),
+      renderCover: vi.fn(async () => ({
+        title: "测试箱子封面",
+        coverUrl: "chips-render://cover/box.html",
+        mimeType: "text/html" as const,
+        ratio: "4:3",
+      })),
+    },
     document: {
       detectType: vi.fn((filePath: string) => filePath.endsWith(".box") ? "box" : filePath.endsWith(".card") ? "card" : null),
       window: {
@@ -360,6 +397,123 @@ describe("App（卡片查看器根组件）", () => {
     expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
   });
 
+  it("优先从结构化 cardSource 启动上下文恢复本地文档", async () => {
+    expectRealDocumentFixturesAvailable(["foodGridBox"]);
+    appRuntimeMock.setLaunchParams({
+      trigger: "file-association",
+      targetPath: "/tmp/legacy-target.card",
+      cardSource: {
+        kind: "local-file",
+        documentKind: "box",
+        filePath: realDocumentFixtures.foodGridBox,
+      },
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(appRuntimeMock.client.document.window.render).toHaveBeenCalledWith({
+      filePath: realDocumentFixtures.foodGridBox,
+      locale: "zh-CN",
+      mode: "view",
+    });
+    expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: "/tmp/legacy-target.card",
+      }),
+    );
+  });
+
+  it("可以从社区 cardSource 启动上下文恢复托管文档", async () => {
+    appRuntimeMock.setLaunchParams({
+      trigger: "community-open-view",
+      cardSource: {
+        kind: "community-card",
+        cardId: "card-1",
+        title: "社区卡片",
+        documentUrl: "https://community.example/cards/card-1/view",
+        coverUrl: "https://community.example/cards/card-1/cover",
+        coverRatio: "3:4",
+      },
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const frame = container.querySelector("iframe");
+    expect(frame).toBeInstanceOf(HTMLIFrameElement);
+    expect(frame?.getAttribute("src")).toBe("https://community.example/cards/card-1/view");
+    expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
+  });
+
+  it("本地卡片读取封面后可以切换封面与内容", async () => {
+    expectRealDocumentFixturesAvailable(["compositeCard"]);
+    appRuntimeMock.setLaunchParams({
+      trigger: "file-association",
+      cardSource: {
+        kind: "local-file",
+        documentKind: "card",
+        filePath: realDocumentFixtures.compositeCard,
+      },
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(appRuntimeMock.client.card.readInfo).toHaveBeenCalledWith(realDocumentFixtures.compositeCard, ["metadata", "cover"]);
+    const coverButton = Array.from(container.querySelectorAll("button"))
+      .find((element) => element.getAttribute("aria-label") === "查看封面");
+    expect(coverButton).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      coverButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const coverFrame = container.querySelector('[data-chips-app="card-viewer.cover"] iframe');
+    expect(coverFrame).toBeInstanceOf(HTMLIFrameElement);
+    expect(coverFrame?.getAttribute("src")).toBe("chips-render://cover/card.html");
+    expect(container.textContent).toContain("测试卡片");
+
+    const contentButton = Array.from(container.querySelectorAll("button"))
+      .find((element) => element.getAttribute("aria-label") === "查看内容");
+    expect(contentButton).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => {
+      contentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-chips-app="card-viewer.cover"]')).toBeNull();
+  });
+
+  it("拒绝当前尚未支持的远程 cardSource", async () => {
+    appRuntimeMock.setLaunchParams({
+      trigger: "community-open-view",
+      cardSource: {
+        kind: "remote-card-file",
+        url: "https://community.example/source/demo.card",
+      },
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("当前查看来源暂不支持");
+    expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
+  });
+
   it("进入卡片或箱子查看态后不渲染顶部菜单栏和工具栏", async () => {
     expectRealDocumentFixturesAvailable(["foodGridBox"]);
     appRuntimeMock.setLaunchParams({
@@ -497,6 +651,35 @@ describe("App（卡片查看器根组件）", () => {
     expect(zhText("card-viewer.commands.openFile.title")).toBe("打开文件");
     expect(missingLocaleText("card-viewer.viewer.documentLoading")).toBe("Loading document…");
     expect(translateLocalKey("card-viewer.missing.key", "zh-CN")).toBe("card-viewer.missing.key");
+  });
+
+  it("应当按结构化来源模型解析 cardSource 并过滤非法封面比例", () => {
+    expect(parseCardViewerSource({
+      kind: "local-file",
+      filePath: " /tmp/demo.card ",
+    })).toEqual({
+      kind: "local-file",
+      documentKind: "card",
+      filePath: "/tmp/demo.card",
+    });
+    expect(parseCardViewerSource({
+      kind: "community-card",
+      cardId: "card-1",
+      title: "Demo",
+      documentUrl: "https://community.example/cards/card-1/view",
+      coverUrl: "https://community.example/cards/card-1/cover",
+      coverRatio: "calc(100vw)",
+    })).toEqual({
+      kind: "community-card",
+      cardId: "card-1",
+      title: "Demo",
+      documentUrl: "https://community.example/cards/card-1/view",
+      coverUrl: "https://community.example/cards/card-1/cover",
+    });
+    expect(parseCardViewerSource({
+      kind: "local-file",
+      filePath: "/tmp/demo.txt",
+    })).toBeNull();
   });
 
   it("卡片窗口组件应当提供独立的居中视口容器来承载复合卡片", () => {

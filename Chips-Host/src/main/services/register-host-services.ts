@@ -2449,7 +2449,7 @@ const openBoxDocument = async (
     cardSource: {
       kind: 'local-file',
       documentKind: 'box',
-      filePath: boxFile,
+      filePath: boxFile
     },
     trigger: 'box-open-service'
   });
@@ -2580,18 +2580,19 @@ const openAssociatedPathInternal = async (
     .find((record) => record.enabled && record.manifest.type === 'app');
 
   if (plugin) {
-    const launched = await openPluginWindow(ctx, state, plugin.manifest.id, {
-      trigger: 'association-open',
-      ...(extension === '.box'
-        ? {
-            cardSource: {
-              kind: 'local-file',
-              documentKind: 'box',
-              filePath: resolvedPath,
-            },
-          }
-        : { targetPath: resolvedPath })
-    });
+    const launchParams: Record<string, unknown> = {
+      targetPath: resolvedPath,
+      trigger: 'association-open'
+    };
+    if (extension === '.box') {
+      delete launchParams.targetPath;
+      launchParams.cardSource = {
+        kind: 'local-file',
+        documentKind: 'box',
+        filePath: resolvedPath
+      };
+    }
+    const launched = await openPluginWindow(ctx, state, plugin.manifest.id, launchParams);
     return {
       targetPath: resolvedPath,
       extension,

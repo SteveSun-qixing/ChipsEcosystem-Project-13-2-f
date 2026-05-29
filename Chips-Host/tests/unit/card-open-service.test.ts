@@ -30,9 +30,9 @@ describe('CardOpenService', () => {
       cardSource: {
         kind: 'local-file',
         documentKind: 'card',
-        filePath: '/tmp/demo.card',
+        filePath: '/tmp/demo.card'
       },
-      trigger: 'card-open-service',
+      trigger: 'card-open-service'
     });
   });
 

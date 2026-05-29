@@ -1,4 +1,5 @@
 import { CardWindow } from "../components/CardWindow";
+import { ViewerCoverSurface } from "../components/ViewerCoverSurface";
 import { useAppRuntime, type OpenedTarget } from "../app/AppRuntimeProvider";
 
 interface DocumentFileSceneProps {
@@ -7,6 +8,18 @@ interface DocumentFileSceneProps {
 
 export function DocumentFileScene({ target }: DocumentFileSceneProps): React.ReactElement {
   const runtime = useAppRuntime();
+
+  if (runtime.viewerMode === "cover" && runtime.activeCover) {
+    return (
+      <ViewerCoverSurface
+        cover={runtime.activeCover}
+        title={runtime.activeTitle ?? runtime.activeCover.title ?? runtime.t("card-viewer.viewer.documentTitle")}
+        closeLabel={runtime.t("card-viewer.actions.viewContent")}
+        unavailableLabel={runtime.t("card-viewer.viewer.coverUnavailable")}
+        onClose={runtime.showContent}
+      />
+    );
+  }
 
   return (
     <CardWindow

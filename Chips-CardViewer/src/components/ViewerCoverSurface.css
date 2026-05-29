@@ -6,6 +6,7 @@
   --viewer-cover-title-gap: clamp(12px, 2vh, 18px);
   --viewer-cover-viewport-block: 100vh;
 
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   padding:
@@ -54,8 +55,6 @@
 }
 
 .viewer-cover-surface [data-scope="viewer-cover-frame"][data-part="root"],
-.viewer-cover-surface [data-scope="card-cover-frame"][data-part="root"],
-.viewer-cover-surface [data-scope="safe-cover-surface"][data-part="root"],
 .viewer-cover-surface [data-scope="embedded-document-frame"][data-part="root"] {
   width: 100%;
   height: 100%;
@@ -76,45 +75,6 @@
   background: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 4%, transparent);
 }
 
-.viewer-cover-surface [data-part="shadow-host"] {
-  width: 100%;
-  height: 100%;
-  aspect-ratio: var(--viewer-cover-aspect-ratio);
-  background: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 4%, transparent);
-}
-
-.viewer-cover-surface [data-part="frame-container"][data-ratio="1:1"] {
-  aspect-ratio: 1 / 1;
-}
-
-.viewer-cover-surface [data-part="frame-container"][data-ratio="3:4"] {
-  aspect-ratio: 3 / 4;
-}
-
-.viewer-cover-surface [data-part="frame-container"][data-ratio="4:3"] {
-  aspect-ratio: 4 / 3;
-}
-
-.viewer-cover-surface [data-part="frame-container"][data-ratio="16:9"] {
-  aspect-ratio: 16 / 9;
-}
-
-.viewer-cover-surface [data-part="shadow-host"][data-ratio="1:1"] {
-  aspect-ratio: 1 / 1;
-}
-
-.viewer-cover-surface [data-part="shadow-host"][data-ratio="3:4"] {
-  aspect-ratio: 3 / 4;
-}
-
-.viewer-cover-surface [data-part="shadow-host"][data-ratio="4:3"] {
-  aspect-ratio: 4 / 3;
-}
-
-.viewer-cover-surface [data-part="shadow-host"][data-ratio="16:9"] {
-  aspect-ratio: 16 / 9;
-}
-
 .viewer-cover-surface [data-part="frame-container"] iframe {
   position: absolute;
   inset: 0;
@@ -122,7 +82,7 @@
   height: 100%;
   display: block;
   border: 0;
-  background: #ffffff;
+  background: var(--chips-sys-color-surface, #ffffff);
 }
 
 .viewer-cover-surface__hit-target {
@@ -173,20 +133,8 @@
   border: 0;
 }
 
-.viewer-cover-surface__hint {
-  color: color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 58%, transparent);
-  font-size: 13px;
-  line-height: 1.4;
-  letter-spacing: 0;
-}
-
 .viewer-cover-surface--state {
   align-content: center;
-}
-
-.card-viewer-shell--document .viewer-cover-surface {
-  min-height: 0;
-  align-items: start;
 }
 
 .viewer-cover-surface__state-panel {

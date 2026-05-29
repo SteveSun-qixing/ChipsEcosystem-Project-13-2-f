@@ -30,6 +30,11 @@ export type {
   DocumentWindowRenderResult,
   DocumentWindowResizePayload,
 } from "./api/document";
+export type {
+  CardViewerCoverSourceFields,
+  CardViewerDocumentKind,
+  CardViewerSource,
+} from "./types/card-viewer";
 export type { IconDescriptor, IconStyle } from "./api/icon";
 export type {
   CardApi,

@@ -1,10 +1,9 @@
 {
   "card-viewer": {
     "actions": {
-      "back": "返回上一页",
       "open": "打开文件",
-      "showCover": "查看封面",
-      "showContent": "查看内容"
+      "viewCover": "查看封面",
+      "viewContent": "查看内容"
     },
     "commands": {
       "openFile": {
@@ -39,14 +38,13 @@
       "documentContainerError": "找不到文档窗口容器",
       "documentFatalError": "文档窗口发生严重错误",
       "documentRenderError": "文档窗口渲染失败",
-      "coverCloseHint": "点击封面返回内容",
-      "coverUnavailable": "当前文档没有可用封面。",
-      "localMetadataError": "无法读取文档信息，请检查 Host 卡片信息链路。",
-      "remoteCardUnsupported": "远程卡片文件需要先由宿主解析为正式文档来源。"
+      "metadataLoadError": "查看来源元数据读取失败",
+      "coverUnavailable": "当前来源没有可查看的封面"
     },
     "errors": {
       "hostActionFailed": "操作失败，请检查 Host 日志与桥接链路。",
       "unsupportedFile": "当前只支持打开 .card 或 .box 文件。",
+      "unsupportedSource": "当前查看来源暂不支持，请检查启动参数与 Host 日志。",
       "resourceOpenFailedTitle": "无法打开资源",
       "resourceOpenFailed": "当前资源无法通过正式路由打开，请检查处理器插件与 Host 日志。"
     },

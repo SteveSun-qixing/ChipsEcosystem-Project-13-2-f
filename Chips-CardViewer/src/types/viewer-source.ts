@@ -1,3 +1,5 @@
+import type { CardViewerSource as SdkCardViewerSource } from "chips-sdk";
+
 export type ViewerDocumentKind = "card" | "box";
 
 export interface ViewerCoverSource {
@@ -15,34 +17,7 @@ interface CommunitySourceCoverFields {
   coverRatio?: string;
 }
 
-export type CardViewerSource =
-  | {
-      kind: "local-file";
-      documentKind: ViewerDocumentKind;
-      filePath: string;
-    }
-  | ({
-      kind: "community-card";
-      cardId: string;
-      title: string;
-      createdAt?: string;
-      documentUrl: string;
-      canonicalUrl?: string;
-    } & CommunitySourceCoverFields)
-  | ({
-      kind: "community-box";
-      boxId: string;
-      title: string;
-      createdAt?: string;
-      documentUrl: string;
-      canonicalUrl?: string;
-    } & CommunitySourceCoverFields)
-  | {
-      kind: "remote-card-file";
-      url: string;
-      title?: string;
-      createdAt?: string;
-    };
+export type CardViewerSource = SdkCardViewerSource;
 
 export type ResolvedViewerSource =
   | {
@@ -139,7 +114,7 @@ function spreadCommunityCoverFields(
   };
 }
 
-function inferDocumentKindFromPath(filePath: string): ViewerDocumentKind | null {
+export function inferDocumentKindFromPath(filePath: string): ViewerDocumentKind | null {
   const normalized = filePath.trim().toLowerCase();
   if (normalized.endsWith(".card")) {
     return "card";
@@ -155,21 +130,20 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     return null;
   }
 
-  const kind = value.kind;
-  if (kind === "local-file") {
+  if (value.kind === "local-file") {
     const filePath = normalizeString(value.filePath);
     const documentKind = normalizeDocumentKind(value.documentKind) ?? (filePath ? inferDocumentKindFromPath(filePath) : null);
     if (!filePath || !documentKind) {
       return null;
     }
     return {
-      kind,
+      kind: "local-file",
       documentKind,
       filePath,
     };
   }
 
-  if (kind === "community-card") {
+  if (value.kind === "community-card") {
     const cardId = normalizeString(value.cardId);
     const title = normalizeString(value.title);
     const documentUrl = normalizeString(value.documentUrl);
@@ -178,7 +152,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     }
     const cover = normalizeViewerCoverSource(value, title);
     return {
-      kind,
+      kind: "community-card",
       cardId,
       title,
       documentUrl,
@@ -188,7 +162,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     };
   }
 
-  if (kind === "community-box") {
+  if (value.kind === "community-box") {
     const boxId = normalizeString(value.boxId);
     const title = normalizeString(value.title);
     const documentUrl = normalizeString(value.documentUrl);
@@ -197,7 +171,7 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     }
     const cover = normalizeViewerCoverSource(value, title);
     return {
-      kind,
+      kind: "community-box",
       boxId,
       title,
       documentUrl,
@@ -207,13 +181,13 @@ export function parseCardViewerSource(value: unknown): CardViewerSource | null {
     };
   }
 
-  if (kind === "remote-card-file") {
+  if (value.kind === "remote-card-file") {
     const url = normalizeString(value.url);
     if (!url) {
       return null;
     }
     return {
-      kind,
+      kind: "remote-card-file",
       url,
       ...(normalizeString(value.title) ? { title: normalizeString(value.title) } : undefined),
       ...(normalizeString(value.createdAt) ? { createdAt: normalizeString(value.createdAt) } : undefined),
@@ -235,4 +209,33 @@ export function getSourceDocumentKind(source: CardViewerSource): ViewerDocumentK
     return "box";
   }
   return source.documentKind;
+}
+
+export function resolveViewerSource(source: CardViewerSource): ResolvedViewerSource {
+  if (source.kind === "local-file") {
+    return {
+      renderKind: "local-file",
+      source,
+    };
+  }
+
+  if (source.kind === "community-card" || source.kind === "community-box") {
+    const cover = normalizeViewerCoverSource(source as unknown as Record<string, unknown>, source.title);
+    return {
+      renderKind: "hosted-document",
+      source,
+      title: source.title,
+      ...(source.createdAt ? { createdAt: source.createdAt } : undefined),
+      documentUrl: source.documentUrl,
+      ...(cover ? { cover } : undefined),
+    };
+  }
+
+  return {
+    renderKind: "unsupported",
+    source,
+    ...(source.title ? { title: source.title } : undefined),
+    ...(source.createdAt ? { createdAt: source.createdAt } : undefined),
+    reason: "remote-card-file",
+  };
 }

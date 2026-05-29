@@ -7,6 +7,13 @@ import { useCardViewerText, type CardViewerTextResolver } from "../i18n/useCardV
 import { chipsClient } from "../runtime/chips-client";
 import { readLaunchContext } from "../runtime/launch-context";
 import {
+  inferDocumentKindFromPath,
+  resolveCardViewerSource,
+  resolveViewerSource,
+  type CardViewerSource,
+  type ViewerCoverSource,
+} from "../types/viewer-source";
+import {
   getSceneDefinition,
   getSceneIdForTarget,
   type CardViewerSceneDefinition,
@@ -17,10 +24,20 @@ export type OpenedTarget =
   | {
       kind: "file";
       filePath: string;
+      documentKind: "card" | "box";
+      source: Extract<CardViewerSource, { kind: "local-file" }>;
+      title?: string;
+      createdAt?: string;
+      cover?: ViewerCoverSource;
+      metadataLoaded?: boolean;
     }
   | {
       kind: "document";
       documentUrl: string;
+      source?: Extract<CardViewerSource, { kind: "community-card" | "community-box" }>;
+      title?: string;
+      createdAt?: string;
+      cover?: ViewerCoverSource;
     };
 
 export interface CardViewerRuntimeEnvironment {
@@ -44,9 +61,15 @@ export interface CardViewerRuntimeValue {
   activeScene: CardViewerSceneDefinition;
   openedTarget: OpenedTarget | null;
   error: string | null;
+  viewerMode: "content" | "cover";
+  activeCover: ViewerCoverSource | null;
+  activeTitle: string | null;
+  canViewCover: boolean;
   locale: SupportedLocale;
   surfaceMode: "immersive" | "document";
   t: CardViewerTextResolver;
+  showContent(): void;
+  showCover(): void;
   openFile(): Promise<void>;
   openFilePath(filePath: string): void;
 }
@@ -64,16 +87,84 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeCoverRatio(value: unknown): string | undefined {
+  const normalized = normalizeString(value);
+  if (!normalized || !/^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function getFileName(filePath: string): string {
+  const parts = filePath.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? filePath;
+}
+
+function readCardMetadataTitle(rawMetadata: unknown): string | undefined {
+  if (!isRecord(rawMetadata)) {
+    return undefined;
+  }
+  return normalizeString(rawMetadata.name) ?? normalizeString(rawMetadata.title);
+}
+
 function resolveOpenedTarget(filePath: string): OpenedTarget | null {
   const normalized = filePath.trim();
   if (!normalized) {
+    return null;
+  }
+  const documentKind = inferDocumentKindFromPath(normalized);
+  if (!documentKind) {
     return null;
   }
 
   return {
     kind: "file",
     filePath: normalized,
+    documentKind,
+    source: {
+      kind: "local-file",
+      documentKind,
+      filePath: normalized,
+    },
   };
+}
+
+function resolveOpenedTargetFromCardSource(source: CardViewerSource): OpenedTarget | null {
+  const resolved = resolveViewerSource(source);
+  if (resolved.renderKind === "local-file") {
+    return {
+      kind: "file",
+      filePath: resolved.source.filePath,
+      documentKind: resolved.source.documentKind,
+      source: resolved.source,
+      title: resolved.title,
+      createdAt: resolved.createdAt,
+      cover: resolved.cover,
+    };
+  }
+  if (resolved.renderKind === "hosted-document") {
+    return {
+      kind: "document",
+      documentUrl: resolved.documentUrl,
+      source: resolved.source,
+      title: resolved.title,
+      createdAt: resolved.createdAt,
+      cover: resolved.cover,
+    };
+  }
+  return null;
 }
 
 function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string | null {
@@ -114,8 +205,13 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   const [launchContext, setLaunchContext] = React.useState<PlatformLaunchContext>(() => readLaunchContext(client));
   const [openedTarget, setOpenedTarget] = React.useState<OpenedTarget | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [viewerMode, setViewerMode] = React.useState<"content" | "cover">("content");
   const { locale, text } = useCardViewerText();
   const hasResolvedLaunchContextRef = React.useRef(false);
+
+  React.useEffect(() => {
+    setViewerMode("content");
+  }, [openedTarget?.kind, openedTarget?.kind === "file" ? openedTarget.filePath : openedTarget?.documentUrl]);
 
   React.useEffect(() => {
     if (appConfig.featureFlags.enableDiagnosticsLogging) {
@@ -159,6 +255,23 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     setLaunchContext(nextLaunchContext);
 
     const launchParams = resolveLaunchParams(nextLaunchContext);
+    const cardSource = resolveCardViewerSource(launchParams);
+    if (cardSource) {
+      const nextTarget = resolveOpenedTargetFromCardSource(cardSource);
+      if (!nextTarget) {
+        setError(text("card-viewer.errors.unsupportedSource"));
+        return;
+      }
+
+      logger.info("从结构化 cardSource 启动上下文恢复查看态", {
+        sourceKind: cardSource.kind,
+        trigger: launchParams.trigger,
+      });
+      setOpenedTarget(nextTarget);
+      setError(null);
+      return;
+    }
+
     const webDocumentUrl = resolveWebDocumentUrl(launchParams);
     if (webDocumentUrl) {
       logger.info("从 Web 启动上下文恢复托管文档查看态", {
@@ -257,6 +370,99 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     setOpenedTarget(nextTarget);
   }, [client, logger, text]);
 
+  React.useEffect(() => {
+    if (!openedTarget || openedTarget.kind !== "file" || openedTarget.cover || openedTarget.metadataLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadCover = async () => {
+      try {
+        if (openedTarget.documentKind === "card") {
+          const info = await client.card.readInfo(openedTarget.filePath, ["metadata", "cover"]);
+          if (cancelled) {
+            return;
+          }
+          const metadata = info.info.metadata;
+          const title =
+            normalizeString(metadata?.name)
+            ?? readCardMetadataTitle(metadata?.raw)
+            ?? getFileName(openedTarget.filePath);
+          const cover = info.info.cover?.resourceUrl
+            ? {
+                title: normalizeString(info.info.cover.title) ?? title,
+                coverUrl: info.info.cover.resourceUrl,
+                ...(normalizeCoverRatio(info.info.cover.ratio)
+                  ? { ratio: normalizeCoverRatio(info.info.cover.ratio) }
+                  : undefined),
+              }
+            : undefined;
+          setOpenedTarget((current) => {
+            if (!current || current.kind !== "file" || current.filePath !== openedTarget.filePath) {
+              return current;
+            }
+            return {
+              ...current,
+              title,
+              createdAt: normalizeString(metadata?.createdAt) ?? normalizeString(metadata?.raw?.created_at),
+              metadataLoaded: true,
+              ...(cover ? { cover } : undefined),
+            };
+          });
+          return;
+        }
+
+        const [metadata, coverView] = await Promise.all([
+          client.box.readMetadata(openedTarget.filePath).catch(() => null),
+          client.box.renderCover(openedTarget.filePath).catch(() => null),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const title = normalizeString(metadata?.name) ?? getFileName(openedTarget.filePath);
+        const cover = coverView?.coverUrl
+          ? {
+              title: normalizeString(coverView.title) ?? title,
+              coverUrl: coverView.coverUrl,
+              ...(normalizeCoverRatio(coverView.ratio) ? { ratio: normalizeCoverRatio(coverView.ratio) } : undefined),
+            }
+          : undefined;
+        setOpenedTarget((current) => {
+          if (!current || current.kind !== "file" || current.filePath !== openedTarget.filePath) {
+            return current;
+          }
+          return {
+            ...current,
+            title,
+            createdAt: normalizeString(metadata?.createdAt),
+            metadataLoaded: true,
+            ...(cover ? { cover } : undefined),
+          };
+        });
+      } catch (runtimeError) {
+        logger.warn("读取查看来源封面信息失败，已降级为正文查看", {
+          filePath: openedTarget.filePath,
+          error: resolveErrorMessage(runtimeError, text("card-viewer.viewer.metadataLoadError")),
+        });
+        setOpenedTarget((current) => {
+          if (!current || current.kind !== "file" || current.filePath !== openedTarget.filePath) {
+            return current;
+          }
+          return {
+            ...current,
+            metadataLoaded: true,
+          };
+        });
+      }
+    };
+
+    void loadCover();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, logger, openedTarget, text]);
+
   const openFile = React.useCallback(async () => {
     try {
       setError(null);
@@ -284,6 +490,18 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
 
   const activeSceneId = getSceneIdForTarget(openedTarget);
   const activeScene = getSceneDefinition(activeSceneId);
+  const activeCover = openedTarget?.cover ?? null;
+  const activeTitle =
+    openedTarget?.title
+    ?? openedTarget?.cover?.title
+    ?? (openedTarget?.kind === "file" ? getFileName(openedTarget.filePath) : null);
+  const canViewCover = activeCover !== null;
+  const showContent = React.useCallback(() => {
+    setViewerMode("content");
+  }, []);
+  const showCover = React.useCallback(() => {
+    setViewerMode("cover");
+  }, []);
   const environment = React.useMemo<CardViewerRuntimeEnvironment>(() => ({
     appId: appConfig.appId,
     pluginId: launchContext.surfaceContext?.pluginId ?? launchContext.pluginId ?? appConfig.appId,
@@ -305,9 +523,15 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     activeScene,
     openedTarget,
     error,
+    viewerMode,
+    activeCover,
+    activeTitle,
+    canViewCover,
     locale,
     surfaceMode,
     t: text,
+    showContent,
+    showCover,
     openFile,
     openFilePath,
   }), [
@@ -317,13 +541,19 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     environment,
     error,
     launchContext,
+    activeCover,
+    activeTitle,
+    canViewCover,
     locale,
     openFile,
     openFilePath,
     openedTarget,
+    showContent,
+    showCover,
     surfaceMode,
     text,
     traceId,
+    viewerMode,
   ]);
 
   return <AppRuntimeContext.Provider value={value}>{children}</AppRuntimeContext.Provider>;

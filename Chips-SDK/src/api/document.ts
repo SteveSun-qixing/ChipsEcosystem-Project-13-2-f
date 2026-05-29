@@ -1,6 +1,7 @@
 import type {
   CompositeInteractionPolicy,
   CompositeNodeError,
+  CompositeResizePayload,
   CompositeResourceOpenPayload,
   FrameRenderResult,
 } from "./card";
@@ -32,6 +33,16 @@ export interface DocumentWindowErrorPayload extends StandardError {
 
 export interface DocumentWindowNodeErrorPayload extends CompositeNodeError {
   documentType: "card";
+}
+
+export interface DocumentWindowResizePayload {
+  documentType: DocumentType;
+  height: number;
+  reason: string;
+  nodeCount?: number;
+  layoutType?: string;
+  pluginId?: string;
+  sessionId?: string;
 }
 
 export interface DocumentApi {

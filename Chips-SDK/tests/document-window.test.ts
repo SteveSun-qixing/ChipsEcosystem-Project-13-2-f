@@ -217,8 +217,10 @@ describe("Document window SDK contract", () => {
 
     expect(card.documentType).toBe("card");
     expect(card.frame.src).toBe("chips-render://card-session/index.html");
+    expect(card.frame.dataset.chipsDocumentType).toBe("card");
     expect(box.documentType).toBe("box");
     expect(box.frame.src).toBe("chips-render://box-render-session/index.html");
+    expect(box.frame.dataset.chipsDocumentType).toBe("box");
     expect(calls.map((call) => call.action)).toEqual([
       "card.render",
       "box.inspect",
@@ -370,5 +372,79 @@ describe("Document window SDK contract", () => {
     });
 
     await result.dispose();
+  });
+
+  it("exposes card and box resize events through the unified document window API", async () => {
+    const client = createDocumentClient();
+    const card = await client.document.window.render({
+      filePath: "/workspace/ProductFinishedProductTestingSpace/集大成者.card",
+    });
+    const box = await client.document.window.render({ filePath: inspection.path });
+    const cardResize = vi.fn();
+    const boxResize = vi.fn();
+
+    const cleanupCardResize = client.document.window.onResize(card.frame, cardResize);
+
+    window.dispatchEvent(new MessageEvent("message", {
+      source: card.frame.contentWindow,
+      origin: "null",
+      data: {
+        type: "chips.composite:resize",
+        payload: {
+          height: 421.4,
+          nodeCount: 3,
+          reason: "node-height",
+        },
+      },
+    }));
+    cleanupCardResize();
+
+    const cleanupBoxResize = client.document.window.onResize(box.frame, boxResize);
+    window.dispatchEvent(new MessageEvent("message", {
+      source: box.frame.contentWindow,
+      origin: "null",
+      data: {
+        type: "chips.box-layout:resize",
+        payload: {
+          height: 612.2,
+          reason: "layout-ready",
+          layoutType: "chips.layout.grid",
+          pluginId: "com.chips.layout.grid",
+          sessionId: "box-view-session-1",
+        },
+      },
+    }));
+    cleanupBoxResize();
+    window.dispatchEvent(new MessageEvent("message", {
+      source: box.frame.contentWindow,
+      origin: "null",
+      data: {
+        type: "chips.box-layout:resize",
+        payload: {
+          height: 0,
+          reason: "invalid",
+        },
+      },
+    }));
+
+    expect(cardResize).toHaveBeenCalledTimes(1);
+    expect(cardResize).toHaveBeenCalledWith({
+      documentType: "card",
+      height: 422,
+      nodeCount: 3,
+      reason: "node-height",
+    });
+    expect(boxResize).toHaveBeenCalledTimes(1);
+    expect(boxResize).toHaveBeenCalledWith({
+      documentType: "box",
+      height: 613,
+      reason: "layout-ready",
+      layoutType: "chips.layout.grid",
+      pluginId: "com.chips.layout.grid",
+      sessionId: "box-view-session-1",
+    });
+
+    await card.dispose();
+    await box.dispose();
   });
 });

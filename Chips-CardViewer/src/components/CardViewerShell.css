@@ -68,3 +68,29 @@
   line-height: 1.35;
   letter-spacing: 0;
 }
+
+.card-viewer-shell__floating-action {
+  position: fixed;
+  z-index: 20;
+  inset-block-start: max(16px, env(safe-area-inset-top));
+  inset-inline-end: max(16px, env(safe-area-inset-right));
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 10%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--chips-sys-color-surface, #ffffff) 92%, transparent);
+  color: var(--chips-sys-color-on-surface, #111111);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--chips-sys-color-on-surface, #111111) 14%, transparent);
+  cursor: pointer;
+}
+
+.card-viewer-shell__floating-action:hover {
+  background: color-mix(in srgb, var(--chips-sys-color-primary, #3b82f6) 8%, var(--chips-sys-color-surface, #ffffff));
+}
+
+.card-viewer-shell__floating-action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--chips-sys-color-primary, #3b82f6) 34%, transparent);
+  outline-offset: 3px;
+}

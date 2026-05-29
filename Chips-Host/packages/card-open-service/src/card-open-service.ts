@@ -40,7 +40,7 @@ export class CardOpenService {
         cardSource: {
           kind: 'local-file',
           documentKind: 'card',
-          filePath: cardFile,
+          filePath: cardFile
         },
         trigger: 'card-open-service'
       });

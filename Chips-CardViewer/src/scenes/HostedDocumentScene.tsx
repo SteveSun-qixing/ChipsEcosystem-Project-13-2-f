@@ -1,4 +1,5 @@
 import { HostedDocumentWindow } from "../components/HostedDocumentWindow";
+import { ViewerCoverSurface } from "../components/ViewerCoverSurface";
 import { useAppRuntime, type OpenedTarget } from "../app/AppRuntimeProvider";
 
 interface HostedDocumentSceneProps {
@@ -7,6 +8,18 @@ interface HostedDocumentSceneProps {
 
 export function HostedDocumentScene({ target }: HostedDocumentSceneProps): React.ReactElement {
   const runtime = useAppRuntime();
+
+  if (runtime.viewerMode === "cover" && runtime.activeCover) {
+    return (
+      <ViewerCoverSurface
+        cover={runtime.activeCover}
+        title={runtime.activeTitle ?? runtime.activeCover.title ?? runtime.t("card-viewer.viewer.hostedDocumentTitle")}
+        closeLabel={runtime.t("card-viewer.actions.viewContent")}
+        unavailableLabel={runtime.t("card-viewer.viewer.coverUnavailable")}
+        onClose={runtime.showContent}
+      />
+    );
+  }
 
   return (
     <HostedDocumentWindow

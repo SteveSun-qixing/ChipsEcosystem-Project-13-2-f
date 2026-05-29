@@ -1,10 +1,9 @@
 {
   "card-viewer": {
     "actions": {
-      "back": "Go Back",
       "open": "Open File",
-      "showCover": "Show Cover",
-      "showContent": "Show Content"
+      "viewCover": "View Cover",
+      "viewContent": "View Content"
     },
     "commands": {
       "openFile": {
@@ -39,14 +38,13 @@
       "documentContainerError": "The document container is unavailable.",
       "documentFatalError": "A fatal error occurred while rendering the document.",
       "documentRenderError": "Failed to render the document window.",
-      "coverCloseHint": "Click the cover to return to content.",
-      "coverUnavailable": "No cover is available for this document.",
-      "localMetadataError": "Unable to read document information. Check the Host card info chain.",
-      "remoteCardUnsupported": "Remote card files must be resolved by the host into an official document source first."
+      "metadataLoadError": "Failed to read viewer source metadata.",
+      "coverUnavailable": "This source does not have a cover to display."
     },
     "errors": {
       "hostActionFailed": "The action failed. Check Host logs and the bridge chain.",
       "unsupportedFile": "Only .card and .box files are supported.",
+      "unsupportedSource": "This viewer source is not supported yet. Check launch params and Host logs.",
       "resourceOpenFailedTitle": "Unable to open resource",
       "resourceOpenFailed": "The selected resource could not be opened through the official route. Check the handler plugins and Host logs."
     },

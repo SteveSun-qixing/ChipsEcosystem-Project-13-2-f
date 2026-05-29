@@ -71,9 +71,47 @@ describe("dark theme baseline", () => {
 
     expect(cssRaw).toContain('color-scheme: dark;');
     expect(cssRaw).toContain('--chips-base-shadow-color');
-    expect(tokens.ref.chips?.ref?.color?.['gray-950']).toBe('#0b0f16');
+    expect(cssRaw).toContain('--chips-base-shadow-control');
+    expect(cssRaw).toContain('--chips-base-shadow-card');
+    expect(cssRaw).toContain('--chips-base-shadow-float');
+    expect(cssRaw).toContain('--chips-base-edge-top');
+    expect(cssRaw).toContain('--chips-base-focus-ring');
+    expect(tokens.ref.chips?.ref?.color?.['gray-950']).toBe('#070b12');
+    expect(tokens.ref.chips?.ref?.color?.['gray-650']).toBe('#232c3d');
     expect(tokens.sys.chips?.sys?.color?.canvas).toBe('{chips.ref.color.gray-950}');
-    expect(tokens.sys.chips?.sys?.color?.primary).toBe('{chips.ref.color.blue-600}');
+    expect(tokens.sys.chips?.sys?.color?.primary).toBe('{chips.ref.color.blue-500}');
+    expect(tokens.sys.chips?.sys?.color?.['surface-accent']).toBe('#123241');
+    expect(tokens.sys.chips?.sys?.color?.['focus-ring']).toBe('{chips.ref.color.cyan-300}');
+  });
+
+  it("keeps the dark theme visual language aligned with the official theme baseline", async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const [cssRaw, tokens] = await Promise.all([
+      fs.readFile(path.join(projectRoot, "dist", "theme.css"), "utf-8"),
+      readJson<Record<string, unknown>>(path.join(projectRoot, "dist", "tokens.json"))
+    ]);
+
+    expect(getPath(tokens, "ref.chips.ref.radius")).toMatchObject({
+      xs: "8px",
+      sm: "10px",
+      md: "12px",
+      control: "14px",
+      pill: "999px"
+    });
+    expect(getPath(tokens, "comp.chips.comp.divider.root.color")).toBe("{chips.sys.color.border-subtle}");
+    expect(getPath(tokens, "comp.chips.comp.form.control.border.idle")).toBe("{chips.sys.color.border-subtle}");
+    expect(getPath(tokens, "comp.chips.comp.navigation-split-view.divider.color")).toBe(
+      "{chips.sys.color.border-subtle}"
+    );
+    expect(cssRaw).toContain("box-shadow: var(--chips-base-shadow-control)");
+    expect(cssRaw).toContain("box-shadow: var(--chips-base-shadow-card)");
+    expect(cssRaw).toContain("box-shadow: var(--chips-base-shadow-float)");
+    expect(cssRaw).toContain("background-color: var(--chips-base-edge-top)");
+    expect(cssRaw).toContain("font-family: Inter, ui-sans-serif, system-ui");
+    expect(cssRaw).not.toContain('font-family: "Roboto Flex"');
+    expect(cssRaw).not.toContain("letter-spacing: 0.01em");
+    expect(cssRaw).not.toContain("outline: 2px solid var(--chips-comp-button-focus-outline)");
+    expect(cssRaw).not.toContain("translateY(0.5px)");
   });
 
   it("declares reusable dark semantic state colors", async () => {

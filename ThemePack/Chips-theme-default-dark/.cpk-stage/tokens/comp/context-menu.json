@@ -3,29 +3,33 @@
     "comp": {
       "context-menu": {
         "root": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "transparent"
         },
         "trigger": {
           "surface": {
-            "idle": "{chips.sys.color.surface}"
+            "idle": "{chips.sys.color.surface-raised}"
           }
         },
         "content": {
-          "surface": "{chips.sys.color.surface}"
+          "surface": "{chips.sys.color.surface-elevated}"
         },
         "item": {
           "surface": {
-            "hover": "{chips.sys.color.surface}"
+            "hover": "{chips.sys.color.info-surface}"
           },
           "text": {
             "color": "{chips.sys.color.on-surface}"
+          },
+          "icon": {
+            "color": "{chips.sys.icon.color}",
+            "color-disabled": "{chips.sys.icon.color-disabled}"
           }
         },
         "shortcut": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.sys.color.on-surface-soft}"
         },
         "focus": {
-          "outline": "{chips.sys.color.primary}"
+          "outline": "{chips.sys.color.focus-ring}"
         }
       }
     }

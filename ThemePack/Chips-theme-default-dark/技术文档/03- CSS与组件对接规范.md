@@ -104,7 +104,9 @@
 
 [data-scope="button"][data-part="root"][data-state="focus"],
 [data-scope="button"][data-part="root"]:focus-visible {
-  outline: 2px solid var(--chips-comp-button-focus-outline);
+  outline: var(--chips-base-layout-focus-outline-width) solid var(--chips-comp-button-focus-outline);
+  outline-offset: var(--chips-base-layout-focus-outline-offset);
+  box-shadow: var(--chips-base-focus-ring);
 }
 ```
 
@@ -160,6 +162,8 @@
 
 `toolbar / menu-bar / context-menu / shortcut` 是命令消费组件的正式主题 scope。本主题在 `overlays.css` 中提供独立暗色样式：工具栏和菜单栏使用 `surface-raised` 层，菜单内容使用 `surface-elevated` 层，hover/active 使用低饱和 `info-surface`，焦点统一使用 `focus-ring`。这些组件只展示或消费 Host command/shortcut 链路的结果，不在主题包中实现命令注册、调度或快捷键处理。
 
+菜单、Popover、Dialog、CommandPalette、Select、日期/时间弹层统一使用 `--chips-base-shadow-float` 与 `--chips-base-border-subtle` 表达层级，并通过 `backdrop-filter`、顶部高光和底部暗边形成克制液态浮层。`Select.Content` 在本主题中作为锚定触发器下方的绝对定位 listbox 浮层呈现，消费 `--chips-select-content-gutter / --chips-select-content-min-inline-size / --chips-select-content-max-block-size` 控制间距、宽度和滚动边界，不进入普通文档流。
+
 `ChipsIcon` 的 tone 由 `data-tone="default|muted|accent|danger|disabled"` 暴露。暗夜主题在 `styles/base.css` 中以 `chips.comp.icon.root.* -> chips.sys.icon.*` 的顺序解析色彩、强调填充、权重和 grade；工具栏、菜单栏、上下文菜单和图标按钮的图标状态继续通过自身 `chips.comp.*.icon.*` token 覆盖，不硬编码私有尺寸或颜色。
 
 ---
@@ -196,7 +200,7 @@
 - Token：
   - `chips.layout.density.comfortable`
   - `chips.layout.gap.md`
-- 在本主题中，通过 `styles/base.css` 中的派生变量（如 `--chips-base-space-2/3/4`）抽象为常用内边距与间距，用于控制组件之间的距离。
+- 在本主题中，通过 `styles/base.css` 中的派生变量（如 `--chips-base-space-1/2/3/4`、`--chips-base-control-height`、`--chips-base-control-height-compact`）抽象为常用内边距、控件高度与间距，用于控制组件视觉密度。
 
 ---
 

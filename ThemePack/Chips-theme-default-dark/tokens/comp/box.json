@@ -5,12 +5,12 @@
         "root": {
           "surface": "{chips.sys.color.surface}",
           "border": {
-            "color": "{chips.sys.color.on-surface}"
+            "color": "{chips.sys.color.border-subtle}"
           },
           "radius": "{chips.sys.radius.container}"
         },
         "focus": {
-          "outline": "{chips.sys.color.primary}"
+          "outline": "{chips.sys.color.focus-ring}"
         }
       }
     }

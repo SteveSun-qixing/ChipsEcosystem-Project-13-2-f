@@ -1,11 +1,12 @@
 # 字体资源规范
 
-本目录用于存放主题自带字体资源。根据《图标与字体系统设计规范》，推荐：
+本目录用于存放主题自带 UI 文本字体资源。当前暗夜主题未随包发布 UI 文本字体文件，`dist/theme.css` 只使用系统字体回退链：
 
-- UI 拉丁主字体：Roboto Flex；
-- 中文主字体：Noto Sans SC / Noto Sans TC；
-- 日韩主字体：Noto Sans JP / Noto Sans KR；
-- 等宽字体：Noto Sans Mono。
+```css
+Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+"Segoe UI", "Noto Sans SC", sans-serif
+```
 
-当前模板未内置具体字体文件，后续可根据实际主题设计放置所需字体，并在 CSS 中通过 `@font-face` 与 Token 进行接入。
+Material Symbols 图标字体不放在本目录，正式位置为 `icons/variablefont/`，构建时复制到 `dist/icons/variablefont/`。
 
+后续如需发布 UI 文本字体，必须先把真实字体文件放入 `fonts/`，再在 `dist/theme.css` 中通过 `@font-face` 声明，并同步更新来源说明与测试。

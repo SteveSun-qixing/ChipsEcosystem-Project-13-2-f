@@ -135,7 +135,14 @@
         "chips.comp.card-cover-frame.name.color",
         "chips.comp.card-cover-frame.status.color.normal",
         "chips.comp.card-cover-frame.status.color.error"
-      ]
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
     },
     {
       "component": "card-shell",
@@ -244,9 +251,10 @@
       "scope": "command-palette",
       "parts": [
         "root",
-        "trigger",
-        "search",
+        "input",
         "list",
+        "group",
+        "group-label",
         "item",
         "shortcut",
         "status"
@@ -262,10 +270,11 @@
       ],
       "requiredTokens": [
         "chips.comp.command-palette.root.surface",
-        "chips.comp.command-palette.search.surface.idle",
-        "chips.comp.command-palette.search.border.idle",
-        "chips.comp.command-palette.result.surface.active",
-        "chips.comp.command-palette.result.text.color",
+        "chips.comp.command-palette.input.surface.idle",
+        "chips.comp.command-palette.input.border.idle",
+        "chips.comp.command-palette.item.surface.active",
+        "chips.comp.command-palette.item.text.color",
+        "chips.comp.command-palette.group.label.color",
         "chips.comp.command-palette.shortcut.color",
         "chips.comp.command-palette.focus.outline"
       ]
@@ -293,7 +302,14 @@
         "chips.comp.composite-card-window.overlay.text",
         "chips.comp.composite-card-window.status.color.normal",
         "chips.comp.composite-card-window.status.color.error"
-      ]
+      ],
+      "iframe": {
+        "requiredSandbox": true,
+        "lifecycleEvents": [
+          "ready",
+          "error"
+        ]
+      }
     },
     {
       "component": "context-menu",
@@ -304,6 +320,7 @@
         "content",
         "group",
         "item",
+        "icon",
         "shortcut",
         "status"
       ],
@@ -322,8 +339,26 @@
         "chips.comp.context-menu.content.surface",
         "chips.comp.context-menu.item.surface.hover",
         "chips.comp.context-menu.item.text.color",
+        "chips.comp.context-menu.item.icon.color",
+        "chips.comp.context-menu.item.icon.color-disabled",
         "chips.comp.context-menu.shortcut.color",
-        "chips.comp.context-menu.focus.outline"
+        "chips.comp.context-menu.focus.outline",
+        "chips.motion.menu.enter-duration",
+        "chips.motion.menu.exit-duration",
+        "chips.motion.menu.easing",
+        "chips.motion.menu.distance"
+      ],
+      "motionConstraints": [
+        {
+          "type": "menu-transition",
+          "tokenKeys": [
+            "chips.motion.menu.enter-duration",
+            "chips.motion.menu.exit-duration",
+            "chips.motion.menu.easing",
+            "chips.motion.menu.distance"
+          ],
+          "reducedMotion": "opacity-only"
+        }
       ]
     },
     {
@@ -331,10 +366,11 @@
       "scope": "data-grid",
       "parts": [
         "root",
-        "table",
+        "toolbar",
         "header",
         "row",
         "cell",
+        "pagination",
         "status"
       ],
       "states": [
@@ -348,13 +384,33 @@
       ],
       "requiredTokens": [
         "chips.comp.data-grid.root.surface",
+        "chips.comp.data-grid.toolbar.surface",
+        "chips.comp.data-grid.toolbar.gap",
         "chips.comp.data-grid.header.surface",
         "chips.comp.data-grid.header.text.color",
+        "chips.comp.data-grid.header.sort.color",
         "chips.comp.data-grid.row.surface.idle",
+        "chips.comp.data-grid.row.surface.hover",
         "chips.comp.data-grid.row.surface.selected",
         "chips.comp.data-grid.cell.text.color",
+        "chips.comp.data-grid.pagination.surface",
+        "chips.comp.data-grid.pagination.gap",
         "chips.comp.data-grid.border.color",
-        "chips.comp.data-grid.focus.outline"
+        "chips.comp.data-grid.focus.outline",
+        "chips.motion.list.reorder-duration",
+        "chips.motion.list.reorder-easing",
+        "chips.motion.list.stagger"
+      ],
+      "motionConstraints": [
+        {
+          "type": "list-reorder",
+          "tokenKeys": [
+            "chips.motion.list.reorder-duration",
+            "chips.motion.list.reorder-easing",
+            "chips.motion.list.stagger"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -454,8 +510,10 @@
         "trigger",
         "backdrop",
         "content",
-        "title",
-        "description",
+        "header",
+        "body",
+        "footer",
+        "actions",
         "close",
         "status"
       ],
@@ -472,9 +530,30 @@
         "chips.comp.dialog.backdrop.surface",
         "chips.comp.dialog.content.radius",
         "chips.comp.dialog.content.surface",
-        "chips.comp.dialog.title.color",
+        "chips.comp.dialog.header.color",
+        "chips.comp.dialog.body.color",
+        "chips.comp.dialog.footer.gap",
+        "chips.comp.dialog.actions.gap",
         "chips.comp.dialog.close.color",
-        "chips.comp.dialog.focus.outline"
+        "chips.comp.dialog.focus.outline",
+        "chips.motion.overlay.enter-duration",
+        "chips.motion.overlay.exit-duration",
+        "chips.motion.overlay.easing",
+        "chips.motion.overlay.distance",
+        "chips.motion.overlay.scale"
+      ],
+      "motionConstraints": [
+        {
+          "type": "overlay-transition",
+          "tokenKeys": [
+            "chips.motion.overlay.enter-duration",
+            "chips.motion.overlay.exit-duration",
+            "chips.motion.overlay.easing",
+            "chips.motion.overlay.distance",
+            "chips.motion.overlay.scale"
+          ],
+          "reducedMotion": "opacity-only"
+        }
       ]
     },
     {
@@ -615,14 +694,17 @@
       ]
     },
     {
-      "component": "form-field",
-      "scope": "form-field",
+      "component": "form",
+      "scope": "form",
       "parts": [
         "root",
+        "section",
+        "field",
         "label",
+        "required",
         "control",
-        "helper",
         "error",
+        "hint",
         "status"
       ],
       "states": [
@@ -635,40 +717,19 @@
         "error"
       ],
       "requiredTokens": [
-        "chips.comp.form-field.label.color",
-        "chips.comp.form-field.control.surface.idle",
-        "chips.comp.form-field.control.border.idle",
-        "chips.comp.form-field.control.border.error",
-        "chips.comp.form-field.helper.color",
-        "chips.comp.form-field.error.color",
-        "chips.comp.form-field.focus.outline"
-      ]
-    },
-    {
-      "component": "form-group",
-      "scope": "form-group",
-      "parts": [
-        "root",
-        "legend",
-        "description",
-        "content",
-        "status"
-      ],
-      "states": [
-        "idle",
-        "hover",
-        "focus",
-        "active",
-        "disabled",
-        "loading",
-        "error"
-      ],
-      "requiredTokens": [
-        "chips.comp.form-group.root.gap",
-        "chips.comp.form-group.legend.color",
-        "chips.comp.form-group.description.color",
-        "chips.comp.form-group.divider.color",
-        "chips.comp.form-group.status.color.error"
+        "chips.comp.form.root.gap",
+        "chips.comp.form.section.gap",
+        "chips.comp.form.section.divider.color",
+        "chips.comp.form.field.gap",
+        "chips.comp.form.label.color",
+        "chips.comp.form.label.required.color",
+        "chips.comp.form.control.surface.idle",
+        "chips.comp.form.control.border.idle",
+        "chips.comp.form.control.border.error",
+        "chips.comp.form.hint.color",
+        "chips.comp.form.error.color",
+        "chips.comp.form.status.color.error",
+        "chips.comp.form.focus.outline"
       ]
     },
     {
@@ -706,11 +767,29 @@
       ],
       "requiredTokens": [
         "chips.comp.icon.root.color",
+        "chips.comp.icon.root.color-muted",
+        "chips.comp.icon.root.color-accent",
+        "chips.comp.icon.root.color-danger",
+        "chips.comp.icon.root.color-disabled",
         "chips.comp.icon.root.size",
+        "chips.comp.icon.root.size-dense",
+        "chips.comp.icon.root.size-toolbar",
+        "chips.comp.icon.root.size-compact",
         "chips.comp.icon.root.fill",
+        "chips.comp.icon.root.fill-emphasis",
         "chips.comp.icon.root.wght",
+        "chips.comp.icon.root.wght-strong",
+        "chips.comp.icon.root.wght-muted",
         "chips.comp.icon.root.grad",
+        "chips.comp.icon.root.grad-emphasis",
+        "chips.comp.icon.root.grad-muted",
         "chips.comp.icon.root.opsz"
+      ],
+      "a11yConstraints": [
+        {
+          "type": "functional-icon-label",
+          "messageKey": "component.icon.a11y.functionalIconLabelRequired"
+        }
       ]
     },
     {
@@ -739,9 +818,23 @@
         "chips.comp.icon-button.root.surface.active",
         "chips.comp.icon-button.root.surface.disabled",
         "chips.comp.icon-button.icon.color.idle",
+        "chips.comp.icon-button.icon.color.hover",
+        "chips.comp.icon-button.icon.color.active",
         "chips.comp.icon-button.icon.color.disabled",
         "chips.comp.icon-button.focus.outline",
-        "chips.comp.icon-button.status.color.error"
+        "chips.comp.icon-button.status.color.error",
+        "chips.motion.duration.fast",
+        "chips.motion.easing.standard"
+      ],
+      "motionConstraints": [
+        {
+          "type": "state-transition",
+          "tokenKeys": [
+            "chips.motion.duration.fast",
+            "chips.motion.easing.standard"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -895,8 +988,22 @@
         "chips.comp.loading-boundary.fallback.surface",
         "chips.comp.loading-boundary.skeleton.surface.idle",
         "chips.comp.loading-boundary.skeleton.surface.active",
+        "chips.comp.loading-boundary.skeleton.motion.duration",
+        "chips.comp.loading-boundary.skeleton.motion.easing",
+        "chips.comp.loading-boundary.skeleton.motion.reduced-duration",
         "chips.comp.loading-boundary.status.color.info",
         "chips.comp.loading-boundary.focus.outline"
+      ],
+      "motionConstraints": [
+        {
+          "type": "loading-feedback",
+          "tokenKeys": [
+            "chips.comp.loading-boundary.skeleton.motion.duration",
+            "chips.comp.loading-boundary.skeleton.motion.easing",
+            "chips.comp.loading-boundary.skeleton.motion.reduced-duration"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -927,7 +1034,21 @@
         "chips.comp.media.control.color",
         "chips.comp.media.caption.color",
         "chips.comp.media.status.color.error",
-        "chips.comp.media.focus.outline"
+        "chips.comp.media.focus.outline",
+        "chips.motion.duration.fast",
+        "chips.motion.easing.standard",
+        "chips.motion.reduced.duration"
+      ],
+      "motionConstraints": [
+        {
+          "type": "media-control-feedback",
+          "tokenKeys": [
+            "chips.motion.duration.fast",
+            "chips.motion.easing.standard",
+            "chips.motion.reduced.duration"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -938,6 +1059,9 @@
         "trigger",
         "content",
         "item",
+        "group",
+        "group-label",
+        "separator",
         "status"
       ],
       "states": [
@@ -952,10 +1076,29 @@
       "requiredTokens": [
         "chips.comp.menu.content.radius",
         "chips.comp.menu.content.surface",
+        "chips.comp.menu.group.label.color",
         "chips.comp.menu.item.surface.hover",
         "chips.comp.menu.item.surface.active",
         "chips.comp.menu.item.text.color",
-        "chips.comp.menu.focus.outline"
+        "chips.comp.menu.separator.color",
+        "chips.comp.menu.separator.thickness",
+        "chips.comp.menu.focus.outline",
+        "chips.motion.menu.enter-duration",
+        "chips.motion.menu.exit-duration",
+        "chips.motion.menu.easing",
+        "chips.motion.menu.distance"
+      ],
+      "motionConstraints": [
+        {
+          "type": "menu-transition",
+          "tokenKeys": [
+            "chips.motion.menu.enter-duration",
+            "chips.motion.menu.exit-duration",
+            "chips.motion.menu.easing",
+            "chips.motion.menu.distance"
+          ],
+          "reducedMotion": "opacity-only"
+        }
       ]
     },
     {
@@ -967,6 +1110,7 @@
         "content",
         "group",
         "item",
+        "icon",
         "shortcut",
         "status"
       ],
@@ -985,8 +1129,70 @@
         "chips.comp.menu-bar.menu.surface.hover",
         "chips.comp.menu-bar.item.surface.hover",
         "chips.comp.menu-bar.item.text.color",
+        "chips.comp.menu-bar.item.icon.color",
+        "chips.comp.menu-bar.item.icon.color-disabled",
         "chips.comp.menu-bar.shortcut.color",
-        "chips.comp.menu-bar.focus.outline"
+        "chips.comp.menu-bar.focus.outline",
+        "chips.motion.menu.enter-duration",
+        "chips.motion.menu.exit-duration",
+        "chips.motion.menu.easing",
+        "chips.motion.menu.distance"
+      ],
+      "motionConstraints": [
+        {
+          "type": "menu-transition",
+          "tokenKeys": [
+            "chips.motion.menu.enter-duration",
+            "chips.motion.menu.exit-duration",
+            "chips.motion.menu.easing",
+            "chips.motion.menu.distance"
+          ],
+          "reducedMotion": "opacity-only"
+        }
+      ]
+    },
+    {
+      "component": "navigation-split-view",
+      "scope": "navigation-split-view",
+      "parts": [
+        "root",
+        "sidebar",
+        "content",
+        "detail",
+        "divider",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.navigation-split-view.root.surface",
+        "chips.comp.navigation-split-view.sidebar.surface",
+        "chips.comp.navigation-split-view.content.surface",
+        "chips.comp.navigation-split-view.detail.surface",
+        "chips.comp.navigation-split-view.divider.color",
+        "chips.comp.navigation-split-view.status.color.error",
+        "chips.comp.navigation-split-view.focus.outline",
+        "chips.motion.scene.transition-duration",
+        "chips.motion.scene.transition-easing",
+        "chips.motion.scene.distance"
+      ],
+      "motionConstraints": [
+        {
+          "type": "scene-transition",
+          "tokenKeys": [
+            "chips.motion.scene.transition-duration",
+            "chips.motion.scene.transition-easing",
+            "chips.motion.scene.distance"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -1101,7 +1307,6 @@
       "parts": [
         "root",
         "trigger",
-        "positioner",
         "content",
         "arrow",
         "status"
@@ -1121,7 +1326,25 @@
         "chips.comp.popover.content.surface",
         "chips.comp.popover.content.border",
         "chips.comp.popover.arrow.surface",
-        "chips.comp.popover.focus.outline"
+        "chips.comp.popover.focus.outline",
+        "chips.motion.overlay.enter-duration",
+        "chips.motion.overlay.exit-duration",
+        "chips.motion.overlay.easing",
+        "chips.motion.overlay.distance",
+        "chips.motion.overlay.scale"
+      ],
+      "motionConstraints": [
+        {
+          "type": "overlay-transition",
+          "tokenKeys": [
+            "chips.motion.overlay.enter-duration",
+            "chips.motion.overlay.exit-duration",
+            "chips.motion.overlay.easing",
+            "chips.motion.overlay.distance",
+            "chips.motion.overlay.scale"
+          ],
+          "reducedMotion": "opacity-only"
+        }
       ]
     },
     {
@@ -1147,10 +1370,24 @@
         "chips.comp.progress.track.surface",
         "chips.comp.progress.range.surface.determinate",
         "chips.comp.progress.range.surface.indeterminate",
+        "chips.comp.progress.range.motion.duration",
+        "chips.comp.progress.range.motion.easing",
+        "chips.comp.progress.range.motion.reduced-duration",
         "chips.comp.progress.label.color",
         "chips.comp.progress.value.color",
         "chips.comp.progress.status.color.error",
         "chips.comp.progress.focus.outline"
+      ],
+      "motionConstraints": [
+        {
+          "type": "indeterminate-progress",
+          "tokenKeys": [
+            "chips.comp.progress.range.motion.duration",
+            "chips.comp.progress.range.motion.easing",
+            "chips.comp.progress.range.motion.reduced-duration"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -1180,6 +1417,61 @@
         "chips.comp.radio.control.surface.disabled",
         "chips.comp.radio.indicator.color.checked",
         "chips.comp.radio.label.color"
+      ]
+    },
+    {
+      "component": "rating",
+      "scope": "rating",
+      "parts": [
+        "root",
+        "label",
+        "item",
+        "icon",
+        "status"
+      ],
+      "states": [
+        "idle",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "error"
+      ],
+      "requiredTokens": [
+        "chips.comp.rating.root.gap",
+        "chips.comp.rating.item.size",
+        "chips.comp.rating.item.radius",
+        "chips.comp.rating.item.surface.idle",
+        "chips.comp.rating.item.surface.hover",
+        "chips.comp.rating.item.surface.active",
+        "chips.comp.rating.item.surface.disabled",
+        "chips.comp.rating.icon.color.idle",
+        "chips.comp.rating.icon.color.active",
+        "chips.comp.rating.icon.color.heart-active",
+        "chips.comp.rating.icon.color.disabled",
+        "chips.comp.rating.label.color",
+        "chips.comp.rating.status.color.error",
+        "chips.comp.rating.focus.outline"
+      ],
+      "a11yConstraints": [
+        {
+          "type": "radiogroup-label",
+          "role": "radiogroup",
+          "required": [
+            "aria-label",
+            "aria-labelledby"
+          ],
+          "anyOf": true
+        },
+        {
+          "type": "radio-item-state",
+          "part": "item",
+          "role": "radio",
+          "required": [
+            "aria-checked"
+          ]
+        }
       ]
     },
     {
@@ -1362,7 +1654,7 @@
         "trigger",
         "value",
         "icon",
-        "list",
+        "content",
         "option",
         "status"
       ],
@@ -1380,6 +1672,9 @@
         "chips.comp.select.trigger.surface.idle",
         "chips.comp.select.trigger.surface.focus",
         "chips.comp.select.trigger.border.idle",
+        "chips.comp.select.content.radius",
+        "chips.comp.select.content.surface",
+        "chips.comp.select.option.surface.highlighted",
         "chips.comp.select.option.surface.selected",
         "chips.comp.select.option.text.color"
       ]
@@ -1424,8 +1719,24 @@
         "chips.comp.skeleton.root.surface",
         "chips.comp.skeleton.item.surface.idle",
         "chips.comp.skeleton.item.surface.active",
+        "chips.comp.skeleton.item.motion.duration",
+        "chips.comp.skeleton.item.motion.easing",
+        "chips.comp.skeleton.item.motion.stagger",
+        "chips.comp.skeleton.item.motion.reduced-duration",
         "chips.comp.skeleton.status.color.info",
         "chips.comp.skeleton.focus.outline"
+      ],
+      "motionConstraints": [
+        {
+          "type": "skeleton-feedback",
+          "tokenKeys": [
+            "chips.comp.skeleton.item.motion.duration",
+            "chips.comp.skeleton.item.motion.easing",
+            "chips.comp.skeleton.item.motion.stagger",
+            "chips.comp.skeleton.item.motion.reduced-duration"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -1684,7 +1995,21 @@
         "chips.comp.tabs.trigger.surface.active",
         "chips.comp.tabs.trigger.text.color",
         "chips.comp.tabs.panel.surface",
-        "chips.comp.tabs.focus.outline"
+        "chips.comp.tabs.focus.outline",
+        "chips.motion.scene.transition-duration",
+        "chips.motion.scene.transition-easing",
+        "chips.motion.scene.distance"
+      ],
+      "motionConstraints": [
+        {
+          "type": "scene-transition",
+          "tokenKeys": [
+            "chips.motion.scene.transition-duration",
+            "chips.motion.scene.transition-easing",
+            "chips.motion.scene.distance"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -1991,7 +2316,23 @@
         "chips.comp.toolbar.item.surface.disabled",
         "chips.comp.toolbar.item.text.color",
         "chips.comp.toolbar.item.icon.color",
-        "chips.comp.toolbar.focus.outline"
+        "chips.comp.toolbar.item.icon.color-active",
+        "chips.comp.toolbar.item.icon.color-disabled",
+        "chips.comp.toolbar.item.icon.size",
+        "chips.comp.toolbar.item.icon.wght",
+        "chips.comp.toolbar.focus.outline",
+        "chips.motion.duration.fast",
+        "chips.motion.easing.standard"
+      ],
+      "motionConstraints": [
+        {
+          "type": "command-state-transition",
+          "tokenKeys": [
+            "chips.motion.duration.fast",
+            "chips.motion.easing.standard"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {
@@ -2018,7 +2359,25 @@
         "chips.comp.tooltip.content.surface",
         "chips.comp.tooltip.content.text.color",
         "chips.comp.tooltip.arrow.surface",
-        "chips.comp.tooltip.focus.outline"
+        "chips.comp.tooltip.focus.outline",
+        "chips.motion.overlay.enter-duration",
+        "chips.motion.overlay.exit-duration",
+        "chips.motion.overlay.easing",
+        "chips.motion.overlay.distance",
+        "chips.motion.overlay.scale"
+      ],
+      "motionConstraints": [
+        {
+          "type": "overlay-transition",
+          "tokenKeys": [
+            "chips.motion.overlay.enter-duration",
+            "chips.motion.overlay.exit-duration",
+            "chips.motion.overlay.easing",
+            "chips.motion.overlay.distance",
+            "chips.motion.overlay.scale"
+          ],
+          "reducedMotion": "opacity-only"
+        }
       ]
     },
     {
@@ -2026,10 +2385,12 @@
       "scope": "tree",
       "parts": [
         "root",
-        "node",
-        "toggle",
+        "item",
+        "branch",
+        "leaf",
+        "disclosure",
         "label",
-        "children",
+        "group",
         "status"
       ],
       "states": [
@@ -2043,12 +2404,31 @@
       ],
       "requiredTokens": [
         "chips.comp.tree.root.surface",
-        "chips.comp.tree.node.surface.idle",
-        "chips.comp.tree.node.surface.selected",
-        "chips.comp.tree.node.text.color",
-        "chips.comp.tree.toggle.color",
-        "chips.comp.tree.guide.color",
-        "chips.comp.tree.focus.outline"
+        "chips.comp.tree.item.surface.idle",
+        "chips.comp.tree.item.surface.hover",
+        "chips.comp.tree.item.surface.selected",
+        "chips.comp.tree.item.surface.disabled",
+        "chips.comp.tree.item.text.color",
+        "chips.comp.tree.branch.indent",
+        "chips.comp.tree.leaf.indent",
+        "chips.comp.tree.disclosure.color",
+        "chips.comp.tree.group.guide.color",
+        "chips.comp.tree.status.color.error",
+        "chips.comp.tree.focus.outline",
+        "chips.motion.list.reorder-duration",
+        "chips.motion.list.reorder-easing",
+        "chips.motion.list.stagger"
+      ],
+      "motionConstraints": [
+        {
+          "type": "list-reorder",
+          "tokenKeys": [
+            "chips.motion.list.reorder-duration",
+            "chips.motion.list.reorder-easing",
+            "chips.motion.list.stagger"
+          ],
+          "reducedMotion": "state-only"
+        }
       ]
     },
     {

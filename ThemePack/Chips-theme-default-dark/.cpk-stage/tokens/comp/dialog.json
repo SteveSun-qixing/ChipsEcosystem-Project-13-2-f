@@ -9,8 +9,17 @@
           "radius": "{chips.sys.radius.container}",
           "surface": "{chips.sys.color.surface-elevated}"
         },
-        "title": {
+        "header": {
           "color": "{chips.sys.color.on-surface}"
+        },
+        "body": {
+          "color": "{chips.sys.color.on-surface-muted}"
+        },
+        "footer": {
+          "gap": "{chips.ref.space.3}"
+        },
+        "actions": {
+          "gap": "{chips.ref.space.2}"
         },
         "close": {
           "color": "{chips.sys.color.on-surface-muted}"

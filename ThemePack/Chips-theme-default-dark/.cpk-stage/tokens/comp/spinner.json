@@ -17,7 +17,7 @@
         },
         "status": {
           "color": {
-            "info": "{chips.sys.color.on-surface}",
+            "info": "{chips.sys.color.info}",
             "error": "{chips.sys.color.error}"
           }
         }

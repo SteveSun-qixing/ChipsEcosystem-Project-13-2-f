@@ -15,10 +15,10 @@
           "surface": "{chips.sys.color.surface}"
         },
         "divider": {
-          "color": "{chips.sys.color.on-surface}"
+          "color": "{chips.sys.color.border-subtle}"
         },
         "focus": {
-          "outline": "{chips.sys.color.primary}"
+          "outline": "{chips.sys.color.focus-ring}"
         }
       }
     }

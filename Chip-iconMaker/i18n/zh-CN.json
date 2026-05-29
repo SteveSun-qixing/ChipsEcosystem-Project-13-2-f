@@ -1,0 +1,182 @@
+{
+  "app": {
+    "identity": {
+      "displayName": "图标工坊"
+    },
+    "shell": {
+      "subtitle": "生成 PNG、ICO 与 ICNS 图标资源包",
+      "languageSwitch": "切换到 {locale}",
+      "navigationLabel": "应用场景",
+      "contentLabel": "图标生成工作台",
+      "detailLabel": "命令与诊断",
+      "loading": "正在读取运行环境"
+    },
+    "scenes": {
+      "main": {
+        "title": "图标生成",
+        "description": "导入源图或选择字体图标并生成多平台图标"
+      },
+      "settings": {
+        "title": "设置",
+        "description": "图标生成偏好"
+      }
+    },
+    "commands": {
+      "sectionTitle": "命令",
+      "focusImporter": {
+        "title": "选择源图",
+        "description": "聚焦源图导入入口",
+        "ariaLabel": "选择源图"
+      },
+      "generateIcons": {
+        "title": "生成图标",
+        "description": "按当前设置生成图标资源",
+        "ariaLabel": "生成图标"
+      },
+      "refreshTheme": {
+        "title": "刷新主题状态",
+        "description": "重新读取 Host 当前主题状态",
+        "ariaLabel": "刷新主题状态",
+        "disabledReason": "当前运行环境不允许读取主题状态"
+      },
+      "menu": {
+        "file": "文件",
+        "view": "视图",
+        "ariaLabel": "图标工坊命令菜单"
+      },
+      "toolbar": {
+        "ariaLabel": "图标工坊工具栏"
+      },
+      "palette": {
+        "searchPlaceholder": "搜索命令",
+        "ariaLabel": "命令面板"
+      },
+      "status": {
+        "idle": "命令系统等待注册",
+        "registering": "正在注册命令",
+        "ready": "命令已注册",
+        "error": "命令运行时需要检查",
+        "lastInvoked": "最近触发：{commandId}（来源：{source}）",
+        "errorWithCode": "命令错误：{code}"
+      }
+    },
+    "cli": {
+      "generate": {
+        "title": "生成图标文件",
+        "description": "从输入图片生成 PNG、ICO 或 ICNS 图标文件"
+      }
+    },
+    "workspace": {
+      "unknown": "未知",
+      "error": "环境读取错误：{code}"
+    },
+    "runtime": {
+      "sectionTitle": "运行时诊断",
+      "sectionDescription": "当前 scene、surface、命令与诊断状态。",
+      "iconLabel": "运行状态",
+      "commandErrorDescription": "命令运行时错误：{code}",
+      "errorTitle": "运行时需要检查",
+      "errorDescription": "应用运行时报告了需要处理的诊断。",
+      "refreshAction": "重新读取环境",
+      "status": {
+        "ready": "运行时已就绪",
+        "error": "运行时存在诊断"
+      },
+      "dialog": {
+        "open": "查看运行上下文",
+        "title": "运行上下文",
+        "description": "Host 提供的 scene 与 surface 信息。",
+        "sceneId": "场景：{value}",
+        "surfaceId": "容器：{value}",
+        "sessionId": "会话：{value}",
+        "diagnostics": "诊断数量：{count}",
+        "close": "关闭"
+      }
+    },
+    "errors": {
+      "boundaryTitle": "应用运行异常",
+      "boundaryDescription": "运行时边界捕获到异常。",
+      "retry": "重试"
+    }
+  },
+  "iconMaker": {
+    "aria": {
+      "scene": "图标生成器"
+    },
+    "basic": {
+      "title": "基础设置"
+    },
+    "sourceMode": {
+      "title": "来源",
+      "image": "上传图片",
+      "font": "图标字体"
+    },
+    "image": {
+      "dropHint": "拖拽或点击上传图片"
+    },
+    "font": {
+      "fontSource": "字体来源",
+      "glyphPanel": "图标选择面板",
+      "summary": "{name}，{count} 个图标",
+      "foreground": "图标颜色",
+      "commonColors": "常用图标颜色",
+      "customFont": "自定义图标字体",
+      "upload": "上传图标字体"
+    },
+    "background": {
+      "title": "背景颜色",
+      "white": "纯白",
+      "black": "纯黑",
+      "peach": "桃粉",
+      "ocean": "海蓝",
+      "aurora": "极光",
+      "violet": "紫莓",
+      "ember": "暖焰",
+      "slate": "石板"
+    },
+    "advanced": {
+      "title": "高级设置"
+    },
+    "formats": {
+      "title": "输出格式",
+      "png": "PNG",
+      "ico": "ICO",
+      "icns": "ICNS",
+      "required": "至少选择一种输出格式。"
+    },
+    "size": {
+      "title": "输出尺寸",
+      "unit": "px",
+      "preview": "预览尺寸：{size}px"
+    },
+    "fit": {
+      "title": "缩放适配",
+      "fitTitle": "适应",
+      "fitDescription": "等比例缩放，空白区域显示背景。",
+      "fillTitle": "填充",
+      "fillDescription": "等比例铺满画布并居中裁剪。"
+    },
+    "preview": {
+      "title": "实时预览",
+      "canvas": "图标实时预览画布",
+      "size": "{size} x {size}px",
+      "disabledNoFormat": "请至少选择一种输出格式。",
+      "disabledNoImage": "请先上传图片或切换到图标字体。",
+      "disabledNoGlyph": "请先选择一个字体图标。"
+    },
+    "actions": {
+      "clear": "清除图片",
+      "download": "生成并下载",
+      "generating": "正在生成"
+    },
+    "feedback": {
+      "unsupported": "这个文件格式暂不支持。",
+      "loaded": "图片已载入，预览已更新。",
+      "fontLoaded": "图标字体已载入。",
+      "previewFailed": "预览生成失败。",
+      "downloading": "正在生成 icons.zip。",
+      "downloadStarted": "已开始下载。",
+      "downloadFailed": "下载生成失败。"
+    }
+  }
+}

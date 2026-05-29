@@ -1,0 +1,182 @@
+{
+  "app": {
+    "identity": {
+      "displayName": "Icon Studio"
+    },
+    "shell": {
+      "subtitle": "Generate PNG, ICO, and ICNS icon bundles",
+      "languageSwitch": "Switch to {locale}",
+      "navigationLabel": "App scenes",
+      "contentLabel": "Icon generation workbench",
+      "detailLabel": "Commands and diagnostics",
+      "loading": "Reading runtime environment"
+    },
+    "scenes": {
+      "main": {
+        "title": "Icon generation",
+        "description": "Import artwork or choose a font icon and generate multi-platform icons"
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Icon generation preferences"
+      }
+    },
+    "commands": {
+      "sectionTitle": "Commands",
+      "focusImporter": {
+        "title": "Choose artwork",
+        "description": "Focus the source artwork importer",
+        "ariaLabel": "Choose artwork"
+      },
+      "generateIcons": {
+        "title": "Generate icons",
+        "description": "Generate icon resources with the current settings",
+        "ariaLabel": "Generate icons"
+      },
+      "refreshTheme": {
+        "title": "Refresh theme status",
+        "description": "Read the current Host theme state again",
+        "ariaLabel": "Refresh theme status",
+        "disabledReason": "The current runtime cannot read theme status"
+      },
+      "menu": {
+        "file": "File",
+        "view": "View",
+        "ariaLabel": "Icon Studio command menu"
+      },
+      "toolbar": {
+        "ariaLabel": "Icon Studio toolbar"
+      },
+      "palette": {
+        "searchPlaceholder": "Search commands",
+        "ariaLabel": "Command palette"
+      },
+      "status": {
+        "idle": "Command system is waiting",
+        "registering": "Registering commands",
+        "ready": "Commands registered",
+        "error": "Command runtime needs attention",
+        "lastInvoked": "Last invoked: {commandId} from {source}",
+        "errorWithCode": "Command error: {code}"
+      }
+    },
+    "cli": {
+      "generate": {
+        "title": "Generate icon files",
+        "description": "Generate PNG, ICO, or ICNS icon files from an input image"
+      }
+    },
+    "workspace": {
+      "unknown": "Unknown",
+      "error": "Environment read error: {code}"
+    },
+    "runtime": {
+      "sectionTitle": "Runtime diagnostics",
+      "sectionDescription": "Current scene, surface, command, and diagnostic state.",
+      "iconLabel": "Runtime status",
+      "commandErrorDescription": "Command runtime error: {code}",
+      "errorTitle": "Runtime needs attention",
+      "errorDescription": "The app runtime reported diagnostics that need attention.",
+      "refreshAction": "Refresh environment",
+      "status": {
+        "ready": "Runtime is ready",
+        "error": "Runtime has diagnostics"
+      },
+      "dialog": {
+        "open": "View runtime context",
+        "title": "Runtime context",
+        "description": "Scene and surface information from Host.",
+        "sceneId": "Scene: {value}",
+        "surfaceId": "Surface: {value}",
+        "sessionId": "Session: {value}",
+        "diagnostics": "Diagnostics: {count}",
+        "close": "Close"
+      }
+    },
+    "errors": {
+      "boundaryTitle": "App runtime error",
+      "boundaryDescription": "The runtime boundary caught an error.",
+      "retry": "Retry"
+    }
+  },
+  "iconMaker": {
+    "aria": {
+      "scene": "Icon generator"
+    },
+    "basic": {
+      "title": "Basic settings"
+    },
+    "sourceMode": {
+      "title": "Source",
+      "image": "Upload image",
+      "font": "Icon font"
+    },
+    "image": {
+      "dropHint": "Drag or click to upload an image"
+    },
+    "font": {
+      "fontSource": "Font source",
+      "glyphPanel": "Icon picker",
+      "summary": "{name}, {count} icons",
+      "foreground": "Icon color",
+      "commonColors": "Common icon colors",
+      "customFont": "Custom icon font",
+      "upload": "Upload icon font"
+    },
+    "background": {
+      "title": "Background",
+      "white": "White",
+      "black": "Black",
+      "peach": "Peach",
+      "ocean": "Ocean",
+      "aurora": "Aurora",
+      "violet": "Violet",
+      "ember": "Ember",
+      "slate": "Slate"
+    },
+    "advanced": {
+      "title": "Advanced settings"
+    },
+    "formats": {
+      "title": "Output formats",
+      "png": "PNG",
+      "ico": "ICO",
+      "icns": "ICNS",
+      "required": "Select at least one output format."
+    },
+    "size": {
+      "title": "Output size",
+      "unit": "px",
+      "preview": "Preview size: {size}px"
+    },
+    "fit": {
+      "title": "Scale fitting",
+      "fitTitle": "Fit",
+      "fitDescription": "Scale proportionally and show the background in empty space.",
+      "fillTitle": "Fill",
+      "fillDescription": "Fill the canvas proportionally and crop from center."
+    },
+    "preview": {
+      "title": "Live preview",
+      "canvas": "Live icon preview canvas",
+      "size": "{size} x {size}px",
+      "disabledNoFormat": "Select at least one output format.",
+      "disabledNoImage": "Upload an image or switch to icon font.",
+      "disabledNoGlyph": "Choose a font icon first."
+    },
+    "actions": {
+      "clear": "Clear image",
+      "download": "Generate and download",
+      "generating": "Generating"
+    },
+    "feedback": {
+      "unsupported": "This file format is not supported.",
+      "loaded": "Image loaded and preview updated.",
+      "fontLoaded": "Icon font loaded.",
+      "previewFailed": "Preview generation failed.",
+      "downloading": "Generating icons.zip.",
+      "downloadStarted": "Download started.",
+      "downloadFailed": "Download generation failed."
+    }
+  }
+}

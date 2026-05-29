@@ -10,6 +10,7 @@
     "npm": "10.9.3"
   },
   "workspaces": [
+    "Chip-iconMaker",
     "Chips-*",
     "Chips-BaseCardPlugin/*",
     "Chips-BoxLayoutPlugin/*",

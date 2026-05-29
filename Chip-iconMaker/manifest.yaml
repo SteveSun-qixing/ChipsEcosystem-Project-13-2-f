@@ -1,0 +1,149 @@
+id: com.chips.iconmaker
+name: 图标工坊
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 图标工坊是运行在薯片 Host surface 中的应用插件，用于从图片或图标字体生成 PNG、ICO 与 ICNS 图标资源包。
+
+author:
+  name: Chips
+  email: dev@chips.local
+
+keywords:
+  - chips
+  - icon
+  - icns
+  - ico
+  - png
+
+permissions:
+  - theme.read
+  - i18n.read
+  - i18n.write
+  - command.read
+  - command.write
+  - command.invoke
+  - cli.task
+  - file.read
+  - file.write
+  - log.write
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: download
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 图标工坊
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      frame: true
+
+cli:
+  commands:
+    - commandPath: iconmaker generate
+      commandId: com.chips.iconmaker.cli.generate
+      target:
+        type: app
+        pluginId: com.chips.iconmaker
+        commandId: com.chips.iconmaker.generate-icons
+        surface:
+          open: true
+          focus: true
+          reuse: preferred
+      titleKey: app.cli.generate.title
+      descriptionKey: app.cli.generate.description
+      permissions:
+        - file.read
+        - file.write
+        - cli.task
+      job:
+        wait: true
+        cancelOnInterrupt: true
+      output:
+        mode: human
+        artifacts:
+          - output.files
+      arguments:
+        - name: input
+          position: 0
+          type: path
+          required: true
+          mapsTo: inputPath
+          path:
+            kind: file
+            role: input
+            exists: true
+            extensions: [png, jpg, jpeg, webp, gif, svg]
+          ui:
+            control: pathInput
+      options:
+        - name: output
+          short: o
+          type: path
+          required: true
+          mapsTo: outputDir
+          path:
+            kind: directory
+            role: output
+            create: true
+            overwrite: overwrite
+          ui:
+            control: pathInput
+        - name: formats
+          short: f
+          type: stringList
+          default: [png, ico, icns]
+          mapsTo: formats
+          choices: [png, ico, icns]
+          multiple: true
+          ui:
+            control: multiSelect
+            choices: [png, ico, icns]
+        - name: size
+          short: s
+          type: integer
+          default: 256
+          mapsTo: size
+          validation:
+            min: 16
+            max: 1024
+          ui:
+            control: slider
+            min: 16
+            max: 1024
+            step: 16

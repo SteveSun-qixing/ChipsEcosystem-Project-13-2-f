@@ -1,21 +1,21 @@
-# 视频基础卡片静态图标来源说明
+# video-BCP 基础卡片插件图标来源说明
 
-- 当前文件：`basecard-icon.svg`
-- 同步时间：2026-04-18
+- 正式设计源目录：`design-assets/Basecardicon/`
+- 对应设计源文件：`video-BCP.png/.ico/.icns/.svg`
+- Material Symbols 名称：`smart_display`
+- 官方 SVG 缓存：`design-assets/material-symbols/svg/rounded/smart_display.svg`
+- 生成脚本：`scripts/generate-plugin-material-icons.ts`
+- 同步时间：2026-05-29
 
-## 资产角色
+## 当前工程内纳入版本控制的文件
 
-- 该文件是基础卡片模板内的静态展示资源；
-- 用于生成工程后的插件静态身份资源；
-- 不属于运行时 UI 图标主链路。
+- `basecard-icon.png`
+- `basecard-icon.ico`
+- `basecard-icon.icns`
+- `basecard-icon.svg`
 
-## 运行时边界
+## 使用边界
 
-- 生成工程后，运行时图标统一使用 `src/index.ts` 中的 `basecardDefinition.icon`
-- 编辑引擎、查看器和治理页统一通过 `ChipsIcon + IconDescriptor` 渲染，不消费本 SVG 文件
-
-## 设计说明
-
-- 当前 SVG 为项目内手工绘制的简化视频卡片识别图；
-- 语义上表达“播放器窗口 + 播放三角形”；
-- 不引用外部第三方图标资产。
+- 基础卡片插件没有 `manifest.ui.launcher.icon`，这些文件不属于系统入口图标链路；
+- 运行时图标描述符以 `src/index.ts -> basecardDefinition.icon` 为准；
+- 查看器、编辑器和治理页渲染图标时仍应使用 `ChipsIcon + IconDescriptor`。

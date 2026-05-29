@@ -1,13 +1,13 @@
-# 应用插件启动图标来源说明
+# MusicPlayer 应用插件图标来源说明
 
-- 正式来源目录：`/Users/sevenstars/Documents/ChipsCard/Develop/Project-13-2-f-task008-图标系统搭建/design-assets/Appicon/`
-- 对应源文件：
-  - `AppIcon.png`
-  - `AppIcon.ico`
-  - `AppIcon.icns`
-- 同步时间：2026-03-26
+- 正式设计源目录：`design-assets/Appicon/`
+- 对应设计源文件：`MusicPlayer.png/.ico/.icns/.svg`
+- Material Symbols 名称：`library_music`
+- 官方 SVG 缓存：`design-assets/material-symbols/svg/rounded/library_music.svg`
+- 生成脚本：`scripts/generate-plugin-material-icons.ts`
+- 同步时间：2026-05-29
 
-## 模板内纳入版本控制的文件
+## 当前工程内纳入版本控制的文件
 
 - `app-icon.png`
 - `app-icon.ico`
@@ -16,6 +16,6 @@
 
 ## 使用边界
 
-- `app-icon.ico` 是当前应用插件 `manifest.yaml -> ui.launcher.icon` 使用的正式启动图标文件；
-- 生成工程后，Host 会按平台选择 `ico / icns / png` 作为系统入口图标；
-- 这些文件只属于操作系统入口图标链路，不属于运行时 `ChipsIcon` 图标模型。
+- `app-icon.ico` 是 `manifest.yaml -> ui.launcher.icon` 的正式声明文件；
+- Host 会按平台选择 `ico / icns / png` 作为系统入口图标；
+- 这些文件只属于系统入口与安装分发链路，不属于运行时 `ChipsIcon` 图标模型。

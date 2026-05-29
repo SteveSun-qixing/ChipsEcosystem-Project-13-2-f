@@ -2,6 +2,7 @@
   "card-viewer": {
     "actions": {
       "open": "Open File",
+      "returnHome": "Back to Home",
       "viewCover": "View Cover",
       "viewContent": "View Content"
     },

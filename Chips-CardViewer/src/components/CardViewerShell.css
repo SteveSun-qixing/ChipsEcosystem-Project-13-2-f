@@ -86,6 +86,15 @@
   cursor: pointer;
 }
 
+.card-viewer-shell__floating-action--back {
+  inset-inline-start: max(16px, env(safe-area-inset-left));
+  inset-inline-end: auto;
+}
+
+.card-viewer-shell__floating-action--cover {
+  inset-inline-end: max(16px, env(safe-area-inset-right));
+}
+
 .card-viewer-shell__floating-action:hover {
   background: color-mix(in srgb, var(--chips-sys-color-primary, #3b82f6) 8%, var(--chips-sys-color-surface, #ffffff));
 }

@@ -2,6 +2,7 @@
   "card-viewer": {
     "actions": {
       "open": "打开文件",
+      "returnHome": "返回首页",
       "viewCover": "查看封面",
       "viewContent": "查看内容"
     },

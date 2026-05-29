@@ -35,10 +35,30 @@ export function AppShell(): React.ReactElement {
     }
   }, [commands.lastInvoked, runtime]);
 
-  const action = runtime.openedTarget && runtime.canViewCover ? (
+  const returnHomeLabel = runtime.t("card-viewer.actions.returnHome");
+  const backAction = runtime.openedTarget ? (
     <button
       type="button"
-      className="card-viewer-shell__floating-action"
+      className="card-viewer-shell__floating-action card-viewer-shell__floating-action--back"
+      onClick={runtime.returnHome}
+      aria-label={returnHomeLabel}
+      title={returnHomeLabel}
+    >
+      <ChipsIcon
+        descriptor={{
+          name: "chevron_left",
+          style: "rounded",
+          decorative: true,
+        }}
+        size={24}
+      />
+    </button>
+  ) : null;
+
+  const coverAction = runtime.openedTarget && runtime.canViewCover ? (
+    <button
+      type="button"
+      className="card-viewer-shell__floating-action card-viewer-shell__floating-action--cover"
       onClick={runtime.viewerMode === "cover" ? runtime.showContent : runtime.showCover}
       aria-label={
         runtime.viewerMode === "cover"
@@ -59,6 +79,12 @@ export function AppShell(): React.ReactElement {
         size={22}
       />
     </button>
+  ) : null;
+  const action = backAction || coverAction ? (
+    <>
+      {backAction}
+      {coverAction}
+    </>
   ) : null;
 
   const content =

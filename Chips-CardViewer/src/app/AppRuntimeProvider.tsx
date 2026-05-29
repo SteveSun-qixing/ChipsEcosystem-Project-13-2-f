@@ -70,6 +70,7 @@ export interface CardViewerRuntimeValue {
   t: CardViewerTextResolver;
   showContent(): void;
   showCover(): void;
+  returnHome(): void;
   openFile(): Promise<void>;
   openFilePath(filePath: string): void;
 }
@@ -502,6 +503,16 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   const showCover = React.useCallback(() => {
     setViewerMode("cover");
   }, []);
+  const returnHome = React.useCallback(() => {
+    logger.info("用户返回卡片查看器首页", {
+      targetKind: openedTarget?.kind ?? null,
+      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
+      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
+    });
+    setError(null);
+    setViewerMode("content");
+    setOpenedTarget(null);
+  }, [logger, openedTarget]);
   const environment = React.useMemo<CardViewerRuntimeEnvironment>(() => ({
     appId: appConfig.appId,
     pluginId: launchContext.surfaceContext?.pluginId ?? launchContext.pluginId ?? appConfig.appId,
@@ -532,6 +543,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     t: text,
     showContent,
     showCover,
+    returnHome,
     openFile,
     openFilePath,
   }), [
@@ -548,6 +560,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     openFile,
     openFilePath,
     openedTarget,
+    returnHome,
     showContent,
     showCover,
     surfaceMode,

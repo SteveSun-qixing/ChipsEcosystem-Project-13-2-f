@@ -6,6 +6,42 @@ import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
 import { CardRenderCacheService } from '../services/card-render-cache.service';
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function createCoverPreparingHtml(title: string): string {
+  const safeTitle = escapeHtmlText(title);
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${safeTitle}</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 100%; min-height: 100%; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #f8fbff;
+        color: #101828;
+        font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+      }
+      h1 { margin: 0; font-size: clamp(24px, 6vw, 44px); line-height: 1.08; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <h1>${safeTitle}</h1>
+  </body>
+</html>`;
+}
+
 const cardRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── GET /api/v1/cards/:cardId ────────────────────────────────────
 
@@ -46,10 +82,10 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       const viewState = renderCache
         ? 'cache_ready'
         : latestJob?.status === 'failed'
-          ? 'render_error'
-          : card.status === 'ready'
-            ? 'rendering'
-            : card.status;
+            ? 'render_error'
+            : card.status === 'ready'
+              ? 'rendering'
+              : card.status;
 
       return {
         data: {
@@ -64,7 +100,9 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
                 expiresAt: renderCache.expiresAt,
               }
             : {
-                status: latestJob?.status === 'failed' ? 'error' : latestJob?.status ?? 'queued',
+                status: latestJob?.status === 'failed'
+                  ? 'error'
+                  : latestJob?.status ?? 'queued',
                 generatedAt: null,
                 lastAccessedAt: null,
                 expiresAt: null,
@@ -117,19 +155,19 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         data: {
           cardId: card.id,
-          status: renderCache?.status ?? latestJob?.status ?? 'queued',
+          status: renderCache?.status ?? latestJob?.status ?? card.status,
           viewState: renderCache
             ? 'cache_ready'
-            : latestJob?.status === 'failed'
+            : latestJob?.status === 'failed' || card.status === 'error'
               ? 'render_error'
               : 'rendering',
           attemptCount: latestJob?.attemptCount ?? 0,
           updatedAt: renderCache?.updatedAt ?? latestJob?.updatedAt ?? card.updatedAt,
           viewUrl: `/api/v1/cards/${card.id}/view`,
-          error: latestJob?.lastError
+          error: latestJob?.lastError || card.errorMessage
             ? {
                 code: ErrorCode.CARD_RENDER_ERROR,
-                message: latestJob.lastError,
+                message: latestJob?.lastError ?? card.errorMessage,
               }
             : null,
         },
@@ -164,7 +202,7 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(202).send({
         data: {
           cardId: card.id,
-          viewState: 'rendering',
+          viewState: card.status === 'error' ? 'render_error' : 'rendering',
           renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
           retryAfterSeconds: 3,
         },

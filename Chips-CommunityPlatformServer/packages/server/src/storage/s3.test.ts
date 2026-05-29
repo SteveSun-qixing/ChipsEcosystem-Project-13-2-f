@@ -107,15 +107,15 @@ describe('storage url and bucket mapping', () => {
 
     const url = await storage.uploadBuffer({
       bucket: 'chips-card-render-cache',
-      key: 'user-1/card-1/index.html',
+      key: 'card-1/cache-version/index.html',
       body: '<!doctype html>',
       contentType: 'text/html',
     });
 
-    expect(url).toBe('https://file.chipscard.space/chips-card-render-cache/user-1/card-1/index.html');
+    expect(url).toBe('https://file.chipscard.space/chips-card-render-cache/card-1/cache-version/index.html');
     expect(sentCommands[0]?.input).toMatchObject({
       Bucket: 'chipscardspace',
-      Key: 'chips-card-render-cache/user-1/card-1/index.html',
+      Key: 'chips-card-render-cache/card-1/cache-version/index.html',
       ContentType: 'text/html',
     });
   });
@@ -147,7 +147,7 @@ describe('storage url and bucket mapping', () => {
 
       await storage.uploadFile({
         bucket: 'chips-card-render-cache',
-        key: 'user-1/card-1/index.html',
+        key: 'card-1/cache-version/index.html',
         filePath: htmlPath,
       });
 
@@ -187,6 +187,37 @@ describe('storage url and bucket mapping', () => {
     });
   });
 
+  it('creates presigned PUT URLs for logical public resource buckets', async () => {
+    const { storage } = await loadStorage({
+      S3_PUBLIC_URL: 'https://file.chipscard.space',
+      S3_BUCKET_NAME: 'chipscardspace',
+    });
+
+    const signed = storage.createPresignedPutUrl({
+      bucket: 'chips-card-resources',
+      key: 'users/user-1/uploads/upload-1/resources/photo.png',
+      contentType: 'image/png',
+      expiresInSeconds: 900,
+      headers: {
+        'x-amz-meta-chips-sha256': 'hash-value',
+      },
+    });
+    const url = new URL(signed.url);
+
+    expect(signed.method).toBe('PUT');
+    expect(signed.headers).toMatchObject({
+      'content-type': 'image/png',
+      'x-amz-meta-chips-sha256': 'hash-value',
+    });
+    expect(url.origin).toBe('https://s3.ap-southeast-1.qiniucs.com');
+    expect(url.pathname).toBe('/chipscardspace/chips-card-resources/users/user-1/uploads/upload-1/resources/photo.png');
+    expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toContain('content-type');
+    expect(signed.publicUrl).toBe(
+      'https://file.chipscard.space/chips-card-resources/users/user-1/uploads/upload-1/resources/photo.png',
+    );
+  });
+
   it('deletes listed physical keys from the single physical bucket', async () => {
     const { storage, sentCommands } = await loadStorage(
       {
@@ -195,22 +226,22 @@ describe('storage url and bucket mapping', () => {
       },
       [
         {
-          Contents: [{ Key: 'chips-card-render-cache/user-1/card-1/index.html' }],
+          Contents: [{ Key: 'chips-card-render-cache/card-1/cache-version/index.html' }],
           IsTruncated: false,
         },
       ],
     );
 
-    await storage.deleteObjectsByPrefix('chips-card-render-cache', 'user-1/card-1/');
+    await storage.deleteObjectsByPrefix('chips-card-render-cache', 'card-1/cache-version/');
 
     expect(sentCommands[0]?.input).toMatchObject({
       Bucket: 'chipscardspace',
-      Prefix: 'chips-card-render-cache/user-1/card-1/',
+      Prefix: 'chips-card-render-cache/card-1/cache-version/',
     });
     expect(sentCommands[1]?.input).toMatchObject({
       Bucket: 'chipscardspace',
       Delete: {
-        Objects: [{ Key: 'chips-card-render-cache/user-1/card-1/index.html' }],
+        Objects: [{ Key: 'chips-card-render-cache/card-1/cache-version/index.html' }],
         Quiet: true,
       },
     });

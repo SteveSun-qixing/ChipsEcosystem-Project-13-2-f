@@ -24,9 +24,6 @@ export interface CardOpenViewRecord {
   title: string;
   coverUrl: string | null;
   coverRatio: string | null;
-  htmlUrl: string | null;
-  sourceCardSha256: string | null;
-  cardStructure?: never;
   status: Card['status'];
   visibility: Card['visibility'];
   createdAt: Date;
@@ -191,6 +188,44 @@ export const CardService = {
     return card;
   },
 
+  async getOpenViewAccessible(
+    cardId: string,
+    requesterId: string | null,
+  ): Promise<CardOpenViewRecord> {
+    const card = await db.query.cards.findFirst({
+      where: eq(cards.id, cardId),
+      columns: {
+        id: true,
+        userId: true,
+        title: true,
+        coverUrl: true,
+        coverRatio: true,
+        status: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!card) {
+      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
+    }
+    if (card.visibility === 'private' && card.userId !== requesterId) {
+      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
+    }
+
+    return {
+      id: card.id,
+      userId: card.userId,
+      title: card.title,
+      coverUrl: card.coverUrl,
+      coverRatio: card.coverRatio,
+      status: card.status,
+      visibility: card.visibility,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
+    };
+  },
+
   async update(cardId: string, userId: string, patch: UpdateCardInput): Promise<Card> {
     const card = await this.findById(cardId);
     if (!card || card.userId !== userId) {
@@ -247,6 +282,7 @@ export const CardService = {
     await deleteObjectsByPrefix(Bucket.CARD_RENDER_CACHE_PRIVATE, `${cardId}/`);
     await deleteObjectsByPrefix(Bucket.CARD_COVER_CACHE, `${cardId}/`);
     await deleteObjectsByPrefix(Bucket.CARD_COVER_CACHE_PRIVATE, `${cardId}/`);
+    await deleteObjectsByPrefix(Bucket.COVERS, `cards/${userId}/${cardId}/`);
     // 删除数据库记录
     await db.delete(cards).where(eq(cards.id, cardId));
   },
@@ -351,43 +387,12 @@ export const CardService = {
     };
   },
 
-  async getOpenViewAccessible(
-    cardId: string,
-    requesterId: string | null,
-  ): Promise<CardOpenViewRecord> {
-    const card = await db.query.cards.findFirst({
-      where: eq(cards.id, cardId),
-      columns: {
-        id: true,
-        userId: true,
-        title: true,
-        coverUrl: true,
-        coverRatio: true,
-        htmlUrl: true,
-        sourceCardSha256: true,
-        cardStructure: false,
-        status: true,
-        visibility: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    if (!card) {
-      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
-    }
-    if (card.visibility === 'private' && card.userId !== requesterId) {
-      throw AppError.notFound(ErrorCode.CARD_NOT_FOUND, 'Card not found');
-    }
-    return card;
-  },
-
   toOpenViewDTO(card: CardOpenViewRecord) {
     return {
       id: card.id,
       title: card.title,
       coverUrl: card.coverUrl,
       coverRatio: card.coverRatio,
-      htmlUrl: card.htmlUrl,
       viewUrl: `/api/v1/cards/${card.id}/view`,
       renderStatusUrl: `/api/v1/cards/${card.id}/render-status`,
       status: card.status,

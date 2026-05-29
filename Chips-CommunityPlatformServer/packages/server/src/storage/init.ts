@@ -4,7 +4,7 @@ import {
   PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import { getS3Client } from './s3';
-import { PRIVATE_BUCKETS, PUBLIC_BUCKETS, STORAGE_BUCKETS, BucketName } from './buckets';
+import { PRIVATE_BUCKETS, PUBLIC_BUCKETS, STORAGE_BUCKETS, type BucketName } from './buckets';
 import { env } from '../config/env';
 
 /**

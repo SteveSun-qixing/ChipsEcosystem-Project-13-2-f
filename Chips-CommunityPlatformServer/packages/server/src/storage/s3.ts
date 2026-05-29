@@ -134,7 +134,7 @@ export async function uploadStream(params: {
 }
 
 /**
- * 下载对象存储文件到本地路径
+ * 下载对象存储文件到本地路径。
  */
 export async function downloadFile(params: {
   bucket: string;

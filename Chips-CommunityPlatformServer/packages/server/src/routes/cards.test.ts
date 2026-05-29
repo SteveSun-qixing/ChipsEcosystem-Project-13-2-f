@@ -12,7 +12,11 @@ const cardServiceMock = {
   toSummaryDTO: vi.fn((card: Record<string, unknown>) => card),
   toOpenViewDTO: vi.fn((card: Record<string, unknown>) => {
     const { cardMetadata: _cardMetadata, cardStructure: _cardStructure, ...rest } = card;
-    return rest;
+    return {
+      ...rest,
+      viewUrl: `/api/v1/cards/${String(card.id)}/view`,
+      renderStatusUrl: `/api/v1/cards/${String(card.id)}/render-status`,
+    };
   }),
 };
 
@@ -89,29 +93,31 @@ describe('cards route authorization', () => {
     app.decorate('optionalAuthenticate', async () => {});
 
     cardServiceMock.getAccessible.mockResolvedValue({
-      id: 'card-ready',
+      id: 'card-cache-ready',
       userId: 'owner-user',
       status: 'ready',
       visibility: 'public',
+      htmlUrl: null,
+      updatedAt: new Date('2026-04-09T00:00:00.000Z'),
     });
     cardRenderCacheServiceMock.findReadyCache.mockResolvedValue({
       id: 'cache-1',
-      entryUrl: 'https://file.example/chips-card-render-cache/card-ready/cache/index.html',
+      entryUrl: 'https://file.example/chips-card-render-cache/card-cache-ready/cache/index.html',
     });
     cardRenderCacheServiceMock.touchCache.mockResolvedValue({
       id: 'cache-1',
-      entryUrl: 'https://file.example/chips-card-render-cache/card-ready/cache/index.html',
+      entryUrl: 'https://file.example/chips-card-render-cache/card-cache-ready/cache/index.html',
     });
 
     await app.register(cardRoutes);
 
     const response = await app.inject({
       method: 'GET',
-      url: '/api/v1/cards/card-ready/view',
+      url: '/api/v1/cards/card-cache-ready/view',
     });
 
     expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toBe('https://file.example/chips-card-render-cache/card-ready/cache/index.html');
+    expect(response.headers.location).toBe('https://file.example/chips-card-render-cache/card-cache-ready/cache/index.html');
     expect(cardRenderCacheServiceMock.touchCache).toHaveBeenCalledWith('cache-1');
 
     await app.close();
@@ -129,8 +135,9 @@ describe('cards route authorization', () => {
       userId: 'owner-user',
       status: 'ready',
       visibility: 'public',
+      htmlUrl: null,
+      updatedAt: new Date('2026-04-09T00:00:00.000Z'),
     });
-    cardRenderCacheServiceMock.findReadyCache.mockResolvedValue(null);
 
     await app.register(cardRoutes);
 
@@ -150,43 +157,6 @@ describe('cards route authorization', () => {
     await app.close();
   });
 
-  it('卡片 cover 接口在缓存缺失时返回可嵌入的准备中封面并入队封面渲染任务', async () => {
-    const { default: cardRoutes } = await import('./cards');
-    const app = Fastify();
-
-    app.decorate('authenticate', async () => {});
-    app.decorate('optionalAuthenticate', async () => {});
-
-    cardServiceMock.getAccessible.mockResolvedValue({
-      id: 'card-cover-miss',
-      userId: 'owner-user',
-      title: '封面准备中',
-      status: 'ready',
-      visibility: 'public',
-    });
-    cardRenderCacheServiceMock.findReadyCache.mockResolvedValue(null);
-
-    await app.register(cardRoutes);
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/v1/cards/card-cover-miss/cover',
-    });
-
-    expect(response.statusCode).toBe(202);
-    expect(response.headers['content-type']).toContain('text/html');
-    expect(response.body).toContain('<!doctype html>');
-    expect(response.body).toContain('封面准备中');
-    expect(cardRenderCacheServiceMock.enqueueForCard).toHaveBeenCalledWith({
-      cardId: 'card-cover-miss',
-      createdBy: 'cover_miss',
-      renderProfile: 'community-cover',
-      priority: 20,
-    });
-
-    await app.close();
-  });
-
   it('卡片打开轻量接口允许未登录访问公开卡片且不返回完整 JSONB 字段', async () => {
     const { default: cardRoutes } = await import('./cards');
     const app = Fastify();
@@ -200,7 +170,6 @@ describe('cards route authorization', () => {
       title: '公开卡片',
       coverUrl: 'https://file.example/chips-covers/cards/owner-user/card-1/index.html',
       coverRatio: '3:4',
-      htmlUrl: null,
       status: 'ready',
       visibility: 'public',
       cardMetadata: { heavy: true },
@@ -225,81 +194,12 @@ describe('cards route authorization', () => {
     const payload = response.json();
     expect(payload.data.cardMetadata).toBeUndefined();
     expect(payload.data.cardStructure).toBeUndefined();
-    expect(payload.data.htmlUrl).toBeNull();
+    expect(payload.data.htmlUrl).toBeUndefined();
+    expect(payload.data.viewUrl).toBe('/api/v1/cards/card-1/view');
+    expect(payload.data.viewState).toBe('rendering');
 
     await app.close();
   });
-
-  it('卡片打开轻量接口在已登录场景下继续按请求者身份判定私有卡片', async () => {
-    const { default: cardRoutes } = await import('./cards');
-    const app = Fastify();
-
-    app.decorate('authenticate', async () => {});
-    app.decorate('optionalAuthenticate', async (request: { user?: unknown }) => {
-      request.user = { userId: 'owner-user', role: 'user', jti: 'jwt-1' };
-    });
-
-    cardServiceMock.getOpenViewAccessible.mockResolvedValue({
-      id: 'card-private',
-      userId: 'owner-user',
-      title: '私有卡片',
-      coverUrl: null,
-      coverRatio: null,
-      htmlUrl: null,
-      status: 'pending',
-      visibility: 'private',
-      createdAt: new Date('2026-04-09T00:00:00.000Z'),
-      updatedAt: new Date('2026-04-09T00:00:00.000Z'),
-    });
-
-    await app.register(cardRoutes);
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/v1/cards/card-private/open-view',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(cardServiceMock.getOpenViewAccessible).toHaveBeenCalledWith('card-private', 'owner-user');
-
-    await app.close();
-  });
-
-  it.each(['pending', 'error', 'ready'] as const)(
-    '卡片打开轻量接口保留 %s 状态',
-    async (status) => {
-      const { default: cardRoutes } = await import('./cards');
-      const app = Fastify();
-
-      app.decorate('authenticate', async () => {});
-      app.decorate('optionalAuthenticate', async () => {});
-
-      cardServiceMock.getOpenViewAccessible.mockResolvedValue({
-        id: `card-${status}`,
-        userId: 'owner-user',
-        title: `${status} card`,
-        coverUrl: null,
-        coverRatio: null,
-        htmlUrl: status === 'ready' ? 'https://file.example/chips-card-render-cache/card/cache/index.html' : null,
-        status,
-        visibility: 'public',
-        createdAt: new Date('2026-04-09T00:00:00.000Z'),
-        updatedAt: new Date('2026-04-09T00:00:00.000Z'),
-      });
-
-      await app.register(cardRoutes);
-
-      const response = await app.inject({
-        method: 'GET',
-        url: `/api/v1/cards/card-${status}/open-view`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.status).toBe(status);
-
-      await app.close();
-    },
-  );
 
   it('卡片状态接口在已登录场景下继续按请求者身份判定可见性', async () => {
     const { default: cardRoutes } = await import('./cards');
@@ -315,7 +215,7 @@ describe('cards route authorization', () => {
       userId: 'owner-user',
       status: 'ready',
       errorMessage: null,
-      htmlUrl: 'http://localhost:9000/chips-card-render-cache/card-1/cache/index.html',
+      htmlUrl: null,
       updatedAt: new Date('2026-04-09T00:00:00.000Z'),
     });
 

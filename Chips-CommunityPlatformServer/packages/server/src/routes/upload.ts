@@ -36,7 +36,6 @@ function createUploadTempFilePath(extension: '.card' | '.box'): string {
 async function drainUploadStream(stream: AsyncIterable<unknown>): Promise<void> {
   for await (const chunk of stream) {
     void chunk;
-    // Drain the stream without buffering invalid uploads in memory.
   }
 }
 
@@ -127,7 +126,6 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
         userId: request.user!.userId,
         roomId: session.roomId ?? undefined,
         visibility: session.visibility,
-        uploadSessionId: session.id,
         clientName: session.clientName,
         clientVersion: session.clientVersion,
         verifiedResources,
@@ -166,7 +164,6 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
 
       for await (const part of parts) {
         if (part.type === 'file' && part.fieldname === 'file') {
-          // 校验文件扩展名
           if (!part.filename?.endsWith('.card')) {
             await drainUploadStream(part.file);
             throw AppError.badRequest(
@@ -197,7 +194,6 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
-        // 验证 options（roomId 格式等）
         const opts = UploadCardSchema.parse({ roomId, visibility });
         if (opts.roomId) {
           await RoomService.assertOwnedByUser(opts.roomId, request.user!.userId);
@@ -322,7 +318,6 @@ async function receiveProcessedCardUpload(params: {
   userId: string;
   roomId?: string;
   visibility: 'public' | 'private';
-  uploadSessionId?: string;
   clientName?: string | null;
   clientVersion?: string | null;
   verifiedResources?: UploadSessionVerifiedResource[];

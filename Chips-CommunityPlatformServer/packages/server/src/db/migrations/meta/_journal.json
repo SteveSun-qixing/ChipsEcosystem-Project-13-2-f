@@ -12,22 +12,8 @@
     {
       "idx": 1,
       "version": "5",
-      "when": 1779508800000,
-      "tag": "0001_community_server_performance",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1779601800000,
-      "tag": "0002_card_source_render_cache",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1779604200000,
-      "tag": "0003_drop_legacy_card_pipeline",
+      "when": 1780052700000,
+      "tag": "0001_community_open_view_cache_base",
       "breakpoints": true
     }
   ]

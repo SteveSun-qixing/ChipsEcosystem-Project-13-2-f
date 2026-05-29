@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { and, asc, desc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   cardRenderCaches,
@@ -21,7 +20,6 @@ import {
   downloadFile,
   getObjectStream,
   uploadFile,
-  uploadBuffer,
 } from '../storage/s3';
 import { hostIntegration } from './host-integration';
 import { mapWithConcurrency } from '../utils/async';
@@ -123,7 +121,7 @@ async function uploadDirectory(params: {
   rootDir: string;
   bucket: string;
   keyPrefix: string;
-}): Promise<{ entryUrl: string; sizeBytes: number; fileCount: number }> {
+}): Promise<{ sizeBytes: number; fileCount: number }> {
   const files = listFilesRecursive(params.rootDir);
   const stats = files.map((relativePath) => ({
     relativePath,
@@ -140,11 +138,7 @@ async function uploadDirectory(params: {
     });
   });
 
-  const entryUrl = isPublicCacheBucket(params.bucket)
-    ? buildObjectUrl(params.bucket, `${params.keyPrefix}/index.html`)
-    : '';
-
-  return { entryUrl, sizeBytes, fileCount: stats.length };
+  return { sizeBytes, fileCount: stats.length };
 }
 
 function copyCoverAssets(unpackedCardDir: string, coverOutputDir: string): void {

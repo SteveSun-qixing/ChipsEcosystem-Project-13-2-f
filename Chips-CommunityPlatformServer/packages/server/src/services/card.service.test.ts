@@ -46,6 +46,7 @@ vi.mock('../storage/s3', () => ({
 vi.mock('../storage/buckets', () => ({
   Bucket: {
     CARD_RESOURCES: 'chips-card-resources',
+    COVERS: 'chips-covers',
     CARD_FILES: 'chips-card-files',
     CARD_RENDER_CACHE: 'chips-card-render-cache',
     CARD_RENDER_CACHE_PRIVATE: 'chips-card-render-cache-private',

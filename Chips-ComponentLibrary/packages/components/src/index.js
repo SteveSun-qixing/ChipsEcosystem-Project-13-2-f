@@ -6232,6 +6232,25 @@ function focusRegistryEntry(entry) {
   }
 }
 
+function assignCssLength(value) {
+  if (typeof value === "number") {
+    return `${value}px`;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+  return undefined;
+}
+
+function buildSelectContentStyle(style, { gutter, maxBlockSize, minInlineSize }) {
+  return {
+    "--chips-select-content-gutter": assignCssLength(gutter) ?? "var(--chips-base-space-1, 4px)",
+    "--chips-select-content-max-block-size": assignCssLength(maxBlockSize) ?? "min(280px, calc(100vh - 24px))",
+    "--chips-select-content-min-inline-size": assignCssLength(minInlineSize) ?? "100%",
+    ...style
+  };
+}
+
 function resolveSelectableEntry(items, preferredValue) {
   return getEnabledEntryByValue(items, preferredValue)
     || getFirstEnabledEntry(items);
@@ -6700,7 +6719,15 @@ const SelectValue = React.forwardRef((props, ref) => {
 SelectValue.displayName = "ChipsSelect.Value";
 
 const SelectContent = React.forwardRef((props, ref) => {
-  const { children, onKeyDown, ...rest } = props;
+  const {
+    children,
+    onKeyDown,
+    gutter,
+    maxBlockSize,
+    minInlineSize,
+    style,
+    ...rest
+  } = props;
   const context = useSelectCompoundContext("content");
   const handleKeyDown = (event) => {
     if (typeof onKeyDown === "function") {
@@ -6751,7 +6778,9 @@ const SelectContent = React.forwardRef((props, ref) => {
       id: rest.id || context.contentId,
       role: rest.role || "listbox",
       "aria-labelledby": rest["aria-labelledby"] || context.triggerId,
+      "data-placement": rest["data-placement"] || "bottom-start",
       tabIndex: rest.tabIndex ?? -1,
+      style: buildSelectContentStyle(style, { gutter, maxBlockSize, minInlineSize }),
       onKeyDown: handleKeyDown
     },
     children

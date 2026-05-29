@@ -192,7 +192,7 @@ Theme Runtime 的正式引用解析顺序为 `ref -> sys -> motion/layout -> com
 - `chips.comp.menu.*`
 - `chips.comp.select.*`
 
-`Menu` 的 `content/item/group/group-label/separator/focus` token 分别表达菜单内容容器、菜单项、高亮/选中视觉、分组标题、分隔线和焦点视觉；`Select` 的 `trigger/content/option/value/icon/focus` token 分别表达触发器、listbox 内容容器、选项高亮/选中、当前值和展开图标视觉。`Select.Content` 的正式 part 是 `content`，主题包不得继续依赖 `select` scope 下的旧 `list` part。
+`Menu` 的 `content/item/group/group-label/separator/focus` token 分别表达菜单内容容器、菜单项、高亮/选中视觉、分组标题、分隔线和焦点视觉；`Select` 的 `trigger/content/option/value/icon/focus` token 分别表达触发器、listbox 内容容器、选项高亮/选中、当前值和展开图标视觉。`Select.Content` 的正式 part 是 `content`，主题包不得继续依赖 `select` scope 下的旧 `list` part。主题包必须把 `Select.Content` 渲染为锚定触发器下方的非文档流浮层，使用 `--chips-select-content-gutter / --chips-select-content-min-inline-size / --chips-select-content-max-block-size` 控制间距、宽度和滚动边界，不得通过普通文档流把应用窗口或容器撑大。
 
 命令消费组件 token 是 Host command registry、应用工具栏和上下文菜单共同消费的正式契约，默认主题和暗色主题必须按组件库 contract 同步覆盖：
 

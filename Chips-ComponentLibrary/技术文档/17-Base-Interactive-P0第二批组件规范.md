@@ -40,11 +40,14 @@
 ### 3.3 ChipsSelect
 
 - `data-scope="select"`
-- `data-part="root|trigger|value|icon|list|option|status"`
+- `data-part="root|trigger|value|icon|content|option|status"`
 - 语义：
   - trigger：`role="button"` + `aria-haspopup="listbox"`
-  - list：`role="listbox"`
+  - content：`role="listbox"`，默认 `data-placement="bottom-start"`
   - option：`role="option"` + `aria-selected`
+- 展开结构：
+  - `Content` 是锚定 `Root/Trigger` 下方的非文档流浮层，不参与调用页面布局计算
+  - 通过 `gutter / minInlineSize / maxBlockSize` 或对应 CSS 变量控制间距、宽度和滚动边界
 - 支持受控与非受控：
   - `value/defaultValue`
   - `open/defaultOpen`

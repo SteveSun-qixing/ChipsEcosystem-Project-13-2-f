@@ -697,7 +697,11 @@ export interface SelectProps {
 
 export interface SelectTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
 
-export interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+export interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  gutter?: string | number;
+  maxBlockSize?: string | number;
+  minInlineSize?: string | number;
+}
 
 export interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
   placeholder?: React.ReactNode;

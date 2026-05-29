@@ -206,6 +206,10 @@ test("Select content renders children and supports roving option selection", asy
     const content = fixture.container.querySelector('[data-scope="select"][data-part="content"]');
     const options = [...fixture.container.querySelectorAll('[data-scope="select"][data-part="option"]')];
     assert.equal(content.getAttribute("role"), "listbox");
+    assert.equal(content.getAttribute("data-placement"), "bottom-start");
+    assert.equal(content.style.getPropertyValue("--chips-select-content-min-inline-size"), "100%");
+    assert.equal(content.style.getPropertyValue("--chips-select-content-gutter"), "var(--chips-base-space-1, 4px)");
+    assert.equal(content.style.getPropertyValue("--chips-select-content-max-block-size"), "min(280px, calc(100vh - 24px))");
     assert.equal(options.length, 3);
     assert.equal(options[0].textContent, "Book");
     assert.deepEqual(options.map((option) => option.tabIndex), [0, -1, -1]);
@@ -219,6 +223,40 @@ test("Select content renders children and supports roving option selection", asy
     assert.deepEqual(values, ["image"]);
     assert.equal(trigger.textContent.includes("Image"), true);
     assert.equal(document.activeElement, trigger);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("Select content accepts controlled overlay sizing variables", async () => {
+  const fixture = setupDom();
+  try {
+    fixture.render(
+      React.createElement(ChipsSelect.Root, {
+        defaultOpen: true,
+        options: [
+          { value: "book", label: "Book" },
+          { value: "image", label: "Image" }
+        ]
+      },
+        React.createElement(ChipsSelect.Trigger, null, React.createElement(ChipsSelect.Value, null)),
+        React.createElement(
+          ChipsSelect.Content,
+          {
+            gutter: 10,
+            maxBlockSize: "12rem",
+            minInlineSize: "18rem"
+          },
+          React.createElement(ChipsSelect.Option, { value: "book" }, "Book"),
+          React.createElement(ChipsSelect.Option, { value: "image" }, "Image")
+        )
+      )
+    );
+
+    const content = fixture.container.querySelector('[data-scope="select"][data-part="content"]');
+    assert.equal(content.style.getPropertyValue("--chips-select-content-gutter"), "10px");
+    assert.equal(content.style.getPropertyValue("--chips-select-content-max-block-size"), "12rem");
+    assert.equal(content.style.getPropertyValue("--chips-select-content-min-inline-size"), "18rem");
   } finally {
     fixture.cleanup();
   }

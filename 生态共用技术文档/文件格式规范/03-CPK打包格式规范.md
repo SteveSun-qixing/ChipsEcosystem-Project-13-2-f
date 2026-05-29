@@ -74,6 +74,16 @@ CPK 文件内部以包根 `manifest.yaml` 为唯一正式清单源。`chipsdev p
 
 系统提供基于 `chipsdev` 与 `chips` 的 CPK 工具链。开发者在插件工程中使用 `chipsdev package` 生成 `.cpk` 文件，使用 `chipsdev validate` 校验构建产物与清单结构；Host 侧通过 `chips plugin install <cpk路径>` 安装 `.cpk` 并执行运行时校验。
 
+`chipsdev package` 必须在写包前执行 Manifest 形态门禁；Host `plugin.install` 在安装目录、manifest 文件或 `.cpk` 时也必须执行同类类型边界校验。若发现以下问题，打包立即失败且不得生成新的 `.cpk`：
+
+- 缺少基础字段、`permissions` 不是数组、`runtime.targets` 不完整；
+- 应用插件缺少 `ui.surface`，或非应用插件声明 `ui.surface / ui.launcher / ui.window`；
+- app/module 插件声明了其他类型的官方字段，例如 `module`、`layout`、`theme`、`themeId`、`displayName`、`isDefault`、`parentTheme`；
+- app/module 插件声明 Host 插件治理保留字段 `plugin`；
+- `cli.commands` 结构无效，或插件命令路径占用了 Host 固定命令根。
+
+类型专属字段的正式归属以 `生态共用技术文档/插件开发/06-Manifest配置规范.md` 为准；CPK 打包规范只记录打包门禁必须执行这一要求。
+
 ## 签名机制
 
 签名属于发布来源治理能力，不是本地开发和本地 `.cpk` 安装的前置条件。当前 Host 运行时把本地开发与本地安装视为 `source = local` 主链路；当 manifest 声明 `source` 且不为 `local` 时，Host 会要求存在 `signature` 字段。完整远端来源、公钥验证、分发审核和公证流程应在发布安全文档中单独冻结，不应写成本地 `chipsdev package -> chips plugin install` 的必经步骤。

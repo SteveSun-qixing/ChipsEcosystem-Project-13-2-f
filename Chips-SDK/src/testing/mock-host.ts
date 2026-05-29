@@ -5,7 +5,7 @@ import type {
   ClientConfig,
   EventsApi,
 } from "../types/client";
-import { createError, type StandardError } from "../types/errors";
+import { createError, normalizeStandardError, type StandardError } from "../types/errors";
 import type {
   ThemeChangedPayload,
   ThemeContractView,
@@ -27,6 +27,7 @@ import type {
   CommandView,
   CommandSource,
 } from "../api/command";
+import type { CliTaskRecord } from "../api/cli-task";
 import type {
   PlatformCapabilitySnapshot,
   PlatformInfo,
@@ -66,6 +67,7 @@ export interface MockChipsHostState {
   launchContext: PlatformLaunchContext;
   surfaces: SurfaceState[];
   commands: CommandView[];
+  cliTasks: CliTaskRecord[];
   diagnostics: ControlPlaneDiagnoseResult;
   metrics: ControlPlaneMetrics;
   permissions: string[];
@@ -257,6 +259,7 @@ export function createMockChipsHost(options: MockChipsHostOptions = {}): MockChi
   const delays = new Map<string, number>();
   let surfaceSeed = 0;
   let invocationSeed = 0;
+  let cliTaskSeed = 0;
 
   const theme: ThemeState = {
     themeId: options.theme?.themeId ?? "chips-official.default-theme",
@@ -303,6 +306,7 @@ export function createMockChipsHost(options: MockChipsHostOptions = {}): MockChi
       createSurfaceStateFromContext(defaultSurfaceContext),
     ],
     commands: [],
+    cliTasks: [],
     diagnostics: {
       routeCount: 0,
       serviceCount: 0,
@@ -422,6 +426,10 @@ export function createMockChipsHost(options: MockChipsHostOptions = {}): MockChi
         nextInvocationId() {
           invocationSeed += 1;
           return `invocation-${invocationSeed}`;
+        },
+        nextCliTaskId() {
+          cliTaskSeed += 1;
+          return `cli-task-${cliTaskSeed}`;
         },
       });
     },
@@ -658,6 +666,7 @@ function handleDefaultAction(
   ids: {
     nextSurfaceId(): string;
     nextInvocationId(): string;
+    nextCliTaskId(): string;
   },
 ): unknown | Promise<unknown> {
   switch (action) {
@@ -719,6 +728,20 @@ function handleDefaultAction(
       return invokeCommand(payload, host, ids.nextInvocationId);
     case "command.setState":
       return setCommandState(payload, host);
+    case "cli.task.create":
+      return createCliTask(payload, host, ids.nextCliTaskId);
+    case "cli.task.bindInvocation":
+      return bindCliTaskInvocation(payload, host);
+    case "cli.task.get":
+      return { task: requireCliTask(payload, host) };
+    case "cli.task.progress":
+      return updateCliTaskProgress(payload, host);
+    case "cli.task.complete":
+      return completeCliTask(payload, host);
+    case "cli.task.fail":
+      return failCliTask(payload, host);
+    case "cli.task.cancel":
+      return cancelCliTask(payload, host);
     case "platform.getInfo":
       return { info: host.state.platformInfo };
     case "platform.getCapabilities":
@@ -1020,6 +1043,112 @@ function setCommandState(payload: unknown, host: MockChipsHost): Promise<{ comma
   return host.emit("command.changed", changed).then(() => ({ command: next }));
 }
 
+function createCliTask(
+  payload: unknown,
+  host: MockChipsHost,
+  nextCliTaskId: () => string,
+): Promise<{ task: CliTaskRecord }> {
+  const record = toRecord(payload);
+  const pluginId = typeof record.pluginId === "string" ? record.pluginId : "";
+  const commandId = typeof record.commandId === "string" ? record.commandId : "";
+  if (!pluginId || !commandId) {
+    throw createError("INVALID_ARGUMENT", "cli.task.create: pluginId and commandId are required.");
+  }
+  const now = Date.now();
+  const task: CliTaskRecord = {
+    taskId: nextCliTaskId(),
+    pluginId,
+    commandId,
+    commandPath: Array.isArray(record.commandPath)
+      ? record.commandPath.filter((item): item is string => typeof item === "string")
+      : undefined,
+    surfaceId: typeof record.surfaceId === "string" ? record.surfaceId : undefined,
+    sessionId: typeof record.sessionId === "string" ? record.sessionId : undefined,
+    status: "running",
+    createdAt: now,
+    updatedAt: now,
+  };
+  host.state.cliTasks = [...host.state.cliTasks, task];
+  return host.emit("cli.task.created", task).then(() => ({ task }));
+}
+
+function bindCliTaskInvocation(payload: unknown, host: MockChipsHost): Promise<{ task: CliTaskRecord }> {
+  const record = toRecord(payload);
+  const task = requireCliTask(record, host);
+  const next: CliTaskRecord = {
+    ...task,
+    invocationId: typeof record.invocationId === "string" ? record.invocationId : task.invocationId,
+    surfaceId: typeof record.surfaceId === "string" ? record.surfaceId : task.surfaceId,
+    sessionId: typeof record.sessionId === "string" ? record.sessionId : task.sessionId,
+    updatedAt: Date.now(),
+  };
+  replaceCliTask(host, next);
+  return host.emit("cli.task.changed", next).then(() => ({ task: next }));
+}
+
+function requireCliTask(payload: unknown, host: MockChipsHost): CliTaskRecord {
+  const record = toRecord(payload);
+  const taskId = typeof record.taskId === "string" ? record.taskId : "";
+  const task = host.state.cliTasks.find((item) => item.taskId === taskId);
+  if (!task) {
+    throw createError("CLI_TASK_NOT_FOUND", `CLI task not found: ${taskId || "<missing>"}`, { taskId });
+  }
+  return task;
+}
+
+function updateCliTaskProgress(payload: unknown, host: MockChipsHost): Promise<{ task: CliTaskRecord }> {
+  const record = toRecord(payload);
+  const task = requireCliTask(record, host);
+  const next: CliTaskRecord = {
+    ...task,
+    progress: isRecord(record.progress) ? record.progress : {},
+    updatedAt: Date.now(),
+  };
+  replaceCliTask(host, next);
+  return host.emit("cli.task.progress", next).then(() => ({ task: next }));
+}
+
+function completeCliTask(payload: unknown, host: MockChipsHost): Promise<{ task: CliTaskRecord }> {
+  const record = toRecord(payload);
+  const task = requireCliTask(record, host);
+  const next: CliTaskRecord = {
+    ...task,
+    status: "completed",
+    output: record.output,
+    updatedAt: Date.now(),
+  };
+  replaceCliTask(host, next);
+  return host.emit("cli.task.completed", next).then(() => ({ task: next }));
+}
+
+function failCliTask(payload: unknown, host: MockChipsHost): Promise<{ task: CliTaskRecord }> {
+  const record = toRecord(payload);
+  const task = requireCliTask(record, host);
+  const next: CliTaskRecord = {
+    ...task,
+    status: "failed",
+    error: normalizeStandardError(record.error, "CLI task failed.", "CLI_TASK_FAILED"),
+    updatedAt: Date.now(),
+  };
+  replaceCliTask(host, next);
+  return host.emit("cli.task.failed", next).then(() => ({ task: next }));
+}
+
+function cancelCliTask(payload: unknown, host: MockChipsHost): Promise<{ task: CliTaskRecord }> {
+  const task = requireCliTask(payload, host);
+  const next: CliTaskRecord = {
+    ...task,
+    status: "cancelled",
+    updatedAt: Date.now(),
+  };
+  replaceCliTask(host, next);
+  return host.emit("cli.task.cancelled", next).then(() => ({ task: next }));
+}
+
+function replaceCliTask(host: MockChipsHost, task: CliTaskRecord): void {
+  host.state.cliTasks = host.state.cliTasks.map((item) => (item.taskId === task.taskId ? task : item));
+}
+
 function setPreventSleep(payload: unknown, host: MockChipsHost): { preventSleep: boolean } {
   const record = toRecord(payload);
   host.state.power = {
@@ -1063,7 +1192,7 @@ function isSurfaceState(value: unknown): value is SurfaceStateKind {
 }
 
 function isCommandSource(value: unknown): value is CommandSource {
-  return ["menu", "toolbar", "shortcut", "palette", "context-menu", "api"].includes(String(value));
+  return ["menu", "toolbar", "shortcut", "palette", "context-menu", "api", "cli"].includes(String(value));
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

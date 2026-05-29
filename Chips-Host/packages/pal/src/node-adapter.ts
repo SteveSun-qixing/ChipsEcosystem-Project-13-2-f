@@ -366,6 +366,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
       height: presentation.height ?? 800,
       resizable: presentation.resizable,
       alwaysOnTop: presentation.alwaysOnTop,
+      visible: presentation.visible,
       url:
         target.type === 'url'
           ? target.url
@@ -423,7 +424,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
       width,
       height,
       focused: false,
-      state: 'normal',
+      state: options.visible === false ? 'hidden' : 'normal',
       url: options.url,
       pluginId: options.pluginId,
       sessionId: options.sessionId,
@@ -460,7 +461,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
         height,
         resizable: options.resizable ?? true,
         alwaysOnTop: options.alwaysOnTop ?? false,
-        show: true,
+        show: options.visible ?? true,
         ...buildElectronWindowChromeOptions(options.chrome),
         webPreferences
       });
@@ -486,6 +487,7 @@ class NodeWindowManager implements PALWindow, PALSurface {
 
     const browserWindow = this.electronWindows.get(id);
     if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.show?.();
       browserWindow.focus();
     }
 
@@ -519,13 +521,19 @@ class NodeWindowManager implements PALWindow, PALSurface {
 
     const browserWindow = this.electronWindows.get(id);
     if (browserWindow && !browserWindow.isDestroyed()) {
-      if (state === 'minimized') {
+      if (state === 'hidden') {
+        browserWindow.hide?.();
+      } else if (state === 'minimized') {
+        browserWindow.show?.();
         browserWindow.minimize();
       } else if (state === 'maximized') {
+        browserWindow.show?.();
         browserWindow.maximize();
       } else if (state === 'fullscreen') {
+        browserWindow.show?.();
         browserWindow.setFullScreen(true);
       } else {
+        browserWindow.show?.();
         browserWindow.setFullScreen(false);
         browserWindow.restore();
       }
@@ -579,6 +587,9 @@ class NodeWindowManager implements PALWindow, PALSurface {
   }
 
   private resolveWindowState(window: ElectronBrowserWindowLike): WindowState['state'] {
+    if (window.isVisible && !window.isVisible()) {
+      return 'hidden';
+    }
     if (window.isFullScreen()) {
       return 'fullscreen';
     }

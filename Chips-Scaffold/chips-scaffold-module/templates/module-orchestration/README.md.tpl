@@ -36,6 +36,16 @@ chipsdev module invoke \
 
 CLI 会先构建当前工程，再在开发工作区安装并启用 `.cpk`，最后通过 Host `module.invoke` 启动编排 job。返回 job 后，CLI 会轮询到 `completed`、`failed` 或 `cancelled` 终态。
 
+## 插件 CLI 命令
+
+`manifest.yaml` 默认声明一条插件命令：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} execute '[{"capability":"module.example.step","method":"run","input":{"value":"demo"}}]'
+```
+
+该命令由 Host 动态发现，JSON 位置参数会映射为 `steps`，真实执行仍走 Host `module.invoke / module.job.*`，不会直接导入下游模块源码。
+
 ## 依赖治理
 
 - `--consumes` 只写入 `manifest.module.consumes`，不会自动安装或启用下游 provider；

@@ -41,6 +41,21 @@ function resolveTemplateRoot(): string {
 }
 
 const TEMPLATE_ROOT = resolveTemplateRoot();
+const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+  "help",
+  "host",
+  "start",
+  "stop",
+  "status",
+  "config",
+  "logs",
+  "theme",
+  "plugin",
+  "update",
+  "doctor",
+  "open",
+  "completion",
+]);
 
 const TEXT_EXTENSIONS = new Set([
   ".ts",
@@ -58,6 +73,29 @@ const TEXT_EXTENSIONS = new Set([
   ".txt",
   ".svg",
 ]);
+
+function toCliCommandRoot(projectName: string, pluginId: string): string {
+  const candidates = [projectName, pluginId]
+    .map((value) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    )
+    .filter((value) => value.length > 0);
+
+  for (const candidate of candidates) {
+    const root = HOST_FIXED_CLI_COMMAND_ROOTS.has(candidate)
+      ? `${candidate}-module`
+      : candidate;
+    if (/^[a-z0-9][a-z0-9-]*$/.test(root)) {
+      return root;
+    }
+  }
+
+  return "chips-module";
+}
 
 export async function loadTemplateMeta(
   templateId: string
@@ -190,6 +228,7 @@ function buildTemplateContext(options: CreateModuleProjectOptions): TemplateCont
     TARGET_DIR: options.targetDir,
     TEMPLATE_ID: options.templateId,
     PLUGIN_ID: options.pluginId,
+    CLI_COMMAND_ROOT: toCliCommandRoot(options.projectName, options.pluginId),
     MODULE_CAPABILITY: options.moduleCapability,
     MODULE_CONSUMES_YAML: moduleConsumesYaml,
     DISPLAY_NAME: options.displayName,

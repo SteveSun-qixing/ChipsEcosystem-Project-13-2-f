@@ -55,6 +55,13 @@
         "errorWithCode": "命令错误：{code}"
       }
     },
+    "cli": {
+      "open": {
+        "title": "打开 {{ DISPLAY_NAME }}",
+        "description": "从命令行打开应用容器并传入启动参数",
+        "subjectPlaceholder": "输入要传递给应用的文本参数"
+      }
+    },
     "workspace": {
       "overviewTitle": "运行概览",
       "overviewDescription": "应用通过 Host surface、SDK 和组件库运行。",

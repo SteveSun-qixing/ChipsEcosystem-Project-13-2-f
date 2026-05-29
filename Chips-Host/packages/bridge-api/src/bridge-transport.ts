@@ -13,7 +13,7 @@ export type BridgeSurfaceKind = 'window' | 'tab' | 'route' | 'modal' | 'sheet' |
 export type BridgeSurfaceStateKind = 'normal' | 'minimized' | 'maximized' | 'fullscreen' | 'hidden';
 export type BridgeWindowChromeTitleBarStyle = 'default' | 'hidden' | 'hiddenInset' | 'customButtonsOnHover';
 export type BridgeCommandScopeKind = 'global' | 'app' | 'scene' | 'surface' | 'document';
-export type BridgeCommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api';
+export type BridgeCommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api' | 'cli';
 
 export interface BridgeWindowChromeOverlayOptions {
   color?: string;
@@ -112,6 +112,7 @@ export interface BridgeSurfacePresentation {
   height?: number;
   resizable?: boolean;
   alwaysOnTop?: boolean;
+  visible?: boolean;
   chrome?: BridgeWindowChromeOptions;
 }
 
@@ -125,6 +126,7 @@ export interface BridgeSurfaceCommandContext {
   commandId: string;
   source?: string;
   payload?: Record<string, unknown>;
+  taskId?: string;
 }
 
 export interface BridgeSurfaceContext {

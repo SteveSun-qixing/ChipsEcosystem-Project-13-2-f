@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("node:fs");
+const fsp = require("node:fs/promises");
 const path = require("node:path");
 
 const TEMPLATE_ROOT = path.join(__dirname, "..", "templates");
@@ -12,6 +13,22 @@ const FORBIDDEN_TEMPLATE_PATTERNS = [
   { pattern: /runtime\.tsx/, label: "旧 UI runtime.tsx" },
   { pattern: /\bchips dev\b/i, label: "旧 chips dev 命令" }
 ];
+
+const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+  "help",
+  "host",
+  "start",
+  "stop",
+  "status",
+  "config",
+  "logs",
+  "theme",
+  "plugin",
+  "update",
+  "doctor",
+  "open",
+  "completion",
+]);
 
 const FORBIDDEN_OUTPUT_PATTERNS = [
   ...FORBIDDEN_TEMPLATE_PATTERNS,
@@ -137,6 +154,39 @@ function assertRenderedOutputClean(templateId, targetDir) {
   }
 }
 
+async function assertRenderedManifestCliContract(templateId, targetDir) {
+  const manifestPath = path.join(targetDir, "manifest.yaml");
+  const manifestText = await fsp.readFile(manifestPath, "utf-8");
+  if (!/cli:\n\s+commands:/.test(manifestText)) {
+    throw new Error(`模板 ${templateId} 生成 manifest.yaml 必须声明 cli.commands。`);
+  }
+  if (!/target:\n\s+type:\s+module/.test(manifestText)) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令必须指向 module target。`);
+  }
+  if (!/output:\n\s+mode:\s+json/.test(manifestText)) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令必须声明 json 输出模式。`);
+  }
+  if (!/mapsTo:/.test(manifestText)) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令必须声明参数映射。`);
+  }
+  if (!/ui:\n\s+control:/.test(manifestText)) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令必须声明 TUI 控件提示。`);
+  }
+  const commandPathMatch = manifestText.match(/commandPath:\s+([^\n]+)/);
+  if (!commandPathMatch) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令缺少 commandPath。`);
+  }
+  const root = commandPathMatch[1].trim().split(/\s+/)[0];
+  if (HOST_FIXED_CLI_COMMAND_ROOTS.has(root)) {
+    throw new Error(`模板 ${templateId} 生成 CLI 命令占用了 Host 固定命令根：${root}`);
+  }
+  for (const forbidden of [/^plugin\s*:/m, /^theme\s*:/m, /^themeId\s*:/m, /^displayName\s*:/m, /^layout\s*:/m, /^ui:\s*$/m]) {
+    if (forbidden.test(manifestText)) {
+      throw new Error(`模板 ${templateId} 生成 module manifest 不应声明越界字段：${forbidden}`);
+    }
+  }
+}
+
 async function main() {
   const templates = fs.readdirSync(TEMPLATE_ROOT, { withFileTypes: true });
   if (templates.length === 0) {
@@ -203,6 +253,7 @@ async function main() {
       throw new Error(`模板 ${templateId} 生成产物不应包含 template.json。`);
     }
     assertRenderedOutputClean(templateId, targetDir);
+    await assertRenderedManifestCliContract(templateId, targetDir);
   }
 
   fs.rmSync(tempRoot, { recursive: true, force: true });

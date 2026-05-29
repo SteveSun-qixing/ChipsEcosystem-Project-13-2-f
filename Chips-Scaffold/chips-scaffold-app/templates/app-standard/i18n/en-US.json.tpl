@@ -55,6 +55,13 @@
         "errorWithCode": "Command error: {code}"
       }
     },
+    "cli": {
+      "open": {
+        "title": "Open {{ DISPLAY_NAME }}",
+        "description": "Open the app surface from the CLI and pass launch parameters",
+        "subjectPlaceholder": "Enter text to pass into the app"
+      }
+    },
     "workspace": {
       "overviewTitle": "Runtime overview",
       "overviewDescription": "The app runs through Host surface, SDK, and the component library.",

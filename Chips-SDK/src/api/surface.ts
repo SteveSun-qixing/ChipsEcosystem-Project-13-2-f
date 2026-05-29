@@ -10,6 +10,7 @@ export interface SurfacePresentation {
   height?: number;
   resizable?: boolean;
   alwaysOnTop?: boolean;
+  visible?: boolean;
   chrome?: WindowChromeOptions;
 }
 
@@ -23,6 +24,7 @@ export interface SurfaceCommandContext {
   commandId: string;
   source?: string;
   payload?: Record<string, unknown>;
+  taskId?: string;
 }
 
 export interface SurfaceContext {

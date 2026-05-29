@@ -41,3 +41,85 @@ module:
           inputSchema: contracts/runAsync.input.schema.json
           outputSchema: contracts/runAsync.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} run
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: run
+        timeoutMs: 30000
+      titleKey: module.cli.run.title
+      descriptionKey: module.cli.run.description
+      arguments:
+        - name: source-text
+          position: 0
+          type: text
+          required: true
+          mapsTo: sourceText
+          ui:
+            control: pasteBox
+            placeholderKey: module.cli.run.sourceText.placeholder
+      options:
+        - name: uppercase
+          short: u
+          type: boolean
+          default: false
+          mapsTo: uppercase
+          ui:
+            control: toggle
+        - name: prefix
+          short: p
+          type: string
+          mapsTo: prefix
+      output:
+        mode: json
+        json: supported
+    - commandPath: {{ CLI_COMMAND_ROOT }} run-async
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: runAsync
+        timeoutMs: 60000
+      titleKey: module.cli.runAsync.title
+      descriptionKey: module.cli.runAsync.description
+      arguments:
+        - name: source-text
+          position: 0
+          type: text
+          required: true
+          mapsTo: sourceText
+          ui:
+            control: pasteBox
+            placeholderKey: module.cli.runAsync.sourceText.placeholder
+      options:
+        - name: uppercase
+          short: u
+          type: boolean
+          default: false
+          mapsTo: uppercase
+          ui:
+            control: toggle
+        - name: prefix
+          short: p
+          type: string
+          mapsTo: prefix
+        - name: delay-ms
+          short: d
+          type: integer
+          default: 25
+          mapsTo: delayMs
+          validation:
+            min: 0
+            max: 60000
+          ui:
+            control: slider
+            min: 0
+            max: 60000
+            step: 25
+      output:
+        mode: json
+        json: supported
+      job:
+        wait: true
+        cancelOnInterrupt: true

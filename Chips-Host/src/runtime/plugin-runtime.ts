@@ -6,7 +6,7 @@ import { createError } from '../shared/errors';
 import type { PluginRuntimeTargetId, PluginUiConfig } from '../shared/window-chrome';
 import { parsePluginUiConfig } from '../shared/window-chrome';
 import { parseYamlLite } from '../shared/yaml-lite';
-import { createId, now } from '../shared/utils';
+import { createId, deepClone, now } from '../shared/utils';
 
 export type PluginType = 'app' | 'card' | 'layout' | 'module' | 'theme';
 
@@ -58,6 +58,155 @@ export interface ModulePluginManifestMeta {
   consumes: ModuleConsumeManifestMeta[];
 }
 
+export type CliCommandTargetType = 'app' | 'module';
+export type CliCommandParameterType =
+  | 'string'
+  | 'stringList'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'enum'
+  | 'path'
+  | 'json'
+  | 'jsonFile'
+  | 'text'
+  | 'textFile';
+
+export type CliCommandUiControl =
+  | 'select'
+  | 'multiSelect'
+  | 'toggle'
+  | 'stepper'
+  | 'slider'
+  | 'pathInput'
+  | 'pasteBox'
+  | 'textarea';
+
+export type CliCommandPathKind = 'file' | 'directory' | 'any';
+export type CliCommandPathRole = 'input' | 'output';
+export type CliCommandOverwritePolicy = 'fail' | 'overwrite' | 'rename' | 'skip';
+export type CliCommandBatchFormat = 'lines' | 'json-array';
+export type CliCommandBatchItemType = 'value' | 'path';
+export type CliCommandBatchExecutionMode = 'aggregate' | 'itemized';
+export type CliCommandOutputMode = 'human' | 'json';
+export type CliCommandJsonOutputPolicy = 'supported' | 'required' | 'unsupported';
+export type CliCommandSurfaceReusePolicy = 'always' | 'never' | 'preferred';
+
+export interface CliCommandPathRuleManifestMeta {
+  kind?: CliCommandPathKind;
+  role?: CliCommandPathRole;
+  exists?: boolean;
+  create?: boolean;
+  extensions?: string[];
+  overwrite?: CliCommandOverwritePolicy;
+}
+
+export interface CliCommandBatchItemPathRuleManifestMeta {
+  kind?: CliCommandPathKind;
+  exists?: boolean;
+  create?: boolean;
+  extensions?: string[];
+}
+
+export interface CliCommandBatchManifestMeta {
+  format: CliCommandBatchFormat;
+  itemType?: CliCommandBatchItemType;
+  itemPath?: CliCommandBatchItemPathRuleManifestMeta;
+  execution?: CliCommandBatchExecutionMode;
+}
+
+export interface CliCommandUiManifestMeta {
+  control?: CliCommandUiControl;
+  choices?: unknown[];
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholderKey?: string;
+}
+
+export interface CliCommandValidationManifestMeta {
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+}
+
+export interface CliCommandParameterManifestMeta {
+  name: string;
+  short?: string;
+  position?: number;
+  type: CliCommandParameterType;
+  required?: boolean;
+  default?: unknown;
+  mapsTo?: string;
+  choices?: unknown[];
+  multiple?: boolean;
+  validation?: CliCommandValidationManifestMeta;
+  path?: CliCommandPathRuleManifestMeta;
+  batch?: CliCommandBatchManifestMeta;
+  ui?: CliCommandUiManifestMeta;
+}
+
+export interface CliCommandModuleTargetManifestMeta {
+  type: 'module';
+  capability: string;
+  method: string;
+  pluginId?: string;
+  timeoutMs?: number;
+}
+
+export interface CliCommandAppTargetManifestMeta {
+  type: 'app';
+  pluginId: string;
+  commandId?: string;
+  launchParams?: Record<string, unknown>;
+  surface?: {
+    open?: boolean;
+    focus?: boolean;
+    reuse?: CliCommandSurfaceReusePolicy;
+  };
+}
+
+export type CliCommandTargetManifestMeta =
+  | CliCommandModuleTargetManifestMeta
+  | CliCommandAppTargetManifestMeta;
+
+export interface CliCommandOutputManifestMeta {
+  mode?: CliCommandOutputMode;
+  json?: CliCommandJsonOutputPolicy;
+  artifacts?: string[];
+}
+
+export interface CliCommandJobManifestMeta {
+  wait?: boolean;
+  cancelOnInterrupt?: boolean;
+}
+
+export interface CliCommandConflictManifestMeta {
+  priority?: number;
+  namespace?: string;
+}
+
+export interface CliCommandManifestMeta {
+  commandId: string;
+  commandPath: string[];
+  target: CliCommandTargetManifestMeta;
+  titleKey: string;
+  descriptionKey?: string;
+  examples: string[];
+  permissions: string[];
+  arguments: CliCommandParameterManifestMeta[];
+  options: CliCommandParameterManifestMeta[];
+  output?: CliCommandOutputManifestMeta;
+  job?: CliCommandJobManifestMeta;
+  conflict?: CliCommandConflictManifestMeta;
+}
+
+export interface CliManifestMeta {
+  commands: CliCommandManifestMeta[];
+}
+
 export interface PluginRuntimeTargetManifestMeta {
   supported: boolean;
 }
@@ -90,6 +239,7 @@ export interface PluginManifest {
   theme?: ThemePluginManifestMeta;
   layout?: LayoutPluginManifestMeta;
   module?: ModulePluginManifestMeta;
+  cli?: CliManifestMeta;
 }
 
 export interface PluginRecord {
@@ -152,13 +302,98 @@ const pluginTypes: PluginType[] = ['app', 'card', 'layout', 'module', 'theme'];
 const pluginSources = ['official', 'third-party', 'local'] as const;
 const runtimeTargetIds: PluginRuntimeTargetId[] = ['desktop', 'web', 'mobile', 'headless'];
 const capabilityFallbackBehaviors: PluginCapabilityFallbackBehavior[] = ['reject', 'download', 'share', 'openExternal'];
+const cliCommandTargetTypes: CliCommandTargetType[] = ['app', 'module'];
+const cliCommandParameterTypes: CliCommandParameterType[] = [
+  'string',
+  'stringList',
+  'number',
+  'integer',
+  'boolean',
+  'enum',
+  'path',
+  'json',
+  'jsonFile',
+  'text',
+  'textFile'
+];
+const cliCommandUiControls: CliCommandUiControl[] = [
+  'select',
+  'multiSelect',
+  'toggle',
+  'stepper',
+  'slider',
+  'pathInput',
+  'pasteBox',
+  'textarea'
+];
+const cliCommandPathKinds: CliCommandPathKind[] = ['file', 'directory', 'any'];
+const cliCommandPathRoles: CliCommandPathRole[] = ['input', 'output'];
+const cliCommandOverwritePolicies: CliCommandOverwritePolicy[] = ['fail', 'overwrite', 'rename', 'skip'];
+const cliCommandBatchFormats: CliCommandBatchFormat[] = ['lines', 'json-array'];
+const cliCommandBatchItemTypes: CliCommandBatchItemType[] = ['value', 'path'];
+const cliCommandBatchExecutionModes: CliCommandBatchExecutionMode[] = ['aggregate', 'itemized'];
+const cliCommandOutputModes: CliCommandOutputMode[] = ['human', 'json'];
+const cliCommandJsonOutputPolicies: CliCommandJsonOutputPolicy[] = ['supported', 'required', 'unsupported'];
+const cliCommandSurfaceReusePolicies: CliCommandSurfaceReusePolicy[] = ['always', 'never', 'preferred'];
+const hostFixedCliCommandRoots = new Set([
+  'help',
+  'host',
+  'start',
+  'stop',
+  'status',
+  'config',
+  'logs',
+  'theme',
+  'plugin',
+  'update',
+  'doctor',
+  'open',
+  'completion'
+]);
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+const CLI_COMMAND_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
+const CLI_COMMAND_PARAM_NAME_PATTERN = /^[a-z][a-z0-9-]*$/i;
+const CLI_COMMAND_MAPS_TO_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
+
+const typeExclusiveManifestFields: Array<{ field: string; ownerType: PluginType }> = [
+  { field: 'module', ownerType: 'module' },
+  { field: 'layout', ownerType: 'layout' },
+  { field: 'theme', ownerType: 'theme' },
+  { field: 'themeId', ownerType: 'theme' },
+  { field: 'displayName', ownerType: 'theme' },
+  { field: 'isDefault', ownerType: 'theme' },
+  { field: 'parentTheme', ownerType: 'theme' }
+];
 
 const hasPluginType = (value: string): value is PluginType => pluginTypes.includes(value as PluginType);
 const hasPluginSource = (value: string): value is (typeof pluginSources)[number] =>
   pluginSources.includes(value as (typeof pluginSources)[number]);
 const hasCapabilityFallbackBehavior = (value: string): value is PluginCapabilityFallbackBehavior =>
   capabilityFallbackBehaviors.includes(value as PluginCapabilityFallbackBehavior);
+const hasCliCommandTargetType = (value: string): value is CliCommandTargetType =>
+  cliCommandTargetTypes.includes(value as CliCommandTargetType);
+const hasCliCommandParameterType = (value: string): value is CliCommandParameterType =>
+  cliCommandParameterTypes.includes(value as CliCommandParameterType);
+const hasCliCommandUiControl = (value: string): value is CliCommandUiControl =>
+  cliCommandUiControls.includes(value as CliCommandUiControl);
+const hasCliCommandPathKind = (value: string): value is CliCommandPathKind =>
+  cliCommandPathKinds.includes(value as CliCommandPathKind);
+const hasCliCommandPathRole = (value: string): value is CliCommandPathRole =>
+  cliCommandPathRoles.includes(value as CliCommandPathRole);
+const hasCliCommandOverwritePolicy = (value: string): value is CliCommandOverwritePolicy =>
+  cliCommandOverwritePolicies.includes(value as CliCommandOverwritePolicy);
+const hasCliCommandBatchFormat = (value: string): value is CliCommandBatchFormat =>
+  cliCommandBatchFormats.includes(value as CliCommandBatchFormat);
+const hasCliCommandBatchItemType = (value: string): value is CliCommandBatchItemType =>
+  cliCommandBatchItemTypes.includes(value as CliCommandBatchItemType);
+const hasCliCommandBatchExecutionMode = (value: string): value is CliCommandBatchExecutionMode =>
+  cliCommandBatchExecutionModes.includes(value as CliCommandBatchExecutionMode);
+const hasCliCommandOutputMode = (value: string): value is CliCommandOutputMode =>
+  cliCommandOutputModes.includes(value as CliCommandOutputMode);
+const hasCliCommandJsonOutputPolicy = (value: string): value is CliCommandJsonOutputPolicy =>
+  cliCommandJsonOutputPolicies.includes(value as CliCommandJsonOutputPolicy);
+const hasCliCommandSurfaceReusePolicy = (value: string): value is CliCommandSurfaceReusePolicy =>
+  cliCommandSurfaceReusePolicies.includes(value as CliCommandSurfaceReusePolicy);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -646,6 +881,17 @@ export class PluginRuntime {
         field: 'module'
       });
     }
+    for (const command of manifest.cli?.commands ?? []) {
+      const missingPermissions = command.permissions.filter((permission) => !manifest.permissions.includes(permission));
+      if (missingPermissions.length > 0) {
+        throw createError('PLUGIN_INVALID', 'cli.commands permissions must be declared by plugin permissions', {
+          manifestPath,
+          pluginId: manifest.id,
+          commandId: command.commandId,
+          missingPermissions
+        });
+      }
+    }
   }
 
   private recordAudit(
@@ -906,6 +1152,24 @@ export class PluginRuntime {
 
     const { entry, assets } = collectManifestAssetPaths(record, manifestPath);
 
+    for (const { field, ownerType } of typeExclusiveManifestFields) {
+      if (typeof record[field] !== 'undefined' && record.type !== ownerType) {
+        throw createError('PLUGIN_INVALID', `manifest.${field} is only supported for ${ownerType} plugins`, {
+          manifestPath,
+          field,
+          ownerType,
+          type: record.type
+        });
+      }
+    }
+    if ((record.type === 'app' || record.type === 'module') && typeof record.plugin !== 'undefined') {
+      throw createError('PLUGIN_INVALID', 'manifest.plugin is reserved for Host plugin governance', {
+        manifestPath,
+        field: 'plugin',
+        type: record.type
+      });
+    }
+
     const ui = parsePluginUiConfig(record.ui, manifestPath);
     if (record.type !== 'app' && ui?.launcher) {
       throw createError('PLUGIN_INVALID', 'ui.launcher is only supported for app plugins', {
@@ -950,6 +1214,7 @@ export class PluginRuntime {
       }
     }
     const capabilityFallbacks = this.parseCapabilityFallbacks(record, manifestPath);
+    const cli = this.parseCliManifestMeta(record, manifestPath);
 
     const theme = record.type === 'theme' ? this.parseThemeManifestMeta(record, manifestPath) : undefined;
     const layout = record.type === 'layout' ? this.parseLayoutManifestMeta(record) : undefined;
@@ -977,8 +1242,849 @@ export class PluginRuntime {
       capabilityFallbacks,
       theme,
       layout,
-      module
+      module,
+      cli
     };
+  }
+
+  private parseCliManifestMeta(record: Record<string, unknown>, manifestPath: string): CliManifestMeta | undefined {
+    const cli = record.cli;
+    if (typeof cli === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(cli)) {
+      throw createError('PLUGIN_INVALID', 'cli must be an object', {
+        manifestPath,
+        field: 'cli'
+      });
+    }
+    if (record.type !== 'app' && record.type !== 'module') {
+      throw createError('PLUGIN_INVALID', 'cli.commands is only supported for app and module plugins', {
+        manifestPath,
+        field: 'cli.commands',
+        type: record.type
+      });
+    }
+    if (!Array.isArray(cli.commands)) {
+      throw createError('PLUGIN_INVALID', 'cli.commands must be an array', {
+        manifestPath,
+        field: 'cli.commands'
+      });
+    }
+
+    const commands = cli.commands.map((command, commandIndex) => {
+      return this.parseCliCommandManifestMeta(record, command, commandIndex, manifestPath);
+    });
+    const commandIds = new Set<string>();
+    for (const command of commands) {
+      if (commandIds.has(command.commandId)) {
+        throw createError('PLUGIN_INVALID', 'cli.commands commandId must be unique within the plugin manifest', {
+          manifestPath,
+          field: 'cli.commands.commandId',
+          commandId: command.commandId
+        });
+      }
+      commandIds.add(command.commandId);
+    }
+
+    return {
+      commands
+    };
+  }
+
+  private parseCliCommandManifestMeta(
+    manifestRecord: Record<string, unknown>,
+    value: unknown,
+    commandIndex: number,
+    manifestPath: string
+  ): CliCommandManifestMeta {
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli.commands entries must be objects', {
+        manifestPath,
+        field: `cli.commands[${commandIndex}]`
+      });
+    }
+
+    const commandPath = this.parseCliCommandPath(value.commandPath, `cli.commands[${commandIndex}].commandPath`, manifestPath);
+    if (hostFixedCliCommandRoots.has(commandPath[0]!.toLowerCase())) {
+      throw createError('PLUGIN_INVALID', 'cli.commands commandPath must not shadow Host fixed commands', {
+        manifestPath,
+        field: `cli.commands[${commandIndex}].commandPath`,
+        commandPath,
+        reservedRoot: commandPath[0]
+      });
+    }
+    const titleKey = asOptionalString(value.titleKey);
+    if (!titleKey) {
+      throw createError('PLUGIN_INVALID', 'cli.commands[].titleKey is required', {
+        manifestPath,
+        field: `cli.commands[${commandIndex}].titleKey`
+      });
+    }
+
+    const commandId =
+      asOptionalString(value.commandId) ?? `${String(manifestRecord.id)}.cli.${commandPath.join('.')}`;
+    const target = this.parseCliCommandTargetManifestMeta(
+      manifestRecord,
+      value.target,
+      `cli.commands[${commandIndex}].target`,
+      manifestPath
+    );
+    const argumentItems = this.parseCliCommandParameterList(
+      value.arguments,
+      `cli.commands[${commandIndex}].arguments`,
+      manifestPath,
+      true
+    );
+    const optionItems = this.parseCliCommandParameterList(
+      value.options,
+      `cli.commands[${commandIndex}].options`,
+      manifestPath,
+      false
+    );
+
+    this.assertUniqueCliCommandParameterNames(
+      [...argumentItems, ...optionItems],
+      `cli.commands[${commandIndex}]`,
+      manifestPath
+    );
+
+    return {
+      commandId,
+      commandPath,
+      target,
+      titleKey,
+      descriptionKey: asOptionalString(value.descriptionKey),
+      examples: this.parseCliCommandExamples(value.examples, `cli.commands[${commandIndex}].examples`, manifestPath),
+      permissions: this.parseCliCommandPermissions(value.permissions, `cli.commands[${commandIndex}].permissions`, manifestPath),
+      arguments: argumentItems,
+      options: optionItems,
+      output: this.parseCliCommandOutput(value.output, `cli.commands[${commandIndex}].output`, manifestPath),
+      job: this.parseCliCommandJob(value.job, `cli.commands[${commandIndex}].job`, manifestPath),
+      conflict: this.parseCliCommandConflict(value.conflict, `cli.commands[${commandIndex}].conflict`, manifestPath)
+    };
+  }
+
+  private parseCliCommandPath(value: unknown, field: string, manifestPath: string): string[] {
+    const segments =
+      typeof value === 'string'
+        ? value.trim().split(/\s+/).filter((segment) => segment.length > 0)
+        : Array.isArray(value)
+          ? value.map((segment) => (typeof segment === 'string' ? segment.trim() : ''))
+          : [];
+    if (segments.length === 0 || segments.some((segment) => !CLI_COMMAND_PATH_SEGMENT_PATTERN.test(segment))) {
+      throw createError('PLUGIN_INVALID', 'cli commandPath must be a non-empty command segment string or string[]', {
+        manifestPath,
+        field,
+        value
+      });
+    }
+    return segments;
+  }
+
+  private parseCliCommandTargetManifestMeta(
+    manifestRecord: Record<string, unknown>,
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandTargetManifestMeta {
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command target must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const targetType = asOptionalString(value.type);
+    if (!targetType || !hasCliCommandTargetType(targetType)) {
+      throw createError('PLUGIN_INVALID', 'cli command target.type must be "app" or "module"', {
+        manifestPath,
+        field: `${field}.type`,
+        targetType
+      });
+    }
+    if (targetType !== manifestRecord.type) {
+      throw createError('PLUGIN_INVALID', 'cli command target.type must match the declaring plugin type', {
+        manifestPath,
+        field: `${field}.type`,
+        pluginType: manifestRecord.type,
+        targetType
+      });
+    }
+
+    if (targetType === 'module') {
+      const capability = asOptionalString(value.capability);
+      const method = asOptionalString(value.method);
+      if (!capability || !method) {
+        throw createError('PLUGIN_INVALID', 'module cli target requires capability and method', {
+          manifestPath,
+          field
+        });
+      }
+      const pluginId = asOptionalString(value.pluginId);
+      if (pluginId && pluginId !== manifestRecord.id) {
+        throw createError('PLUGIN_INVALID', 'module cli target pluginId must match the declaring plugin id', {
+          manifestPath,
+          field: `${field}.pluginId`,
+          pluginId,
+          ownerPluginId: manifestRecord.id
+        });
+      }
+      const target: CliCommandModuleTargetManifestMeta = {
+        type: 'module',
+        capability,
+        method
+      };
+      if (pluginId) {
+        target.pluginId = pluginId;
+      }
+      if (typeof value.timeoutMs !== 'undefined') {
+        if (typeof value.timeoutMs !== 'number' || !Number.isFinite(value.timeoutMs) || value.timeoutMs <= 0) {
+          throw createError('PLUGIN_INVALID', 'module cli target timeoutMs must be a positive finite number', {
+            manifestPath,
+            field: `${field}.timeoutMs`
+          });
+        }
+        target.timeoutMs = value.timeoutMs;
+      }
+      return target;
+    }
+
+    const pluginId = asOptionalString(value.pluginId) ?? String(manifestRecord.id);
+    if (pluginId !== manifestRecord.id) {
+      throw createError('PLUGIN_INVALID', 'app cli target pluginId must match the declaring plugin id', {
+        manifestPath,
+        field: `${field}.pluginId`,
+        pluginId,
+        ownerPluginId: manifestRecord.id
+      });
+    }
+    const target: CliCommandAppTargetManifestMeta = {
+      type: 'app',
+      pluginId
+    };
+    const commandId = asOptionalString(value.commandId);
+    if (commandId) {
+      target.commandId = commandId;
+    }
+    if (typeof value.launchParams !== 'undefined') {
+      if (!isRecord(value.launchParams)) {
+        throw createError('PLUGIN_INVALID', 'app cli target launchParams must be an object', {
+          manifestPath,
+          field: `${field}.launchParams`
+        });
+      }
+      target.launchParams = deepClone(value.launchParams);
+    }
+    if (typeof value.surface !== 'undefined') {
+      if (!isRecord(value.surface)) {
+        throw createError('PLUGIN_INVALID', 'app cli target surface must be an object', {
+          manifestPath,
+          field: `${field}.surface`
+        });
+      }
+      const surface: NonNullable<CliCommandAppTargetManifestMeta['surface']> = {};
+      if (typeof value.surface.open !== 'undefined') {
+        if (typeof value.surface.open !== 'boolean') {
+          throw createError('PLUGIN_INVALID', 'app cli target surface.open must be a boolean', {
+            manifestPath,
+            field: `${field}.surface.open`
+          });
+        }
+        surface.open = value.surface.open;
+      }
+      if (typeof value.surface.focus !== 'undefined') {
+        if (typeof value.surface.focus !== 'boolean') {
+          throw createError('PLUGIN_INVALID', 'app cli target surface.focus must be a boolean', {
+            manifestPath,
+            field: `${field}.surface.focus`
+          });
+        }
+        surface.focus = value.surface.focus;
+      }
+      const reuse = asOptionalString(value.surface.reuse);
+      if (reuse) {
+        if (!hasCliCommandSurfaceReusePolicy(reuse)) {
+          throw createError('PLUGIN_INVALID', 'app cli target surface.reuse is invalid', {
+            manifestPath,
+            field: `${field}.surface.reuse`,
+            reuse
+          });
+        }
+        surface.reuse = reuse;
+      }
+      target.surface = surface;
+    }
+    return target;
+  }
+
+  private parseCliCommandParameterList(
+    value: unknown,
+    field: string,
+    manifestPath: string,
+    positional: boolean
+  ): CliCommandParameterManifestMeta[] {
+    if (typeof value === 'undefined') {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      throw createError('PLUGIN_INVALID', `${field} must be an array`, {
+        manifestPath,
+        field
+      });
+    }
+    const parameters = value.map((parameter, parameterIndex) => {
+      return this.parseCliCommandParameter(
+        parameter,
+        `${field}[${parameterIndex}]`,
+        manifestPath,
+        positional
+      );
+    });
+    if (positional) {
+      const positions = new Set<number>();
+      for (const parameter of parameters) {
+        const position = parameter.position ?? 0;
+        if (positions.has(position)) {
+          throw createError('PLUGIN_INVALID', 'cli positional argument positions must be unique', {
+            manifestPath,
+            field,
+            position
+          });
+        }
+        positions.add(position);
+      }
+      return parameters.sort((left, right) => (left.position ?? 0) - (right.position ?? 0));
+    }
+    return parameters;
+  }
+
+  private parseCliCommandParameter(
+    value: unknown,
+    field: string,
+    manifestPath: string,
+    positional: boolean
+  ): CliCommandParameterManifestMeta {
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command parameter entries must be objects', {
+        manifestPath,
+        field
+      });
+    }
+    const name = asOptionalString(value.name);
+    const type = asOptionalString(value.type);
+    if (!name || !CLI_COMMAND_PARAM_NAME_PATTERN.test(name)) {
+      throw createError('PLUGIN_INVALID', 'cli command parameter name is invalid', {
+        manifestPath,
+        field: `${field}.name`,
+        name
+      });
+    }
+    if (!type || !hasCliCommandParameterType(type)) {
+      throw createError('PLUGIN_INVALID', 'cli command parameter type is invalid', {
+        manifestPath,
+        field: `${field}.type`,
+        type
+      });
+    }
+    const parameter: CliCommandParameterManifestMeta = {
+      name,
+      type
+    };
+    const short = asOptionalString(value.short);
+    if (short) {
+      if (!/^[A-Za-z0-9]$/.test(short)) {
+        throw createError('PLUGIN_INVALID', 'cli command option short must be one character', {
+          manifestPath,
+          field: `${field}.short`,
+          short
+        });
+      }
+      parameter.short = short;
+    }
+    if (positional) {
+      const position = value.position;
+      if (typeof position !== 'undefined') {
+        if (typeof position !== 'number' || !Number.isInteger(position) || position < 0) {
+          throw createError('PLUGIN_INVALID', 'cli command argument position must be a non-negative integer', {
+            manifestPath,
+            field: `${field}.position`
+          });
+        }
+        parameter.position = position;
+      }
+    } else if (typeof value.position !== 'undefined') {
+      throw createError('PLUGIN_INVALID', 'cli command options must not declare position', {
+        manifestPath,
+        field: `${field}.position`
+      });
+    }
+    if (typeof value.required !== 'undefined') {
+      if (typeof value.required !== 'boolean') {
+        throw createError('PLUGIN_INVALID', 'cli command parameter required must be a boolean', {
+          manifestPath,
+          field: `${field}.required`
+        });
+      }
+      parameter.required = value.required;
+    }
+    if (typeof value.default !== 'undefined') {
+      parameter.default = deepClone(value.default);
+    }
+    const mapsTo = asOptionalString(value.mapsTo);
+    if (mapsTo) {
+      if (!CLI_COMMAND_MAPS_TO_PATTERN.test(mapsTo)) {
+        throw createError('PLUGIN_INVALID', 'cli command parameter mapsTo must be a dotted payload path', {
+          manifestPath,
+          field: `${field}.mapsTo`,
+          mapsTo
+        });
+      }
+      parameter.mapsTo = mapsTo;
+    }
+    if (typeof value.choices !== 'undefined') {
+      if (!Array.isArray(value.choices)) {
+        throw createError('PLUGIN_INVALID', 'cli command parameter choices must be an array', {
+          manifestPath,
+          field: `${field}.choices`
+        });
+      }
+      parameter.choices = value.choices.map((item) => deepClone(item));
+    }
+    if (typeof value.multiple !== 'undefined') {
+      if (typeof value.multiple !== 'boolean') {
+        throw createError('PLUGIN_INVALID', 'cli command parameter multiple must be a boolean', {
+          manifestPath,
+          field: `${field}.multiple`
+        });
+      }
+      parameter.multiple = value.multiple;
+    }
+    parameter.validation = this.parseCliCommandParameterValidation(value.validation, `${field}.validation`, manifestPath);
+    parameter.path = this.parseCliCommandPathRule(value.path, `${field}.path`, manifestPath);
+    if (parameter.path?.role === 'output' && type !== 'path') {
+      throw createError('PLUGIN_INVALID', 'cli command output path role is only supported by path parameters', {
+        manifestPath,
+        field: `${field}.path.role`,
+        type
+      });
+    }
+    if (parameter.path?.overwrite && parameter.path.role !== 'output') {
+      throw createError('PLUGIN_INVALID', 'cli command path.overwrite requires path.role: output', {
+        manifestPath,
+        field: `${field}.path.overwrite`
+      });
+    }
+    parameter.batch = this.parseCliCommandBatchRule(value.batch, `${field}.batch`, manifestPath);
+    parameter.ui = this.parseCliCommandParameterUi(value.ui, `${field}.ui`, manifestPath);
+    if (parameter.batch && type !== 'textFile' && type !== 'jsonFile') {
+      throw createError('PLUGIN_INVALID', 'cli command batch is only supported by textFile or jsonFile parameters', {
+        manifestPath,
+        field: `${field}.batch`,
+        type
+      });
+    }
+    if (parameter.batch?.format === 'lines' && type !== 'textFile') {
+      throw createError('PLUGIN_INVALID', 'cli command batch.format lines requires a textFile parameter', {
+        manifestPath,
+        field: `${field}.batch.format`,
+        type
+      });
+    }
+    if (parameter.batch?.format === 'json-array' && type !== 'jsonFile') {
+      throw createError('PLUGIN_INVALID', 'cli command batch.format json-array requires a jsonFile parameter', {
+        manifestPath,
+        field: `${field}.batch.format`,
+        type
+      });
+    }
+    return parameter;
+  }
+
+  private assertUniqueCliCommandParameterNames(
+    parameters: CliCommandParameterManifestMeta[],
+    field: string,
+    manifestPath: string
+  ): void {
+    const names = new Set<string>();
+    const shorts = new Set<string>();
+    for (const parameter of parameters) {
+      if (names.has(parameter.name)) {
+        throw createError('PLUGIN_INVALID', 'cli command parameter names must be unique', {
+          manifestPath,
+          field,
+          name: parameter.name
+        });
+      }
+      names.add(parameter.name);
+      if (parameter.short) {
+        if (shorts.has(parameter.short)) {
+          throw createError('PLUGIN_INVALID', 'cli command option short aliases must be unique', {
+            manifestPath,
+            field,
+            short: parameter.short
+          });
+        }
+        shorts.add(parameter.short);
+      }
+    }
+  }
+
+  private parseCliCommandParameterValidation(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandValidationManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command parameter validation must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const validation: CliCommandValidationManifestMeta = {};
+    for (const key of ['min', 'max', 'minLength', 'maxLength'] as const) {
+      if (typeof value[key] === 'undefined') {
+        continue;
+      }
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key])) {
+        throw createError('PLUGIN_INVALID', `cli command parameter validation.${key} must be a finite number`, {
+          manifestPath,
+          field: `${field}.${key}`
+        });
+      }
+      validation[key] = value[key];
+    }
+    const pattern = asOptionalString(value.pattern);
+    if (pattern) {
+      validation.pattern = pattern;
+    }
+    return Object.keys(validation).length > 0 ? validation : undefined;
+  }
+
+  private parseCliCommandPathRule(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandPathRuleManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command path rule must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const rule: CliCommandPathRuleManifestMeta = {};
+    const kind = asOptionalString(value.kind);
+    if (kind) {
+      if (!hasCliCommandPathKind(kind)) {
+        throw createError('PLUGIN_INVALID', 'cli command path.kind is invalid', {
+          manifestPath,
+          field: `${field}.kind`,
+          kind
+        });
+      }
+      rule.kind = kind;
+    }
+    const role = asOptionalString(value.role);
+    if (role) {
+      if (!hasCliCommandPathRole(role)) {
+        throw createError('PLUGIN_INVALID', 'cli command path.role is invalid', {
+          manifestPath,
+          field: `${field}.role`,
+          role
+        });
+      }
+      rule.role = role;
+    }
+    for (const key of ['exists', 'create'] as const) {
+      if (typeof value[key] === 'undefined') {
+        continue;
+      }
+      if (typeof value[key] !== 'boolean') {
+        throw createError('PLUGIN_INVALID', `cli command path.${key} must be a boolean`, {
+          manifestPath,
+          field: `${field}.${key}`
+        });
+      }
+      rule[key] = value[key];
+    }
+    if (typeof value.extensions !== 'undefined') {
+      rule.extensions = asStringArray(value.extensions, `${field}.extensions`, manifestPath, false);
+    }
+    const overwrite = asOptionalString(value.overwrite);
+    if (overwrite) {
+      if (!hasCliCommandOverwritePolicy(overwrite)) {
+        throw createError('PLUGIN_INVALID', 'cli command path.overwrite is invalid', {
+          manifestPath,
+          field: `${field}.overwrite`,
+          overwrite
+        });
+      }
+      rule.overwrite = overwrite;
+    }
+    return Object.keys(rule).length > 0 ? rule : undefined;
+  }
+
+  private parseCliCommandBatchItemPathRule(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandBatchItemPathRuleManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command batch.itemPath must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const rule: CliCommandBatchItemPathRuleManifestMeta = {};
+    const kind = asOptionalString(value.kind);
+    if (kind) {
+      if (!hasCliCommandPathKind(kind)) {
+        throw createError('PLUGIN_INVALID', 'cli command batch.itemPath.kind is invalid', {
+          manifestPath,
+          field: `${field}.kind`,
+          kind
+        });
+      }
+      rule.kind = kind;
+    }
+    for (const key of ['exists', 'create'] as const) {
+      if (typeof value[key] === 'undefined') {
+        continue;
+      }
+      if (typeof value[key] !== 'boolean') {
+        throw createError('PLUGIN_INVALID', `cli command batch.itemPath.${key} must be a boolean`, {
+          manifestPath,
+          field: `${field}.${key}`
+        });
+      }
+      rule[key] = value[key];
+    }
+    if (typeof value.extensions !== 'undefined') {
+      rule.extensions = asStringArray(value.extensions, `${field}.extensions`, manifestPath, false);
+    }
+    return Object.keys(rule).length > 0 ? rule : undefined;
+  }
+
+  private parseCliCommandBatchRule(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandBatchManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command batch must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const format = asOptionalString(value.format);
+    if (!format || !hasCliCommandBatchFormat(format)) {
+      throw createError('PLUGIN_INVALID', 'cli command batch.format is invalid', {
+        manifestPath,
+        field: `${field}.format`,
+        format
+      });
+    }
+    const batch: CliCommandBatchManifestMeta = {
+      format
+    };
+    const itemType = asOptionalString(value.itemType);
+    if (itemType) {
+      if (!hasCliCommandBatchItemType(itemType)) {
+        throw createError('PLUGIN_INVALID', 'cli command batch.itemType is invalid', {
+          manifestPath,
+          field: `${field}.itemType`,
+          itemType
+        });
+      }
+      batch.itemType = itemType;
+    }
+    batch.itemPath = this.parseCliCommandBatchItemPathRule(value.itemPath, `${field}.itemPath`, manifestPath);
+    if (batch.itemPath && batch.itemType !== 'path') {
+      throw createError('PLUGIN_INVALID', 'cli command batch.itemPath requires batch.itemType: path', {
+        manifestPath,
+        field: `${field}.itemPath`
+      });
+    }
+    return batch;
+  }
+
+  private parseCliCommandParameterUi(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandUiManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command parameter ui must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const ui: CliCommandUiManifestMeta = {};
+    const control = asOptionalString(value.control);
+    if (control) {
+      if (!hasCliCommandUiControl(control)) {
+        throw createError('PLUGIN_INVALID', 'cli command parameter ui.control is invalid', {
+          manifestPath,
+          field: `${field}.control`,
+          control
+        });
+      }
+      ui.control = control;
+    }
+    if (typeof value.choices !== 'undefined') {
+      if (!Array.isArray(value.choices)) {
+        throw createError('PLUGIN_INVALID', 'cli command parameter ui.choices must be an array', {
+          manifestPath,
+          field: `${field}.choices`
+        });
+      }
+      ui.choices = value.choices.map((item) => deepClone(item));
+    }
+    for (const key of ['min', 'max', 'step'] as const) {
+      if (typeof value[key] === 'undefined') {
+        continue;
+      }
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key])) {
+        throw createError('PLUGIN_INVALID', `cli command parameter ui.${key} must be a finite number`, {
+          manifestPath,
+          field: `${field}.${key}`
+        });
+      }
+      ui[key] = value[key];
+    }
+    const placeholderKey = asOptionalString(value.placeholderKey);
+    if (placeholderKey) {
+      ui.placeholderKey = placeholderKey;
+    }
+    return Object.keys(ui).length > 0 ? ui : undefined;
+  }
+
+  private parseCliCommandExamples(value: unknown, field: string, manifestPath: string): string[] {
+    if (typeof value === 'undefined') {
+      return [];
+    }
+    return asStringArray(value, field, manifestPath, true);
+  }
+
+  private parseCliCommandPermissions(value: unknown, field: string, manifestPath: string): string[] {
+    if (typeof value === 'undefined') {
+      return [];
+    }
+    return asStringArray(value, field, manifestPath, true);
+  }
+
+  private parseCliCommandOutput(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandOutputManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command output must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const output: CliCommandOutputManifestMeta = {};
+    const mode = asOptionalString(value.mode);
+    if (mode) {
+      if (!hasCliCommandOutputMode(mode)) {
+        throw createError('PLUGIN_INVALID', 'cli command output.mode is invalid', {
+          manifestPath,
+          field: `${field}.mode`,
+          mode
+        });
+      }
+      output.mode = mode;
+    }
+    const json = asOptionalString(value.json);
+    if (json) {
+      if (!hasCliCommandJsonOutputPolicy(json)) {
+        throw createError('PLUGIN_INVALID', 'cli command output.json is invalid', {
+          manifestPath,
+          field: `${field}.json`,
+          json
+        });
+      }
+      output.json = json;
+    }
+    if (typeof value.artifacts !== 'undefined') {
+      output.artifacts = asStringArray(value.artifacts, `${field}.artifacts`, manifestPath, true);
+    }
+    return Object.keys(output).length > 0 ? output : undefined;
+  }
+
+  private parseCliCommandJob(value: unknown, field: string, manifestPath: string): CliCommandJobManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command job must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const job: CliCommandJobManifestMeta = {};
+    for (const key of ['wait', 'cancelOnInterrupt'] as const) {
+      if (typeof value[key] === 'undefined') {
+        continue;
+      }
+      if (typeof value[key] !== 'boolean') {
+        throw createError('PLUGIN_INVALID', `cli command job.${key} must be a boolean`, {
+          manifestPath,
+          field: `${field}.${key}`
+        });
+      }
+      job[key] = value[key];
+    }
+    return Object.keys(job).length > 0 ? job : undefined;
+  }
+
+  private parseCliCommandConflict(
+    value: unknown,
+    field: string,
+    manifestPath: string
+  ): CliCommandConflictManifestMeta | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    if (!isRecord(value)) {
+      throw createError('PLUGIN_INVALID', 'cli command conflict must be an object', {
+        manifestPath,
+        field
+      });
+    }
+    const conflict: CliCommandConflictManifestMeta = {};
+    if (typeof value.priority !== 'undefined') {
+      if (typeof value.priority !== 'number' || !Number.isFinite(value.priority)) {
+        throw createError('PLUGIN_INVALID', 'cli command conflict.priority must be a finite number', {
+          manifestPath,
+          field: `${field}.priority`
+        });
+      }
+      conflict.priority = value.priority;
+    }
+    const namespace = asOptionalString(value.namespace);
+    if (namespace) {
+      conflict.namespace = namespace;
+    }
+    return Object.keys(conflict).length > 0 ? conflict : undefined;
   }
 
   private parseRuntimeManifestMeta(record: Record<string, unknown>, manifestPath: string): PluginRuntimeManifestMeta | undefined {

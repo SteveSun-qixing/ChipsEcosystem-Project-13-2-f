@@ -59,6 +59,7 @@ export const HOST_INTERNAL_PERMISSIONS = [
   'command.write',
   'command.invoke',
   'command.manage',
+  'cli.task',
   'plugin.read',
   'window.control',
   'plugin.manage',

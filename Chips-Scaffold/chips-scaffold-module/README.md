@@ -54,6 +54,12 @@ npm run verify
 
 `npm run verify` 会串联 lint、typecheck、test、build、validate 和 package。`npm run package` 输出 `.cpk`，该包必须能被 Host 安装、启用，并通过 `module.listProviders / module.resolve / module.invoke / module.job.*` 完成真实调用。
 
+## 插件 CLI 命令
+
+所有模块模板都会在 `manifest.yaml` 生成 `cli.commands` 示例。命令路径使用项目名派生的安全根段，避开 `help / host / start / stop / status / config / logs / theme / plugin / update / doctor / open / completion` 等 Host 固定命令根；参数声明按模板 schema 映射到 `module.invoke.input`，路径、JSON、枚举、布尔值和 slider/textarea 等 TUI 提示均写在 manifest 中。
+
+插件命令被安装并启用后由 Host 动态发现，执行仍必须走 `module.invoke / module.job.*`，不得让生成工程提供独立 OS CLI 程序或直接导入模块源码。
+
 ## Host 联调
 
 生成工程的真实联调入口是：

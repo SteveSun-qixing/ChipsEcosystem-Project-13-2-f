@@ -370,6 +370,7 @@ const normalizeSurfaceContext = (value: unknown): SurfaceContext | undefined => 
             commandId: commandContext.commandId,
             source: typeof commandContext.source === "string" ? commandContext.source : undefined,
             payload: normalizeLaunchParams(commandContext.payload),
+            taskId: typeof commandContext.taskId === "string" ? commandContext.taskId : undefined,
           }
         : undefined,
   };

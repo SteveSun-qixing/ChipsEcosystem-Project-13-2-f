@@ -39,6 +39,63 @@ const FORBIDDEN_RENDERED_PATTERNS = [
   /TODO|FIXME/,
 ];
 
+const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+  "help",
+  "host",
+  "start",
+  "stop",
+  "status",
+  "config",
+  "logs",
+  "theme",
+  "plugin",
+  "update",
+  "doctor",
+  "open",
+  "completion",
+]);
+
+const assertModuleCliCommandContract = (
+  templateId: string,
+  manifest: string,
+  expected: {
+    commandSuffix: string;
+    method: string;
+    titleKey: string;
+    permissionSnippets?: string[];
+    snippets: string[];
+  }
+) => {
+  expect(manifest, templateId).toMatch(/cli:\n\s+commands:/);
+  expect(manifest, templateId).toContain(`commandPath: ${templateId}-project ${expected.commandSuffix}`);
+  expect(manifest, templateId).toContain("target:\n        type: module");
+  expect(manifest, templateId).toContain(`method: ${expected.method}`);
+  expect(manifest, templateId).toContain(`titleKey: ${expected.titleKey}`);
+  expect(manifest, templateId).toMatch(/output:\n\s+mode:\s+json/);
+
+  const commandPathMatch = manifest.match(/commandPath:\s+([^\n]+)/);
+  expect(commandPathMatch, `${templateId} should declare commandPath`).not.toBeNull();
+  const root = commandPathMatch?.[1]?.trim().split(/\s+/)[0] ?? "";
+  expect(HOST_FIXED_CLI_COMMAND_ROOTS.has(root), `${templateId} CLI root should not shadow Host fixed commands`).toBe(false);
+
+  for (const snippet of expected.permissionSnippets ?? []) {
+    expect(manifest, templateId).toContain(snippet);
+  }
+  for (const snippet of expected.snippets) {
+    expect(manifest, templateId).toContain(snippet);
+  }
+  for (const forbiddenPattern of [
+    /^plugin\s*:/m,
+    /^theme\s*:/m,
+    /^themeId\s*:/m,
+    /^displayName\s*:/m,
+    /^layout\s*:/m,
+    /^ui:\n(?:[\s\S]*?^\S|\s*$)/m,
+  ]) {
+    expect(manifest, `${templateId} should not declare ${forbiddenPattern}`).not.toMatch(forbiddenPattern);
+  }
+};
+
 async function removeDirIfExists(targetDir: string): Promise<void> {
   try {
     await fs.rm(targetDir, { recursive: true, force: true });
@@ -129,6 +186,20 @@ describe("module template-engine", () => {
       expect(manifest).toMatch(/headless:\n      supported:\s+true/);
       expect(manifest).toMatch(/module:\n/);
       expect(manifest).toMatch(/capability:\s+module\.standard\.project/);
+      assertModuleCliCommandContract("module-standard", manifest, {
+        commandSuffix: "run",
+        method: "run",
+        titleKey: "module.cli.run.title",
+        snippets: [
+          "mapsTo: sourceText",
+          "mapsTo: uppercase",
+          "mapsTo: prefix",
+          "commandPath: module-standard-project run-async",
+          "method: runAsync",
+          "mapsTo: delayMs",
+          "cancelOnInterrupt: true",
+        ],
+      });
       expect(pkg.devDependencies.react).toBeUndefined();
       expect(pkg.devDependencies["chips-sdk"]).toBe("^0.1.0");
       expect(moduleDefinitionTest).toMatch(/runAsync/);
@@ -162,6 +233,10 @@ describe("module template-engine", () => {
       string,
       {
         method: string;
+        commandSuffix: string;
+        titleKey: string;
+        cliSnippets: string[];
+        cliPermissionSnippets?: string[];
         contracts: string[];
         manifest: RegExp[];
         source: RegExp[];
@@ -169,6 +244,18 @@ describe("module template-engine", () => {
     > = {
       "module-standard": {
         method: "runAsync",
+        commandSuffix: "run",
+        titleKey: "module.cli.run.title",
+        cliSnippets: [
+          "mapsTo: sourceText",
+          "mapsTo: uppercase",
+          "mapsTo: prefix",
+          "commandPath: module-standard-project run-async",
+          "method: runAsync",
+          "mapsTo: delayMs",
+          "ui:\n            control: slider",
+          "cancelOnInterrupt: true",
+        ],
         contracts: [
           "contracts/run.input.schema.json",
           "contracts/run.output.schema.json",
@@ -180,6 +267,14 @@ describe("module template-engine", () => {
       },
       "module-pure-function": {
         method: "run",
+        commandSuffix: "run",
+        titleKey: "module.cli.run.title",
+        cliSnippets: [
+          "mapsTo: value",
+          "mapsTo: trim",
+          "mapsTo: caseMode",
+          "choices: [preserve, upper, lower]",
+        ],
         contracts: [
           "contracts/run.input.schema.json",
           "contracts/run.output.schema.json",
@@ -189,6 +284,17 @@ describe("module template-engine", () => {
       },
       "module-file-conversion": {
         method: "convert",
+        commandSuffix: "convert",
+        titleKey: "module.cli.convert.title",
+        cliPermissionSnippets: ["- file.read", "- file.write"],
+        cliSnippets: [
+          "mapsTo: sourceFile",
+          "mapsTo: output.path",
+          "mapsTo: output.overwrite",
+          "mapsTo: options",
+          "artifacts:\n          - outputPath",
+          "cancelOnInterrupt: true",
+        ],
         contracts: [
           "contracts/convert.input.schema.json",
           "contracts/convert.output.schema.json",
@@ -198,6 +304,19 @@ describe("module template-engine", () => {
       },
       "module-html-rendering": {
         method: "convert",
+        commandSuffix: "render",
+        titleKey: "module.cli.render.title",
+        cliPermissionSnippets: ["- file.read", "- file.write", "- platform.read"],
+        cliSnippets: [
+          "mapsTo: htmlDir",
+          "mapsTo: outputFile",
+          "mapsTo: options.target",
+          "mapsTo: entryFile",
+          "mapsTo: options.pdf",
+          "mapsTo: options.image",
+          "choices: [pdf, image]",
+          "cancelOnInterrupt: true",
+        ],
         contracts: [
           "contracts/convert.input.schema.json",
           "contracts/convert.output.schema.json",
@@ -207,6 +326,15 @@ describe("module template-engine", () => {
       },
       "module-image-processing": {
         method: "process",
+        commandSuffix: "process",
+        titleKey: "module.cli.process.title",
+        cliPermissionSnippets: ["- file.read"],
+        cliSnippets: [
+          "mapsTo: imagePath",
+          "mapsTo: options.sampleSize",
+          "min: 16",
+          "max: 256",
+        ],
         contracts: [
           "contracts/process.input.schema.json",
           "contracts/process.output.schema.json",
@@ -216,6 +344,15 @@ describe("module template-engine", () => {
       },
       "module-color-extraction": {
         method: "pick",
+        commandSuffix: "colors",
+        titleKey: "module.cli.colors.title",
+        cliPermissionSnippets: ["- file.read"],
+        cliSnippets: [
+          "mapsTo: imagePath",
+          "mapsTo: options.sampleSize",
+          "min: 48",
+          "max: 160",
+        ],
         contracts: [
           "contracts/pick.input.schema.json",
           "contracts/pick.output.schema.json",
@@ -225,6 +362,14 @@ describe("module template-engine", () => {
       },
       "module-orchestration": {
         method: "execute",
+        commandSuffix: "execute",
+        titleKey: "module.cli.execute.title",
+        cliPermissionSnippets: ["- module.read", "- module.invoke"],
+        cliSnippets: [
+          "mapsTo: steps",
+          "ui:\n            control: textarea",
+          "cancelOnInterrupt: true",
+        ],
         contracts: [
           "contracts/execute.input.schema.json",
           "contracts/execute.output.schema.json",
@@ -280,6 +425,13 @@ describe("module template-engine", () => {
         for (const pattern of expected.manifest) {
           expect(manifest, templateId).toMatch(pattern);
         }
+        assertModuleCliCommandContract(templateId, manifest, {
+          commandSuffix: expected.commandSuffix,
+          method: expected.method,
+          titleKey: expected.titleKey,
+          permissionSnippets: expected.cliPermissionSnippets,
+          snippets: expected.cliSnippets,
+        });
         for (const pattern of expected.source) {
           expect(source, templateId).toMatch(pattern);
         }

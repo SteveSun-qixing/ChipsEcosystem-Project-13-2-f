@@ -38,3 +38,42 @@ module:
           inputSchema: contracts/run.input.schema.json
           outputSchema: contracts/run.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} run
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: run
+        timeoutMs: 30000
+      titleKey: module.cli.run.title
+      descriptionKey: module.cli.run.description
+      arguments:
+        - name: value
+          position: 0
+          type: text
+          required: true
+          mapsTo: value
+          ui:
+            control: pasteBox
+            placeholderKey: module.cli.run.value.placeholder
+      options:
+        - name: trim
+          short: t
+          type: boolean
+          default: true
+          mapsTo: trim
+          ui:
+            control: toggle
+        - name: case-mode
+          short: c
+          type: enum
+          default: preserve
+          choices: [preserve, upper, lower]
+          mapsTo: caseMode
+          ui:
+            control: select
+            choices: [preserve, upper, lower]
+      output:
+        mode: json
+        json: supported

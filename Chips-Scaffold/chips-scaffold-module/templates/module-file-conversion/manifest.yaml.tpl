@@ -40,3 +40,62 @@ module:
           inputSchema: contracts/convert.input.schema.json
           outputSchema: contracts/convert.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} convert
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: convert
+        timeoutMs: 60000
+      titleKey: module.cli.convert.title
+      descriptionKey: module.cli.convert.description
+      permissions:
+        - file.read
+        - file.write
+      arguments:
+        - name: source-file
+          position: 0
+          type: path
+          required: true
+          mapsTo: sourceFile
+          path:
+            kind: file
+            exists: true
+          ui:
+            control: pathInput
+            placeholderKey: module.cli.convert.sourceFile.placeholder
+        - name: output-path
+          position: 1
+          type: path
+          required: true
+          mapsTo: output.path
+          path:
+            kind: any
+            create: false
+          ui:
+            control: pathInput
+            placeholderKey: module.cli.convert.outputPath.placeholder
+      options:
+        - name: overwrite
+          short: o
+          type: boolean
+          default: false
+          mapsTo: output.overwrite
+          ui:
+            control: toggle
+        - name: options
+          type: json
+          default: {}
+          mapsTo: options
+          ui:
+            control: textarea
+            placeholderKey: module.cli.convert.options.placeholder
+      output:
+        mode: json
+        json: supported
+        artifacts:
+          - outputPath
+      job:
+        wait: true
+        cancelOnInterrupt: true

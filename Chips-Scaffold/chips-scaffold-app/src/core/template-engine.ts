@@ -32,6 +32,44 @@ function resolveTemplatesRoot(): string {
 }
 
 const TEMPLATES_ROOT = resolveTemplatesRoot();
+const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+  "help",
+  "host",
+  "start",
+  "stop",
+  "status",
+  "config",
+  "logs",
+  "theme",
+  "plugin",
+  "update",
+  "doctor",
+  "open",
+  "completion",
+]);
+
+function toCliCommandRoot(projectName: string, pluginId: string): string {
+  const candidates = [projectName, pluginId]
+    .map((value) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    )
+    .filter((value) => value.length > 0);
+
+  for (const candidate of candidates) {
+    const root = HOST_FIXED_CLI_COMMAND_ROOTS.has(candidate)
+      ? `${candidate}-app`
+      : candidate;
+    if (/^[a-z0-9][a-z0-9-]*$/.test(root)) {
+      return root;
+    }
+  }
+
+  return "chips-app";
+}
 
 export async function listTemplateMetas(): Promise<AppScaffoldTemplateMeta[]> {
   const entries = await fs.readdir(TEMPLATES_ROOT, { withFileTypes: true });
@@ -92,6 +130,7 @@ function buildContext(options: CreateAppProjectOptions): TemplateContext {
     TARGET_DIR: targetDir,
     TEMPLATE_ID: templateId,
     PLUGIN_ID: pluginId,
+    CLI_COMMAND_ROOT: toCliCommandRoot(projectName, pluginId),
     DISPLAY_NAME: displayName,
     VERSION: version,
     AUTHOR_NAME: authorName,

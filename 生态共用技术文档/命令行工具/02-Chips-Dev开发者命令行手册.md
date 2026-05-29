@@ -45,6 +45,8 @@ npm install
 
 以下命令由 `chipsdev` 直接转发到 Host CLI，但工作区固定为开发工作区：
 
+- `chipsdev`
+- `chipsdev --interactive`
 - `chipsdev start`
 - `chipsdev stop`
 - `chipsdev status`
@@ -55,8 +57,17 @@ npm install
 - `chipsdev update check|install`
 - `chipsdev doctor`
 - `chipsdev open <path>`
+- `chipsdev completion <bash|zsh|fish>`
 
 这些命令与 `chips` 使用同一套 Host 管理能力，但不会落到用户工作区。
+
+`chipsdev` 不带参数时会进入开发工作区的插件 CLI TUI；`chipsdev --interactive` 可显式进入同一界面。该 TUI 由 Host CLI 实现，`chipsdev` 只负责解析开发工作区并转发，因此命令发现、补全、参数控件、操作日志和执行仍复用 `cli.command.list`、传统 CLI 执行器、`module.invoke / module.job.*`、`surface.open / plugin.launch`、`log.export` 等 Host 正式链路。
+
+`chipsdev completion <shell>` 同样委托 Host CLI 生成补全脚本，但生成的脚本注册目标是 `chipsdev`，并在每次补全时调用 `chipsdev __complete ...`。`__complete` 是 `chipsdev` 私有补全入口，会先解析开发工作区，再转发到 Host CLI 的 `__complete`，因此 `chipsdev plugin install/enable/disable` 后下一次 Tab 补全即可看到最新 app/module 插件命令，不会落到用户 `chips` 工作区。
+
+开发工作区已安装并启用的插件 CLI 命令也可以直接通过 `chipsdev <commandPath> [args] [options]` 调用。`chipsdev` 对未知顶层命令不会在 SDK 层提前失败，而是将完整 argv 转发到开发工作区 Host CLI，由 Host 的最长前缀匹配、冲突消解、参数解析和正式路由决定是否执行或返回结构化错误。
+
+非交互终端中，`chipsdev` 空命令不会阻塞脚本，会输出 TUI 需要交互式终端的提示并返回成功；显式 `chipsdev --interactive` 在非交互终端中返回失败，用于 CI 或脚本识别误用。
 
 ### 2. 工程命令
 
@@ -87,6 +98,8 @@ npm install
 - `chipsdev build` 会优先执行工程 `package.json` 中的正式 `build` 脚本；
 - 若工程未声明 `build` 脚本，或该脚本本身会再次回调 `chipsdev build`，则回退到 SDK 内置构建链路；
 - `chipsdev package` 除 `dist/` 构建产物外，还会一并打包 manifest 显式引用的正式静态资源；
+- `chipsdev validate` 与 `chipsdev package` 会拒绝类型专属官方字段越界声明，尤其是 app/module 插件不得声明 `plugin / theme / themeId / displayName / isDefault / parentTheme / layout` 等不属于自身类型或属于 Host 治理的字段；
+- `chipsdev validate` 与 `chipsdev package` 会校验 `manifest.cli.commands` 中输出路径、覆盖策略和批量输入元数据：`path.overwrite` 只允许用于 `type: path` 且 `path.role: output` 的参数，`batch.format: lines` 只允许 `textFile`，`batch.format: json-array` 只允许 `jsonFile`；
 - 当前正式收集范围至少包括：
   - `preview`
   - `ui.layout.contract`
@@ -156,7 +169,7 @@ chipsdev module invoke \
 - 第 3 步中的“正式构建”与 `chipsdev build` 保持同一语义：优先执行工程自己的正式 `build` 脚本，再按需要回退到 SDK 内置构建链路；
 - `--timeout-ms` 会同时作为 CLI 等待窗口与 Host `module.invoke.timeoutMs` 传入；sync 方法超时返回 `MODULE_TIMEOUT`，job 方法超时后 job 进入 `failed` 终态；
 - 模块调用完成后，联调用 Electron Host 会在输出结果后主动退出，不继续常驻；
-- `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；
+- `chipsdev start/stop/status/config/logs/plugin/theme/open` 仍然是开发工作区 Host 管理命令，底层委托给 Host CLI；`start/stop/status` 管理开发工作区状态标记，不承担真实 Electron `BrowserWindow` 宿主联调职责；
 - 这些命令不承担真实 Electron `BrowserWindow` 宿主联调职责；
 - 因此，依赖 `platform.renderHtmlToImage`、`platform.renderHtmlToPdf` 之类 Electron 渲染导出能力的模块，必须使用 `chipsdev module invoke` 验证。
 
@@ -424,7 +437,7 @@ npm run quality:gate
 npm run verify
 ```
 
-其中 `verify` 串联 `lint/typecheck/test/build/validate/preview:smoke/quality:gate`。应用模板当前不声明 `package` npm 脚本；需要生成应用 `.cpk` 时使用 `chipsdev package` 或后续在应用工程中显式添加等价脚本。应用真实窗口联调以 `chipsdev run` 为主，运行时必须通过 Host surface、Bridge、SDK、主题系统和多语言系统接线。
+其中 `verify` 串联 `lint/typecheck/test/build/validate/preview:smoke/quality:gate`。应用模板当前不声明 `package` npm 脚本；需要生成应用 `.cpk` 时使用 `chipsdev package` 或后续在应用工程中显式添加等价脚本。生成工程的 `manifest.yaml` 默认包含一条 `cli.commands` 应用入口，命令路径根段由项目名派生并避开 Host 固定命令根，执行时通过 Host `surface.open` 打开当前应用。应用真实窗口联调以 `chipsdev run` 为主，运行时必须通过 Host surface、Bridge、SDK、主题系统和多语言系统接线。
 
 `chipsdev create card <targetDir>` 会创建标准基础卡片插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`src/render`、`src/editor`、`src/schema`、`src/shared`、`i18n`、`templates`、`tests` 与必要静态资源，并预置以下脚本：
 
@@ -466,7 +479,7 @@ npm run package
 npm run verify
 ```
 
-其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。模块插件没有窗口入口，真实联调必须通过 `chipsdev module invoke` 或安装启用后由应用/SDK 的模块服务调用；模块之间依赖只通过 `manifest.module.consumes` 与 Host 注入的 `ctx.module.invoke(...)` 建立，不允许跨目录直接 import。
+其中 `verify` 串联 `lint/typecheck/test/build/validate/package`。生成工程的 `manifest.yaml` 默认包含按模板能力 schema 映射的 `cli.commands`，命令路径根段由项目名派生并避开 Host 固定命令根；安装启用后可通过 `chips <commandPath>` 或开发工作区中的 `chipsdev <commandPath>` 调用，并进入 Host / chipsdev 的动态 shell completion 候选，但真实执行仍回到 Host `module.invoke / module.job.*`。模块插件没有窗口入口，真实联调必须通过 `chipsdev module invoke` 或安装启用后由应用/SDK 的模块服务调用；模块之间依赖只通过 `manifest.module.consumes` 与 Host 注入的 `ctx.module.invoke(...)` 建立，不允许跨目录直接 import。
 
 `chipsdev create theme <targetDir>` 会创建标准主题包插件工程。生成工程默认包含 `manifest.yaml`、`chips.config.mjs`、`tokens/ref.json`、`tokens/sys.json`、`tokens/motion.json`、`tokens/layout.json`、`tokens/comp/*.json`、`styles`、`contracts`、`icons/variablefont`、`preview`、`src`、`tests` 与 README，并预置以下脚本：
 

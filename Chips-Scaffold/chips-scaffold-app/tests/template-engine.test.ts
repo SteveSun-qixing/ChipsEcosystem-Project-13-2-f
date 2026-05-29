@@ -149,6 +149,28 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       manifestContent.includes("surface:\n    defaultKind: window"),
       "manifest.yaml 应包含 ui.surface 默认容器配置",
     );
+    assert.ok(
+      manifestContent.includes("cli:\n  commands:"),
+      "manifest.yaml 应声明 cli.commands 命令行入口",
+    );
+    assert.ok(
+      manifestContent.includes("commandPath: my-app open"),
+      "manifest.yaml 应使用项目名派生安全 CLI 命令路径",
+    );
+    assert.ok(
+      manifestContent.includes("target:\n        type: app") &&
+        manifestContent.includes("pluginId: com.example.my-app") &&
+        manifestContent.includes("surface:\n          open: true") &&
+        manifestContent.includes("reuse: preferred"),
+      "应用 CLI 命令应通过 Host surface.open 打开当前插件",
+    );
+    assert.ok(
+      manifestContent.includes("titleKey: app.cli.open.title") &&
+        manifestContent.includes("descriptionKey: app.cli.open.description") &&
+        manifestContent.includes("mapsTo: subject") &&
+        manifestContent.includes("placeholderKey: app.cli.open.subjectPlaceholder"),
+      "应用 CLI 命令应声明 i18n key、参数映射与 TUI 输入提示",
+    );
     for (const permission of ["i18n.read", "i18n.write", "command.read", "command.write", "command.invoke"]) {
       assert.ok(
         manifestContent.includes(`  - ${permission}`),
@@ -159,6 +181,19 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       !/^commands\s*:/m.test(manifestContent),
       "manifest.yaml 不应声明未冻结的 commands 字段",
     );
+    for (const forbiddenPattern of [
+      /^plugin\s*:/m,
+      /^theme\s*:/m,
+      /^themeId\s*:/m,
+      /^displayName\s*:/m,
+      /^module\s*:/m,
+      /^layout\s*:/m,
+    ]) {
+      assert.ok(
+        !forbiddenPattern.test(manifestContent),
+        `应用 manifest 不应声明类型越界或 Host 治理保留字段：${forbiddenPattern}`,
+      );
+    }
     assert.equal(
       packageContent.dependencies["@chips/component-library"],
       "^0.1.0",
@@ -317,6 +352,10 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
     for (const key of ["languageSwitch", "runtime", "dialog", "disabledReason"]) {
       assert.ok(zhCnContent.includes(key), `中文 i18n 应包含语言切换 key：${key}`);
       assert.ok(enUsContent.includes(key), `英文 i18n 应包含语言切换 key：${key}`);
+    }
+    for (const key of ["cli", "subjectPlaceholder"]) {
+      assert.ok(zhCnContent.includes(key), `中文 i18n 应包含 CLI key：${key}`);
+      assert.ok(enUsContent.includes(key), `英文 i18n 应包含 CLI key：${key}`);
     }
 
     for (const dirName of FORBIDDEN_PROJECT_DIRS) {

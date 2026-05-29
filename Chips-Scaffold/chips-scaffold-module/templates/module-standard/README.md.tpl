@@ -75,6 +75,17 @@ chipsdev module invoke \
 
 也可以使用等价的 `--capability={{ MODULE_CAPABILITY }}` 参数形式。CLI 会先执行正式构建，随后在开发工作区安装并启用当前模块，再通过 Host `module.invoke` 调用 capability/method；若返回 job，会轮询到 `completed`、`failed` 或 `cancelled` 终态。
 
+## 插件 CLI 命令
+
+`manifest.yaml` 默认声明以下 `cli.commands`，安装并启用插件后可由 Host 动态发现：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} run "hello" --uppercase --prefix "[demo] "
+chips {{ CLI_COMMAND_ROOT }} run-async "hello" --delay-ms 25
+```
+
+这些命令只声明参数到 `module.invoke.input` 的映射，实际执行仍由 Host `module.invoke / module.job.*` 完成。
+
 ## 默认能力定义
 
 模板默认声明一个 capability：

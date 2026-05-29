@@ -484,6 +484,116 @@
       "idempotent": false,
       "retries": 0
     },
+    "cli.command.get": {
+      "action": "cli.command.get",
+      "schemaIn": "schemas/cli.command.get.request.json",
+      "schemaOut": "schemas/cli.command.get.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "cli.command.list": {
+      "action": "cli.command.list",
+      "schemaIn": "schemas/cli.command.list.request.json",
+      "schemaOut": "schemas/cli.command.list.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "cli.command.resolve": {
+      "action": "cli.command.resolve",
+      "schemaIn": "schemas/cli.command.resolve.request.json",
+      "schemaOut": "schemas/cli.command.resolve.response.json",
+      "permission": [
+        "plugin.read"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "cli.task.bindInvocation": {
+      "action": "cli.task.bindInvocation",
+      "schemaIn": "schemas/cli.task.bindInvocation.request.json",
+      "schemaOut": "schemas/cli.task.bindInvocation.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "cli.task.cancel": {
+      "action": "cli.task.cancel",
+      "schemaIn": "schemas/cli.task.cancel.request.json",
+      "schemaOut": "schemas/cli.task.cancel.response.json",
+      "permission": [
+        "cli.task"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "cli.task.complete": {
+      "action": "cli.task.complete",
+      "schemaIn": "schemas/cli.task.complete.request.json",
+      "schemaOut": "schemas/cli.task.complete.response.json",
+      "permission": [
+        "cli.task"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "cli.task.create": {
+      "action": "cli.task.create",
+      "schemaIn": "schemas/cli.task.create.request.json",
+      "schemaOut": "schemas/cli.task.create.response.json",
+      "permission": [
+        "plugin.manage"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "cli.task.fail": {
+      "action": "cli.task.fail",
+      "schemaIn": "schemas/cli.task.fail.request.json",
+      "schemaOut": "schemas/cli.task.fail.response.json",
+      "permission": [
+        "cli.task"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
+    "cli.task.get": {
+      "action": "cli.task.get",
+      "schemaIn": "schemas/cli.task.get.request.json",
+      "schemaOut": "schemas/cli.task.get.response.json",
+      "permission": [
+        "cli.task"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": true,
+      "retries": 0
+    },
+    "cli.task.progress": {
+      "action": "cli.task.progress",
+      "schemaIn": "schemas/cli.task.progress.request.json",
+      "schemaOut": "schemas/cli.task.progress.response.json",
+      "permission": [
+        "cli.task"
+      ],
+      "timeoutMs": 3000,
+      "idempotent": false,
+      "retries": 0
+    },
     "config.batchSet": {
       "action": "config.batchSet",
       "schemaIn": "schemas/config.batchSet.request.json",

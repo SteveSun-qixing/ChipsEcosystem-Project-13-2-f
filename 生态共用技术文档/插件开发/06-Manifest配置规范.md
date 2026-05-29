@@ -9,6 +9,7 @@
 - `runtime.targets`
 - `ui.surface`
 - `capabilityFallbacks`
+- `cli.commands`
 
 这些字段已经被 Host 运行时、`chipsdev validate`、Scaffold 模板和官方插件清单共同采用。
 
@@ -189,9 +190,128 @@ capabilityFallbacks:
 2. key 必须是非空 capability 名称
 3. 每个 fallback 都必须声明 `whenUnsupported`
 
-## 7. 其他类型插件的正式要求
+## 7. 命令行扩展声明：`cli.commands`
 
-### 7.1 `card`
+`type: app` 与 `type: module` 插件可以通过 `cli.commands` 声明可被 Host 动态发现的命令行入口。Host 在 `plugin.install` 时解析并校验这些声明，并通过 `cli.command.list / cli.command.get / cli.command.resolve` 暴露只读命令索引。
+
+```yaml
+cli:
+  commands:
+    - commandPath: icon generate
+      target:
+        type: module
+        capability: converter.icon.generate
+        method: generate
+      titleKey: icon.cli.generate.title
+      descriptionKey: icon.cli.generate.description
+      permissions:
+        - file.read
+      arguments:
+        - name: input
+          position: 0
+          type: path
+          required: true
+          mapsTo: inputPath
+      options:
+        - name: formats
+          short: f
+          type: stringList
+          default: [png, ico]
+          mapsTo: formats
+          ui:
+            control: multiSelect
+            choices: [png, ico, icns]
+```
+
+顶层规则：
+
+1. `cli` 必须是对象，`cli.commands` 必须是数组。
+2. 只有 `app` 与 `module` 插件允许声明 `cli.commands`；`card / layout / theme` 不允许声明。
+3. `commandPath` 必填，可写为空格分隔字符串或字符串数组，段名只能使用字母、数字和连字符。
+4. `titleKey` 必填，`descriptionKey` 可选，均为 i18n key。
+5. `commandId` 可选；省略时 Host 归一为 `<pluginId>.cli.<commandPath以点连接>`。
+6. `permissions` 可选，但其中每一项都必须已出现在插件顶层 `permissions` 中。
+7. 同一插件内 `commandId`、参数 `name` 和短选项 `short` 不得重复。
+8. `commandPath` 第一段不得占用 Host 固定命令根：`help / host / start / stop / status / config / logs / theme / plugin / update / doctor / open / completion`。
+
+官方 app/module 脚手架会为生成工程默认写入 `cli.commands` 示例。脚手架命令路径第一段由项目名派生为只含字母、数字和连字符的安全根段；若派生结果命中 Host 固定命令根，应用模板追加 `-app`，模块模板追加 `-module`，保证生成工程默认可通过 Host 与 `chipsdev validate/package` 校验。
+
+模块目标：
+
+```yaml
+target:
+  type: module
+  capability: converter.icon.generate
+  method: generate
+  timeoutMs: 60000
+```
+
+- 声明插件必须是 `type: module`。
+- `capability` 与 `method` 必填。
+- `pluginId` 可选；若写入，必须等于声明该命令的插件 ID。
+- 实际执行仍必须走 Host `module.invoke` 与 `module.job.*` 正式链路。
+
+应用目标：
+
+```yaml
+target:
+  type: app
+  pluginId: chips.app.editor
+  commandId: chips.app.editor.open
+  surface:
+    open: true
+    focus: true
+    reuse: preferred
+```
+
+- 声明插件必须是 `type: app`。
+- `pluginId` 默认等于声明插件 ID；显式写入时也必须等于声明插件 ID。
+- `commandId` 可选；存在时表示后续 CLI 执行器会通过 Host command 系统投递。
+- `surface.reuse` 当前允许 `always / never / preferred`。
+
+参数类型当前允许：
+
+- `string`
+- `stringList`
+- `number`
+- `integer`
+- `boolean`
+- `enum`
+- `path`
+- `json`
+- `jsonFile`
+- `text`
+- `textFile`
+
+参数字段当前允许 `name / short / position / type / required / default / mapsTo / choices / multiple / validation / path / batch / ui`。其中 `mapsTo` 是写入目标 payload 的点分路径；`ui.control` 允许 `select / multiSelect / toggle / stepper / slider / pathInput / pasteBox / textarea`。
+
+路径规则：
+
+- `path.kind` 允许 `file / directory / any`。
+- `path.role` 允许 `input / output`；省略时按输入路径处理。
+- `path.exists` 要求目标路径已存在；`path.create` 允许 CLI 在执行前创建输出目录或输出文件父目录。
+- `path.extensions` 是允许的扩展名列表，扩展名可以带点或不带点。
+- `path.overwrite` 只允许在 `type: path` 且 `path.role: output` 时声明，允许值为 `fail / overwrite / rename / skip`。
+- 输出路径已存在时，`fail` 返回 `CLI_OUTPUT_EXISTS`；`overwrite` 允许继续；`rename` 在执行前把 payload 中的路径改写为同目录未占用的 `name-1.ext`、`name-2.ext` 等；`skip` 不调用插件目标，直接返回结构化 skipped 结果。
+- 用户传入全局 `--overwrite` 时，CLI 会把声明为输出路径的参数按 `overwrite` 策略处理；若插件命令本身声明了名为 `overwrite` 的布尔选项，该选项仍会进入插件 payload。
+
+批量输入规则：
+
+- `batch` 只允许 `textFile` 与 `jsonFile` 参数声明。
+- `batch.format: lines` 只允许搭配 `textFile`，CLI 会读取文本文件、按行拆分、去掉空行并输出数组。
+- `batch.format: json-array` 只允许搭配 `jsonFile`，CLI 会要求 JSON 文件顶层为数组。
+- `batch.itemType` 允许 `value / path`；`path` 会把每一项按当前 shell 工作目录解析为绝对路径。
+- `batch.itemPath` 只允许在 `batch.itemType: path` 时声明，字段与输入路径规则一致，支持 `kind / exists / create / extensions`。
+
+输出规则：
+
+- `output.mode` 可声明为 `json / human`。未声明时，Host CLI 当前默认输出结构化 JSON，便于脚本稳定消费。
+- `output.mode: human` 表示未传入 `--json` 时默认输出人读摘要；用户传入 `--json` 时必须返回完整结构化 JSON。
+- `output.artifacts` 是结果对象中的点分路径列表，用于让 human 输出提取生成文件、目录或关键产物路径；CLI 不根据插件私有字段名猜测产物语义。
+
+## 8. 其他类型插件的正式要求
+
+### 8.1 `card`
 
 - 应声明 `runtime.targets`
 - 正式解析依据仍是 `capabilities.cardTypes`
@@ -227,7 +347,7 @@ runtime:
 
 `basecardDefinition.pluginId` 应与 `manifest.id` 对齐，`basecardDefinition.cardType` 应与 `manifest.capabilities.cardTypes[0]` 对齐。
 
-### 7.2 `layout`
+### 8.2 `layout`
 
 - 应声明 `runtime.targets`
 - 正式解析依据是 `layout.layoutType`
@@ -262,7 +382,7 @@ layout:
   displayName: 示例布局
 ```
 
-### 7.3 `module`
+### 8.3 `module`
 
 - 应声明 `runtime.targets`
 - 正式 provider 契约仍以 `module.provides / module.consumes` 为准
@@ -309,7 +429,7 @@ module:
       versionRange: ^1.0.0
 ```
 
-### 7.4 `theme`
+### 8.4 `theme`
 
 - 应声明 `runtime.targets`
 - 主题入口继续使用对象结构 `entry.tokens / entry.themeCss`
@@ -349,13 +469,24 @@ ui:
     minFunctionalSet: contracts/theme-min-functional-set.json
 ```
 
-## 8. CLI 与 Host 校验边界
+## 9. CLI 与 Host 校验边界
 
-`chipsdev validate` 是工程打包前校验入口，当前至少检查基础字段、`permissions` 数组、完整 `runtime.targets`、应用插件 `ui.surface`、`capabilityFallbacks`、模块 provider 契约和 manifest 声明资产存在性。
+`chipsdev validate` 是工程打包前校验入口，当前至少检查基础字段、`permissions` 数组、完整 `runtime.targets`、应用插件 `ui.surface`、`capabilityFallbacks`、模块 provider 契约、`cli.commands` 基础结构和 manifest 声明资产存在性。
+
+`chipsdev package` 在写入 `.cpk` 前必须复用 `chipsdev validate` 的 Manifest 形态校验。校验失败时不得生成新的 `.cpk`。
+
+类型专属官方字段必须按 owner 类型声明，`chipsdev validate / package` 和 Host `plugin.install` 安装校验均不得接受越界声明：
+
+- `module` 只允许 `type: module` 插件声明。
+- `layout` 只允许 `type: layout` 插件声明。
+- `theme / themeId / displayName / isDefault / parentTheme` 只允许 `type: theme` 插件声明。
+- `ui.surface / ui.launcher / ui.window` 只允许 `type: app` 插件声明。
+- `manifest.plugin` 是 Host 插件治理保留字段，`app / module` 插件不得声明。
+- `ui.layout` 是页面布局、主题契约资产索引等场景的共享容器，不按插件类型无条件禁止；具体子字段仍需按对应场景校验。
 
 Host `plugin.install` 是运行时安装入口，支持传入目录、单个 manifest 文件或 `.cpk` 文件。`.cpk` 会先解包到受控临时目录，再查找 manifest、校验资源并复制为当前工作区 `plugins/<pluginId>` 下的已安装副本。Host 还会解析主题、布局与模块的类型专属字段。开发者不应把源码目录当作 Host 正式运行入口。
 
-## 9. 应用插件示例
+## 10. 应用插件示例
 
 ```yaml
 id: chips.photo.viewer
@@ -399,7 +530,7 @@ ui:
     icon: assets/icons/app-icon.png
 ```
 
-## 10. 校验门禁
+## 11. 校验门禁
 
 当前 `chipsdev validate` 已正式校验：
 
@@ -409,7 +540,7 @@ ui:
 4. `capabilityFallbacks` 若提供则必须合法
 5. 非 `app` 插件不得声明 `ui.surface`
 
-## 11. 质量要求
+## 12. 质量要求
 
 1. Manifest 公共字段变化必须同步更新 Host 解析、CLI 校验、Scaffold 模板和共享文档。
 2. 不允许继续把桌面假设直接写死到公共契约里。

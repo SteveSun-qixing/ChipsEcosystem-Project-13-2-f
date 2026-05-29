@@ -40,6 +40,8 @@ const COMMANDS = new Set([
   'update',
   'doctor',
   'open',
+  'completion',
+  '__complete',
   'module',
   'preview',
   'component',
@@ -57,7 +59,25 @@ const COMMANDS = new Set([
   'login',
   'publish',
   'version',
+  '--interactive',
   'run'
+]);
+
+const HOST_FIXED_COMMANDS = new Set([
+  'help',
+  'host',
+  'start',
+  'stop',
+  'status',
+  'config',
+  'logs',
+  'theme',
+  'plugin',
+  'update',
+  'doctor',
+  'open',
+  'completion',
+  '__complete'
 ]);
 
 const HOST_MANAGED_COMMANDS = new Set([
@@ -70,8 +90,36 @@ const HOST_MANAGED_COMMANDS = new Set([
   'theme',
   'update',
   'doctor',
-  'open'
+  'open',
+  'completion',
+  '__complete'
 ]);
+
+const CLI_COMMAND_PATH_KINDS = new Set(['file', 'directory', 'any']);
+const CLI_COMMAND_PATH_ROLES = new Set(['input', 'output']);
+const CLI_COMMAND_OVERWRITE_POLICIES = new Set(['fail', 'overwrite', 'rename', 'skip']);
+const CLI_COMMAND_BATCH_FORMATS = new Set(['lines', 'json-array']);
+const CLI_COMMAND_BATCH_ITEM_TYPES = new Set(['value', 'path']);
+const CLI_COMMAND_PARAMETER_TYPES = new Set([
+  'string',
+  'stringList',
+  'number',
+  'integer',
+  'boolean',
+  'enum',
+  'path',
+  'json',
+  'jsonFile',
+  'text',
+  'textFile'
+]);
+const CLI_COMMAND_OUTPUT_MODES = new Set(['human', 'json']);
+const CLI_COMMAND_JSON_OUTPUT_POLICIES = new Set(['supported', 'required', 'unsupported']);
+const CLI_COMMAND_SURFACE_REUSE_POLICIES = new Set(['always', 'never', 'preferred']);
+const CLI_COMMAND_PATH_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
+const CLI_COMMAND_PARAM_NAME_PATTERN = /^[a-z][a-z0-9-]*$/i;
+const CLI_COMMAND_MAPS_TO_PATTERN = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*$/;
+const CLI_COMMAND_PERMISSION_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+$/;
 
 const log = (value) => {
   if (typeof value === 'string') {
@@ -118,6 +166,8 @@ const printHelp = () => {
       '',
       '用法：',
       '  chipsdev <command> [options]',
+      '  chipsdev',
+      '  chipsdev --interactive',
       '',
       '可用命令：',
       '  init        初始化项目级开发配置（chips.config.mjs）',
@@ -150,13 +200,17 @@ const printHelp = () => {
       '  publish     生成发布包元数据并校验，可对接后续正式发布系统',
       '  run         在开发环境下启动 Host 并运行应用插件',
       '  version     查看 chipsdev 版本',
-      '  help        查看帮助信息'
+      '  help        查看帮助信息',
+      '',
+      '交互模式：',
+      '  不带参数运行 chipsdev 会进入开发工作区 TUI；非交互终端下会安全返回提示。',
+      '  chipsdev --interactive 可显式进入同一 TUI。'
     ].join('\n')
   );
 };
 
 const parseArgs = (argv) => {
-  const [command = 'help', ...rest] = argv;
+  const [command = '', ...rest] = argv;
   return { command, args: rest };
 };
 
@@ -889,6 +943,246 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
 const normalizeManifestAssetPath = (value) =>
   path.normalize(String(value).trim()).replace(/^[.][\\/]/, '');
 
+const parseCliCommandPathSegments = (value) => {
+  if (typeof value === 'string') {
+    return value.trim().split(/\s+/).filter((segment) => segment.length > 0);
+  }
+  if (Array.isArray(value)) {
+    return value.map((segment) => (typeof segment === 'string' ? segment.trim() : ''));
+  }
+  return null;
+};
+
+const appendCliPathRuleManifestErrors = (rule, errors, field) => {
+  if (typeof rule === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(rule)) {
+    errors.push(`${field} 提供时必须是对象。`);
+    return;
+  }
+  if (typeof rule.kind !== 'undefined' && (typeof rule.kind !== 'string' || !CLI_COMMAND_PATH_KINDS.has(rule.kind))) {
+    errors.push(`${field}.kind 必须是 file / directory / any 之一。`);
+  }
+  if (typeof rule.role !== 'undefined' && (typeof rule.role !== 'string' || !CLI_COMMAND_PATH_ROLES.has(rule.role))) {
+    errors.push(`${field}.role 必须是 input / output 之一。`);
+  }
+  for (const key of ['exists', 'create']) {
+    if (typeof rule[key] !== 'undefined' && typeof rule[key] !== 'boolean') {
+      errors.push(`${field}.${key} 必须是布尔值。`);
+    }
+  }
+  if (typeof rule.extensions !== 'undefined') {
+    if (
+      !Array.isArray(rule.extensions) ||
+      rule.extensions.length === 0 ||
+      rule.extensions.some((item) => typeof item !== 'string' || item.trim().length === 0)
+    ) {
+      errors.push(`${field}.extensions 必须是非空字符串数组。`);
+    }
+  }
+  if (
+    typeof rule.overwrite !== 'undefined' &&
+    (typeof rule.overwrite !== 'string' || !CLI_COMMAND_OVERWRITE_POLICIES.has(rule.overwrite))
+  ) {
+    errors.push(`${field}.overwrite 必须是 fail / overwrite / rename / skip 之一。`);
+  }
+  if (typeof rule.overwrite !== 'undefined' && rule.role !== 'output') {
+    errors.push(`${field}.overwrite 只能在 role: output 时声明。`);
+  }
+};
+
+const appendCliBatchRuleManifestErrors = (batch, errors, field, parameterType) => {
+  if (typeof batch === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(batch)) {
+    errors.push(`${field} 提供时必须是对象。`);
+    return;
+  }
+  if (parameterType !== 'textFile' && parameterType !== 'jsonFile') {
+    errors.push(`${field} 只允许 textFile / jsonFile 参数声明。`);
+  }
+  if (typeof batch.format !== 'string' || !CLI_COMMAND_BATCH_FORMATS.has(batch.format)) {
+    errors.push(`${field}.format 必须是 lines / json-array 之一。`);
+  }
+  if (batch.format === 'lines' && parameterType !== 'textFile') {
+    errors.push(`${field}.format 为 lines 时参数类型必须是 textFile。`);
+  }
+  if (batch.format === 'json-array' && parameterType !== 'jsonFile') {
+    errors.push(`${field}.format 为 json-array 时参数类型必须是 jsonFile。`);
+  }
+  if (
+    typeof batch.itemType !== 'undefined' &&
+    (typeof batch.itemType !== 'string' || !CLI_COMMAND_BATCH_ITEM_TYPES.has(batch.itemType))
+  ) {
+    errors.push(`${field}.itemType 必须是 value / path 之一。`);
+  }
+  if (typeof batch.itemPath !== 'undefined') {
+    if (batch.itemType !== 'path') {
+      errors.push(`${field}.itemPath 只能在 itemType: path 时声明。`);
+    }
+    appendCliPathRuleManifestErrors(batch.itemPath, errors, `${field}.itemPath`);
+  }
+};
+
+const appendCliParameterManifestErrors = (parameter, errors, field) => {
+  if (!isPlainObject(parameter)) {
+    errors.push(`${field} 必须是对象。`);
+    return;
+  }
+  if (typeof parameter.name !== 'string' || !CLI_COMMAND_PARAM_NAME_PATTERN.test(parameter.name)) {
+    errors.push(`${field}.name 必须是合法的非空参数名。`);
+  }
+  const parameterType = parameter.type;
+  if (typeof parameterType !== 'string' || !CLI_COMMAND_PARAMETER_TYPES.has(parameterType)) {
+    errors.push(`${field}.type 必须是受支持的 CLI 参数类型。`);
+  }
+  if (typeof parameter.short !== 'undefined') {
+    if (typeof parameter.short !== 'string' || !/^[A-Za-z0-9]$/.test(parameter.short)) {
+      errors.push(`${field}.short 必须是单个字母或数字。`);
+    }
+  }
+  if (typeof parameter.position !== 'undefined') {
+    if (typeof parameter.position !== 'number' || !Number.isInteger(parameter.position) || parameter.position < 0) {
+      errors.push(`${field}.position 必须是非负整数。`);
+    }
+  }
+  if (typeof parameter.required !== 'undefined' && typeof parameter.required !== 'boolean') {
+    errors.push(`${field}.required 必须是布尔值。`);
+  }
+  if (typeof parameter.mapsTo !== 'undefined') {
+    if (typeof parameter.mapsTo !== 'string' || !CLI_COMMAND_MAPS_TO_PATTERN.test(parameter.mapsTo)) {
+      errors.push(`${field}.mapsTo 必须是点分隔 payload 路径。`);
+    }
+  }
+  if (typeof parameter.choices !== 'undefined' && !Array.isArray(parameter.choices)) {
+    errors.push(`${field}.choices 必须是数组。`);
+  }
+  if (typeof parameter.multiple !== 'undefined' && typeof parameter.multiple !== 'boolean') {
+    errors.push(`${field}.multiple 必须是布尔值。`);
+  }
+  if (typeof parameter.path !== 'undefined') {
+    appendCliPathRuleManifestErrors(parameter.path, errors, `${field}.path`);
+    if (isPlainObject(parameter.path) && parameter.path.role === 'output' && parameterType !== 'path') {
+      errors.push(`${field}.path.role 为 output 时参数类型必须是 path。`);
+    }
+  }
+  appendCliBatchRuleManifestErrors(parameter.batch, errors, `${field}.batch`, parameterType);
+};
+
+const appendCliParameterListManifestErrors = (parameters, errors, field, positional) => {
+  if (typeof parameters === 'undefined') {
+    return [];
+  }
+  if (!Array.isArray(parameters)) {
+    errors.push(`${field} 必须是数组。`);
+    return [];
+  }
+
+  const names = new Set();
+  const shorts = new Set();
+  const positions = new Set();
+  parameters.forEach((parameter, parameterIndex) => {
+    const parameterField = `${field}[${parameterIndex}]`;
+    appendCliParameterManifestErrors(parameter, errors, parameterField);
+    if (!isPlainObject(parameter)) {
+      return;
+    }
+    if (typeof parameter.name === 'string') {
+      if (names.has(parameter.name)) {
+        errors.push(`${parameterField}.name 与同一 CLI 命令中的其他参数重复。`);
+      }
+      names.add(parameter.name);
+    }
+    if (typeof parameter.short === 'string') {
+      if (shorts.has(parameter.short)) {
+        errors.push(`${parameterField}.short 与同一 CLI 命令中的其他短选项重复。`);
+      }
+      shorts.add(parameter.short);
+    }
+    if (positional) {
+      const position = typeof parameter.position === 'undefined' ? parameterIndex : parameter.position;
+      if (typeof position === 'number' && Number.isInteger(position) && position >= 0) {
+        if (positions.has(position)) {
+          errors.push(`${parameterField}.position 与同一 CLI 命令中的其他位置参数重复。`);
+        }
+        positions.add(position);
+      }
+    } else if (typeof parameter.position !== 'undefined') {
+      errors.push(`${parameterField}.position 只允许位置参数声明，options 不得声明。`);
+    }
+  });
+  return parameters.filter(isPlainObject);
+};
+
+const appendCliCommandOutputManifestErrors = (output, errors, field) => {
+  if (typeof output === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(output)) {
+    errors.push(`${field} 提供时必须是对象。`);
+    return;
+  }
+  if (
+    typeof output.mode !== 'undefined' &&
+    (typeof output.mode !== 'string' || !CLI_COMMAND_OUTPUT_MODES.has(output.mode))
+  ) {
+    errors.push(`${field}.mode 必须是 human / json 之一。`);
+  }
+  if (
+    typeof output.json !== 'undefined' &&
+    (typeof output.json !== 'string' || !CLI_COMMAND_JSON_OUTPUT_POLICIES.has(output.json))
+  ) {
+    errors.push(`${field}.json 必须是 supported / required / unsupported 之一。`);
+  }
+  if (typeof output.artifacts !== 'undefined') {
+    if (
+      !Array.isArray(output.artifacts) ||
+      output.artifacts.length === 0 ||
+      output.artifacts.some((item) => typeof item !== 'string' || item.trim().length === 0)
+    ) {
+      errors.push(`${field}.artifacts 必须是非空字符串数组。`);
+    }
+  }
+};
+
+const appendCliCommandJobManifestErrors = (job, errors, field) => {
+  if (typeof job === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(job)) {
+    errors.push(`${field} 提供时必须是对象。`);
+    return;
+  }
+  for (const key of ['wait', 'cancelOnInterrupt']) {
+    if (typeof job[key] !== 'undefined' && typeof job[key] !== 'boolean') {
+      errors.push(`${field}.${key} 必须是布尔值。`);
+    }
+  }
+};
+
+const appendCliCommandConflictManifestErrors = (conflict, errors, field) => {
+  if (typeof conflict === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(conflict)) {
+    errors.push(`${field} 提供时必须是对象。`);
+    return;
+  }
+  if (
+    typeof conflict.priority !== 'undefined' &&
+    (typeof conflict.priority !== 'number' || !Number.isFinite(conflict.priority))
+  ) {
+    errors.push(`${field}.priority 必须是有限数字。`);
+  }
+  if (typeof conflict.namespace !== 'undefined') {
+    if (typeof conflict.namespace !== 'string' || conflict.namespace.trim().length === 0) {
+      errors.push(`${field}.namespace 必须是非空字符串。`);
+    }
+  }
+};
+
 const collectManifestAssetPaths = (manifest) => {
   const assets = [];
   const appendAsset = (value) => {
@@ -1057,6 +1351,8 @@ const handlePackage = async () => {
   const config = await loadProjectConfig(projectRoot);
   const { manifest, manifestPath } = await loadManifest(projectRoot);
 
+  assertManifestShapeForPackage(manifest);
+
   const outDir = path.join(projectRoot, config.outDir);
   const hasOutDir = fs.existsSync(outDir) && fs.statSync(outDir).isDirectory();
   if (!hasOutDir) {
@@ -1089,6 +1385,195 @@ const handlePackage = async () => {
   });
 };
 
+const appendTypeExclusiveManifestErrors = (manifest, errors) => {
+  const type = typeof manifest.type === 'string' ? manifest.type : undefined;
+  const assertOwnedField = (field, ownerType) => {
+    if (typeof manifest[field] !== 'undefined' && type !== ownerType) {
+      errors.push(`manifest.${field} 只允许 ${ownerType} 插件声明，当前插件类型为 ${type ?? '(missing type)'}。`);
+    }
+  };
+
+  assertOwnedField('module', 'module');
+  assertOwnedField('layout', 'layout');
+  assertOwnedField('theme', 'theme');
+  assertOwnedField('themeId', 'theme');
+  assertOwnedField('isDefault', 'theme');
+  assertOwnedField('parentTheme', 'theme');
+  assertOwnedField('displayName', 'theme');
+
+  if ((type === 'app' || type === 'module') && typeof manifest.plugin !== 'undefined') {
+    errors.push('manifest.plugin 是 Host 插件治理保留字段，app/module 插件不得声明。');
+  }
+
+  const ui = isPlainObject(manifest.ui) ? manifest.ui : undefined;
+  if (type !== 'app' && ui) {
+    for (const field of ['surface', 'launcher', 'window']) {
+      if (typeof ui[field] !== 'undefined') {
+        errors.push(`manifest.ui.${field} 只允许 app 插件声明，当前插件类型为 ${type ?? '(missing type)'}。`);
+      }
+    }
+  }
+};
+
+const appendCliCommandManifestErrors = (manifest, errors) => {
+  if (typeof manifest.cli === 'undefined') {
+    return;
+  }
+  if (!isPlainObject(manifest.cli)) {
+    errors.push('manifest.cli 提供时必须是对象。');
+    return;
+  }
+  if (manifest.type !== 'app' && manifest.type !== 'module') {
+    errors.push('只有 app/module 插件允许声明 manifest.cli.commands。');
+    return;
+  }
+  if (!Array.isArray(manifest.cli.commands)) {
+    errors.push('manifest.cli.commands 必须是数组。');
+    return;
+  }
+
+  for (const [index, command] of manifest.cli.commands.entries()) {
+    if (!isPlainObject(command)) {
+      errors.push(`manifest.cli.commands[${index}] 必须是对象。`);
+      continue;
+    }
+    const field = `manifest.cli.commands[${index}]`;
+    const commandPath = parseCliCommandPathSegments(command.commandPath);
+    if (!commandPath || commandPath.length === 0 || commandPath.some((segment) => segment.length === 0)) {
+      errors.push(`manifest.cli.commands[${index}].commandPath 必须是非空命令路径。`);
+      continue;
+    }
+    if (commandPath.some((segment) => !CLI_COMMAND_PATH_SEGMENT_PATTERN.test(segment))) {
+      errors.push(`${field}.commandPath 只能包含字母、数字和连字符，且每段必须以字母或数字开头。`);
+    }
+    const root = commandPath[0].toLowerCase();
+    if (HOST_FIXED_COMMANDS.has(root)) {
+      errors.push(
+        `manifest.cli.commands[${index}].commandPath 不得以 Host 固定命令 "${root}" 开头。`
+      );
+    }
+
+    if (typeof command.commandId !== 'undefined' && (typeof command.commandId !== 'string' || command.commandId.trim().length === 0)) {
+      errors.push(`${field}.commandId 提供时必须是非空字符串。`);
+    }
+    if (typeof command.titleKey !== 'string' || command.titleKey.trim().length === 0) {
+      errors.push(`${field}.titleKey 必须是非空多语言 key。`);
+    }
+    if (typeof command.descriptionKey !== 'undefined' && (typeof command.descriptionKey !== 'string' || command.descriptionKey.trim().length === 0)) {
+      errors.push(`${field}.descriptionKey 提供时必须是非空字符串。`);
+    }
+    if (typeof command.examples !== 'undefined') {
+      if (
+        !Array.isArray(command.examples) ||
+        command.examples.some((item) => typeof item !== 'string' || item.trim().length === 0)
+      ) {
+        errors.push(`${field}.examples 必须是非空字符串数组。`);
+      }
+    }
+
+    if (!isPlainObject(command.target)) {
+      errors.push(`${field}.target 必须是对象。`);
+    } else {
+      const targetType = command.target.type;
+      if (targetType !== 'app' && targetType !== 'module') {
+        errors.push(`${field}.target.type 必须是 app 或 module。`);
+      } else if (targetType !== manifest.type) {
+        errors.push(`${field}.target.type 必须与插件类型 ${manifest.type} 一致。`);
+      }
+      if (targetType === 'module') {
+        if (typeof command.target.capability !== 'string' || command.target.capability.trim().length === 0) {
+          errors.push(`${field}.target.capability 必须是非空字符串。`);
+        }
+        if (typeof command.target.method !== 'string' || command.target.method.trim().length === 0) {
+          errors.push(`${field}.target.method 必须是非空字符串。`);
+        }
+        if (typeof command.target.pluginId !== 'undefined' && command.target.pluginId !== manifest.id) {
+          errors.push(`${field}.target.pluginId 必须与 manifest.id 一致。`);
+        }
+        if (
+          typeof command.target.timeoutMs !== 'undefined' &&
+          (typeof command.target.timeoutMs !== 'number' || !Number.isFinite(command.target.timeoutMs) || command.target.timeoutMs <= 0)
+        ) {
+          errors.push(`${field}.target.timeoutMs 必须是正数。`);
+        }
+      }
+      if (targetType === 'app') {
+        const targetPluginId = command.target.pluginId ?? manifest.id;
+        if (targetPluginId !== manifest.id) {
+          errors.push(`${field}.target.pluginId 必须与 manifest.id 一致。`);
+        }
+        if (typeof command.target.commandId !== 'undefined' && (typeof command.target.commandId !== 'string' || command.target.commandId.trim().length === 0)) {
+          errors.push(`${field}.target.commandId 提供时必须是非空字符串。`);
+        }
+        if (typeof command.target.launchParams !== 'undefined' && !isPlainObject(command.target.launchParams)) {
+          errors.push(`${field}.target.launchParams 提供时必须是对象。`);
+        }
+        if (typeof command.target.surface !== 'undefined') {
+          if (!isPlainObject(command.target.surface)) {
+            errors.push(`${field}.target.surface 提供时必须是对象。`);
+          } else {
+            if (typeof command.target.surface.open !== 'undefined' && typeof command.target.surface.open !== 'boolean') {
+              errors.push(`${field}.target.surface.open 必须是布尔值。`);
+            }
+            if (typeof command.target.surface.focus !== 'undefined' && typeof command.target.surface.focus !== 'boolean') {
+              errors.push(`${field}.target.surface.focus 必须是布尔值。`);
+            }
+            if (
+              typeof command.target.surface.reuse !== 'undefined' &&
+              (typeof command.target.surface.reuse !== 'string' || !CLI_COMMAND_SURFACE_REUSE_POLICIES.has(command.target.surface.reuse))
+            ) {
+              errors.push(`${field}.target.surface.reuse 必须是 always / never / preferred 之一。`);
+            }
+          }
+        }
+      }
+    }
+
+    const argumentParameters = appendCliParameterListManifestErrors(command.arguments, errors, `${field}.arguments`, true);
+    const optionParameters = appendCliParameterListManifestErrors(command.options, errors, `${field}.options`, false);
+    const allNames = new Set();
+    const allShorts = new Set();
+    for (const parameter of [...argumentParameters, ...optionParameters]) {
+      if (typeof parameter.name === 'string') {
+        if (allNames.has(parameter.name)) {
+          errors.push(`${field} 中参数 name 必须唯一：${parameter.name}`);
+        }
+        allNames.add(parameter.name);
+      }
+      if (typeof parameter.short === 'string') {
+        if (allShorts.has(parameter.short)) {
+          errors.push(`${field} 中参数 short 必须唯一：${parameter.short}`);
+        }
+        allShorts.add(parameter.short);
+      }
+    }
+
+    if (typeof command.permissions !== 'undefined') {
+      if (
+        !Array.isArray(command.permissions) ||
+        command.permissions.some((permission) => typeof permission !== 'string' || permission.trim().length === 0 || !CLI_COMMAND_PERMISSION_PATTERN.test(permission))
+      ) {
+        errors.push(`${field}.permissions 必须是合法权限名数组。`);
+      } else if (Array.isArray(manifest.permissions)) {
+        const missingPermissions = command.permissions.filter((permission) => !manifest.permissions.includes(permission));
+        if (missingPermissions.length > 0) {
+          errors.push(`${field}.permissions 必须先在 manifest.permissions 声明：${missingPermissions.join(', ')}`);
+        }
+      }
+    }
+    appendCliCommandOutputManifestErrors(command.output, errors, `${field}.output`);
+    appendCliCommandJobManifestErrors(command.job, errors, `${field}.job`);
+    appendCliCommandConflictManifestErrors(command.conflict, errors, `${field}.conflict`);
+  }
+};
+
+const assertManifestShapeForPackage = (manifest) => {
+  const errors = validateManifestShape(manifest);
+  if (errors.length > 0) {
+    throw new Error(`manifest.yaml 校验失败，无法打包：\n- ${errors.join('\n- ')}`);
+  }
+};
+
 const validateManifestShape = (manifest) => {
   const runtimeTargetIds = ['desktop', 'web', 'mobile', 'headless'];
   const surfaceKinds = ['window', 'tab', 'route', 'modal', 'sheet', 'fullscreen'];
@@ -1114,6 +1599,9 @@ const validateManifestShape = (manifest) => {
   if (!Array.isArray(manifest.permissions)) {
     errors.push('manifest.permissions 必须存在且为数组。');
   }
+
+  appendTypeExclusiveManifestErrors(manifest, errors);
+  appendCliCommandManifestErrors(manifest, errors);
 
   if (!isPlainObject(manifest.runtime)) {
     errors.push('manifest.runtime 必须存在且为对象。');
@@ -1552,12 +2040,21 @@ const delegateHostManagedCommand = async (command, args) => {
   const projectRoot = resolveProjectRoot();
   const workspacePath = await resolveDevWorkspace(projectRoot);
   const requiresThemeBootstrap = new Set(['theme', 'run', 'open']);
+  const forwardedArgs = command === 'completion' ? [command, ...args, 'chipsdev'] : [command, ...args];
 
   if (requiresThemeBootstrap.has(command)) {
     await ensureDevWorkspaceThemeBootstrap(projectRoot, workspacePath);
   }
 
-  await runHostCliCommand(projectRoot, workspacePath, [command, ...args], {
+  await runHostCliCommand(projectRoot, workspacePath, forwardedArgs, {
+    CHIPS_WORKSPACE_KIND: 'dev'
+  });
+};
+
+const delegateHostInteractiveCommand = async (explicit = false) => {
+  const projectRoot = resolveProjectRoot();
+  const workspacePath = await resolveDevWorkspace(projectRoot);
+  await runHostCliCommand(projectRoot, workspacePath, explicit ? ['--interactive'] : [], {
     CHIPS_WORKSPACE_KIND: 'dev'
   });
 };
@@ -2259,12 +2756,31 @@ const handleDiagnostics = async (args) => {
 const main = async () => {
   const { command, args } = parseArgs(process.argv.slice(2));
 
+  if (command === '') {
+    try {
+      await delegateHostInteractiveCommand(false);
+      process.exitCode = 0;
+    } catch (error) {
+      const payload = toErrorPayload(error);
+      if (payload) {
+        logError(payload);
+      }
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (!COMMANDS.has(command)) {
-    logError({
-      error: `未知命令：${command}`,
-      hint: '使用 `chipsdev help` 查看可用命令'
-    });
-    process.exitCode = 1;
+    try {
+      await delegateHostManagedCommand(command, args);
+      process.exitCode = 0;
+    } catch (error) {
+      const payload = toErrorPayload(error);
+      if (payload) {
+        logError(payload);
+      }
+      process.exitCode = 1;
+    }
     return;
   }
 
@@ -2282,7 +2798,9 @@ const main = async () => {
   }
 
   try {
-    if (command === 'theme' && args[0] === 'inspect') {
+    if (command === '--interactive') {
+      await delegateHostInteractiveCommand(true);
+    } else if (command === 'theme' && args[0] === 'inspect') {
       await handleThemeInspect(args);
     } else if (HOST_MANAGED_COMMANDS.has(command)) {
       await delegateHostManagedCommand(command, args);

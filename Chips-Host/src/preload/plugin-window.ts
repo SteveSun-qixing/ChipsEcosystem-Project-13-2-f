@@ -58,7 +58,11 @@ const normalizeSurfaceContext = (value: unknown): SurfaceContext | undefined => 
           typeof value.commandContext.source === 'string'
             ? value.commandContext.source
             : undefined,
-        payload: normalizeLaunchParams(value.commandContext.payload)
+        payload: normalizeLaunchParams(value.commandContext.payload),
+        taskId:
+          typeof value.commandContext.taskId === 'string'
+            ? value.commandContext.taskId
+            : undefined
       }
     : undefined;
 

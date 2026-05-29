@@ -39,3 +39,44 @@ module:
           inputSchema: contracts/pick.input.schema.json
           outputSchema: contracts/pick.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} colors
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: pick
+        timeoutMs: 30000
+      titleKey: module.cli.colors.title
+      descriptionKey: module.cli.colors.description
+      permissions:
+        - file.read
+      arguments:
+        - name: image-path
+          position: 0
+          type: path
+          required: true
+          mapsTo: imagePath
+          path:
+            kind: file
+            exists: true
+          ui:
+            control: pathInput
+            placeholderKey: module.cli.colors.imagePath.placeholder
+      options:
+        - name: sample-size
+          short: s
+          type: integer
+          default: 96
+          mapsTo: options.sampleSize
+          validation:
+            min: 48
+            max: 160
+          ui:
+            control: slider
+            min: 48
+            max: 160
+            step: 1
+      output:
+        mode: json
+        json: supported

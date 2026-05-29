@@ -27,6 +27,7 @@ export interface SurfacePresentation {
   height?: number;
   resizable?: boolean;
   alwaysOnTop?: boolean;
+  visible?: boolean;
   chrome?: WindowChromeOptions;
 }
 
@@ -40,6 +41,7 @@ export interface SurfaceCommandContext {
   commandId: string;
   source?: string;
   payload?: Record<string, unknown>;
+  taskId?: string;
 }
 
 export interface SurfaceContext {
@@ -103,6 +105,7 @@ export interface WindowOptions {
   height: number;
   resizable?: boolean;
   alwaysOnTop?: boolean;
+  visible?: boolean;
   url?: string;
   pluginId?: string;
   sessionId?: string;
@@ -117,7 +120,7 @@ export interface WindowState extends SurfaceState {
   width: number;
   height: number;
   kind: 'window';
-  state: 'normal' | 'minimized' | 'maximized' | 'fullscreen';
+  state: SurfaceStateKind;
 }
 
 export interface FileReadOptions {

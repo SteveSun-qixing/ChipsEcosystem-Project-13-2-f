@@ -162,6 +162,38 @@ async function main() {
     if (/^commands\s*:/m.test(manifestText)) {
       throw new Error("E2E: 应用模板不应生成未冻结的 manifest.commands 字段");
     }
+    if (!manifestText.includes("cli:\n  commands:")) {
+      throw new Error("E2E: 应用模板应生成 manifest.cli.commands");
+    }
+    if (!manifestText.includes("commandPath: app-e2e open")) {
+      throw new Error("E2E: 应用模板 CLI 命令路径应来自项目名安全命令根");
+    }
+    for (const requiredText of [
+      "target:\n        type: app",
+      "pluginId: com.example.app-e2e",
+      "surface:\n          open: true",
+      "reuse: preferred",
+      "titleKey: app.cli.open.title",
+      "descriptionKey: app.cli.open.description",
+      "mapsTo: subject",
+      "placeholderKey: app.cli.open.subjectPlaceholder",
+    ]) {
+      if (!manifestText.includes(requiredText)) {
+        throw new Error(`E2E: 应用模板 CLI 声明缺少 ${requiredText}`);
+      }
+    }
+    for (const forbiddenPattern of [
+      /^plugin\s*:/m,
+      /^theme\s*:/m,
+      /^themeId\s*:/m,
+      /^displayName\s*:/m,
+      /^module\s*:/m,
+      /^layout\s*:/m,
+    ]) {
+      if (forbiddenPattern.test(manifestText)) {
+        throw new Error(`E2E: 应用模板 manifest 不应声明越界字段 ${forbiddenPattern}`);
+      }
+    }
 
     const commandSource = await readFile(
       path.join(projectDir, "src", "commands", "app-commands.ts"),

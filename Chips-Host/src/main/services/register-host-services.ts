@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createError } from '../../shared/errors';
+import { createError, toStandardError } from '../../shared/errors';
 import { schemaRegistry } from '../../shared/schema';
 import { createId, deepClone } from '../../shared/utils';
 import type { LogEntry, RouteDescriptor, RouteInvocationContext, ServiceRegistration, StandardError } from '../../shared/types';
@@ -17,7 +17,7 @@ import { StructuredLogger } from '../../shared/logger';
 import type { PluginUiConfig } from '../../shared/window-chrome';
 import { cloneWindowChromeOptions, resolveManifestWindowChrome } from '../../shared/window-chrome';
 import { PluginRuntime } from '../../runtime';
-import type { PluginRecord } from '../../runtime';
+import type { CliCommandManifestMeta, CliCommandTargetManifestMeta, PluginRecord } from '../../runtime';
 import type { Kernel } from '../../../packages/kernel/src';
 import type { HostKind, PALAdapter, SurfaceContext, SurfaceKind, SurfacePresentation, SurfaceState, WindowChromeOptions } from '../../../packages/pal/src';
 import { CardService } from '../../../packages/card-service/src';
@@ -91,6 +91,47 @@ interface PluginRecordView extends PluginInfoView {
   installedAt: number;
 }
 
+interface CliCommandOwnerView {
+  pluginId: string;
+  pluginType: PluginRecord['manifest']['type'];
+  pluginName: string;
+  pluginVersion: string;
+  source?: PluginRecord['manifest']['source'];
+}
+
+interface CliCommandConflictView {
+  commandPathKey: string;
+  enabledCommandIds: string[];
+  allCommandIds: string[];
+}
+
+interface CliCommandView {
+  commandId: string;
+  commandPath: string[];
+  commandPathKey: string;
+  owner: CliCommandOwnerView;
+  enabled: boolean;
+  declaration: CliCommandManifestMeta;
+  conflicts: CliCommandConflictView[];
+}
+
+interface CliCommandIndexView {
+  schemaVersion: 1;
+  version: string;
+  updatedAt: string;
+  workspacePath: string;
+  commands: CliCommandView[];
+  conflicts: CliCommandConflictView[];
+}
+
+interface CliCommandQueryOptions {
+  commandPath?: string | string[];
+  commandId?: string;
+  pluginId?: string;
+  targetType?: CliCommandTargetManifestMeta['type'];
+  includeDisabled?: boolean;
+}
+
 interface PluginShortcutView {
   pluginId: string;
   name: string;
@@ -153,9 +194,51 @@ interface ModuleJobView {
   };
 }
 
+type CliTaskStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+interface CliTaskRecord {
+  taskId: string;
+  pluginId: string;
+  commandId: string;
+  commandPath?: string[];
+  invocationId?: string;
+  surfaceId?: string;
+  sessionId?: string;
+  status: CliTaskStatus;
+  createdAt: number;
+  updatedAt: number;
+  progress?: Record<string, unknown>;
+  output?: unknown;
+  error?: StandardError;
+}
+
+interface CliTaskView {
+  taskId: string;
+  pluginId: string;
+  commandId: string;
+  commandPath?: string[];
+  invocationId?: string;
+  surfaceId?: string;
+  sessionId?: string;
+  status: CliTaskStatus;
+  createdAt: number;
+  updatedAt: number;
+  progress?: Record<string, unknown>;
+  output?: unknown;
+  error?: StandardError;
+}
+
 type CommandScopeKind = 'global' | 'app' | 'scene' | 'surface' | 'document';
-type CommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api';
+type CommandSource = 'menu' | 'toolbar' | 'shortcut' | 'palette' | 'context-menu' | 'api' | 'cli';
 type CommandIconStyle = 'outlined' | 'rounded' | 'sharp';
+type FileWriteContent =
+  | string
+  | Buffer
+  | Uint8Array
+  | ArrayBuffer
+  | ArrayBufferView
+  | number[]
+  | { type: 'Buffer'; data: number[] };
 
 interface CommandIconDescriptor {
   name: string;
@@ -258,6 +341,7 @@ interface CommandInvocationContext {
   sceneId?: string;
   surfaceId?: string;
   documentId?: string;
+  taskId?: string;
   data?: Record<string, unknown>;
 }
 
@@ -334,6 +418,7 @@ interface RuntimeState {
   moduleRuntimes: Map<string, ModuleRuntimeRecord>;
   moduleJobs: Map<string, ModuleJobRecord>;
   moduleJobControllers: Map<string, AbortController>;
+  cliTasks: Map<string, CliTaskRecord>;
   credentials: Map<string, { iv: string; tag: string; value: string }>;
   clipboard: unknown;
   themes: ThemeRecord[];
@@ -342,6 +427,7 @@ interface RuntimeState {
   locales: Record<string, Record<string, string>>;
   commands: Map<string, RegisteredCommand>;
   commandShortcuts: Map<string, CommandShortcut[]>;
+  cliCommandIndexVersion: number;
   routeMetrics: Map<string, RouteMetric>;
   activatedServices: Set<string>;
 }
@@ -375,6 +461,52 @@ const toModuleJobView = (record: ModuleJobRecord): ModuleJobView => {
     progress: record.progress ? deepClone(record.progress) : undefined,
     output: typeof record.output === 'undefined' ? undefined : deepClone(record.output),
     error: record.error ? { ...record.error } : undefined
+  };
+};
+
+const toCliTaskView = (record: CliTaskRecord): CliTaskView => {
+  return {
+    taskId: record.taskId,
+    pluginId: record.pluginId,
+    commandId: record.commandId,
+    commandPath: record.commandPath ? [...record.commandPath] : undefined,
+    invocationId: record.invocationId,
+    surfaceId: record.surfaceId,
+    sessionId: record.sessionId,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    progress: record.progress ? deepClone(record.progress) : undefined,
+    output: typeof record.output === 'undefined' ? undefined : deepClone(record.output),
+    error: record.error ? { ...record.error } : undefined
+  };
+};
+
+const requireCliTask = (state: RuntimeState, taskId: string): CliTaskRecord => {
+  const task = state.cliTasks.get(taskId);
+  if (!task) {
+    throw createError('CLI_TASK_NOT_FOUND', `CLI task not found: ${taskId}`, { taskId });
+  }
+  return task;
+};
+
+const ensureCliTaskOwner = (
+  task: CliTaskRecord,
+  routeContext: RouteInvocationContext,
+  action: `${string}.${string}`
+): void => {
+  if (routeContext.caller.pluginId === task.pluginId) {
+    return;
+  }
+  ensureCallerPermission(routeContext, 'plugin.manage', action);
+};
+
+const normalizeCliTaskError = (value: unknown): StandardError => {
+  const standard = toStandardError(value, 'CLI_TASK_FAILED');
+  return {
+    ...standard,
+    code: standard.code || 'CLI_TASK_FAILED',
+    message: standard.message || 'CLI task failed'
   };
 };
 
@@ -423,6 +555,26 @@ const unregisterModulePluginState = async (
     pluginId,
     reason
   });
+};
+
+const cancelCliTasksForPlugin = async (
+  ctx: HostServiceContext,
+  state: RuntimeState,
+  pluginId: string,
+  reason: 'plugin-disabled' | 'plugin-uninstalled'
+): Promise<void> => {
+  for (const task of state.cliTasks.values()) {
+    if (task.pluginId !== pluginId || task.status !== 'running') {
+      continue;
+    }
+    task.status = 'cancelled';
+    task.updatedAt = Date.now();
+    task.error = {
+      code: 'CLI_TASK_CANCELLED',
+      message: `CLI task cancelled because plugin was ${reason === 'plugin-disabled' ? 'disabled' : 'uninstalled'}`
+    };
+    await ctx.kernel.events.emit('cli.task.cancelled', 'cli-task-service', toCliTaskView(task));
+  }
 };
 
 type ConfigScope = 'user' | 'workspace' | 'system';
@@ -509,6 +661,7 @@ const buildState = (): RuntimeState => ({
   moduleRuntimes: new Map<string, ModuleRuntimeRecord>(),
   moduleJobs: new Map<string, ModuleJobRecord>(),
   moduleJobControllers: new Map<string, AbortController>(),
+  cliTasks: new Map<string, CliTaskRecord>(),
   credentials: new Map<string, { iv: string; tag: string; value: string }>(),
   clipboard: null,
   themes: [],
@@ -526,6 +679,7 @@ const buildState = (): RuntimeState => ({
   },
   commands: new Map<string, RegisteredCommand>(),
   commandShortcuts: new Map<string, CommandShortcut[]>(),
+  cliCommandIndexVersion: 1,
   routeMetrics: new Map<string, RouteMetric>(),
   activatedServices: new Set<string>()
 });
@@ -639,6 +793,30 @@ const asStringArray = (value: unknown): string[] => {
   return value
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     .map((item) => item.trim());
+};
+
+const normalizeFileWriteContent = (value: FileWriteContent): string | Buffer => {
+  if (typeof value === 'string' || Buffer.isBuffer(value)) {
+    return value;
+  }
+  if (value instanceof ArrayBuffer) {
+    return Buffer.from(value);
+  }
+  if (ArrayBuffer.isView(value)) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  }
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return Buffer.from(value);
+  }
+  if (
+    isRecord(value) &&
+    value.type === 'Buffer' &&
+    Array.isArray(value.data) &&
+    value.data.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)
+  ) {
+    return Buffer.from(value.data);
+  }
+  throw createError('FILE_CONTENT_INVALID', 'file.write content must be string or binary bytes');
 };
 
 const asPositiveFiniteNumber = (value: unknown): number | undefined => {
@@ -967,6 +1145,135 @@ const toPluginRecordView = (record: ReturnType<PluginRuntime['query']>[number]):
     ui: record.manifest.ui ? deepClone(record.manifest.ui) : undefined,
     installedAt: record.installedAt
   };
+};
+
+const normalizeCliCommandPathKey = (commandPath: string | string[]): string => {
+  const segments = Array.isArray(commandPath)
+    ? commandPath
+    : commandPath.trim().split(/\s+/).filter((segment) => segment.length > 0);
+  return segments.map((segment) => segment.trim().toLowerCase()).filter((segment) => segment.length > 0).join(' ');
+};
+
+const parseCliCommandQueryOptions = (input: unknown): CliCommandQueryOptions => {
+  if (!isRecord(input)) {
+    return {};
+  }
+  return {
+    commandPath:
+      typeof input.commandPath === 'string' || Array.isArray(input.commandPath)
+        ? (input.commandPath as string | string[])
+        : undefined,
+    commandId: asString(input.commandId),
+    pluginId: asString(input.pluginId),
+    targetType: input.targetType === 'app' || input.targetType === 'module' ? input.targetType : undefined,
+    includeDisabled: input.includeDisabled === true
+  };
+};
+
+const toCliCommandOwnerView = (record: PluginRecord): CliCommandOwnerView => {
+  return {
+    pluginId: record.manifest.id,
+    pluginType: record.manifest.type,
+    pluginName: record.manifest.name,
+    pluginVersion: record.manifest.version,
+    source: record.manifest.source
+  };
+};
+
+const buildCliCommandIndex = (ctx: HostServiceContext, state: RuntimeState): CliCommandIndexView => {
+  const records = ctx.runtime
+    .query()
+    .filter((record) => record.manifest.type === 'app' || record.manifest.type === 'module')
+    .sort((left, right) => left.manifest.id.localeCompare(right.manifest.id));
+  const commands: CliCommandView[] = [];
+
+  for (const record of records) {
+    for (const declaration of record.manifest.cli?.commands ?? []) {
+      const commandPathKey = normalizeCliCommandPathKey(declaration.commandPath);
+      commands.push({
+        commandId: declaration.commandId,
+        commandPath: [...declaration.commandPath],
+        commandPathKey,
+        owner: toCliCommandOwnerView(record),
+        enabled: record.enabled,
+        declaration: deepClone(declaration),
+        conflicts: []
+      });
+    }
+  }
+
+  const conflicts = [...commands.reduce((groups, command) => {
+    const group = groups.get(command.commandPathKey) ?? [];
+    group.push(command);
+    groups.set(command.commandPathKey, group);
+    return groups;
+  }, new Map<string, CliCommandView[]>()).entries()]
+    .map(([commandPathKey, groupedCommands]) => {
+      const enabledCommandIds = groupedCommands
+        .filter((command) => command.enabled)
+        .map((command) => command.commandId)
+        .sort((left, right) => left.localeCompare(right));
+      if (enabledCommandIds.length <= 1) {
+        return null;
+      }
+      return {
+        commandPathKey,
+        enabledCommandIds,
+        allCommandIds: groupedCommands.map((command) => command.commandId).sort((left, right) => left.localeCompare(right))
+      };
+    })
+    .filter((conflict): conflict is CliCommandConflictView => conflict !== null)
+    .sort((left, right) => left.commandPathKey.localeCompare(right.commandPathKey));
+
+  for (const command of commands) {
+    command.conflicts = conflicts.filter((conflict) => conflict.allCommandIds.includes(command.commandId));
+  }
+
+  commands.sort((left, right) => {
+    const byPath = left.commandPathKey.localeCompare(right.commandPathKey);
+    if (byPath !== 0) {
+      return byPath;
+    }
+    return left.commandId.localeCompare(right.commandId);
+  });
+
+  return {
+    schemaVersion: 1,
+    version: String(state.cliCommandIndexVersion),
+    updatedAt: new Date(state.cliCommandIndexVersion).toISOString(),
+    workspacePath: ctx.workspacePath,
+    commands,
+    conflicts
+  };
+};
+
+const filterCliCommands = (index: CliCommandIndexView, options: CliCommandQueryOptions): CliCommandView[] => {
+  const commandPathKey =
+    typeof options.commandPath !== 'undefined'
+      ? normalizeCliCommandPathKey(options.commandPath)
+      : undefined;
+  return index.commands.filter((command) => {
+    if (!options.includeDisabled && !command.enabled) {
+      return false;
+    }
+    if (options.commandId && command.commandId !== options.commandId) {
+      return false;
+    }
+    if (commandPathKey && command.commandPathKey !== commandPathKey) {
+      return false;
+    }
+    if (options.pluginId && command.owner.pluginId !== options.pluginId) {
+      return false;
+    }
+    if (options.targetType && command.declaration.target.type !== options.targetType) {
+      return false;
+    }
+    return true;
+  });
+};
+
+const touchCliCommandIndex = (state: RuntimeState): void => {
+  state.cliCommandIndexVersion = Date.now();
 };
 
 const shortcutRegistryPath = (workspacePath: string): string => path.join(workspacePath, 'plugin-shortcuts.json');
@@ -1349,7 +1656,7 @@ const ensureCallerPermission = (
 };
 
 const COMMAND_SCOPE_KINDS = new Set<CommandScopeKind>(['global', 'app', 'scene', 'surface', 'document']);
-const COMMAND_SOURCES = new Set<CommandSource>(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api']);
+const COMMAND_SOURCES = new Set<CommandSource>(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api', 'cli']);
 const COMMAND_ICON_STYLES = new Set<CommandIconStyle>(['outlined', 'rounded', 'sharp']);
 
 const assertNoRawCommandText = (definition: Record<string, unknown>): void => {
@@ -1991,6 +2298,7 @@ const openPluginSurface = async (
     height: surfaceHeight,
     resizable: options?.presentation?.resizable,
     alwaysOnTop: options?.presentation?.alwaysOnTop,
+    visible: options?.presentation?.visible,
     chrome
   };
   const surfaceContext: SurfaceContext = {
@@ -3617,14 +3925,14 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
         )
       },
       write: {
-        descriptor: descriptor<{ path: string; content: string | Buffer }, { ack: true }>(
+        descriptor: descriptor<{ path: string; content: FileWriteContent }, { ack: true }>(
           'file.write',
           ['file.write'],
           5_000,
           false,
           0,
           withMetrics(state, 'file.write', async (input) => {
-            await ctx.pal.fs.writeFile(input.path, input.content);
+            await ctx.pal.fs.writeFile(input.path, normalizeFileWriteContent(input.content));
             return { ack: true };
           })
         )
@@ -4376,6 +4684,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               sceneId: invocationContext?.sceneId ?? command.scope.sceneId,
               surfaceId: invocationContext?.surfaceId ?? command.scope.surfaceId,
               documentId: invocationContext?.documentId ?? command.scope.documentId,
+              context: invocationContext,
               payload
             });
             return {
@@ -4906,6 +5215,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           0,
           withMetrics(state, 'plugin.install', async (input) => {
             const record = await ctx.runtime.install(input.manifestPath);
+            touchCliCommandIndex(state);
             if (record.manifest.type === 'module') {
               await syncModuleProviders(ctx, state);
             }
@@ -4927,6 +5237,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'plugin.enable', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.enable(input.pluginId);
+            touchCliCommandIndex(state);
             if (plugin.manifest.type === 'module') {
               await syncModuleProviders(ctx, state);
             }
@@ -4948,6 +5259,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
           withMetrics(state, 'plugin.disable', async (input) => {
             const plugin = ctx.runtime.get(input.pluginId);
             await ctx.runtime.disable(input.pluginId);
+            touchCliCommandIndex(state);
             if (plugin.manifest.type === 'module') {
               await stopModuleRuntime(ctx, state, input.pluginId, invokeModuleInternal);
               await unregisterModulePluginState(ctx, state, input.pluginId, 'plugin-disabled');
@@ -4956,6 +5268,7 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             if (plugin.manifest.type === 'app') {
               await unregisterCommandsByOwner(ctx, state, { pluginId: input.pluginId }, 'plugin-disabled');
             }
+            await cancelCliTasksForPlugin(ctx, state, input.pluginId, 'plugin-disabled');
             if (plugin.manifest.type === 'theme') {
               await syncInstalledThemes(ctx, state);
             }
@@ -4981,7 +5294,9 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
               await stopModuleRuntime(ctx, state, input.pluginId, invokeModuleInternal);
               await unregisterModulePluginState(ctx, state, input.pluginId, 'plugin-uninstalled');
             }
+            await cancelCliTasksForPlugin(ctx, state, input.pluginId, 'plugin-uninstalled');
             await ctx.runtime.uninstall(input.pluginId);
+            touchCliCommandIndex(state);
             if (plugin.manifest.type === 'module') {
               await syncModuleProviders(ctx, state);
             }
@@ -5092,6 +5407,271 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
             const session = ctx.runtime.completeHandshake(input.sessionId, input.nonce);
             await ctx.kernel.events.emit('plugin.ready', 'plugin-service', { pluginId: session.pluginId, sessionId: session.sessionId });
             return { session };
+          })
+        )
+      }
+    }
+  };
+
+  const cliCommandService: ServiceRegistration = {
+    name: 'cli-command',
+    actions: {
+      list: {
+        descriptor: descriptor<CliCommandQueryOptions, { index: CliCommandIndexView; commands: CliCommandView[] }>(
+          'cli.command.list',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'cli.command.list', async (input) => {
+            const options = parseCliCommandQueryOptions(input);
+            const index = buildCliCommandIndex(ctx, state);
+            return {
+              index,
+              commands: filterCliCommands(index, options)
+            };
+          })
+        )
+      },
+      get: {
+        descriptor: descriptor<CliCommandQueryOptions, { command?: CliCommandView }>(
+          'cli.command.get',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'cli.command.get', async (input) => {
+            const options = parseCliCommandQueryOptions(input);
+            if (!options.commandId && !options.commandPath) {
+              throw createError('CLI_COMMAND_QUERY_INVALID', 'cli.command.get requires commandId or commandPath');
+            }
+            const index = buildCliCommandIndex(ctx, state);
+            const matches = filterCliCommands(index, {
+              ...options,
+              includeDisabled: options.includeDisabled
+            });
+            if (matches.length > 1) {
+              throw createError('CLI_COMMAND_CONFLICT', 'Multiple CLI commands match the requested identifier', {
+                commandPath: options.commandPath,
+                commandId: options.commandId,
+                matches: matches.map((command) => ({
+                  commandId: command.commandId,
+                  ownerPluginId: command.owner.pluginId,
+                  commandPath: command.commandPath
+                }))
+              });
+            }
+            return { command: matches[0] };
+          })
+        )
+      },
+      resolve: {
+        descriptor: descriptor<CliCommandQueryOptions, { command?: CliCommandView; conflicts: CliCommandConflictView[] }>(
+          'cli.command.resolve',
+          ['plugin.read'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'cli.command.resolve', async (input) => {
+            const options = parseCliCommandQueryOptions(input);
+            if (!options.commandId && !options.commandPath) {
+              throw createError('CLI_COMMAND_QUERY_INVALID', 'cli.command.resolve requires commandId or commandPath');
+            }
+            const index = buildCliCommandIndex(ctx, state);
+            const matches = filterCliCommands(index, options);
+            const conflicts = [...new Map(
+              matches.flatMap((command) => command.conflicts).map((conflict) => [conflict.commandPathKey, conflict])
+            ).values()];
+            if (conflicts.length > 0 && !options.pluginId && !options.commandId) {
+              return {
+                command: undefined,
+                conflicts
+              };
+            }
+            return {
+              command: matches[0],
+              conflicts
+            };
+          })
+        )
+      }
+    }
+  };
+
+  const cliTaskService: ServiceRegistration = {
+    name: 'cli-task',
+    actions: {
+      create: {
+        descriptor: descriptor<
+          {
+            pluginId: string;
+            commandId: string;
+            commandPath?: string[];
+            surfaceId?: string;
+            sessionId?: string;
+          },
+          { task: CliTaskView }
+        >(
+          'cli.task.create',
+          ['plugin.manage'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.create', async (input) => {
+            const pluginId = asString(input.pluginId);
+            const commandId = asString(input.commandId);
+            if (!pluginId || !commandId) {
+              throw createError('CLI_TASK_INVALID', 'cli.task.create requires pluginId and commandId');
+            }
+            const plugin = ctx.runtime.get(pluginId);
+            if (!plugin.enabled) {
+              throw createError('PLUGIN_DISABLED', `Plugin disabled: ${pluginId}`, { pluginId });
+            }
+            if (plugin.manifest.type !== 'app' && plugin.manifest.type !== 'module') {
+              throw createError('PLUGIN_TYPE_UNSUPPORTED', 'CLI tasks are only supported for app and module plugins', {
+                pluginId,
+                pluginType: plugin.manifest.type
+              });
+            }
+
+            const nowMs = Date.now();
+            const task: CliTaskRecord = {
+              taskId: createId(),
+              pluginId,
+              commandId,
+              commandPath: Array.isArray(input.commandPath) ? asStringArray(input.commandPath) : undefined,
+              surfaceId: asString(input.surfaceId),
+              sessionId: asString(input.sessionId),
+              status: 'running',
+              createdAt: nowMs,
+              updatedAt: nowMs
+            };
+            state.cliTasks.set(task.taskId, task);
+            await ctx.kernel.events.emit('cli.task.created', 'cli-task-service', toCliTaskView(task));
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      bindInvocation: {
+        descriptor: descriptor<
+          { taskId: string; invocationId?: string; surfaceId?: string; sessionId?: string },
+          { task: CliTaskView }
+        >(
+          'cli.task.bindInvocation',
+          ['plugin.manage'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.bindInvocation', async (input) => {
+            const task = requireCliTask(state, input.taskId);
+            task.invocationId = asString(input.invocationId) ?? task.invocationId;
+            task.surfaceId = asString(input.surfaceId) ?? task.surfaceId;
+            task.sessionId = asString(input.sessionId) ?? task.sessionId;
+            task.updatedAt = Date.now();
+            await ctx.kernel.events.emit('cli.task.changed', 'cli-task-service', toCliTaskView(task));
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      get: {
+        descriptor: descriptor<{ taskId: string }, { task: CliTaskView }>(
+          'cli.task.get',
+          ['cli.task'],
+          3_000,
+          true,
+          0,
+          withMetrics(state, 'cli.task.get', async (input, routeContext) => {
+            const task = requireCliTask(state, input.taskId);
+            ensureCliTaskOwner(task, routeContext, 'cli.task.get');
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      progress: {
+        descriptor: descriptor<{ taskId: string; progress: Record<string, unknown> }, { task: CliTaskView }>(
+          'cli.task.progress',
+          ['cli.task'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.progress', async (input, routeContext) => {
+            const task = requireCliTask(state, input.taskId);
+            ensureCliTaskOwner(task, routeContext, 'cli.task.progress');
+            if (!isRecord(input.progress)) {
+              throw createError('CLI_TASK_INVALID', 'cli.task.progress requires progress object');
+            }
+            if (task.status !== 'running') {
+              return { task: toCliTaskView(task) };
+            }
+            task.progress = deepClone(input.progress);
+            task.updatedAt = Date.now();
+            await ctx.kernel.events.emit('cli.task.progress', 'cli-task-service', toCliTaskView(task));
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      complete: {
+        descriptor: descriptor<{ taskId: string; output?: unknown }, { task: CliTaskView }>(
+          'cli.task.complete',
+          ['cli.task'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.complete', async (input, routeContext) => {
+            const task = requireCliTask(state, input.taskId);
+            ensureCliTaskOwner(task, routeContext, 'cli.task.complete');
+            if (task.status !== 'running') {
+              return { task: toCliTaskView(task) };
+            }
+            task.status = 'completed';
+            task.updatedAt = Date.now();
+            task.output = typeof input.output === 'undefined' ? undefined : deepClone(input.output);
+            await ctx.kernel.events.emit('cli.task.completed', 'cli-task-service', toCliTaskView(task));
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      fail: {
+        descriptor: descriptor<{ taskId: string; error: unknown }, { task: CliTaskView }>(
+          'cli.task.fail',
+          ['cli.task'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.fail', async (input, routeContext) => {
+            const task = requireCliTask(state, input.taskId);
+            ensureCliTaskOwner(task, routeContext, 'cli.task.fail');
+            if (task.status !== 'running') {
+              return { task: toCliTaskView(task) };
+            }
+            task.status = 'failed';
+            task.updatedAt = Date.now();
+            task.error = normalizeCliTaskError(input.error);
+            await ctx.kernel.events.emit('cli.task.failed', 'cli-task-service', toCliTaskView(task));
+            return { task: toCliTaskView(task) };
+          })
+        )
+      },
+      cancel: {
+        descriptor: descriptor<{ taskId: string }, { task: CliTaskView }>(
+          'cli.task.cancel',
+          ['cli.task'],
+          3_000,
+          false,
+          0,
+          withMetrics(state, 'cli.task.cancel', async (input, routeContext) => {
+            const task = requireCliTask(state, input.taskId);
+            ensureCliTaskOwner(task, routeContext, 'cli.task.cancel');
+            if (task.status === 'running') {
+              task.status = 'cancelled';
+              task.updatedAt = Date.now();
+              task.error = {
+                code: 'CLI_TASK_CANCELLED',
+                message: 'CLI task was cancelled'
+              };
+              await ctx.kernel.events.emit('cli.task.cancelled', 'cli-task-service', toCliTaskView(task));
+            }
+            return { task: toCliTaskView(task) };
           })
         )
       }
@@ -6817,6 +7397,8 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     associationService,
     windowService,
     pluginService,
+    cliCommandService,
+    cliTaskService,
     moduleService,
     platformService,
     logService,

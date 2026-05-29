@@ -31,9 +31,9 @@ export interface TemplateContext {
   TARGET_DIR: string;
   TEMPLATE_ID: string;
   PLUGIN_ID: string;
+  CLI_COMMAND_ROOT: string;
   DISPLAY_NAME: string;
   VERSION: string;
   AUTHOR_NAME?: string;
   AUTHOR_EMAIL?: string;
 }
-

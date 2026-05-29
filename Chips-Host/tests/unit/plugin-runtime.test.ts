@@ -295,6 +295,613 @@ describe('PluginRuntime', () => {
     await expect(fs.access(path.join(record.installPath, 'dist/main.js'))).resolves.toBeUndefined();
   });
 
+  it('parses app plugin cli.commands declarations', async () => {
+    const appDir = path.join(workspace, 'cli-app');
+    await fs.mkdir(path.join(appDir, 'dist'), { recursive: true });
+    await fs.writeFile(path.join(appDir, 'dist/index.html'), '<!doctype html>', 'utf-8');
+    await fs.writeFile(
+      path.join(appDir, 'manifest.yaml'),
+      [
+        'id: chips.cli.app',
+        'version: "1.0.0"',
+        'type: app',
+        'name: CLI App',
+        'permissions:',
+        '  - file.read',
+        '  - command.invoke',
+        'entry: dist/index.html',
+        ...appRuntimeYamlLines,
+        ...appSurfaceYamlLines,
+        'cli:',
+        '  commands:',
+        '    - commandPath: editor open',
+        '      target:',
+        '        type: app',
+        '        pluginId: chips.cli.app',
+        '        commandId: chips.cli.app.open',
+        '        surface:',
+        '          open: true',
+        '          focus: true',
+        '          reuse: preferred',
+        '      titleKey: cli.app.open.title',
+        '      descriptionKey: cli.app.open.description',
+        '      permissions:',
+        '        - file.read',
+        '      arguments:',
+        '        - name: path',
+        '          position: 0',
+        '          type: path',
+        '          required: true',
+        '          mapsTo: path',
+        '          path:',
+        '            kind: file',
+        '            exists: true',
+        '      options:',
+        '        - name: readonly',
+        '          short: r',
+        '          type: boolean',
+        '          mapsTo: readonly',
+        '      output:',
+        '        mode: human'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const record = await runtime.install(path.join(appDir, 'manifest.yaml'));
+
+    expect(record.manifest.cli?.commands).toHaveLength(1);
+    expect(record.manifest.cli?.commands[0]).toMatchObject({
+      commandId: 'chips.cli.app.cli.editor.open',
+      commandPath: ['editor', 'open'],
+      target: {
+        type: 'app',
+        pluginId: 'chips.cli.app',
+        commandId: 'chips.cli.app.open',
+        surface: {
+          open: true,
+          focus: true,
+          reuse: 'preferred'
+        }
+      },
+      titleKey: 'cli.app.open.title',
+      permissions: ['file.read'],
+      arguments: [
+        expect.objectContaining({
+          name: 'path',
+          position: 0,
+          type: 'path',
+          mapsTo: 'path',
+          path: {
+            kind: 'file',
+            exists: true
+          }
+        })
+      ],
+      options: [
+        expect.objectContaining({
+          name: 'readonly',
+          short: 'r',
+          type: 'boolean',
+          mapsTo: 'readonly'
+        })
+      ],
+      output: {
+        mode: 'human'
+      }
+    });
+  });
+
+  it('parses module plugin cli.commands declarations', async () => {
+    const moduleDir = path.join(workspace, 'cli-module');
+    await fs.mkdir(path.join(moduleDir, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(moduleDir, 'contracts'), { recursive: true });
+    await fs.writeFile(path.join(moduleDir, 'dist/index.cjs'), 'exports.providers = [];', 'utf-8');
+    await fs.writeFile(path.join(moduleDir, 'contracts/generate.input.schema.json'), '{"type":"object"}', 'utf-8');
+    await fs.writeFile(path.join(moduleDir, 'contracts/generate.output.schema.json'), '{"type":"object"}', 'utf-8');
+    await fs.writeFile(
+      path.join(moduleDir, 'manifest.yaml'),
+      [
+        'id: chips.cli.module',
+        'version: "1.0.0"',
+        'type: module',
+        'name: CLI Module',
+        'permissions:',
+        '  - file.read',
+        '  - file.write',
+        'entry: dist/index.cjs',
+        'runtime:',
+        '  targets:',
+        '    desktop:',
+        '      supported: true',
+        '    web:',
+        '      supported: false',
+        '    mobile:',
+        '      supported: false',
+        '    headless:',
+        '      supported: true',
+        'module:',
+        '  apiVersion: 1',
+        '  runtime: worker',
+        '  activation: onDemand',
+        '  provides:',
+        '    - capability: converter.icon.generate',
+        '      version: "1.0.0"',
+        '      methods:',
+        '        - name: generate',
+        '          mode: job',
+        '          inputSchema: contracts/generate.input.schema.json',
+        '          outputSchema: contracts/generate.output.schema.json',
+        '  consumes: []',
+        'cli:',
+        '  commands:',
+        '    - commandPath: icon generate',
+        '      target:',
+        '        type: module',
+        '        capability: converter.icon.generate',
+        '        method: generate',
+        '        timeoutMs: 60000',
+        '      titleKey: cli.icon.generate.title',
+        '      permissions:',
+        '        - file.read',
+        '        - file.write',
+      '      arguments:',
+      '        - name: input',
+      '          position: 0',
+      '          type: path',
+      '          required: true',
+      '          mapsTo: inputPath',
+      '      options:',
+      '        - name: output',
+      '          short: o',
+      '          type: path',
+      '          mapsTo: outputPath',
+      '          path:',
+      '            kind: file',
+      '            role: output',
+      '            create: true',
+      '            overwrite: rename',
+      '        - name: batch',
+      '          type: textFile',
+      '          mapsTo: items',
+      '          path:',
+      '            kind: file',
+      '            exists: true',
+      '          batch:',
+      '            format: lines',
+      '            itemType: path',
+      '            itemPath:',
+      '              kind: file',
+      '              exists: true',
+      '        - name: formats',
+      '          short: f',
+      '          type: stringList',
+        '          default: [png, ico]',
+        '          mapsTo: formats',
+        '          ui:',
+        '            control: multiSelect',
+        '            choices: [png, ico, icns]',
+        '      output:',
+        '        mode: human',
+        '        json: supported',
+        '      job:',
+        '        wait: true',
+        '        cancelOnInterrupt: true'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const record = await runtime.install(path.join(moduleDir, 'manifest.yaml'));
+
+    expect(record.manifest.cli?.commands[0]).toMatchObject({
+      commandId: 'chips.cli.module.cli.icon.generate',
+      commandPath: ['icon', 'generate'],
+      target: {
+        type: 'module',
+        capability: 'converter.icon.generate',
+        method: 'generate',
+        timeoutMs: 60000
+      },
+      permissions: ['file.read', 'file.write'],
+      options: [
+        expect.objectContaining({
+          name: 'output',
+          type: 'path',
+          path: {
+            kind: 'file',
+            role: 'output',
+            create: true,
+            overwrite: 'rename'
+          }
+        }),
+        expect.objectContaining({
+          name: 'batch',
+          type: 'textFile',
+          mapsTo: 'items',
+          path: {
+            kind: 'file',
+            exists: true
+          },
+          batch: {
+            format: 'lines',
+            itemType: 'path',
+            itemPath: {
+              kind: 'file',
+              exists: true
+            }
+          }
+        }),
+        expect.objectContaining({
+          name: 'formats',
+          type: 'stringList',
+          default: ['png', 'ico'],
+          ui: {
+            control: 'multiSelect',
+            choices: ['png', 'ico', 'icns']
+          }
+        })
+      ],
+      output: {
+        mode: 'human',
+        json: 'supported'
+      },
+      job: {
+        wait: true,
+        cancelOnInterrupt: true
+      }
+    });
+  });
+
+  it('rejects invalid cli output path and batch metadata', async () => {
+    const invalidManifestPath = path.join(workspace, 'invalid-cli-path-batch.json');
+    await fs.writeFile(
+      invalidManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.cli.path.batch',
+          version: '1.0.0',
+          type: 'module',
+          name: 'Invalid CLI Path Batch',
+          permissions: [],
+          entry: 'dist/index.cjs',
+          runtime: {
+            targets: {
+              desktop: { supported: true },
+              web: { supported: false },
+              mobile: { supported: false },
+              headless: { supported: true }
+            }
+          },
+          module: {
+            apiVersion: 1,
+            runtime: 'worker',
+            activation: 'onDemand',
+            provides: [
+              {
+                capability: 'invalid.cli.path.batch',
+                version: '1.0.0',
+                methods: [
+                  {
+                    name: 'run',
+                    mode: 'sync',
+                    inputSchema: 'contracts/run.input.schema.json',
+                    outputSchema: 'contracts/run.output.schema.json'
+                  }
+                ]
+              }
+            ],
+            consumes: []
+          },
+          cli: {
+            commands: [
+              {
+                commandPath: 'invalid batch',
+                target: {
+                  type: 'module',
+                  capability: 'invalid.cli.path.batch',
+                  method: 'run'
+                },
+                titleKey: 'invalid.batch.title',
+                options: [
+                  {
+                    name: 'output',
+                    type: 'textFile',
+                    path: {
+                      role: 'output',
+                      overwrite: 'fail'
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    await fs.mkdir(path.join(workspace, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(workspace, 'contracts'), { recursive: true });
+    await fs.writeFile(path.join(workspace, 'dist/index.cjs'), 'exports.providers = [];', 'utf-8');
+    await fs.writeFile(path.join(workspace, 'contracts/run.input.schema.json'), '{"type":"object"}', 'utf-8');
+    await fs.writeFile(path.join(workspace, 'contracts/run.output.schema.json'), '{"type":"object"}', 'utf-8');
+
+    await expect(runtime.install(invalidManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        field: 'cli.commands[0].options[0].path.role'
+      })
+    });
+  });
+
+  it('rejects cli.commands on non app/module plugins and undeclared command permissions', async () => {
+    const invalidCardManifestPath = path.join(workspace, 'invalid-cli-card.json');
+    await fs.writeFile(
+      invalidCardManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.cli.card',
+          version: '1.0.0',
+          type: 'card',
+          name: 'Invalid CLI Card',
+          permissions: [],
+          cli: {
+            commands: [
+              {
+                commandPath: 'card run',
+                target: {
+                  type: 'module',
+                  capability: 'card.run',
+                  method: 'run'
+                },
+                titleKey: 'card.run.title'
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    );
+    await expect(runtime.install(invalidCardManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID'
+    });
+
+    const invalidAppManifestPath = path.join(workspace, 'invalid-cli-permission.json');
+    await fs.writeFile(
+      invalidAppManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.cli.permission',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Invalid CLI Permission',
+          permissions: ['file.read'],
+          ...appManifestContract,
+          cli: {
+            commands: [
+              {
+                commandPath: 'editor export',
+                target: {
+                  type: 'app',
+                  pluginId: 'chips.invalid.cli.permission'
+                },
+                titleKey: 'editor.export.title',
+                permissions: ['file.write']
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    );
+    await expect(runtime.install(invalidAppManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID'
+    });
+  });
+
+  it('rejects plugin cli.commands that shadow Host fixed commands', async () => {
+    const invalidManifestPath = path.join(workspace, 'invalid-reserved-cli.json');
+    await fs.writeFile(
+      invalidManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.reserved.cli',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Invalid Reserved CLI',
+          permissions: [],
+          ...appManifestContract,
+          cli: {
+            commands: [
+              {
+                commandPath: 'completion refresh',
+                target: {
+                  type: 'app'
+                },
+                titleKey: 'completion.refresh.title'
+              }
+            ]
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(runtime.install(invalidManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        reservedRoot: 'completion'
+      })
+    });
+  });
+
+  it('rejects type-exclusive official fields and reserved plugin governance metadata', async () => {
+    const invalidAppManifestPath = path.join(workspace, 'invalid-official-fields-app.json');
+    await fs.writeFile(
+      invalidAppManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.official.app',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Invalid Official App',
+          permissions: [],
+          ...appManifestContract,
+          module: {
+            apiVersion: 1,
+            runtime: 'worker',
+            activation: 'onDemand',
+            provides: []
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(runtime.install(invalidAppManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        field: 'module',
+        ownerType: 'module',
+        type: 'app'
+      })
+    });
+
+    const invalidAppThemeManifestPath = path.join(workspace, 'invalid-official-fields-app-theme.json');
+    await fs.writeFile(
+      invalidAppThemeManifestPath,
+      JSON.stringify(
+        {
+          id: 'chips.invalid.official.app.theme',
+          version: '1.0.0',
+          type: 'app',
+          name: 'Invalid Official App Theme',
+          permissions: [],
+          ...appManifestContract,
+          theme: {
+            themeId: 'chips.invalid.theme'
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await expect(runtime.install(invalidAppThemeManifestPath)).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        field: 'theme',
+        ownerType: 'theme',
+        type: 'app'
+      })
+    });
+
+    const invalidModuleDir = path.join(workspace, 'invalid-official-fields-module');
+    await fs.mkdir(path.join(invalidModuleDir, 'dist'), { recursive: true });
+    await fs.mkdir(path.join(invalidModuleDir, 'contracts'), { recursive: true });
+    await fs.writeFile(path.join(invalidModuleDir, 'dist/index.cjs'), 'exports.providers = [];', 'utf-8');
+    await fs.writeFile(path.join(invalidModuleDir, 'contracts/run.input.schema.json'), '{"type":"object"}', 'utf-8');
+    await fs.writeFile(path.join(invalidModuleDir, 'contracts/run.output.schema.json'), '{"type":"object"}', 'utf-8');
+    await fs.writeFile(
+      path.join(invalidModuleDir, 'manifest.yaml'),
+      [
+        'id: chips.invalid.official.module',
+        'version: "1.0.0"',
+        'type: module',
+        'name: Invalid Official Module',
+        'permissions: []',
+        'entry: dist/index.cjs',
+        'runtime:',
+        '  targets:',
+        '    desktop:',
+        '      supported: true',
+        '    web:',
+        '      supported: false',
+        '    mobile:',
+        '      supported: false',
+        '    headless:',
+        '      supported: true',
+        'theme:',
+        '  themeId: chips.invalid.theme',
+        'themeId: chips.invalid.theme',
+        'module:',
+        '  apiVersion: 1',
+        '  runtime: worker',
+        '  activation: onDemand',
+        '  provides:',
+        '    - capability: invalid.official.module',
+        '      version: "1.0.0"',
+        '      methods:',
+        '        - name: run',
+        '          mode: sync',
+        '          inputSchema: contracts/run.input.schema.json',
+        '          outputSchema: contracts/run.output.schema.json',
+        '  consumes: []'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    await expect(runtime.install(path.join(invalidModuleDir, 'manifest.yaml'))).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        field: 'theme',
+        ownerType: 'theme',
+        type: 'module'
+      })
+    });
+
+    await fs.writeFile(
+      path.join(invalidModuleDir, 'manifest.yaml'),
+      [
+        'id: chips.invalid.reserved.module',
+        'version: "1.0.0"',
+        'type: module',
+        'name: Invalid Reserved Module',
+        'permissions: []',
+        'entry: dist/index.cjs',
+        'runtime:',
+        '  targets:',
+        '    desktop:',
+        '      supported: true',
+        '    web:',
+        '      supported: false',
+        '    mobile:',
+        '      supported: false',
+        '    headless:',
+        '      supported: true',
+        'plugin:',
+        '  id: chips.reserved',
+        'module:',
+        '  apiVersion: 1',
+        '  runtime: worker',
+        '  activation: onDemand',
+        '  provides:',
+        '    - capability: invalid.reserved.module',
+        '      version: "1.0.0"',
+        '      methods:',
+        '        - name: run',
+        '          mode: sync',
+        '          inputSchema: contracts/run.input.schema.json',
+        '          outputSchema: contracts/run.output.schema.json',
+        '  consumes: []'
+      ].join('\n'),
+      'utf-8'
+    );
+
+    await expect(runtime.install(path.join(invalidModuleDir, 'manifest.yaml'))).rejects.toMatchObject({
+      code: 'PLUGIN_INVALID',
+      details: expect.objectContaining({
+        field: 'plugin',
+        type: 'module'
+      })
+    });
+  });
+
   it('installs .cpk package generated by chipsdev package', async () => {
     const projectDir = path.join(workspace, 'chipsdev-package-source');
     const sdkCliPath = path.resolve(__dirname, '../../../Chips-SDK/cli/index.js');

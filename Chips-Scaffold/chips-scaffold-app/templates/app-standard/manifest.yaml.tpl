@@ -40,6 +40,30 @@ capabilityFallbacks:
   save-file:
     whenUnsupported: reject
 
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} open
+      target:
+        type: app
+        pluginId: {{ PLUGIN_ID }}
+        surface:
+          open: true
+          focus: true
+          reuse: preferred
+      titleKey: app.cli.open.title
+      descriptionKey: app.cli.open.description
+      arguments:
+        - name: subject
+          position: 0
+          type: string
+          required: false
+          mapsTo: subject
+          ui:
+            control: pasteBox
+            placeholderKey: app.cli.open.subjectPlaceholder
+      output:
+        mode: json
+
 engines:
   chips: "^1.0.0"
 

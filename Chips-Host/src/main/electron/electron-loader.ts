@@ -61,10 +61,13 @@ export interface ElectronWebContentsLike {
 export interface ElectronBrowserWindowLike {
   id: number;
   focus(): void;
+  show?(): void;
+  hide?(): void;
   setSize(width: number, height: number): void;
   getBounds(): { width: number; height: number };
   setTitle(title: string): void;
   isFocused(): boolean;
+  isVisible?(): boolean;
   isMinimized(): boolean;
   isMaximized(): boolean;
   isFullScreen(): boolean;

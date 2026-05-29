@@ -221,7 +221,7 @@ const validateOptionalFiniteNumber = (value: unknown, field: string, errors: str
 };
 
 const COMMAND_SCOPE_KINDS = new Set(['global', 'app', 'scene', 'surface', 'document']);
-const COMMAND_SOURCES = new Set(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api']);
+const COMMAND_SOURCES = new Set(['menu', 'toolbar', 'shortcut', 'palette', 'context-menu', 'api', 'cli']);
 const COMMAND_ICON_STYLES = new Set(['outlined', 'rounded', 'sharp']);
 
 const validateOptionalStringArray = (value: unknown, field: string, errors: string[]): void => {
@@ -459,6 +459,38 @@ const validateCommandInvokeRequest: SchemaValidator = (input: unknown) => {
   return errors.length > 0 ? { valid: false, errors } : { valid: true };
 };
 
+const validateCliCommandQueryRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateOptionalString(input.commandId, 'commandId', errors);
+  validateOptionalString(input.pluginId, 'pluginId', errors);
+  if (typeof input.commandPath !== 'undefined') {
+    if (typeof input.commandPath === 'string') {
+      if (input.commandPath.trim().length === 0) {
+        errors.push('commandPath must be a non-empty string when provided');
+      }
+    } else if (
+      !Array.isArray(input.commandPath) ||
+      input.commandPath.some((segment) => typeof segment !== 'string' || segment.trim().length === 0)
+    ) {
+      errors.push('commandPath must be a non-empty string or string[] when provided');
+    }
+  }
+  if (
+    typeof input.targetType !== 'undefined' &&
+    input.targetType !== 'app' &&
+    input.targetType !== 'module'
+  ) {
+    errors.push('targetType must be app or module when provided');
+  }
+  if (typeof input.includeDisabled !== 'undefined' && typeof input.includeDisabled !== 'boolean') {
+    errors.push('includeDisabled must be a boolean when provided');
+  }
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
 const validateModuleListProvidersRequest: SchemaValidator = (input: unknown) => {
   if (!isRecord(input)) {
     return { valid: false, errors: ['Input must be an object'] };
@@ -541,6 +573,88 @@ const validateModuleJobRequest: SchemaValidator = (input: unknown) => {
   return typeof input.jobId === 'string' && input.jobId.trim().length > 0
     ? { valid: true }
     : { valid: false, errors: ['jobId must be a non-empty string'] };
+};
+
+const validateCliTaskCreateRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  if (typeof input.pluginId !== 'string' || input.pluginId.trim().length === 0) {
+    errors.push('pluginId must be a non-empty string');
+  }
+  if (typeof input.commandId !== 'string' || input.commandId.trim().length === 0) {
+    errors.push('commandId must be a non-empty string');
+  }
+  if (
+    typeof input.commandPath !== 'undefined' &&
+    (!Array.isArray(input.commandPath) || input.commandPath.some((item) => typeof item !== 'string' || item.trim().length === 0))
+  ) {
+    errors.push('commandPath must be a non-empty string[] when provided');
+  }
+  validateOptionalString(input.surfaceId, 'surfaceId', errors);
+  validateOptionalString(input.sessionId, 'sessionId', errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCliTaskBindRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateRequiredCliTaskId(input.taskId, errors);
+  validateOptionalString(input.invocationId, 'invocationId', errors);
+  validateOptionalString(input.surfaceId, 'surfaceId', errors);
+  validateOptionalString(input.sessionId, 'sessionId', errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCliTaskRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateRequiredCliTaskId(input.taskId, errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCliTaskProgressRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateRequiredCliTaskId(input.taskId, errors);
+  if (!isRecord(input.progress)) {
+    errors.push('progress must be an object');
+  }
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCliTaskCompleteRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateRequiredCliTaskId(input.taskId, errors);
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateCliTaskFailRequest: SchemaValidator = (input: unknown) => {
+  if (!isRecord(input)) {
+    return { valid: false, errors: ['Input must be an object'] };
+  }
+  const errors: string[] = [];
+  validateRequiredCliTaskId(input.taskId, errors);
+  if (typeof input.error === 'undefined') {
+    errors.push('error is required');
+  }
+  return errors.length > 0 ? { valid: false, errors } : { valid: true };
+};
+
+const validateRequiredCliTaskId = (value: unknown, errors: string[]): void => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    errors.push('taskId must be a non-empty string');
+  }
 };
 
 const validatePlatformRenderHtmlToPdfRequest: SchemaValidator = (input: unknown) => {
@@ -697,6 +811,28 @@ export const registerHostSchemas = (): void => {
   schemaRegistry.register('schemas/command.setState.response.json', objectWithKeys(['command']));
   schemaRegistry.register('schemas/command.invoke.request.json', validateCommandInvokeRequest);
   schemaRegistry.register('schemas/command.invoke.response.json', objectWithKeys(['commandId', 'invocationId', 'dispatched', 'command']));
+
+  schemaRegistry.register('schemas/cli.command.list.request.json', validateCliCommandQueryRequest);
+  schemaRegistry.register('schemas/cli.command.list.response.json', objectWithKeys(['index', 'commands']));
+  schemaRegistry.register('schemas/cli.command.get.request.json', validateCliCommandQueryRequest);
+  schemaRegistry.register('schemas/cli.command.get.response.json', objectWithKeys([]));
+  schemaRegistry.register('schemas/cli.command.resolve.request.json', validateCliCommandQueryRequest);
+  schemaRegistry.register('schemas/cli.command.resolve.response.json', objectWithKeys(['conflicts']));
+
+  schemaRegistry.register('schemas/cli.task.create.request.json', validateCliTaskCreateRequest);
+  schemaRegistry.register('schemas/cli.task.create.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.bindInvocation.request.json', validateCliTaskBindRequest);
+  schemaRegistry.register('schemas/cli.task.bindInvocation.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.get.request.json', validateCliTaskRequest);
+  schemaRegistry.register('schemas/cli.task.get.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.progress.request.json', validateCliTaskProgressRequest);
+  schemaRegistry.register('schemas/cli.task.progress.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.complete.request.json', validateCliTaskCompleteRequest);
+  schemaRegistry.register('schemas/cli.task.complete.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.fail.request.json', validateCliTaskFailRequest);
+  schemaRegistry.register('schemas/cli.task.fail.response.json', objectWithKeys(['task']));
+  schemaRegistry.register('schemas/cli.task.cancel.request.json', validateCliTaskRequest);
+  schemaRegistry.register('schemas/cli.task.cancel.response.json', objectWithKeys(['task']));
 
   registerPair('surface.open', ['request'], ['surface']);
   registerPair('surface.focus', ['surfaceId'], ['ack']);

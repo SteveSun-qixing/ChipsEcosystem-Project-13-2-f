@@ -26,6 +26,27 @@ const run = (args, cwd, env = process.env) =>
     });
   });
 
+const runCapture = (args, cwd, env = process.env) =>
+  new Promise((resolve, reject) => {
+    const child = childProcess.spawn('node', [cliPath, ...args], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+  });
+
 const runCommand = (command, args, cwd, env = process.env) =>
   new Promise((resolve, reject) => {
     const child = childProcess.spawn(command, args, {
@@ -64,6 +85,23 @@ const main = async () => {
   };
 
   try {
+    const implicitInteractive = await runCapture([], projectRoot, env);
+    assert.equal(implicitInteractive.code, 0);
+    assert.match(implicitInteractive.stdout, /Chips TUI requires an interactive terminal/);
+
+    const explicitInteractive = await runCapture(['--interactive'], projectRoot, env);
+    assert.equal(explicitInteractive.code, 1);
+    assert.match(explicitInteractive.stdout, /Chips TUI requires an interactive terminal/);
+
+    const completionScript = await runCapture(['completion', 'bash'], projectRoot, env);
+    assert.equal(completionScript.code, 0);
+    assert.match(completionScript.stdout, /chipsdev __complete/);
+    assert.match(completionScript.stdout, /complete -F _chipsdev_completion chipsdev/);
+
+    const privateCompletion = await runCapture(['__complete', ''], projectRoot, env);
+    assert.equal(privateCompletion.code, 0);
+    assert.match(privateCompletion.stdout, /completion/);
+
     await run(['theme', 'current'], projectRoot, env);
     await run(['status'], projectRoot, env);
 

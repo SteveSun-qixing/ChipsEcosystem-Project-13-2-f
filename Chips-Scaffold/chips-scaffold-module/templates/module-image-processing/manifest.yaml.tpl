@@ -39,3 +39,44 @@ module:
           inputSchema: contracts/process.input.schema.json
           outputSchema: contracts/process.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} process
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: process
+        timeoutMs: 30000
+      titleKey: module.cli.process.title
+      descriptionKey: module.cli.process.description
+      permissions:
+        - file.read
+      arguments:
+        - name: image-path
+          position: 0
+          type: path
+          required: true
+          mapsTo: imagePath
+          path:
+            kind: file
+            exists: true
+          ui:
+            control: pathInput
+            placeholderKey: module.cli.process.imagePath.placeholder
+      options:
+        - name: sample-size
+          short: s
+          type: integer
+          default: 64
+          mapsTo: options.sampleSize
+          validation:
+            min: 16
+            max: 256
+          ui:
+            control: slider
+            min: 16
+            max: 256
+            step: 1
+      output:
+        mode: json
+        json: supported

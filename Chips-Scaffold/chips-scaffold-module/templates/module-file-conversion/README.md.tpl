@@ -36,6 +36,16 @@ chipsdev module invoke \
 
 CLI 会先构建当前工程，再在开发工作区安装并启用 `.cpk`，最后通过 Host `module.invoke` 启动 job。返回 job 后，CLI 会轮询到 `completed`、`failed` 或 `cancelled` 终态；`module.job.cancel` 会让运行中任务进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`。
 
+## 插件 CLI 命令
+
+`manifest.yaml` 默认声明一条插件命令：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} convert /绝对路径/input.txt /绝对路径/output.json --overwrite
+```
+
+该命令由 Host 动态发现，路径参数会先经过 CLI 层解析和基础校验，再映射为 `sourceFile` 与 `output.path` 传给 `module.invoke`。
+
 ## 正式边界
 
 - 模块不创建应用窗口，不直接读写应用私有资源；

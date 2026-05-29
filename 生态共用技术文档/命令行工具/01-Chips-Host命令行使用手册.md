@@ -12,29 +12,21 @@ Chips Host命令行工具是管理本地薯片生态实例的核心工具。通�
 
 ## 启动命令
 
-启动命令启动薯片主机应用。使用命令chips start可以启动应用。启动命令支持多个选项配置启动行为。
+`chips` 会在执行命令时自动确保当前工作区存在，并按命令类型启动所需的 Host 承载环境。用户执行插件 CLI 命令、进入 TUI、补全或查询状态前，不需要先手动运行 `chips start`。
 
-后台启动选项-d或--daemon可以让应用在后台运行。后台启动时命令行会立即返回，应用在后台持续运行。查看后台进程状态可以使用status命令。
+`chips start` 是显式状态管理入口，用于把当前工作区标记为运行中并供 `chips status`、诊断和脚本检查使用。插件命令的真实执行不依赖这个状态文件；模块目标会由 CLI 启动 Host 运行时调用 `module.invoke`，应用目标在需要应用页面注册 `commandId` 时会自动拉起 Electron Host 承载应用 surface，再通过 `command.invoke` 投递命令。
 
-指定配置选项-c或--config可以指定配置文件路径。默认使用用户目录下的配置文件。指定配置可以启动不同配置的实例。
-
-端口选项-p或--port可以指定服务端口。默认端口是8080。端口冲突时需要指定其他端口。
+当前 `chips start` 不接收额外参数。执行成功后会写入当前工作区 `host-state.json`，内容包含 `running / pid / startedAt`，便于 `chips status` 读取。
 
 ## 停止命令
 
-停止命令停止运行中的薯片主机。使用命令chips stop可以停止应用。停止命令会优雅地关闭应用，等待所有任务完成。
-
-强制停止选项-f或--force可以强制终止应用。强制终止会立即停止应用，可能丢失未保存的数据。强制停止只在紧急情况下使用。
-
-停止超时选项-t或--timeout可以设置停止等待时间。默认等待30秒。超时后仍未停止的应用会被强制终止。
+停止命令清除当前工作区运行状态。使用命令 `chips stop` 会移除 `host-state.json` 并输出 `{ running: false }`。插件 CLI 命令的自动承载链路不要求先运行 `chips stop` 或 `chips start`。
 
 ## 状态命令
 
-状态命令查看应用的运行状态。使用命令chips status可以查看当前状态。状态信息包括运行状态、端口、资源使用等。
+状态命令查看当前工作区状态。使用命令 `chips status` 可以查看当前工作区路径、工作区类型，以及 `chips start` 写入的 `running / pid / startedAt` 状态标记。该命令不读取系统进程表，也不承诺返回端口、资源使用或连接数。
 
-详细状态选项-v或--verbose可以查看更详细的信息。详细信息包括进程ID、启动时间、内存使用、连接数等。详细状态用于问题诊断。
-
-JSON输出选项--json可以输出JSON格式的状态信息。JSON格式便于程序解析，适合自动化脚本使用。
+`chips status` 默认输出 JSON 结构，便于程序解析和自动化脚本使用。
 
 ## 配置命令
 
@@ -108,6 +100,132 @@ JSON输出选项--json可以输出JSON格式的状态信息。JSON格式便于�
 
 启用插件命令chips plugin enable可以启用已安装插件。禁用插件命令chips plugin disable可以停用插件。查询命令chips plugin query可按插件类型或 capability 查看运行时记录。
 
+## 插件 CLI 命令发现
+
+Host 支持从已安装应用插件和模块插件的 `manifest.yaml` 读取 `cli.commands` 声明，并在运行时派生当前工作区的命令索引。
+
+当前已落地的正式发现路由：
+
+- `cli.command.list`：返回完整索引和按条件过滤后的命令列表。
+- `cli.command.get`：按 `commandId` 或 `commandPath` 获取唯一命令；如果多个已启用插件声明同一路径，会返回 `CLI_COMMAND_CONFLICT`。
+- `cli.command.resolve`：按 `commandId`、`commandPath` 和可选 `pluginId` 解析命令，并返回冲突组。
+
+索引命令记录包含：
+
+- `commandId`
+- `commandPath`
+- `commandPathKey`
+- `owner.pluginId / owner.pluginType / owner.pluginName / owner.pluginVersion`
+- `enabled`
+- `declaration`
+- `conflicts`
+
+插件安装、启用、禁用或卸载后，Host 会重新派生索引版本。禁用插件的命令在默认查询中不会作为可执行命令返回，但可通过 `includeDisabled: true` 进入治理视图。
+
+插件 CLI 命令执行入口：
+
+```bash
+chips <commandPath> [arguments] [options]
+chips --plugin <pluginId> <commandPath> [arguments] [options]
+```
+
+执行规则：
+
+- Host 固定命令根保留给内建命令，插件命令不得以 `help / host / start / stop / status / config / logs / theme / plugin / update / doctor / open / completion` 开头。
+- CLI 使用最长前缀匹配已启用插件的 `commandPath`，剩余 token 按该命令的 `arguments / options` 解析。
+- `--plugin <pluginId>` 用于同一路径存在多个插件命令时手动限定 owner；未限定且存在冲突时返回 `CLI_COMMAND_CONFLICT`。
+- 执行插件 CLI 命令时，`chips` 会自动启动本次命令所需的 Host 承载环境；用户不需要先执行 `chips start`。
+- 模块目标走 `module.invoke`；若返回 job 且命令未声明 `job.wait: false`，CLI 会轮询 `module.job.get` 至 `completed / failed / cancelled`。
+- 应用目标根据声明调用 `surface.open` 或 `plugin.launch`；声明 `target.commandId` 的执行类命令会通过 `surface.open` 创建 `presentation.visible: false` 的后台 surface，等待应用通过正式 SDK/Bridge 注册目标 command 后再调用 `command.invoke`，不会主动聚焦或显示窗口。若应用命令声明等待任务，CLI 会先创建 `cli.task`，把 `taskId` 写入 launch params 与 command context，并等待应用通过 SDK `client.cliTask.progress/complete/fail/cancel` 上报终态。
+- 当应用目标声明 `target.commandId` 且当前 CLI 进程不在 Electron 中运行时，CLI 会自动启动短生命周期 Electron Host runner。runner 负责后台加载应用插件页面、等待应用通过正式 SDK/Bridge 注册目标 command，再执行 `command.invoke` 并等待 `cli.task` 终态；因此应用插件命令不会因为用户未提前启动 Host 而返回 `CLI_COMMAND_NOT_READY`，也不需要向用户展示应用窗口。
+- 不声明 `target.commandId`、只负责打开或聚焦应用的 CLI 入口不会使用短生命周期 runner，避免打开的应用 surface 随 runner 退出而关闭。
+- 等待期间，最终 stdout 仍只输出结构化结果；TTY 下 CLI 会把去重后的 `job.progress` 或 `task.progress` 以原地刷新的进度行写入 stderr，若进度包含 `percent` 则显示百分比进度条，若包含 `stage` 则显示阶段名，避免污染脚本解析 stdout。
+- 非交互环境默认不显示进度；需要人工观察或调试时可设置 `CHIPS_CLI_JOB_PROGRESS=1`，CLI 会把每次变化的进度按行写入 stderr。
+- 若命令声明 `job.cancelOnInterrupt: true`，等待模块 job 时按 `Ctrl+C` 会调用 `module.job.cancel({ jobId })`，等待应用 cli task 时会调用 `cli.task.cancel({ taskId })`，随后继续等待 Host 返回 `cancelled` 终态并按对应结构化错误码退出。
+- `path / jsonFile / textFile` 等参数会在 CLI 层按当前工作目录解析；`path.exists / path.kind / path.extensions / path.create` 由 CLI 先行校验。
+- `path.role: output` 表示该路径是输出目标。输出路径已存在时，默认按 `fail` 返回 `CLI_OUTPUT_EXISTS`；声明 `path.overwrite: overwrite` 时允许继续；声明 `rename` 时会把 payload 中路径改写到同目录未占用的新名称；声明 `skip` 时不调用插件目标并返回 `{ ok: true, skipped: true }`。
+- 用户可传入 `--overwrite` 覆盖输出路径声明中的默认冲突策略；若插件命令自己声明了 `overwrite` 选项，该选项仍按普通参数进入 payload。
+- `textFile` 可声明 `batch.format: lines`，CLI 会按行读取、过滤空行并映射为数组；`jsonFile` 可声明 `batch.format: json-array`，CLI 会要求文件顶层为数组。
+- 批量项若声明 `batch.itemType: path`，每一项都会先按当前工作目录解析为绝对路径，并可用 `batch.itemPath.kind / exists / create / extensions` 逐项校验；批量格式或逐项校验失败返回 `CLI_BATCH_INVALID`。
+- 命令执行成功时默认输出结构化 JSON；若命令声明 `output.mode: human` 且用户未传入 `--json`，CLI 会输出人读摘要。`--json` 始终强制机器可读 JSON。错误输出包含 `error / code / details / retryable`。
+
+官方 app/module 脚手架生成的 `manifest.yaml` 已默认包含插件 CLI 命令示例。应用模板默认生成 `<项目命令根> open`，通过 `surface.open` 打开当前应用；模块模板默认按能力 schema 生成 `<项目命令根> run / run-async / convert / render / process / colors / execute` 等入口。项目命令根由项目名派生并避开 Host 固定命令根，安装启用后可立即被 `cli.command.list`、shell completion 与 `chips <commandPath>` 发现。
+
+## Shell 补全
+
+Host CLI 可以输出当前 shell 的补全脚本：
+
+```bash
+chips completion bash
+chips completion zsh
+chips completion fish
+```
+
+补全脚本会在每次补全时调用 `chips __complete ...`，该私有入口读取当前工作区 Host 动态命令索引，并合并 Host 固定命令树。因此，插件安装、启用、禁用或卸载后，下一次 Tab 补全会自动反映最新命令，不需要重新安装补全脚本或重启 Host。补全只提供候选，真实执行仍使用传统 CLI 执行器并重新经过最长前缀匹配、冲突消解、参数解析、路径校验和 Host 正式路由。
+
+## CLI 交互式 TUI
+
+`chips` 在交互式终端中不带任何参数直接运行时，会进入 CLI 命令构建器：
+
+```bash
+chips
+chips --interactive
+```
+
+入口规则：
+
+- `chips` 空命令在 TTY 环境进入交互式界面；
+- `chips --interactive` 可显式进入交互式界面；
+- 非 TTY 环境不会阻塞，空命令输出 TUI 需要交互式终端的提示并返回 0，显式 `--interactive` 返回 1；
+- TUI 同时展示 Host 系统指令和 `cli.command.list` 返回的当前已启用 app/module 插件命令，不读取插件源码或绕过 Host 运行时。
+- 系统指令包括 `help / start / stop / status / config / logs / theme / plugin / update / doctor / open / completion` 等固定命令根；插件命令不得占用这些根。
+
+界面结构：
+
+- TUI 使用纯终端字符界面，不输出彩色前景、彩色背景或闪烁样式；外层以 Unicode 圆角边框承载，整体从上到下固定为顶部命令框、动态交互区、底部提示栏三块；
+- TUI 进入交互界面时使用备用终端屏幕并隐藏真实终端光标，退出时恢复；每次按键或输出刷新只更新发生变化的行，避免整屏清空造成闪烁；
+- TUI 会按当前终端列宽和行高重新排版。列宽不足时裁剪长文本，行高不足时优先保留顶部命令框、底部提示栏和当前焦点区域的摘要，避免窗口缩放后内容溢出滚屏；
+- 顶部命令框始终显示当前已拼接的完整命令，显示形态为 `chips > ...`，当前待输入或待确认片段会实时进入预览，光标以静态 `_` 下划线表示；
+- 动态交互区是唯一焦点区域，会根据当前命令构建阶段切换为二级/三级指令列表、参数选择列表、滑动条、粘贴输入框或多选框；
+- 底部提示栏只展示键盘操作，不参与焦点。第一行随当前控件变化，第二行固定展示 `Backspace 返回上级 / Ctrl+C 取消命令 / 命令完整后 Enter 执行 / Ctrl+\ 退出`；
+- 命令完整时，动态区第一项固定为 `命令已完整`，底部 `Enter 执行` 前会出现 `▶` 标记；按 `Enter` 会立即执行当前命令。若还需要追加可选参数，可用 `↑ / ↓` 移动到附加参数项继续补充。
+
+键盘操作：
+
+- `↑ / ↓`：在列表和多选框中移动当前项；
+- `← / →`：在滑动条中调节数值，在输入框中移动输入光标；
+- `Space`：在多选框中切换当前项选中状态；
+- `Enter`：确认当前列表项、输入值、滑块值或多选结果；命令完整且当前项为 `命令已完整` 时执行命令；
+- `Backspace`：非输入框模式下删除最后一个命令片段并返回上级；输入框模式下只删除输入框内字符；
+- `Ctrl+C`：在构建界面清空当前命令并回到初始指令列表；执行中会请求取消当前命令；
+- `Ctrl+\`：退出 TUI。
+
+参数控件由 `cli.commands` 中的参数类型和 `ui.control` 驱动：
+
+- `select`：渲染为互斥参数选择列表；
+- `multiSelect`：渲染为多选框，确认后把选中值用逗号传给同一个参数；
+- `toggle` 和多个可选布尔参数：渲染为多选框，确认后把选中的 flag 逐个追加到命令 token；
+- `stepper / slider`：渲染为滑动条，按 `ui.min / ui.max / ui.step` 或 `validation.min / validation.max` 调节数值；
+- `pathInput / pasteBox / textarea`：渲染为粘贴输入框，支持直接键入、标准终端粘贴、光标移动与退格。
+
+执行中与结果展示：
+
+- 命令完整后按 `Enter`，动态交互区切换为执行中面板，显示命令、实时输出、进度条和 `Ctrl+C` 中止提示；
+- TUI 会捕获传统 CLI 执行器写入 stdout/stderr 的内容，并在执行中面板滚动展示；若底层模块 job 或应用 cli task 输出进度，stderr 进度行也会进入实时输出；
+- 执行中按 `Ctrl+C` 会向当前执行链路发送中止信号。对于声明 `job.cancelOnInterrupt: true` 的模块 job 或应用 cli task，Host 会继续复用正式取消链路；
+- 命令结束后，动态交互区切换为结果面板，展示成功/失败/已中止状态、退出码、耗时、最多 10 至 15 行输出和错误摘要；
+- 结果面板支持 `↑ / ↓` 滚动输出，`Enter` 返回构建界面，`R` 重新执行上一条命令，`Ctrl+C` 退出 TUI。
+
+执行时 TUI 会把最终命令 token 交回传统 CLI 执行器。系统指令继续走现有 Host CLI 分支；插件指令继续复用同一套最长前缀匹配、`--plugin` owner 消歧、参数解析、路径校验、payload 映射、module job 等待和 app surface 打开链路。TUI 不定义第二套执行语义，也不提供历史命令搜索。
+
+当前已落地传统命令行执行器、Host 动态命令索引、shell completion、job 进度条 stderr 展示、TUI 命令构建器和 CLI/TUI 操作日志。更细粒度的 human 输出模板仍以后续阶段为准，但必须继续复用同一命令索引、参数解析和 Host 路由执行边界。
+
+## CLI / TUI 操作日志
+
+Host CLI 会把内建命令、插件命令、TUI 执行和 shell completion 请求都记录到工作区 `host-logs.jsonl`。日志通过 Host `log.export` 汇出，用户可以使用 `chips logs` 查看。
+
+操作日志使用结构化 `LogEntry`，其中 `namespace` 为 `cli`、`action` 为 `operation.execute`；`metadata.source` 区分 `cli / tui / completion`，并记录脱敏后的命令行、参数 token、工作区类型、退出码、插件命令 ID、命令路径、目标类型、耗时和错误对象。包含 token、secret、password、credential、api key 等敏感键名的参数值必须脱敏。
+
 ## 主题管理命令
 
 主题管理命令用于查看和校验当前主机工作区中的可用主题。使用命令chips theme进行主题管理。
@@ -135,13 +253,9 @@ JSON输出选项--json可以输出JSON格式的状态信息。JSON格式便于�
 
 ## 更新命令
 
-更新命令检查和安装应用更新。使用命令chips update进行更新管理。
+更新命令保留为 Host 更新链路的正式入口。当前未配置外部更新提供方时，`chips update check` 返回当前版本、`provider: "local"` 和 `updateAvailable: false`；`chips update install` 返回 `installed: false` 并说明当前工作区未配置外部更新提供方。
 
-检查更新命令chips update check可以检查是否有新版本。检查会连接更新服务器获取版本信息。
-
-安装更新命令chips update install可以安装新版本。安装前会提示用户确认。安装过程会下载并替换文件。
-
-自动更新选项-a或--auto可以启用自动更新。自动更新在后台检查并安装更新。重大安全更新会自动安装。
+后续接入正式更新服务器时，仍应复用 `chips update check|install` 两个入口，并同步补充下载、校验、确认和回滚策略。
 
 ## 诊断命令
 
@@ -155,7 +269,7 @@ JSON输出选项--json可以输出JSON格式的状态信息。JSON格式便于�
 
 ## 环境变量
 
-命令行使用多个环境变量配置行为。CHIPS_HOME指定应用数据目录。CHIPS_CONFIG指定配置文件路径。CHIPS_PORT指定默认端口。
+命令行使用环境变量配置行为。`CHIPS_HOME` 指定应用数据目录；`CHIPS_WORKSPACE_KIND` 标记工作区类型，`user` 为用户工作区，`dev` 为开发工作区。
 
 环境变量可以在Shell配置文件中设置。设置后命令行会自动使用这些变量。环境变量优先级高于默认配置。
 

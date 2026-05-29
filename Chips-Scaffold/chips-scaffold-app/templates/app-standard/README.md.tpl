@@ -29,6 +29,16 @@ npm run dev
 
 `reports/` 是本地验证产物目录，默认不纳入版本管理。`preview:smoke` 是报告级 smoke，用于确认 mock 预览、manifest、surface 与入口资产状态；真实 Host 窗口联调仍使用 `chipsdev run`。`quality:gate` 是生态态势摘要，失败检查会阻断本地验证，warning 需要开发者按报告判断。
 
+## 命令行入口
+
+`manifest.yaml` 默认声明一条 `cli.commands` 应用入口：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} open "启动参数"
+```
+
+该命令由 Host 动态发现，执行时通过 `surface.open` 打开当前应用，并把位置参数写入 launch context 的 `cli.payload.subject`。应用插件不是独立 OS CLI 程序，后续如需投递应用内部 command，应继续通过 Host `command.invoke` 链路。
+
 ## 目录结构
 
 ```text
@@ -73,7 +83,7 @@ npm run dev
 
 - 官方前端栈使用 React。
 - 系统能力通过 `chips-sdk` 与组件库 Environment hooks 消费。
-- 命令通过 `client.command.*` 注册、查询、调用和监听，不写入 `manifest.commands`。
+- 应用内命令通过 `client.command.*` 注册、查询、调用和监听；命令行入口写入 `manifest.cli.commands`，不写入旧 `manifest.commands`。
 - 用户可见文案统一维护在 `i18n/*.json`，渲染期通过本地同步 adapter 解析。
 - 视觉表达走组件库结构、主题 token 和 `--chips-*` CSS 变量，不在组件中写硬编码颜色、阴影或圆角。
 - 应用入口图标来自 `manifest.ui.launcher.icon`，运行时 UI 图标使用组件库 `ChipsIcon` 与 `IconDescriptor`。

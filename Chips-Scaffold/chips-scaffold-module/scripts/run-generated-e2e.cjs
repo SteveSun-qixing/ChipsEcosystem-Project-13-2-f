@@ -112,6 +112,22 @@ const FORBIDDEN_RENDERED_PATTERNS = [
   /TODO|FIXME/,
 ];
 
+const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+  "help",
+  "host",
+  "start",
+  "stop",
+  "status",
+  "config",
+  "logs",
+  "theme",
+  "plugin",
+  "update",
+  "doctor",
+  "open",
+  "completion",
+]);
+
 const TEXT_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
@@ -204,6 +220,28 @@ const assertGeneratedProjectClean = async (targetDir, templateId) => {
   }
 };
 
+const assertGeneratedManifestCliContract = async (targetDir, templateId) => {
+  const manifestText = await fsp.readFile(path.join(targetDir, "manifest.yaml"), "utf-8");
+  assert.match(manifestText, /cli:\n\s+commands:/, `${templateId} should declare cli.commands`);
+  assert.match(manifestText, /target:\n\s+type:\s+module/, `${templateId} CLI target should be module`);
+  assert.match(manifestText, /output:\n\s+mode:\s+json/, `${templateId} CLI output should be json`);
+  assert.match(manifestText, /mapsTo:/, `${templateId} CLI parameters should map into payload`);
+  assert.match(manifestText, /ui:\n\s+control:/, `${templateId} CLI parameters should carry TUI hints`);
+
+  const commandPathMatch = manifestText.match(/commandPath:\s+([^\n]+)/);
+  assert.ok(commandPathMatch, `${templateId} should declare commandPath`);
+  const root = commandPathMatch[1].trim().split(/\s+/)[0];
+  assert.equal(
+    HOST_FIXED_CLI_COMMAND_ROOTS.has(root),
+    false,
+    `${templateId} CLI root should not shadow Host fixed commands`
+  );
+
+  for (const forbidden of [/^plugin\s*:/m, /^theme\s*:/m, /^themeId\s*:/m, /^displayName\s*:/m, /^layout\s*:/m, /^ui:\s*$/m]) {
+    assert.equal(forbidden.test(manifestText), false, `${templateId} manifest should not declare ${forbidden}`);
+  }
+};
+
 const createModuleProject = async (sandboxRoot, template, env) => {
   const targetRelativePath =
     template.targetRelativePath ??
@@ -228,6 +266,7 @@ const createModuleProject = async (sandboxRoot, template, env) => {
     await fsp.access(path.join(targetDir, fileName));
   }
   await assertGeneratedProjectClean(targetDir, template.id);
+  await assertGeneratedManifestCliContract(targetDir, template.id);
   return { targetRelativePath: toPosixPath(targetRelativePath), targetDir };
 };
 
@@ -264,6 +303,11 @@ const assertDefaultProjectContract = async (sandboxRoot, targetRelativePath, tar
   assert.match(manifestText, /mode:\s+sync/);
   assert.match(manifestText, /mode:\s+job/);
   assert.match(manifestText, /consumes:\s+\[\]/);
+  assert.match(manifestText, /commandPath:\s+module-smoke run/);
+  assert.match(manifestText, /commandPath:\s+module-smoke run-async/);
+  assert.match(manifestText, /mapsTo:\s+sourceText/);
+  assert.match(manifestText, /mapsTo:\s+delayMs/);
+  assert.match(manifestText, /cancelOnInterrupt:\s+true/);
 
   const capabilityMatch = manifestText.match(/capability:\s*([^\n]+)/);
   assert.ok(capabilityMatch, "module capability should be declared in manifest");

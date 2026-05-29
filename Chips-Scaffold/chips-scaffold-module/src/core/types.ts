@@ -37,6 +37,7 @@ export interface TemplateContext {
   TARGET_DIR: string;
   TEMPLATE_ID: string;
   PLUGIN_ID: string;
+  CLI_COMMAND_ROOT: string;
   MODULE_CAPABILITY: string;
   MODULE_CONSUMES_YAML: string;
   DISPLAY_NAME: string;

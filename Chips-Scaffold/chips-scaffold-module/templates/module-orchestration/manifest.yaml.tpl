@@ -40,3 +40,31 @@ module:
           inputSchema: contracts/execute.input.schema.json
           outputSchema: contracts/execute.output.schema.json
   consumes:{{ MODULE_CONSUMES_YAML }}
+cli:
+  commands:
+    - commandPath: {{ CLI_COMMAND_ROOT }} execute
+      target:
+        type: module
+        capability: {{ MODULE_CAPABILITY }}
+        method: execute
+        timeoutMs: 60000
+      titleKey: module.cli.execute.title
+      descriptionKey: module.cli.execute.description
+      permissions:
+        - module.read
+        - module.invoke
+      arguments:
+        - name: steps
+          position: 0
+          type: json
+          required: true
+          mapsTo: steps
+          ui:
+            control: textarea
+            placeholderKey: module.cli.execute.steps.placeholder
+      output:
+        mode: json
+        json: supported
+      job:
+        wait: true
+        cancelOnInterrupt: true

@@ -19,6 +19,7 @@ class MockBrowserWindow {
 
   private title: string;
   private focused = false;
+  private visible: boolean;
   private minimized = false;
   private maximized = false;
   private fullscreen = false;
@@ -34,6 +35,7 @@ class MockBrowserWindow {
     this.title = String(options.title ?? '');
     this.width = Number(options.width ?? 800);
     this.height = Number(options.height ?? 600);
+    this.visible = options.show !== false;
     this.webContents = {
       id: this.id,
       send: () => {}
@@ -42,8 +44,18 @@ class MockBrowserWindow {
   }
 
   public focus(): void {
+    this.visible = true;
     this.focused = true;
     this.minimized = false;
+  }
+
+  public show(): void {
+    this.visible = true;
+  }
+
+  public hide(): void {
+    this.visible = false;
+    this.focused = false;
   }
 
   public setSize(width: number, height: number): void {
@@ -66,6 +78,10 @@ class MockBrowserWindow {
     return this.focused;
   }
 
+  public isVisible(): boolean {
+    return this.visible;
+  }
+
   public isMinimized(): boolean {
     return this.minimized;
   }
@@ -79,6 +95,7 @@ class MockBrowserWindow {
   }
 
   public minimize(): void {
+    this.visible = true;
     this.minimized = true;
     this.maximized = false;
     this.fullscreen = false;
@@ -86,6 +103,7 @@ class MockBrowserWindow {
   }
 
   public maximize(): void {
+    this.visible = true;
     this.maximized = true;
     this.minimized = false;
     this.fullscreen = false;
@@ -94,12 +112,14 @@ class MockBrowserWindow {
   public setFullScreen(flag: boolean): void {
     this.fullscreen = flag;
     if (flag) {
+      this.visible = true;
       this.maximized = false;
       this.minimized = false;
     }
   }
 
   public restore(): void {
+    this.visible = true;
     this.maximized = false;
     this.minimized = false;
     this.fullscreen = false;
@@ -107,6 +127,7 @@ class MockBrowserWindow {
 
   public close(): void {
     this.destroyed = true;
+    this.visible = false;
     this.focused = false;
     this.onClosed?.();
   }
@@ -288,6 +309,48 @@ describe('Node PAL BrowserWindow host chain', () => {
     const browserWindow = MockBrowserWindow.instances[0]!;
     expect(browserWindow.loadedFile).toBe(path.resolve(htmlEntry));
     expect(browserWindow.loadedUrl).toBeUndefined();
+  });
+
+  it('keeps Electron windows hidden when surface presentation is not visible', async () => {
+    (globalThis as Record<string, unknown>)[ELECTRON_MOCK_KEY] = {
+      BrowserWindow: MockBrowserWindow
+    };
+
+    const pal = new NodePalAdapter({
+      window: {
+        electronPreloadPath: __filename
+      }
+    });
+    const opened = await pal.surface.open({
+      kind: 'window',
+      target: {
+        type: 'plugin',
+        pluginId: 'chips.demo.hidden',
+        url: 'https://chips.local/hidden',
+        permissions: ['command.read']
+      },
+      presentation: {
+        title: 'Hidden App Command Surface',
+        visible: false
+      },
+      context: {
+        sceneId: 'scene-hidden',
+        pluginId: 'chips.demo.hidden',
+        kind: 'window',
+        presentation: {
+          title: 'Hidden App Command Surface',
+          visible: false
+        }
+      }
+    });
+
+    const browserWindow = MockBrowserWindow.instances[0]!;
+    expect(browserWindow.options.show).toBe(false);
+    expect(opened.state).toBe('hidden');
+    expect(opened.context?.presentation.visible).toBe(false);
+
+    await pal.surface.setState(opened.id, 'normal');
+    expect((await pal.surface.getState(opened.id)).state).toBe('normal');
   });
 
   it('maps window chrome options into Electron BrowserWindow configuration', async () => {

@@ -17,6 +17,7 @@ import { loadElectronModule } from '../electron/electron-loader';
 import {
   CHIPS_RENDER_DOCUMENT_SCHEME,
 } from '../electron/render-document-protocol';
+import type { LogEntry } from '../../shared/types';
 import {
   DEFAULT_BUILT_IN_PLUGINS,
   ensureBuiltInPlugins,
@@ -66,6 +67,7 @@ export class HostCore {
     }
 
     registerHostSchemas();
+    await this.loadPersistentLogs();
     await this.runtime.load();
     const builtInBootstrap = await ensureBuiltInPlugins({
       runtime: this.runtime,
@@ -144,6 +146,7 @@ export class HostCore {
       action: 'stop',
       result: 'success'
     });
+    await this.persistLogs();
   }
 
   public isRunning(): boolean {
@@ -177,6 +180,54 @@ export class HostCore {
     return electron?.protocol && typeof electron.protocol.handle === 'function' && electron?.net?.fetch
       ? CHIPS_RENDER_DOCUMENT_SCHEME
       : undefined;
+  }
+
+  private logFilePath(): string {
+    return path.join(this.workspacePath, 'host-logs.jsonl');
+  }
+
+  private async readPersistentLogEntries(): Promise<LogEntry[]> {
+    const filePath = this.logFilePath();
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const entries: LogEntry[] = [];
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+        try {
+          const entry = JSON.parse(trimmed) as LogEntry;
+          if (entry && typeof entry.requestId === 'string' && typeof entry.message === 'string') {
+            entries.push(entry);
+          }
+        } catch {
+          // Ignore damaged lines and keep the rest of the operation log readable.
+        }
+      }
+      return entries;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      void code;
+      return [];
+    }
+  }
+
+  private async loadPersistentLogs(): Promise<void> {
+    this.logger.load(await this.readPersistentLogEntries());
+  }
+
+  private async persistLogs(): Promise<void> {
+    const merged = new Map<string, LogEntry>();
+    for (const entry of await this.readPersistentLogEntries()) {
+      merged.set(`${entry.traceId}:${entry.requestId}:${entry.timestamp}:${entry.action ?? ''}:${entry.message}`, entry);
+    }
+    for (const entry of this.logger.query()) {
+      merged.set(`${entry.traceId}:${entry.requestId}:${entry.timestamp}:${entry.action ?? ''}:${entry.message}`, entry);
+    }
+    const payload = `${[...merged.values()].map((entry) => JSON.stringify(entry)).join('\n')}\n`;
+    await fs.mkdir(this.workspacePath, { recursive: true });
+    await fs.writeFile(this.logFilePath(), payload, 'utf-8');
   }
 
   private getCardService(): CardService {

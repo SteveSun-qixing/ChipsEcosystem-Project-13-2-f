@@ -36,6 +36,16 @@ chipsdev module invoke \
 
 该模板依赖真实 Electron Host 的平台渲染能力，因此不要用普通开发服务器替代联调。CLI 会构建当前工程、安装并启用 `.cpk`，再通过 Host `module.invoke` 调用 job 并轮询终态。
 
+## 插件 CLI 命令
+
+`manifest.yaml` 默认声明一条插件命令：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} render /绝对路径/html-dir /绝对路径/output.pdf --target pdf
+```
+
+该命令由 Host 动态发现，参数会映射为 `htmlDir / outputFile / options.target`，真实执行仍走 Host `module.invoke / module.job.*`。
+
 ## 正式边界
 
 - 模块只能通过 `ctx.host.invoke("platform.renderHtmlToPdf", payload)` 或 `ctx.host.invoke("platform.renderHtmlToImage", payload)` 使用 Host 渲染导出能力；

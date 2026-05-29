@@ -206,6 +206,44 @@ async function main() {
         );
         hasError = true;
       }
+      for (const forbiddenPattern of [
+        /^plugin\s*:/m,
+        /^theme\s*:/m,
+        /^themeId\s*:/m,
+        /^displayName\s*:/m,
+        /^module\s*:/m,
+        /^layout\s*:/m,
+      ]) {
+        if (forbiddenPattern.test(manifestText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} manifest.yaml.tpl 不应声明类型越界或 Host 治理保留字段：${forbiddenPattern}`,
+          );
+          hasError = true;
+        }
+      }
+      for (const requiredText of [
+        "cli:",
+        "commands:",
+        "commandPath: {{ CLI_COMMAND_ROOT }} open",
+        "target:",
+        "type: app",
+        "pluginId: {{ PLUGIN_ID }}",
+        "surface:",
+        "open: true",
+        "focus: true",
+        "reuse: preferred",
+        "titleKey: app.cli.open.title",
+        "descriptionKey: app.cli.open.description",
+        "mapsTo: subject",
+        "placeholderKey: app.cli.open.subjectPlaceholder",
+      ]) {
+        if (!manifestText.includes(requiredText)) {
+          console.error(
+            `[check-templates] 模板 ${dir} manifest.yaml.tpl 缺少应用 CLI 声明片段：${requiredText}`,
+          );
+          hasError = true;
+        }
+      }
 
       const commandText = await readFile(
         path.join(base, "src/commands/app-commands.ts.tpl"),
@@ -380,7 +418,7 @@ async function main() {
       const enUsText = await readFile(path.join(base, "i18n/en-US.json.tpl"), "utf8");
       const zhCnBundle = JSON.parse(zhCnText);
       const enUsBundle = JSON.parse(enUsText);
-      for (const key of ["languageSwitch", "openWorkspace", "refreshTheme"]) {
+      for (const key of ["languageSwitch", "openWorkspace", "refreshTheme", "subjectPlaceholder"]) {
         if (!zhCnText.includes(key) || !enUsText.includes(key)) {
           console.error(
             `[check-templates] 模板 ${dir} i18n 资源缺少关键 key：${key}`,
@@ -391,6 +429,7 @@ async function main() {
       const i18nKeys = new Set([
         ...collectRegexGroupValues(sourceText, /text\(\s*["']([^"']+)["']/g),
         ...collectRegexGroupValues(commandText, /(?:titleKey|descriptionKey|ariaLabelKey|disabledReasonKey)\s*:\s*["']([^"']+)["']/g),
+        ...collectRegexGroupValues(manifestText, /(?:titleKey|descriptionKey|placeholderKey)\s*:\s*([A-Za-z0-9_.-]+)/g),
       ]);
       for (const key of i18nKeys) {
         if (!key.startsWith("app.")) {

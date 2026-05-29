@@ -23,6 +23,10 @@ export interface FileWatchOptions {
   timeoutMs?: number;
 }
 
+export interface FileMkdirOptions {
+  recursive?: boolean;
+}
+
 export interface FileDeleteOptions {
   recursive?: boolean;
 }
@@ -45,7 +49,7 @@ export interface FileApi {
   stat(path: string): Promise<FileStat>;
   list(dir: string, options?: FileListOptions): Promise<FileEntry[]>;
   watch(path: string, options?: FileWatchOptions): Promise<FileWatchEvent | null>;
-  mkdir(path: string): Promise<void>;
+  mkdir(path: string, options?: FileMkdirOptions): Promise<void>;
   delete(path: string, options?: FileDeleteOptions): Promise<void>;
   move(sourcePath: string, destPath: string): Promise<void>;
   copy(sourcePath: string, destPath: string): Promise<void>;
@@ -208,11 +212,11 @@ export function createFileApi(client: CoreClient): FileApi {
       });
       return result.event;
     },
-    async mkdir(path) {
+    async mkdir(path, options) {
       if (!path) {
         throw createError("INVALID_ARGUMENT", "file.mkdir: path is required.");
       }
-      await client.invoke("file.mkdir", { path });
+      await client.invoke("file.mkdir", { path, options });
     },
     async delete(path, options) {
       if (!path) {

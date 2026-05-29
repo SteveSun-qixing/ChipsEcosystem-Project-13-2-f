@@ -1487,6 +1487,39 @@ describe('Host services integration', () => {
     expect(result.entries.some((entry) => entry.message === 'integration-log')).toBe(true);
   });
 
+  it('persists logs across host restart', async () => {
+    await runtime.invoke('log.write', {
+      level: 'info',
+      message: 'persistent-integration-log',
+      metadata: {
+        source: 'integration-test'
+      }
+    });
+
+    await app.stop();
+    app = new HostApplication({ workspacePath: workspace });
+    await app.start();
+    runtime = new RuntimeClient(app.createBridge(), {
+      defaultTimeout: 5000,
+      maxRetries: 1,
+      retryDelay: 10,
+      retryBackoff: 2,
+      enableRetry: true
+    });
+
+    const result = await runtime.invoke<{ entries: Array<{ message: string; metadata?: Record<string, unknown> }> }>('log.query', {});
+    expect(result.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'persistent-integration-log',
+          metadata: expect.objectContaining({
+            source: 'integration-test'
+          })
+        })
+      ])
+    );
+  });
+
   it('persists encrypted credentials across host restart', async () => {
     await runtime.invoke('credential.set', { ref: 'chips.api.token', value: 'secret-token' });
     const stored = await fs.readFile(path.join(workspace, 'credentials.enc.json'), 'utf-8');
@@ -1509,8 +1542,10 @@ describe('Host services integration', () => {
 
   it('returns control-plane health report', async () => {
     const report = await runtime.invoke<{ status: string; report: { routes: number; services: number } }>('control-plane.health', {});
+    const checked = await runtime.invoke<{ services: Array<{ name: string }> }>('control-plane.check', {});
     expect(report.status).toBe('ok');
-    expect(report.report.services).toBe(20);
+    expect(report.report.services).toBe(checked.services.length);
+    expect(checked.services.map((service) => service.name)).toContain('cli-task');
     expect(report.report.routes).toBeGreaterThan(30);
   });
 
@@ -2015,6 +2050,218 @@ describe('Host services integration', () => {
     } catch (error) {
       throw error;
     }
+  });
+
+  it('builds CLI command index from enabled app and module plugin manifests', async () => {
+    const appPluginDir = path.join(workspace, 'cli-index-app');
+    await writeText(path.join(appPluginDir, 'dist/index.html'), '<!doctype html>');
+    await writeText(
+      path.join(appPluginDir, 'manifest.yaml'),
+      [
+        'id: chips.cli.index.app',
+        'name: CLI Index App',
+        'version: "1.0.0"',
+        'type: app',
+        'entry: dist/index.html',
+        'permissions:',
+        '  - file.read',
+        '  - command.invoke',
+        ...appRuntimeYamlLines,
+        'ui:',
+        ...appSurfaceYamlLines,
+        'cli:',
+        '  commands:',
+        '    - commandPath: demo open',
+        '      target:',
+        '        type: app',
+        '        pluginId: chips.cli.index.app',
+        '        commandId: chips.cli.index.app.open',
+        '        surface:',
+        '          open: true',
+        '          focus: true',
+        '      titleKey: cli.demo.open.title',
+        '      permissions:',
+        '        - file.read',
+        '      arguments:',
+        '        - name: path',
+        '          position: 0',
+        '          type: path',
+        '          required: true',
+        '          mapsTo: path'
+      ].join('\n')
+    );
+
+    const modulePluginDir = path.join(workspace, 'cli-index-module');
+    await writeText(path.join(modulePluginDir, 'dist/index.cjs'), 'exports.providers = [];');
+    await writeText(path.join(modulePluginDir, 'contracts/run.input.schema.json'), '{"type":"object"}');
+    await writeText(path.join(modulePluginDir, 'contracts/run.output.schema.json'), '{"type":"object"}');
+    await writeText(
+      path.join(modulePluginDir, 'manifest.yaml'),
+      [
+        'id: chips.cli.index.module',
+        'name: CLI Index Module',
+        'version: "1.0.0"',
+        'type: module',
+        'entry: dist/index.cjs',
+        'permissions:',
+        '  - file.read',
+        'runtime:',
+        '  targets:',
+        '    desktop:',
+        '      supported: true',
+        '    web:',
+        '      supported: false',
+        '    mobile:',
+        '      supported: false',
+        '    headless:',
+        '      supported: true',
+        'module:',
+        '  apiVersion: 1',
+        '  runtime: worker',
+        '  activation: onDemand',
+        '  provides:',
+        '    - capability: cli.index.run',
+        '      version: "1.0.0"',
+        '      methods:',
+        '        - name: run',
+        '          mode: sync',
+        '          inputSchema: contracts/run.input.schema.json',
+        '          outputSchema: contracts/run.output.schema.json',
+        '  consumes: []',
+        'cli:',
+        '  commands:',
+        '    - commandPath: demo open',
+        '      target:',
+        '        type: module',
+        '        capability: cli.index.run',
+        '        method: run',
+        '      titleKey: cli.demo.module.open.title',
+        '      permissions:',
+        '        - file.read'
+      ].join('\n')
+    );
+
+    const appInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.join(appPluginDir, 'manifest.yaml')
+    });
+
+    const disabledIndex = await runtime.invoke<{
+      commands: Array<{ commandId: string; enabled: boolean }>;
+    }>('cli.command.list', {
+      includeDisabled: true
+    });
+    expect(disabledIndex.commands).toContainEqual(
+      expect.objectContaining({
+        commandId: 'chips.cli.index.app.cli.demo.open',
+        enabled: false
+      })
+    );
+    await expect(
+      runtime.invoke<{ commands: unknown[] }>('cli.command.list', {
+        commandPath: 'demo open'
+      })
+    ).resolves.toMatchObject({
+      commands: []
+    });
+
+    await runtime.invoke('plugin.enable', { pluginId: appInstall.pluginId });
+    const enabledIndex = await runtime.invoke<{
+      commands: Array<{
+        commandId: string;
+        commandPath: string[];
+        enabled: boolean;
+        owner: { pluginId: string; pluginType: string };
+        declaration: { target: { type: string; pluginId?: string } };
+      }>;
+    }>('cli.command.list', {
+      commandPath: ['demo', 'open']
+    });
+    expect(enabledIndex.commands).toEqual([
+      expect.objectContaining({
+        commandId: 'chips.cli.index.app.cli.demo.open',
+        commandPath: ['demo', 'open'],
+        enabled: true,
+        owner: expect.objectContaining({
+          pluginId: 'chips.cli.index.app',
+          pluginType: 'app'
+        }),
+        declaration: expect.objectContaining({
+          target: expect.objectContaining({
+            type: 'app',
+            pluginId: 'chips.cli.index.app'
+          })
+        })
+      })
+    ]);
+
+    const moduleInstall = await runtime.invoke<{ pluginId: string }>('plugin.install', {
+      manifestPath: path.join(modulePluginDir, 'manifest.yaml')
+    });
+    await runtime.invoke('plugin.enable', { pluginId: moduleInstall.pluginId });
+
+    const conflictResult = await runtime.invoke<{
+      command?: unknown;
+      conflicts: Array<{
+        commandPathKey: string;
+        enabledCommandIds: string[];
+      }>;
+    }>('cli.command.resolve', {
+      commandPath: 'demo open'
+    });
+    expect(conflictResult.command).toBeUndefined();
+    expect(conflictResult.conflicts).toEqual([
+      expect.objectContaining({
+        commandPathKey: 'demo open',
+        enabledCommandIds: ['chips.cli.index.app.cli.demo.open', 'chips.cli.index.module.cli.demo.open']
+      })
+    ]);
+
+    await expect(
+      runtime.invoke('cli.command.get', {
+        commandPath: 'demo open'
+      })
+    ).rejects.toMatchObject({
+      code: 'CLI_COMMAND_CONFLICT'
+    });
+
+    const resolvedModule = await runtime.invoke<{
+      command?: {
+        commandId: string;
+        declaration: {
+          target: {
+            type: string;
+            capability: string;
+            method: string;
+          };
+        };
+      };
+      conflicts: unknown[];
+    }>('cli.command.resolve', {
+      commandPath: 'demo open',
+      pluginId: 'chips.cli.index.module'
+    });
+    expect(resolvedModule.command).toMatchObject({
+      commandId: 'chips.cli.index.module.cli.demo.open',
+      declaration: {
+        target: {
+          type: 'module',
+          capability: 'cli.index.run',
+          method: 'run'
+        }
+      }
+    });
+
+    await runtime.invoke('plugin.disable', { pluginId: appInstall.pluginId });
+    const afterDisable = await runtime.invoke<{
+      command?: { commandId: string };
+      conflicts: unknown[];
+    }>('cli.command.resolve', {
+      commandPath: 'demo open'
+    });
+    expect(afterDisable.command).toMatchObject({
+      commandId: 'chips.cli.index.module.cli.demo.open'
+    });
+    expect(afterDisable.conflicts).toEqual([]);
   });
 
   it('orders module providers by semantic version', async () => {

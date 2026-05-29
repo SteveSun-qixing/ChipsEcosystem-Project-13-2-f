@@ -382,7 +382,7 @@ describe("createClient", () => {
     expect(Array.from(result as Uint8Array)).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
-  it("passes recursive list and delete options into file routes", async () => {
+  it("passes recursive list, mkdir, and delete options into file routes", async () => {
     const calls: Array<{ action: string; payload: unknown }> = [];
     const entry = {
       path: "/workspace/card/content/demo.yaml",
@@ -402,6 +402,7 @@ describe("createClient", () => {
     });
 
     await expect(client.file.list("/workspace/card", { recursive: true })).resolves.toEqual([entry]);
+    await client.file.mkdir("/workspace/card/assets/icons", { recursive: true });
     await client.file.delete("/workspace/card/tmp", { recursive: true });
 
     expect(calls).toEqual([
@@ -409,6 +410,15 @@ describe("createClient", () => {
         action: "file.list",
         payload: {
           dir: "/workspace/card",
+          options: {
+            recursive: true,
+          },
+        },
+      },
+      {
+        action: "file.mkdir",
+        payload: {
+          path: "/workspace/card/assets/icons",
           options: {
             recursive: true,
           },
@@ -1035,6 +1045,242 @@ describe("createClient", () => {
       code: "INVALID_ARGUMENT",
       message: "command.register: title must be expressed as an i18n key field.",
     });
+  });
+
+  it("wraps CLI command discovery actions", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const command = {
+      commandId: "chips.cli.index.module.cli.demo.open",
+      commandPath: ["demo", "open"],
+      commandPathKey: "demo open",
+      owner: {
+        pluginId: "chips.cli.index.module",
+        pluginType: "module" as const,
+        pluginName: "CLI Index Module",
+        pluginVersion: "1.0.0",
+      },
+      enabled: true,
+      declaration: {
+        commandId: "chips.cli.index.module.cli.demo.open",
+        commandPath: ["demo", "open"],
+        target: {
+          type: "module" as const,
+          capability: "cli.index.run",
+          method: "run",
+        },
+        titleKey: "cli.demo.module.open.title",
+        examples: [],
+        permissions: ["file.read"],
+        arguments: [],
+        options: [],
+      },
+      conflicts: [],
+    };
+    const index = {
+      schemaVersion: 1 as const,
+      version: "1",
+      updatedAt: "2026-05-28T00:00:00.000Z",
+      workspacePath: "/tmp/chips",
+      commands: [command],
+      conflicts: [],
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "cli.command.list":
+            return { index, commands: [command] };
+          case "cli.command.get":
+            return { command };
+          case "cli.command.resolve":
+            return { command, conflicts: [] };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(client.cliCommand.list({ targetType: "module" })).resolves.toEqual({
+      index,
+      commands: [command],
+    });
+    await expect(client.cliCommand.get({ commandPath: ["demo", "open"] })).resolves.toEqual(command);
+    await expect(client.cliCommand.resolve({ commandPath: "demo open", pluginId: "chips.cli.index.module" })).resolves.toEqual({
+      command,
+      conflicts: [],
+    });
+
+    await expect(client.cliCommand.get({})).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      message: "cli.command.get: commandId or commandPath is required.",
+    });
+
+    expect(calls).toEqual([
+      {
+        action: "cli.command.list",
+        payload: {
+          targetType: "module",
+        },
+      },
+      {
+        action: "cli.command.get",
+        payload: {
+          commandPath: ["demo", "open"],
+        },
+      },
+      {
+        action: "cli.command.resolve",
+        payload: {
+          commandPath: "demo open",
+          pluginId: "chips.cli.index.module",
+        },
+      },
+    ]);
+  });
+
+  it("wraps CLI task actions", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const runningTask = {
+      taskId: "cli-task-1",
+      pluginId: "com.chips.iconmaker",
+      commandId: "com.chips.iconmaker.cli.generate",
+      commandPath: ["iconmaker", "generate"],
+      status: "running" as const,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const progressedTask = {
+      ...runningTask,
+      progress: {
+        stage: "writing",
+        percent: 75,
+      },
+      updatedAt: 2,
+    };
+    const completedTask = {
+      ...progressedTask,
+      status: "completed" as const,
+      output: {
+        files: ["/tmp/icons/icon.png"],
+      },
+      updatedAt: 3,
+    };
+
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        switch (action) {
+          case "cli.task.create":
+            return { task: runningTask };
+          case "cli.task.bindInvocation":
+            return { task: { ...runningTask, invocationId: "invocation-1", surfaceId: "surface-1" } };
+          case "cli.task.get":
+            return { task: progressedTask };
+          case "cli.task.progress":
+            return { task: progressedTask };
+          case "cli.task.complete":
+            return { task: completedTask };
+          case "cli.task.fail":
+            return { task: { ...runningTask, status: "failed", error: { code: "BOOM", message: "boom" } } };
+          case "cli.task.cancel":
+            return { task: { ...runningTask, status: "cancelled" } };
+          default:
+            throw { code: "SERVICE_NOT_FOUND", message: action };
+        }
+      },
+    });
+
+    await expect(
+      client.cliTask.create({
+        pluginId: "com.chips.iconmaker",
+        commandId: "com.chips.iconmaker.cli.generate",
+        commandPath: ["iconmaker", "generate"],
+      }),
+    ).resolves.toEqual(runningTask);
+    await expect(
+      client.cliTask.bindInvocation({
+        taskId: "cli-task-1",
+        invocationId: "invocation-1",
+        surfaceId: "surface-1",
+      }),
+    ).resolves.toMatchObject({
+      invocationId: "invocation-1",
+      surfaceId: "surface-1",
+    });
+    await expect(client.cliTask.get("cli-task-1")).resolves.toEqual(progressedTask);
+    await expect(client.cliTask.progress("cli-task-1", { stage: "writing", percent: 75 })).resolves.toEqual(progressedTask);
+    await expect(client.cliTask.complete("cli-task-1", { files: ["/tmp/icons/icon.png"] })).resolves.toEqual(completedTask);
+    await expect(client.cliTask.fail("cli-task-1", { code: "BOOM", message: "boom" })).resolves.toMatchObject({
+      status: "failed",
+    });
+    await expect(client.cliTask.cancel("cli-task-1")).resolves.toMatchObject({
+      status: "cancelled",
+    });
+
+    expect(calls).toEqual([
+      {
+        action: "cli.task.create",
+        payload: {
+          pluginId: "com.chips.iconmaker",
+          commandId: "com.chips.iconmaker.cli.generate",
+          commandPath: ["iconmaker", "generate"],
+          surfaceId: undefined,
+          sessionId: undefined,
+        },
+      },
+      {
+        action: "cli.task.bindInvocation",
+        payload: {
+          taskId: "cli-task-1",
+          invocationId: "invocation-1",
+          surfaceId: "surface-1",
+        },
+      },
+      {
+        action: "cli.task.get",
+        payload: {
+          taskId: "cli-task-1",
+        },
+      },
+      {
+        action: "cli.task.progress",
+        payload: {
+          taskId: "cli-task-1",
+          progress: {
+            stage: "writing",
+            percent: 75,
+          },
+        },
+      },
+      {
+        action: "cli.task.complete",
+        payload: {
+          taskId: "cli-task-1",
+          output: {
+            files: ["/tmp/icons/icon.png"],
+          },
+        },
+      },
+      {
+        action: "cli.task.fail",
+        payload: {
+          taskId: "cli-task-1",
+          error: {
+            code: "BOOM",
+            message: "boom",
+          },
+        },
+      },
+      {
+        action: "cli.task.cancel",
+        payload: {
+          taskId: "cli-task-1",
+        },
+      },
+    ]);
   });
 
   it("unwraps plugin metadata responses", async () => {

@@ -3,7 +3,7 @@ import { createError } from "../types/errors";
 import type { IconDescriptor } from "./icon";
 
 export type CommandScopeKind = "global" | "app" | "scene" | "surface" | "document";
-export type CommandSource = "menu" | "toolbar" | "shortcut" | "palette" | "context-menu" | "api";
+export type CommandSource = "menu" | "toolbar" | "shortcut" | "palette" | "context-menu" | "api" | "cli";
 
 export interface CommandConditionExpression {
   key: string;
@@ -198,7 +198,7 @@ export interface CommandApi {
 }
 
 const COMMAND_SCOPE_KINDS = new Set<CommandScopeKind>(["global", "app", "scene", "surface", "document"]);
-const COMMAND_SOURCES = new Set<CommandSource>(["menu", "toolbar", "shortcut", "palette", "context-menu", "api"]);
+const COMMAND_SOURCES = new Set<CommandSource>(["menu", "toolbar", "shortcut", "palette", "context-menu", "api", "cli"]);
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -404,7 +404,7 @@ function normalizeSource(source: CommandSource | undefined, action: string): Com
   if (!COMMAND_SOURCES.has(source)) {
     throw createError(
       "INVALID_ARGUMENT",
-      `${action}: source must be one of menu/toolbar/shortcut/palette/context-menu/api.`,
+      `${action}: source must be one of menu/toolbar/shortcut/palette/context-menu/api/cli.`,
     );
   }
   return source;

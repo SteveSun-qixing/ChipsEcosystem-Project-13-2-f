@@ -105,6 +105,7 @@ interface SurfaceOpenRequest {
     height?: number;
     resizable?: boolean;
     alwaysOnTop?: boolean;
+    visible?: boolean;
     chrome?: WindowChromeOptions;
   };
   context?: SurfaceContext;
@@ -115,6 +116,7 @@ interface SurfaceOpenRequest {
 
 - `target.type = "plugin"` 时，Host 必须走正式插件会话初始化链路；
 - 当前该场景除 `window.control` 外，还要求调用方具备 `plugin.manage`；
+- `presentation.visible` 表示初始是否显示 surface；省略或 `true` 为可见，`false` 用于 Host 托管的后台/命令执行 surface，不代表跳过应用运行时、Bridge 或权限校验；
 - Desktop 目前实际仍落为 `window`，若请求了其他 `kind`，PAL 会在返回的 `metadata` 中保留请求语义；
 - `plugin.launch` 保留为 app 插件兼容入口，并复用同一底层实现。
 
@@ -328,6 +330,7 @@ window.chips.platform.getLaunchContext()
     height?: number;
     resizable?: boolean;
     alwaysOnTop?: boolean;
+    visible?: boolean;
     chrome?: WindowChromeOptions;
   };
   surfaceContext?: {
@@ -342,6 +345,7 @@ window.chips.platform.getLaunchContext()
       height?: number;
       resizable?: boolean;
       alwaysOnTop?: boolean;
+      visible?: boolean;
       chrome?: WindowChromeOptions;
     };
     launchParams?: Record<string, unknown>;

@@ -36,6 +36,16 @@ chipsdev module invoke \
 
 CLI 会先构建当前工程，再在开发工作区安装并启用 `.cpk`，最后通过 Host 模块服务调用能力。sync 方法超时会返回 `MODULE_TIMEOUT`，输入或输出不符合 schema 会返回 `MODULE_SCHEMA_INVALID`。若后续添加 job 方法，取消运行中 job 后应进入 `cancelled`，错误码为 `MODULE_JOB_CANCELLED`。
 
+## 插件 CLI 命令
+
+`manifest.yaml` 默认声明一条插件命令：
+
+```bash
+chips {{ CLI_COMMAND_ROOT }} run " Hello " --case-mode upper
+```
+
+该命令由 Host 动态发现，参数会映射为 `module.invoke.input`，真实执行仍走 Host 模块服务。
+
 ## 正式边界
 
 - 模块不创建应用窗口，不生成 UI，不接入主题或多语言运行时；

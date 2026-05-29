@@ -4,6 +4,11 @@ import { createId, now } from './utils';
 export class StructuredLogger {
   private readonly entries: LogEntry[] = [];
 
+  public load(entries: LogEntry[]): void {
+    this.entries.length = 0;
+    this.entries.push(...entries);
+  }
+
   public write(entry: Omit<LogEntry, 'timestamp' | 'traceId'> & { traceId?: string }): LogEntry {
     const normalized: LogEntry = {
       ...entry,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { authApi, type PublicUserProfile } from '../api/auth';
 import { boxesApi, cardsApi, type BoxSummary, type CardSummary } from '../api/content';
@@ -17,284 +17,6 @@ interface ProfileState {
   loading: boolean;
   error: string;
 }
-
-type AmbientLayerStyle = CSSProperties & Record<`--${string}`, string>;
-
-const PROFILE_BACKGROUND_STREAMS: ReadonlyArray<{ id: string; style: AmbientLayerStyle }> = [
-  {
-    id: 'sunrise-stream',
-    style: {
-      '--profile-stream-width': '72vw',
-      '--profile-stream-height': '24vh',
-      '--profile-stream-top': '4vh',
-      '--profile-stream-left': '-8vw',
-      '--profile-stream-rotate': '-14deg',
-      '--profile-stream-opacity': '0.28',
-      '--profile-stream-blur': '88px',
-      '--profile-stream-duration': '24s',
-      '--profile-stream-delay': '-5s',
-      '--profile-stream-drift-x': '12vw',
-      '--profile-stream-drift-y': '6vh',
-      '--profile-stream-gradient':
-        'linear-gradient(90deg, rgba(255, 154, 116, 0.6), rgba(255, 213, 102, 0.28), rgba(255, 255, 255, 0))',
-    },
-  },
-  {
-    id: 'lagoon-stream',
-    style: {
-      '--profile-stream-width': '64vw',
-      '--profile-stream-height': '22vh',
-      '--profile-stream-top': '34vh',
-      '--profile-stream-left': '18vw',
-      '--profile-stream-rotate': '10deg',
-      '--profile-stream-opacity': '0.24',
-      '--profile-stream-blur': '82px',
-      '--profile-stream-duration': '26s',
-      '--profile-stream-delay': '-16s',
-      '--profile-stream-drift-x': '-10vw',
-      '--profile-stream-drift-y': '8vh',
-      '--profile-stream-gradient':
-        'linear-gradient(90deg, rgba(104, 197, 255, 0), rgba(104, 197, 255, 0.32), rgba(127, 238, 195, 0.56), rgba(255, 255, 255, 0))',
-    },
-  },
-  {
-    id: 'violet-stream',
-    style: {
-      '--profile-stream-width': '58vw',
-      '--profile-stream-height': '20vh',
-      '--profile-stream-top': '66vh',
-      '--profile-stream-left': '44vw',
-      '--profile-stream-rotate': '-12deg',
-      '--profile-stream-opacity': '0.2',
-      '--profile-stream-blur': '76px',
-      '--profile-stream-duration': '22s',
-      '--profile-stream-delay': '-11s',
-      '--profile-stream-drift-x': '9vw',
-      '--profile-stream-drift-y': '-7vh',
-      '--profile-stream-gradient':
-        'linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(188, 159, 255, 0.22), rgba(255, 157, 212, 0.46), rgba(255, 255, 255, 0))',
-    },
-  },
-];
-
-const PROFILE_BACKGROUND_ORBS: ReadonlyArray<{ id: string; style: AmbientLayerStyle }> = [
-  {
-    id: 'coral-haze',
-    style: {
-      '--profile-orb-size': '26vw',
-      '--profile-orb-top': '-8vh',
-      '--profile-orb-left': '-4vw',
-      '--profile-orb-color': 'rgba(255, 148, 116, 0.72)',
-      '--profile-orb-opacity': '0.48',
-      '--profile-orb-blur': '108px',
-      '--profile-orb-duration': '36s',
-      '--profile-orb-delay': '-10s',
-      '--profile-orb-drift-x': '14vw',
-      '--profile-orb-drift-y': '22vh',
-      '--profile-orb-scale-start': '0.94',
-      '--profile-orb-scale-mid': '1.12',
-      '--profile-orb-scale-end': '1.02',
-    },
-  },
-  {
-    id: 'golden-mist',
-    style: {
-      '--profile-orb-size': '22vw',
-      '--profile-orb-top': '4vh',
-      '--profile-orb-left': '18vw',
-      '--profile-orb-color': 'rgba(255, 213, 102, 0.66)',
-      '--profile-orb-opacity': '0.36',
-      '--profile-orb-blur': '96px',
-      '--profile-orb-duration': '40s',
-      '--profile-orb-delay': '-26s',
-      '--profile-orb-drift-x': '10vw',
-      '--profile-orb-drift-y': '20vh',
-      '--profile-orb-scale-start': '0.96',
-      '--profile-orb-scale-mid': '1.1',
-      '--profile-orb-scale-end': '1',
-    },
-  },
-  {
-    id: 'mint-bloom',
-    style: {
-      '--profile-orb-size': '24vw',
-      '--profile-orb-top': '0vh',
-      '--profile-orb-left': '74vw',
-      '--profile-orb-color': 'rgba(145, 235, 174, 0.68)',
-      '--profile-orb-opacity': '0.34',
-      '--profile-orb-blur': '102px',
-      '--profile-orb-duration': '38s',
-      '--profile-orb-delay': '-8s',
-      '--profile-orb-drift-x': '-12vw',
-      '--profile-orb-drift-y': '20vh',
-      '--profile-orb-scale-start': '0.92',
-      '--profile-orb-scale-mid': '1.1',
-      '--profile-orb-scale-end': '1.02',
-    },
-  },
-  {
-    id: 'seafoam',
-    style: {
-      '--profile-orb-size': '20vw',
-      '--profile-orb-top': '24vh',
-      '--profile-orb-left': '4vw',
-      '--profile-orb-color': 'rgba(109, 232, 204, 0.64)',
-      '--profile-orb-opacity': '0.28',
-      '--profile-orb-blur': '92px',
-      '--profile-orb-duration': '34s',
-      '--profile-orb-delay': '-18s',
-      '--profile-orb-drift-x': '13vw',
-      '--profile-orb-drift-y': '16vh',
-      '--profile-orb-scale-start': '0.95',
-      '--profile-orb-scale-mid': '1.08',
-      '--profile-orb-scale-end': '1.03',
-    },
-  },
-  {
-    id: 'cyan-breath',
-    style: {
-      '--profile-orb-size': '30vw',
-      '--profile-orb-top': '22vh',
-      '--profile-orb-left': '28vw',
-      '--profile-orb-color': 'rgba(101, 210, 255, 0.74)',
-      '--profile-orb-opacity': '0.32',
-      '--profile-orb-blur': '114px',
-      '--profile-orb-duration': '42s',
-      '--profile-orb-delay': '-34s',
-      '--profile-orb-drift-x': '16vw',
-      '--profile-orb-drift-y': '22vh',
-      '--profile-orb-scale-start': '0.92',
-      '--profile-orb-scale-mid': '1.12',
-      '--profile-orb-scale-end': '1.04',
-    },
-  },
-  {
-    id: 'iris-air',
-    style: {
-      '--profile-orb-size': '18vw',
-      '--profile-orb-top': '34vh',
-      '--profile-orb-left': '78vw',
-      '--profile-orb-color': 'rgba(149, 167, 255, 0.66)',
-      '--profile-orb-opacity': '0.28',
-      '--profile-orb-blur': '90px',
-      '--profile-orb-duration': '36s',
-      '--profile-orb-delay': '-12s',
-      '--profile-orb-drift-x': '-10vw',
-      '--profile-orb-drift-y': '16vh',
-      '--profile-orb-scale-start': '0.94',
-      '--profile-orb-scale-mid': '1.08',
-      '--profile-orb-scale-end': '1.02',
-    },
-  },
-  {
-    id: 'rose-cloud',
-    style: {
-      '--profile-orb-size': '28vw',
-      '--profile-orb-top': '58vh',
-      '--profile-orb-left': '-6vw',
-      '--profile-orb-color': 'rgba(255, 157, 212, 0.7)',
-      '--profile-orb-opacity': '0.36',
-      '--profile-orb-blur': '112px',
-      '--profile-orb-duration': '44s',
-      '--profile-orb-delay': '-30s',
-      '--profile-orb-drift-x': '15vw',
-      '--profile-orb-drift-y': '-14vh',
-      '--profile-orb-scale-start': '0.92',
-      '--profile-orb-scale-mid': '1.12',
-      '--profile-orb-scale-end': '1',
-    },
-  },
-  {
-    id: 'lagoon-haze',
-    style: {
-      '--profile-orb-size': '20vw',
-      '--profile-orb-top': '74vh',
-      '--profile-orb-left': '18vw',
-      '--profile-orb-color': 'rgba(105, 194, 255, 0.68)',
-      '--profile-orb-opacity': '0.3',
-      '--profile-orb-blur': '96px',
-      '--profile-orb-duration': '35s',
-      '--profile-orb-delay': '-20s',
-      '--profile-orb-drift-x': '-11vw',
-      '--profile-orb-drift-y': '-18vh',
-      '--profile-orb-scale-start': '0.96',
-      '--profile-orb-scale-mid': '1.1',
-      '--profile-orb-scale-end': '1.01',
-    },
-  },
-  {
-    id: 'sunbeam',
-    style: {
-      '--profile-orb-size': '24vw',
-      '--profile-orb-top': '72vh',
-      '--profile-orb-left': '50vw',
-      '--profile-orb-color': 'rgba(255, 208, 105, 0.7)',
-      '--profile-orb-opacity': '0.32',
-      '--profile-orb-blur': '100px',
-      '--profile-orb-duration': '40s',
-      '--profile-orb-delay': '-42s',
-      '--profile-orb-drift-x': '12vw',
-      '--profile-orb-drift-y': '-18vh',
-      '--profile-orb-scale-start': '0.95',
-      '--profile-orb-scale-mid': '1.1',
-      '--profile-orb-scale-end': '1.02',
-    },
-  },
-  {
-    id: 'violet-whisper',
-    style: {
-      '--profile-orb-size': '18vw',
-      '--profile-orb-top': '62vh',
-      '--profile-orb-left': '78vw',
-      '--profile-orb-color': 'rgba(188, 159, 255, 0.68)',
-      '--profile-orb-opacity': '0.24',
-      '--profile-orb-blur': '88px',
-      '--profile-orb-duration': '34s',
-      '--profile-orb-delay': '-16s',
-      '--profile-orb-drift-x': '-12vw',
-      '--profile-orb-drift-y': '-14vh',
-      '--profile-orb-scale-start': '0.98',
-      '--profile-orb-scale-mid': '1.08',
-      '--profile-orb-scale-end': '1.01',
-    },
-  },
-  {
-    id: 'peach-spark',
-    style: {
-      '--profile-orb-size': '16vw',
-      '--profile-orb-top': '42vh',
-      '--profile-orb-left': '14vw',
-      '--profile-orb-color': 'rgba(255, 182, 133, 0.68)',
-      '--profile-orb-opacity': '0.22',
-      '--profile-orb-blur': '82px',
-      '--profile-orb-duration': '30s',
-      '--profile-orb-delay': '-21s',
-      '--profile-orb-drift-x': '9vw',
-      '--profile-orb-drift-y': '12vh',
-      '--profile-orb-scale-start': '0.94',
-      '--profile-orb-scale-mid': '1.08',
-      '--profile-orb-scale-end': '1.02',
-    },
-  },
-  {
-    id: 'mint-spark',
-    style: {
-      '--profile-orb-size': '14vw',
-      '--profile-orb-top': '48vh',
-      '--profile-orb-left': '60vw',
-      '--profile-orb-color': 'rgba(136, 242, 191, 0.66)',
-      '--profile-orb-opacity': '0.22',
-      '--profile-orb-blur': '76px',
-      '--profile-orb-duration': '28s',
-      '--profile-orb-delay': '-6s',
-      '--profile-orb-drift-x': '-9vw',
-      '--profile-orb-drift-y': '13vh',
-      '--profile-orb-scale-start': '0.96',
-      '--profile-orb-scale-mid': '1.1',
-      '--profile-orb-scale-end': '1.03',
-    },
-  },
-];
 
 function toCommunityWorks(cards: CardSummary[], boxes: BoxSummary[]): CommunityWorkItem[] {
   const cardItems = cards
@@ -428,6 +150,7 @@ export default function ProfilePage() {
 
     return authUser.username.toLowerCase() === state.user.username.toLowerCase();
   }, [authUser, isAuthLoading, state.user]);
+  const isProfilePending = state.loading || isAuthLoading;
 
   const selectedWorkKeySet = useMemo(() => new Set(selectedWorkKeys), [selectedWorkKeys]);
 
@@ -576,7 +299,7 @@ export default function ProfilePage() {
 
   let pageBody: ReactNode;
 
-  if (state.loading) {
+  if (isProfilePending) {
     pageBody = (
       <>
         <section className="profile-hero profile-hero--skeleton">
@@ -640,16 +363,6 @@ export default function ProfilePage() {
 
   return (
     <div className="page-container profile-page">
-      <div className="profile-page__ambient" aria-hidden="true">
-        {PROFILE_BACKGROUND_STREAMS.map((stream) => (
-          <span key={stream.id} className="profile-page__stream" style={stream.style} />
-        ))}
-        {PROFILE_BACKGROUND_ORBS.map((orb) => (
-          <span key={orb.id} className="profile-page__orb" style={orb.style} />
-        ))}
-        <span className="profile-page__frost" />
-      </div>
-
       <div className="profile-page__content">{pageBody}</div>
 
       {state.user && isOwner ? (

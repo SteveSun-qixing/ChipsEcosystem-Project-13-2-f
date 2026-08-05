@@ -12,7 +12,7 @@ export const themeRegistry: Record<ThemeId, ThemeDefinition> = {
   'ccps.web.nectar-dusk': {
     id: 'ccps.web.nectar-dusk',
     label: 'Nectar Dusk',
-    colorScheme: 'dark',
+    colorScheme: 'light',
   },
   'ccps.web.pear-mist': {
     id: 'ccps.web.pear-mist',
@@ -22,11 +22,7 @@ export const themeRegistry: Record<ThemeId, ThemeDefinition> = {
 };
 
 export function detectPreferredTheme(): ThemeId {
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) {
-    return 'ccps.web.pear-mist';
-  }
-
-  return 'ccps.web.nectar-dusk';
+  return 'ccps.web.pear-mist';
 }
 
 export function isThemeId(value: string | null | undefined): value is ThemeId {

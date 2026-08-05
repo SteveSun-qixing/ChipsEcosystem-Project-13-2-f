@@ -22,10 +22,6 @@ export default function HomePage() {
 
   return (
     <div className="home-simple">
-      <div className="home-simple__glow home-simple__glow--blue" />
-      <div className="home-simple__glow home-simple__glow--green" />
-      <div className="home-simple__glow home-simple__glow--peach" />
-
       <section className="home-simple__hero" aria-labelledby="home-title">
         <div className="home-simple__copy">
           <p className="home-simple__eyebrow">{t('brand.name')}</p>

@@ -30,6 +30,10 @@ function resolveAppRouteMode(pathname: string): AppRouteMode {
   return 'default';
 }
 
+function isProfileRoute(pathname: string): boolean {
+  return /^\/@[^/]+\/?$/.test(pathname);
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { t } = useAppPreferences();
   const { isAuthenticated, isLoading } = useAuth();
@@ -147,6 +151,7 @@ function AppChrome() {
   const location = useLocation();
   const routeMode = resolveAppRouteMode(location.pathname);
   const isChromeVisible = routeMode === 'default';
+  const shouldShowFooter = isChromeVisible && !isProfileRoute(location.pathname);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-ccps-route-mode', routeMode);
@@ -167,7 +172,7 @@ function AppChrome() {
       ].filter(Boolean).join(' ')}
     >
       <AppRoutes />
-      {isChromeVisible ? <SiteFooter /> : null}
+      {shouldShowFooter ? <SiteFooter /> : null}
     </div>
   );
 }

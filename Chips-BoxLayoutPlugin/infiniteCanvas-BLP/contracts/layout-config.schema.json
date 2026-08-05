@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Infinite canvas layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": ["defaultView", "displayMode", "gridVisible", "snapToGrid", "background", "items"],
+      "properties": {
+        "defaultView": {
+          "type": "object",
+          "required": ["x", "y", "zoom"],
+          "properties": {
+            "x": { "type": "number", "minimum": -100000, "maximum": 100000 },
+            "y": { "type": "number", "minimum": -100000, "maximum": 100000 },
+            "zoom": { "type": "number", "minimum": 0.25, "maximum": 4 }
+          }
+        },
+        "displayMode": {
+          "type": "string",
+          "enum": ["point", "cover", "mixed"]
+        },
+        "gridVisible": {
+          "type": "boolean"
+        },
+        "snapToGrid": {
+          "type": "boolean"
+        },
+        "background": {
+          "$ref": "#/$defs/background"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/canvasItem"
+          }
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/backgroundAssetPath"
+      }
+    }
+  },
+  "$defs": {
+    "backgroundAssetPath": {
+      "type": "string",
+      "pattern": "^assets\\/layouts\\/infinitecanvas\\/background\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+      "not": {
+        "anyOf": [
+          { "pattern": "(^|/)\\.($|/)" },
+          { "pattern": "(^|/)\\.\\.($|/)" }
+        ]
+      }
+    },
+    "background": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image"]
+        },
+        "assetPath": {
+          "$ref": "#/$defs/backgroundAssetPath"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "canvasItem": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": -100000, "maximum": 100000 },
+        "y": { "type": "number", "minimum": -100000, "maximum": 100000 },
+        "width": { "type": "number", "minimum": 96, "maximum": 520 },
+        "height": { "type": "number", "minimum": 72, "maximum": 420 },
+        "mode": {
+          "type": "string",
+          "enum": ["point", "cover"]
+        },
+        "labelOverride": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

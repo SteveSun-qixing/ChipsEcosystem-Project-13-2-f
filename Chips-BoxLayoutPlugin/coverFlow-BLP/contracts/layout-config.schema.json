@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cover Flow BLP layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": [
+        "sortMode",
+        "coverSize",
+        "sideAngleDeg",
+        "centerScale",
+        "spacing",
+        "showReflection",
+        "wheelSensitivity",
+        "background",
+        "topRegion"
+      ],
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "coverSize": {
+          "type": "string",
+          "enum": ["compact", "regular", "large"]
+        },
+        "sideAngleDeg": {
+          "type": "number",
+          "minimum": 15,
+          "maximum": 75
+        },
+        "centerScale": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1.5
+        },
+        "spacing": {
+          "type": "string",
+          "enum": ["tight", "regular", "wide"]
+        },
+        "showReflection": {
+          "type": "boolean"
+        },
+        "wheelSensitivity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/boxAssetPath"
+      }
+    }
+  },
+  "$defs": {
+    "boxAssetPath": {
+      "type": "string",
+      "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+      "not": {
+        "anyOf": [
+          { "pattern": "(^|/)\\.($|/)" },
+          { "pattern": "(^|/)\\.\\.($|/)" }
+        ]
+      }
+    },
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "$ref": "#/$defs/boxAssetPath"
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,22 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { hostIntegration, type WebPluginSessionView, type WebResourceOpenRequest } from '../services/host-integration.js';
-
-const DEFAULT_THEME_SNAPSHOT = {
-  themeId: 'chips-official.default-theme',
-  version: '1.0.0',
-};
+import { hostIntegration, type WebPluginSessionView, type WebResourceOpenRequest, type WebThemeRuntimeView } from '../services/host-integration.js';
 
 function injectPluginRuntime(html: string, sessionId: string): string {
   const baseTag = `<base href="/api/v1/host/plugin-sessions/${encodeURIComponent(sessionId)}/">`;
+  const themeTag = `<link rel="stylesheet" href="/api/v1/host/plugin-sessions/${encodeURIComponent(sessionId)}/theme.css">`;
   const scriptTag = `<script src="/api/v1/host/plugin-sessions/${encodeURIComponent(sessionId)}/bootstrap.js"></script>`;
 
   if (/<head[^>]*>/i.test(html)) {
-    return html.replace(/<head([^>]*)>/i, `<head$1>\n    ${baseTag}\n    ${scriptTag}`);
+    return html.replace(/<head([^>]*)>/i, `<head$1>\n    ${baseTag}\n    ${themeTag}\n    ${scriptTag}`);
   }
 
-  return `${baseTag}\n${scriptTag}\n${html}`;
+  return `${baseTag}\n${themeTag}\n${scriptTag}\n${html}`;
 }
 
 function resolveContentType(filePath: string): string {
@@ -45,25 +41,161 @@ function resolveContentType(filePath: string): string {
       return 'image/avif';
     case '.ico':
       return 'image/x-icon';
+    case '.woff':
+      return 'font/woff';
     case '.woff2':
       return 'font/woff2';
+    case '.ttf':
+      return 'font/ttf';
+    case '.otf':
+      return 'font/otf';
     default:
       return 'application/octet-stream';
   }
 }
 
-function createBootstrapScript(session: WebPluginSessionView): string {
+const CPX_LENGTH_PATTERN = /(-?(?:\d+\.?\d*|\.\d+))cpx\b/g;
+
+function formatCssNumber(value: number): string {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.000000005) {
+    return '0';
+  }
+
+  return value.toFixed(8).replace(/\.?0+$/, '');
+}
+
+function convertCpxToViewportLength(value: string, baseWidth = 1024): string {
+  return value.replace(CPX_LENGTH_PATTERN, (match, numeric: string) => {
+    const cpxValue = Number(numeric);
+    if (!Number.isFinite(cpxValue)) {
+      return match;
+    }
+    return `${formatCssNumber(cpxValue * (100 / baseWidth))}vw`;
+  });
+}
+
+function normalizeThemeCssForBrowser(cssText: string): string {
+  let result = '';
+  let segmentStart = 0;
+  let index = 0;
+
+  const readQuotedRange = (startIndex: number): number => {
+    const quote = cssText[startIndex];
+    let cursor = startIndex + 1;
+    while (cursor < cssText.length) {
+      const char = cssText[cursor];
+      if (char === '\\') {
+        cursor += 2;
+        continue;
+      }
+      cursor += 1;
+      if (char === quote) {
+        break;
+      }
+    }
+    return cursor;
+  };
+
+  const readCommentRange = (startIndex: number): number => {
+    const endIndex = cssText.indexOf('*/', startIndex + 2);
+    return endIndex >= 0 ? endIndex + 2 : cssText.length;
+  };
+
+  const readUrlRange = (startIndex: number): number => {
+    let cursor = startIndex + 4;
+    while (cursor < cssText.length) {
+      const char = cssText[cursor];
+      if (char === '"' || char === "'") {
+        cursor = readQuotedRange(cursor);
+        continue;
+      }
+      if (char === '\\') {
+        cursor += 2;
+        continue;
+      }
+      cursor += 1;
+      if (char === ')') {
+        break;
+      }
+    }
+    return cursor;
+  };
+
+  while (index < cssText.length) {
+    const char = cssText[index];
+    let protectedEnd: number | null = null;
+
+    if (char === '"' || char === "'") {
+      protectedEnd = readQuotedRange(index);
+    } else if (char === '/' && cssText[index + 1] === '*') {
+      protectedEnd = readCommentRange(index);
+    } else if (cssText.slice(index, index + 4).toLowerCase() === 'url(') {
+      protectedEnd = readUrlRange(index);
+    }
+
+    if (protectedEnd !== null) {
+      result += convertCpxToViewportLength(cssText.slice(segmentStart, index));
+      result += cssText.slice(index, protectedEnd);
+      index = protectedEnd;
+      segmentStart = index;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  result += convertCpxToViewportLength(cssText.slice(segmentStart));
+  return result;
+}
+
+function normalizeThemeTokenValueForBrowser(value: unknown): unknown {
+  return typeof value === 'string' ? convertCpxToViewportLength(value) : value;
+}
+
+function normalizeThemeRuntimeForBrowser(themeRuntime: WebThemeRuntimeView): WebThemeRuntimeView {
+  return {
+    ...themeRuntime,
+    css: normalizeThemeCssForBrowser(themeRuntime.css),
+    tokens: Object.fromEntries(
+      Object.entries(themeRuntime.tokens).map(([key, value]) => [key, normalizeThemeTokenValueForBrowser(value)]),
+    ),
+  };
+}
+
+function createThemeStylesheet(inputThemeRuntime: WebThemeRuntimeView): string {
+  const themeRuntime = normalizeThemeRuntimeForBrowser(inputThemeRuntime);
+  const variables = Object.entries(themeRuntime.tokens)
+    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+    .map(([key, value]) => `  --${key.replaceAll('.', '-')}: ${String(value)};`);
+  const rootBlock = [
+    ':root {',
+    `  color-scheme: light;`,
+    ...variables,
+    '}',
+  ].join('\n');
+
+  return [rootBlock, themeRuntime.css].filter((block) => block.trim().length > 0).join('\n\n');
+}
+
+function createBootstrapScript(session: WebPluginSessionView, inputThemeRuntime: WebThemeRuntimeView): string {
   const launchContext = {
     pluginId: session.pluginId,
     sessionId: session.sessionId,
     launchParams: session.launchParams,
   };
+  const themeRuntime = normalizeThemeRuntimeForBrowser(inputThemeRuntime);
 
   return `
 (function () {
   const sessionId = ${JSON.stringify(session.sessionId)};
   const launchContext = ${JSON.stringify(launchContext)};
-  const themeSnapshot = ${JSON.stringify(DEFAULT_THEME_SNAPSHOT)};
+  const themeRuntime = ${JSON.stringify(themeRuntime)};
+  const themeSnapshot = {
+    themeId: themeRuntime.themeId,
+    displayName: themeRuntime.displayName,
+    version: themeRuntime.version,
+    ...(themeRuntime.parentTheme ? { parentTheme: themeRuntime.parentTheme } : {}),
+  };
   const locale = "zh-CN";
   const pending = new Map();
   const listeners = new Map();
@@ -113,6 +245,10 @@ function createBootstrapScript(session: WebPluginSessionView): string {
     });
   }
 
+  function syncThemeToDocument() {
+    document.documentElement.setAttribute("data-chips-theme-id", themeRuntime.themeId);
+    document.documentElement.setAttribute("data-chips-theme-version", themeRuntime.version);
+  }
   function postToParent(message) {
     if (!window.parent || window.parent === window) {
       throw new Error("chips web shell parent window is missing");
@@ -289,10 +425,22 @@ function createBootstrapScript(session: WebPluginSessionView): string {
     }
 
     if (action === "theme.getCurrent") {
+      return themeSnapshot;
+    }
+
+    if (action === "theme.getAllCss") {
       return {
-        themeId: themeSnapshot.themeId,
-        displayName: "Default Theme",
-        version: themeSnapshot.version,
+        css: themeRuntime.css || "",
+        themeId: themeRuntime.themeId,
+      };
+    }
+
+    if (action === "theme.resolve") {
+      return {
+        resolved: Array.isArray(themeRuntime.resolved) ? themeRuntime.resolved : [],
+        tokens: themeRuntime.tokens || {},
+        diagnostics: Array.isArray(themeRuntime.diagnostics) ? themeRuntime.diagnostics : [],
+        summary: themeRuntime.summary,
       };
     }
 
@@ -417,8 +565,7 @@ function createBootstrapScript(session: WebPluginSessionView): string {
   });
 
   document.documentElement.lang = locale;
-  document.documentElement.setAttribute("data-chips-theme-id", themeSnapshot.themeId);
-  document.documentElement.setAttribute("data-chips-theme-version", themeSnapshot.version);
+  syncThemeToDocument();
 
   window.chips = {
     invoke,
@@ -515,9 +662,37 @@ const hostRuntimeRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { sessionId } = request.params as { sessionId: string };
       const session = hostIntegration.getWebPluginSession(sessionId);
+      const themeRuntime = await hostIntegration.getWebThemeRuntime();
       reply.type('application/javascript; charset=utf-8');
       reply.header('Cache-Control', 'no-store');
-      return createBootstrapScript(session);
+      return createBootstrapScript(session, themeRuntime);
+    },
+  );
+
+  fastify.get(
+    '/api/v1/host/plugin-sessions/:sessionId/theme.css',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const { sessionId } = request.params as { sessionId: string };
+      hostIntegration.getWebPluginSession(sessionId);
+      const themeRuntime = await hostIntegration.getWebThemeRuntime();
+      reply.type('text/css; charset=utf-8');
+      reply.header('Cache-Control', 'no-store');
+      return createThemeStylesheet(themeRuntime);
+    },
+  );
+
+  fastify.get(
+    '/api/v1/host/theme-assets/:themeId/*',
+    { preHandler: [fastify.optionalAuthenticate] },
+    async (request, reply) => {
+      const params = request.params as { themeId: string; '*': string };
+      const assetPath = params['*'] ?? '';
+      const resolvedPath = hostIntegration.resolveWebThemeAssetPath(params.themeId, assetPath);
+      const file = await fs.readFile(resolvedPath);
+      reply.type(resolveContentType(resolvedPath));
+      reply.header('Cache-Control', 'public, max-age=300');
+      return reply.send(file);
     },
   );
 

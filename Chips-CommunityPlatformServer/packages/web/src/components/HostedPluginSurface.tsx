@@ -105,6 +105,7 @@ function normalizeResourceOpenRequest(payload: unknown): HostResourceOpenRequest
       ...(typeof payload.resource.fileName === 'string' && payload.resource.fileName.trim()
         ? { fileName: payload.resource.fileName.trim() }
         : undefined),
+      ...(isRecord(payload.resource.payload) ? { payload: payload.resource.payload } : undefined),
     },
   };
 }
@@ -167,6 +168,18 @@ function createPendingTab(kind: WebSurfaceNavigationKind): PendingTabHandle {
   return pending;
 }
 
+function focusOpenedTab(opened: PendingTabHandle): void {
+  if (!opened || opened.closed) {
+    return;
+  }
+
+  try {
+    opened.focus();
+  } catch {
+    // 部分浏览器环境可能拒绝脚本聚焦新标签页；导航回退逻辑仍会继续兜底。
+  }
+}
+
 function navigatePendingTab(pending: PendingTabHandle, url: string): boolean {
   if (!pending || pending.closed) {
     return false;
@@ -174,6 +187,7 @@ function navigatePendingTab(pending: PendingTabHandle, url: string): boolean {
 
   try {
     pending.location.replace(url);
+    focusOpenedTab(pending);
     return true;
   } catch {
     return false;
@@ -198,15 +212,22 @@ function openHostedRoute(
   options?: {
     pendingTab?: PendingTabHandle;
     fallbackToCurrentPage?: boolean;
+    preferCurrentPage?: boolean;
   },
 ): void {
+  if (options?.preferCurrentPage) {
+    window.location.assign(url);
+    return;
+  }
+
   if (navigatePendingTab(options?.pendingTab ?? null, url)) {
     return;
   }
 
   if (supportsNewTab(kind)) {
-    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    const popup = window.open(url, '_blank');
     if (popup) {
+      focusOpenedTab(popup);
       return;
     }
   }
@@ -222,14 +243,21 @@ function openExternalUrl(
   options?: {
     pendingTab?: PendingTabHandle;
     fallbackToCurrentPage?: boolean;
+    preferCurrentPage?: boolean;
   },
 ): void {
+  if (options?.preferCurrentPage) {
+    window.location.assign(url);
+    return;
+  }
+
   if (navigatePendingTab(options?.pendingTab ?? null, url)) {
     return;
   }
 
   const popup = window.open(url, '_blank', 'noopener,noreferrer');
   if (popup) {
+    focusOpenedTab(popup);
     return;
   }
 
@@ -479,13 +507,13 @@ export function HostedPluginSurface({
                   fileName: plan.resolved.fileName,
                   title: normalizedRequest.resource.title,
                   matchedCapability: plan.matchedCapability,
+                  ...(normalizedRequest.resource.payload ? { payload: normalizedRequest.resource.payload } : undefined),
                 },
               },
             });
             const route = buildHostedPluginRoute(nextSession.sessionId);
             openHostedRoute(route, 'tab', {
               pendingTab,
-              fallbackToCurrentPage: false,
             });
             respond({
               requestId: request.requestId,
@@ -504,7 +532,6 @@ export function HostedPluginSurface({
 
           openExternalUrl(plan.resolved.resourceId, 'tab', {
             pendingTab,
-            fallbackToCurrentPage: false,
           });
           respond({
             requestId: request.requestId,

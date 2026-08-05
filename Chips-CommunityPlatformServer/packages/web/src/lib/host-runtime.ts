@@ -44,6 +44,7 @@ export interface HostResourceOpenRequest {
     mimeType?: string;
     title?: string;
     fileName?: string;
+    payload?: Record<string, unknown>;
   };
 }
 

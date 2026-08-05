@@ -56,7 +56,7 @@ const EnvSchema = z.object({
   CARD_RENDER_JOB_MAX_ATTEMPTS: z.coerce.number().int().positive().default(2),
   CARD_RENDER_QUEUE_POLL_TIMEOUT_SEC: z.coerce.number().int().min(1).default(5),
   CARD_RENDER_CACHE_TTL_DAYS: z.coerce.number().int().positive().default(30),
-  CARD_RENDERER_VERSION: z.string().default('community-card-renderer-1'),
+  CARD_RENDERER_VERSION: z.string().default('community-card-renderer-4'),
   UPLOAD_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(60),
 
   // Admin bootstrap

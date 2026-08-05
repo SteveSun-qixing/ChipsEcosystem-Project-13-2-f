@@ -37,8 +37,12 @@ function addCacheTtl(from = new Date()): Date {
   return new Date(from.getTime() + CACHE_TTL_MS);
 }
 
+function resolveSourceVersion(card: Pick<Card, 'sourceCardSha256' | 'sourceCardKey'>): string {
+  return card.sourceCardSha256 ?? (card.sourceCardKey ? `network-card:${card.sourceCardKey}` : 'missing-source');
+}
+
 function createCacheVersion(
-  card: Pick<Card, 'id' | 'sourceCardSha256'>,
+  card: Pick<Card, 'id' | 'sourceCardSha256' | 'sourceCardKey'>,
   renderProfile: string,
   locale = DEFAULT_LOCALE,
 ): string {
@@ -47,7 +51,7 @@ function createCacheVersion(
     renderProfile,
     env.HOST_ACTIVE_THEME_ID,
     locale,
-    card.sourceCardSha256 ?? 'missing-source',
+    resolveSourceVersion(card),
   ].join('__').replace(/[^a-zA-Z0-9._-]/g, '-');
 }
 
@@ -180,12 +184,13 @@ export const CardRenderCacheService = {
       where: eq(cards.id, params.cardId),
     });
 
-    if (!card || !card.sourceCardSha256 || !card.sourceCardBucket || !card.sourceCardKey) {
+    if (!card || !card.sourceCardBucket || !card.sourceCardKey) {
       return null;
     }
 
     const locale = DEFAULT_LOCALE;
     const renderProfile = params.renderProfile ?? VIEW_RENDER_PROFILE;
+    const sourceVersion = resolveSourceVersion(card);
     const existingReady = await this.findReadyCache(card.id, { renderProfile });
     if (existingReady) {
       return null;
@@ -194,7 +199,7 @@ export const CardRenderCacheService = {
     const existingJob = await db.query.cardRenderJobs.findFirst({
       where: and(
         eq(cardRenderJobs.cardId, card.id),
-        eq(cardRenderJobs.sourceCardSha256, card.sourceCardSha256),
+        eq(cardRenderJobs.sourceCardSha256, sourceVersion),
         eq(cardRenderJobs.rendererVersion, env.CARD_RENDERER_VERSION),
         eq(cardRenderJobs.renderProfile, renderProfile),
         eq(cardRenderJobs.locale, locale),
@@ -213,7 +218,7 @@ export const CardRenderCacheService = {
       .insert(cardRenderJobs)
       .values({
         cardId: card.id,
-        sourceCardSha256: card.sourceCardSha256,
+        sourceCardSha256: sourceVersion,
         rendererVersion: env.CARD_RENDERER_VERSION,
         renderProfile,
         locale,
@@ -233,17 +238,19 @@ export const CardRenderCacheService = {
       columns: {
         id: true,
         sourceCardSha256: true,
+        sourceCardKey: true,
       },
     });
-    if (!card?.sourceCardSha256) {
+    if (!card) {
       return null;
     }
 
+    const sourceVersion = resolveSourceVersion(card);
     const now = new Date();
     const result = await db.query.cardRenderCaches.findFirst({
       where: and(
         eq(cardRenderCaches.cardId, cardId),
-        eq(cardRenderCaches.sourceCardSha256, card.sourceCardSha256),
+        eq(cardRenderCaches.sourceCardSha256, sourceVersion),
         eq(cardRenderCaches.rendererVersion, env.CARD_RENDERER_VERSION),
         eq(cardRenderCaches.renderProfile, options?.renderProfile ?? VIEW_RENDER_PROFILE),
         eq(cardRenderCaches.themeId, env.HOST_ACTIVE_THEME_ID),
@@ -410,10 +417,11 @@ export const CardRenderCacheService = {
 
   async renderViewJob(job: CardRenderJob): Promise<CardRenderCache> {
     const card = await db.query.cards.findFirst({ where: eq(cards.id, job.cardId) });
-    if (!card || !card.sourceCardBucket || !card.sourceCardKey || !card.sourceCardSha256) {
+    if (!card || !card.sourceCardBucket || !card.sourceCardKey) {
       throw new Error(`Card source file is missing for render job ${job.id}`);
     }
 
+    const sourceVersion = resolveSourceVersion(card);
     const cacheBucket = createCacheBucket(card, job.renderProfile);
     const cacheVersion = createCacheVersion(card, job.renderProfile, job.locale);
     const cacheKeyPrefix = `${card.id}/${cacheVersion}`;
@@ -430,7 +438,7 @@ export const CardRenderCacheService = {
       .insert(cardRenderCaches)
       .values({
         cardId: card.id,
-        sourceCardSha256: card.sourceCardSha256,
+        sourceCardSha256: sourceVersion,
         rendererVersion: job.rendererVersion,
         renderProfile: job.renderProfile,
         locale: job.locale,
@@ -526,10 +534,11 @@ export const CardRenderCacheService = {
 
   async renderCoverJob(job: CardRenderJob): Promise<CardRenderCache> {
     const card = await db.query.cards.findFirst({ where: eq(cards.id, job.cardId) });
-    if (!card || !card.sourceCardBucket || !card.sourceCardKey || !card.sourceCardSha256) {
+    if (!card || !card.sourceCardBucket || !card.sourceCardKey) {
       throw new Error(`Card source file is missing for cover render job ${job.id}`);
     }
 
+    const sourceVersion = resolveSourceVersion(card);
     const cacheBucket = createCacheBucket(card, job.renderProfile);
     const cacheVersion = createCacheVersion(card, job.renderProfile, job.locale);
     const cacheKeyPrefix = `${card.id}/${cacheVersion}`;
@@ -546,7 +555,7 @@ export const CardRenderCacheService = {
       .insert(cardRenderCaches)
       .values({
         cardId: card.id,
-        sourceCardSha256: card.sourceCardSha256,
+        sourceCardSha256: sourceVersion,
         rendererVersion: job.rendererVersion,
         renderProfile: job.renderProfile,
         locale: job.locale,
@@ -712,6 +721,7 @@ export const CardRenderCacheService = {
     renderProfile?: string;
     cacheVersion: string;
     assetPath: string;
+    range?: string;
   }) {
     const keyPrefix = `${params.cardId}/${params.cacheVersion}`;
     const assetPath = normalizeCacheAssetPath(params.assetPath);
@@ -720,6 +730,7 @@ export const CardRenderCacheService = {
         ? Bucket.CARD_COVER_CACHE_PRIVATE
         : Bucket.CARD_RENDER_CACHE_PRIVATE,
       key: `${keyPrefix}/${assetPath}`,
+      range: params.range,
     });
   },
 };

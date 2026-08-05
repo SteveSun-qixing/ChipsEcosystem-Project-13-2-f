@@ -1,0 +1,57 @@
+.settings-page {
+  display: grid;
+  gap: 24px;
+}
+
+.settings-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+}
+
+.settings-page__header h1 {
+  margin-top: 8px;
+  font-size: clamp(32px, 5vw, 48px);
+}
+
+.settings-card {
+  display: grid;
+  gap: 18px;
+  padding: clamp(24px, 4vw, 32px);
+}
+
+.settings-card__hint {
+  font-size: 13px;
+}
+
+.settings-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-card__row > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .settings-page__header {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .settings-card__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,0 +1,292 @@
+{
+  "app": {
+    "identity": {
+      "displayName": "薯片社区"
+    },
+    "shell": {
+      "subtitle": "社区客户端",
+      "languageSwitch": "切换到 {locale}",
+      "navigationLabel": "应用场景",
+      "contentLabel": "主要内容",
+      "detailLabel": "运行环境",
+      "ready": "运行环境已就绪",
+      "loading": "正在读取运行环境"
+    },
+    "scenes": {
+      "main": {
+        "title": "社区",
+        "description": "浏览薯片社区内容"
+      },
+      "settings": {
+        "title": "设置",
+        "description": "社区服务器连接与应用偏好"
+      }
+    },
+    "commands": {
+      "sectionTitle": "命令",
+      "openWorkspace": {
+        "title": "打开工作区",
+        "description": "进入社区工作区场景",
+        "ariaLabel": "打开工作区"
+      },
+      "openSettings": {
+        "title": "打开设置",
+        "description": "进入社区服务器设置场景",
+        "ariaLabel": "打开设置"
+      },
+      "refreshTheme": {
+        "title": "刷新主题状态",
+        "description": "重新读取 Host 当前主题状态",
+        "ariaLabel": "刷新主题状态",
+        "disabledReason": "当前运行环境不允许读取主题状态"
+      },
+      "menu": {
+        "app": "应用",
+        "ariaLabel": "应用命令菜单"
+      },
+      "toolbar": {
+        "ariaLabel": "主工具栏"
+      },
+      "palette": {
+        "searchPlaceholder": "搜索命令",
+        "ariaLabel": "命令面板"
+      },
+      "status": {
+        "idle": "命令系统等待注册",
+        "registering": "正在注册命令",
+        "ready": "命令已注册",
+        "error": "命令运行时需要检查",
+        "lastInvoked": "最近触发：{commandId}（来源：{source}）",
+        "errorWithCode": "命令错误：{code}"
+      }
+    },
+    "cli": {
+      "open": {
+        "title": "打开薯片社区",
+        "description": "从命令行打开社区客户端并传入启动参数",
+        "subjectPlaceholder": "输入要传递给应用的文本参数"
+      }
+    },
+    "errors": {
+      "boundaryTitle": "应用运行异常",
+      "boundaryDescription": "运行时边界捕获到异常。",
+      "retry": "重试"
+    }
+  },
+  "brand": {
+    "name": "薯片社区",
+    "tagline": "欢迎页、社区简介、个人主页、上传工作区与后台管理"
+  },
+  "footer": {
+    "brand": "薯片社区",
+    "ariaLabel": "页脚相关链接",
+    "about": "社区简介",
+    "profile": "我的主页",
+    "workspace": "工作区",
+    "login": "登录",
+    "register": "注册"
+  },
+  "common": {
+    "loading": "加载中…",
+    "error": "出现了一点问题",
+    "networkError": "无法连接到社区服务器，请打开右上角设置，检查服务器地址是否正确。",
+    "retry": "重试",
+    "cancel": "取消",
+    "save": "保存",
+    "back": "返回",
+    "logout": "退出登录",
+    "open": "打开",
+    "viewProfile": "查看主页",
+    "card": "卡片",
+    "box": "箱子",
+    "owner": "作者",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "fileSize": "文件大小",
+    "layout": "布局",
+    "public": "公开",
+    "private": "私密",
+    "noDescription": "暂无简介",
+    "processing": "处理中",
+    "ready": "已就绪",
+    "pending": "等待中",
+    "success": "成功"
+  },
+  "nav": {
+    "home": "欢迎",
+    "about": "社区简介",
+    "profile": "我的主页",
+    "workspace": "工作区",
+    "login": "登录",
+    "register": "注册"
+  },
+  "home": {
+    "heroTitle": "让想法像薯片一样轻轻展开",
+    "heroSubtitle": "卡片承载灵感，箱子收纳关系，社区只做一件事：给创作一个清爽、安静、好看的入口。",
+    "belief": "我们相信工具应该柔软、模块应该自由、内容应该被温柔地看见。",
+    "actionLabel": "首页主要操作",
+    "visualLabel": "薯片社区卡片视觉",
+    "ideasLabel": "薯片生态理念",
+    "heroPrimary": "创建主页",
+    "heroSecondary": "了解一下",
+    "heroLogin": "登录账号",
+    "openProfile": "打开个人主页",
+    "openWorkspace": "前往工作区",
+    "floatCardProfile": "个人主页",
+    "floatCardBox": "箱子空间",
+    "floatCardCard": "灵感卡片",
+    "ideaSlowTitle": "慢一点",
+    "ideaSlowBody": "不追信息流，只给作品留出呼吸感。",
+    "ideaModularTitle": "拆开来",
+    "ideaModularBody": "卡片、箱子、插件各自独立，又能自然组合。",
+    "ideaCreatorTitle": "好看地连接",
+    "ideaCreatorBody": "分享不是喧闹的广场，而是漂亮的入口。"
+  },
+  "about": {
+    "title": "社区简介",
+    "subtitle": "欢迎页负责讲清楚社区，个人页负责承载创作，后台负责平台治理。",
+    "sectionProduct": "产品定位",
+    "sectionProductBody": "薯片社区不是传统信息流，而是以个人为单位的作品主页集合。每个用户都有自己的社区门面，卡片和箱子统一沉淀在一个清爽、克制、有质感的空间里。",
+    "sectionArchitecture": "系统边界",
+    "sectionArchitectureBody": "社区服务器与 Host 同根同源，但互不依赖。服务器侧拥有自己的 Web 主题、图标和多语言运行时，更适合浏览器环境与高并发服务。",
+    "sectionWorkflow": "使用路径",
+    "sectionWorkflowBody": "访客从欢迎页了解社区，再进入个人主页浏览作品。作者登录后从主页右上角进入工作区上传内容。管理员则通过独立后台完成治理工作。",
+    "sectionPlugins": "插件与生态",
+    "sectionPluginsBody": "插件能力尽量复用同一套生态哲学，但社区站点不会要求普通用户安装 Host。公共能力在服务器架构中复制并二次优化，以适配 Web。",
+    "backHome": "返回欢迎页"
+  },
+  "admin": {
+    "redirectTitle": "前往管理员后台",
+    "redirectBody": "管理员后台是独立的网页入口。客户端不会内嵌后台页面，点击下方按钮会在系统浏览器中打开。",
+    "redirectAction": "在浏览器中打开管理员后台"
+  },
+  "auth": {
+    "loginTitle": "欢迎回来",
+    "loginSubtitle": "登录后会按账号身份自动进入个人主页或管理员后台。",
+    "registerTitle": "创建社区账号",
+    "registerSubtitle": "注册后即可拥有个人社区主页与上传工作区。",
+    "username": "用户名",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "loginAction": "登录",
+    "registerAction": "注册",
+    "noAccount": "还没有账号？",
+    "hasAccount": "已经有账号了？",
+    "toLogin": "去登录",
+    "toRegister": "去注册",
+    "validation": {
+      "required": "请输入用户名和密码",
+      "usernameLength": "用户名长度必须在 3 到 32 个字符之间",
+      "usernamePattern": "用户名只能包含字母、数字、下划线和连字符",
+      "passwordLength": "密码长度至少为 8 位",
+      "passwordMismatch": "两次输入的密码不一致"
+    }
+  },
+  "profile": {
+    "collectionTitle": "最近发布",
+    "empty": "这里还没有对外展示的内容。",
+    "notFound": "没有找到这个用户。",
+    "openWorkspace": "进入工作区",
+    "manageAction": "管理作品",
+    "manageDone": "完成管理",
+    "manageTitle": "作品整理",
+    "manageHint": "卡片和箱子都支持勾选后批量删除。",
+    "manageSelectedCount": "已选择 {count} 个作品",
+    "manageDelete": "删除所选作品",
+    "manageDeleting": "正在删除…",
+    "manageDeleteConfirm": "确定删除已选择的 {count} 个作品吗？此操作无法撤销。",
+    "manageDeleteFailed": "有 {count} 个作品删除失败，请稍后重试。",
+    "manageTileSelect": "选择{type} {title}",
+    "settingsOpen": "编辑资料",
+    "settingsEyebrow": "资料设置",
+    "settingsTitle": "编辑个人资料",
+    "settingsSubtitle": "更新名字、头像和简介，页面会立即同步到你的个人主页。",
+    "settingsAvatar": "个人头像",
+    "settingsAvatarAction": "上传新头像",
+    "settingsAvatarHint": "支持 JPG、PNG、WebP、GIF，大小不超过 5MB。",
+    "settingsAvatarSelected": "已选择：{name}",
+    "settingsName": "个人名字",
+    "settingsBio": "个人简介",
+    "settingsSaving": "正在保存…",
+    "settingsNameRequired": "个人名字不能为空。",
+    "settingsImageTypeInvalid": "头像仅支持 JPG、PNG、WebP 或 GIF 格式。",
+    "settingsImageTooLarge": "头像文件不能超过 5MB。",
+    "settingsSubmitError": "个人资料更新失败，请稍后重试。"
+  },
+  "workspace": {
+    "title": "客户端发布",
+    "subtitle": "卡片上传、完整下载和本地查看都由薯片客户端中的统一卡片传输模块完成。",
+    "backToProfile": "返回我的主页",
+    "clientOnlyTitle": "在薯片客户端中发布卡片",
+    "clientOnlyBody": "客户端的统一卡片传输模块会负责资源直传、网络资源卡片生成、网页查看缓存和完整卡片下载恢复。",
+    "clientOnlyStepsLabel": "客户端发布步骤",
+    "clientOnlyStepCreate": "制作卡片",
+    "clientOnlyStepCreateBody": "在电脑或手机客户端中编辑并保存完整 .card。",
+    "clientOnlyStepPublish": "客户端发布",
+    "clientOnlyStepPublishBody": "客户端模块把资源上传对象存储，并生成网络资源卡片。",
+    "clientOnlyStepView": "网页查看",
+    "clientOnlyStepViewBody": "发布完成后，浏览器只打开社区页面和查看缓存。",
+    "uploadTitle": "上传卡片",
+    "uploadSubtitle": "选择本机上的一个或多个完整 .card 文件，客户端会处理资源外置与网络资源卡片生成。",
+    "uploadAction": "选择 .card 文件并上传",
+    "uploading": "正在上传…",
+    "uploadProgress": "上传进度：{phase}",
+    "uploadBatchProgress": "正在上传第 {current} / {total} 个：{phase}",
+    "uploadComplete": "上传完成，{count} 个卡片已发布到社区。",
+    "uploadCompleteOpen": "打开卡片页面",
+    "uploadBatchFailed": "上传完成：成功 {success} 个，失败 {failed} 个。",
+    "uploadResultListLabel": "上传结果",
+    "uploadResultPublished": "已发布",
+    "uploadFailed": "上传失败：{message}",
+    "uploadRequiresLogin": "上传卡片前请先登录社区账号。",
+    "uploadProviderMissing": "未找到社区卡片传输模块，请先在 Host 中安装并启用 Chips-CommunityUploader-Plugin。",
+    "uploadSelectCard": "请选择一个或多个 .card 文件。"
+  },
+  "card": {
+    "errorState": "卡片处理失败，请稍后回到工作区查看状态。",
+    "notReady": "卡片仍在处理链路中，请稍后刷新。",
+    "opening": "正在为你打开卡片…",
+    "backToPrevious": "返回上一页",
+    "viewFailedTitle": "打开卡片失败",
+    "viewFailed": "打开本地查看器失败：{message}",
+    "downloadAction": "下载完整卡片",
+    "downloading": "正在下载完整卡片…",
+    "downloadComplete": "完整卡片已保存：{path}",
+    "downloadFailed": "下载失败：{message}",
+    "downloadUnavailable": "当前卡片暂时无法下载完整文件。"
+  },
+  "box": {
+    "summaryTitle": "箱子摘要",
+    "referenceTitle": "引用卡片",
+    "empty": "这个箱子里还没有可展示的引用卡片。",
+    "notReady": "箱子查看文档正在准备中，请稍后刷新。",
+    "communityCard": "打开社区卡片",
+    "sourceLink": "打开原始链接",
+    "identifierLabel": "箱子文件 ID"
+  },
+  "detail": {
+    "ownerSpace": "访问作者主页",
+    "notFound": "没有找到目标内容。"
+  },
+  "client": {
+    "settings": {
+      "title": "社区服务器",
+      "subtitle": "设置薯片社区服务器的访问地址。登录状态与卡片传输都会使用该地址。",
+      "serverUrl": "服务器地址",
+      "serverUrlPlaceholder": "https://www.chipscard.space",
+      "serverUrlHint": "例如 https://www.chipscard.space 或本地开发地址 http://127.0.0.1:8788",
+      "save": "保存设置",
+      "saved": "服务器设置已保存。",
+      "savedRequireLogin": "服务器地址已更新，当前账号已退出，请使用新地址重新登录。",
+      "saveFailed": "保存服务器设置失败：{message}",
+      "invalidUrl": "请输入有效的 http(s) 地址。",
+      "logout": "退出当前社区账号",
+      "loggedInAs": "当前登录：@{username}"
+    },
+    "transfer": {
+      "moduleMissing": "未找到社区卡片传输模块。请先在 Host 中安装并启用 Chips-CommunityUploader-Plugin。",
+      "notLoggedIn": "请先登录社区账号。"
+    },
+    "openInBrowser": "在浏览器中打开"
+  }
+}

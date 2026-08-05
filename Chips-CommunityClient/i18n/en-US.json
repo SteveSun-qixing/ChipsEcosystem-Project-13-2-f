@@ -1,0 +1,292 @@
+{
+  "app": {
+    "identity": {
+      "displayName": "Chips Community"
+    },
+    "shell": {
+      "subtitle": "Community client",
+      "languageSwitch": "Switch to {locale}",
+      "navigationLabel": "App scenes",
+      "contentLabel": "Main content",
+      "detailLabel": "Runtime environment",
+      "ready": "Runtime environment ready",
+      "loading": "Loading runtime environment"
+    },
+    "scenes": {
+      "main": {
+        "title": "Community",
+        "description": "Browse chips community content"
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Community server connection and app preferences"
+      }
+    },
+    "commands": {
+      "sectionTitle": "Commands",
+      "openWorkspace": {
+        "title": "Open workspace",
+        "description": "Switch to the community workspace scene",
+        "ariaLabel": "Open workspace"
+      },
+      "openSettings": {
+        "title": "Open settings",
+        "description": "Switch to the community server settings scene",
+        "ariaLabel": "Open settings"
+      },
+      "refreshTheme": {
+        "title": "Refresh theme",
+        "description": "Re-read the current Host theme state",
+        "ariaLabel": "Refresh theme",
+        "disabledReason": "The current environment is not allowed to read theme state"
+      },
+      "menu": {
+        "app": "App",
+        "ariaLabel": "App command menu"
+      },
+      "toolbar": {
+        "ariaLabel": "Main toolbar"
+      },
+      "palette": {
+        "searchPlaceholder": "Search commands",
+        "ariaLabel": "Command palette"
+      },
+      "status": {
+        "idle": "Command system waiting to register",
+        "registering": "Registering commands",
+        "ready": "Commands registered",
+        "error": "Command runtime needs attention",
+        "lastInvoked": "Last invoked: {commandId} (source: {source})",
+        "errorWithCode": "Command error: {code}"
+      }
+    },
+    "cli": {
+      "open": {
+        "title": "Open Chips Community",
+        "description": "Open the community client from the command line with launch parameters",
+        "subjectPlaceholder": "Text parameter to pass to the app"
+      }
+    },
+    "errors": {
+      "boundaryTitle": "App runtime error",
+      "boundaryDescription": "The runtime boundary caught an exception.",
+      "retry": "Retry"
+    }
+  },
+  "brand": {
+    "name": "Chips Community",
+    "tagline": "Welcome page, community intro, personal showcase, workspace, and admin"
+  },
+  "footer": {
+    "brand": "Chips Community",
+    "ariaLabel": "Footer links",
+    "about": "About",
+    "profile": "My profile",
+    "workspace": "Workspace",
+    "login": "Log in",
+    "register": "Register"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "networkError": "Cannot reach the community server. Open Settings (top right) and check the server address.",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "logout": "Log out",
+    "open": "Open",
+    "viewProfile": "View profile",
+    "card": "Card",
+    "box": "Box",
+    "owner": "Owner",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "fileSize": "File size",
+    "layout": "Layout",
+    "public": "Public",
+    "private": "Private",
+    "noDescription": "No bio yet",
+    "processing": "Processing",
+    "ready": "Ready",
+    "pending": "Pending",
+    "success": "Success"
+  },
+  "nav": {
+    "home": "Welcome",
+    "about": "About",
+    "profile": "My profile",
+    "workspace": "Workspace",
+    "login": "Log in",
+    "register": "Register"
+  },
+  "home": {
+    "heroTitle": "Let ideas unfold like chips",
+    "heroSubtitle": "Cards hold sparks, boxes hold relationships, and the community does one simple thing: give creation a calm, beautiful doorway.",
+    "belief": "We believe tools should feel gentle, modules should stay free, and content should be seen with care.",
+    "actionLabel": "Home primary actions",
+    "visualLabel": "Chips community card visual",
+    "ideasLabel": "Chips ecosystem ideas",
+    "heroPrimary": "Create profile",
+    "heroSecondary": "Learn more",
+    "heroLogin": "Log in",
+    "openProfile": "Open profile",
+    "openWorkspace": "Open workspace",
+    "floatCardProfile": "Personal page",
+    "floatCardBox": "Box space",
+    "floatCardCard": "Idea card",
+    "ideaSlowTitle": "Go slower",
+    "ideaSlowBody": "No feed race, just room for work to breathe.",
+    "ideaModularTitle": "Keep it modular",
+    "ideaModularBody": "Cards, boxes, and plugins stay independent while composing naturally.",
+    "ideaCreatorTitle": "Connect beautifully",
+    "ideaCreatorBody": "Sharing is not a noisy square. It is a polished doorway."
+  },
+  "about": {
+    "title": "Community intro",
+    "subtitle": "The welcome page explains the community, profile pages hold creation, and the admin console governs the platform.",
+    "sectionProduct": "Product position",
+    "sectionProductBody": "Chips Community is not a traditional feed. It is a network of personal showcase pages. Every user gets a clear front door where cards and boxes live together in a refined, restrained, tactile space.",
+    "sectionArchitecture": "System boundary",
+    "sectionArchitectureBody": "The server and Host are same-origin in philosophy but fully independent at runtime. The server owns its own Web-specific theme, icon, and i18n systems for browser performance and service delivery.",
+    "sectionWorkflow": "Usage flow",
+    "sectionWorkflowBody": "Visitors start on the welcome page, learn what the community is, then step into personal pages to browse work. Authors log in and jump into the workspace. Administrators use a separate console for governance.",
+    "sectionPlugins": "Plugins and ecosystem",
+    "sectionPluginsBody": "Plugin capabilities stay aligned with the wider ecosystem, but ordinary web visitors never need to install Host. Shared ideas are copied into the server architecture and then adapted for the Web.",
+    "backHome": "Back to welcome"
+  },
+  "admin": {
+    "redirectTitle": "Go to the admin console",
+    "redirectBody": "The administrator console is a separate web entry. The client does not embed admin pages. Use the button below to open it in the system browser.",
+    "redirectAction": "Open admin console in browser"
+  },
+  "auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in and the site will route you to either your personal page or the administrator console based on your account.",
+    "registerTitle": "Create your account",
+    "registerSubtitle": "Every account gets a personal page and upload workspace.",
+    "username": "Username",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "loginAction": "Log in",
+    "registerAction": "Register",
+    "noAccount": "Need an account?",
+    "hasAccount": "Already have an account?",
+    "toLogin": "Go to login",
+    "toRegister": "Go to register",
+    "validation": {
+      "required": "Enter both username and password",
+      "usernameLength": "Username must be between 3 and 32 characters",
+      "usernamePattern": "Username can only contain letters, numbers, underscores, and hyphens",
+      "passwordLength": "Password must be at least 8 characters long",
+      "passwordMismatch": "Passwords do not match"
+    }
+  },
+  "profile": {
+    "collectionTitle": "Recent releases",
+    "empty": "There is nothing public on this page yet.",
+    "notFound": "This user could not be found.",
+    "openWorkspace": "Open workspace",
+    "manageAction": "Manage work",
+    "manageDone": "Done",
+    "manageTitle": "Work management",
+    "manageHint": "Cards and boxes can both be selected for batch deletion.",
+    "manageSelectedCount": "{count} items selected",
+    "manageDelete": "Delete selected items",
+    "manageDeleting": "Deleting…",
+    "manageDeleteConfirm": "Delete the selected {count} items? This cannot be undone.",
+    "manageDeleteFailed": "{count} selected items failed to delete. Please try again.",
+    "manageTileSelect": "Select {type} {title}",
+    "settingsOpen": "Edit profile",
+    "settingsEyebrow": "Profile settings",
+    "settingsTitle": "Edit your profile",
+    "settingsSubtitle": "Update your name, avatar, and bio. Changes appear on your page right away.",
+    "settingsAvatar": "Avatar",
+    "settingsAvatarAction": "Upload avatar",
+    "settingsAvatarHint": "Supports JPG, PNG, WebP, and GIF up to 5 MB.",
+    "settingsAvatarSelected": "Selected: {name}",
+    "settingsName": "Name",
+    "settingsBio": "Bio",
+    "settingsSaving": "Saving…",
+    "settingsNameRequired": "Name cannot be empty.",
+    "settingsImageTypeInvalid": "Avatar must be a JPG, PNG, WebP, or GIF image.",
+    "settingsImageTooLarge": "Avatar image must be 5 MB or smaller.",
+    "settingsSubmitError": "Failed to update the profile. Please try again."
+  },
+  "workspace": {
+    "title": "Client publishing",
+    "subtitle": "Card upload, full-card download, and local viewing are all handled by the unified card transfer module inside the chips client.",
+    "backToProfile": "Back to my profile",
+    "clientOnlyTitle": "Publish cards from the chips client",
+    "clientOnlyBody": "The client transfer module owns resource upload, network-resource card generation, web view cache preparation, and full-card download restoration.",
+    "clientOnlyStepsLabel": "Client publishing steps",
+    "clientOnlyStepCreate": "Create the card",
+    "clientOnlyStepCreateBody": "Edit and save the complete .card in the desktop or mobile client.",
+    "clientOnlyStepPublish": "Publish in client",
+    "clientOnlyStepPublishBody": "The client uploads resources to object storage and generates a network-resource card.",
+    "clientOnlyStepView": "View on web",
+    "clientOnlyStepViewBody": "After publishing, the browser opens only the community page and view cache.",
+    "uploadTitle": "Upload cards",
+    "uploadSubtitle": "Pick one or more complete .card files on this device. The client handles resource externalization and network-resource card generation.",
+    "uploadAction": "Choose .card file(s) and upload",
+    "uploading": "Uploading…",
+    "uploadProgress": "Upload progress: {phase}",
+    "uploadBatchProgress": "Uploading {current} / {total}: {phase}",
+    "uploadComplete": "Upload complete. {count} card(s) are now live on the community.",
+    "uploadCompleteOpen": "Open the card page",
+    "uploadBatchFailed": "Upload finished: {success} succeeded, {failed} failed.",
+    "uploadResultListLabel": "Upload results",
+    "uploadResultPublished": "Published",
+    "uploadFailed": "Upload failed: {message}",
+    "uploadRequiresLogin": "Log in to your community account before uploading cards.",
+    "uploadProviderMissing": "Community card transfer module not found. Install and enable Chips-CommunityUploader-Plugin in Host first.",
+    "uploadSelectCard": "Please choose one or more .card files."
+  },
+  "card": {
+    "errorState": "Card processing failed. Please return to the workspace and check again.",
+    "notReady": "This card is still moving through the processing pipeline.",
+    "opening": "Opening the card for you…",
+    "backToPrevious": "Back",
+    "viewFailedTitle": "Failed to open the card",
+    "viewFailed": "Failed to open the local viewer: {message}",
+    "downloadAction": "Download full card",
+    "downloading": "Downloading the full card…",
+    "downloadComplete": "Full card saved: {path}",
+    "downloadFailed": "Download failed: {message}",
+    "downloadUnavailable": "This card cannot be downloaded as a full file right now."
+  },
+  "box": {
+    "summaryTitle": "Box summary",
+    "referenceTitle": "Referenced cards",
+    "empty": "This box does not expose any visible references yet.",
+    "notReady": "The box viewing document is still being prepared.",
+    "communityCard": "Open community card",
+    "sourceLink": "Open source link",
+    "identifierLabel": "Box file ID"
+  },
+  "detail": {
+    "ownerSpace": "Visit author profile",
+    "notFound": "The target content was not found."
+  },
+  "client": {
+    "settings": {
+      "title": "Community server",
+      "subtitle": "Set the address of the chips community server. Login state and card transfer use this address.",
+      "serverUrl": "Server address",
+      "serverUrlPlaceholder": "https://www.chipscard.space",
+      "serverUrlHint": "For example https://www.chipscard.space or a local dev address like http://127.0.0.1:8788",
+      "save": "Save settings",
+      "saved": "Server settings saved.",
+      "savedRequireLogin": "Server address updated. You have been signed out; sign in again with the new address.",
+      "saveFailed": "Failed to save server settings: {message}",
+      "invalidUrl": "Enter a valid http(s) address.",
+      "logout": "Log out of the community account",
+      "loggedInAs": "Signed in as @{username}"
+    },
+    "transfer": {
+      "moduleMissing": "Community card transfer module not found. Install and enable Chips-CommunityUploader-Plugin in Host first.",
+      "notLoggedIn": "Log in to your community account first."
+    },
+    "openInBrowser": "Open in browser"
+  }
+}

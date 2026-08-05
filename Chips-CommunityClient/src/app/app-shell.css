@@ -1,0 +1,5 @@
+.app-shell {
+  min-height: 100vh;
+  color: var(--ccps-sys-text);
+  background: var(--ccps-sys-canvas);
+}

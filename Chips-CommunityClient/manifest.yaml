@@ -1,0 +1,105 @@
+id: com.chips.community-client
+name: 薯片社区
+version: 0.1.0
+type: app
+entry: dist/index.html
+
+description: 薯片社区客户端应用插件，用于浏览社区内容（欢迎页、个人主页、卡片、箱子等），并直接调用社区卡片传输模块完成卡片上传、完整下载与本地查看器打开。
+
+author:
+  name: sevenstars
+  email: chips-community-client@example.invalid
+
+keywords:
+  - chips
+  - community
+  - client
+
+permissions:
+  - theme.read
+  - i18n.read
+  - i18n.write
+  - command.read
+  - command.write
+  - command.invoke
+  - config.read
+  - config.write
+  - credential.manage
+  - module.read
+  - module.invoke
+  - card.read
+  - box.read
+  - plugin.read
+  - resource.read
+  - platform.read
+  - platform.external
+  - network.request
+  - file.read
+
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: false
+
+capabilityFallbacks:
+  open-file:
+    whenUnsupported: reject
+  save-file:
+    whenUnsupported: reject
+
+cli:
+  commands:
+    - commandPath: chips-community open
+      target:
+        type: app
+        pluginId: com.chips.community-client
+        surface:
+          open: true
+          focus: true
+          reuse: preferred
+      titleKey: app.cli.open.title
+      descriptionKey: app.cli.open.description
+      arguments:
+        - name: subject
+          position: 0
+          type: string
+          required: false
+          mapsTo: subject
+          ui:
+            control: pasteBox
+            placeholderKey: app.cli.open.subjectPlaceholder
+      output:
+        mode: json
+
+engines:
+  chips: "^1.0.0"
+
+os:
+  - darwin
+  - win32
+  - linux
+
+ui:
+  layout:
+    owner: page
+    unit: cpx
+    baseWidth: 1024
+  launcher:
+    displayName: 薯片社区
+    icon: assets/icons/app-icon.ico
+  surface:
+    defaultKind: window
+    preferredKinds:
+      desktop: window
+      web: route
+      mobile: fullscreen
+      headless: window
+  window:
+    chrome:
+      frame: true

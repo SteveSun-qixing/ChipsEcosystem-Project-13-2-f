@@ -30,7 +30,7 @@ export function CardViewerShell({
             : "card-viewer-shell__main--immersive",
         ].join(" ")}
       >
-        {children}
+        {content}
       </main>
       {action}
     </div>

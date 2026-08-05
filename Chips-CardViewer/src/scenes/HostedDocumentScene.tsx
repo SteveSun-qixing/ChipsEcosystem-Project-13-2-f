@@ -12,6 +12,7 @@ export function HostedDocumentScene({ target }: HostedDocumentSceneProps): React
   if (runtime.viewerMode === "cover" && runtime.activeCover) {
     return (
       <ViewerCoverSurface
+        client={runtime.client}
         cover={runtime.activeCover}
         title={runtime.activeTitle ?? runtime.activeCover.title ?? runtime.t("card-viewer.viewer.hostedDocumentTitle")}
         closeLabel={runtime.t("card-viewer.actions.viewContent")}

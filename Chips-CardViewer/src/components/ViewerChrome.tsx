@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
-import { useChipsBridge } from "../hooks/useChipsBridge";
+import type { Client } from "chips-sdk";
 import "./ViewerChrome.css";
 
 export interface ViewerChromeAction {
@@ -34,6 +34,7 @@ interface ViewerChromeContextValue {
 const ViewerChromeContext = createContext<ViewerChromeContextValue | null>(null);
 
 interface ViewerChromeProviderProps {
+  client: Pick<Client, "events">;
   state: ViewerChromeState;
   externalChrome: boolean;
   onBack: () => void;
@@ -59,13 +60,13 @@ function normalizeActionPayload(payload: unknown): string | null {
 }
 
 function ViewerChromeProvider({
+  client,
   state,
   externalChrome,
   onBack,
   onAction,
   children,
 }: ViewerChromeProviderProps) {
-  const bridge = useChipsBridge();
   const trigger = useCallback(
     (actionId: string) => {
       if (actionId === "back" && state.back.enabled) {
@@ -78,25 +79,25 @@ function ViewerChromeProvider({
   );
 
   useEffect(() => {
-    if (!externalChrome || typeof bridge.emit !== "function") {
+    if (!externalChrome) {
       return;
     }
 
-    void bridge.emit("plugin.chrome.update", {
+    void client.events.emit("plugin.chrome.update", {
       title: state.title,
       metaLines: state.metaLines,
       back: state.back,
       actions: state.actions,
       safeBlockStart: state.safeBlockStart,
     }).catch(() => undefined);
-  }, [bridge, externalChrome, state]);
+  }, [client, externalChrome, state]);
 
   useEffect(() => {
-    if (!externalChrome || typeof bridge.on !== "function") {
+    if (!externalChrome) {
       return undefined;
     }
 
-    const unsubscribe = bridge.on("plugin.chrome.action", (payload: unknown) => {
+    const unsubscribe = client.events.on("plugin.chrome.action", (payload: unknown) => {
       const actionId = normalizeActionPayload(payload);
       if (actionId) {
         trigger(actionId);
@@ -106,7 +107,7 @@ function ViewerChromeProvider({
     return () => {
       unsubscribe?.();
     };
-  }, [bridge, externalChrome, trigger]);
+  }, [client, externalChrome, trigger]);
 
   const value = useMemo<ViewerChromeContextValue>(
     () => ({

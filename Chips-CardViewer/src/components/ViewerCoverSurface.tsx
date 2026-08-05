@@ -1,15 +1,23 @@
 import React from "react";
 import { EmbeddedDocumentFrame } from "@chips/component-library";
+import type { Client } from "chips-sdk";
 import type { ViewerCoverSource } from "../types/viewer-source";
 import "./ViewerCoverSurface.css";
 
 interface ViewerCoverSurfaceProps {
+  client?: Pick<Client, "events">;
   cover: ViewerCoverSource;
   title: string;
   closeLabel: string;
   unavailableLabel: string;
   onClose: () => void;
 }
+
+const COVER_SURFACE_MIN_HEIGHT = 320;
+const COVER_SURFACE_SAFE_BLOCK_END_FALLBACK = 72;
+const COVER_SURFACE_STABLE_DELAY_MS = 160;
+
+type CoverSurfaceResizeReason = "content-resize" | "viewport-resize";
 
 export function resolveCoverAspectRatioStyle(ratio: string): React.CSSProperties | undefined {
   const match = ratio.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
@@ -32,19 +40,103 @@ export function resolveCoverAspectRatioStyle(ratio: string): React.CSSProperties
   } as React.CSSProperties;
 }
 
+function getViewportHeight(): number {
+  if (typeof window === "undefined" || !Number.isFinite(window.innerHeight)) {
+    return COVER_SURFACE_MIN_HEIGHT;
+  }
+  return Math.max(COVER_SURFACE_MIN_HEIGHT, Math.ceil(window.innerHeight));
+}
+
+function readDocumentCssPixels(name: string, fallback: number): number {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return fallback;
+  }
+
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name);
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.ceil(parsed) : fallback;
+}
+
 export function ViewerCoverSurface({
+  client,
   cover,
   title,
   closeLabel,
   unavailableLabel,
   onClose,
 }: ViewerCoverSurfaceProps): React.ReactElement {
+  const rootRef = React.useRef<HTMLElement | null>(null);
+  const stableTimerRef = React.useRef<number | null>(null);
   const ratio = cover.ratio ?? "4:3";
   const aspectRatioStyle = resolveCoverAspectRatioStyle(ratio);
 
+  const publishResize = React.useCallback(
+    (reason: CoverSurfaceResizeReason, stable: boolean) => {
+      if (!client) {
+        return;
+      }
+
+      const root = rootRef.current;
+      const measuredHeight = root
+        ? Math.max(
+            root.scrollHeight,
+            root.offsetHeight,
+            Math.ceil(root.getBoundingClientRect().height),
+          )
+        : 0;
+      const contentHeight = Math.max(COVER_SURFACE_MIN_HEIGHT, measuredHeight, getViewportHeight());
+      const safeBlockEnd = readDocumentCssPixels(
+        "--chips-document-safe-area-block-end",
+        COVER_SURFACE_SAFE_BLOCK_END_FALLBACK,
+      );
+
+      void client.events.emit("plugin.surface.resize", {
+        height: contentHeight,
+        contentHeight,
+        safeBlockEnd,
+        viewportHeight: getViewportHeight(),
+        reason,
+        stable,
+      }).catch(() => undefined);
+    },
+    [client],
+  );
+
+  React.useLayoutEffect(() => {
+    if (!client) {
+      return undefined;
+    }
+
+    const publishStablePair = (reason: CoverSurfaceResizeReason) => {
+      publishResize(reason, false);
+      if (stableTimerRef.current !== null) {
+        window.clearTimeout(stableTimerRef.current);
+      }
+      stableTimerRef.current = window.setTimeout(() => {
+        stableTimerRef.current = null;
+        publishResize(reason, true);
+      }, COVER_SURFACE_STABLE_DELAY_MS);
+    };
+
+    publishStablePair("content-resize");
+
+    const handleResize = () => {
+      publishStablePair("viewport-resize");
+    };
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (stableTimerRef.current !== null) {
+        window.clearTimeout(stableTimerRef.current);
+        stableTimerRef.current = null;
+      }
+    };
+  }, [client, cover.coverUrl, publishResize, ratio, title]);
+
   if (!cover.coverUrl) {
     return (
-      <section className="viewer-cover-surface viewer-cover-surface--state" aria-live="polite">
+      <section ref={rootRef} className="viewer-cover-surface viewer-cover-surface--state" aria-live="polite">
         <div className="viewer-cover-surface__state-panel">
           <h2>{unavailableLabel}</h2>
         </div>
@@ -54,6 +146,7 @@ export function ViewerCoverSurface({
 
   return (
     <section
+      ref={rootRef}
       className="viewer-cover-surface"
       data-chips-app="card-viewer.cover"
       aria-label={title}

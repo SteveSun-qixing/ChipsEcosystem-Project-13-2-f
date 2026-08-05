@@ -16,6 +16,10 @@ function isCardViewReady(card: CardOpenView): boolean {
   return card.viewState === 'cache_ready' && Boolean(resolveCardDocumentUrl(card));
 }
 
+function isCardViewPending(card: CardOpenView): boolean {
+  return !isCardViewReady(card) && card.status !== 'error' && card.viewState !== 'render_error';
+}
+
 export default function CardDetailPage() {
   const { t } = useAppPreferences();
   const { cardId } = useParams<{ cardId: string }>();
@@ -65,6 +69,14 @@ export default function CardDetailPage() {
       try {
         const status = await cardsApi.getCardRenderStatus(cardId);
         if (cancelled) {
+          return;
+        }
+
+        if (status.viewState === 'cache_ready') {
+          const openView = await cardsApi.getCardOpenView(cardId);
+          if (!cancelled) {
+            setCard(openView);
+          }
           return;
         }
 
@@ -125,6 +137,7 @@ export default function CardDetailPage() {
     <DocumentPluginRoutePage
       source={source}
       loading={loading}
+      pending={Boolean(card && isCardViewPending(card))}
       error={
         error ||
         (card?.status === 'error' || card?.viewState === 'render_error'

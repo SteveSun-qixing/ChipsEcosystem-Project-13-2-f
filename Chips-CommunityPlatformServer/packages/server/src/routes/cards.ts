@@ -1,10 +1,12 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { CardService } from '../services/card.service';
 import { UpdateCardSchema, PaginationSchema } from '../schemas/content.schemas';
 import { UserService } from '../services/user.service';
 import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
 import { CardRenderCacheService } from '../services/card-render-cache.service';
+
+type RenderCacheStreamObject = Awaited<ReturnType<typeof CardRenderCacheService.streamPrivateCache>>;
 
 function escapeHtmlText(value: string): string {
   return value
@@ -42,6 +44,42 @@ function createCoverPreparingHtml(title: string): string {
 </html>`;
 }
 
+function shouldEnqueueOpenViewRenderJob(latestJob: { status: string } | null): boolean {
+  return !latestJob || latestJob.status === 'succeeded' || latestJob.status === 'cancelled';
+}
+
+function normalizeRangeHeader(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.startsWith('bytes=') ? normalized : undefined;
+}
+
+function sendRenderCacheObject(
+  reply: FastifyReply,
+  object: RenderCacheStreamObject,
+) {
+  if (object.statusCode === 206 || object.contentRange) {
+    reply.status(206);
+  }
+  reply.header('accept-ranges', object.acceptRanges ?? 'bytes');
+  if (object.contentRange) {
+    reply.header('content-range', object.contentRange);
+  }
+  if (object.contentType) {
+    reply.header('content-type', object.contentType);
+  }
+  if (object.contentLength !== undefined) {
+    reply.header('content-length', String(object.contentLength));
+  }
+  if (object.etag) {
+    reply.header('etag', object.etag);
+  }
+  return reply.send(object.body);
+}
+
 const cardRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── GET /api/v1/cards/:cardId ────────────────────────────────────
 
@@ -76,9 +114,17 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       const coverCache = await CardRenderCacheService.findReadyCache(card.id, {
         renderProfile: CardRenderCacheService.coverRenderProfile,
       });
-      const latestJob = renderCache ? null : await CardRenderCacheService.getLatestJob(card.id, {
+      let latestJob = renderCache ? null : await CardRenderCacheService.getLatestJob(card.id, {
         renderProfile: CardRenderCacheService.viewRenderProfile,
       });
+      if (!renderCache && card.status === 'ready' && shouldEnqueueOpenViewRenderJob(latestJob)) {
+        latestJob = await CardRenderCacheService.enqueueForCard({
+          cardId: card.id,
+          createdBy: 'view_miss',
+          renderProfile: CardRenderCacheService.viewRenderProfile,
+          priority: 10,
+        }) ?? latestJob;
+      }
       const viewState = renderCache
         ? 'cache_ready'
         : latestJob?.status === 'failed'
@@ -90,7 +136,7 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         data: {
           ...CardService.toOpenViewDTO(card),
-          coverUrl: coverCache ? `/api/v1/cards/${card.id}/cover` : card.coverUrl,
+          coverUrl: card.status === 'ready' || coverCache || card.coverUrl ? `/api/v1/cards/${card.id}/cover` : null,
           viewState,
           renderCache: renderCache
             ? {
@@ -254,23 +300,16 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
         '*': string;
       };
       await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const range = normalizeRangeHeader(request.headers.range);
       const object = await CardRenderCacheService.streamPrivateCache({
         cardId,
         cacheVersion,
         assetPath,
+        range,
         renderProfile: CardRenderCacheService.viewRenderProfile,
       });
 
-      if (object.contentType) {
-        reply.header('content-type', object.contentType);
-      }
-      if (object.contentLength !== undefined) {
-        reply.header('content-length', String(object.contentLength));
-      }
-      if (object.etag) {
-        reply.header('etag', object.etag);
-      }
-      return reply.send(object.body);
+      return sendRenderCacheObject(reply, object);
     },
   );
 
@@ -286,23 +325,16 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
         '*': string;
       };
       await CardService.getAccessible(cardId, request.user?.userId ?? null);
+      const range = normalizeRangeHeader(request.headers.range);
       const object = await CardRenderCacheService.streamPrivateCache({
         cardId,
         cacheVersion,
         assetPath,
+        range,
         renderProfile: CardRenderCacheService.coverRenderProfile,
       });
 
-      if (object.contentType) {
-        reply.header('content-type', object.contentType);
-      }
-      if (object.contentLength !== undefined) {
-        reply.header('content-length', String(object.contentLength));
-      }
-      if (object.etag) {
-        reply.header('etag', object.etag);
-      }
-      return reply.send(object.body);
+      return sendRenderCacheObject(reply, object);
     },
   );
 
@@ -375,41 +407,5 @@ const cardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 };
-
-function escapeHtmlText(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-
-function createCoverPreparingHtml(title: string): string {
-  const safeTitle = escapeHtmlText(title);
-  return `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${safeTitle}</title>
-    <style>
-      * { box-sizing: border-box; }
-      html, body { margin: 0; width: 100%; min-height: 100%; }
-      body {
-        min-height: 100vh;
-        display: grid;
-        place-items: end stretch;
-        padding: clamp(18px, 5vw, 32px);
-        background: linear-gradient(155deg, #f8fbff 0%, #dfeeff 44%, #b7d7ff 100%);
-        color: #101828;
-        font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
-      }
-      h1 { margin: 0; font-size: clamp(28px, 7vw, 54px); line-height: 1; }
-    </style>
-  </head>
-  <body>
-    <h1>${safeTitle}</h1>
-  </body>
-</html>`;
-}
 
 export default cardRoutes;

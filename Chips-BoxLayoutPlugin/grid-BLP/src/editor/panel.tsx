@@ -33,6 +33,15 @@ export type LayoutEditorRoot = HTMLElement & {
 
 type LayoutMessageKey = Parameters<typeof getLayoutMessage>[1];
 
+const StableSelect = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof ChipsSelect>>((props, ref) => (
+  <ChipsSelect
+    {...props}
+    ref={ref}
+    iconContent={<span aria-hidden="true">{"\u25be"}</span>}
+  />
+));
+StableSelect.displayName = "StableSelect";
+
 const EDITOR_STYLE_TEXT = `
 .chips-grid-layout-editor {
   box-sizing: border-box;
@@ -43,7 +52,7 @@ const EDITOR_STYLE_TEXT = `
   overflow: auto;
   color: var(--chips-sys-color-on-surface, #0f172a);
   background-color: var(--chips-sys-color-surface, #ffffff);
-  font: var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif));
+  font: var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, sans-serif));
 }
 
 .chips-grid-layout-editor,
@@ -248,7 +257,7 @@ export function LayoutEditorPanel({
               name="sortMode"
             >
               <ChipsForm.Label>{getLayoutMessage(locale, "editor.sort_mode")}</ChipsForm.Label>
-              <ChipsSelect
+              <StableSelect
                 value={config.props.sortMode}
                 placeholder={getLayoutMessage(locale, "editor.sort_mode")}
                 i18n={i18n}
@@ -266,7 +275,7 @@ export function LayoutEditorPanel({
                     label: getLayoutMessage(locale, "editor.sort_name_desc"),
                   },
                 ]}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   commit(updateProps(config, {
                     sortMode: value as SortMode,
                   }));

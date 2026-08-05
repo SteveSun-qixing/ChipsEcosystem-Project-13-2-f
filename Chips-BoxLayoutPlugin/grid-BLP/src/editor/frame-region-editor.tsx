@@ -378,7 +378,6 @@ export function FrameRegionEditor({
       commandId: `${id}.upload`,
       titleKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
       ariaLabelKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
-      icon: { name: "upload_file" },
       toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 1 }],
       state: {
         enabled: hasImageAssetBridge && busyAction !== "delete",
@@ -389,7 +388,6 @@ export function FrameRegionEditor({
       commandId: `${id}.clear`,
       titleKey: "editor.clear_asset",
       ariaLabelKey: "editor.clear_asset",
-      icon: { name: "delete" },
       toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 2 }],
       state: {
         enabled: hasContent && busyAction !== "import",

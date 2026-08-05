@@ -124,8 +124,30 @@ describe("layout-config", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toMatchObject({
-      "props.background.assetPath": "background assetPath is required when mode is image.",
+      "props.background.assetPath": "background assetPath must be a box assets/ relative path.",
       "assetRefs[0]": "assetRefs item must be a box assets/ relative path.",
+    });
+  });
+
+  it("rejects unsafe raw frame asset paths even when the frame mode does not use them", () => {
+    const result = validateLayoutConfigInput({
+      props: {
+        background: {
+          mode: "none",
+          assetPath: "file:///tmp/background.webp",
+        },
+        topRegion: {
+          mode: "html",
+          html: "<strong>Title</strong>",
+          assetPath: "assets/layouts/list/../secret.webp",
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toMatchObject({
+      "props.background.assetPath": "background assetPath must be a box assets/ relative path.",
+      "props.topRegion.assetPath": "topRegion assetPath must be a box assets/ relative path.",
     });
   });
 

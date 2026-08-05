@@ -1,6 +1,6 @@
 import React from "react";
 import { FrameRegionSurface } from "../shared/frame-region";
-import { hasFrameRegionContent, type FrameRegionConfig } from "../schema/layout-config";
+import { hasFrameRegionContent, isSafeBoxAssetPath, type FrameRegionConfig } from "../schema/layout-config";
 import type { ResolvedRuntimeResource } from "../shared/types";
 import { getLayoutMessage } from "../shared/i18n";
 
@@ -62,14 +62,33 @@ const MODE_MESSAGE_KEY = {
   html: "editor.frame_mode_html",
 } as const;
 
+function sanitizeAssetFileName(name: string): string {
+  const sanitized = name
+    .trim()
+    .replace(/[\\/]+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/^\.+/, "")
+    .replace(/-+$/, "");
+  return sanitized.length > 0 ? sanitized : "asset";
+}
+
 async function safeDeleteAsset(
   assetPath: string | undefined,
   deleteBoxAsset?: (assetPath: string) => Promise<void>,
-): Promise<void> {
-  if (!assetPath || !deleteBoxAsset) {
-    return;
+): Promise<boolean> {
+  if (!assetPath) {
+    return true;
   }
-  await deleteBoxAsset(assetPath).catch(() => undefined);
+  if (!deleteBoxAsset) {
+    return false;
+  }
+  try {
+    await deleteBoxAsset(assetPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function FrameRegionEditor({
@@ -94,7 +113,10 @@ export function FrameRegionEditor({
     }
 
     if (region.mode === "image" && nextMode !== "image") {
-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      const deleted = await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      if (!deleted) {
+        return;
+      }
     }
 
     if (nextMode === "image") {
@@ -127,24 +149,37 @@ export function FrameRegionEditor({
 
     const imported = await importBoxAsset({
       file,
-      preferredPath: `${preferredAssetPrefix}/${file.name}`,
+      preferredPath: `${preferredAssetPrefix}/${Date.now()}-${sanitizeAssetFileName(file.name)}`,
     });
+    if (!isSafeBoxAssetPath(imported.assetPath)) {
+      await safeDeleteAsset(imported.assetPath, deleteBoxAsset);
+      event.currentTarget.value = "";
+      return;
+    }
     const previousAssetPath = region.mode === "image" ? region.assetPath : undefined;
+    if (previousAssetPath && previousAssetPath !== imported.assetPath) {
+      const deleted = await safeDeleteAsset(previousAssetPath, deleteBoxAsset);
+      if (!deleted) {
+        await safeDeleteAsset(imported.assetPath, deleteBoxAsset);
+        event.currentTarget.value = "";
+        return;
+      }
+    }
+
     onChange({
       mode: "image",
       assetPath: imported.assetPath,
     });
-
-    if (previousAssetPath && previousAssetPath !== imported.assetPath) {
-      await safeDeleteAsset(previousAssetPath, deleteBoxAsset);
-    }
 
     event.currentTarget.value = "";
   };
 
   const handleClear = async () => {
     if (region.mode === "image") {
-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      const deleted = await safeDeleteAsset(region.assetPath, deleteBoxAsset);
+      if (!deleted) {
+        return;
+      }
     }
     onChange({
       mode: "none",
@@ -210,7 +245,7 @@ export function FrameRegionEditor({
               border: "1px solid rgba(148,163,184,0.24)",
               background: "#ffffff",
               padding: "14px 16px",
-              font: "13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              font: "13px/1.6 var(--chips-font-family-mono, ui-monospace)",
               color: "#0f172a",
             }}
             onChange={(event) => {

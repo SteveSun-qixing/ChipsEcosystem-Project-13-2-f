@@ -36,6 +36,25 @@ export type LayoutEditorRoot = HTMLElement & {
   __chipsDispose?: () => void;
 };
 
+const StableSelect = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof ChipsSelect>>((props, ref) => (
+  <ChipsSelect
+    {...props}
+    ref={ref}
+    iconContent={<span aria-hidden="true">{"\u25be"}</span>}
+  />
+));
+StableSelect.displayName = "StableSelect";
+
+const StableNumberInput = React.forwardRef<HTMLInputElement, React.ComponentProps<typeof ChipsNumberInput>>((props, ref) => (
+  <ChipsNumberInput
+    {...props}
+    ref={ref}
+    decrementContent={<span aria-hidden="true">-</span>}
+    incrementContent={<span aria-hidden="true">+</span>}
+  />
+));
+StableNumberInput.displayName = "StableNumberInput";
+
 function updateConfig(config: LayoutConfig, patch: Partial<LayoutConfig["props"]>): LayoutConfig {
   return normalizeLayoutConfig({
     ...config,
@@ -80,7 +99,7 @@ const shellStyle: React.CSSProperties = {
   overflow: "hidden",
   color: "var(--chips-sys-color-on-surface, #0f172a)",
   background: "var(--chips-sys-color-surface, #ffffff)",
-  font: '14px/1.55 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif)',
+  font: "var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, sans-serif))",
 };
 
 const bodyStyle: React.CSSProperties = {
@@ -125,14 +144,14 @@ export function LayoutEditorPanel({
             <ChipsForm.Field name="sortMode">
               <ChipsForm.Label>{t("editor.sort_mode")}</ChipsForm.Label>
               <ChipsForm.Control>
-                <ChipsSelect
+                <StableSelect
                   value={config.props.sortMode}
                   options={[
                     { value: "manual", label: t("editor.sort_manual") },
                     { value: "name-asc", label: t("editor.sort_name_asc") },
                     { value: "name-desc", label: t("editor.sort_name_desc") },
                   ]}
-                  onValueChange={(value) => {
+                  onValueChange={(value: string) => {
                     onChange(updateConfig(config, {
                       sortMode: value as SortMode,
                     }));
@@ -189,14 +208,14 @@ export function LayoutEditorPanel({
             <ChipsForm.Field name="groupMode">
               <ChipsForm.Label>{t("editor.group_mode")}</ChipsForm.Label>
               <ChipsForm.Control>
-                <ChipsSelect
+                <StableSelect
                   value={config.props.groupMode}
                   options={[
                     { value: "none", label: t("editor.group_none") },
                     { value: "type", label: t("editor.group_type") },
                     { value: "tag", label: t("editor.group_tag") },
                   ]}
-                  onValueChange={(value) => {
+                  onValueChange={(value: string) => {
                     onChange(updateConfig(config, {
                       groupMode: value as GroupMode,
                     }));
@@ -228,14 +247,14 @@ export function LayoutEditorPanel({
             <ChipsForm.Field name="pageSize">
               <ChipsForm.Label>{t("editor.page_size")}</ChipsForm.Label>
               <ChipsForm.Control>
-                <ChipsNumberInput
+                <StableNumberInput
                   value={config.props.pageSize}
                   min={20}
                   max={240}
                   step={20}
                   largeStep={40}
                   ariaLabel={t("editor.page_size")}
-                  onValueChange={(value) => {
+                  onValueChange={(value: number | null) => {
                     onChange(updateConfig(config, {
                       pageSize: typeof value === "number" ? value : 120,
                     }));

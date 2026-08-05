@@ -297,6 +297,19 @@ export function validateLayoutConfigInput(input: Record<string, unknown> | undef
     });
   }
 
+  const rawProps = typeof input?.props === "object" && input.props
+    ? input.props as Record<string, unknown>
+    : {};
+  for (const key of ["background", "topRegion"] as const) {
+    const rawRegion = typeof rawProps[key] === "object" && rawProps[key]
+      ? rawProps[key] as Record<string, unknown>
+      : {};
+    const rawAssetPath = rawRegion.assetPath;
+    if (typeof rawAssetPath === "string" && rawAssetPath.length > 0 && !isSafeBoxAssetPath(rawAssetPath)) {
+      errors[`props.${key}.assetPath`] = `${key} assetPath must be a box assets/ relative path.`;
+    }
+  }
+
   return {
     valid: Object.keys(errors).length === 0,
     errors,

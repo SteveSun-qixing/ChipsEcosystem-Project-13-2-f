@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -193,6 +193,16 @@ async function main() {
       if (forbiddenPattern.test(manifestText)) {
         throw new Error(`E2E: 应用模板 manifest 不应声明越界字段 ${forbiddenPattern}`);
       }
+    }
+
+    let templateMetaPresent = true;
+    try {
+      await stat(path.join(projectDir, "template.json"));
+    } catch {
+      templateMetaPresent = false;
+    }
+    if (templateMetaPresent) {
+      throw new Error("E2E: 生成工程不得包含模板元数据文件 template.json");
     }
 
     const commandSource = await readFile(

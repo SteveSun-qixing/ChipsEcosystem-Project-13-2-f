@@ -32,6 +32,7 @@ function resolveTemplatesRoot(): string {
 }
 
 const TEMPLATES_ROOT = resolveTemplatesRoot();
+const SCAFFOLD_METADATA_FILE_NAMES = new Set(["template.json"]);
 const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
   "help",
   "host",
@@ -211,6 +212,9 @@ async function copyTemplateDir(
   let filesCreated = 0;
   const entries = await fs.readdir(templateDir, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.isFile() && SCAFFOLD_METADATA_FILE_NAMES.has(entry.name)) {
+      continue;
+    }
     const sourcePath = path.join(templateDir, entry.name);
     const renderedName = renderTemplateString(entry.name, context).replace(
       /\.tpl$/,

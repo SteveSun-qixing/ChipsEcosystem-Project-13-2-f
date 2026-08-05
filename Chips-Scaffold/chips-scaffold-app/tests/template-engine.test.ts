@@ -327,6 +327,11 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
       { code: "ENOENT" },
       "初始化工程不应生成旧 ExamplePanel 示例组件",
     );
+    await assert.rejects(
+      stat(path.join(targetDir, "template.json")),
+      { code: "ENOENT" },
+      "初始化工程不应生成模板元数据文件 template.json",
+    );
     assert.ok(
       !/style=\{\{/.test(appRuntimeContent),
       "初始化工程源码不应使用 inline style",

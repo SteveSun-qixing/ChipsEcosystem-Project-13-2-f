@@ -1,4 +1,5 @@
 import React from "react";
+import type { Client } from "chips-sdk";
 import type { ResolvedViewerSource } from "../types/viewer-source";
 import { CardWindow } from "./CardWindow";
 import { HostedDocumentWindow } from "./HostedDocumentWindow";
@@ -7,6 +8,7 @@ import { ViewerCoverSurface } from "./ViewerCoverSurface";
 type ViewerMode = "content" | "cover";
 
 interface ViewerStageProps {
+  client: Client;
   source: ResolvedViewerSource | null;
   viewerMode: ViewerMode;
   error: string | null;
@@ -26,6 +28,7 @@ interface ViewerStageProps {
 }
 
 export function ViewerStage({
+  client,
   source,
   viewerMode,
   error,
@@ -58,16 +61,19 @@ export function ViewerStage({
   }
 
   if (viewerMode === "cover") {
-    if (source.cover) {
-      return (
-        <ViewerCoverSurface
-          cover={source.cover}
-          title={source.title ?? source.cover.title ?? coverCloseLabel}
-          closeLabel={coverCloseLabel}
-          unavailableLabel={coverUnavailableLabel}
-          onClose={onCloseCover}
-        />
-      );
+    if (source.renderKind === "local-file" || source.renderKind === "hosted-document") {
+      if (source.cover) {
+        return (
+          <ViewerCoverSurface
+            client={client}
+            cover={source.cover}
+            title={source.title ?? source.cover.title ?? coverCloseLabel}
+            closeLabel={coverCloseLabel}
+            unavailableLabel={coverUnavailableLabel}
+            onClose={onCloseCover}
+          />
+        );
+      }
     }
 
     return (
@@ -82,8 +88,10 @@ export function ViewerStage({
   if (source.renderKind === "hosted-document") {
     return (
       <HostedDocumentWindow
+        client={client}
         documentUrl={source.documentUrl}
         traceId={traceId}
+        iframeTitle={loadingLabel}
         loadingLabel={loadingLabel}
         containerErrorLabel={containerErrorLabel}
         resourceOpenErrorTitle={resourceOpenErrorTitle}
@@ -95,6 +103,7 @@ export function ViewerStage({
   if (source.renderKind === "local-file") {
     return (
       <CardWindow
+        client={client}
         filePath={source.source.filePath}
         documentType={source.source.documentKind}
         traceId={traceId}

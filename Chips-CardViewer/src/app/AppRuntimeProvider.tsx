@@ -73,6 +73,8 @@ export interface CardViewerRuntimeValue {
   returnHome(): void;
   openFile(): Promise<void>;
   openFilePath(filePath: string): void;
+  downloadActiveCard(): Promise<void>;
+  canDownloadActiveCard: boolean;
 }
 
 const AppRuntimeContext = React.createContext<CardViewerRuntimeValue | null>(null);
@@ -171,6 +173,27 @@ function resolveOpenedTargetFromCardSource(source: CardViewerSource): OpenedTarg
 function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string | null {
   const documentUrl = typeof launchParams.webDocumentUrl === "string" ? launchParams.webDocumentUrl.trim() : "";
   return documentUrl.length > 0 ? documentUrl : null;
+}
+
+interface CommunityTransferServerConfig {
+  baseUrl: string;
+  accessToken: string;
+}
+
+function resolveCommunityTransferServer(launchParams: Record<string, unknown>): CommunityTransferServerConfig | null {
+  const rawServer = launchParams.communityServer;
+  if (!isRecord(rawServer)) {
+    return null;
+  }
+  const baseUrl = normalizeString(rawServer.baseUrl);
+  if (!baseUrl) {
+    return null;
+  }
+  const accessToken = normalizeString(rawServer.accessToken);
+  if (!accessToken) {
+    return null;
+  }
+  return { baseUrl, accessToken };
 }
 
 function resolveHostSceneId(launchContext: PlatformLaunchContext): string {
@@ -294,7 +317,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
 
     const nextTarget = resolveOpenedTarget(targetPath);
 
-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
+    if (!nextTarget || nextTarget.kind !== "file" || client.document.detectType(nextTarget.filePath) === null) {
       setError(text("card-viewer.errors.unsupportedFile"));
       return;
     }
@@ -307,7 +330,9 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     setError(null);
   }, [client, logger, text]);
 
-  const surfaceMode = openedTarget?.kind === "document" ? "document" : "immersive";
+  // Every opened document uses document flow so the outer host owns scrolling.
+  // The empty landing surface remains immersive and viewport-bound.
+  const surfaceMode = openedTarget ? "document" : "immersive";
 
   React.useEffect(() => {
     if (typeof document === "undefined") {
@@ -356,7 +381,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
 
   const openFilePath = React.useCallback((filePath: string) => {
     const nextTarget = resolveOpenedTarget(filePath);
-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
+    if (!nextTarget || nextTarget.kind !== "file" || client.document.detectType(nextTarget.filePath) === null) {
       logger.warn("选择的文件类型当前不受支持", {
         filePath,
       });
@@ -503,16 +528,6 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
   const showCover = React.useCallback(() => {
     setViewerMode("cover");
   }, []);
-  const returnHome = React.useCallback(() => {
-    logger.info("用户返回卡片查看器首页", {
-      targetKind: openedTarget?.kind ?? null,
-      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
-      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
-    });
-    setError(null);
-    setViewerMode("content");
-    setOpenedTarget(null);
-  }, [logger, openedTarget]);
   const environment = React.useMemo<CardViewerRuntimeEnvironment>(() => ({
     appId: appConfig.appId,
     pluginId: launchContext.surfaceContext?.pluginId ?? launchContext.pluginId ?? appConfig.appId,
@@ -523,6 +538,62 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     surfaceKind: resolveSurfaceKind(launchContext),
     launchParams: resolveLaunchParams(launchContext),
   }), [activeSceneId, launchContext]);
+  const canDownloadActiveCard =
+    openedTarget?.kind === "document"
+    && openedTarget.source?.kind === "community-card"
+    && resolveCommunityTransferServer(environment.launchParams) !== null
+    && surfaceMode !== "document";
+  const downloadActiveCard = React.useCallback(async () => {
+    if (openedTarget?.kind !== "document" || openedTarget.source?.kind !== "community-card") {
+      setError(text("card-viewer.actions.downloadUnavailable"));
+      return;
+    }
+
+    const server = resolveCommunityTransferServer(environment.launchParams);
+    if (!server) {
+      setError(text("card-viewer.actions.downloadUnavailable"));
+      return;
+    }
+
+    try {
+      const outputPath = await client.platform.saveFile({
+        title: text("card-viewer.actions.downloadCard"),
+        defaultPath: `${openedTarget.title ?? openedTarget.source.cardId}.card`,
+      });
+      if (!outputPath) {
+        return;
+      }
+
+      await client.communityCardTransfer.download({
+        cardId: openedTarget.source.cardId,
+        outputPath,
+        server: {
+          baseUrl: server.baseUrl,
+          accessToken: server.accessToken,
+        },
+      });
+      await client.platform.showMessage({
+        title: text("card-viewer.actions.downloadComplete"),
+        message: outputPath,
+      });
+    } catch (runtimeError) {
+      logger.error("社区卡片下载失败", runtimeError);
+      await client.platform.showMessage({
+        title: text("card-viewer.actions.downloadFailed"),
+        message: resolveErrorMessage(runtimeError, text("card-viewer.actions.downloadUnavailable")),
+      });
+    }
+  }, [client, environment.launchParams, logger, openedTarget, text]);
+  const returnHome = React.useCallback(() => {
+    logger.info("用户返回卡片查看器首页", {
+      targetKind: openedTarget?.kind ?? null,
+      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
+      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
+    });
+    setError(null);
+    setViewerMode("content");
+    setOpenedTarget(null);
+  }, [logger, openedTarget]);
 
   const value = React.useMemo<CardViewerRuntimeValue>(() => ({
     client,
@@ -546,6 +617,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     returnHome,
     openFile,
     openFilePath,
+    downloadActiveCard,
+    canDownloadActiveCard,
   }), [
     activeScene,
     activeSceneId,
@@ -567,6 +640,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
     text,
     traceId,
     viewerMode,
+    downloadActiveCard,
+    canDownloadActiveCard,
   ]);
 
   return <AppRuntimeContext.Provider value={value}>{children}</AppRuntimeContext.Provider>;

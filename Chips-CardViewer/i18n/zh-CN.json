@@ -4,7 +4,12 @@
       "open": "打开文件",
       "returnHome": "返回首页",
       "viewCover": "查看封面",
-      "viewContent": "查看内容"
+      "viewContent": "查看内容",
+      "downloadCard": "下载卡片",
+      "downloadingCard": "正在下载卡片…",
+      "downloadComplete": "卡片已下载",
+      "downloadFailed": "卡片下载失败",
+      "downloadUnavailable": "当前社区卡片暂不支持在此客户端下载"
     },
     "commands": {
       "openFile": {

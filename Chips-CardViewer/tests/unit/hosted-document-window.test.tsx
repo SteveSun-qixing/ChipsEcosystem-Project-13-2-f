@@ -248,7 +248,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
     });
 
     expect(latestResizePayload()).toMatchObject({
-      contentHeight: 1400,
+      contentHeight: 1568,
       stable: false,
     });
   });

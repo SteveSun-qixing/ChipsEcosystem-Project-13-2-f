@@ -22,6 +22,10 @@
   "include": [
     "src",
     "tests"
+  ],
+  "exclude": [
+    "归档",
+    "src/**/归档"
   ]
 }
 

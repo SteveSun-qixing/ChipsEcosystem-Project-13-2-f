@@ -7,10 +7,15 @@ import {
 } from "../commands/card-viewer-commands";
 import { useCardViewerCommands } from "../commands/useCardViewerCommands";
 import { CardViewerShell } from "../components/CardViewerShell";
+import { ViewerChrome, type ViewerChromeState } from "../components/ViewerChrome";
 import { DocumentFileScene } from "../scenes/DocumentFileScene";
 import { EmptyScene } from "../scenes/EmptyScene";
 import { HostedDocumentScene } from "../scenes/HostedDocumentScene";
 import { useAppRuntime } from "./AppRuntimeProvider";
+
+const CARD_VIEWER_TOGGLE_COVER_ACTION_ID = "toggle-cover";
+const CARD_VIEWER_DOWNLOAD_ACTION_ID = "download-card";
+const DOCUMENT_SURFACE_CHROME_SAFE_BLOCK_START = 96;
 
 export function AppShell(): React.ReactElement {
   const runtime = useAppRuntime();
@@ -36,6 +41,12 @@ export function AppShell(): React.ReactElement {
   }, [commands.lastInvoked, runtime]);
 
   const returnHomeLabel = runtime.t("card-viewer.actions.returnHome");
+  const coverActionLabel =
+    runtime.viewerMode === "cover"
+      ? runtime.t("card-viewer.actions.viewContent")
+      : runtime.t("card-viewer.actions.viewCover");
+  const coverActionIcon = runtime.viewerMode === "cover" ? "document" : "cover";
+  const usesExternalChrome = runtime.openedTarget?.kind === "document";
   const backAction = runtime.openedTarget ? (
     <button
       type="button"
@@ -60,16 +71,8 @@ export function AppShell(): React.ReactElement {
       type="button"
       className="card-viewer-shell__floating-action card-viewer-shell__floating-action--cover"
       onClick={runtime.viewerMode === "cover" ? runtime.showContent : runtime.showCover}
-      aria-label={
-        runtime.viewerMode === "cover"
-          ? runtime.t("card-viewer.actions.viewContent")
-          : runtime.t("card-viewer.actions.viewCover")
-      }
-      title={
-        runtime.viewerMode === "cover"
-          ? runtime.t("card-viewer.actions.viewContent")
-          : runtime.t("card-viewer.actions.viewCover")
-      }
+      aria-label={coverActionLabel}
+      title={coverActionLabel}
     >
       <ChipsIcon
         descriptor={{
@@ -80,12 +83,90 @@ export function AppShell(): React.ReactElement {
       />
     </button>
   ) : null;
-  const action = backAction || coverAction ? (
+  const downloadActionLabel = runtime.t("card-viewer.actions.downloadCard");
+  const downloadAction = runtime.canDownloadActiveCard ? (
+    <button
+      type="button"
+      className="card-viewer-shell__floating-action card-viewer-shell__floating-action--download"
+      onClick={() => void runtime.downloadActiveCard()}
+      aria-label={downloadActionLabel}
+      title={downloadActionLabel}
+    >
+      <ChipsIcon
+        descriptor={{
+          name: "download",
+          decorative: true,
+        }}
+        size={22}
+      />
+    </button>
+  ) : null;
+  const action = backAction || coverAction || downloadAction ? (
     <>
       {backAction}
       {coverAction}
+      {downloadAction}
     </>
   ) : null;
+  const chromeState = React.useMemo<ViewerChromeState>(
+    () => ({
+      title: runtime.openedTarget ? runtime.activeTitle ?? undefined : undefined,
+      metaLines: [],
+      back: {
+        label: returnHomeLabel,
+        enabled: Boolean(runtime.openedTarget),
+        handledByPlugin: true,
+      },
+      actions: [
+        ...(runtime.openedTarget && runtime.canViewCover
+          ? [
+              {
+                id: CARD_VIEWER_TOGGLE_COVER_ACTION_ID,
+                label: coverActionLabel,
+                icon: coverActionIcon,
+              },
+            ]
+          : []),
+        ...(runtime.canDownloadActiveCard
+          ? [
+              {
+                id: CARD_VIEWER_DOWNLOAD_ACTION_ID,
+                label: runtime.t("card-viewer.actions.downloadCard"),
+                icon: "download",
+              },
+            ]
+          : []),
+      ],
+      safeBlockStart: DOCUMENT_SURFACE_CHROME_SAFE_BLOCK_START,
+    }),
+    [
+      coverActionIcon,
+      coverActionLabel,
+      returnHomeLabel,
+      runtime.activeTitle,
+      runtime.canDownloadActiveCard,
+      runtime.canViewCover,
+      runtime.openedTarget,
+      runtime.t,
+    ],
+  );
+  const handleChromeAction = React.useCallback(
+    (actionId: string) => {
+      if (actionId === CARD_VIEWER_DOWNLOAD_ACTION_ID) {
+        void runtime.downloadActiveCard();
+        return;
+      }
+      if (actionId !== CARD_VIEWER_TOGGLE_COVER_ACTION_ID) {
+        return;
+      }
+      if (runtime.viewerMode === "cover") {
+        runtime.showContent();
+        return;
+      }
+      runtime.showCover();
+    },
+    [runtime],
+  );
 
   const content =
     runtime.openedTarget === null ? (
@@ -95,6 +176,13 @@ export function AppShell(): React.ReactElement {
     ) : (
       <DocumentFileScene target={runtime.openedTarget} />
     );
+  const shell = (
+    <CardViewerShell
+      surfaceMode={runtime.surfaceMode}
+      content={content}
+      action={usesExternalChrome ? null : action}
+    />
+  );
 
   return (
     <ChipsCommandProvider
@@ -103,11 +191,17 @@ export function AppShell(): React.ReactElement {
       i18n={runtime.t}
       query={{ includeDisabled: true }}
     >
-      <CardViewerShell
-        surfaceMode={runtime.surfaceMode}
-        content={content}
-        action={action}
-      />
+      {usesExternalChrome ? (
+        <ViewerChrome.Provider
+          client={runtime.client}
+          state={chromeState}
+          externalChrome
+          onBack={runtime.returnHome}
+          onAction={handleChromeAction}
+        >
+          {shell}
+        </ViewerChrome.Provider>
+      ) : shell}
     </ChipsCommandProvider>
   );
 }

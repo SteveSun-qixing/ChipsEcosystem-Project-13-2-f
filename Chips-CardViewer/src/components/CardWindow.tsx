@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useThemeRuntime } from "@chips/component-library";
-import type { Client, FrameRenderResult } from "chips-sdk";
+import type { Client, DocumentWindowResizePayload, FrameRenderResult } from "chips-sdk";
 import { createScopedLogger } from "../../config/logging";
 import type { ViewerDocumentKind } from "../types/viewer-source";
 import "./CardWindow.css";
@@ -244,29 +244,38 @@ export function CardWindow({
         <div
           data-chips-app="card-viewer.viewport"
           className="card-viewer-window__viewport card-viewer-window__viewport--document-flow"
+          style={{ "--card-viewer-document-frame-height": `${documentHeight}px` } as React.CSSProperties}
         >
           <div
+            ref={containerRef}
             data-scope="document-window"
-            data-part="overlay"
-            data-state="loading"
-            role="status"
-            aria-live="polite"
-            className="card-viewer-window__overlay"
-          >
-            {loadingLabel}
-          </div>
-        )}
-        {error && (
-          <div
-            data-scope="document-window"
-            data-part="overlay"
-            data-state="error"
-            role="alert"
-            className="card-viewer-window__overlay card-viewer-window__overlay--error"
-          >
-            <span>{error}</span>
-          </div>
-        )}
+            data-part="frame-host"
+            className="card-viewer-window__frame-host card-viewer-window__frame-host--document-flow"
+          />
+          {isLoading && (
+            <div
+              data-scope="document-window"
+              data-part="overlay"
+              data-state="loading"
+              role="status"
+              aria-live="polite"
+              className="card-viewer-window__overlay"
+            >
+              {loadingLabel}
+            </div>
+          )}
+          {error && (
+            <div
+              data-scope="document-window"
+              data-part="overlay"
+              data-state="error"
+              role="alert"
+              className="card-viewer-window__overlay card-viewer-window__overlay--error"
+            >
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
       </div>
       <div className="card-viewer-window__safe-area" aria-hidden="true" />
     </div>

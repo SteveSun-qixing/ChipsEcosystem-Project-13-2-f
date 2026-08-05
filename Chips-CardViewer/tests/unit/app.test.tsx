@@ -271,6 +271,9 @@ const appRuntimeMock = vi.hoisted(() => {
         timestamp: "2026-05-25T00:00:00.000Z",
       }));
     },
+    emitEvent(event: string, payload: unknown) {
+      (eventListeners.get(event) ?? []).forEach((handler) => handler(payload));
+    },
   };
 });
 
@@ -301,6 +304,8 @@ describe("App（卡片查看器根组件）", () => {
     document.documentElement.removeAttribute("lang");
     document.documentElement.removeAttribute("dir");
     document.documentElement.removeAttribute("data-chips-locale");
+    document.documentElement.removeAttribute("data-chips-surface-mode");
+    document.body.removeAttribute("data-chips-surface-mode");
   });
 
   it("应当导出一个可用的 React 组件", () => {
@@ -450,6 +455,44 @@ describe("App（卡片查看器根组件）", () => {
     expect(frame).toBeInstanceOf(HTMLIFrameElement);
     expect(frame?.getAttribute("src")).toBe("https://community.example/cards/card-1/view");
     expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
+    expect(appRuntimeMock.client.events.emit).toHaveBeenCalledWith(
+      "plugin.chrome.update",
+      expect.objectContaining({
+        title: "社区卡片",
+        back: expect.objectContaining({
+          handledByPlugin: true,
+        }),
+        actions: [
+          expect.objectContaining({
+            id: "toggle-cover",
+            label: "查看封面",
+            icon: "cover",
+          }),
+        ],
+      }),
+    );
+
+    await act(async () => {
+      appRuntimeMock.emitEvent("plugin.chrome.action", { actionId: "toggle-cover" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const coverFrame = container.querySelector('[data-chips-app="card-viewer.cover"] iframe');
+    expect(coverFrame).toBeInstanceOf(HTMLIFrameElement);
+    expect(coverFrame?.getAttribute("src")).toBe("https://community.example/cards/card-1/cover");
+    expect(appRuntimeMock.client.events.emit).toHaveBeenCalledWith(
+      "plugin.chrome.update",
+      expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            id: "toggle-cover",
+            label: "查看内容",
+            icon: "document",
+          }),
+        ],
+      }),
+    );
   });
 
   it("本地卡片读取封面后可以切换封面与内容", async () => {
@@ -495,6 +538,32 @@ describe("App（卡片查看器根组件）", () => {
     expect(container.querySelector('[data-chips-app="card-viewer.cover"]')).toBeNull();
   });
 
+  it("打开本地文档时使用 document-flow surface，并保留查看器本地操作栏", async () => {
+    expectRealDocumentFixturesAvailable(["foodGridBox"]);
+    appRuntimeMock.setLaunchParams({
+      trigger: "file-association",
+      targetPath: realDocumentFixtures.foodGridBox,
+    });
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("document");
+    expect(document.body.getAttribute("data-chips-surface-mode")).toBe("document");
+    expect(container.querySelector(".card-viewer-shell--document")).not.toBeNull();
+    expect(container.querySelector(".card-viewer-shell--immersive")).toBeNull();
+    expect(container.querySelector(".card-viewer-shell__floating-action--back")).not.toBeNull();
+    expect(container.querySelector(".card-viewer-window--document-flow")).not.toBeNull();
+    expect(container.querySelector("iframe")?.getAttribute("scrolling")).toBe("no");
+    expect(appRuntimeMock.client.events.emit).not.toHaveBeenCalledWith(
+      "plugin.chrome.update",
+      expect.anything(),
+    );
+  });
+
   it("查看态左上角返回按钮会取消当前查看并回到首页", async () => {
     expectRealDocumentFixturesAvailable(["foodGridBox"]);
     appRuntimeMock.setLaunchParams({
@@ -509,6 +578,7 @@ describe("App（卡片查看器根组件）", () => {
     });
 
     expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeInstanceOf(HTMLDivElement);
+    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("document");
     const backButton = Array.from(container.querySelectorAll("button"))
       .find((element) => element.getAttribute("aria-label") === "返回首页");
     expect(backButton).toBeInstanceOf(HTMLButtonElement);
@@ -521,6 +591,8 @@ describe("App（卡片查看器根组件）", () => {
 
     expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeNull();
     expect(container.textContent).toContain("拖入卡片或箱子文件");
+    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("immersive");
+    expect(document.body.getAttribute("data-chips-surface-mode")).toBe("immersive");
     expect(Array.from(container.querySelectorAll("button"))
       .some((element) => element.getAttribute("aria-label") === "返回首页")).toBe(false);
   });

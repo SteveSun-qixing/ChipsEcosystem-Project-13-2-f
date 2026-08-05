@@ -34,7 +34,7 @@
   min-width: 0;
   border: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--chips-sys-color-surface, #ffffff);
 }
 
 .card-viewer-window__iframe {

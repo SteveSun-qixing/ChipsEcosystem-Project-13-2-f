@@ -18,11 +18,13 @@ type ResourceOpenPayload = {
   fileName?: string;
   payload?: Record<string, unknown>;
 };
+type ResizePayload = { documentType: 'card' | 'box'; height: number; reason: string };
 type DocumentWindowHandlerPayloads = {
   onReady: ReadyPayload;
   onError: ErrorPayload;
   onNodeError: NodeErrorPayload;
   onResourceOpen: ResourceOpenPayload;
+  onResize: ResizePayload;
 };
 type DocumentWindowHandlerName = keyof DocumentWindowHandlerPayloads;
 
@@ -33,18 +35,20 @@ const mockState = vi.hoisted(() => {
     onError: vi.fn(),
     onNodeError: vi.fn(),
     onResourceOpen: vi.fn(),
+    onResize: vi.fn(),
   };
   const handlers = {
     onReady: [] as Array<() => void>,
     onError: [] as Array<(payload: ErrorPayload) => void>,
     onNodeError: [] as Array<(payload: NodeErrorPayload) => void>,
     onResourceOpen: [] as Array<(payload: ResourceOpenPayload) => void>,
+    onResize: [] as Array<(payload: ResizePayload) => void>,
   };
-  const render = vi.fn(async () => ({
+  const render = vi.fn(async (options: { filePath: string; locale?: string; mode?: string }) => ({
     frame: document.createElement('iframe'),
     origin: 'file://',
     dispose,
-    documentType: 'box' as const,
+    documentType: options.filePath.endsWith('.box') ? 'box' as const : 'card' as const,
   }));
 
   return {
@@ -56,6 +60,10 @@ const mockState = vi.hoisted(() => {
           onReady: vi.fn((_frame: HTMLIFrameElement, handler: () => void) => {
             handlers.onReady.push(handler);
             return cleanup.onReady;
+          }),
+          onResize: vi.fn((_frame: HTMLIFrameElement, handler: (payload: ResizePayload) => void) => {
+            handlers.onResize.push(handler);
+            return cleanup.onResize;
           }),
           onError: vi.fn((_frame: HTMLIFrameElement, handler: (payload: ErrorPayload) => void) => {
             handlers.onError.push(handler);
@@ -127,7 +135,6 @@ describe('统一文档查看窗口基础流程', () => {
     }));
     mockState.client.resource.open.mockResolvedValue(undefined);
   });
-
   afterEach(async () => {
     await act(async () => {
       root.unmount();
@@ -313,12 +320,13 @@ describe('统一文档查看窗口基础流程', () => {
     });
     mockState.client.document.window.onResize.mockImplementationOnce((_frame, handler) => {
       resizeHandler = handler;
-      return () => undefined;
+      return mockState.cleanup.onResize;
     });
 
     await act(async () => {
       root.render(
         <CardWindow
+          client={mockState.client as any}
           filePath="/tmp/demo.card"
           traceId="trace-document-height"
           locale="zh-CN"

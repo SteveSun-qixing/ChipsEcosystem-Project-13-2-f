@@ -4,7 +4,12 @@
       "open": "Open File",
       "returnHome": "Back to Home",
       "viewCover": "View Cover",
-      "viewContent": "View Content"
+      "viewContent": "View Content",
+      "downloadCard": "Download Card",
+      "downloadingCard": "Downloading card…",
+      "downloadComplete": "Card downloaded",
+      "downloadFailed": "Card download failed",
+      "downloadUnavailable": "This community card cannot be downloaded in the current client"
     },
     "commands": {
       "openFile": {

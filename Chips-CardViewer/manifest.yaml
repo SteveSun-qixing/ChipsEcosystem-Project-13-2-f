@@ -25,6 +25,9 @@ permissions:
   - plugin.read
   - resource.read
   - platform.read
+  - platform.external
+  - module.invoke
+  - network.request
   - theme.read
   - i18n.read
   - command.read
@@ -38,7 +41,7 @@ runtime:
     web:
       supported: true
     mobile:
-      supported: false
+      supported: true
     headless:
       supported: false
 

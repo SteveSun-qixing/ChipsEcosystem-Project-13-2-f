@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewerCoverSurface } from "../../src/components/ViewerCoverSurface";
 
 const coverSurfaceMock = vi.hoisted(() => ({
-  bridge: {
-    emit: vi.fn(async () => undefined),
+  client: {
+    events: {
+      emit: vi.fn(async () => undefined),
+      on: vi.fn(() => () => undefined),
+      once: vi.fn(() => () => undefined),
+    },
   },
-}));
-
-vi.mock("../../src/hooks/useChipsBridge", () => ({
-  useChipsBridge: () => coverSurfaceMock.bridge,
 }));
 
 describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
@@ -41,6 +41,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
     await act(async () => {
       root.render(
         <ViewerCoverSurface
+          client={coverSurfaceMock.client}
           cover={{
             title: "卡片封面",
             coverUrl: "https://example.test/cover.html",
@@ -55,7 +56,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
       await Promise.resolve();
     });
 
-    expect(coverSurfaceMock.bridge.emit).toHaveBeenCalledWith(
+    expect(coverSurfaceMock.client.events.emit).toHaveBeenCalledWith(
       "plugin.surface.resize",
       expect.objectContaining({
         height: expect.any(Number),
@@ -69,7 +70,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
       await vi.advanceTimersByTimeAsync(180);
     });
 
-    expect(coverSurfaceMock.bridge.emit).toHaveBeenCalledWith(
+    expect(coverSurfaceMock.client.events.emit).toHaveBeenCalledWith(
       "plugin.surface.resize",
       expect.objectContaining({
         height: expect.any(Number),

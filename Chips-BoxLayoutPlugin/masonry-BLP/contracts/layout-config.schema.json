@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "瀑布流布局插件 layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": [
+        "sortMode",
+        "columnMode",
+        "gap",
+        "titleMode",
+        "showSummary",
+        "pageSize",
+        "background",
+        "topRegion"
+      ],
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "columnMode": {
+          "type": "string",
+          "enum": ["auto", "compact", "wide"]
+        },
+        "gap": {
+          "type": "string",
+          "enum": ["compact", "regular", "spacious"]
+        },
+        "titleMode": {
+          "type": "string",
+          "enum": ["below-cover", "overlay", "hidden"]
+        },
+        "showSummary": {
+          "type": "boolean"
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 240
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

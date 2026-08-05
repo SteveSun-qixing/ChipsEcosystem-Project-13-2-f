@@ -5,6 +5,10 @@
   "description": "薯片社区平台服务器（Chips Community Platform Server）",
   "scripts": {
     "dev": "pnpm --filter @ccps/server dev",
+    "start:local": "bash scripts/start-local-dev.sh start",
+    "stop:local": "bash scripts/start-local-dev.sh stop",
+    "status:local": "bash scripts/start-local-dev.sh status",
+    "logs:local": "bash scripts/start-local-dev.sh logs",
     "build": "pnpm --filter @ccps/server build && pnpm --filter @ccps/web build && pnpm --filter @ccps/admin build",
     "lint": "eslint 'packages/*/src/**/*.{ts,tsx}'",
     "test": "pnpm --filter @ccps/server test",

@@ -10,6 +10,7 @@ packages/server/.chips-server-host-worker/
 coverage/
 .nyc_output/
 tmp/
+.codex-logs/
 deploy/.env
 deploy/certs/*
 !deploy/certs/.gitkeep

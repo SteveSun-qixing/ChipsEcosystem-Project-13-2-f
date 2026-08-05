@@ -29,6 +29,10 @@ const createContext = (
   };
 };
 
+const escapeRegExpForTest = (value: string): string => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 describe("card to html module", () => {
   it("exports the formal converter.card.to-html capability", () => {
     expect(moduleDefinition.providers[0]?.capability).toBe("converter.card.to-html");
@@ -231,6 +235,281 @@ describe("card to html module", () => {
     expect(hostInvoke).toHaveBeenCalledWith("file.write", {
       path: path.join(outputDir, "index.html"),
       content: expect.stringContaining('class="chips-export-stage__content"'),
+    });
+  });
+
+  it("keeps exported base-card resource bases relative for Host runtime URL normalization", async () => {
+    const outputDir = path.resolve("/tmp/export-html-relative-resource-base");
+    const cardRoot = path.resolve("/tmp/card-source-relative-resource-base");
+    const renderedBody = [
+      "<!doctype html>",
+      "<html lang=\"zh-CN\">",
+      "<body>",
+      "<iframe data-node-id=\"gallery\" srcdoc=\"&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;base href=&quot;file:///tmp/card-source-relative-resource-base/&quot; /&gt;&lt;/head&gt;&lt;body&gt;&lt;script&gt;const resourceBaseUrl = &quot;file:///tmp/card-source-relative-resource-base/&quot;; const resolveResourceUrl = async (resourcePath) =&gt; new URL(resourcePath, resourceBaseUrl).toString();&lt;/script&gt;&lt;img src=&quot;file:///tmp/card-source-relative-resource-base/assets/hero.png&quot; /&gt;&lt;/body&gt;&lt;/html&gt;\"></iframe>",
+      "</body>",
+      "</html>",
+    ].join("");
+
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        if (payload?.path === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (payload?.path === cardRoot) {
+          return { meta: { isFile: false, isDirectory: true } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "card.render") {
+        return {
+          view: {
+            title: "Relative Resource Base Demo",
+            body: renderedBody,
+            documentUrl: "file:///tmp/render-session-relative-resource-base/index.html",
+            sessionId: "render-session-relative-resource-base",
+            semanticHash: "semantic-relative-resource-base",
+            target: "offscreen-render",
+          },
+        };
+      }
+
+      if (action === "file.list") {
+        expect(payload).toEqual({
+          dir: cardRoot,
+          options: { recursive: true },
+        });
+        return {
+          entries: [
+            { path: path.join(cardRoot, "assets"), isFile: false, isDirectory: true },
+            { path: path.join(cardRoot, "assets", "hero.png"), isFile: true, isDirectory: false },
+          ],
+        };
+      }
+
+      return { ack: true };
+    });
+
+    await moduleDefinition.providers[0]!.methods.convert(ctx, {
+      cardFile: path.resolve("/tmp/demo.card"),
+      output: {
+        path: outputDir,
+        packageMode: "directory",
+      },
+    });
+
+    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "gallery.html"),
+      content: expect.stringContaining('<base href="./assets/content/" />'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "gallery.html"),
+      content: expect.stringContaining('const resourceBaseUrl = "./assets/content/";'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "gallery.html"),
+      content: expect.stringContaining('new URL(resourcePath, resourceBaseUrl).toString()'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "gallery.html"),
+      content: expect.stringContaining('<img src="./assets/content/assets/hero.png" />'),
+    });
+  });
+
+  it("copies and rewrites Host theme font file URLs injected into exported HTML", async () => {
+    const outputDir = path.resolve("/tmp/export-html-theme-font");
+    const cardRoot = path.resolve("/tmp/card-source-theme-font");
+    const themeFontPath = path.resolve(
+      "/tmp/.chips-server-host-worker/plugins/theme.theme.chips-official-default-theme/dist/icons/variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2",
+    );
+    const themeFontUrl = `file://${themeFontPath.replace(/\[/g, "%5B").replace(/\]/g, "%5D")}`;
+    const renderedBody = [
+      "<!doctype html>",
+      '<html lang="zh-CN">',
+      "<head>",
+      `<style>@font-face { font-family: "Material Symbols Outlined"; src: url("${themeFontUrl}") format("woff2"); }</style>`,
+      "</head>",
+      "<body>",
+      `<iframe srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;base href=&quot;file:///tmp/card-source-theme-font/&quot; /&gt;&lt;style&gt;@font-face { font-family: &quot;Material Symbols Outlined&quot;; src: url(&quot;${themeFontUrl}&quot;) format(&quot;woff2&quot;); }&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;img src=&quot;file:///tmp/card-source-theme-font/content/pic.png&quot; /&gt;&lt;/body&gt;&lt;/html&gt;"></iframe>`,
+      "</body>",
+      "</html>",
+    ].join("");
+
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        const target = payload?.path;
+        if (target === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (target === themeFontPath) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (target === cardRoot) {
+          return { meta: { isFile: false, isDirectory: true } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "card.render") {
+        return {
+          view: {
+            title: "Theme Font Demo",
+            body: renderedBody,
+            documentUrl: "file:///tmp/render-session-theme-font/index.html",
+            sessionId: "render-session-theme-font",
+            semanticHash: "semantic-theme-font",
+            target: "offscreen-render",
+          },
+        };
+      }
+
+      if (action === "file.list") {
+        expect(payload).toEqual({
+          dir: cardRoot,
+          options: { recursive: true },
+        });
+        return {
+          entries: [
+            { path: path.join(cardRoot, "content"), isFile: false, isDirectory: true },
+            { path: path.join(cardRoot, "content", "pic.png"), isFile: true, isDirectory: false },
+          ],
+        };
+      }
+
+      return { ack: true };
+    });
+
+    const result = await moduleDefinition.providers[0]!.methods.convert(ctx, {
+      cardFile: path.resolve("/tmp/demo.card"),
+      output: {
+        path: outputDir,
+        packageMode: "directory",
+      },
+    });
+
+    expect(result.assetCount).toBe(2);
+
+    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
+    expect(hostInvoke).toHaveBeenCalledWith("file.copy", {
+      sourcePath: themeFontPath,
+      destPath: expect.stringMatching(new RegExp(`${escapeRegExpForTest(path.join(outputDir, "assets", "theme"))}.+MaterialSymbolsOutlined`)),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "index.html"),
+      content: expect.not.stringContaining("file://"),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "index.html"),
+      content: expect.stringContaining("./assets/theme/"),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "frame-1.html"),
+      content: expect.not.stringContaining("file://"),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "frame-1.html"),
+      content: expect.stringContaining("./assets/theme/"),
+    });
+  });
+
+  it("rewrites Host theme font file URLs inside escaped JavaScript theme CSS strings", async () => {
+    const outputDir = path.resolve("/tmp/export-html-theme-font-script");
+    const cardRoot = path.resolve("/tmp/card-source-theme-font-script");
+    const themeFontPath = path.resolve(
+      "/tmp/.chips-server-host-worker/plugins/theme.theme.chips-official-default-theme/dist/icons/variablefont/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].woff2",
+    );
+    const themeFontUrl = `file://${themeFontPath.replace(/\[/g, "%5B").replace(/\]/g, "%5D")}`;
+    const frameHtml = [
+      "<!doctype html>",
+      "<html>",
+      `<head><base href="file:///tmp/card-source-theme-font-script/" /></head>`,
+      "<body>",
+      `<script>const themeCssText = "@font-face {\\n  src: url(\\\"${themeFontUrl}\\\") format(\\\"woff2\\\");\\n}"; const resourceBaseUrl = "file:///tmp/card-source-theme-font-script/";</script>`,
+      "</body>",
+      "</html>",
+    ].join("");
+    const renderedBody = [
+      "<!doctype html>",
+      '<html lang="zh-CN">',
+      "<body>",
+      `<iframe srcdoc="${frameHtml
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}"></iframe>`,
+      "</body>",
+      "</html>",
+    ].join("");
+
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.stat") {
+        const target = payload?.path;
+        if (target === path.resolve("/tmp/demo.card")) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (target === themeFontPath) {
+          return { meta: { isFile: true, isDirectory: false } };
+        }
+        if (target === cardRoot) {
+          return { meta: { isFile: false, isDirectory: true } };
+        }
+        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
+      }
+
+      if (action === "card.render") {
+        return {
+          view: {
+            title: "Theme Font Script Demo",
+            body: renderedBody,
+            documentUrl: "file:///tmp/render-session-theme-font-script/index.html",
+            sessionId: "render-session-theme-font-script",
+            semanticHash: "semantic-theme-font-script",
+            target: "offscreen-render",
+          },
+        };
+      }
+
+      if (action === "file.list") {
+        expect(payload).toEqual({
+          dir: cardRoot,
+          options: { recursive: true },
+        });
+        return {
+          entries: [
+            { path: path.join(cardRoot, ".card"), isFile: false, isDirectory: true },
+            { path: path.join(cardRoot, ".card", "metadata.yaml"), isFile: true, isDirectory: false },
+          ],
+        };
+      }
+
+      return { ack: true };
+    });
+
+    await moduleDefinition.providers[0]!.methods.convert(ctx, {
+      cardFile: path.resolve("/tmp/demo.card"),
+      output: {
+        path: outputDir,
+        packageMode: "directory",
+      },
+    });
+
+    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
+    expect(hostInvoke).toHaveBeenCalledWith("file.copy", {
+      sourcePath: themeFontPath,
+      destPath: expect.stringMatching(new RegExp(`${escapeRegExpForTest(path.join(outputDir, "assets", "theme"))}.+MaterialSymbolsRounded`)),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "frame-1.html"),
+      content: expect.not.stringContaining("file://"),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "frame-1.html"),
+      content: expect.stringContaining('url(\\"./assets/theme/'),
+    });
+    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
+      path: path.join(outputDir, "frame-1.html"),
+      content: expect.stringContaining('const resourceBaseUrl = "./assets/content/";'),
     });
   });
 

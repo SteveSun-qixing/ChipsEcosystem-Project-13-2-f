@@ -22,10 +22,10 @@
 - `FR-03` 必须通过 Host `card.render(..., { target: "offscreen-render" })` 获取正式 HTML 视图
 - `FR-04` HTML 导出结果中的卡片内容必须与 Host `card.render` 一致
 - `FR-05` 支持将请求中的 `themeId / locale` 透传到 Host `card.render` 单次调用覆盖参数
-- `FR-06` `includeAssets=true` 时，模块必须识别 `file://` 资源根、复制资源树，并改写为导出目录相对路径
+- `FR-06` `includeAssets=true` 时，模块必须识别 `file://` 或受控渲染协议资源根、复制卡片资源树，并改写为导出目录相对路径
 - `FR-07` `includeAssets=false` 时，仅允许 `directory` 输出，并返回“保留原始 `file://` 引用”的结构化警告
 - `FR-08` `includeManifest=true` 时必须生成 `conversion-manifest.json`；`includeManifest=false` 时允许省略，但结果不得作为 PDF / 图片链路中间产物
-- `FR-09` 目录态输出至少包含 `index.html`；当 `includeAssets=true` 时包含 `assets/content/`；当 `includeManifest=true` 时包含 `conversion-manifest.json`
+- `FR-09` 目录态输出至少包含 `index.html`；当 `includeAssets=true` 且存在卡片资源时包含 `assets/content/`；当存在 Host 注入主题文件资源时包含 `assets/theme/`；当 `includeManifest=true` 时包含 `conversion-manifest.json`
 - `FR-10` `zip` 输出必须复用同一份目录构建逻辑，并在末阶段通过 Host ZIP 能力打包
 - `FR-11` 输出已存在且 `overwrite=false` 时必须拒绝覆盖
 - `FR-12` 资源复制、文件写入或打包失败时，必须清理本次产生的部分输出与临时目录
@@ -34,6 +34,7 @@
 - `FR-15` 导出展示壳层不得引入查看器运行时逻辑，不得改写卡片内部语义结构
 - `FR-16` 复合卡片 iframe 外置 sibling HTML 文件名必须全局唯一，重复 `data-node-id` 或混合旧新 iframe 来源时不得互相覆盖
 - `FR-17` `conversion-manifest.json` 必须保留 Host `card.render` 返回的渲染诊断、内容文件列表和一致性信息，便于下游转换和排查工具消费
+- `FR-18` Host 注入主题 CSS 中的本地字体、图标字体等根外 `file://` 文件资源必须复制到导出产物并改写为相对 URL，最终 HTML 不得继续引用 Host worker 或本机绝对路径
 
 ## 4. 非功能需求
 

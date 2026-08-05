@@ -12,7 +12,8 @@ import type {
 const ENTRY_FILE = "index.html" as const;
 const MANIFEST_FILE = "conversion-manifest.json" as const;
 const CONTENT_ASSET_DIR = "assets/content";
-const ABSOLUTE_URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/.*?(?=(?:&quot;|&#39;|["'<>\s`]))/gi;
+const THEME_ASSET_DIR = "assets/theme";
+const ABSOLUTE_URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/.*?(?=(?:\\["']|&quot;|&#39;|["'<>\s`]))/gi;
 const BASE_HREF_PATTERN = /base href=(?:&quot;|")([^"&]+)(?:&quot;|")/gi;
 const WINDOWS_ABSOLUTE_PATTERN = /^[A-Za-z]:\//;
 const HTML_OPEN_PATTERN = /<html([^>]*)>/i;
@@ -20,6 +21,17 @@ const EXPORT_HEAD_CLOSE_PATTERN = /<\/head>/i;
 const EXPORT_BODY_PATTERN = /<body([^>]*)>([\s\S]*)<\/body>/i;
 const IFRAME_SRCDOC_PATTERN = /<iframe\b([^>]*?)\bsrcdoc="([^"]*)"([^>]*)><\/iframe>/gi;
 const IFRAME_SRC_PATTERN = /<iframe\b([^>]*?)\bsrc="([^"]+)"([^>]*)><\/iframe>/gi;
+
+interface ResolvedAssetReference {
+  rawUrl: string;
+  resolvedPath: string;
+}
+
+interface OfflineAssetRewriteState {
+  copiedAssetRoots: Set<string>;
+  copiedStandaloneAssets: Map<string, string>;
+  usedStandaloneAssetPaths: Set<string>;
+}
 const EXPORT_PRESENTATION_STYLE = `
 <style data-chips-export-shell="card-html">
 html,
@@ -156,6 +168,11 @@ const dirnameNormalized = (filePath: string): string => {
   return parent ? `${root}${parent}` : root;
 };
 
+const basenameNormalized = (filePath: string): string => {
+  const segments = splitSegments(filePath);
+  return segments.at(-1) ?? "";
+};
+
 const relativeNormalized = (fromPath: string, toPath: string): string => {
   const fromNormalized = toNormalizedPath(fromPath);
   const toNormalized = toNormalizedPath(toPath);
@@ -190,6 +207,10 @@ const encodeRelativeUrl = (relativePath: string, trailingSlash = false): string 
   return trailingSlash ? `${encoded}/` : encoded;
 };
 
+const encodeAssetReferenceUrl = (assetPath: string): string => {
+  return `./${encodeRelativeUrl(assetPath)}`;
+};
+
 const fromFileUrl = (fileUrl: string): string => {
   const url = new URL(fileUrl);
   if (url.protocol !== "file:") {
@@ -211,6 +232,20 @@ const toFileStat = (value: unknown): HostFileStatLike | undefined => {
     isFile: typeof value.isFile === "boolean" ? value.isFile : undefined,
     isDirectory: typeof value.isDirectory === "boolean" ? value.isDirectory : undefined,
   };
+};
+
+const isDirectoryLikeReference = async (
+  ctx: CardToHtmlContext,
+  resolvedPath: string,
+): Promise<boolean> => {
+  const stat = await safeStat(ctx, toNativePath(resolvedPath, resolvedPath));
+  if (stat?.isDirectory === true) {
+    return true;
+  }
+  if (stat?.isFile === true) {
+    return false;
+  }
+  return !isLikelyFilePath(resolvedPath);
 };
 
 const isWithinRoot = (rootPath: string, targetPath: string): boolean => {
@@ -260,6 +295,20 @@ const escapeRegExp = (value: string): string => {
 
 const isLikelyFilePath = (value: string): boolean => {
   return /\/[^/]+\.[^/]+$/.test(value);
+};
+
+const isHostThemeAssetPath = (value: string): boolean => {
+  const normalized = toNormalizedPath(value).toLowerCase();
+  return /(?:^|\/)theme\.theme\.[^/]+\/dist\//.test(normalized);
+};
+
+const createStablePathHash = (value: string): string => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 };
 
 const pushWarning = (
@@ -407,8 +456,8 @@ const extractBaseHrefUrls = (html: string): string[] => {
 const extractResolvedUrlReferences = async (
   ctx: CardToHtmlContext,
   html: string,
-): Promise<Array<{ rawUrl: string; resolvedPath: string }>> => {
-  const references: Array<{ rawUrl: string; resolvedPath: string }> = [];
+): Promise<ResolvedAssetReference[]> => {
+  const references: ResolvedAssetReference[] = [];
   const seen = new Set<string>();
 
   for (const rawUrl of extractFileUrls(html)) {
@@ -443,8 +492,8 @@ const extractResolvedUrlReferences = async (
 const extractAssetRoot = async (
   ctx: CardToHtmlContext,
   html: string,
-): Promise<{ rootPath: string; baseHrefUrls: string[]; references: Array<{ rawUrl: string; resolvedPath: string }> } | undefined> => {
-  const references = await extractResolvedUrlReferences(ctx, html);
+  references: ResolvedAssetReference[],
+): Promise<{ rootPath: string; baseHrefUrls: string[]; references: ResolvedAssetReference[] } | undefined> => {
   if (references.length === 0) {
     return undefined;
   }
@@ -474,9 +523,15 @@ const extractAssetRoot = async (
     }
   }
 
-  const fallbackRoots = references.map((reference) =>
-    isLikelyFilePath(reference.resolvedPath) ? dirnameNormalized(reference.resolvedPath) : reference.resolvedPath,
-  );
+  const fallbackReferences = references.filter((reference) => !isHostThemeAssetPath(reference.resolvedPath));
+  const fallbackRoots: string[] = [];
+  for (const reference of fallbackReferences) {
+    fallbackRoots.push(
+      (await isDirectoryLikeReference(ctx, reference.resolvedPath))
+        ? reference.resolvedPath
+        : dirnameNormalized(reference.resolvedPath),
+    );
+  }
   const sharedRoot = findSharedAncestor(fallbackRoots);
   if (!sharedRoot) {
     return undefined;
@@ -493,7 +548,7 @@ const rewriteHtmlAssetUrls = (
   html: string,
   assetRootPath: string,
   baseHrefUrls: string[],
-  references: Array<{ rawUrl: string; resolvedPath: string }>,
+  references: ResolvedAssetReference[],
 ): string => {
   let rewrittenHtml = html;
 
@@ -527,12 +582,98 @@ const rewriteHtmlAssetUrls = (
   return rewrittenHtml;
 };
 
+const sanitizeAssetFileName = (value: string): string => {
+  const sanitized = value.trim().replace(/[<>:"|?*\x00-\x1f]+/g, "-").replace(/^-+|-+$/g, "");
+  return sanitized || "asset";
+};
+
+const allocateStandaloneAssetPath = (
+  resolvedPath: string,
+  usedStandaloneAssetPaths: Set<string>,
+): string => {
+  const hash = createStablePathHash(resolvedPath);
+  const fileName = sanitizeAssetFileName(basenameNormalized(resolvedPath));
+  const baseCandidate = joinNormalized(THEME_ASSET_DIR, `${hash}-${fileName}`);
+  let candidate = baseCandidate;
+  let duplicateIndex = 2;
+
+  while (usedStandaloneAssetPaths.has(candidate)) {
+    candidate = joinNormalized(THEME_ASSET_DIR, `${hash}-${duplicateIndex}-${fileName}`);
+    duplicateIndex += 1;
+  }
+
+  usedStandaloneAssetPaths.add(candidate);
+  return candidate;
+};
+
+const ensureStandaloneAssetCopied = async (
+  ctx: CardToHtmlContext,
+  resolvedPath: string,
+  state: OfflineAssetRewriteState,
+  buildRoot: string,
+  outputPathReference: string,
+): Promise<{ assetPath: string; copiedFiles: number } | undefined> => {
+  if (await isDirectoryLikeReference(ctx, resolvedPath)) {
+    return undefined;
+  }
+
+  const existingAssetPath = state.copiedStandaloneAssets.get(resolvedPath);
+  if (existingAssetPath) {
+    return { assetPath: existingAssetPath, copiedFiles: 0 };
+  }
+
+  const assetPath = allocateStandaloneAssetPath(resolvedPath, state.usedStandaloneAssetPaths);
+  const destination = joinNormalized(buildRoot, assetPath);
+  await ensureDirectory(ctx, toNativePath(dirnameNormalized(destination), outputPathReference));
+  await ctx.host.invoke("file.copy", {
+    sourcePath: toNativePath(resolvedPath, resolvedPath),
+    destPath: toNativePath(destination, outputPathReference),
+  });
+  state.copiedStandaloneAssets.set(resolvedPath, assetPath);
+  return { assetPath, copiedFiles: 1 };
+};
+
+const rewriteStandaloneAssetUrls = async (
+  ctx: CardToHtmlContext,
+  html: string,
+  references: ResolvedAssetReference[],
+  assetRootPath: string | undefined,
+  state: OfflineAssetRewriteState,
+  buildRoot: string,
+  outputPathReference: string,
+): Promise<{ html: string; copiedFiles: number }> => {
+  let rewrittenHtml = html;
+  let copiedFiles = 0;
+
+  for (const reference of references) {
+    if (assetRootPath && isWithinRoot(assetRootPath, reference.resolvedPath)) {
+      continue;
+    }
+
+    const copied = await ensureStandaloneAssetCopied(
+      ctx,
+      reference.resolvedPath,
+      state,
+      buildRoot,
+      outputPathReference,
+    );
+    if (!copied) {
+      continue;
+    }
+
+    copiedFiles += copied.copiedFiles;
+    rewrittenHtml = rewrittenHtml.split(reference.rawUrl).join(encodeAssetReferenceUrl(copied.assetPath));
+  }
+
+  return { html: rewrittenHtml, copiedFiles };
+};
+
 const rewriteOfflineHtmlDocument = async (
   ctx: CardToHtmlContext,
   html: string,
   includeAssets: boolean,
   warnings: CardToHtmlWarning[],
-  copiedAssetRoots: Set<string>,
+  state: OfflineAssetRewriteState,
   buildRoot: string,
   outputPathReference: string,
   label: string,
@@ -541,9 +682,44 @@ const rewriteOfflineHtmlDocument = async (
     return { html, copiedFiles: 0 };
   }
 
-  const assetRoot = await extractAssetRoot(ctx, html);
-  if (!assetRoot) {
-    if (extractFileUrls(html).length > 0) {
+  const references = await extractResolvedUrlReferences(ctx, html);
+  const assetRoot = await extractAssetRoot(ctx, html, references);
+  let rewrittenHtml = html;
+  let copiedFiles = 0;
+
+  if (assetRoot) {
+    rewrittenHtml = rewriteHtmlAssetUrls(
+      rewrittenHtml,
+      assetRoot.rootPath,
+      assetRoot.baseHrefUrls,
+      assetRoot.references,
+    );
+
+    if (!state.copiedAssetRoots.has(assetRoot.rootPath)) {
+      state.copiedAssetRoots.add(assetRoot.rootPath);
+      copiedFiles += await copyAssetTree(
+        ctx,
+        assetRoot.rootPath,
+        joinNormalized(buildRoot, CONTENT_ASSET_DIR),
+        outputPathReference,
+      );
+    }
+  }
+
+  const rewrittenStandaloneAssets = await rewriteStandaloneAssetUrls(
+    ctx,
+    rewrittenHtml,
+    references,
+    assetRoot?.rootPath,
+    state,
+    buildRoot,
+    outputPathReference,
+  );
+  rewrittenHtml = rewrittenStandaloneAssets.html;
+  copiedFiles += rewrittenStandaloneAssets.copiedFiles;
+
+  if (!assetRoot && copiedFiles === 0 && rewrittenHtml === html) {
+    if (references.length > 0) {
       pushWarning(
         warnings,
         "CONVERTER_HTML_NO_ASSET_ROOT",
@@ -554,25 +730,6 @@ const rewriteOfflineHtmlDocument = async (
     return { html, copiedFiles: 0 };
   }
 
-  const rewrittenHtml = rewriteHtmlAssetUrls(
-    html,
-    assetRoot.rootPath,
-    assetRoot.baseHrefUrls,
-    assetRoot.references,
-  );
-
-  if (copiedAssetRoots.has(assetRoot.rootPath)) {
-    return { html: rewrittenHtml, copiedFiles: 0 };
-  }
-
-  copiedAssetRoots.add(assetRoot.rootPath);
-  const copiedFiles = await copyAssetTree(
-    ctx,
-    assetRoot.rootPath,
-    joinNormalized(buildRoot, CONTENT_ASSET_DIR),
-    outputPathReference,
-  );
-
   return { html: rewrittenHtml, copiedFiles };
 };
 
@@ -581,7 +738,7 @@ const externalizeIframeSrcdocDocuments = async (
   html: string,
   includeAssets: boolean,
   warnings: CardToHtmlWarning[],
-  copiedAssetRoots: Set<string>,
+  state: OfflineAssetRewriteState,
   buildRoot: string,
   outputPathReference: string,
   allocateFrameFileName: (attrs: string) => string,
@@ -612,7 +769,7 @@ const externalizeIframeSrcdocDocuments = async (
       frameContent,
       includeAssets,
       warnings,
-      copiedAssetRoots,
+      state,
       buildRoot,
       outputPathReference,
       fileName,
@@ -643,7 +800,7 @@ const externalizeIframeSrcDocuments = async (
   documentUrl: string,
   includeAssets: boolean,
   warnings: CardToHtmlWarning[],
-  copiedAssetRoots: Set<string>,
+  state: OfflineAssetRewriteState,
   buildRoot: string,
   outputPathReference: string,
   allocateFrameFileName: (attrs: string) => string,
@@ -681,7 +838,7 @@ const externalizeIframeSrcDocuments = async (
       frameContent,
       includeAssets,
       warnings,
-      copiedAssetRoots,
+      state,
       buildRoot,
       outputPathReference,
       fileName,
@@ -1083,7 +1240,11 @@ export const convertCardToHtml = async (
     renderSessionId = renderView.sessionId;
     let htmlBody = applyExportPresentationShell(renderView.body);
     let assetCount = 0;
-    const copiedAssetRoots = new Set<string>();
+    const offlineAssetState: OfflineAssetRewriteState = {
+      copiedAssetRoots: new Set<string>(),
+      copiedStandaloneAssets: new Map<string, string>(),
+      usedStandaloneAssetPaths: new Set<string>(),
+    };
     const allocateFrameFileName = createFrameFileAllocator();
 
     failureStage = "rewrite-assets";
@@ -1102,7 +1263,7 @@ export const convertCardToHtml = async (
       renderView.documentUrl,
       request.options.includeAssets,
       warnings,
-      copiedAssetRoots,
+      offlineAssetState,
       buildRoot,
       request.output.path,
       allocateFrameFileName,
@@ -1115,7 +1276,7 @@ export const convertCardToHtml = async (
       htmlBody,
       request.options.includeAssets,
       warnings,
-      copiedAssetRoots,
+      offlineAssetState,
       buildRoot,
       request.output.path,
       allocateFrameFileName,
@@ -1128,7 +1289,7 @@ export const convertCardToHtml = async (
       htmlBody,
       request.options.includeAssets,
       warnings,
-      copiedAssetRoots,
+      offlineAssetState,
       buildRoot,
       request.output.path,
       ENTRY_FILE,

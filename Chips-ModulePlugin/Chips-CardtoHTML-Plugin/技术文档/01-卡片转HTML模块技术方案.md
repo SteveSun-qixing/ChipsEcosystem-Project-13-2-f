@@ -32,8 +32,9 @@
      - 旧口径 `iframe[srcdoc]`
      - 当前正式 render session 口径 `iframe[src]`
    - 对 `iframe[src]` 通过 `card.resolveDocumentPath` 解析 render session 子文档真实落点
-   - 从基础卡片子文档内的 `base href="file://..."`、`base href="chips-render://card-root/..."` 或其他受控绝对资源引用推导资源根目录
-   - 把资源复制到 `assets/content/`
+   - 从基础卡片子文档内的 `base href="file://..."`、`base href="chips-render://card-root/..."` 或其他受控绝对资源引用推导卡片资源根目录
+   - 把卡片资源根目录复制到 `assets/content/`
+   - 把 Host 注入主题 CSS 中引用的根外本地文件资源复制到 `assets/theme/`
    - 把 HTML 内的 `file://` 与受控渲染协议资源地址改写为相对路径
 4. `write-output`
    - 在最终 HTML 上补充导出展示壳层
@@ -73,10 +74,12 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
 
 当前实现遵循以下规则：
 
-- 资源根优先从基础卡片子文档中的 `base href` 推导，既支持 `file://` 也支持受控渲染协议资源根
-- 若不存在唯一 `base href`，则回退到所有可解析绝对资源引用的共享祖先目录
-- 复制时保留资源树相对结构，统一落到 `assets/content/`
-- 仅改写资源根范围内的本地/受控资源链接；根外链接保持原样
+- 卡片资源根优先从基础卡片子文档中的 `base href` 推导，既支持 `file://` 也支持受控渲染协议资源根
+- 若不存在唯一 `base href`，则回退到所有可解析绝对资源引用的共享祖先目录；Host 主题插件产物路径不参与卡片资源根推导
+- 卡片资源复制时保留资源树相对结构，统一落到 `assets/content/`
+- Host 注入主题 CSS 引用的根外本地文件资源按单文件复制到 `assets/theme/`，并以内容来源路径哈希生成稳定文件名，避免不同主题资产重名覆盖
+- 仅目录型卡片资源根继续整树复制；根外本地文件资源按文件粒度复制，避免把 Host worker 插件目录整体打入导出产物
+- HTML 内所有已解析并复制的 `file://` 与受控渲染协议资源链接必须改写为导出目录相对路径
 - render session 子文档通过 `card.resolveDocumentPath` 解析真实文件路径后再读取，避免依赖 `documentUrl` 的协议前缀或磁盘目录结构
 - `includeAssets=false` 时不复制资源、不改写链接，并返回 `CONVERTER_HTML_ASSETS_SKIPPED`
 
@@ -94,11 +97,10 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
 ├─ index.html
 ├─ <node-id>.html               # 复合卡片中每个基础卡片 iframe 的离线文档
 ├─ assets/
-│  └─ content/                  # includeAssets=true 时存在
+│  ├─ content/                  # includeAssets=true 且存在卡片资源根时存在
+│  └─ theme/                    # includeAssets=true 且存在 Host 注入主题文件资源时存在
 └─ conversion-manifest.json     # includeManifest=true 时存在
 ```
-
-当前版本不单独产出 `assets/theme/`。若未来 Host 渲染链路输出独立主题工件，应在不改变公共入口能力的前提下落位到该目录。
 
 补充约束：
 

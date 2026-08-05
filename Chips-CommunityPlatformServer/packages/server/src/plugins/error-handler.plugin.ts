@@ -46,6 +46,16 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // 不支持的内容类型（如向 JSON 控制面发送 octet-stream 卡字节）
+    if (error.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE' || error.statusCode === 415) {
+      return reply.status(415).send({
+        error: {
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Unsupported media type',
+        },
+      });
+    }
+
     // JWT 错误
     if (error.code === 'FST_JWT_AUTHORIZATION_TOKEN_INVALID' ||
         error.code === 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED') {

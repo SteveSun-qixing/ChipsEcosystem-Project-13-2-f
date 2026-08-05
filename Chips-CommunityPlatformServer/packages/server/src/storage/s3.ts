@@ -169,8 +169,11 @@ export async function getObjectStream(params: {
   body: NodeJS.ReadableStream;
   contentType?: string;
   contentLength?: number;
+  contentRange?: string;
+  acceptRanges?: string;
   etag?: string;
   lastModified?: Date;
+  statusCode?: number;
 }> {
   const s3 = getS3Client();
   const target = toStorageTarget(params.bucket, params.key);
@@ -190,8 +193,11 @@ export async function getObjectStream(params: {
     body: response.Body as NodeJS.ReadableStream,
     contentType: response.ContentType,
     contentLength: response.ContentLength,
+    contentRange: response.ContentRange,
+    acceptRanges: response.AcceptRanges,
     etag: response.ETag,
     lastModified: response.LastModified,
+    statusCode: response.$metadata.httpStatusCode,
   };
 }
 
@@ -451,6 +457,68 @@ export function createPresignedPutUrl(params: {
     method: 'PUT',
     headers,
     publicUrl: isPublicBucket(params.bucket) ? buildObjectUrl(params.bucket, params.key) : '',
+  };
+}
+
+/**
+ * 创建 S3 兼容 GET 预签名 URL。
+ *
+ * 下载链路只把临时读取地址交给客户端，文件字节仍由对象存储/CDN 承担。
+ */
+export function createPresignedGetUrl(params: {
+  bucket: BucketName | string;
+  key: string;
+  expiresInSeconds: number;
+  responseContentDisposition?: string;
+}): { url: string; method: 'GET'; headers: Record<string, string> } {
+  const now = new Date();
+  const { amzDate, dateStamp } = toAmzDate(now);
+  const credentialScope = `${dateStamp}/${env.S3_REGION}/s3/aws4_request`;
+  const target = buildPresignTarget(params.bucket, params.key);
+  const signedHeaders = 'host';
+  const query = new URLSearchParams({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${env.S3_ACCESS_KEY}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(params.expiresInSeconds),
+    'X-Amz-SignedHeaders': signedHeaders,
+  });
+
+  if (params.responseContentDisposition) {
+    query.set('response-content-disposition', params.responseContentDisposition);
+  }
+
+  const canonicalQuery = [...query.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+  const canonicalHeaders = `host:${target.host}\n`;
+  const canonicalRequest = [
+    'GET',
+    target.canonicalPath,
+    canonicalQuery,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join('\n');
+  const signature = crypto
+    .createHmac('sha256', buildSigningKey(dateStamp))
+    .update(stringToSign, 'utf-8')
+    .digest('hex');
+
+  query.set('X-Amz-Signature', signature);
+  target.url.search = query.toString();
+
+  return {
+    url: target.url.toString(),
+    method: 'GET',
+    headers: {},
   };
 }
 

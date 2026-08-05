@@ -68,6 +68,7 @@ async function loadStorage(
       DeleteObjectsCommand: Command,
       ListObjectsV2Command: Command,
       HeadObjectCommand: Command,
+      GetObjectCommand: Command,
     };
   });
 
@@ -216,6 +217,30 @@ describe('storage url and bucket mapping', () => {
     expect(signed.publicUrl).toBe(
       'https://file.chipscard.space/chips-card-resources/users/user-1/uploads/upload-1/resources/photo.png',
     );
+  });
+
+  it('creates presigned GET URLs for client-side card download plans', async () => {
+    const { storage } = await loadStorage({
+      S3_PUBLIC_URL: 'https://file.chipscard.space',
+      S3_BUCKET_NAME: 'chipscardspace',
+    });
+
+    const signed = storage.createPresignedGetUrl({
+      bucket: 'chips-card-resources',
+      key: 'cards/card-1/versions/version-1/network-card/card.card',
+      expiresInSeconds: 900,
+      responseContentDisposition: 'attachment; filename="Demo.card"',
+    });
+    const url = new URL(signed.url);
+
+    expect(signed.method).toBe('GET');
+    expect(signed.headers).toEqual({});
+    expect(url.origin).toBe('https://s3.ap-southeast-1.qiniucs.com');
+    expect(url.pathname).toBe('/chipscardspace/chips-card-resources/cards/card-1/versions/version-1/network-card/card.card');
+    expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
+    expect(url.searchParams.get('X-Amz-Expires')).toBe('900');
+    expect(url.searchParams.get('response-content-disposition')).toBe('attachment; filename="Demo.card"');
   });
 
   it('deletes listed physical keys from the single physical bucket', async () => {

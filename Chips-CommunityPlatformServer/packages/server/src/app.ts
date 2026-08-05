@@ -15,6 +15,7 @@ import userRoutes from './routes/users';
 import roomRoutes from './routes/rooms';
 import spaceRoutes from './routes/space';
 import uploadRoutes from './routes/upload';
+import cardTransferRoutes from './routes/card-transfer';
 import cardRoutes from './routes/cards';
 import boxRoutes from './routes/boxes';
 import discoverRoutes from './routes/discover';
@@ -72,7 +73,7 @@ export async function buildApp() {
 
   await fastify.register(fastifyMultipart, {
     limits: {
-      fileSize: Math.max(env.MAX_CARD_SIZE_MB, env.MAX_BOX_SIZE_MB) * 1024 * 1024,
+      fileSize: env.MAX_BOX_SIZE_MB * 1024 * 1024,
     },
     attachFieldsToBody: false,
   });
@@ -119,6 +120,7 @@ export async function buildApp() {
   await fastify.register(roomRoutes);
   await fastify.register(spaceRoutes);
   await fastify.register(uploadRoutes);
+  await fastify.register(cardTransferRoutes);
   await fastify.register(cardRoutes);
   await fastify.register(boxRoutes);
   await fastify.register(discoverRoutes);

@@ -201,7 +201,9 @@ function createBootstrapScript(session: WebPluginSessionView, inputThemeRuntime:
   const listeners = new Map();
   const localFiles = new Map();
   const localObjectUrls = new Map();
+  const commands = new Map();
   let requestCounter = 0;
+  let commandInvocationCounter = 0;
 
   function createRequestId() {
     requestCounter += 1;
@@ -245,10 +247,164 @@ function createBootstrapScript(session: WebPluginSessionView, inputThemeRuntime:
     });
   }
 
+  function readRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  }
+
+  function cloneRecord(value) {
+    return JSON.parse(JSON.stringify(value || {}));
+  }
+
   function syncThemeToDocument() {
     document.documentElement.setAttribute("data-chips-theme-id", themeRuntime.themeId);
     document.documentElement.setAttribute("data-chips-theme-version", themeRuntime.version);
   }
+
+  function createCommandDiagnostic(state) {
+    return {
+      visible: state && state.visible === false ? false : true,
+      enabled: state && state.enabled === false ? false : true,
+      checked: Boolean(state && state.checked === true),
+      ...(state && typeof state.hiddenReasonKey === "string" ? { hiddenReasonKey: state.hiddenReasonKey } : {}),
+      ...(state && typeof state.disabledReasonKey === "string" ? { disabledReasonKey: state.disabledReasonKey } : {}),
+    };
+  }
+
+  function toCommandView(definition, state) {
+    const commandState = cloneRecord(state || definition.state || {});
+    const timestamp = Date.now();
+    return {
+      ...cloneRecord(definition),
+      state: commandState,
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      registeredAt: definition.registeredAt || timestamp,
+      updatedAt: timestamp,
+      diagnostic: createCommandDiagnostic(commandState),
+    };
+  }
+
+  function getCommand(commandId) {
+    const normalized = typeof commandId === "string" ? commandId.trim() : "";
+    if (!normalized) {
+      throw new Error("commandId is required");
+    }
+    return commands.get(normalized);
+  }
+
+  function emitCommandEvent(eventName, payload) {
+    emit(eventName, payload);
+  }
+
+  function registerCommand(payload) {
+    const definition = readRecord(payload);
+    const commandId = typeof definition?.commandId === "string" ? definition.commandId.trim() : "";
+    if (!definition || !commandId) {
+      throw new Error("command.register: commandId is required");
+    }
+    const command = toCommandView({
+      ...definition,
+      commandId,
+      registeredAt: Date.now(),
+    });
+    commands.set(commandId, command);
+    emitCommandEvent("command.registered", {
+      commandId,
+      command,
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      registeredAt: command.registeredAt,
+    });
+    emitCommandEvent("command.changed", {
+      commandId,
+      command,
+      change: "registered",
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      source: "api",
+    });
+    return { command };
+  }
+
+  function unregisterCommand(payload) {
+    const commandId = typeof payload?.commandId === "string" ? payload.commandId.trim() : "";
+    if (!commandId) {
+      throw new Error("command.unregister: commandId is required");
+    }
+    commands.delete(commandId);
+    emitCommandEvent("command.unregistered", {
+      commandId,
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      reason: "api",
+    });
+    emitCommandEvent("command.changed", {
+      commandId,
+      change: "unregistered",
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      source: "api",
+    });
+    return { ack: true };
+  }
+
+  function setCommandState(payload) {
+    const commandId = typeof payload?.commandId === "string" ? payload.commandId.trim() : "";
+    if (!commandId) {
+      throw new Error("command.setState: commandId is required");
+    }
+    const current = getCommand(commandId);
+    if (!current) {
+      return { command: undefined };
+    }
+    const nextState = {
+      ...(readRecord(current.state) || {}),
+      ...(readRecord(payload.state) || {}),
+    };
+    const command = toCommandView(current, nextState);
+    commands.set(commandId, command);
+    emitCommandEvent("command.changed", {
+      commandId,
+      command,
+      state: nextState,
+      change: "state",
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      source: "api",
+    });
+    return { command };
+  }
+
+  function invokeCommand(payload) {
+    const commandId = typeof payload?.commandId === "string" ? payload.commandId.trim() : "";
+    if (!commandId) {
+      throw new Error("command.invoke: commandId is required");
+    }
+    const command = getCommand(commandId);
+    if (!command) {
+      throw new Error("command.invoke: command not found");
+    }
+    commandInvocationCounter += 1;
+    const event = {
+      commandId,
+      invocationId: sessionId + ":command:" + String(commandInvocationCounter),
+      source: typeof payload.source === "string" ? payload.source : "api",
+      payload: readRecord(payload.payload) || {},
+      command,
+      handlerId: command.handlerId,
+      ownerPluginId: launchContext.pluginId,
+      ownerSessionId: sessionId,
+      context: readRecord(payload.context) || undefined,
+    };
+    emitCommandEvent("command.invoked", event);
+    return {
+      commandId,
+      invocationId: event.invocationId,
+      dispatched: true,
+      command,
+    };
+  }
+
   function postToParent(message) {
     if (!window.parent || window.parent === window) {
       throw new Error("chips web shell parent window is missing");
@@ -469,6 +625,32 @@ function createBootstrapScript(session: WebPluginSessionView, inputThemeRuntime:
       const resourceId = payload && typeof payload === "object" ? payload.resourceId : undefined;
       return await readResourceMetadataPayload(resourceId);
     }
+
+    if (action === "command.register") {
+      return registerCommand(payload);
+    }
+
+    if (action === "command.unregister") {
+      return unregisterCommand(payload || {});
+    }
+
+    if (action === "command.get") {
+      const command = getCommand(payload && payload.commandId);
+      return { command };
+    }
+
+    if (action === "command.list") {
+      return { commands: Array.from(commands.values()) };
+    }
+
+    if (action === "command.invoke") {
+      return invokeCommand(payload || {});
+    }
+
+    if (action === "command.setState") {
+      return setCommandState(payload || {});
+    }
+
     if (action === "platform.dialogOpenFile") {
       const filePaths = await openBrowserFileDialog();
       return { filePaths };

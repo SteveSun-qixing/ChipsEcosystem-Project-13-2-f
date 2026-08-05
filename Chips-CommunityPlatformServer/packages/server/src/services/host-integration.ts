@@ -12,6 +12,8 @@ import {
   type WebResourceOpenRequest,
 } from './web-resource-open-plan.js';
 
+export type { WebResourceOpenPlan, WebResourceOpenRequest } from './web-resource-open-plan.js';
+
 interface ModuleInvokeResult<TOutput> {
   mode: 'sync' | 'job';
   output?: TOutput;
@@ -67,6 +69,15 @@ interface RuntimePluginRecord {
       };
     };
     capabilities?: string[];
+    theme?: {
+      themeId?: string;
+      displayName?: string;
+      version?: string;
+      parentTheme?: string;
+      tokensPath?: string;
+      themeCssPath?: string;
+      contractPath?: string;
+    };
   };
   installPath: string;
   enabled: boolean;
@@ -94,6 +105,17 @@ export interface WebPluginEntryView extends WebPluginSessionView {
   entryDir: string;
 }
 
+export interface WebThemeRuntimeView {
+  themeId: string;
+  displayName: string;
+  version: string;
+  parentTheme?: string;
+  css: string;
+  tokens: Record<string, unknown>;
+  resolved: Array<{ id: string; displayName: string; version: string; order: number }>;
+  diagnostics?: unknown[];
+  summary?: unknown;
+}
 
 export interface FileConvertResult {
   outputPath: string;
@@ -112,89 +134,74 @@ export interface FileConvertResult {
 
 const MODULE_JOB_POLL_MS = 50;
 const WEB_RUNTIME_TARGET = 'web';
+const CSS_URL_PATTERN = /url\(\s*(?:'([^']+)'|"([^"]+)"|([^'")]+))\s*\)/gi;
 
-const WEB_RESOURCE_MIME_BY_EXTENSION: Record<string, string> = {
-  '.avif': 'image/avif',
-  '.bmp': 'image/bmp',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-};
-
-function normalizeOptionalString(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
+interface WebThemeAssetRoot {
+  themeId: string;
+  installPath: string;
 }
 
-function normalizeResourceIntent(value: string | undefined): string {
-  return normalizeOptionalString(value)?.toLowerCase() ?? 'view';
+function splitCssUrlSuffix(input: string): { pathname: string; suffix: string } {
+  const queryIndex = input.indexOf('?');
+  const hashIndex = input.indexOf('#');
+  const splitIndex = [queryIndex, hashIndex].filter((value) => value >= 0).sort((left, right) => left - right)[0] ?? -1;
+
+  if (splitIndex < 0) {
+    return { pathname: input, suffix: '' };
+  }
+
+  return {
+    pathname: input.slice(0, splitIndex),
+    suffix: input.slice(splitIndex),
+  };
 }
 
-function inferResourceExtension(resourceId: string, fileName?: string): string | undefined {
-  const candidate = normalizeOptionalString(fileName) ?? resourceId;
-  if (!candidate) {
-    return undefined;
-  }
-
-  try {
-    const parsed = new URL(candidate);
-    const extension = path.extname(parsed.pathname).trim().toLowerCase();
-    return extension.length > 0 ? extension : undefined;
-  } catch {
-    const extension = path.extname(candidate).trim().toLowerCase();
-    return extension.length > 0 ? extension : undefined;
-  }
+function isPathInsideRoot(rootPath: string, candidatePath: string): boolean {
+  const relative = path.relative(rootPath, candidatePath);
+  return relative.length === 0 || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-function inferResourceMimeType(mimeType: string | undefined, extension: string | undefined): string | undefined {
-  const normalizedMimeType = normalizeOptionalString(mimeType)?.toLowerCase();
-  if (normalizedMimeType) {
-    return normalizedMimeType;
-  }
-
-  if (!extension) {
-    return undefined;
-  }
-
-  return WEB_RESOURCE_MIME_BY_EXTENSION[extension];
+function buildWebThemeAssetUrl(themeId: string, relativePath: string, suffix: string): string {
+  const encodedPath = relativePath
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return `/api/v1/host/theme-assets/${encodeURIComponent(themeId)}/${encodedPath}${suffix}`;
 }
 
-function buildResourceHandlerCapabilities(intent: string, mimeType: string | undefined, extension: string | undefined): string[] {
-  const capabilities: string[] = [];
+export function rewriteWebThemeCssAssetUrls(cssText: string, assetRoots: WebThemeAssetRoot[]): string {
+  if (!cssText.trim() || assetRoots.length === 0) {
+    return cssText;
+  }
 
-  if (mimeType) {
-    capabilities.push(`resource-handler:${intent}:${mimeType}`);
-    const slashIndex = mimeType.indexOf('/');
-    if (slashIndex > 0) {
-      capabilities.push(`resource-handler:${intent}:${mimeType.slice(0, slashIndex)}/*`);
+  const normalizedRoots = assetRoots.map((root) => ({
+    themeId: root.themeId,
+    installPath: path.resolve(root.installPath),
+  }));
+
+  return cssText.replace(CSS_URL_PATTERN, (match, singleQuoted, doubleQuoted, bareValue) => {
+    const rawValue = String(singleQuoted ?? doubleQuoted ?? bareValue ?? '').trim();
+    if (!rawValue || !rawValue.startsWith('file:')) {
+      return match;
     }
-  }
 
-  if (extension) {
-    capabilities.push(`file-handler:${extension}`);
-  }
+    const { pathname, suffix } = splitCssUrlSuffix(rawValue);
+    let filePath = '';
+    try {
+      filePath = fileURLToPath(pathname);
+    } catch {
+      return match;
+    }
 
-  return capabilities;
-}
+    const matchingRoot = normalizedRoots.find((root) => isPathInsideRoot(root.installPath, filePath));
+    if (!matchingRoot) {
+      return match;
+    }
 
-function isExternalUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'data:' || parsed.protocol === 'blob:';
-  } catch {
-    return false;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    const relativePath = path.relative(matchingRoot.installPath, filePath).split(path.sep).join('/');
+    return `url("${buildWebThemeAssetUrl(matchingRoot.themeId, relativePath, suffix)}")`;
+  });
 }
 
 export class HostIntegrationService {
@@ -407,6 +414,66 @@ export class HostIntegrationService {
     }
 
     throw new Error(`Resolved plugin asset not found: ${assetPath}`);
+  }
+
+  public async getWebThemeRuntime(): Promise<WebThemeRuntimeView> {
+    if (!this.initialized) {
+      await this.init();
+    }
+
+    const [current, cssResult, resolved] = await Promise.all([
+      this.host.kernel.invoke<Record<string, never>, {
+        themeId: string;
+        displayName: string;
+        version: string;
+        parentTheme?: string;
+      }>('theme.getCurrent', {}, this.createKernelContext()),
+      this.host.kernel.invoke<Record<string, never>, { css: string; themeId: string }>(
+        'theme.getAllCss',
+        {},
+        this.createKernelContext(),
+      ),
+      this.host.kernel.invoke<{ chain: string[] }, {
+        resolved: Array<{ id: string; displayName: string; version: string; order: number }>;
+        tokens: Record<string, unknown>;
+        diagnostics?: unknown[];
+        summary?: unknown;
+      }>('theme.resolve', { chain: [] }, this.createKernelContext()),
+    ]);
+
+    return {
+      themeId: current.themeId,
+      displayName: current.displayName,
+      version: current.version,
+      ...(current.parentTheme ? { parentTheme: current.parentTheme } : {}),
+      css: this.rewriteThemeCssAssetUrlsForWeb(cssResult.css),
+      tokens: resolved.tokens ?? {},
+      resolved: resolved.resolved ?? [],
+      ...(resolved.diagnostics ? { diagnostics: resolved.diagnostics } : {}),
+      ...(resolved.summary ? { summary: resolved.summary } : {}),
+    };
+  }
+
+  public resolveWebThemeAssetPath(themeId: string, assetPath: string): string {
+    const normalizedThemeId = themeId.trim();
+    if (!normalizedThemeId) {
+      throw new Error('themeId is required');
+    }
+
+    const plugin = this.findRuntimeThemePluginRecord(normalizedThemeId);
+    const normalizedAssetPath = assetPath.replace(/^\/+/, '');
+    const resolvedPath = path.resolve(plugin.installPath, normalizedAssetPath);
+    const relative = path.relative(plugin.installPath, resolvedPath);
+
+    if (!normalizedAssetPath || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`Theme asset escaped install root: ${assetPath}`);
+    }
+
+    if (!fsSync.existsSync(resolvedPath) || !fsSync.statSync(resolvedPath).isFile()) {
+      throw new Error(`Theme asset not found: ${assetPath}`);
+    }
+
+    return resolvedPath;
   }
 
   public closeWebPluginSession(sessionId: string): void {
@@ -695,6 +762,35 @@ export class HostIntegrationService {
     }
 
     return session;
+  }
+
+  private getRuntimeThemePluginRecords(): RuntimePluginRecord[] {
+    return this.host.runtime
+      .query({ type: 'theme' })
+      .filter((record) => record.enabled) as RuntimePluginRecord[];
+  }
+
+  private findRuntimeThemePluginRecord(themeId: string): RuntimePluginRecord {
+    const plugin = this.getRuntimeThemePluginRecords().find((record) => {
+      const manifestThemeId = record.manifest.theme?.themeId ?? record.manifest.id;
+      return manifestThemeId === themeId;
+    });
+
+    if (!plugin) {
+      throw new Error(`Theme plugin not found: ${themeId}`);
+    }
+
+    return plugin;
+  }
+
+  private rewriteThemeCssAssetUrlsForWeb(cssText: string): string {
+    const assetRoots = this.getRuntimeThemePluginRecords()
+      .map((record) => ({
+        themeId: record.manifest.theme?.themeId ?? record.manifest.id,
+        installPath: record.installPath,
+      }));
+
+    return rewriteWebThemeCssAssetUrls(cssText, assetRoots);
   }
 
   private ensurePluginSupportsWeb(plugin: RuntimePluginRecord): void {

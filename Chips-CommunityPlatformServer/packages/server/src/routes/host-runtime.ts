@@ -151,6 +151,9 @@ function createBootstrapScript(session: WebPluginSessionView): string {
     if (resourceId.startsWith("http://") || resourceId.startsWith("https://") || resourceId.startsWith("data:") || resourceId.startsWith("blob:")) {
       return resourceId;
     }
+    if (resourceId.startsWith("/")) {
+      return new URL(resourceId, window.location.origin).toString();
+    }
     if (!resourceId.startsWith("chips-web-file://")) {
       return null;
     }
@@ -168,6 +171,88 @@ function createBootstrapScript(session: WebPluginSessionView): string {
     const objectUrl = URL.createObjectURL(file);
     localObjectUrls.set(resourceId, objectUrl);
     return objectUrl;
+  }
+
+  function readLocalFile(resourceId) {
+    if (!resourceId.startsWith("chips-web-file://")) {
+      return null;
+    }
+
+    const file = localFiles.get(resourceId);
+    if (!file) {
+      throw new Error("local file handle not found");
+    }
+    return file;
+  }
+
+  function arrayBufferToBinaryPayload(buffer) {
+    return { data: Array.from(new Uint8Array(buffer)) };
+  }
+
+  async function readResourceBinaryPayload(resourceId) {
+    const normalizedResourceId = typeof resourceId === "string" ? resourceId.trim() : "";
+    if (!normalizedResourceId) {
+      throw new Error("resourceId is required");
+    }
+
+    const file = readLocalFile(normalizedResourceId);
+    if (file) {
+      return arrayBufferToBinaryPayload(await file.arrayBuffer());
+    }
+
+    const uri = resolveLocalResourceUri(normalizedResourceId);
+    if (!uri) {
+      throw new Error("unsupported web resource id");
+    }
+
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error("resource fetch failed: " + String(response.status));
+    }
+    return arrayBufferToBinaryPayload(await response.arrayBuffer());
+  }
+
+  async function readResourceMetadataPayload(resourceId) {
+    const normalizedResourceId = typeof resourceId === "string" ? resourceId.trim() : "";
+    if (!normalizedResourceId) {
+      throw new Error("resourceId is required");
+    }
+
+    const file = readLocalFile(normalizedResourceId);
+    if (file) {
+      return {
+        metadata: {
+          path: normalizedResourceId,
+          fileName: file.name || undefined,
+          mimeType: file.type || undefined,
+          size: typeof file.size === "number" ? file.size : undefined,
+          isFile: true,
+          isDirectory: false,
+          mtimeMs: typeof file.lastModified === "number" ? file.lastModified : undefined,
+        },
+      };
+    }
+
+    const uri = resolveLocalResourceUri(normalizedResourceId);
+    if (!uri) {
+      throw new Error("unsupported web resource id");
+    }
+
+    const response = await fetch(uri, { method: "HEAD" });
+    if (!response.ok) {
+      throw new Error("resource metadata fetch failed: " + String(response.status));
+    }
+    const sizeText = response.headers.get("content-length");
+    const size = sizeText ? Number(sizeText) : undefined;
+    return {
+      metadata: {
+        path: normalizedResourceId,
+        mimeType: response.headers.get("content-type") || undefined,
+        size: Number.isFinite(size) ? size : undefined,
+        isFile: true,
+        isDirectory: false,
+      },
+    };
   }
 
   async function handleLocalInvoke(action, payload) {
@@ -227,6 +312,15 @@ function createBootstrapScript(session: WebPluginSessionView): string {
       return { uri };
     }
 
+    if (action === "resource.readBinary") {
+      const resourceId = payload && typeof payload === "object" ? payload.resourceId : undefined;
+      return await readResourceBinaryPayload(resourceId);
+    }
+
+    if (action === "resource.readMetadata") {
+      const resourceId = payload && typeof payload === "object" ? payload.resourceId : undefined;
+      return await readResourceMetadataPayload(resourceId);
+    }
     if (action === "platform.dialogOpenFile") {
       const filePaths = await openBrowserFileDialog();
       return { filePaths };

@@ -138,6 +138,62 @@ describe("resolveLaunchImagePath", () => {
     });
   });
 
+  it("社区 Web 图片序列 payload 使用相对路径时按顶层资源推导同源序列 URL", () => {
+    expect(
+      resolveLaunchImageTarget({
+        launchParams: {
+          resourceOpen: {
+            resourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-02.jpg",
+            fileName: "page-02.jpg",
+            mimeType: "image/jpeg",
+            payload: {
+              kind: "chips.book-card",
+              version: "1.0.0",
+              cardType: "base.book",
+              mode: "image-sequence",
+              resources: {
+                images: [
+                  {
+                    resourceId: "comic/page-01.jpg",
+                    relativePath: "comic/page-01.jpg",
+                    fileName: "page-01.jpg",
+                    mimeType: "image/jpeg",
+                  },
+                  {
+                    resourceId: "comic/page-02.jpg",
+                    relativePath: "comic/page-02.jpg",
+                    fileName: "page-02.jpg",
+                    mimeType: "image/jpeg",
+                  },
+                ],
+              },
+              display: {
+                title: "Community Comic",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      images: [
+        {
+          sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-01.jpg",
+          fileName: "page-01.jpg",
+          mimeType: "image/jpeg",
+          relativePath: "comic/page-01.jpg",
+        },
+        {
+          sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-02.jpg",
+          fileName: "page-02.jpg",
+          mimeType: "image/jpeg",
+          relativePath: "comic/page-02.jpg",
+        },
+      ],
+      initialIndex: 1,
+      title: "Community Comic",
+    });
+  });
+
   it("通过正式资源打开上下文接收成品测试空间真实图片", () => {
     const imagePath = requireFileMaterial("图片.jpg");
 

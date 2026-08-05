@@ -206,4 +206,46 @@ describe("resolveLaunchBookTarget", () => {
       relativePath: "电子书.epub",
     });
   });
+
+  it("社区 Web 电子书 payload 使用相对路径时优先读取顶层已解析资源", () => {
+    expect(
+      resolveLaunchBookTarget({
+        launchParams: {
+          trigger: "resource-open-service",
+          resourceOpen: {
+            intent: "view",
+            resourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/books/demo.epub",
+            fileName: "demo.epub",
+            mimeType: "application/epub+zip",
+            payload: {
+              kind: "chips.book-card",
+              version: "1.0.0",
+              cardType: "base.book",
+              mode: "ebook",
+              resources: {
+                book: {
+                  resourceId: "books/demo.epub",
+                  relativePath: "books/demo.epub",
+                  fileName: "demo.epub",
+                  mimeType: "application/epub+zip",
+                },
+              },
+              display: {
+                title: "社区缓存电子书",
+                author: "Chips QA",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/books/demo.epub",
+      filePath: undefined,
+      fileName: "demo.epub",
+      mimeType: "application/epub+zip",
+      title: "社区缓存电子书",
+      author: "Chips QA",
+      relativePath: "books/demo.epub",
+    });
+  });
 });

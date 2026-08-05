@@ -22,7 +22,7 @@ describe("mountBasecardView", () => {
     expect(coverRule).toContain("aspect-ratio: 2 / 3;");
   });
 
-  it("renders ebook metadata and opens the resolved book resource", async () => {
+  it("renders ebook metadata and opens the card-root book resource", async () => {
     const container = document.createElement("div");
     const openResource = vi.fn();
     const config: BasecardConfig = {
@@ -60,7 +60,7 @@ describe("mountBasecardView", () => {
     button.click();
 
     expect(openResource).toHaveBeenCalledWith({
-      resourceId: "file:///tmp/books/demo.epub",
+      resourceId: "books/demo.epub",
       mimeType: "application/epub+zip",
       title: "Demo Book",
       fileName: "demo.epub",
@@ -71,7 +71,7 @@ describe("mountBasecardView", () => {
         mode: "ebook",
         resources: {
           book: expect.objectContaining({
-            resourceId: "file:///tmp/books/demo.epub",
+            resourceId: "books/demo.epub",
             relativePath: "books/demo.epub",
           }),
         },
@@ -134,7 +134,7 @@ describe("mountBasecardView", () => {
     button.click();
 
     expect(openResource).toHaveBeenCalledWith({
-      resourceId: "file:///tmp/comic/001.jpg",
+      resourceId: "comic/001.jpg",
       mimeType: "image/jpeg",
       title: "Comic",
       fileName: "001.jpg",
@@ -143,8 +143,8 @@ describe("mountBasecardView", () => {
         mode: "image-sequence",
         resources: {
           images: [
-            expect.objectContaining({ relativePath: "comic/001.jpg" }),
-            expect.objectContaining({ relativePath: "comic/002.jpg" }),
+            expect.objectContaining({ resourceId: "comic/001.jpg", relativePath: "comic/001.jpg" }),
+            expect.objectContaining({ resourceId: "comic/002.jpg", relativePath: "comic/002.jpg" }),
           ],
         },
       }),

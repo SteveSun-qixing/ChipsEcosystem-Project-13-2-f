@@ -34,6 +34,19 @@ function setTextFieldValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+async function waitForVideoPreviewSrc(root: ParentNode, expectedSrc: string): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const src = root.querySelector('[data-role="video-resource"] video')?.getAttribute("src");
+    if (src === expectedSrc) {
+      return;
+    }
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  expect(root.querySelector('[data-role="video-resource"] video')?.getAttribute("src")).toBe(expectedSrc);
+}
+
 describe("createBasecardEditorRoot", () => {
   it("emits metadata changes only after the user leaves the metadata form", async () => {
     const initialConfig = createConfig({
@@ -108,7 +121,7 @@ describe("createBasecardEditorRoot", () => {
       video_file: "demo.mp4",
       cover_image: "",
     });
-    expect(root.querySelector('[data-role="video-resource"] video')?.getAttribute("src")).toBe("demo.mp4");
+    await waitForVideoPreviewSrc(root, "demo.mp4");
     expect(root.querySelector('[data-role="cover-resource"]')).toBeNull();
   });
 

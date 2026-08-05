@@ -36,6 +36,7 @@ export function resolveLaunchBookTarget(launchContext: PlatformLaunchContext): L
   if (bookPayload?.resources.book) {
     const bookResource = readRecord(bookPayload.resources.book);
     const sourceId =
+      readNonEmptyString(resourceOpen?.resourceId) ??
       readNonEmptyString(bookResource?.resourceId) ??
       readNonEmptyString(bookResource?.relativePath);
     if (sourceId) {

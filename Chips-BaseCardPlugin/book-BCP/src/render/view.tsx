@@ -327,13 +327,12 @@ function Cover(props: { src: string; alt: string }) {
 
 function createImagePayload(input: {
   config: BasecardConfig;
-  resolvedUrls: Map<string, string>;
   title: string;
   author: string;
 }): BookCardOpenPayload | null {
   const images = sortImageItems(input.config.image_sequence, input.config.image_sort_basis)
     .map((image) => buildOpenResourceDescriptor(
-      input.resolvedUrls.get(image.file_path) || image.file_path,
+      image.file_path,
       image.file_path,
       image.mime_type || inferImageMimeTypeFromPath(image.file_path),
     ))
@@ -360,12 +359,11 @@ function createImagePayload(input: {
 
 function createEbookPayload(input: {
   config: BasecardConfig;
-  resolvedUrls: Map<string, string>;
   title: string;
   author: string;
 }): BookCardOpenPayload | null {
   const book = buildOpenResourceDescriptor(
-    input.resolvedUrls.get(input.config.book_file) || input.config.book_file,
+    input.config.book_file,
     input.config.book_file,
     inferBookMimeType(input.config.book_format || input.config.book_file),
   );
@@ -434,7 +432,6 @@ export function BasecardView({
 
       const payload = createImagePayload({
         config,
-        resolvedUrls,
         title,
         author,
       });
@@ -443,7 +440,7 @@ export function BasecardView({
       }
 
       openResource({
-        resourceId: resolvedUrls.get(firstImage.file_path) || firstImage.file_path,
+        resourceId: firstImage.file_path,
         mimeType: firstImage.mime_type || inferImageMimeTypeFromPath(firstImage.file_path),
         title,
         fileName: resolveFileName(firstImage.file_path),
@@ -454,7 +451,6 @@ export function BasecardView({
 
     const payload = createEbookPayload({
       config,
-      resolvedUrls,
       title,
       author,
     });
@@ -463,7 +459,7 @@ export function BasecardView({
     }
 
     openResource({
-      resourceId: resolvedUrls.get(config.book_file) || config.book_file,
+      resourceId: config.book_file,
       mimeType: inferBookMimeType(config.book_format || config.book_file),
       title,
       fileName: resolveFileName(config.book_file),

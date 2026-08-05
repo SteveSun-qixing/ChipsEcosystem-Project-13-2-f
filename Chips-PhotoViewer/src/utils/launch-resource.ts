@@ -43,11 +43,96 @@ function readBookPayload(value: unknown): BookCardOpenPayload | null {
   return payload as unknown as BookCardOpenPayload;
 }
 
-function readPayloadImageResource(value: unknown): LaunchImageResource | null {
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizePlainPath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function isSourceForRelativePath(sourceId: string, relativePath: string | undefined): boolean {
+  if (!relativePath) {
+    return false;
+  }
+
+  if (sourceId === relativePath) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(sourceId);
+    const sourceSegments = parsed.pathname.split("/").filter(Boolean).map(decodePathSegment);
+    const relativeSegments = normalizePlainPath(relativePath).split("/").filter(Boolean);
+    return relativeSegments.length > 0
+      && sourceSegments.slice(-relativeSegments.length).join("/") === relativeSegments.join("/");
+  } catch {
+    const normalizedSource = normalizePlainPath(sourceId);
+    const normalizedRelative = normalizePlainPath(relativePath);
+    return normalizedSource.endsWith(`/${normalizedRelative}`) || normalizedSource === normalizedRelative;
+  }
+}
+
+function resolveResourceBaseFromDirectSource(
+  directSource: string | undefined,
+  directRelativePath: string | undefined,
+): string | undefined {
+  if (!directSource || !directRelativePath || !isSourceForRelativePath(directSource, directRelativePath)) {
+    return undefined;
+  }
+
+  const relativeSegments = normalizePlainPath(directRelativePath).split("/").filter(Boolean);
+  if (relativeSegments.length === 0) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(directSource);
+    const sourceSegments = parsed.pathname.split("/").filter(Boolean);
+    parsed.pathname = `/${sourceSegments.slice(0, -relativeSegments.length).join("/")}/`;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    const normalizedSource = normalizePlainPath(directSource);
+    const normalizedRelative = normalizePlainPath(directRelativePath);
+    if (normalizedSource.endsWith(normalizedRelative)) {
+      return normalizedSource.slice(0, normalizedSource.length - normalizedRelative.length);
+    }
+  }
+
+  return undefined;
+}
+
+function resolvePayloadSourceId(
+  sourceId: string | undefined,
+  relativePath: string | undefined,
+  resourceBaseUrl: string | undefined,
+): string | undefined {
+  if (sourceId && (!relativePath || sourceId !== relativePath)) {
+    return sourceId;
+  }
+
+  if (relativePath && resourceBaseUrl) {
+    try {
+      return new URL(relativePath, resourceBaseUrl).toString();
+    } catch {
+      return `${resourceBaseUrl}${relativePath}`;
+    }
+  }
+
+  return sourceId ?? relativePath;
+}
+
+function readPayloadImageResource(value: unknown, resourceBaseUrl?: string): LaunchImageResource | null {
   const record = readRecord(value);
   const sourceId = readNonEmptyString(record?.resourceId);
   const relativePath = readNonEmptyString(record?.relativePath);
-  const resolvedSourceId = sourceId ?? relativePath;
+  const resolvedSourceId = resolvePayloadSourceId(sourceId, relativePath, resourceBaseUrl);
   if (!resolvedSourceId) {
     return null;
   }
@@ -66,18 +151,36 @@ export function resolveLaunchImageTarget(launchContext: PlatformLaunchContext): 
   const bookPayload = readBookPayload(resourceOpen?.payload);
 
   if (bookPayload) {
-    const images = (bookPayload.resources.images ?? [])
-      .map(readPayloadImageResource)
+    const rawImages = bookPayload.resources.images ?? [];
+    const directSources = [
+      readNonEmptyString(resourceOpen?.resourceId),
+      readNonEmptyString(resourceOpen?.filePath),
+    ].filter((item): item is string => Boolean(item));
+    const directImage = rawImages.find((image) => {
+      const record = readRecord(image);
+      const sourceId = readNonEmptyString(record?.resourceId);
+      const relativePath = readNonEmptyString(record?.relativePath);
+      return directSources.some((directSource) => (
+        directSource === sourceId
+        || directSource === relativePath
+        || isSourceForRelativePath(directSource, relativePath)
+      ));
+    });
+    const directImageRecord = readRecord(directImage);
+    const directRelativePath = readNonEmptyString(directImageRecord?.relativePath)
+      ?? readNonEmptyString(directImageRecord?.resourceId);
+    const directSource = directSources.find((source) => (
+      source === directRelativePath || isSourceForRelativePath(source, directRelativePath)
+    ));
+    const resourceBaseUrl = resolveResourceBaseFromDirectSource(directSource, directRelativePath);
+    const images = rawImages
+      .map((image) => readPayloadImageResource(image, resourceBaseUrl))
       .filter((image): image is LaunchImageResource => image !== null);
     if (images.length > 0) {
-      const directSources = [
-        readNonEmptyString(resourceOpen?.resourceId),
-        readNonEmptyString(resourceOpen?.filePath),
-      ].filter((item): item is string => Boolean(item));
       const initialIndex = directSources.length > 0
         ? images.findIndex((image) => (
           directSources.includes(image.sourceId) ||
-          (image.relativePath ? directSources.includes(image.relativePath) : false)
+          (image.relativePath ? directSources.includes(image.relativePath) || directSources.some((source) => isSourceForRelativePath(source, image.relativePath)) : false)
         ))
         : 0;
 

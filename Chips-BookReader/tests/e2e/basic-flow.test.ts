@@ -284,6 +284,42 @@ describe("书籍阅读器基础流程真实回归", () => {
       author: "Book Card Author",
       mimeType: "application/pdf",
     });
+
+    expect(
+      resolveLaunchBookTarget({
+        launchParams: {
+          resourceOpen: {
+            resourceId: "https://community.example/cache/assets/content/books/minimal.epub",
+            fileName: "minimal.epub",
+            mimeType: "application/epub+zip",
+            payload: {
+              kind: "chips.book-card",
+              version: "1.0.0",
+              cardType: "base.book",
+              mode: "ebook",
+              resources: {
+                book: {
+                  resourceId: "books/minimal.epub",
+                  relativePath: "books/minimal.epub",
+                  fileName: "minimal.epub",
+                  mimeType: "application/epub+zip",
+                },
+              },
+              display: {
+                title: "Community Cached Book",
+                author: "Book Card Author",
+              },
+            },
+          },
+        },
+      }),
+    ).toMatchObject({
+      sourceId: "https://community.example/cache/assets/content/books/minimal.epub",
+      relativePath: "books/minimal.epub",
+      title: "Community Cached Book",
+      author: "Book Card Author",
+      mimeType: "application/epub+zip",
+    });
   });
 
   it("加载并渲染 EPUB / EPUB3 最小样本，保留目录、资源内联和内部链接改写", async () => {

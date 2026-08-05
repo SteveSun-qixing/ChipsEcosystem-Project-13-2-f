@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "cardId": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "server": {
+      "type": "object",
+      "required": ["baseUrl", "accessToken"],
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        },
+        "accessToken": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "tempDir": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

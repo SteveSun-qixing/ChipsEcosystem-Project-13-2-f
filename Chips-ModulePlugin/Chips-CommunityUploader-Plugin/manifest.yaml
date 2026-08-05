@@ -3,7 +3,7 @@ name: Chips Community Uploader
 version: 0.1.0
 type: module
 entry: dist/index.mjs
-description: 在用户设备上处理 .card 资源外置、链接替换、重新打包并发布到社区服务器的官方上传模块。
+description: 在用户设备上处理 .card 上传、网络资源卡片生成、远程打开和完整卡片下载恢复的官方社区卡片传输模块。
 author:
   name: sevenstars
   email: chips-community-uploader@example.invalid
@@ -13,6 +13,10 @@ permissions:
   - file.read
   - file.write
   - network.request
+  - platform.external
+  - plugin.manage
+  - window.control
+  - zip.manage
 runtime:
   targets:
     desktop:
@@ -20,7 +24,7 @@ runtime:
     web:
       supported: false
     mobile:
-      supported: false
+      supported: true
     headless:
       supported: true
 engines:
@@ -34,11 +38,19 @@ module:
   runtime: worker
   activation: onDemand
   provides:
-    - capability: community.card.publish
+    - capability: community.card.transfer
       version: "1.0.0"
       methods:
-        - name: publish
+        - name: upload
           mode: job
-          inputSchema: contracts/publish.input.schema.json
-          outputSchema: contracts/publish.output.schema.json
+          inputSchema: contracts/upload.input.schema.json
+          outputSchema: contracts/upload.output.schema.json
+        - name: download
+          mode: job
+          inputSchema: contracts/download.input.schema.json
+          outputSchema: contracts/download.output.schema.json
+        - name: openRemote
+          mode: job
+          inputSchema: contracts/openRemote.input.schema.json
+          outputSchema: contracts/openRemote.output.schema.json
   consumes: []

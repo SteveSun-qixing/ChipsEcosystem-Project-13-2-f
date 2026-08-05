@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": ["opened", "url"],
+  "properties": {
+    "opened": {
+      "type": "boolean",
+      "const": true
+    },
+    "url": {
+      "type": "string"
+    },
+    "localCardPath": {
+      "type": "string"
+    },
+    "surfaceId": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

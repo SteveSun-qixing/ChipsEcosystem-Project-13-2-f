@@ -1,18 +1,49 @@
-import { publishCommunityCard } from "./publisher";
-import type { CommunityCardPublishContext, CommunityCardPublishRequest, CommunityCardPublishResult } from "./types";
+import {
+  downloadCommunityCard,
+  openRemoteCommunityCard,
+  uploadCommunityCard,
+} from "./publisher";
+import type {
+  CommunityCardPublishContext,
+  CommunityCardTransferDownloadRequest,
+  CommunityCardTransferDownloadResult,
+  CommunityCardTransferOpenRemoteRequest,
+  CommunityCardTransferOpenRemoteResult,
+  CommunityCardTransferUploadRequest,
+  CommunityCardTransferUploadResult,
+} from "./types";
 
-export type { CommunityCardPublishRequest, CommunityCardPublishResult } from "./types";
+export type {
+  CommunityCardTransferDownloadRequest,
+  CommunityCardTransferDownloadResult,
+  CommunityCardTransferOpenRemoteRequest,
+  CommunityCardTransferOpenRemoteResult,
+  CommunityCardTransferUploadRequest,
+  CommunityCardTransferUploadResult,
+} from "./types";
 
 const moduleDefinition = {
   providers: [
     {
-      capability: "community.card.publish",
+      capability: "community.card.transfer",
       methods: {
-        async publish(
+        async upload(
           ctx: CommunityCardPublishContext,
-          input: CommunityCardPublishRequest,
-        ): Promise<CommunityCardPublishResult> {
-          return publishCommunityCard(ctx, input);
+          input: CommunityCardTransferUploadRequest,
+        ): Promise<CommunityCardTransferUploadResult> {
+          return uploadCommunityCard(ctx, input);
+        },
+        async download(
+          ctx: CommunityCardPublishContext,
+          input: CommunityCardTransferDownloadRequest,
+        ): Promise<CommunityCardTransferDownloadResult> {
+          return downloadCommunityCard(ctx, input);
+        },
+        async openRemote(
+          ctx: CommunityCardPublishContext,
+          input: CommunityCardTransferOpenRemoteRequest,
+        ): Promise<CommunityCardTransferOpenRemoteResult> {
+          return openRemoteCommunityCard(ctx, input);
         },
       },
     },

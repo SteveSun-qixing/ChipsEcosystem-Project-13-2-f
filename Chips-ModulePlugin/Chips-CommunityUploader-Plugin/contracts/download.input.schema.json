@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "required": ["cardId", "server", "outputPath"],
+  "properties": {
+    "cardId": {
+      "type": "string"
+    },
+    "versionId": {
+      "type": "string"
+    },
+    "server": {
+      "type": "object",
+      "required": ["baseUrl", "accessToken"],
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        },
+        "accessToken": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputPath": {
+      "type": "string"
+    },
+    "client": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "tempDir": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

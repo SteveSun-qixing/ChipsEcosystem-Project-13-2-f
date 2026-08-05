@@ -81,6 +81,23 @@ const resolveReferenceUrl = (
   return undefined;
 };
 
+const splitUrlSuffix = (value: string): { url: string; suffix: string } => {
+  const match = /[?#]/.exec(value);
+  if (!match || match.index < 0) {
+    return { url: value, suffix: "" };
+  }
+  return {
+    url: value.slice(0, match.index),
+    suffix: value.slice(match.index),
+  };
+};
+
+const resolveOriginalPath = (rawReference: string, pathMap: Map<string, string>): string | undefined => {
+  const { url, suffix } = splitUrlSuffix(rawReference);
+  const originalPath = pathMap.get(url);
+  return originalPath ? `${originalPath}${suffix}` : undefined;
+};
+
 const replaceInValue = (
   value: unknown,
   urlMap: Map<string, string>,
@@ -155,6 +172,77 @@ const replaceInValue = (
   return value;
 };
 
+const restoreInValue = (
+  value: unknown,
+  pathMap: Map<string, string>,
+  sourceFilePath: string,
+  richTextContentFileMap: Map<string, string>,
+): unknown => {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    const cardType = typeof record.card_type === "string" ? record.card_type.trim() : "";
+    const contentSource = typeof record.content_source === "string" ? record.content_source.trim() : "";
+    const rawContentText = typeof record.content_text === "string" ? record.content_text : undefined;
+
+    if (RICHTEXT_CARD_TYPES.has(cardType) && contentSource === "inline" && rawContentText) {
+      const originalContentFile = richTextContentFileMap.get(sourceFilePath);
+      if (originalContentFile) {
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(record)) {
+          if (key === "content_source") {
+            result[key] = "file";
+            continue;
+          }
+          if (key === "content_text") {
+            continue;
+          }
+          result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
+        }
+        result.content_file = originalContentFile;
+        return result;
+      }
+    }
+
+    const source = record.source;
+    const rawUrl = typeof record.url === "string" ? record.url : undefined;
+    const originalPath = rawUrl ? resolveOriginalPath(rawUrl, pathMap) : undefined;
+
+    if (source === "url" && originalPath) {
+      const result: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(record)) {
+        if (key === "source") {
+          result[key] = "file";
+          continue;
+        }
+        if (key === "url") {
+          continue;
+        }
+        result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
+      }
+      result.file_path = originalPath;
+      return result;
+    }
+  }
+
+  if (typeof value === "string") {
+    return resolveOriginalPath(value, pathMap) ?? value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => restoreInValue(item, pathMap, sourceFilePath, richTextContentFileMap));
+  }
+
+  if (value !== null && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
+    }
+    return result;
+  }
+
+  return value;
+};
+
 export const replaceYamlResourceUrls = (
   yamlText: string,
   urlMap: Map<string, string>,
@@ -164,6 +252,17 @@ export const replaceYamlResourceUrls = (
   const parsed = parse(yamlText) as unknown;
   const replaced = replaceInValue(parsed, urlMap, sourceFilePath, textResourceMap);
   return stringify(replaced, { indent: 2 });
+};
+
+export const restoreYamlResourcePaths = (
+  yamlText: string,
+  pathMap: Map<string, string>,
+  sourceFilePath: string,
+  richTextContentFileMap: Map<string, string>,
+): string => {
+  const parsed = parse(yamlText) as unknown;
+  const restored = restoreInValue(parsed, pathMap, sourceFilePath, richTextContentFileMap);
+  return stringify(restored, { indent: 2 });
 };
 
 export const collectFileBackedRichTextResourcePaths = (
@@ -197,6 +296,22 @@ export const replaceCoverHtmlUrls = (coverHtml: string, urlMap: Map<string, stri
   result = result.replace(/url\(([\"']?)([^)"']+)\1\)/g, (match, quote: string, value: string) => {
     const resolved = resolveReferenceUrl(value, urlMap, ".card/cover.html");
     return resolved ? `url(${quote}${resolved}${quote})` : match;
+  });
+
+  return result;
+};
+
+export const restoreCoverHtmlPaths = (coverHtml: string, pathMap: Map<string, string>): string => {
+  let result = coverHtml;
+
+  result = result.replace(/=([\"'])([^\"']+)\1/g, (match, quote: string, value: string) => {
+    const restored = resolveOriginalPath(value, pathMap);
+    return restored ? `=${quote}${restored}${quote}` : match;
+  });
+
+  result = result.replace(/url\(([\"']?)([^)"']+)\1\)/g, (match, quote: string, value: string) => {
+    const restored = resolveOriginalPath(value, pathMap);
+    return restored ? `url(${quote}${restored}${quote})` : match;
   });
 
   return result;

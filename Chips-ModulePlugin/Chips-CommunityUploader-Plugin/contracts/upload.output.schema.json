@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "required": ["cardId", "versionId", "status", "renderStatus", "renderStatusUrl", "communityUrl", "uploadedResources"],
+  "properties": {
+    "cardId": {
+      "type": "string"
+    },
+    "versionId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "renderStatus": {
+      "type": "string"
+    },
+    "renderStatusUrl": {
+      "type": "string"
+    },
+    "communityUrl": {
+      "type": "string"
+    },
+    "networkCardPath": {
+      "type": "string"
+    },
+    "uploadedResources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["originalRelativePath", "networkUrl", "publicUrl", "bucket", "objectKey", "sizeBytes", "mimeType"],
+        "properties": {
+          "originalRelativePath": {
+            "type": "string"
+          },
+          "networkUrl": {
+            "type": "string"
+          },
+          "publicUrl": {
+            "type": "string"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "objectKey": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

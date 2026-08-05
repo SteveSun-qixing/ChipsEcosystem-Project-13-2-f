@@ -1,66 +1,116 @@
 import type { CommunityUploaderWarning } from "./errors";
 
-export interface CommunityCardPublishRequest {
+export interface CommunityCardTransferServer {
+  baseUrl: string;
+  accessToken: string;
+}
+
+export interface CommunityCardTransferClientInfo {
+  name?: string;
+  version?: string;
+  platform?: string;
+}
+
+export interface CommunityCardTransferUploadRequest {
   cardFile: string;
-  server: {
-    baseUrl: string;
-    accessToken: string;
-  };
+  server: CommunityCardTransferServer;
   publish?: {
     roomId?: string | null;
-    visibility?: "public" | "private";
     idempotencyKey?: string;
   };
-  client?: {
-    name?: string;
-    version?: string;
-    platform?: string;
-  };
+  client?: CommunityCardTransferClientInfo;
   workspace?: {
     tempDir?: string;
-    keepProcessedCard?: boolean;
-    processedCardPath?: string;
+    keepNetworkCard?: boolean;
+    networkCardPath?: string;
   };
 }
 
-export interface NormalizedCommunityCardPublishRequest {
+export interface NormalizedCommunityCardTransferUploadRequest {
   cardFile: string;
-  server: {
-    baseUrl: string;
-    accessToken: string;
-  };
+  server: CommunityCardTransferServer;
   publish: {
     roomId?: string | null;
-    visibility: "public" | "private";
     idempotencyKey?: string;
   };
-  client: {
-    name: string;
-    version: string;
+  client: Required<Pick<CommunityCardTransferClientInfo, "name" | "version">> & {
     platform?: string;
   };
   workspace: {
     tempDir?: string;
-    keepProcessedCard: boolean;
-    processedCardPath?: string;
+    keepNetworkCard: boolean;
+    networkCardPath?: string;
   };
 }
 
-export interface CommunityCardPublishResult {
+export interface CommunityCardTransferUploadedResource {
+  originalRelativePath: string;
+  networkUrl: string;
+  publicUrl: string;
+  bucket: string;
+  objectKey: string;
+  sizeBytes: number;
+  mimeType: string;
+}
+
+export interface CommunityCardTransferUploadResult {
   cardId: string;
+  versionId: string;
   status: string;
   renderStatus: string;
   renderStatusUrl: string;
   communityUrl: string;
-  processedCardPath?: string;
-  uploadedResources: Array<{
-    relativePath: string;
-    publicUrl: string;
-    sizeBytes: number;
-    sha256: string;
-    mimeType: string;
-  }>;
+  networkCardPath?: string;
+  uploadedResources: CommunityCardTransferUploadedResource[];
   warnings?: CommunityUploaderWarning[];
+}
+
+export interface CommunityCardTransferDownloadRequest {
+  cardId: string;
+  server: CommunityCardTransferServer;
+  outputPath: string;
+  versionId?: string;
+  client?: CommunityCardTransferClientInfo;
+  workspace?: {
+    tempDir?: string;
+  };
+}
+
+export interface NormalizedCommunityCardTransferDownloadRequest {
+  cardId: string;
+  server: CommunityCardTransferServer;
+  outputPath: string;
+  versionId?: string;
+  client: Required<Pick<CommunityCardTransferClientInfo, "name" | "version">> & {
+    platform?: string;
+  };
+  workspace: {
+    tempDir?: string;
+  };
+}
+
+export interface CommunityCardTransferDownloadResult {
+  cardId: string;
+  versionId?: string | null;
+  outputPath: string;
+  restoredResourceCount: number;
+  suggestedFileName?: string;
+}
+
+export interface CommunityCardTransferOpenRemoteRequest {
+  cardId?: string;
+  url?: string;
+  server?: CommunityCardTransferServer;
+  workspace?: {
+    tempDir?: string;
+  };
+}
+
+export interface CommunityCardTransferOpenRemoteResult {
+  opened: true;
+  url: string;
+  localCardPath?: string;
+  surfaceId?: string;
 }
 
 export interface HostFileStatLike {
@@ -78,6 +128,17 @@ export interface HostFileListEntry {
 export interface HostCardReadInfo {
   metadata?: Record<string, unknown>;
   status?: unknown;
+}
+
+export interface HostZipEntryMeta {
+  path: string;
+  size: number;
+  compressedSize: number;
+  crc32: number;
+  offset: number;
+  isDirectory: boolean;
+  compressionMethod: number;
+  modifiedTime?: number;
 }
 
 export interface CommunityCardPublishContext {

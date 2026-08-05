@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": ["cardId", "outputPath", "restoredResourceCount"],
+  "properties": {
+    "cardId": {
+      "type": "string"
+    },
+    "versionId": {
+      "type": ["string", "null"]
+    },
+    "outputPath": {
+      "type": "string"
+    },
+    "restoredResourceCount": {
+      "type": "integer"
+    },
+    "suggestedFileName": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -150,20 +150,6 @@ interface PaginatedEnvelope<T> {
   pagination: Pagination;
 }
 
-interface UploadSessionResponse {
-  uploadId: string;
-  resourcePrefix: string;
-  expiresAt: string;
-}
-
-interface CardUploadResponse {
-  cardId: string;
-  status: string;
-  renderStatus?: string;
-  renderStatusUrl?: string;
-  communityUrl?: string;
-}
-
 async function fetchAllPages<T>(
   loader: (page: number, pageSize: number) => Promise<PaginatedEnvelope<T>>,
   pageSize = 100,
@@ -184,39 +170,6 @@ async function fetchAllPages<T>(
 }
 
 export const cardsApi = {
-  async uploadCard(
-    file: File,
-    options: { roomId?: string; visibility?: 'public' | 'private' },
-    onProgress?: (pct: number) => void,
-  ) {
-    const session = await apiClient.post<{ data: UploadSessionResponse }>('/upload-sessions', {
-      contentType: 'card',
-      fileName: file.name,
-      roomId: options.roomId ?? null,
-      visibility: options.visibility ?? 'public',
-      client: {
-        name: 'ccps-web-workspace',
-        version: '1.0.0',
-        platform: 'web',
-      },
-    });
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('manifest', JSON.stringify({
-      client: 'ccps-web-workspace',
-      mode: 'source-card-submit',
-      resources: [],
-      resourcePrefix: session.data.resourcePrefix,
-    }));
-
-    const res = await apiClient.upload<{ data: CardUploadResponse }>(
-      `/upload-sessions/${session.data.uploadId}/card`,
-      fd,
-      onProgress,
-    );
-    return res.data;
-  },
-
   async getCard(cardId: string) {
     const res = await apiClient.get<{ data: CardDetail }>(`/cards/${cardId}`);
     return res.data;
@@ -271,24 +224,6 @@ export const cardsApi = {
 };
 
 export const boxesApi = {
-  async uploadBox(
-    file: File,
-    options: { roomId?: string; visibility?: 'public' | 'private' },
-    onProgress?: (pct: number) => void,
-  ) {
-    const fd = new FormData();
-    fd.append('file', file);
-    if (options.roomId) fd.append('roomId', options.roomId);
-    if (options.visibility) fd.append('visibility', options.visibility);
-
-    const res = await apiClient.upload<{ data: { boxId: string; title: string } }>(
-      '/upload/box',
-      fd,
-      onProgress,
-    );
-    return res.data;
-  },
-
   async getBox(boxId: string) {
     const res = await apiClient.get<{ data: BoxDetail }>(`/boxes/${boxId}`);
     return res.data;

@@ -33,3 +33,17 @@
   line-height: 1.35;
   letter-spacing: 0;
 }
+
+.document-plugin-route__download-hint {
+  width: 100%;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ccps-sys-text-muted, #667085);
+  background: var(--ccps-sys-surface-muted, rgba(15, 23, 42, 0.04));
+  border-bottom: 1px solid var(--ccps-sys-border, rgba(15, 23, 42, 0.08));
+  text-align: center;
+}

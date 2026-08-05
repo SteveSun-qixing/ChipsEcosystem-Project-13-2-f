@@ -6,7 +6,7 @@
 
 它描述的是社区服务器自己的正式实现，不额外定义生态公共协议；公共 Host / Bridge / Manifest 口径仍以 `生态共用技术文档/` 为准。
 
-最后核对时间：2026-05-24。
+最后核对时间：2026-07-06。
 
 ## 2. 当前目标
 
@@ -14,7 +14,7 @@
 
 1. 在浏览器里正式承载原版 `type: app` 插件；
 2. 让 `/cards/:cardId` 直接进入原版 `com.chips.card-viewer`；
-3. 让卡片内图片点击后通过正式 `resource.open` 打开原版 `com.chips.photo-viewer`；
+3. 让卡片内图片、音乐、视频、电子书等资源点击后通过正式 `resource.open` 打开对应原版 Web 应用插件；
 4. `/cards/:cardId` 打开前只读取轻量 `open-view` 数据，`coverRatio` 走普通列，不把 `cardMetadata` / `cardStructure` JSONB 放入打开热路径；
 5. 不再依赖临时重写的网页查看器页面。
 
@@ -27,7 +27,9 @@
 - `DELETE /api/v1/host/plugin-sessions/:sessionId`
 - `POST /api/v1/host/resource-open-plan`
 - `GET /api/v1/host/plugin-sessions/:sessionId/entry`
+- `GET /api/v1/host/plugin-sessions/:sessionId/theme.css`
 - `GET /api/v1/host/plugin-sessions/:sessionId/bootstrap.js`
+- `GET /api/v1/host/theme-assets/:themeId/*`
 - `GET /api/v1/host/plugin-sessions/:sessionId/assets/*`
 
 卡片打开页还使用社区内容接口：
@@ -49,12 +51,16 @@
 2. 为浏览器创建正式插件会话，并复用 Host Runtime 的 `pluginInit / completeHandshake`；
 3. 解析插件 HTML 入口与静态资源；
 4. 在浏览器请求 `resource.open` 时，按正式 `resource-handler / file-handler` 能力解析目标插件；
-5. 关闭浏览器侧插件会话。
+5. 提供与桌面 Host preload 对齐的 Web 主题运行时视图，包括 `theme.css`、`theme.getAllCss`、`theme.resolve` 和主题字体资产；
+6. 关闭浏览器侧插件会话。
 
 当前默认纳入社区服务器 Host 的 app 插件：
 
 1. `com.chips.card-viewer`
 2. `com.chips.photo-viewer`
+3. `com.chips.music-player`
+4. `com.chips.video-player`
+5. `com.chips.book-reader`
 
 当前默认纳入社区服务器 Host 的基础卡片插件：
 
@@ -88,13 +94,14 @@
 1. 由插件内部触发的“打开新网页”动作，默认优先使用新标签页承载；
 2. 若浏览器阻止弹窗，再回退到当前页导航；
 3. 社区前台自己的入口路由，例如用户直接进入 `/cards/:cardId`，仍然沿用当前标签页进入。
-4. `resource.open` 在命中图片查看器等二级应用时，会先预打开空白标签页，再把会话路由替换进去，避免一次点击同时打开当前页和新标签页。
+4. 文档型宿主中的 `resource.open`，例如 `/cards/:cardId` 内点击图片、音乐、视频、电子书等基础卡片，命中二级应用后优先使用预打开的新标签页承载，让原卡片阅读页保留在当前标签页。
+5. 所有插件内部发起的 `resource.open` 都保留当前页兜底；如果浏览器拦截新标签页，则由当前页接管导航，避免用户点击后没有任何可见反馈。
 
 ## 6. 浏览器侧 `window.chips` 注入
 
 当前插件页面里的 `window.chips` 由两部分共同提供：
 
-1. 服务端在插件入口 HTML 中注入 `<base>` 与 `bootstrap.js`
+1. 服务端在插件入口 HTML 中注入 `<base>`、`theme.css` 与 `bootstrap.js`
 2. 外层 `HostedPluginSurface` 通过 `postMessage` 接住 iframe 发出的 Host 调用
 
 当前 bootstrap 已覆盖的本地能力包括：
@@ -102,14 +109,33 @@
 1. `platform.getInfo`
 2. `platform.getCapabilities`
 3. `theme.getCurrent`
-4. `i18n.getCurrent`
-5. `resource.resolve`
-6. `platform.dialogOpenFile`
-7. `platform.dialogSaveFile`
-8. `platform.dialogShowMessage`
-9. `platform.dialogShowConfirm`
+4. `theme.getAllCss`
+5. `theme.resolve`
+6. `i18n.getCurrent`
+7. `resource.resolve`
+8. `resource.readBinary`
+9. `resource.readMetadata`
+10. `platform.dialogOpenFile`
+11. `platform.dialogSaveFile`
+12. `platform.dialogShowMessage`
+13. `platform.dialogShowConfirm`
+14. `command.register`
+15. `command.unregister`
+16. `command.get`
+17. `command.list`
+18. `command.invoke`
+19. `command.setState`
 
-其余需要浏览器顶层窗口处理的动作，会转发到外层宿主页。
+主题注入规则：
+
+1. `entry` 路由会在插件自身 CSS 前插入 `/api/v1/host/plugin-sessions/:sessionId/theme.css`；
+2. `theme.css` 由当前 Host active theme 生成，包含 `:root` token 变量、组件主题 CSS 与 Material Symbols `@font-face`；
+3. 主题 CSS 中的 `file://` 字体资产会被重写为 `/api/v1/host/theme-assets/:themeId/*`，并由服务端限制在对应主题插件安装目录内读取；
+4. 主题资产路由按资源扩展返回 Web 可消费 MIME，Material Symbols 字体当前以 `font/woff2` 响应；
+5. `cpx` 长度单位会在服务端归一为浏览器可识别的 `vw`，与桌面 Host preload 的浏览器化处理保持一致；
+6. `bootstrap.js` 只负责设置 `data-chips-theme-id/version` 与提供 `theme.*` Bridge 能力，不依赖内联 `<style>`，避免被插件 CSP 的 `style-src` 阻断。
+
+其中 `resource.resolve/readBinary/readMetadata` 支持 `http://`、`https://`、`data:`、`blob:`、同源根路径 `/api/...` 与浏览器文件选择器产生的 `chips-web-file://` 资源标识，供音乐播放器、视频播放器、书籍阅读器等原版应用插件恢复封面、歌词、字幕、文档元数据等辅助资源。普通相对路径必须先由卡片单节点运行时基于资源基准 URL 归一，不由插件会话入口兜底猜测。`command.*` 在当前 Web 插件会话内维护命令注册表、命令状态和 `command.*` 事件派发，供原版应用插件的菜单、工具栏、快捷键和命令 Provider 正常初始化；不在社区服务端数据库中持久化。其余需要浏览器顶层窗口处理的动作，会转发到外层宿主页。
 
 ## 7. 正式链路
 
@@ -118,14 +144,17 @@
 `/cards/:cardId` 当前链路：
 
 1. 社区前台读取 `GET /api/v1/cards/:cardId/open-view`；
-2. 若 `viewState = cache_ready` 且存在 `viewUrl`，前台创建 `com.chips.card-viewer` Web 会话；
-3. 启动参数中写入结构化 `cardSource`，其 `documentUrl/viewUrl` 指向 `GET /api/v1/cards/:cardId/view`；
-4. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
-5. `CardViewer` 用 iframe 承载 `/view` 重定向后的 view 渲染缓存；
-6. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
-7. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
-8. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
-9. 用户最终滚动的是整个页面，而不是卡片查看器内部的小窗。
+2. 若 view 缓存尚未命中，服务端会补排 `community-web` 渲染任务，前台保持 `pending` 加载态并轮询 `GET /api/v1/cards/:cardId/render-status`，不得把 `rendering` 误显示为不存在；
+3. `open-view` 在卡片源文件 ready 时始终返回受控封面入口 `/api/v1/cards/:cardId/cover`，封面缓存未命中时由该入口补排 `community-cover` 渲染任务并返回准备态 HTML；
+4. 若 `viewState = cache_ready` 且存在 `viewUrl`，前台重新读取一次 `open-view`，确保 `cardSource` 携带最新 `coverUrl/coverRatio` 后创建 `com.chips.card-viewer` Web 会话；
+5. 启动参数中写入结构化 `cardSource`，其 `documentUrl/viewUrl` 指向 `GET /api/v1/cards/:cardId/view`；
+6. 原版 `CardViewer` 在 Web 场景下恢复为托管文档查看态；
+7. `CardViewer` 用 iframe 承载 `/view` 重定向后的 view 渲染缓存；
+8. `CardViewer` 在文档型 Web surface 中通过 `plugin.chrome.update` 发布标题、插件接管的返回语义和封面切换动作；社区宿主在 iframe 外渲染固定 chrome，并通过 `plugin.chrome.action` 把动作回传给查看器；
+9. `HostedDocumentWindow` 采用“先挂载 `message/load/error` 监听，再赋值 iframe `src`”的正式时序，避免浏览器加载过快时丢失 `chips.composite:ready` 或原生 `load` 信号；
+10. `HostedDocumentWindow` 消费正式 `chips.composite:resize`，测量 CardViewer 自身真实文档流高度，并向外层插件宿主页发出 `plugin.surface.resize`；
+11. `HostedPluginSurface` 在 `surfaceMode = document` 下按正式高度事件同步 iframe 高度；
+12. 用户最终滚动的是整个页面，而不是卡片查看器内部的小窗。
 
 当前高度事件遵循生态公共 `DocumentSurfaceResizePayload`：
 
@@ -150,18 +179,32 @@ interface DocumentSurfaceResizePayload {
 6. 用户点击外层插件工具栏动作前，`HostedPluginSurface(surfaceMode=document)` 会先把插件 iframe 高度重置到当前浏览器视口并滚动到 surface 顶部，再把 `plugin.chrome.action` 投递给插件。这样从长正文切到封面时，不会让旧正文高度继续参与 CardViewer 内部 `vh` 计算；
 7. CardViewer 的封面态仍使用正式 `coverUrl` iframe 展示 `.card/cover.html`，并由 `ViewerCoverSurface` 发布自己的 `plugin.surface.resize` 高度事件；社区文档流宿主下的封面态不使用旧正文高度做垂直居中基准。
 
-### 7.2 图片打开
+### 7.2 资源打开
 
-卡片内图片点击链路：
+卡片内资源点击链路：
 
 1. 基础卡片发出 `chips.basecard:resource-open`；
 2. 复合卡片文档汇总为 `chips.composite:resource-open`；
 3. 原版 `CardViewer` 调用 `client.resource.open(...)`；
 4. 外层宿主页请求 `/api/v1/host/resource-open-plan`；
-5. 服务端命中 `com.chips.photo-viewer`；
-6. 前台创建新的图片查看器 Web 会话；
-7. 浏览器导航到 `/host/plugins/:sessionId`；
-8. 原版 `PhotoViewer` 从 `launchParams.resourceOpen` 恢复图片查看态。
+5. 服务端依据 `resource-handler:<intent>:<mime>` 与 `file-handler:<ext>` 能力命中 Web 可运行的 app 插件；
+6. 前台创建新的目标 app Web 会话；
+7. 浏览器优先在新标签页导航到 `/host/plugins/:sessionId`，若新标签页被拦截则回退为当前页导航；
+8. 原版目标应用从 `launchParams.resourceOpen` 恢复资源查看态。
+
+当前服务端资源计划已覆盖以下默认处理器：
+
+1. 图片资源：`com.chips.photo-viewer`，例如 `image/png`、`image/jpeg`、`image/webp`；
+2. 音频资源：`com.chips.music-player`，例如 `.mp3/.flac/.wav/.m4a/.aac/.opus/.webm`；
+3. 视频资源：`com.chips.video-player`，例如 `.mp4/.webm/.mov/.m4v/.ogv`；
+4. 电子书与文档资源：`com.chips.book-reader`，例如 `.epub/.pdf/.txt/.md/.fb2/.rtf/.mobi/.azw/.azw3/.djvu/.doc/.docx`。
+
+补充约束：
+
+1. 上游基础卡片传入的 `resource.payload` 必须原样透传到 `launchParams.resourceOpen.payload`；
+2. 社区 Web Host 只负责资源路由和启动上下文组装，不解释 `chips.music-card`、`chips.video-card`、`chips.book-card` 等业务 payload；
+3. 当资源 URL 本身没有扩展名时，资源计划会优先使用 `resource.fileName` 推断扩展名与 MIME 类型；
+4. `GET /api/v1/cards/:cardId/render-cache/:cacheVersion/*` 与 `GET /api/v1/cards/:cardId/cover-cache/:cacheVersion/*` 作为受控缓存资源代理时必须转发浏览器 `Range` 请求，并在对象存储返回分段内容时响应 `206 Content-Range` 与 `Accept-Ranges: bytes`；视频播放器依赖该能力读取 MP4/WebM 等媒体元数据和分段内容。
 
 ## 8. Web Surface 映射
 
@@ -181,7 +224,7 @@ interface DocumentSurfaceResizePayload {
 
 当前映射规则：
 
-1. 普通社区页面走 `default`，保留社区背景与 `SiteFooter`；
+1. 普通社区页面走 `default`，使用朴素白色社区页面背景；其中欢迎页、简介页、认证页和工作区页挂载 `SiteFooter`，个人社区页不挂载站点页脚；
 2. `/cards/:cardId` 走 `document`，关闭社区装饰背景，恢复页面级文档流滚动；
 3. `/host/plugins/:sessionId` 与 `/boxes/:boxId` 当前走 `immersive`，保持沉浸式全窗插件承载；
 4. `document` 和 `immersive` 两类内容直达页都不显示社区页脚。

@@ -1,199 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { boxesApi, cardsApi } from '../api/content';
-import { UploadDropzone } from '../components/UploadDropzone';
-import { UploadQueue } from '../components/UploadQueue';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { useAuth } from '../contexts/AuthContext';
-import { createLocalId, getErrorMessage, getUploadTypeFromFile, sleep } from '../lib/ui';
 import { Icon } from '../runtime/icons/Icon';
-import type { UploadQueueItem } from '../types/community';
 import './WorkspacePage.css';
-
-type QueuePatch = Partial<UploadQueueItem> | ((item: UploadQueueItem) => Partial<UploadQueueItem>);
-
-const WORKSPACE_UPLOAD_CONCURRENCY = 3;
 
 export default function WorkspacePage() {
   const { t } = useAppPreferences();
   const { user } = useAuth();
-  const [queue, setQueue] = useState<UploadQueueItem[]>([]);
-  const [activeUploadIds, setActiveUploadIds] = useState<string[]>([]);
-  const [notice, setNotice] = useState('');
-
   const profileHref = useMemo(() => (user ? `/@${user.username}` : '/login'), [user]);
-
-  const updateQueueItem = useCallback((localId: string, patch: QueuePatch) => {
-    setQueue((current) =>
-      current.map((item) => {
-        if (item.localId !== localId) {
-          return item;
-        }
-
-        const nextPatch = typeof patch === 'function' ? patch(item) : patch;
-        return { ...item, ...nextPatch };
-      }),
-    );
-  }, []);
-
-  const pollCardRenderUntilSettled = useCallback(
-    async (cardId: string) => {
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        const status = await cardsApi.getCardRenderStatus(cardId);
-
-        if (status.viewState === 'cache_ready' || status.viewState === 'render_error') {
-          return status;
-        }
-
-        await sleep(1500);
-      }
-
-      throw new Error(t('workspace.timeout'));
-    },
-    [t],
-  );
-
-  const processQueueItem = useCallback(
-    async (item: UploadQueueItem) => {
-      if (item.type === 'card') {
-        updateQueueItem(item.localId, {
-          status: 'uploading',
-          progress: 0,
-          detailMessage: '',
-          errorMessage: '',
-        });
-
-        const uploadResult = await cardsApi.uploadCard(
-          item.file,
-          { visibility: 'public' },
-          (progress) => {
-            updateQueueItem(item.localId, {
-              status: 'uploading',
-              progress,
-            });
-          },
-        );
-
-        updateQueueItem(item.localId, {
-          status: 'processing',
-          progress: 100,
-          remoteId: uploadResult.cardId,
-          resultHref: `/cards/${uploadResult.cardId}`,
-          detailMessage: t('workspace.processingHint'),
-        });
-
-        const cardStatus = await pollCardRenderUntilSettled(uploadResult.cardId);
-
-        if (cardStatus.viewState === 'cache_ready') {
-          updateQueueItem(item.localId, {
-            status: 'success',
-            progress: 100,
-            detailMessage: t('workspace.successCard'),
-            resultHref: `/cards/${uploadResult.cardId}`,
-          });
-          return;
-        }
-
-        updateQueueItem(item.localId, {
-          status: 'error',
-          progress: 100,
-          errorMessage: cardStatus.error?.message || t('workspace.statusError'),
-          resultHref: `/cards/${uploadResult.cardId}`,
-        });
-        return;
-      }
-
-      updateQueueItem(item.localId, {
-        status: 'uploading',
-        progress: 0,
-        detailMessage: '',
-        errorMessage: '',
-      });
-
-      const uploadResult = await boxesApi.uploadBox(
-        item.file,
-        { visibility: 'public' },
-        (progress) => {
-          updateQueueItem(item.localId, {
-            status: 'uploading',
-            progress,
-          });
-        },
-      );
-
-      updateQueueItem(item.localId, {
-        status: 'success',
-        progress: 100,
-        remoteId: uploadResult.boxId,
-        resultHref: `/boxes/${uploadResult.boxId}`,
-        detailMessage: t('workspace.successBox'),
-      });
-    },
-    [pollCardRenderUntilSettled, t, updateQueueItem],
-  );
-
-  useEffect(() => {
-    const activeIds = new Set(activeUploadIds);
-    const availableSlots = WORKSPACE_UPLOAD_CONCURRENCY - activeIds.size;
-
-    if (availableSlots <= 0) {
-      return;
-    }
-
-    const nextItems = queue
-      .filter((item) => item.status === 'queued' && !activeIds.has(item.localId))
-      .slice(0, availableSlots);
-
-    if (nextItems.length === 0) {
-      return;
-    }
-
-    setActiveUploadIds((current) => [...current, ...nextItems.map((item) => item.localId)]);
-
-    nextItems.forEach((nextItem) => {
-      void processQueueItem(nextItem)
-        .catch((error) => {
-          updateQueueItem(nextItem.localId, {
-            status: 'error',
-            errorMessage: getErrorMessage(error, t('common.error')),
-          });
-        })
-        .finally(() => {
-          setActiveUploadIds((current) => current.filter((localId) => localId !== nextItem.localId));
-        });
-    });
-  }, [activeUploadIds, processQueueItem, queue, t, updateQueueItem]);
-
-  const handleFiles = useCallback(
-    (files: File[]) => {
-      const accepted: UploadQueueItem[] = [];
-      let hasInvalidType = false;
-
-      files.forEach((file) => {
-        const type = getUploadTypeFromFile(file.name);
-
-        if (!type) {
-          hasInvalidType = true;
-          return;
-        }
-
-        accepted.push({
-          localId: createLocalId(),
-          file,
-          type,
-          status: 'queued',
-          progress: 0,
-        });
-      });
-
-      if (accepted.length > 0) {
-        setQueue((current) => [...current, ...accepted]);
-      }
-
-      setNotice(hasInvalidType ? t('workspace.invalidType') : '');
-    },
-    [t],
-  );
 
   if (!user) {
     return null;
@@ -214,10 +29,29 @@ export default function WorkspacePage() {
         </Link>
       </header>
 
-      {notice ? <div className="inline-notice inline-notice--danger">{notice}</div> : null}
-
-      <UploadDropzone onFiles={handleFiles} disabled={false} />
-      <UploadQueue items={queue} profileHref={profileHref} />
+      <section className="panel workspace-client-publish">
+        <div className="workspace-client-publish__icon" aria-hidden="true">
+          <Icon name="upload" size={28} />
+        </div>
+        <div className="workspace-client-publish__copy">
+          <h2>{t('workspace.clientOnlyTitle')}</h2>
+          <p>{t('workspace.clientOnlyBody')}</p>
+        </div>
+        <div className="workspace-client-publish__steps" aria-label={t('workspace.clientOnlyStepsLabel')}>
+          <article>
+            <strong>{t('workspace.clientOnlyStepCreate')}</strong>
+            <span>{t('workspace.clientOnlyStepCreateBody')}</span>
+          </article>
+          <article>
+            <strong>{t('workspace.clientOnlyStepPublish')}</strong>
+            <span>{t('workspace.clientOnlyStepPublishBody')}</span>
+          </article>
+          <article>
+            <strong>{t('workspace.clientOnlyStepView')}</strong>
+            <span>{t('workspace.clientOnlyStepViewBody')}</span>
+          </article>
+        </div>
+      </section>
     </div>
   );
 }

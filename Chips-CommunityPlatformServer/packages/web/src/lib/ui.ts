@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import type { CommunityWorkType } from '../types/community';
 
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
@@ -117,18 +116,4 @@ export function getPostAuthPath(
   }
 
   return `/@${user.username}`;
-}
-
-export function getUploadTypeFromFile(fileName: string): CommunityWorkType | null {
-  const normalizedName = fileName.toLowerCase();
-
-  if (normalizedName.endsWith('.card')) {
-    return 'card';
-  }
-
-  if (normalizedName.endsWith('.box')) {
-    return 'box';
-  }
-
-  return null;
 }

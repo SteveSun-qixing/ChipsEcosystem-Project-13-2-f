@@ -36,6 +36,7 @@ export type DocumentRouteSource =
 interface DocumentPluginRoutePageProps {
   source: DocumentRouteSource | null;
   loading: boolean;
+  pending?: boolean;
   error: string;
   pendingLabel: string;
   trigger: string;
@@ -63,6 +64,7 @@ function resolveSourceId(source: DocumentRouteSource | null): string | null {
 export function DocumentPluginRoutePage({
   source,
   loading,
+  pending = false,
   error,
   pendingLabel,
   trigger,
@@ -126,11 +128,32 @@ export function DocumentPluginRoutePage({
     );
   }
 
-  if (error || sessionError || !source) {
+  if (error || sessionError) {
     return (
       <section className="document-plugin-route document-plugin-route--state" aria-live="polite">
         <div className="document-plugin-route__state-panel">
-          <h1>{error || sessionError || t('detail.notFound')}</h1>
+          <h1>{error || sessionError}</h1>
+        </div>
+      </section>
+    );
+  }
+
+  if (pending) {
+    return (
+      <section className="document-plugin-route document-plugin-route--state" aria-live="polite">
+        <div className="document-plugin-route__state-panel">
+          <span className="detail-transition-spinner" />
+          <h1>{pendingLabel}</h1>
+        </div>
+      </section>
+    );
+  }
+
+  if (!source) {
+    return (
+      <section className="document-plugin-route document-plugin-route--state" aria-live="polite">
+        <div className="document-plugin-route__state-panel">
+          <h1>{t('detail.notFound')}</h1>
         </div>
       </section>
     );
@@ -149,6 +172,11 @@ export function DocumentPluginRoutePage({
 
   return (
     <section className="document-plugin-route">
+      {source.kind === 'community-card' && (
+        <div className="document-plugin-route__download-hint" role="note">
+          {t('card.downloadInClientHint')}
+        </div>
+      )}
       <HostedPluginSurface sessionId={session.sessionId} initialSession={session} surfaceMode="document" />
     </section>
   );

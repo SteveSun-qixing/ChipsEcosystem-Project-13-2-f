@@ -33,3 +33,4 @@ Chips-Scaffold/chips-scaffold-basecard/tests/.tmp-e2e/
 .vscode/
 .specstory/
 release-artifacts/
+.codex-runtime-logs/

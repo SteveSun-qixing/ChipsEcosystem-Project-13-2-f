@@ -14,3 +14,4 @@ tmp/
 deploy/.env
 deploy/certs/*
 !deploy/certs/.gitkeep
+.codex-runtime-logs/

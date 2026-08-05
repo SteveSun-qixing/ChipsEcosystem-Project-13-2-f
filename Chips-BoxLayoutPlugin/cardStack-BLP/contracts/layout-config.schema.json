@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "扑克牌布局插件 layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": [
+        "sortMode",
+        "randomSeed",
+        "stackDepth",
+        "cardSize",
+        "spreadRotationDeg",
+        "swipeThreshold",
+        "reviewLoop",
+        "background",
+        "topRegion"
+      ],
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name", "random"]
+        },
+        "randomSeed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "stackDepth": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8
+        },
+        "cardSize": {
+          "type": "string",
+          "enum": ["compact", "regular", "large"]
+        },
+        "spreadRotationDeg": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "swipeThreshold": {
+          "type": "integer",
+          "minimum": 80,
+          "maximum": 260
+        },
+        "reviewLoop": {
+          "type": "string",
+          "enum": ["stop-at-end", "loop"]
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

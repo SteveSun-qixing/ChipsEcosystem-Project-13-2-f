@@ -1,0 +1,32 @@
+id: chips.layout.cardstack.blp
+name: 扑克牌布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+description: 薯片官方扑克牌布局插件，提供箱子卡堆式单卡浏览与布局参数编辑能力。
+author:
+  name: sevenstars
+  email: cardstack-blp@example.invalid
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+layout:
+  layoutType: chips.layout.cardstack.blp
+  displayName: 扑克牌布局插件

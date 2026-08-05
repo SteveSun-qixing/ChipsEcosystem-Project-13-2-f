@@ -1,0 +1,32 @@
+id: chips.layout.map.blp
+name: 地图布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+description: 薯片官方地图布局插件，提供静态地图底图、经纬度点位和按需封面预览能力。
+author:
+  name: sevenstars
+  email: map-blp@example.invalid
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+layout:
+  layoutType: chips.layout.map.blp
+  displayName: 地图布局插件

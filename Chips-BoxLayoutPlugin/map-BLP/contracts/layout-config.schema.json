@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Map layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": ["mapSource", "defaultView", "markerStyle", "showCoverOnSelect", "entries", "topRegion"],
+      "properties": {
+        "mapSource": {
+          "type": "object",
+          "required": ["mode", "projection", "bounds"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["image", "host-map"]
+            },
+            "projection": {
+              "type": "string",
+              "enum": ["linear-bounds", "web-mercator"]
+            },
+            "assetPath": {
+              "$ref": "#/$defs/assetPath"
+            },
+            "bounds": {
+              "$ref": "#/$defs/bounds"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "mode": { "const": "image" }
+                }
+              },
+              "then": {
+                "properties": {
+                  "projection": { "const": "linear-bounds" }
+                }
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "defaultView": {
+          "type": "object",
+          "required": ["latitude", "longitude", "zoom"],
+          "properties": {
+            "latitude": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "longitude": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "zoom": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 8
+            }
+          },
+          "additionalProperties": false
+        },
+        "markerStyle": {
+          "type": "string",
+          "enum": ["dot-title", "pin-title"]
+        },
+        "showCoverOnSelect": {
+          "type": "boolean"
+        },
+        "entries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["latitude", "longitude"],
+            "properties": {
+              "latitude": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "labelOverride": {
+                "type": "string",
+                "maxLength": 120
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      },
+      "additionalProperties": false
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assetPath"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "assetPath": {
+      "type": "string",
+      "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+      "not": {
+        "anyOf": [
+          { "pattern": "(^|/)\\.($|/)" },
+          { "pattern": "(^|/)\\.\\.($|/)" }
+        ]
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "required": ["west", "south", "east", "north"],
+      "properties": {
+        "west": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "south": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "east": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "north": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      },
+      "additionalProperties": false
+    },
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "$ref": "#/$defs/assetPath"
+        },
+        "html": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

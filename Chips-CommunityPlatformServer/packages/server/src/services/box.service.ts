@@ -263,15 +263,12 @@ export const BoxService = {
             eq(cards.status, 'ready'),
             eq(cards.visibility, 'public'),
           ),
-        });
-
-        return {
-          ...ref,
-          communityCardId: communityCard?.id,
-          communityViewUrl: communityCard ? `/api/v1/cards/${communityCard.id}/view` : undefined,
-          communityRenderStatusUrl: communityCard ? `/api/v1/cards/${communityCard.id}/render-status` : undefined,
-        };
-      }),
+        })
+      : [];
+    const cardsByFileId = new Map(
+      communityCards
+        .filter((card) => card.cardFileId)
+        .map((card) => [card.cardFileId as string, card]),
     );
 
     return refs.map((ref) => {

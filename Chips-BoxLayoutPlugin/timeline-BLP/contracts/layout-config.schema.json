@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "时间线布局配置",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": [
+        "orientation",
+        "scaleMode",
+        "showCovers",
+        "cardDensity",
+        "points",
+        "background",
+        "topRegion"
+      ],
+      "properties": {
+        "orientation": {
+          "type": "string",
+          "enum": ["horizontal", "vertical"]
+        },
+        "scaleMode": {
+          "type": "string",
+          "enum": ["equal-points", "date-distance"]
+        },
+        "showCovers": {
+          "type": "boolean"
+        },
+        "cardDensity": {
+          "type": "string",
+          "enum": ["compact", "comfortable", "spacious"]
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/timelinePoint"
+          }
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "timelinePoint": {
+      "type": "object",
+      "required": ["id", "label", "entryIds"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "date": {
+          "type": "string"
+        },
+        "entryIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -22,7 +22,7 @@ import type {
   RenderViewport,
   ThemeSnapshot
 } from '../../unified-rendering/src';
-import { StoreZipService } from '../../zip-service/src';
+import { StoreZipService, type ZipEntryPlan } from '../../zip-service/src';
 
 export interface CardAst {
   metadata: Record<string, unknown>;
@@ -986,17 +986,51 @@ const createBasecardFrameDocument = (options: {
     '        }',
     '        return segments.join("/");',
     '      };',
+    '      const resolveRuntimeResourceBaseUrl = () => {',
+    '        if (!resourceBaseUrl) {',
+    '          return "";',
+    '        }',
+    '        try {',
+    '          return new URL(resourceBaseUrl, window.location.href).toString();',
+    '        } catch {',
+    '          return "";',
+    '        }',
+    '      };',
     '      const resolveResourceUrl = async (resourcePath) => {',
     '        const normalizedResourcePath = normalizeRelativeResourcePath(resourcePath);',
     '        if (!normalizedResourcePath) {',
     '          throw new Error(`Invalid base card resource path: ${String(resourcePath)}`);',
     '        }',
-    '        if (resourceBaseUrl) {',
-    '          return new URL(normalizedResourcePath, resourceBaseUrl).toString();',
+    '        const runtimeResourceBaseUrl = resolveRuntimeResourceBaseUrl();',
+    '        if (runtimeResourceBaseUrl) {',
+    '          return new URL(normalizedResourcePath, runtimeResourceBaseUrl).toString();',
     '        }',
     '        return normalizedResourcePath;',
     '      };',
     '      const releaseResourceUrl = () => undefined;',
+    '      const resolveOpenResourceId = (resourceId) => {',
+    '        const normalizedResourceId = typeof resourceId === "string" ? resourceId.trim() : "";',
+    '        if (!normalizedResourceId) {',
+    '          return "";',
+    '        }',
+    '        try {',
+    '          return new URL(normalizedResourceId).toString();',
+    '        } catch {',
+    '          const normalizedResourcePath = normalizeRelativeResourcePath(normalizedResourceId);',
+    '          if (!normalizedResourcePath) {',
+    '            return normalizedResourceId;',
+    '          }',
+    '          const runtimeResourceBaseUrl = resolveRuntimeResourceBaseUrl();',
+    '          if (runtimeResourceBaseUrl) {',
+    '            try {',
+    '              return new URL(normalizedResourcePath, runtimeResourceBaseUrl).toString();',
+    '            } catch {',
+    '              return normalizedResourceId;',
+    '            }',
+    '          }',
+    '          return normalizedResourcePath;',
+    '        }',
+    '      };',
     '      const openResource = (input) => {',
     '        if (!input || typeof input !== "object") {',
     '          return;',
@@ -1004,12 +1038,16 @@ const createBasecardFrameDocument = (options: {
     '        if (typeof input.resourceId !== "string" || input.resourceId.trim().length === 0) {',
     '          return;',
     '        }',
+    '        const resourceId = resolveOpenResourceId(input.resourceId);',
+    '        if (!resourceId) {',
+    '          return;',
+    '        }',
     '        const structuredPayload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)',
     '          ? input.payload',
     '          : undefined;',
     "        emit('chips.basecard:resource-open', {",
     '          nodeId,',
-    '          resourceId: input.resourceId.trim(),',
+    '          resourceId,',
     '          mimeType: typeof input.mimeType === "string" ? input.mimeType : undefined,',
     '          title: typeof input.title === "string" ? input.title : undefined,',
     '          fileName: typeof input.fileName === "string" ? input.fileName : undefined,',
@@ -1724,8 +1762,8 @@ export class CardService {
     this.packer = new CardPacker(this.zip);
   }
 
-  public async pack(cardDir: string, outputPath: string): Promise<string> {
-    return this.packer.pack(cardDir, outputPath);
+  public async pack(cardDir: string, outputPath: string, options?: { entryPlan?: ZipEntryPlan[] }): Promise<string> {
+    return this.packer.pack(cardDir, outputPath, { entryPlan: options?.entryPlan });
   }
 
   public async unpack(cardFile: string, outputDir: string): Promise<string> {

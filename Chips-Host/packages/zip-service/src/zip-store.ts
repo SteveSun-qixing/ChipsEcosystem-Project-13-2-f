@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { crc32 } from './crc32';
-import type { ZipEntryInput, ZipEntryMeta } from './types';
+import type { ZipEntryInput, ZipEntryMeta, ZipEntryPlan } from './types';
 
 const LFH_SIGNATURE = 0x04034b50;
 const CD_SIGNATURE = 0x02014b50;
@@ -125,9 +125,49 @@ const collectFiles = async (inputDir: string): Promise<ZipEntryInput[]> => {
   return files;
 };
 
+const applyEntryPlan = (
+  files: ZipEntryInput[],
+  plan: ZipEntryPlan[] | undefined,
+): ZipEntryInput[] => {
+  if (!plan || plan.length === 0) {
+    return files;
+  }
+
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const ordered: ZipEntryInput[] = [];
+  const plannedPaths = new Set<string>();
+
+  for (const item of plan) {
+    if (plannedPaths.has(item.path)) {
+      continue;
+    }
+    const file = byPath.get(item.path);
+    if (!file) {
+      continue;
+    }
+    plannedPaths.add(item.path);
+    ordered.push({
+      ...file,
+      ...(typeof item.modifiedTime === 'number' ? { modifiedTime: item.modifiedTime } : {})
+    });
+  }
+
+  for (const file of files) {
+    if (!plannedPaths.has(file.path)) {
+      ordered.push(file);
+    }
+  }
+
+  return ordered;
+};
+
 export class StoreZipService {
-  public async compress(inputDir: string, outputZip: string): Promise<void> {
-    const files = await collectFiles(inputDir);
+  public async compress(
+    inputDir: string,
+    outputZip: string,
+    options?: { entryPlan?: ZipEntryPlan[] },
+  ): Promise<void> {
+    const files = applyEntryPlan(await collectFiles(inputDir), options?.entryPlan);
     const chunks: Buffer[] = [];
     const centralDirectory: Buffer[] = [];
     const metadata: ZipEntryMeta[] = [];

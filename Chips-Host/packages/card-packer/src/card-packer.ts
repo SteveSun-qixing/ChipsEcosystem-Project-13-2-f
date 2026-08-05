@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import yaml from 'yaml';
 import { createError } from '../../../src/shared/errors';
-import { StoreZipService } from '../../zip-service/src';
+import { StoreZipService, type ZipEntryPlan } from '../../zip-service/src';
 
 export interface CardPackResourceEntry {
   path: string;
@@ -95,7 +95,7 @@ const deepCloneRecord = (value: Record<string, unknown>): Record<string, unknown
 export class CardPacker {
   public constructor(private readonly zip = new StoreZipService()) {}
 
-  public async pack(cardDir: string, outputPath: string): Promise<string> {
+  public async pack(cardDir: string, outputPath: string, options?: { entryPlan?: ZipEntryPlan[] }): Promise<string> {
     const sourceStats = await this.safeStat(cardDir);
     if (!sourceStats?.isDirectory()) {
       throw createError('CARD_PACK_FAILED', `Card directory does not exist: ${cardDir}`, {
@@ -121,13 +121,13 @@ export class CardPacker {
         generated_at: generatedAt
       };
 
-      const totalSize = await this.packUntilSizeStabilizes(stagingDir, outputPath, context.metadata);
+      const totalSize = await this.packUntilSizeStabilizes(stagingDir, outputPath, context.metadata, options?.entryPlan);
       context.metadata.file_info = {
         ...asRecord(context.metadata.file_info),
         total_size: totalSize
       };
       await this.writeYamlFile(path.join(stagingDir, '.card/metadata.yaml'), context.metadata);
-      await this.zip.compress(stagingDir, outputPath);
+      await this.zip.compress(stagingDir, outputPath, { entryPlan: options?.entryPlan });
       return outputPath;
     } finally {
       await fs.rm(stagingRoot, { recursive: true, force: true });
@@ -279,7 +279,8 @@ export class CardPacker {
   private async packUntilSizeStabilizes(
     cardDir: string,
     outputPath: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
+    entryPlan?: ZipEntryPlan[]
   ): Promise<number> {
     let expectedSize = 0;
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -288,7 +289,7 @@ export class CardPacker {
         total_size: expectedSize
       };
       await this.writeYamlFile(path.join(cardDir, '.card/metadata.yaml'), metadata);
-      await this.zip.compress(cardDir, outputPath);
+      await this.zip.compress(cardDir, outputPath, { entryPlan });
       const archiveStat = await fs.stat(outputPath);
       if (archiveStat.size === expectedSize) {
         return archiveStat.size;

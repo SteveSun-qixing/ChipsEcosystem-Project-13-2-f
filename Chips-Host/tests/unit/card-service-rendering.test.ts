@@ -169,6 +169,7 @@ const createRichTextPluginEntry = (pluginId: string, cardTypes: string[], displa
 const createImagePluginEntry = (pluginId: string, cardTypes: string[], displayName: string): string => [
   'const asImages = (config) => Array.isArray(config?.images) ? config.images : [];',
   'export function renderBasecardView(ctx = {}) {',
+  '  globalThis.__chipsLastBasecardContext = ctx;',
   '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
   '  const root = documentRef.createElement("section");',
   '  root.dataset.scope = "image-card";',
@@ -742,6 +743,92 @@ describe('CardService rendering', () => {
     expect(view.body).not.toContain('160cpx');
   }, CARD_RENDER_TEST_TIMEOUT_MS);
 
+  it('normalizes relative resource bases inside exported single-card documents', async () => {
+    const cardDir = await createImageCardDirectory();
+    const themeContext = await loadThemeRenderContext();
+    const workspace = await createTempDir('chips-card-runtime-');
+    const runtime = new PluginRuntime(workspace, {
+      locale: 'zh-CN',
+      themeId: 'chips-official.default-theme',
+    });
+    await runtime.load();
+    await installBaseCardPluginFixture(runtime, workspace, 'image');
+    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
+
+    const view = await service.renderBasecard({
+      baseCardId: 'gallery',
+      cardType: 'ImageCard',
+      title: 'Hero',
+      config: {
+        card_type: 'ImageCard',
+        layout_type: 'single',
+        layout_options: {
+          grid_mode: '2x2',
+          single_width_percent: 100,
+          single_alignment: 'center',
+          spacing_mode: 'comfortable',
+        },
+        images: [
+          {
+            id: 'image-1',
+            source: 'file',
+            file_path: 'assets/hero.png',
+            title: 'Hero',
+            alt: 'Hero',
+          },
+        ],
+      },
+      resourceBaseUrl: './assets/content/',
+      interactionPolicy: 'native',
+      ...themeContext,
+    });
+
+    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
+    const dom = new JSDOM(view.body, {
+      runScripts: 'dangerously',
+      url: 'https://community.example/cache/gallery.html',
+      beforeParse(window: JsdomWindowLike) {
+        installBlobUrlSupport(window);
+        Object.defineProperty(window, 'parent', {
+          configurable: true,
+          value: {
+            postMessage(message: { type?: string; payload?: unknown }) {
+              postedMessages.push(message);
+            },
+          },
+        });
+      },
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const image = dom.window.document?.querySelector?.(
+        '[data-scope="image-card"] img',
+      ) as { getAttribute(name: string): string | null } | null;
+      expect(image?.getAttribute('src')).toBe('https://community.example/cache/assets/content/assets/hero.png');
+
+      postedMessages.length = 0;
+      const openResource = (dom.window as unknown as { __chipsLastBasecardContext?: { openResource?: (input: { resourceId: string; mimeType?: string }) => void } })
+        .__chipsLastBasecardContext?.openResource;
+      expect(typeof openResource).toBe('function');
+      openResource?.({
+        resourceId: 'assets/hero.png',
+        mimeType: 'image/png',
+      });
+
+      const resourceOpenMessage = postedMessages.find((message) => message.type === 'chips.basecard:resource-open');
+      expect(resourceOpenMessage?.payload).toMatchObject({
+        nodeId: 'gallery',
+        intent: 'view',
+        resourceId: 'https://community.example/cache/assets/content/assets/hero.png',
+        mimeType: 'image/png',
+      });
+    } finally {
+      dom.window.close();
+    }
+  }, CARD_RENDER_TEST_TIMEOUT_MS);
+
   it('stitches composite image cards from single-card runtime documents instead of pre-rendered static html', async () => {
     const cardDir = await createImageCardDirectory();
     const themeContext = await loadThemeRenderContext();
@@ -1034,7 +1121,7 @@ describe('CardService rendering', () => {
 
       const introFrame = dom.window.document?.querySelector?.(
         '.chips-composite__frame[data-node-id="intro"]',
-      );
+      ) as { style?: { height?: string } } | null;
       expect(introFrame?.style?.height).toBe('512px');
 
       const resizeMessage = postedMessages.find((message) => message.type === 'chips.composite:resize');

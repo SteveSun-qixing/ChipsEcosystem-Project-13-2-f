@@ -4,6 +4,11 @@ export interface ZipEntryInput {
   modifiedTime?: number;
 }
 
+export interface ZipEntryPlan {
+  path: string;
+  modifiedTime?: number;
+}
+
 export interface ZipEntryMeta {
   path: string;
   size: number;

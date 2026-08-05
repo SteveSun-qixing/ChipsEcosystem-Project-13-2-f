@@ -6571,14 +6571,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'card',
     actions: {
       pack: {
-        descriptor: descriptor<{ cardDir: string; outputPath: string }, { cardFile: string }>(
+        descriptor: descriptor<{ cardDir: string; outputPath: string; entryPlan?: Array<{ path: string; modifiedTime?: number }> }, { cardFile: string }>(
           'card.pack',
           ['card.write'],
           12_000,
           false,
           0,
           withMetrics(state, 'card.pack', async (input) => {
-            const cardFile = await ctx.getCardService().pack(input.cardDir, input.outputPath);
+            const cardFile = await ctx.getCardService().pack(input.cardDir, input.outputPath, {
+              entryPlan: input.entryPlan
+            });
             return { cardFile };
           })
         )
@@ -7208,14 +7210,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
     name: 'zip',
     actions: {
       compress: {
-        descriptor: descriptor<{ inputDir: string; outputZip: string }, { outputZip: string }>(
+        descriptor: descriptor<{ inputDir: string; outputZip: string; entryPlan?: Array<{ path: string; modifiedTime?: number }> }, { outputZip: string }>(
           'zip.compress',
           ['zip.manage'],
           12_000,
           false,
           0,
           withMetrics(state, 'zip.compress', async (input) => {
-            await ctx.getZipService().compress(input.inputDir, input.outputZip);
+            await ctx.getZipService().compress(input.inputDir, input.outputZip, {
+              entryPlan: input.entryPlan
+            });
             return { outputZip: input.outputZip };
           })
         )

@@ -202,4 +202,41 @@ describe('StoreZipService', () => {
 
     await fs.rm(workspace, { recursive: true, force: true });
   });
+
+  it('preserves original entry order and modified times through an entry plan', async () => {
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-zip-plan-test-'));
+    const inputDir = path.join(workspace, 'input');
+    const outputZip = path.join(workspace, 'planned.zip');
+
+    await fs.mkdir(path.join(inputDir, 'content'), { recursive: true });
+    await fs.mkdir(path.join(inputDir, '.card'), { recursive: true });
+    await fs.writeFile(path.join(inputDir, 'content', 'b.yaml'), 'b', 'utf-8');
+    await fs.writeFile(path.join(inputDir, 'hero.png'), 'hero', 'utf-8');
+    await fs.writeFile(path.join(inputDir, '.card', 'metadata.yaml'), 'meta', 'utf-8');
+    await fs.writeFile(path.join(inputDir, 'content', 'a.yaml'), 'a', 'utf-8');
+
+    const zip = new StoreZipService();
+    await zip.compress(inputDir, outputZip, {
+      entryPlan: [
+        { path: '.card/metadata.yaml', modifiedTime: 1767225600000 },
+        { path: 'content/b.yaml', modifiedTime: 1767229200000 },
+        { path: 'hero.png', modifiedTime: 1767232800000 },
+        { path: 'content/a.yaml', modifiedTime: 1767236400000 },
+      ],
+    });
+
+    const entries = await zip.list(outputZip);
+    expect(entries.map((entry) => entry.path)).toEqual([
+      '.card/metadata.yaml',
+      'content/b.yaml',
+      'hero.png',
+      'content/a.yaml',
+    ]);
+    expect(entries[0]?.modifiedTime).toBe(1767225600000);
+    expect(entries[1]?.modifiedTime).toBe(1767229200000);
+    expect(entries[2]?.modifiedTime).toBe(1767232800000);
+    expect(entries[3]?.modifiedTime).toBe(1767236400000);
+
+    await fs.rm(workspace, { recursive: true, force: true });
+  });
 });

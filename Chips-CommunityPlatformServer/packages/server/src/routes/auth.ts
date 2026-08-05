@@ -37,6 +37,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       data: {
         user: UserService.toPrivateProfile(user),
         accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
     });
   });
@@ -88,6 +89,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       data: {
         user: UserService.toPrivateProfile(user),
         accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
     });
   });

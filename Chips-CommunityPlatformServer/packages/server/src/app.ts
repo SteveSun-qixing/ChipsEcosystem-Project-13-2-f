@@ -43,15 +43,21 @@ export async function buildApp() {
     contentSecurityPolicy: false, // CSP 由 Nginx 层控制
   });
 
+  const extraOrigins = env.CORS_EXTRA_ORIGINS.split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  const isAllowedCorsOrigin = (origin: string): boolean =>
+    isClientCorsOriginAllowed(origin, extraOrigins);
+
   await fastify.register(fastifyCors, {
     origin: (origin, cb) => {
-      // 生产模式：只允许 BASE_URL 同源请求
+      // 生产模式：允许 BASE_URL 同源、薯片 Host 客户端来源与 CORS_EXTRA_ORIGINS 白名单
       // 开发模式：允许 localhost 任意端口
       if (env.NODE_ENV === 'development') {
         cb(null, true);
         return;
       }
-      if (!origin || origin === env.BASE_URL) {
+      if (!origin || origin === env.BASE_URL || isAllowedCorsOrigin(origin)) {
         cb(null, true);
         return;
       }
@@ -140,4 +146,23 @@ export async function buildApp() {
   });
 
   return fastify;
+}
+
+/**
+ * 判断客户端来源 Origin 是否允许访问社区 API。
+ * - `chips-render:` 前缀：薯片 Host 渲染进程加载的插件页面来源；
+ * - `null`：file:// 协议页面加载的客户端来源；
+ * - 显式配置在 `CORS_EXTRA_ORIGINS` 白名单中的来源。
+ */
+export function isClientCorsOriginAllowed(
+  origin: string,
+  extraOrigins: string[] = [],
+): boolean {
+  if (origin.startsWith('chips-render:')) {
+    return true;
+  }
+  if (origin === 'null') {
+    return true;
+  }
+  return extraOrigins.includes(origin);
 }

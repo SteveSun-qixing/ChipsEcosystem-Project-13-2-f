@@ -66,6 +66,9 @@ const EnvSchema = z.object({
   // Swagger UI (可在生产环境关闭)
   ENABLE_SWAGGER: BooleanFromEnv.default(true),
 
+  // CORS 额外允许的 Origin（逗号分隔，生产模式下生效，用于桌面客户端等非浏览器来源）
+  CORS_EXTRA_ORIGINS: z.string().default(''),
+
   // Host 插件安装配置
   HOST_CARD_PLUGIN_PATHS: z.string().optional(),
   HOST_LAYOUT_PLUGIN_PATHS: z.string().optional(),

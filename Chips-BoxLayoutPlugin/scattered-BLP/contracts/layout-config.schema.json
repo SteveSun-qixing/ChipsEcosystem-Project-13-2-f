@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scattered layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": [
+        "sortMode",
+        "randomSeed",
+        "visibleFakeCount",
+        "cycleIntervalMs",
+        "cardSize",
+        "spread",
+        "motion",
+        "background",
+        "topRegion"
+      ],
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name", "random"]
+        },
+        "randomSeed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "visibleFakeCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "cycleIntervalMs": {
+          "type": "integer",
+          "minimum": 3000,
+          "maximum": 60000
+        },
+        "cardSize": {
+          "type": "string",
+          "enum": ["compact", "regular", "large"]
+        },
+        "spread": {
+          "type": "string",
+          "enum": ["calm", "loose", "wild"]
+        },
+        "motion": {
+          "type": "string",
+          "enum": ["auto", "reduced"]
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

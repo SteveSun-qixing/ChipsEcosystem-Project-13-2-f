@@ -1,0 +1,32 @@
+id: chips.layout.scattered.blp
+name: 散乱布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+description: 薯片官方散乱布局插件，提供随机卡片堆浏览、顶层封面切换与布局参数编辑能力。
+author:
+  name: sevenstars
+  email: scattered-blp@example.invalid
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+layout:
+  layoutType: chips.layout.scattered.blp
+  displayName: 散乱布局插件

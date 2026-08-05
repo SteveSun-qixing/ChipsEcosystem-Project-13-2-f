@@ -1,0 +1,32 @@
+id: chips.layout.documentlibrary.blp
+name: 文档库布局插件
+version: 0.1.0
+type: layout
+entry: dist/index.mjs
+description: 文档库布局插件用于以层级目录和文档预览方式展示箱子条目。
+author:
+  name: sevenstars
+  email: documentlibrary-blp@example.invalid
+permissions:
+  - box.read
+  - theme.read
+  - i18n.read
+runtime:
+  targets:
+    desktop:
+      supported: true
+    web:
+      supported: false
+    mobile:
+      supported: false
+    headless:
+      supported: true
+engines:
+  chips: "^0.1.0"
+os:
+  - darwin
+  - win32
+  - linux
+layout:
+  layoutType: chips.layout.documentlibrary.blp
+  displayName: 文档库布局插件

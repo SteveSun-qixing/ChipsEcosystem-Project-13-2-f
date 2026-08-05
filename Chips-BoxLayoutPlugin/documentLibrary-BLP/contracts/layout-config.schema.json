@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document library layout config",
+  "type": "object",
+  "required": ["schemaVersion", "props", "assetRefs"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "props": {
+      "type": "object",
+      "required": ["sortMode", "treeNodes", "sidebarWidth", "showSummary", "background", "topRegion"],
+      "properties": {
+        "sortMode": {
+          "type": "string",
+          "enum": ["manual", "name-asc", "name-desc"]
+        },
+        "treeNodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/treeNode"
+          },
+          "maxItems": 500
+        },
+        "sidebarWidth": {
+          "type": "string",
+          "enum": ["compact", "regular", "wide"]
+        },
+        "showSummary": {
+          "type": "boolean"
+        },
+        "background": {
+          "$ref": "#/$defs/frameRegion"
+        },
+        "topRegion": {
+          "$ref": "#/$defs/frameRegion"
+        }
+      }
+    },
+    "assetRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+        "not": {
+          "anyOf": [
+            { "pattern": "(^|/)\\.($|/)" },
+            { "pattern": "(^|/)\\.\\.($|/)" }
+          ]
+        }
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "treeNode": {
+      "type": "object",
+      "required": ["id", "collapsed", "children"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "entryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "titleOverride": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "collapsed": {
+          "type": "boolean"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/treeNode"
+          }
+        }
+      }
+    },
+    "frameRegion": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "image", "html"]
+        },
+        "assetPath": {
+          "type": "string",
+          "pattern": "^assets\\/[^\\\\:?#\\/]+(?:\\/[^\\\\:?#\\/]+)*$",
+          "not": {
+            "anyOf": [
+              { "pattern": "(^|/)\\.($|/)" },
+              { "pattern": "(^|/)\\.\\.($|/)" }
+            ]
+          }
+        },
+        "html": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

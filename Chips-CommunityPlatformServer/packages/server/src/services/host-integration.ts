@@ -4,7 +4,13 @@ import { env } from '../config/env.js';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import * as yaml from 'js-yaml';
+import {
+  resolveWebResourceOpenPlanFromPlugins,
+  type WebResourceOpenPlan,
+  type WebResourceOpenRequest,
+} from './web-resource-open-plan.js';
 
 interface ModuleInvokeResult<TOutput> {
   mode: 'sync' | 'job';
@@ -88,27 +94,6 @@ export interface WebPluginEntryView extends WebPluginSessionView {
   entryDir: string;
 }
 
-export interface WebResourceOpenRequest {
-  intent?: string;
-  resource: {
-    resourceId: string;
-    mimeType?: string;
-    title?: string;
-    fileName?: string;
-  };
-}
-
-export interface WebResourceOpenPlan {
-  mode: 'plugin' | 'external';
-  pluginId?: string;
-  matchedCapability?: string;
-  resolved: {
-    resourceId: string;
-    mimeType?: string;
-    extension?: string;
-    fileName?: string;
-  };
-}
 
 export interface FileConvertResult {
   outputPath: string;
@@ -437,50 +422,12 @@ export class HostIntegrationService {
       await this.init();
     }
 
-    const resourceId = normalizeOptionalString(request.resource.resourceId);
-    if (!resourceId) {
-      throw new Error('resource.resourceId is required');
-    }
-
-    const extension = inferResourceExtension(resourceId, request.resource.fileName);
-    const mimeType = inferResourceMimeType(request.resource.mimeType, extension);
-    const intent = normalizeResourceIntent(request.intent);
-    const candidates = buildResourceHandlerCapabilities(intent, mimeType, extension);
     const plugins = this.host.runtime
       .query({ type: 'app' })
       .filter((record) => record.enabled)
       .filter((record) => (record.manifest.runtime?.targets?.[WEB_RUNTIME_TARGET]?.supported ?? false));
 
-    for (const capability of candidates) {
-      const matched = plugins.find((record) => (record.manifest.capabilities ?? []).includes(capability));
-      if (matched) {
-        return {
-          mode: 'plugin',
-          pluginId: matched.manifest.id,
-          matchedCapability: capability,
-          resolved: {
-            resourceId,
-            mimeType,
-            extension,
-            fileName: normalizeOptionalString(request.resource.fileName),
-          },
-        };
-      }
-    }
-
-    if (isExternalUrl(resourceId)) {
-      return {
-        mode: 'external',
-        resolved: {
-          resourceId,
-          mimeType,
-          extension,
-          fileName: normalizeOptionalString(request.resource.fileName),
-        },
-      };
-    }
-
-    throw new Error(`No web-capable plugin can open resource: ${resourceId}`);
+    return resolveWebResourceOpenPlanFromPlugins(request, plugins);
   }
 
   private async installAndEnablePlugin(sourcePath: string): Promise<string> {
@@ -574,6 +521,9 @@ export class HostIntegrationService {
     const defaultAppPlugins = [
       path.join(root, 'Chips-CardViewer'),
       path.join(root, 'Chips-PhotoViewer'),
+      path.join(root, 'Chips-MusicPlayer'),
+      path.join(root, 'Chips-VideoPlayer'),
+      path.join(root, 'Chips-BookReader'),
     ];
     const defaultCardPlugins = [
       path.join(root, 'Chips-BaseCardPlugin/richtext-BCP'),

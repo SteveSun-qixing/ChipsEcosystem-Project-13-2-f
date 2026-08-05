@@ -172,6 +172,93 @@ describe("resolveLaunchAudioTarget", () => {
     });
   });
 
+  it("在社区 Web 远端资源场景下保留音乐卡片封面和歌词资源上下文", () => {
+    const audioUrl = "http://localhost:9000/chips-card-render-cache/card-1/track.mp3";
+    const coverUrl = "http://localhost:9000/chips-card-render-cache/card-1/cover.png";
+    const lyricsUrl = "http://localhost:9000/chips-card-render-cache/card-1/lyrics.lrc";
+
+    expect(
+      resolveLaunchAudioTarget({
+        launchParams: {
+          trigger: "resource-open-service",
+          resourceOpen: {
+            intent: "view",
+            resourceId: audioUrl,
+            fileName: "track.mp3",
+            mimeType: "audio/mpeg",
+            title: "Web Track",
+            matchedCapability: "resource-handler:view:audio/*",
+            payload: {
+              kind: "chips.music-card",
+              version: "1.0.0",
+              cardType: "base.music",
+              config: {
+                card_type: "MusicCard",
+                theme: "",
+                audio_file: "track.mp3",
+                music_name: "Web Track",
+                album_cover: "cover.png",
+                lyrics_file: "lyrics.lrc",
+                production_team: [
+                  {
+                    id: "artist",
+                    role: "演唱",
+                    people: ["Web Artist"],
+                  },
+                ],
+                release_date: "2026-07-06",
+                album_name: "Community Cache",
+                language: "中文",
+                genre: "Pop",
+              },
+              resources: {
+                audio: {
+                  resourceId: audioUrl,
+                  relativePath: "track.mp3",
+                  fileName: "track.mp3",
+                  mimeType: "audio/mpeg",
+                },
+                cover: {
+                  resourceId: coverUrl,
+                  relativePath: "cover.png",
+                  fileName: "cover.png",
+                  mimeType: "image/png",
+                },
+                lyrics: {
+                  resourceId: lyricsUrl,
+                  relativePath: "lyrics.lrc",
+                  fileName: "lyrics.lrc",
+                  mimeType: "text/plain",
+                },
+              },
+              display: {
+                title: "Web Track",
+                artist: "Web Artist",
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      sourceId: audioUrl,
+      filePath: undefined,
+      fileName: "track.mp3",
+      mimeType: "audio/mpeg",
+      title: "Web Track",
+      musicCard: expect.objectContaining({
+        resources: expect.objectContaining({
+          audio: expect.objectContaining({ resourceId: audioUrl }),
+          cover: expect.objectContaining({ resourceId: coverUrl }),
+          lyrics: expect.objectContaining({ resourceId: lyricsUrl }),
+        }),
+        display: {
+          title: "Web Track",
+          artist: "Web Artist",
+        },
+      }),
+    });
+  });
+
   it("在只有 targetPath 时恢复普通文件关联打开", () => {
     expect(
       resolveLaunchAudioTarget({

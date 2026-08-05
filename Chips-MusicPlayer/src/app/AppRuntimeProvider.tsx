@@ -421,6 +421,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
       let artworkUri = DEFAULT_ARTWORK_URI;
       let artworkKind: TrackPresentation["artworkKind"] = "default";
       let nextRevocableArtworkUrl: string | undefined;
+      let embeddedMetadata: ReturnType<typeof parseEmbeddedAudioMetadata> = {};
+      let companionSelection = explicitSelection;
 
       if (metadataReadTarget) {
         const [binaryResult, companionResult] = await Promise.allSettled([
@@ -428,7 +430,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
           !musicCard && localAudioPath ? discoverCompanionFiles(localAudioPath, explicitSelection) : Promise.resolve(explicitSelection),
         ]);
 
-        const embeddedMetadata =
+        embeddedMetadata =
           binaryResult.status === "fulfilled"
             ? parseEmbeddedAudioMetadata({
                 bytes: binaryResult.value,
@@ -444,72 +446,72 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
           });
         }
 
-        const companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
+        companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
 
         resolvedTitle = target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || resolvedTitle;
         artist = musicCardArtist || embeddedMetadata.artist?.trim() || artist;
         album = musicCardAlbum || embeddedMetadata.album?.trim() || album;
+      }
 
-        try {
-          lyrics = musicCard?.resources.lyrics
-            ? await loadLyricsDocumentFromResourceId(musicCard.resources.lyrics.resourceId)
-            : await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
-        } catch (error) {
-          logger.warn("读取歌词失败，继续回退到嵌入歌词与空歌词视图", {
-            localAudioPath,
-            resourceId: musicCard?.resources.lyrics?.resourceId,
-            error,
-          });
-          lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata).catch(() => createEmptyLyricsDocument());
-        }
+      try {
+        lyrics = musicCard?.resources.lyrics
+          ? await loadLyricsDocumentFromResourceId(musicCard.resources.lyrics.resourceId)
+          : await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
+      } catch (error) {
+        logger.warn("读取歌词失败，继续回退到嵌入歌词与空歌词视图", {
+          localAudioPath,
+          resourceId: musicCard?.resources.lyrics?.resourceId,
+          error,
+        });
+        lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata).catch(() => createEmptyLyricsDocument());
+      }
 
-        resolvedTitle =
-          target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
-        artist = musicCardArtist || embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
-        album = musicCardAlbum || embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
+      resolvedTitle =
+        target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
+      artist = musicCardArtist || embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
+      album = musicCardAlbum || embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
 
-        let hasPreferredArtwork = false;
-        try {
-          const companionArtwork = musicCard?.resources.cover
-            ? await resolveArtworkUriFromResource(musicCard.resources.cover.resourceId)
-            : await resolveArtworkUriFromResource(companionSelection.coverPath);
-          artworkUri = companionArtwork.uri;
-          artworkKind = companionArtwork.kind;
-          hasPreferredArtwork = companionArtwork.kind === "companion";
-        } catch (error) {
-          logger.warn("读取卡片封面或伴生封面失败，继续回退默认封面与嵌入封面", {
-            localAudioPath,
-            resourceId: musicCard?.resources.cover?.resourceId ?? companionSelection.coverPath,
-            error,
-          });
-        }
+      let hasPreferredArtwork = false;
+      try {
+        const companionArtwork = musicCard?.resources.cover
+          ? await resolveArtworkUriFromResource(musicCard.resources.cover.resourceId)
+          : await resolveArtworkUriFromResource(companionSelection.coverPath);
+        artworkUri = companionArtwork.uri;
+        artworkKind = companionArtwork.kind;
+        hasPreferredArtwork = companionArtwork.kind === "companion";
+      } catch (error) {
+        logger.warn("读取卡片封面或伴生封面失败，继续回退默认封面与嵌入封面", {
+          localAudioPath,
+          resourceId: musicCard?.resources.cover?.resourceId ?? companionSelection.coverPath,
+          error,
+        });
+      }
 
-        if (!hasPreferredArtwork && embeddedMetadata.artwork) {
-          const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
-            client,
-            workspacePath,
+      if (!hasPreferredArtwork && embeddedMetadata.artwork) {
+        const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
+          client,
+          workspacePath,
+          sourceId: target.sourceId.trim(),
+          fileName: normalizedFileName,
+          artwork: embeddedMetadata.artwork,
+          logger,
+        });
+
+        if (persistedArtwork) {
+          artworkUri = persistedArtwork.uri;
+          logger.info("嵌入封面已写入 Host 工作区临时 PNG", {
             sourceId: target.sourceId.trim(),
-            fileName: normalizedFileName,
-            artwork: embeddedMetadata.artwork,
-            logger,
+            filePath: persistedArtwork.filePath,
           });
-
-          if (persistedArtwork) {
-            artworkUri = persistedArtwork.uri;
-            logger.info("嵌入封面已写入 Host 工作区临时 PNG", {
-              sourceId: target.sourceId.trim(),
-              filePath: persistedArtwork.filePath,
-            });
-          } else {
-            nextRevocableArtworkUrl = await resolveEmbeddedArtworkUrl(embeddedMetadata.artwork);
-            artworkUri = nextRevocableArtworkUrl;
-            logger.warn("嵌入封面未能落盘到 Host 工作区，回退为运行时对象 URL", {
-              sourceId: target.sourceId.trim(),
-              mimeType: embeddedMetadata.artwork.mimeType,
-            });
-          }
-          artworkKind = "embedded";
+        } else {
+          nextRevocableArtworkUrl = await resolveEmbeddedArtworkUrl(embeddedMetadata.artwork);
+          artworkUri = nextRevocableArtworkUrl;
+          logger.warn("嵌入封面未能落盘到 Host 工作区，回退为运行时对象 URL", {
+            sourceId: target.sourceId.trim(),
+            mimeType: embeddedMetadata.artwork.mimeType,
+          });
         }
+        artworkKind = "embedded";
       }
 
       const source: AudioSource = {

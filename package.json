@@ -12,6 +12,7 @@
   "workspaces": [
     "Chip-iconMaker",
     "Chips-*",
+    "Chips-CommunityPlatformServer/packages/*",
     "Chips-BaseCardPlugin/*",
     "Chips-BoxLayoutPlugin/*",
     "Chips-ModulePlugin/*",

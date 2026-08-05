@@ -78,6 +78,7 @@ export interface Client extends CoreClient {
   cliTask: import("../api/cli-task").CliTaskApi;
   plugin: import("../api/plugin").PluginApi;
   module: import("../api/module").ModuleApi;
+  communityCardTransfer: import("../api/community-card-transfer").CommunityCardTransferApi;
   window: import("../api/window").WindowApi;
   surface: import("../api/surface").SurfaceApi;
   transfer: import("../api/transfer").TransferApi;

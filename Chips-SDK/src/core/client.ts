@@ -20,6 +20,7 @@ import { createCliCommandApi } from "../api/cli-command";
 import { createCliTaskApi } from "../api/cli-task";
 import { createPluginApi } from "../api/plugin";
 import { createModuleApi } from "../api/module";
+import { createCommunityCardTransferApi } from "../api/community-card-transfer";
 import { createWindowApi } from "../api/window";
 import { createSurfaceApi } from "../api/surface";
 import { createTransferApi } from "../api/transfer";
@@ -229,6 +230,7 @@ export function createClient(config: ClientConfig = {}): Client {
     cliTask: createCliTaskApi(core),
     plugin: createPluginApi(core),
     module: createModuleApi(core),
+    communityCardTransfer: createCommunityCardTransferApi(core),
     window: createWindowApi(core),
     surface: createSurfaceApi(core),
     transfer: createTransferApi(core),

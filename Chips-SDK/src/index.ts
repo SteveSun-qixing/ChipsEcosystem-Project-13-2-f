@@ -196,6 +196,15 @@ export type {
   ModuleSyncInvokeResult,
 } from "./api/module";
 export type {
+  CommunityCardTransferApi,
+  CommunityCardTransferClientInfo,
+  CommunityCardTransferDownloadInput,
+  CommunityCardTransferOpenRemoteInput,
+  CommunityCardTransferPublishInput,
+  CommunityCardTransferServer,
+} from "./api/community-card-transfer";
+export { COMMUNITY_CARD_TRANSFER_CAPABILITY } from "./api/community-card-transfer";
+export type {
   ImageColorPaletteEntry,
   ImageColorPaletteRole,
   ImageColorPickInput,

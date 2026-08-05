@@ -1,0 +1,21 @@
+{
+  "name": "chips-card-ecosystem-film",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4310",
+    "render:preview": "node scripts/render-video.mjs --seconds 12 --width 1280 --height 720 --output output/chips_card_ecosystem_preview.webm",
+    "render:keyframes": "node scripts/render-keyframes.mjs --width 960 --height 540 --output output/keyframes",
+    "render:video:720": "node scripts/render-framepipe-video.mjs --seconds 90 --width 1280 --height 720 --output dist/chips_card_ecosystem_1280x720_25fps_silent.mp4",
+    "render:video": "node scripts/render-video.mjs --seconds 90 --width 1920 --height 1080 --output output/chips_card_ecosystem_1920x1080_silent.webm",
+    "audio": "node scripts/build-audio.mjs",
+    "mux": "ffmpeg -y -i output/chips_card_ecosystem_1920x1080_silent.webm -i output/chips_card_ecosystem_audio_mix.wav -c:v libx264 -pix_fmt yuv420p -preset slow -crf 18 -r 25 -c:a aac -b:a 192k -shortest dist/chips_card_ecosystem_1920x1080_25fps_h264.mp4",
+    "frames": "mkdir -p output/checkframes && ffmpeg -y -i dist/chips_card_ecosystem_1920x1080_25fps_h264.mp4 -vf \"select='eq(n,75)+eq(n,550)+eq(n,1125)+eq(n,1625)+eq(n,2175)',scale=640:-1,tile=5x1\" -frames:v 1 output/checkframes/contact_sheet.png"
+  },
+  "dependencies": {
+    "playwright": "^1.60.0",
+    "three": "^0.184.0",
+    "vite": "^7.2.4"
+  }
+}

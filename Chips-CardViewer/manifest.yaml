@@ -4,7 +4,7 @@ version: 0.1.0
 type: app
 entry: dist/index.html
 
-description: 卡片查看器应用，用于通过统一卡片显示链路查看复合卡片内容。
+description: 卡片查看器应用，用于通过统一卡片显示链路查看复合卡片内容。Web target 只负责查看社区卡片页面与查看缓存，不提供上传和下载 .card；Desktop/Mobile 客户端 target 可接入统一卡片传输模块，支持打开社区卡片和下载完整卡片。
 
 author:
   name: CardViewer

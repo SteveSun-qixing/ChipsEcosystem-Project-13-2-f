@@ -476,6 +476,8 @@ describe('Service activation and lazy heavy service creation', () => {
     let boxCreated = 0;
     let zipCreated = 0;
     const cardRenderCalls: Array<{ cardFile: string; options?: Record<string, unknown> }> = [];
+    const boxLayoutFrameCalls: Array<Record<string, unknown>> = [];
+    const boxLayoutEditorCalls: Array<Record<string, unknown>> = [];
     let cardService: CardService | undefined;
     let boxService: BoxService | undefined;
     let zipService: StoreZipService | undefined;
@@ -491,7 +493,27 @@ describe('Service activation and lazy heavy service creation', () => {
     const fakeBoxService = {
       pack: async (_boxDir: string, outputPath: string) => outputPath,
       unpack: async (_boxFile: string, outputDir: string) => outputDir,
-      inspect: async () => ({ files: [] as string[] })
+      inspect: async () => ({ files: [] as string[] }),
+      renderLayoutFrame: async (options: Record<string, unknown>) => {
+        boxLayoutFrameCalls.push(options);
+        return {
+          title: 'box-view',
+          layoutType: options.layoutType,
+          pluginId: options.layoutType,
+          documentUrl: 'chips-render://session/box-view/index.html',
+          sessionId: 'render-session-view'
+        };
+      },
+      renderLayoutEditor: async (options: Record<string, unknown>) => {
+        boxLayoutEditorCalls.push(options);
+        return {
+          title: 'box-editor',
+          layoutType: options.layoutType,
+          pluginId: options.layoutType,
+          documentUrl: 'chips-render://session/box-editor/index.html',
+          sessionId: 'render-session-editor'
+        };
+      }
     } as unknown as BoxService;
     const fakeZipService = {
       compress: async () => { },
@@ -537,7 +559,7 @@ describe('Service activation and lazy heavy service creation', () => {
       }
     });
 
-    const permissionAll = ['config.read', 'card.read', 'box.read', 'zip.manage'];
+    const permissionAll = ['config.read', 'card.read', 'box.read', 'box.write', 'zip.manage'];
     expect(cardCreated).toBe(0);
     expect(boxCreated).toBe(0);
     expect(zipCreated).toBe(0);
@@ -557,6 +579,26 @@ describe('Service activation and lazy heavy service creation', () => {
       createContext(permissionAll)
     );
     await kernel.invoke('box.inspect', { boxFile: '/tmp/demo.box' }, createContext(permissionAll));
+    await kernel.invoke(
+      'box.renderLayoutFrame',
+      {
+        layoutType: 'chips.layout.grid',
+        sessionId: 'box-session',
+        box: { name: 'demo box', activeLayoutType: 'chips.layout.grid' },
+        initialView: { total: 0, items: [] },
+        config: {}
+      },
+      createContext(permissionAll)
+    );
+    await kernel.invoke(
+      'box.renderLayoutEditor',
+      {
+        layoutType: 'chips.layout.grid',
+        entries: [],
+        initialConfig: {}
+      },
+      createContext(permissionAll)
+    );
     await kernel.invoke('zip.list', { zipPath: '/tmp/demo.zip' }, createContext(permissionAll));
     off();
 
@@ -575,5 +617,14 @@ describe('Service activation and lazy heavy service creation', () => {
         verifyConsistency: true
       }
     });
+    expect(boxLayoutFrameCalls).toHaveLength(1);
+    expect(boxLayoutEditorCalls).toHaveLength(1);
+    for (const call of [...boxLayoutFrameCalls, ...boxLayoutEditorCalls]) {
+      expect(call.themeCssText).toEqual(expect.stringContaining('@font-face'));
+      expect(call.themeCssText).toEqual(expect.stringContaining('Material Symbols Outlined'));
+      expect(call.theme).toMatchObject({
+        id: 'chips-official.default-theme'
+      });
+    }
   });
 });

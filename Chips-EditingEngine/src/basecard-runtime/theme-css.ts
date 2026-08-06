@@ -1,3 +1,5 @@
+const HOST_THEME_STYLE_ELEMENT_ID = 'chips-plugin-theme-style';
+
 function collectChipsVariables(referenceElement: HTMLElement): Array<[string, string]> {
   const declarations = new Map<string, string>();
   const candidates = [
@@ -26,7 +28,17 @@ function collectChipsVariables(referenceElement: HTMLElement): Array<[string, st
   return Array.from(declarations.entries()).sort(([left], [right]) => left.localeCompare(right));
 }
 
+function collectHostInjectedThemeCss(referenceElement: HTMLElement): string {
+  const themeStyleElement = referenceElement.ownerDocument.getElementById(HOST_THEME_STYLE_ELEMENT_ID);
+  if (!themeStyleElement || themeStyleElement.tagName.toLowerCase() !== 'style') {
+    return '';
+  }
+
+  return themeStyleElement.textContent?.trim() ?? '';
+}
+
 export function createBasecardFrameThemeCss(referenceElement: HTMLElement): string {
+  const hostThemeCss = collectHostInjectedThemeCss(referenceElement);
   const variables = collectChipsVariables(referenceElement);
   const variableBlock = variables.length > 0
     ? [
@@ -37,6 +49,7 @@ export function createBasecardFrameThemeCss(referenceElement: HTMLElement): stri
     : '';
 
   return [
+    hostThemeCss,
     variableBlock,
     'html, body {',
     '  margin: 0;',
@@ -88,4 +101,3 @@ export function createBasecardFrameThemeCss(referenceElement: HTMLElement): stri
     '}',
   ].filter(Boolean).join('\n');
 }
-

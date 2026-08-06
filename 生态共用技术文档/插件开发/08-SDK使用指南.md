@@ -773,6 +773,7 @@ client.box.documentWindow.render({
 
 - SDK 内部会依次调用 Host `box.inspect -> box.readLayoutDescriptor -> box.normalizeLayoutConfig -> box.getLayoutInitialQuery -> box.openView -> box.renderLayoutFrame`；
 - Host 负责装载布局插件、创建查看会话和生成正式布局文档；
+- Host 托管的布局查看文档必须已注入完整主题 CSS、Material Symbols `@font-face` 与解析后的 token variables；SDK 和应用层不自行注入图标字体，也不拼接主题字体路径；
 - `documentWindow` 返回的 iframe URL 是 Host 托管的正式文档入口，Electron 桌面端可使用 `chips-render://...` 等受控协议地址；应用层不得假定它一定是 `file://`，也不得绕过 Host 自行读取临时布局文档；
 - SDK 负责挂载 iframe，并桥接 `chips.box-layout:*` 运行时消息；
 - 销毁返回的 iframe 时，正式链路需要同时关闭 `box.openView` 创建的查看会话并释放 `box.renderLayoutFrame` 创建的 render session；SDK 返回的 `dispose()` 已封装该流程。
@@ -1024,7 +1025,7 @@ const entries = await client.zip.list('/tmp/site.zip');
 - 应用层不得保留本地默认编辑器作为正式路径兜底；
 - 普通应用和第三方宿主不得绕过 SDK/Host 直接 import 基础卡片插件源码；
 - 选择 Host 托管复合 iframe 的应用，应优先消费 `client.card.compositeWindow.onNodeSelect(...)` 作为基础卡片选中入口；
-- 主题与多语言上下文必须由 Host 注入并沿正式链路进入编辑器 iframe。
+- 主题与多语言上下文必须由 Host 注入并沿正式链路进入编辑器 iframe；会渲染 `ChipsIcon` 或组件库主题样式的编辑器 iframe 必须获得完整主题 CSS 与 token variables，不能降级为 token-only 注入。
 
 官方编辑引擎补充：
 

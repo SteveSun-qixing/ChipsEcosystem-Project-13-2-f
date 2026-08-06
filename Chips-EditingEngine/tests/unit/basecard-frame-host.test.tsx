@@ -4,6 +4,7 @@ import React, { act, useMemo, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasecardFrameHost } from '../../src/basecard-runtime/frame-host';
+import { createBasecardFrameThemeCss } from '../../src/basecard-runtime/theme-css';
 
 const mockRenderView = vi.fn();
 let mockPreviewPointerEvents: 'native' | 'shielded' = 'native';
@@ -203,6 +204,31 @@ describe('BasecardFrameHost', () => {
     expect(host?.style.minHeight).toBe('0px');
     expect(frame?.style.minHeight).toBe('0px');
   }, 15000);
+
+  it('passes Host-injected theme CSS and icon font declarations into local basecard iframes', () => {
+    const hostThemeStyle = document.createElement('style');
+    hostThemeStyle.id = 'chips-plugin-theme-style';
+    hostThemeStyle.textContent = [
+      '@font-face {',
+      '  font-family: "Material Symbols Outlined";',
+      '  src: url("file:///theme/dist/icons/variablefont/MaterialSymbolsOutlined.woff2") format("woff2");',
+      '}',
+      '[data-scope="icon"][data-part="root"] { font-family: "Material Symbols Outlined"; }',
+    ].join('\n');
+    document.head.appendChild(hostThemeStyle);
+    container.style.setProperty('--chips-sys-icon-size', '24px');
+
+    const cssText = createBasecardFrameThemeCss(container);
+
+    expect(cssText).toContain('@font-face');
+    expect(cssText).toContain('Material Symbols Outlined');
+    expect(cssText).toContain('file:///theme/dist/icons/variablefont/MaterialSymbolsOutlined.woff2');
+    expect(cssText).toContain('--chips-sys-icon-size: 24px;');
+    expect(cssText.indexOf('@font-face')).toBeLessThan(cssText.indexOf('--chips-sys-icon-size: 24px;'));
+    expect(cssText.indexOf('--chips-sys-icon-size: 24px;')).toBeLessThan(cssText.indexOf('html, body {'));
+
+    hostThemeStyle.remove();
+  });
 
   it('resolves pending imported resources for preview rendering before they are persisted', async () => {
     mockRenderView.mockReset();

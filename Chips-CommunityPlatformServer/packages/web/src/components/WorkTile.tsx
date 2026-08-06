@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
 import { getInitial, getWorkCoverStyle } from '../lib/ui';
 import { prefetchCardOpenView } from '../lib/card-open-view-prefetch';
+import { prefetchBoxDetail } from '../lib/box-detail-prefetch';
 import { Icon } from '../runtime/icons/Icon';
 import type { CommunityWorkItem } from '../types/community';
 
@@ -22,14 +23,19 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
     rootRef.current = node;
   };
 
-  const prefetchCard = () => {
-    if (!manageMode && isCard) {
+  const prefetchWork = () => {
+    if (manageMode) {
+      return;
+    }
+    if (item.type === 'card') {
       void prefetchCardOpenView(item.id).catch(() => undefined);
+    } else {
+      void prefetchBoxDetail(item.id).catch(() => undefined);
     }
   };
 
   useEffect(() => {
-    if (manageMode || !isCard || typeof IntersectionObserver === 'undefined') {
+    if (manageMode || typeof IntersectionObserver === 'undefined') {
       return;
     }
 
@@ -41,7 +47,7 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          prefetchCard();
+          prefetchWork();
           observer.disconnect();
         }
       },
@@ -51,7 +57,7 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
     return () => {
       observer.disconnect();
     };
-  }, [item.id, isCard, manageMode]);
+  }, [item.id, item.type, manageMode]);
 
   const content = (
     <article className="work-tile__surface">
@@ -119,8 +125,8 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
       className={`work-tile work-tile--${item.type}`}
       style={coverStyle}
       aria-label={`${item.title} · ${item.type === 'card' ? t('common.card') : t('common.box')}`}
-      onMouseEnter={prefetchCard}
-      onFocus={prefetchCard}
+      onMouseEnter={prefetchWork}
+      onFocus={prefetchWork}
     >
       {content}
     </Link>

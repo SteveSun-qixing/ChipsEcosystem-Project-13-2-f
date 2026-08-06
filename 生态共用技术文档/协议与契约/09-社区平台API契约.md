@@ -1,8 +1,8 @@
 # 薯片社区平台 HTTP API 契约
 
 **文档编号**：协议与契约 / 09  
-**文档版本**：v1.3  
-**最后核对时间**：2026-08-05  
+**文档版本**：v1.4  
+**最后核对时间**：2026-08-06  
 **适用范围**：所有需要与薯片社区平台服务器交互的客户端、工具与生态内其他系统。
 
 ## 1. 基础约定
@@ -238,7 +238,7 @@ Authorization: Bearer <access_token>
 - `POST /api/v1/card-transfer/upload-sessions/:uploadId/abort`
 - `POST /api/v1/card-transfer/download-sessions`
 - `GET /api/v1/card-transfer/download-sessions/:downloadId/plan`
-- `POST /api/v1/upload/box`（箱子上传保留 multipart 入口，与卡片传输链路无关）
+- `POST /api/v1/upload/box`（箱子上传保留 multipart 入口；`POST /api/v1/card-transfer/upload-sessions` 传 `contentType: 'box'` 走统一控制面链路）
 
 旧 `POST /api/v1/upload-sessions`、`POST /api/v1/upload-sessions/:uploadId/resources/presign`、`POST /api/v1/upload-sessions/:uploadId/card`、`POST /api/v1/upload/card` 已移除，浏览器卡片上传接口不再存在。
 
@@ -261,6 +261,7 @@ Authorization: Bearer <access_token>
 ### 5.6 箱子
 
 - `GET /api/v1/boxes/:boxId`
+- `GET /api/v1/boxes/:boxId/view`（只读箱子文档，`text/html`）
 - `PATCH /api/v1/boxes/:boxId`
 - `DELETE /api/v1/boxes/:boxId`
 - `GET /api/v1/users/me/boxes`
@@ -392,6 +393,8 @@ Authorization: Bearer <access_token>
 
 ### 6.5 Box Detail
 
+`cards` 为 `structure.entries` 的社区匹配结果（`EnrichedBoxEntryRef`）：`url` 不以 `scheme://` 开头视为内嵌条目（`embedded: true`，`url` 为包内相对路径）；`snapshot.document_id` 匹配到社区公开就绪卡片时输出 `communityCardId / communityViewUrl / communityRenderStatusUrl`。
+
 ```json
 {
   "id": "uuid",
@@ -400,19 +403,30 @@ Authorization: Bearer <access_token>
   "roomId": null,
   "title": "箱子标题",
   "coverUrl": null,
+  "documentUrl": "/api/v1/boxes/uuid/view",
+  "coverRatio": "3:4",
   "layoutPlugin": "chips-official.grid-layout",
   "visibility": "public",
   "fileSizeBytes": 2048,
   "metadata": {},
   "cards": [
     {
+      "entry_id": "abc123def0",
       "url": "https://example.com/demo.card",
-      "card_id": "abc123def0",
+      "document_id": "abc123def0",
       "title": "引用卡片",
-      "cover_url": "https://...",
+      "content_type": "chips/card",
+      "embedded": false,
       "communityCardId": "uuid",
       "communityViewUrl": "/api/v1/cards/uuid/view",
       "communityRenderStatusUrl": "/api/v1/cards/uuid/render-status"
+    },
+    {
+      "entry_id": "def456ghi1",
+      "url": "cards/day-01.card",
+      "title": "内嵌卡片",
+      "embedded": true,
+      "communityCardId": null
     }
   ],
   "user": {
@@ -427,6 +441,16 @@ Authorization: Bearer <access_token>
 }
 ```
 
+### 6.5.1 Box Read-Only Document
+
+`GET /api/v1/boxes/:boxId/view` 返回 `text/html; charset=utf-8` 的只读箱子文档：
+
+- 访问权限与 `GET /api/v1/boxes/:boxId` 一致（私有箱子非所有者按 404）；
+- 内容为服务端根据已保存 metadata/structure 生成的静态 HTML：箱子名称、描述、条目列表；
+- 条目匹配到社区卡片时输出 `/cards/:communityCardId` 链接；内嵌条目展示包内路径；外部条目展示 url；
+- 所有用户内容均经过 HTML 转义；
+- 该文档是 `documentUrl` 字段的当前落地目标（工单097 的暂行正式文档源，Host Web 导出能力补齐后替换）。
+
 ### 6.4.1 Box Summary
 
 箱子列表、房间内容与发现/搜索中的箱子项使用 summary DTO。`coverRatio` 来自箱子表普通列，列表热路径不读取 `metadata` 或 `structure` JSONB。
@@ -437,7 +461,7 @@ Authorization: Bearer <access_token>
   "title": "箱子标题",
   "coverUrl": "https://...",
   "coverRatio": "3:4",
-  "documentUrl": "https://...",
+  "documentUrl": "/api/v1/boxes/uuid/view",
   "layoutPlugin": "chips-official.grid-layout",
   "visibility": "public",
   "createdAt": "2026-03-25T00:00:00.000Z"
@@ -667,6 +691,139 @@ Authorization: Bearer <access_token>
 4. 入队生成 view 缓存和 cover 缓存。
 
 `POST /api/v1/card-transfer/upload-sessions/:uploadId/abort`：取消上传会话，状态置为 `cancelled`。
+
+### 7.1.1 箱子上传会话（客户端 → 控制面 → 对象存储）
+
+箱子与卡片共用 `card-transfer` 控制面，通过请求体 `contentType: 'box'` 分流；字节仍直传对象存储，服务器不接收 multipart `.box`。控制面行为与卡片分支一致：创建会话 → 预签名 → 直传 → complete。
+
+`POST /api/v1/card-transfer/upload-sessions`（`contentType: 'box'`）：
+
+```json
+{
+  "contentType": "box",
+  "fileName": "Travel.box",
+  "roomId": null,
+  "idempotencyKey": "client-generated-key",
+  "client": {
+    "name": "Chips Community Transfer Plugin",
+    "version": "0.1.0",
+    "platform": "darwin"
+  }
+}
+```
+
+响应（201）：
+
+```json
+{
+  "data": {
+    "uploadId": "uuid",
+    "boxId": "uuid",
+    "versionId": "uuid",
+    "expiresAt": "2026-08-06T01:00:00.000Z",
+    "resourcePrefix": "boxes/{boxId}/versions/{versionId}",
+    "boxFile": {
+      "bucket": "chips-box-files",
+      "objectKey": "boxes/{boxId}/versions/{versionId}/box.box",
+      "publicUrl": ""
+    }
+  }
+}
+```
+
+说明：
+
+- `chips-box-files` 为私有 bucket，`publicUrl` 恒为空字符串；
+- 服务端同时落库一条箱子占位记录（`title` 来自 `fileName`），complete 阶段更新该记录。
+
+`POST /api/v1/card-transfer/upload-sessions/:uploadId/objects:presign`（box 会话）：
+
+- 只允许单个 `role: 'box-file'` 对象，key 固定为会话的 `boxFile.objectKey`；
+- `contentType` 固定为 `application/vnd.chips.box+zip`；
+- 拒绝 `resource` / `network-card` 角色。
+
+```json
+{
+  "objects": [
+    {
+      "role": "box-file",
+      "sizeBytes": 2048,
+      "mimeType": "application/vnd.chips.box+zip"
+    }
+  ]
+}
+```
+
+响应（200）：
+
+```json
+{
+  "data": {
+    "objects": [
+      {
+        "role": "box-file",
+        "relativePath": null,
+        "bucket": "chips-box-files",
+        "objectKey": "boxes/{boxId}/versions/{versionId}/box.box",
+        "publicUrl": "",
+        "uploadUrl": "https://s3.example/...",
+        "method": "PUT",
+        "headers": {
+          "content-type": "application/vnd.chips.box+zip",
+          "x-amz-meta-chips-box-id": "uuid",
+          "x-amz-meta-chips-box-version-id": "uuid",
+          "x-amz-meta-chips-transfer-role": "box-file"
+        }
+      }
+    ]
+  }
+}
+```
+
+`POST /api/v1/card-transfer/upload-sessions/:uploadId/complete`（box 会话，JSON 请求体）：
+
+```json
+{
+  "title": "2026 旅行箱",
+  "boxFileId": "b1C2d3E4f5",
+  "layoutPlugin": "chips.layout.grid",
+  "coverRatio": "3:4",
+  "boxFile": {
+    "bucket": "chips-box-files",
+    "objectKey": "boxes/{boxId}/versions/{versionId}/box.box",
+    "publicUrl": null,
+    "sizeBytes": 2048,
+    "mimeType": "application/vnd.chips.box+zip"
+  },
+  "metadata": {},
+  "structure": {},
+  "content": {}
+}
+```
+
+服务器行为：
+
+1. 校验 `boxFile.bucket === chips-box-files` 且 `objectKey === boxFile.objectKey`；
+2. 通过对象存储 Head 校验 box 对象大小；
+3. `BoxService.create` 落库（更新占位记录）：`boxFileId` / `layoutPlugin` / `coverRatio` 可从请求体显式传入，缺省时从 `metadata`（`box_id` / `active_layout_type` / `cover_ratio`）推导；`documentUrl` 写为 `/api/v1/boxes/{boxId}/view`；源对象信息写入 `source_box_*` 字段；
+4. 上传会话置为 `source_ready` 并回写源对象字段；
+5. 不写 `cards` 表、不入队卡片渲染。
+
+响应（200）：
+
+```json
+{
+  "data": {
+    "boxId": "uuid",
+    "versionId": "uuid",
+    "status": "ready",
+    "communityUrl": "https://www.example.com/boxes/uuid",
+    "boxViewUrl": "/api/v1/boxes/uuid/view"
+  }
+}
+```
+
+`POST /api/v1/card-transfer/upload-sessions/:uploadId/abort`：与卡片分支同一通用中止语义。
 
 ### 7.2 卡片下载会话（客户端 → 控制面 → 对象存储）
 

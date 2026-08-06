@@ -5,6 +5,7 @@
  * 路径规则：
  *   chips-card-resources/{userId}/{cardId}/{filename}
  *   chips-card-files/{userId}/{cardId}/source.card
+ *   chips-box-files/{userId}/{boxId}/source.box
  *   chips-card-render-cache/{cardId}/{cacheVersion}/index.html
  *   chips-card-render-cache-private/{cardId}/{cacheVersion}/index.html
  *   chips-card-cover-cache/{cardId}/{cacheVersion}/index.html
@@ -18,6 +19,9 @@ export const Bucket = {
 
   /** 发布态 .card 源文件，内部读 */
   CARD_FILES: 'chips-card-files',
+
+  /** 发布态 .box 源文件，内部读 */
+  BOX_FILES: 'chips-box-files',
 
   /** 公开卡片的渲染缓存，公开读 */
   CARD_RENDER_CACHE: 'chips-card-render-cache',
@@ -44,6 +48,7 @@ export type PublicBucketName = Exclude<
   typeof Bucket.CARD_FILES
     | typeof Bucket.CARD_RENDER_CACHE_PRIVATE
     | typeof Bucket.CARD_COVER_CACHE_PRIVATE
+    | typeof Bucket.BOX_FILES
 >;
 
 /** 需要公开访问的 bucket 列表 */
@@ -58,6 +63,7 @@ export const PUBLIC_BUCKETS: PublicBucketName[] = [
 /** 只供服务端/worker 内部访问的 bucket 列表 */
 export const PRIVATE_BUCKETS: BucketName[] = [
   Bucket.CARD_FILES,
+  Bucket.BOX_FILES,
   Bucket.CARD_RENDER_CACHE_PRIVATE,
   Bucket.CARD_COVER_CACHE_PRIVATE,
 ];

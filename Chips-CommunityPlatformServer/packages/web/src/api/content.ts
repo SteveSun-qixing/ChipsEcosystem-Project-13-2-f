@@ -72,6 +72,19 @@ export interface CardOpenView {
   updatedAt: string;
 }
 
+export interface EnrichedBoxEntryRef {
+  entry_id: string;
+  url: string;
+  document_id?: string;
+  title?: string;
+  cover_url?: string;
+  content_type?: string;
+  embedded: boolean;
+  communityCardId?: string;
+  communityViewUrl?: string;
+  communityRenderStatusUrl?: string;
+}
+
 export interface CardStatus {
   cardId: string;
   status: 'pending' | 'processing' | 'ready' | 'error';
@@ -110,17 +123,7 @@ export interface BoxDetail {
   visibility: 'public' | 'private';
   fileSizeBytes: number | null;
   metadata: unknown;
-  cards?: Array<{
-    url: string;
-    card_id?: string;
-    title?: string;
-    cover_url?: string;
-    sort_index?: number;
-    enabled?: boolean;
-    communityCardId?: string;
-    communityViewUrl?: string;
-    communityRenderStatusUrl?: string;
-  }>;
+  cards?: EnrichedBoxEntryRef[];
   user?: PublicUserProfile | null;
   createdAt: string;
   updatedAt: string;

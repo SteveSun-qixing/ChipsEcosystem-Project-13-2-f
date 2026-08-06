@@ -7,8 +7,12 @@ const roomServiceMock = {
 };
 
 const boxServiceMock = {
+  unpack: vi.fn(),
   create: vi.fn(),
 };
+
+const sha256FileMock = vi.fn();
+const uploadFileMock = vi.fn();
 
 vi.mock('../services/room.service', () => ({
   RoomService: roomServiceMock,
@@ -16,6 +20,17 @@ vi.mock('../services/room.service', () => ({
 
 vi.mock('../services/box.service', () => ({
   BoxService: boxServiceMock,
+}));
+
+vi.mock('../storage/buckets', () => ({
+  Bucket: {
+    BOX_FILES: 'chips-box-files',
+  },
+}));
+
+vi.mock('../storage/s3', () => ({
+  sha256File: sha256FileMock,
+  uploadFile: uploadFileMock,
 }));
 
 vi.mock('../config/env', () => ({
@@ -76,6 +91,18 @@ function createMultipartBody(params: {
 }
 
 beforeEach(() => {
+  boxServiceMock.unpack.mockResolvedValue({
+    tempDir: '/tmp/ccps-box-test-dir',
+    metadata: {
+      box_id: 'b1C2d3E4f5',
+      name: '测试箱子',
+      active_layout_type: 'chips.layout.grid',
+    },
+    structure: { entries: [] },
+    content: { active_layout_type: 'chips.layout.grid', layout_configs: {} },
+  });
+  sha256FileMock.mockResolvedValue('a'.repeat(64));
+  uploadFileMock.mockResolvedValue('');
   boxServiceMock.create.mockResolvedValue({
     id: 'box-1',
     title: '测试箱子',
@@ -87,7 +114,7 @@ afterEach(() => {
 });
 
 describe('upload routes', () => {
-  it('keeps only the box multipart upload endpoint in the legacy upload route', async () => {
+  it('stores the box source in chips-box-files and persists via the new BoxService contract', async () => {
     const app = await buildUploadApp();
     const multipart = createMultipartBody({
       fields: {
@@ -114,12 +141,26 @@ describe('upload routes', () => {
       '11111111-1111-4111-8111-111111111111',
       'user-1',
     );
+    expect(boxServiceMock.unpack).toHaveBeenCalledWith(expect.stringContaining('.box'));
+    expect(sha256FileMock).toHaveBeenCalledWith(expect.stringContaining('.box'));
+    expect(uploadFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bucket: 'chips-box-files',
+        key: expect.stringMatching(/^boxes\/user-1\/uploads\/[\w-]+\/box\.box$/),
+        contentType: 'application/vnd.chips.box+zip',
+      }),
+    );
     expect(boxServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
         roomId: '11111111-1111-4111-8111-111111111111',
         visibility: 'private',
         fileSizeBytes: Buffer.byteLength('box-bytes'),
+        sourceBoxBucket: 'chips-box-files',
+        sourceBoxSha256: 'a'.repeat(64),
+        metadata: expect.objectContaining({ box_id: 'b1C2d3E4f5' }),
+        structure: { entries: [] },
+        content: expect.objectContaining({ active_layout_type: 'chips.layout.grid' }),
       }),
     );
     expect(response.json().data).toEqual({
@@ -150,6 +191,7 @@ describe('upload routes', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('FILE_TYPE_INVALID');
+    expect(boxServiceMock.unpack).not.toHaveBeenCalled();
     expect(boxServiceMock.create).not.toHaveBeenCalled();
 
     await app.close();

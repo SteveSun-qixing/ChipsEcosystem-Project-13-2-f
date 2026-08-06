@@ -249,16 +249,20 @@ interface DocumentSurfaceResizePayload {
 
 ## 9.1 打开页预取与资源预连接
 
-社区前台当前为卡片打开页补充了两类轻量加速：
+社区前台当前为卡片与箱子打开页补充了两类轻量加速：
 
 1. `packages/web/src/lib/card-open-view-prefetch.ts`
    - 以 `cardId` 为 key 维护内存 Promise 缓存；
    - `CardDetailPage` 读取缓存命中结果，否则发起 `GET /api/v1/cards/:cardId/open-view`；
    - 失败请求会从缓存移除，避免缓存错误状态。
-2. `packages/web/src/components/WorkTile.tsx`
-   - 对 `type = card` 且不处于管理模式的作品卡片启用预取；
-   - hover、focus 和接近视口时会调用 `prefetchCardOpenView(cardId)`；
-   - 管理模式下不触发打开页预取。
+2. `packages/web/src/lib/box-detail-prefetch.ts`
+   - 以 `boxId` 为 key 维护内存 Promise 缓存，镜像卡片预取模式；
+   - `BoxDetailPage` 读取缓存命中结果，否则发起 `GET /api/v1/boxes/:boxId`；
+   - 失败请求会从缓存移除，避免缓存错误状态。
+3. `packages/web/src/components/WorkTile.tsx`
+   - 对不处于管理模式的作品瓦片启用预取，按类型分发：`card` 走 `prefetchCardOpenView`，`box` 走 `prefetchBoxDetail`；
+   - hover、focus 和接近视口（IntersectionObserver）时会调用对应预取；
+   - 管理模式下不触发打开页预取；封面仍按原分支渲染（卡片 coverUrl 走 iframe，箱子 coverUrl 走 img，缺失时显示占位）。
 
 前端启动时还会执行 `packages/web/src/lib/resource-hints.ts`：
 

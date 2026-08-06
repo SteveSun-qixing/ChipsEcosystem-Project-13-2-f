@@ -11,8 +11,11 @@ import { ErrorCode } from '../errors/codes';
 import { UploadBoxSchema } from '../schemas/content.schemas';
 import { env } from '../config/env';
 import { RoomService } from '../services/room.service';
+import { Bucket } from '../storage/buckets';
+import { sha256File, uploadFile } from '../storage/s3';
 
 const MAX_BOX_SIZE = env.MAX_BOX_SIZE_MB * 1024 * 1024;
+const BOX_FILE_MIME_TYPE = 'application/vnd.chips.box+zip';
 
 function createBoxUploadTempFilePath(): string {
   return path.join(os.tmpdir(), `ccps-upload-${uuidv4()}.box`);
@@ -104,22 +107,41 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
           await RoomService.assertOwnedByUser(opts.roomId, request.user!.userId);
         }
 
-        const boxFilePath = tempFilePath;
-        const box = await BoxService.create({
-          userId: request.user!.userId,
-          roomId: opts.roomId,
-          visibility: opts.visibility,
-          boxFilePath,
-          fileSizeBytes,
-        });
-        tempFilePath = null;
+        const unpackResult = await BoxService.unpack(tempFilePath);
+        try {
+          const sourceBoxSha256 = await sha256File(tempFilePath);
+          const sourceBoxKey = `boxes/${request.user!.userId}/uploads/${uuidv4()}/box.box`;
+          await uploadFile({
+            bucket: Bucket.BOX_FILES,
+            key: sourceBoxKey,
+            filePath: tempFilePath,
+            contentType: BOX_FILE_MIME_TYPE,
+          });
 
-        return reply.status(201).send({
-          data: {
-            boxId: box.id,
-            title: box.title,
-          },
-        });
+          const box = await BoxService.create({
+            userId: request.user!.userId,
+            roomId: opts.roomId,
+            visibility: opts.visibility,
+            fileSizeBytes,
+            sourceBoxBucket: Bucket.BOX_FILES,
+            sourceBoxKey,
+            sourceBoxSha256,
+            metadata: unpackResult.metadata,
+            structure: unpackResult.structure,
+            content: unpackResult.content,
+          });
+          fs.rmSync(tempFilePath, { force: true });
+          tempFilePath = null;
+
+          return reply.status(201).send({
+            data: {
+              boxId: box.id,
+              title: box.title,
+            },
+          });
+        } finally {
+          fs.rmSync(unpackResult.tempDir, { recursive: true, force: true });
+        }
       } catch (err) {
         if (tempFilePath) {
           try {

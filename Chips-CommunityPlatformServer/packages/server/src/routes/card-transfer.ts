@@ -8,12 +8,14 @@ import { AppError } from '../errors/AppError';
 import { ErrorCode } from '../errors/codes';
 import { RoomService } from '../services/room.service';
 import { CardService } from '../services/card.service';
+import { BoxService } from '../services/box.service';
 import { CardRenderCacheService } from '../services/card-render-cache.service';
 import { UploadSessionService } from '../services/upload-session.service';
 import { Bucket } from '../storage/buckets';
 import { buildObjectUrl, createPresignedGetUrl, createPresignedPutUrl, headObject } from '../storage/s3';
 import { env } from '../config/env';
 import {
+  CompleteBoxTransferUploadSessionSchema,
   CompleteCardTransferUploadSessionSchema,
   CreateCardTransferDownloadSessionSchema,
   CreateCardTransferUploadSessionSchema,
@@ -22,14 +24,33 @@ import {
 
 const TRANSFER_SCHEMA_VERSION = '1.0.0';
 const NETWORK_CARD_MIME_TYPE = 'application/vnd.chips.card+zip';
+const BOX_FILE_MIME_TYPE = 'application/vnd.chips.box+zip';
 const DOWNLOAD_URL_TTL_SECONDS = 900;
 
 interface TransferSessionMetadata {
-  transferKind?: 'network-resource-card';
+  transferKind?: 'network-resource-card' | 'box-source';
   cardId?: string;
   versionId?: string;
   networkCardObjectKey?: string;
   resourcePrefix?: string;
+  boxId?: string;
+  boxFileObjectKey?: string;
+}
+
+interface CardTransferSessionMetadata {
+  transferKind: 'network-resource-card';
+  cardId: string;
+  versionId: string;
+  networkCardObjectKey: string;
+  resourcePrefix: string;
+}
+
+interface BoxTransferSessionMetadata {
+  transferKind: 'box-source';
+  boxId: string;
+  versionId: string;
+  boxFileObjectKey: string;
+  resourcePrefix: string;
 }
 
 interface NetworkCardManifestResource {
@@ -73,7 +94,18 @@ function getTransferMetadata(value: unknown): TransferSessionMetadata {
   return value as TransferSessionMetadata;
 }
 
-function assertTransferSessionMetadata(metadata: TransferSessionMetadata): Required<TransferSessionMetadata> {
+function assertTransferSessionMetadata(
+  metadata: TransferSessionMetadata,
+): CardTransferSessionMetadata | BoxTransferSessionMetadata {
+  if (metadata.transferKind === 'box-source') {
+    if (!metadata.boxId || !metadata.versionId || !metadata.boxFileObjectKey || !metadata.resourcePrefix) {
+      throw AppError.badRequest(
+        ErrorCode.VALIDATION_ERROR,
+        'Upload session is not a box-source transfer session',
+      );
+    }
+    return metadata as BoxTransferSessionMetadata;
+  }
   if (
     metadata.transferKind !== 'network-resource-card' ||
     !metadata.cardId ||
@@ -86,7 +118,7 @@ function assertTransferSessionMetadata(metadata: TransferSessionMetadata): Requi
       'Upload session is not a card-transfer network resource card session',
     );
   }
-  return metadata as Required<TransferSessionMetadata>;
+  return metadata as CardTransferSessionMetadata;
 }
 
 function toCardTitle(fileName?: string): string {
@@ -94,6 +126,13 @@ function toCardTitle(fileName?: string): string {
     return '处理中…';
   }
   return path.posix.basename(fileName.replace(/\\/g, '/'), '.card') || fileName;
+}
+
+function toBoxTitle(fileName?: string): string {
+  if (!fileName) {
+    return '处理中…';
+  }
+  return path.posix.basename(fileName.replace(/\\/g, '/'), '.box') || fileName;
 }
 
 function getNetworkCardManifest(value: unknown): NetworkCardResourceManifest {
@@ -190,6 +229,60 @@ const cardTransferRoutes: FastifyPluginAsync = async (fastify) => {
         await RoomService.assertOwnedByUser(body.roomId, request.user!.userId);
       }
 
+      if (body.contentType === 'box') {
+        const session = await UploadSessionService.create(request.user!.userId, {
+          contentType: 'box',
+          fileName: body.fileName,
+          roomId: body.roomId ?? null,
+          visibility: 'public',
+          idempotencyKey: body.idempotencyKey,
+          client: body.client,
+        });
+        const box = await BoxService.createPlaceholder({
+          userId: request.user!.userId,
+          title: toBoxTitle(body.fileName),
+          roomId: body.roomId ?? undefined,
+          visibility: 'public',
+          publishedByClient: body.client?.name ?? 'chips-box-transfer',
+        });
+
+        const resourcePrefix = `boxes/${box.id}/versions/${session.id}`;
+        const boxFileObjectKey = `${resourcePrefix}/box.box`;
+
+        await db
+          .update(uploadSessions)
+          .set({
+            resourcePrefix,
+            clientMetadata: {
+              ...(session.clientMetadata && typeof session.clientMetadata === 'object'
+                ? session.clientMetadata
+                : {}),
+              transferKind: 'box-source',
+              boxId: box.id,
+              versionId: session.id,
+              resourcePrefix,
+              boxFileObjectKey,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(uploadSessions.id, session.id));
+
+        return reply.status(201).send({
+          data: {
+            uploadId: session.id,
+            boxId: box.id,
+            versionId: session.id,
+            expiresAt: session.expiresAt,
+            resourcePrefix,
+            boxFile: {
+              bucket: Bucket.BOX_FILES,
+              objectKey: boxFileObjectKey,
+              publicUrl: '',
+            },
+          },
+        });
+      }
+
       const session = await UploadSessionService.create(request.user!.userId, {
         contentType: 'card',
         fileName: body.fileName,
@@ -256,6 +349,85 @@ const cardTransferRoutes: FastifyPluginAsync = async (fastify) => {
       const metadata = assertTransferSessionMetadata(getTransferMetadata(session.clientMetadata));
       const expiresInSeconds = Math.min(env.UPLOAD_SESSION_TTL_MINUTES * 60, 3600);
 
+      if (metadata.transferKind === 'box-source') {
+        if (body.objects.length === 1 && body.objects[0]?.role === 'box-file') {
+          const presigned = createPresignedPutUrl({
+            bucket: Bucket.BOX_FILES,
+            key: metadata.boxFileObjectKey,
+            contentType: BOX_FILE_MIME_TYPE,
+            expiresInSeconds,
+            headers: {
+              'x-amz-meta-chips-box-id': metadata.boxId,
+              'x-amz-meta-chips-box-version-id': metadata.versionId,
+              'x-amz-meta-chips-transfer-role': 'box-file',
+            },
+          });
+
+          await db
+            .update(uploadSessions)
+            .set({ status: 'uploading_resources', updatedAt: new Date() })
+            .where(eq(uploadSessions.id, session.id));
+
+          return {
+            data: {
+              objects: [
+                {
+                  role: 'box-file',
+                  relativePath: null,
+                  bucket: Bucket.BOX_FILES,
+                  objectKey: metadata.boxFileObjectKey,
+                  publicUrl: '',
+                  uploadUrl: presigned.url,
+                  method: presigned.method,
+                  headers: presigned.headers,
+                },
+              ],
+            },
+          };
+        }
+
+        if (body.objects.length >= 1 && body.objects.every((object) => object.role === 'cover-file')) {
+          const objects = body.objects.map((object) => {
+            const relativePath = normalizeRelativePath(object.relativePath ?? '');
+            const objectKey = `boxes/${metadata.boxId}/cover/${relativePath}`;
+            const presigned = createPresignedPutUrl({
+              bucket: Bucket.COVERS,
+              key: objectKey,
+              contentType: object.mimeType,
+              expiresInSeconds,
+              headers: {
+                'x-amz-meta-chips-box-id': metadata.boxId,
+                'x-amz-meta-chips-box-version-id': metadata.versionId,
+                'x-amz-meta-chips-transfer-role': 'cover-file',
+              },
+            });
+
+            return {
+              role: 'cover-file',
+              relativePath,
+              bucket: Bucket.COVERS,
+              objectKey,
+              publicUrl: buildObjectUrl(Bucket.COVERS, objectKey),
+              uploadUrl: presigned.url,
+              method: presigned.method,
+              headers: presigned.headers,
+            };
+          });
+
+          await db
+            .update(uploadSessions)
+            .set({ status: 'uploading_resources', updatedAt: new Date() })
+            .where(eq(uploadSessions.id, session.id));
+
+          return { data: { objects } };
+        }
+
+        throw AppError.badRequest(
+          ErrorCode.VALIDATION_ERROR,
+          'Box upload sessions only support box-file or cover-file role objects',
+        );
+      }
+
       const objects = body.objects.map((object) => {
         const objectKey =
           object.role === 'network-card'
@@ -300,9 +472,69 @@ const cardTransferRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [requireJsonBody, fastify.authenticate] },
     async (request, reply) => {
       const { uploadId } = request.params as { uploadId: string };
-      const body = CompleteCardTransferUploadSessionSchema.parse(request.body);
       const session = await UploadSessionService.getOwned(uploadId, request.user!.userId);
       const metadata = assertTransferSessionMetadata(getTransferMetadata(session.clientMetadata));
+
+      if (metadata.transferKind === 'box-source') {
+        const body = CompleteBoxTransferUploadSessionSchema.parse(request.body);
+
+        if (body.boxFile.bucket !== Bucket.BOX_FILES || body.boxFile.objectKey !== metadata.boxFileObjectKey) {
+          throw AppError.badRequest(
+            ErrorCode.VALIDATION_ERROR,
+            'Box file object does not belong to this session',
+          );
+        }
+        await assertUploadedObject({
+          bucket: body.boxFile.bucket,
+          objectKey: body.boxFile.objectKey,
+          expectedSizeBytes: body.boxFile.sizeBytes,
+          label: 'box-file',
+        });
+
+        const box = await BoxService.create({
+          userId: request.user!.userId,
+          roomId: session.roomId ?? undefined,
+          visibility: session.visibility,
+          fileSizeBytes: body.boxFile.sizeBytes,
+          sourceBoxBucket: body.boxFile.bucket,
+          sourceBoxKey: body.boxFile.objectKey,
+          sourceBoxUrl: body.boxFile.publicUrl ?? null,
+          sourceBoxSha256: null,
+          metadata: body.metadata ?? null,
+          structure: body.structure ?? null,
+          content: body.content ?? null,
+          title: body.title,
+          boxFileId: body.boxFileId ?? undefined,
+          layoutPlugin: body.layoutPlugin ?? null,
+          coverRatio: body.coverRatio ?? null,
+          coverBucket: body.coverObject?.bucket ?? null,
+          coverKey: body.coverObject?.objectKey ?? null,
+          boxId: metadata.boxId,
+        });
+
+        await db
+          .update(uploadSessions)
+          .set({
+            status: 'source_ready',
+            sourceBoxBucket: body.boxFile.bucket,
+            sourceBoxKey: body.boxFile.objectKey,
+            sourceBoxSha256: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(uploadSessions.id, session.id));
+
+        return reply.status(200).send({
+          data: {
+            boxId: box.id,
+            versionId: metadata.versionId,
+            status: 'ready',
+            communityUrl: `${env.BASE_URL}/boxes/${box.id}`,
+            boxViewUrl: `/api/v1/boxes/${box.id}/view`,
+          },
+        });
+      }
+
+      const body = CompleteCardTransferUploadSessionSchema.parse(request.body);
 
       assertRestoreManifestStructure(body.restoreManifest);
       if (body.networkCard.bucket !== Bucket.CARD_RESOURCES || body.networkCard.objectKey !== metadata.networkCardObjectKey) {

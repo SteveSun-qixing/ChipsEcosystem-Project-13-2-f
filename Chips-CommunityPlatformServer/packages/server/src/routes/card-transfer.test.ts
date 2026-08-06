@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const CARD_ID = '11111111-1111-4111-8111-111111111111';
 const VERSION_ID = '22222222-2222-4222-8222-222222222222';
+const BOX_ID = '33333333-3333-4333-8333-333333333333';
 
 const roomServiceMock = {
   assertOwnedByUser: vi.fn(),
@@ -16,6 +17,11 @@ const uploadSessionServiceMock = {
 const cardServiceMock = {
   create: vi.fn(),
   getAccessible: vi.fn(),
+};
+
+const boxServiceMock = {
+  createPlaceholder: vi.fn(),
+  create: vi.fn(),
 };
 
 const cardRenderCacheServiceMock = {
@@ -57,6 +63,10 @@ vi.mock('../services/card.service', () => ({
   CardService: cardServiceMock,
 }));
 
+vi.mock('../services/box.service', () => ({
+  BoxService: boxServiceMock,
+}));
+
 vi.mock('../services/card-render-cache.service', () => ({
   CardRenderCacheService: cardRenderCacheServiceMock,
 }));
@@ -64,6 +74,7 @@ vi.mock('../services/card-render-cache.service', () => ({
 vi.mock('../storage/buckets', () => ({
   Bucket: {
     CARD_RESOURCES: 'chips-card-resources',
+    BOX_FILES: 'chips-box-files',
   },
 }));
 
@@ -125,6 +136,27 @@ function transferMetadata() {
   };
 }
 
+function boxTransferMetadata() {
+  return {
+    transferKind: 'box-source',
+    boxId: BOX_ID,
+    versionId: VERSION_ID,
+    resourcePrefix: `boxes/${BOX_ID}/versions/${VERSION_ID}`,
+    boxFileObjectKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+  };
+}
+
+function boxFileObjectPayload(overrides?: Record<string, unknown>) {
+  return {
+    bucket: 'chips-box-files',
+    objectKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+    publicUrl: null,
+    sizeBytes: 2048,
+    mimeType: 'application/vnd.chips.box+zip',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   dbUpdateCalls.length = 0;
   updatedCardResult = null;
@@ -151,6 +183,8 @@ beforeEach(() => {
   }));
   headObjectMock.mockResolvedValue({ contentLength: 100 });
   cardRenderCacheServiceMock.enqueueForCard.mockResolvedValue(undefined);
+  boxServiceMock.createPlaceholder.mockResolvedValue({ id: BOX_ID, title: 'Travel' });
+  boxServiceMock.create.mockResolvedValue({ id: BOX_ID, title: '2026 旅行箱' });
 });
 
 afterEach(() => {
@@ -607,6 +641,299 @@ describe('card transfer routes', () => {
 
     expect(cardServiceMock.getAccessible).not.toHaveBeenCalled();
     expect(cardRenderCacheServiceMock.enqueueForCard).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('creates box upload sessions with a placeholder box and a box-file target', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.create.mockResolvedValue({
+      id: VERSION_ID,
+      fileName: 'Travel.box',
+      expiresAt: new Date('2026-08-05T00:30:00.000Z'),
+      clientMetadata: {},
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/card-transfer/upload-sessions',
+      payload: {
+        contentType: 'box',
+        fileName: 'Travel.box',
+        roomId: null,
+        idempotencyKey: 'idem-box-1',
+        client: {
+          name: 'desktop-transfer',
+          version: '1.0.0',
+          platform: 'desktop',
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(uploadSessionServiceMock.create).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        contentType: 'box',
+        visibility: 'public',
+        fileName: 'Travel.box',
+        idempotencyKey: 'idem-box-1',
+      }),
+    );
+    expect(boxServiceMock.createPlaceholder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        title: 'Travel',
+        visibility: 'public',
+        publishedByClient: 'desktop-transfer',
+      }),
+    );
+    expect(dbUpdateCalls[0]?.values).toMatchObject({
+      resourcePrefix: `boxes/${BOX_ID}/versions/${VERSION_ID}`,
+      clientMetadata: expect.objectContaining(boxTransferMetadata()),
+    });
+    expect(response.json().data).toMatchObject({
+      uploadId: VERSION_ID,
+      boxId: BOX_ID,
+      versionId: VERSION_ID,
+      resourcePrefix: `boxes/${BOX_ID}/versions/${VERSION_ID}`,
+      boxFile: {
+        bucket: 'chips-box-files',
+        objectKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+      },
+    });
+
+    await app.close();
+  });
+
+  it('presigns a single box-file object for box sessions and rejects card roles', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.getOwned.mockResolvedValue({
+      id: VERSION_ID,
+      userId: 'user-1',
+      clientMetadata: boxTransferMetadata(),
+    });
+
+    const presignUrl = `/api/v1/card-transfer/upload-sessions/${VERSION_ID}/objects:presign`;
+    const response = await app.inject({
+      method: 'POST',
+      url: presignUrl,
+      payload: {
+        objects: [
+          {
+            role: 'box-file',
+            sizeBytes: 2048,
+            mimeType: 'application/vnd.chips.box+zip',
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createPresignedPutUrlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bucket: 'chips-box-files',
+        key: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+        contentType: 'application/vnd.chips.box+zip',
+        headers: expect.objectContaining({
+          'x-amz-meta-chips-box-id': BOX_ID,
+          'x-amz-meta-chips-box-version-id': VERSION_ID,
+          'x-amz-meta-chips-transfer-role': 'box-file',
+        }),
+      }),
+    );
+    expect(response.json().data.objects).toEqual([
+      expect.objectContaining({
+        role: 'box-file',
+        relativePath: null,
+        bucket: 'chips-box-files',
+        objectKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+      }),
+    ]);
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: presignUrl,
+      payload: {
+        objects: [
+          {
+            role: 'resource',
+            relativePath: 'video.mp4',
+            sizeBytes: 10,
+            mimeType: 'video/mp4',
+          },
+        ],
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error.code).toBe('VALIDATION_ERROR');
+    expect(createPresignedPutUrlMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ bucket: 'chips-card-resources' }),
+    );
+
+    await app.close();
+  });
+
+  it('completes box sessions by persisting the box with source object info', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.getOwned.mockResolvedValue({
+      id: VERSION_ID,
+      fileName: 'Travel.box',
+      userId: 'user-1',
+      roomId: null,
+      visibility: 'public',
+      clientMetadata: boxTransferMetadata(),
+    });
+    headObjectMock.mockResolvedValue({ contentLength: 2048 });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/card-transfer/upload-sessions/${VERSION_ID}/complete`,
+      payload: {
+        title: '2026 旅行箱',
+        boxFileId: 'b1C2d3E4f5',
+        layoutPlugin: 'chips.layout.grid',
+        coverRatio: '3:4',
+        boxFile: boxFileObjectPayload(),
+        metadata: {
+          box_id: 'b1C2d3E4f5',
+          name: '2026 旅行箱',
+          active_layout_type: 'chips.layout.grid',
+        },
+        structure: {
+          entries: [
+            {
+              entry_id: 'e1A2b3C4d5',
+              url: 'cards/day-01.card',
+              enabled: true,
+            },
+          ],
+        },
+        content: {
+          active_layout_type: 'chips.layout.grid',
+          layout_configs: {},
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(headObjectMock).toHaveBeenCalledWith({
+      bucket: 'chips-box-files',
+      key: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+    });
+    expect(boxServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        visibility: 'public',
+        fileSizeBytes: 2048,
+        sourceBoxBucket: 'chips-box-files',
+        sourceBoxKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+        boxFileId: 'b1C2d3E4f5',
+        layoutPlugin: 'chips.layout.grid',
+        coverRatio: '3:4',
+        title: '2026 旅行箱',
+        metadata: expect.objectContaining({ box_id: 'b1C2d3E4f5' }),
+        structure: expect.objectContaining({ entries: expect.any(Array) }),
+        content: expect.objectContaining({ active_layout_type: 'chips.layout.grid' }),
+        boxId: BOX_ID,
+      }),
+    );
+    const sessionUpdate = dbUpdateCalls.find((call) => call.values.status === 'source_ready');
+    expect(sessionUpdate?.values).toMatchObject({
+      sourceBoxBucket: 'chips-box-files',
+      sourceBoxKey: `boxes/${BOX_ID}/versions/${VERSION_ID}/box.box`,
+    });
+    expect(response.json().data).toMatchObject({
+      boxId: BOX_ID,
+      versionId: VERSION_ID,
+      status: 'ready',
+      communityUrl: `https://community.example/boxes/${BOX_ID}`,
+      boxViewUrl: `/api/v1/boxes/${BOX_ID}/view`,
+    });
+
+    await app.close();
+  });
+
+  it('rejects box sessions whose box file object does not belong to the session', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.getOwned.mockResolvedValue({
+      id: VERSION_ID,
+      userId: 'user-1',
+      roomId: null,
+      visibility: 'public',
+      clientMetadata: boxTransferMetadata(),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/card-transfer/upload-sessions/${VERSION_ID}/complete`,
+      payload: {
+        title: '2026 旅行箱',
+        boxFile: boxFileObjectPayload({
+          objectKey: 'boxes/evil/versions/xxx/box.box',
+        }),
+        metadata: { box_id: 'b1C2d3E4f5', name: '旅行箱', active_layout_type: 'chips.layout.grid' },
+        structure: { entries: [] },
+        content: {},
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    expect(boxServiceMock.create).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects box sessions when the uploaded object size does not match', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.getOwned.mockResolvedValue({
+      id: VERSION_ID,
+      userId: 'user-1',
+      roomId: null,
+      visibility: 'public',
+      clientMetadata: boxTransferMetadata(),
+    });
+    headObjectMock.mockResolvedValue({ contentLength: 100 });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/card-transfer/upload-sessions/${VERSION_ID}/complete`,
+      payload: {
+        title: '2026 旅行箱',
+        boxFile: boxFileObjectPayload(),
+        metadata: { box_id: 'b1C2d3E4f5', name: '旅行箱', active_layout_type: 'chips.layout.grid' },
+        structure: { entries: [] },
+        content: {},
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('VALIDATION_ERROR');
+    expect(boxServiceMock.create).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('aborts box upload sessions without persisting anything', async () => {
+    const app = await buildCardTransferApp();
+    uploadSessionServiceMock.getOwned.mockResolvedValue({
+      id: VERSION_ID,
+      userId: 'user-1',
+      clientMetadata: boxTransferMetadata(),
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/card-transfer/upload-sessions/${VERSION_ID}/abort`,
+      headers: { 'content-type': 'application/json' },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ uploadId: VERSION_ID, status: 'cancelled' });
+    expect(dbUpdateCalls[0]?.values).toMatchObject({ status: 'cancelled' });
+    expect(boxServiceMock.create).not.toHaveBeenCalled();
 
     await app.close();
   });

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { boxesApi, type BoxDetail } from '../api/content';
+import type { BoxDetail } from '../api/content';
 import { DocumentPluginRoutePage, type DocumentRouteSource } from './DocumentPluginRoutePage';
 import { useAppPreferences } from '../contexts/AppPreferencesContext';
+import { prefetchBoxDetail, readPrefetchedBoxDetail } from '../lib/box-detail-prefetch';
 import { getErrorMessage } from '../lib/ui';
 
 export default function BoxDetailPage() {
@@ -21,8 +22,7 @@ export default function BoxDetailPage() {
     setLoading(true);
     setError('');
 
-    boxesApi
-      .getBox(boxId)
+    (readPrefetchedBoxDetail(boxId) ?? prefetchBoxDetail(boxId))
       .then((response) => {
         if (active) {
           setBox(response);
@@ -64,7 +64,7 @@ export default function BoxDetailPage() {
     <DocumentPluginRoutePage
       source={source}
       loading={loading}
-      pending={Boolean(box && !source && !error)}
+      pending={Boolean(box && !box.documentUrl && !error)}
       error={error}
       pendingLabel={t('box.notReady')}
       trigger="community-box-route"

@@ -58,6 +58,10 @@ export const uploadSessions = pgTable(
     sourceCardKey: text('source_card_key'),
     sourceCardSha256: text('source_card_sha256'),
 
+    sourceBoxBucket: text('source_box_bucket'),
+    sourceBoxKey: text('source_box_key'),
+    sourceBoxSha256: text('source_box_sha256'),
+
     idempotencyKey: text('idempotency_key'),
     errorCode: text('error_code'),
     errorMessage: text('error_message'),

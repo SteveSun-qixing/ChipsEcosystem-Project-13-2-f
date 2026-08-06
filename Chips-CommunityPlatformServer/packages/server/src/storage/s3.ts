@@ -343,6 +343,22 @@ function encodeCanonicalPath(pathname: string): string {
     .replace(/^([^/])/, '/$1');
 }
 
+/**
+ * 序列化预签名 query。
+ *
+ * 签名计算与最终 URL 必须使用同一套编码与排序：
+ * - 编码：`encodeURIComponent`（空格 → `%20`），不能使用 `URLSearchParams.toString()`
+ *   （空格 → `+`），否则含空格的参数值（如 `response-content-disposition`）会导致签名校验失败；
+ * - 排序：AWS SigV4 要求按参数名 ASCII 字节序升序（`Array.prototype.sort`），
+ *   不能用 `localeCompare`（locale 排序会把小写字母排在部分大写前，导致签名不匹配）。
+ */
+function serializeSignedQuery(query: URLSearchParams): string {
+  return [...query.entries()]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
+}
+
 function hmac(key: Buffer | string, value: string): Buffer {
   return crypto.createHmac('sha256', key).update(value, 'utf-8').digest();
 }
@@ -420,10 +436,7 @@ export function createPresignedPutUrl(params: {
     'X-Amz-SignedHeaders': signedHeaders,
   });
 
-  const canonicalQuery = [...query.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
+  const canonicalQuery = serializeSignedQuery(query);
   const canonicalHeaders = signedHeaderNames
     .map((headerName) => {
       const value = headerName === 'host' ? target.host : headers[headerName] ?? '';
@@ -450,7 +463,7 @@ export function createPresignedPutUrl(params: {
     .digest('hex');
 
   query.set('X-Amz-Signature', signature);
-  target.url.search = query.toString();
+  target.url.search = serializeSignedQuery(query);
 
   return {
     url: target.url.toString(),
@@ -470,7 +483,7 @@ export function createPresignedGetUrl(params: {
   key: string;
   expiresInSeconds: number;
   responseContentDisposition?: string;
-}): { url: string; method: 'GET'; headers: Record<string, string> } {
+}): { url: string; method: 'GET'; headers: Record<string, string>; expiresInSeconds: number } {
   const now = new Date();
   const { amzDate, dateStamp } = toAmzDate(now);
   const credentialScope = `${dateStamp}/${env.S3_REGION}/s3/aws4_request`;
@@ -488,10 +501,7 @@ export function createPresignedGetUrl(params: {
     query.set('response-content-disposition', params.responseContentDisposition);
   }
 
-  const canonicalQuery = [...query.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
+  const canonicalQuery = serializeSignedQuery(query);
   const canonicalHeaders = `host:${target.host}\n`;
   const canonicalRequest = [
     'GET',
@@ -513,12 +523,13 @@ export function createPresignedGetUrl(params: {
     .digest('hex');
 
   query.set('X-Amz-Signature', signature);
-  target.url.search = query.toString();
+  target.url.search = serializeSignedQuery(query);
 
   return {
     url: target.url.toString(),
     method: 'GET',
     headers: {},
+    expiresInSeconds: params.expiresInSeconds,
   };
 }
 

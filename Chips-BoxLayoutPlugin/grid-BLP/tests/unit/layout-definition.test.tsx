@@ -208,12 +208,215 @@ describe("layoutDefinition", () => {
     expect(editorRoot?.style.height).toBe("100%");
     expect(container.querySelector('[data-scope="form"][data-part="root"]')).toBeTruthy();
     expect(container.querySelector('[data-scope="select"][data-part="root"]')).toBeTruthy();
-    expect(container.querySelector('[data-scope="form"][data-part="root"]')).toBeTruthy();
+    expect(container.querySelector('[data-frame-region-editor="topRegion"]')).toBeTruthy();
+    expect(container.querySelector('[data-frame-region-editor="background"]')).toBeTruthy();
 
     await act(async () => {
       cleanup?.();
     });
     expect(container.style.overflow).toBe("visible");
+  });
+
+  it("switches sort mode through the row select", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+
+    let cleanup: (() => void) | void;
+    await act(async () => {
+      cleanup = layoutDefinition.renderEditor?.({
+        container,
+        entries: [],
+        initialConfig: layoutDefinition.createDefaultConfig(),
+        onChange,
+        locale: "zh-CN",
+      });
+    });
+
+    const sortRow = container.querySelector('[data-scope="select"][data-part="root"]') as HTMLElement | null;
+    const trigger = sortRow?.querySelector('[data-part="trigger"]') as HTMLButtonElement | null;
+    expect(trigger).toBeTruthy();
+
+    await act(async () => {
+      trigger?.click();
+    });
+
+    const options = Array.from(container.querySelectorAll('[data-scope="select"][data-part="option"]'));
+    const nameAsc = options.find((option) => option.textContent?.includes("按名称升序"));
+    expect(nameAsc).toBeTruthy();
+
+    await act(async () => {
+      nameAsc?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      props: expect.objectContaining({
+        sortMode: "name-asc",
+      }),
+    }));
+
+    await act(async () => {
+      cleanup?.();
+    });
+  });
+
+  it("switches frame region modes through the inline segmented control", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+
+    let cleanup: (() => void) | void;
+    await act(async () => {
+      cleanup = layoutDefinition.renderEditor?.({
+        container,
+        entries: [],
+        initialConfig: layoutDefinition.createDefaultConfig(),
+        onChange,
+        locale: "zh-CN",
+      });
+    });
+
+    const background = container.querySelector('[data-frame-region-editor="background"]') as HTMLElement | null;
+    const items = Array.from(background?.querySelectorAll('[data-scope="segmented-control"][data-part="item"]') ?? []);
+    const imageItem = items.find((item) => item.textContent === "图片");
+    expect(imageItem).toBeTruthy();
+
+    await act(async () => {
+      imageItem?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      props: expect.objectContaining({
+        background: {
+          mode: "image",
+        },
+      }),
+    }));
+
+    await act(async () => {
+      cleanup?.();
+    });
+  });
+
+  it("uploads an image by dropping it onto the drop zone", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const importBoxAsset = vi.fn().mockResolvedValue({
+      assetPath: "assets/layouts/grid/background/dropped.webp",
+    });
+
+    await act(async () => {
+      layoutDefinition.renderEditor?.({
+        container,
+        entries: [],
+        initialConfig: layoutDefinition.normalizeConfig({
+          props: {
+            background: {
+              mode: "image",
+            },
+          },
+        }),
+        onChange,
+        readBoxAsset: vi.fn().mockResolvedValue({
+          resourceUrl: "chips-render://box-assets/dropped.webp",
+          mimeType: "image/webp",
+        }),
+        importBoxAsset,
+        deleteBoxAsset: vi.fn(),
+        locale: "zh-CN",
+      });
+      await Promise.resolve();
+    });
+
+    const background = container.querySelector('[data-frame-region-editor="background"]') as HTMLElement | null;
+    const dropZone = background?.querySelector('[data-drop-zone]') as HTMLElement | null;
+    expect(dropZone).toBeTruthy();
+    expect(dropZone?.textContent).toContain("点击选择图片，或拖拽图片到此处");
+
+    const file = new File(["dropped"], "dropped.webp", { type: "image/webp" });
+    const dataTransfer = { files: [file] };
+    const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      configurable: true,
+      value: dataTransfer,
+    });
+
+    await act(async () => {
+      dropZone?.dispatchEvent(dropEvent);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(importBoxAsset).toHaveBeenCalledWith(expect.objectContaining({
+      file,
+      preferredPath: expect.stringMatching(/^assets\/layouts\/grid\/background\/[0-9]+-dropped\.webp$/),
+    }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      props: expect.objectContaining({
+        background: {
+          mode: "image",
+          assetPath: "assets/layouts/grid/background/dropped.webp",
+        },
+      }),
+      assetRefs: ["assets/layouts/grid/background/dropped.webp"],
+    }));
+  });
+
+  it("removes an existing image and falls back to the empty drop zone", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const deleteBoxAsset = vi.fn().mockResolvedValue(undefined);
+
+    await act(async () => {
+      layoutDefinition.renderEditor?.({
+        container,
+        entries: [],
+        initialConfig: layoutDefinition.normalizeConfig({
+          props: {
+            topRegion: {
+              mode: "image",
+              assetPath: "assets/layouts/grid/top-region/banner.webp",
+            },
+          },
+        }),
+        onChange,
+        readBoxAsset: vi.fn().mockResolvedValue({
+          resourceUrl: "chips-render://box-assets/banner.webp",
+          mimeType: "image/webp",
+        }),
+        importBoxAsset: vi.fn(),
+        deleteBoxAsset,
+        locale: "zh-CN",
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const topRegion = container.querySelector('[data-frame-region-editor="topRegion"]') as HTMLElement | null;
+    const filledZone = topRegion?.querySelector('[data-drop-zone][data-state="filled"]') as HTMLElement | null;
+    expect(filledZone).toBeTruthy();
+    expect(topRegion?.textContent).toContain("移除");
+
+    const removeButton = Array.from(topRegion?.querySelectorAll("button") ?? [])
+      .find((button) => button.textContent === "移除");
+
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(deleteBoxAsset).toHaveBeenCalledWith("assets/layouts/grid/top-region/banner.webp");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      props: expect.objectContaining({
+        topRegion: {
+          mode: "none",
+        },
+      }),
+      assetRefs: [],
+    }));
   });
 
   it("keeps the layout shell visible when the box has no entries", async () => {
@@ -390,7 +593,8 @@ describe("layoutDefinition", () => {
       await Promise.resolve();
     });
 
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    const background = container.querySelector('[data-frame-region-editor="background"]') as HTMLElement | null;
+    const input = background?.querySelector('input[type="file"]') as HTMLInputElement | null;
     expect(input).toBeTruthy();
     const file = new File(["hero"], "hero.webp", { type: "image/webp" });
     Object.defineProperty(input, "files", {

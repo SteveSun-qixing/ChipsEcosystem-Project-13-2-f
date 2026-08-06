@@ -97,6 +97,35 @@ const createValidBoxDirectory = async (rootDir: string, cardFile: string): Promi
   await writeText(path.join(rootDir, 'assets/layouts/grid/background.webp'), 'layout-background');
 };
 
+const createBoxDirectoryWithStructure = async (rootDir: string, structureYaml: string): Promise<void> => {
+  await writeText(
+    path.join(rootDir, '.box/metadata.yaml'),
+    [
+      'chip_standards_version: "1.0.0"',
+      `box_id: "${BOX_ID}"`,
+      'name: "旅行箱"',
+      'created_at: "2026-03-23T09:30:00.000Z"',
+      'modified_at: "2026-03-23T11:20:00.000Z"',
+      'active_layout_type: "chips.layout.grid"',
+      ''
+    ].join('\n')
+  );
+  await writeText(path.join(rootDir, '.box/structure.yaml'), structureYaml);
+  await writeText(
+    path.join(rootDir, '.box/cover.html'),
+    '<!doctype html><html><body>旅行箱封面</body></html>',
+  );
+  await writeText(
+    path.join(rootDir, '.box/content.yaml'),
+    [
+      'active_layout_type: "chips.layout.grid"',
+      'layout_configs:',
+      '  chips.layout.grid: {}',
+      ''
+    ].join('\n')
+  );
+};
+
 afterEach(async () => {
   while (workspaces.length > 0) {
     const workspace = workspaces.pop();
@@ -498,11 +527,21 @@ describe('BoxService', () => {
           'chips.layout.size.navigation.primary.min': '160cpx',
         },
       },
-      themeCssText: '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
+      themeCssText: [
+        '@font-face { font-family: "Material Symbols Outlined"; src: url("file:///theme/dist/icons/variablefont/MaterialSymbolsOutlined.woff2") format("woff2"); }',
+        '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
+      ].join('\n'),
     });
 
     const documentPath = fileURLToPath(rendered.documentUrl);
     const body = await fs.readFile(documentPath, 'utf-8');
+    expect(body).toContain('@font-face');
+    expect(body).toContain('Material Symbols Outlined');
+    expect(body).toContain('file:///theme/dist/icons/variablefont/MaterialSymbolsOutlined.woff2');
+    expect(body.indexOf('@font-face')).toBeLessThan(body.indexOf('--chips-layout-gap-md: 1.171875vw;'));
+    expect(body.indexOf('--chips-layout-gap-md: 1.171875vw;')).toBeLessThan(
+      body.indexOf('#chips-box-layout-editor-root')
+    );
     expect(body).toContain('html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }');
     expect(body).toContain('#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }');
     expect(body).toContain('--chips-layout-gap-md: 1.171875vw;');
@@ -595,7 +634,10 @@ describe('BoxService', () => {
           'chips.layout.size.navigation.primary.min': '160cpx',
         },
       },
-      themeCssText: '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
+      themeCssText: [
+        '@font-face { font-family: "Material Symbols Rounded"; src: url("file:///theme/dist/icons/variablefont/MaterialSymbolsRounded.woff2") format("woff2"); }',
+        '[data-scope="box-layout"] { gap: 12cpx; min-inline-size: 160cpx; }',
+      ].join('\n'),
     });
 
     expect(rendered.documentUrl.startsWith('chips-render://session/')).toBe(true);
@@ -604,6 +646,14 @@ describe('BoxService', () => {
 
     const body = await fs.readFile(documentPath ?? '', 'utf-8');
     expect(body).toContain('frame-src about: file: http: https: blob: chips-render:');
+    expect(body).toContain('font-src data: file: chips-render:');
+    expect(body).toContain('@font-face');
+    expect(body).toContain('Material Symbols Rounded');
+    expect(body).toContain('file:///theme/dist/icons/variablefont/MaterialSymbolsRounded.woff2');
+    expect(body.indexOf('@font-face')).toBeLessThan(body.indexOf('--chips-layout-gap-md: 1.171875vw;'));
+    expect(body.indexOf('--chips-layout-gap-md: 1.171875vw;')).toBeLessThan(
+      body.indexOf('#chips-box-layout-root')
+    );
     expect(body).toContain('--chips-layout-gap-md: 1.171875vw;');
     expect(body).toContain('--chips-layout-size-navigation-primary-min: 15.625vw;');
     expect(body).toContain('gap: 1.171875vw; min-inline-size: 15.625vw;');
@@ -611,5 +661,352 @@ describe('BoxService', () => {
     expect(body).not.toContain('160cpx');
 
     await service.releaseRenderSession(rendered.sessionId);
+  });
+
+  describe('embedded card entries', () => {
+    it('packs embedded card files and inspects them through the normalized entry model', async () => {
+      const workspace = await createWorkspace();
+      const sourceDir = path.join(workspace, 'source-box');
+      const boxFile = path.join(workspace, 'travel.box');
+      await writeText(path.join(sourceDir, 'cards/day-01.card'), 'embedded card');
+      await createBoxDirectoryWithStructure(
+        sourceDir,
+        [
+          'entries:',
+          `  - entry_id: "${ENTRY_ID}"`,
+          '    url: cards/day-01.card',
+          '    enabled: true',
+          '    snapshot:',
+          '      document_id: "c7H1k2L9m3"',
+          '      title: "第一天"',
+          '      content_type: "chips/card"',
+          ''
+        ].join('\n')
+      );
+
+      const service = new BoxService();
+      await service.pack(sourceDir, boxFile);
+
+      await expect(service.validate(boxFile)).resolves.toEqual({
+        valid: true,
+        errors: []
+      });
+
+      const inspection = await service.inspect(boxFile);
+      expect(inspection.entries[0]).toMatchObject({
+        entryId: ENTRY_ID,
+        url: 'cards/day-01.card',
+        enabled: true,
+        snapshot: {
+          documentId: 'c7H1k2L9m3',
+          title: '第一天',
+          contentType: 'chips/card'
+        }
+      });
+
+      const opened = await service.openView(boxFile, {
+        ownerKey: 'app:test-viewer'
+      });
+      try {
+        expect(opened.initialView.total).toBe(1);
+        expect(opened.initialView.items[0]?.url).toBe('cards/day-01.card');
+      } finally {
+        await service.closeView(opened.sessionId, 'app:test-viewer');
+      }
+    });
+
+    it('resolves embedded entries through detail, cover, resource and open flows', async () => {
+      const workspace = await createWorkspace();
+      const sourceDir = path.join(workspace, 'source-box');
+      const boxFile = path.join(workspace, 'travel.box');
+      await writeText(path.join(sourceDir, 'cards/day-01.card'), 'embedded card');
+      await createBoxDirectoryWithStructure(
+        sourceDir,
+        [
+          'entries:',
+          `  - entry_id: "${ENTRY_ID}"`,
+          '    url: cards/day-01.card',
+          '    enabled: true',
+          '    snapshot:',
+          '      title: "第一天"',
+          '      content_type: "chips/card"',
+          ''
+        ].join('\n')
+      );
+
+      const service = new BoxService();
+      await service.pack(sourceDir, boxFile);
+      const opened = await service.openView(boxFile, {
+        ownerKey: 'app:test-viewer'
+      });
+
+      try {
+        const readCardInfo = async (resolvedCardFile: string) => ({
+          cardFile: resolvedCardFile,
+          info: {
+            status: {
+              state: 'ready' as const,
+              exists: true,
+              valid: true
+            },
+            metadata: {
+              raw: {
+                name: '嵌入式卡片'
+              },
+              name: '嵌入式卡片'
+            },
+            cover: {
+              title: '嵌入式封面',
+              resourceUrl: pathToFileURL(path.join(workspace, 'cover.html')).href,
+              mimeType: 'text/html' as const,
+              ratio: '3:4'
+            }
+          }
+        });
+
+        const detail = await service.readEntryDetail(opened.sessionId, [ENTRY_ID], ['status', 'documentInfo'], {
+          ownerKey: 'app:test-viewer',
+          readCardInfo
+        });
+        expect(detail.items[0]?.detail.status).toMatchObject({
+          state: 'ready',
+          scheme: 'file',
+          url: 'cards/day-01.card'
+        });
+        expect(detail.items[0]?.detail.documentInfo).toMatchObject({
+          kind: 'card',
+          status: {
+            state: 'ready',
+            exists: true,
+            valid: true
+          },
+          metadata: {
+            name: '嵌入式卡片'
+          }
+        });
+
+        await expect(
+          service.renderEntryCover(opened.sessionId, ENTRY_ID, {
+            ownerKey: 'app:test-viewer',
+            readCardInfo
+          })
+        ).resolves.toEqual({
+          title: '嵌入式封面',
+          coverUrl: pathToFileURL(path.join(workspace, 'cover.html')).href,
+          mimeType: 'text/html',
+          ratio: '3:4'
+        });
+
+        const resource = await service.resolveEntryResource(
+          opened.sessionId,
+          ENTRY_ID,
+          { kind: 'documentFile' },
+          {
+            ownerKey: 'app:test-viewer',
+            readCardInfo
+          }
+        );
+        expect(resource.resourceUrl.startsWith('file://')).toBe(true);
+        expect(resource.mimeType).toBe('application/vnd.chips.card+zip');
+
+        await expect(
+          service.prefetchEntries(opened.sessionId, [ENTRY_ID], ['cover', 'documentInfo'], {
+            ownerKey: 'app:test-viewer',
+            readCardInfo
+          })
+        ).resolves.toEqual({ ack: true });
+
+        await expect(
+          service.openEntry(opened.sessionId, ENTRY_ID, {
+            ownerKey: 'app:test-viewer',
+            openCardFile: async (resolvedCardFile) => ({
+              mode: 'document-window',
+              documentType: 'card',
+              windowId: `window:${resolvedCardFile}`
+            })
+          })
+        ).resolves.toMatchObject({
+          mode: 'document-window',
+          documentType: 'card',
+          windowId: expect.stringContaining(path.join('cards', 'day-01.card'))
+        });
+      } finally {
+        await service.closeView(opened.sessionId, 'app:test-viewer');
+      }
+    });
+
+    it('supports mixed entries: embedded, local file and remote urls', async () => {
+      const workspace = await createWorkspace();
+      const sourceDir = path.join(workspace, 'source-box');
+      const boxFile = path.join(workspace, 'travel.box');
+      const externalCardFile = path.join(workspace, 'external/day-02.card');
+      await writeText(path.join(sourceDir, 'cards/day-01.card'), 'embedded card');
+      await writeText(externalCardFile, 'external card');
+      await createBoxDirectoryWithStructure(
+        sourceDir,
+        [
+          'entries:',
+          `  - entry_id: "${ENTRY_ID}"`,
+          '    url: cards/day-01.card',
+          '    enabled: true',
+          '    snapshot:',
+          '      title: "第一天"',
+          '      content_type: "chips/card"',
+          '  - entry_id: "f3J8n2Q6r1"',
+          `    url: "${pathToFileURL(externalCardFile).href}"`,
+          '    enabled: true',
+          '    snapshot:',
+          '      title: "第二天"',
+          '      content_type: "chips/card"',
+          '  - entry_id: "g4L9p2R6s1"',
+          '    url: "https://example.com/cards/day-03.card"',
+          '    enabled: true',
+          '    snapshot:',
+          '      title: "第三天"',
+          '      content_type: "chips/card"',
+          ''
+        ].join('\n')
+      );
+
+      const service = new BoxService();
+      await service.pack(sourceDir, boxFile);
+
+      const opened = await service.openView(boxFile, {
+        ownerKey: 'app:test-viewer'
+      });
+      try {
+        expect(opened.initialView.total).toBe(3);
+
+        const detail = await service.readEntryDetail(
+          opened.sessionId,
+          [ENTRY_ID, 'f3J8n2Q6r1', 'g4L9p2R6s1'],
+          ['status'],
+          {
+            ownerKey: 'app:test-viewer'
+          }
+        );
+        const statuses = new Map(detail.items.map((item) => [item.entryId, item.detail.status]));
+        expect(statuses.get(ENTRY_ID)).toMatchObject({ state: 'ready', scheme: 'file' });
+        expect(statuses.get('f3J8n2Q6r1')).toMatchObject({ state: 'ready', scheme: 'file' });
+        expect(statuses.get('g4L9p2R6s1')).toMatchObject({ state: 'remote', scheme: 'https' });
+
+        await expect(
+          service.openEntry(opened.sessionId, 'g4L9p2R6s1', {
+            ownerKey: 'app:test-viewer',
+            openExternalUrl: async () => undefined
+          })
+        ).resolves.toEqual({
+          mode: 'external',
+          url: 'https://example.com/cards/day-03.card'
+        });
+      } finally {
+        await service.closeView(opened.sessionId, 'app:test-viewer');
+      }
+    });
+
+    it('rejects invalid embedded entry paths during directory pack', async () => {
+      const cases = [
+        {
+          fileName: 'cards/day-01.card',
+          url: '../cards/day-01.card',
+          message: 'contains invalid path segments'
+        },
+        {
+          fileName: 'cards/day-01.card',
+          url: '/cards/day-01.card',
+          message: 'must be relative'
+        },
+        {
+          fileName: 'cards/day-01.card',
+          url: 'cards/notes.txt',
+          message: 'must reference a .card file'
+        },
+        {
+          fileName: 'cards/day-01.card',
+          url: 'cards/missing.card',
+          message: 'missing in the box package'
+        },
+        {
+          fileName: 'nested.box',
+          url: 'nested.box',
+          message: 'must reference a .card file'
+        }
+      ];
+
+      for (const testCase of cases) {
+        const workspace = await createWorkspace();
+        const sourceDir = path.join(workspace, 'source-box');
+        const boxFile = path.join(workspace, 'travel.box');
+        await writeText(path.join(sourceDir, testCase.fileName), 'content');
+        await createBoxDirectoryWithStructure(
+          sourceDir,
+          [
+            'entries:',
+            `  - entry_id: "${ENTRY_ID}"`,
+            `    url: "${testCase.url}"`,
+            '    enabled: true',
+            ''
+          ].join('\n')
+        );
+
+        const service = new BoxService();
+        await expect(service.pack(sourceDir, boxFile)).rejects.toMatchObject({
+          code: 'BOX_SCHEMA_INVALID',
+          message: expect.stringContaining(testCase.message)
+        });
+      }
+    });
+
+    it('rejects embedded entries that claim a box content type', async () => {
+      const workspace = await createWorkspace();
+      const sourceDir = path.join(workspace, 'source-box');
+      const boxFile = path.join(workspace, 'travel.box');
+      await writeText(path.join(sourceDir, 'cards/day-01.card'), 'embedded card');
+      await createBoxDirectoryWithStructure(
+        sourceDir,
+        [
+          'entries:',
+          `  - entry_id: "${ENTRY_ID}"`,
+          '    url: cards/day-01.card',
+          '    enabled: true',
+          '    snapshot:',
+          '      content_type: "chips/box"',
+          ''
+        ].join('\n')
+      );
+
+      const service = new BoxService();
+      await expect(service.pack(sourceDir, boxFile)).rejects.toMatchObject({
+        code: 'BOX_SCHEMA_INVALID',
+        message: expect.stringContaining('cannot reference box documents')
+      });
+    });
+
+    it('allows embedded cards but still rejects box files inside archives', async () => {
+      const workspace = await createWorkspace();
+      const sourceDir = path.join(workspace, 'source-box');
+      const boxFile = path.join(workspace, 'travel.box');
+      await writeText(path.join(sourceDir, 'cards/day-01.card'), 'embedded card');
+      await writeText(path.join(sourceDir, 'sub/nested.box'), 'nested box');
+      await createBoxDirectoryWithStructure(
+        sourceDir,
+        [
+          'entries:',
+          `  - entry_id: "${ENTRY_ID}"`,
+          '    url: cards/day-01.card',
+          '    enabled: true',
+          ''
+        ].join('\n')
+      );
+
+      const zipService = new StoreZipService();
+      await zipService.compress(sourceDir, boxFile);
+
+      const service = new BoxService();
+      await expect(service.validate(boxFile)).resolves.toEqual({
+        valid: false,
+        errors: ['Box package cannot embed box files: sub/nested.box']
+      });
+    });
   });
 });

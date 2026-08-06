@@ -28,6 +28,12 @@ export interface BoxMetadata {
 
 export interface BoxEntrySnapshot {
   entryId: string;
+  /**
+   * 条目文档定位，支持两种形态：
+   * - 外部引用：绝对 URL（`file://` / `http(s)://` / `webdav://` 等）；
+   * - 内嵌引用：包内相对路径（如 `cards/day-01.card`），不以 `[a-z][a-z0-9+.-]*://` 形式开头、以 `.card` 结尾。
+   * Host 与 SDK 均原样透传该字段，不做形态改写。
+   */
   url: string;
   enabled: boolean;
   snapshot: {

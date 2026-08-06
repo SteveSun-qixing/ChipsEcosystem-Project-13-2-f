@@ -103,6 +103,15 @@ function sanitizePackageRelativePath(pathLike: string, rootSegment: string): str
     return rooted.join('/');
 }
 
+function sanitizeEmbeddedCardStem(name: string): string {
+    const sanitized = name.trim()
+        .replace(/[\u0000-\u001f]/g, '')
+        .replace(/[<>:"/\\|?*]/g, '')
+        .trim();
+    const stem = stripExtension(sanitized || '未命名卡片', '.card');
+    return stem || '未命名卡片';
+}
+
 function createFileUrl(filePath: string): string {
     const normalized = filePath.replace(/\\/g, '/');
     if (/^[a-zA-Z]:\//.test(normalized)) {
@@ -746,6 +755,61 @@ export class BoxDocumentService {
         return session.snapshot;
     }
 
+    async addEmbeddedCard(
+        boxId: string,
+        cardFile: string,
+        preferredName?: string,
+    ): Promise<BoxDocumentSessionSnapshot> {
+        const session = this.requireSession(boxId);
+
+        const fileType = detectDocumentFileType(cardFile);
+        if (fileType !== 'card') {
+            throw new Error(`仅支持内嵌 .card 卡片文件: ${cardFile}`);
+        }
+        if (!(await fileService.exists(cardFile))) {
+            throw new Error(`卡片文件不存在: ${cardFile}`);
+        }
+
+        const info = await getChipsClient().card.readInfo(cardFile, ['status', 'metadata']);
+        if (info.info.status && info.info.status.state !== 'ready') {
+            throw new Error(`卡片文件无效: ${cardFile}`);
+        }
+
+        const fallbackName = `${stripExtension(cardFile.split('/').pop() ?? '卡片', '.card')}.card`;
+        const displayName = preferredName?.trim() || info.info.metadata?.name || fallbackName;
+        const relativePath = await this.pickEmbeddedCardPath(session.snapshot.workspaceDir, displayName);
+        await fileService.copy(cardFile, joinPath(session.snapshot.workspaceDir, relativePath));
+
+        const fallbackTitle = deriveEntryTitle(relativePath);
+        const entry: BoxEntrySnapshot = {
+            entryId: generateId62(),
+            url: relativePath,
+            enabled: true,
+            snapshot: {
+                documentId: info.info.metadata?.cardId,
+                title: info.info.metadata?.name ?? fallbackTitle,
+                summary: info.info.metadata?.name ?? fallbackTitle,
+                tags: info.info.metadata?.tags,
+                cover: {
+                    mode: 'runtime',
+                },
+                contentType: 'chips/card',
+            },
+            layoutHints: {},
+        };
+
+        session.snapshot = this.markDirty({
+            ...session.snapshot,
+            entries: normalizeEntrySortOrder([
+                ...session.snapshot.entries,
+                entry,
+            ]),
+        });
+        this.emitSnapshot(session.snapshot);
+        this.scheduleAutoSave(session.snapshot.boxId);
+        return session.snapshot;
+    }
+
     updateEntry(boxId: string, entryId: string, patch: Partial<BoxEntrySnapshot>): BoxDocumentSessionSnapshot {
         const session = this.requireSession(boxId);
         session.snapshot = this.markDirty({
@@ -969,6 +1033,20 @@ export class BoxDocumentService {
         while (await fileService.exists(joinPath(workspaceDir, candidate))) {
             counter += 1;
             candidate = joinPath(dir, `${stem}-${counter}${ext}`);
+        }
+
+        return candidate;
+    }
+
+    private async pickEmbeddedCardPath(workspaceDir: string, displayName: string): Promise<string> {
+        const baseName = displayName.split('/').pop() ?? '未命名卡片';
+        const stem = sanitizeEmbeddedCardStem(baseName);
+        let candidate = `${stem}.card`;
+        let counter = 1;
+
+        while (await fileService.exists(joinPath(workspaceDir, candidate))) {
+            counter += 1;
+            candidate = `${stem}-${counter}.card`;
         }
 
         return candidate;

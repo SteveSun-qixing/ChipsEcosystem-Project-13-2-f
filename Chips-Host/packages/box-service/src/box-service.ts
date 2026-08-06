@@ -18,8 +18,13 @@ import { StoreZipService } from '../../zip-service/src';
 
 const BOX_ID_PATTERN = /^[0-9A-Za-z]{10}$/;
 const SUPPORTED_URL_SCHEMES = new Set(['file:', 'http:', 'https:', 'webdav:']);
+const URL_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
 const BOX_MIME_TYPE = 'application/vnd.chips.box+zip';
 const CARD_MIME_TYPE = 'application/vnd.chips.card+zip';
+
+const isEmbeddedEntryUrl = (value: string): boolean => {
+  return !URL_SCHEME_PATTERN.test(value);
+};
 
 type BoxTag = string | string[];
 type EntryDetailField = 'documentInfo' | 'coverDescriptor' | 'previewDescriptor' | 'runtimeProps' | 'status';
@@ -546,32 +551,49 @@ const isPathWithinRoot = (rootDir: string, absolutePath: string): boolean => {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 };
 
-const createBoxLayoutThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
-  const declarations = createThemeCssVariableDeclarations(theme.tokens ?? {}).join('\n');
+const createBoxLayoutThemeVariablesCss = (theme: ThemeSnapshot): string => {
+  const declarations = createThemeCssVariableDeclarations(theme.tokens ?? {});
 
-  return normalizeThemeCssForBrowser([
+  if (declarations.length === 0) {
+    return ':root {}';
+  }
+
+  return [
     ':root {',
-    declarations,
+    ...declarations,
     '}',
-    'html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; }',
-    'body { min-width: 0; color: var(--chips-sys-color-on-surface, #111111); }',
-    '#chips-box-layout-root { width: 100%; min-height: 100%; box-sizing: border-box; }',
-    extraCssText ?? '',
-  ].join('\n'));
+  ].join('\n');
 };
 
-const createBoxLayoutEditorThemeCss = (theme: ThemeSnapshot, extraCssText?: string): string => {
-  const declarations = createThemeCssVariableDeclarations(theme.tokens ?? {}).join('\n');
+const joinBoxLayoutStyleBlocks = (...blocks: Array<string | undefined>): string => {
+  return blocks
+    .map((block) => normalizeThemeCssForBrowser(block?.trim() ?? ''))
+    .filter((block) => block.length > 0)
+    .join('\n\n');
+};
 
-  return normalizeThemeCssForBrowser([
-    ':root {',
-    declarations,
-    '}',
-    'html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }',
-    'body { min-width: 0; min-height: 0; color: var(--chips-sys-color-on-surface, #111111); overflow: hidden; }',
-    '#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }',
-    extraCssText ?? '',
-  ].join('\n'));
+const createBoxLayoutThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
+  return joinBoxLayoutStyleBlocks(
+    themeCssText,
+    createBoxLayoutThemeVariablesCss(theme),
+    [
+      'html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; background: transparent; }',
+      'body { min-width: 0; color: var(--chips-sys-color-on-surface, #111111); }',
+      '#chips-box-layout-root { width: 100%; min-height: 100%; box-sizing: border-box; }',
+    ].join('\n')
+  );
+};
+
+const createBoxLayoutEditorThemeCss = (theme: ThemeSnapshot, themeCssText?: string): string => {
+  return joinBoxLayoutStyleBlocks(
+    themeCssText,
+    createBoxLayoutThemeVariablesCss(theme),
+    [
+      'html, body { margin: 0; padding: 0; width: 100%; height: 100%; min-height: 100%; background: transparent; }',
+      'body { min-width: 0; min-height: 0; color: var(--chips-sys-color-on-surface, #111111); overflow: hidden; }',
+      '#chips-box-layout-editor-root { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }',
+    ].join('\n')
+  );
 };
 
 const createBoxLayoutViewDocument = (options: {
@@ -1199,7 +1221,7 @@ export class BoxService {
         }
 
         const detail: Record<string, unknown> = {};
-        const locator = this.resolveEntryLocator(entry.url);
+        const locator = this.resolveEntryLocator(entry.url, session.extractedDir);
 
         for (const field of uniqueFields) {
           if (field === 'status') {
@@ -1294,7 +1316,7 @@ export class BoxService {
           };
         }
       } else {
-        const locator = this.resolveEntryLocator(entry.url);
+        const locator = this.resolveEntryLocator(entry.url, session.extractedDir);
         const documentKind = this.resolveDocumentKind(entry, locator);
         if (locator.scheme === 'file:' && locator.filePath && documentKind === 'box') {
           const coverView = await this.renderCover(locator.filePath);
@@ -1322,7 +1344,7 @@ export class BoxService {
         }
       }
     } else if (resource.kind === 'documentFile') {
-      const locator = this.resolveEntryLocator(entry.url);
+      const locator = this.resolveEntryLocator(entry.url, session.extractedDir);
       if (locator.scheme === 'file:' && locator.filePath) {
         const exists = await this.pathExists(locator.filePath);
         if (!exists) {
@@ -1377,7 +1399,7 @@ export class BoxService {
       };
     }
 
-    const locator = this.resolveEntryLocator(entry.url);
+    const locator = this.resolveEntryLocator(entry.url, session.extractedDir);
     if (locator.scheme === 'file:' && locator.filePath) {
       const documentKind = this.resolveDocumentKind(entry, locator);
       if (documentKind === 'box') {
@@ -1423,7 +1445,7 @@ export class BoxService {
       throw createError('BOX_ENTRY_NOT_FOUND', `Box entry not found: ${entryId}`, { sessionId, entryId });
     }
 
-    const locator = this.resolveEntryLocator(entry.url);
+    const locator = this.resolveEntryLocator(entry.url, session.extractedDir);
     if (locator.scheme === 'file:' && locator.filePath) {
       const exists = await this.pathExists(locator.filePath);
       if (!exists) {
@@ -1610,8 +1632,8 @@ export class BoxService {
       if (entry.compressedSize !== entry.size) {
         errors.push(`ZIP entry must use store mode: ${entry.path}`);
       }
-      if (entry.path.toLowerCase().endsWith('.card') || entry.path.toLowerCase().endsWith('.box')) {
-        errors.push(`Box package cannot embed document files: ${entry.path}`);
+      if (entry.path.toLowerCase().endsWith('.box')) {
+        errors.push(`Box package cannot embed box files: ${entry.path}`);
       }
     }
 
@@ -1796,9 +1818,15 @@ export class BoxService {
         throw createError('BOX_SCHEMA_INVALID', `Duplicate box entry id: ${normalizedEntryId}`);
       }
       seenEntryIds.add(normalizedEntryId);
-      this.assertSupportedUrl(url, `structure.entries[${index}].url`);
+      this.assertSupportedUrl(url, `structure.entries[${index}].url`, knownFiles);
 
       const snapshot = this.normalizeEntrySnapshot(item.snapshot, knownFiles, index);
+      if (isEmbeddedEntryUrl(url) && snapshot.contentType === 'chips/box') {
+        throw createError(
+          'BOX_SCHEMA_INVALID',
+          `structure.entries[${index}] embedded entries cannot reference box documents.`
+        );
+      }
       const layoutHints = this.normalizeLayoutHints(item.layout_hints, index);
 
       normalizedEntries.push({
@@ -1921,7 +1949,12 @@ export class BoxService {
     return Object.keys(layoutHints).length > 0 ? layoutHints : undefined;
   }
 
-  private assertSupportedUrl(value: string, field: string): void {
+  private assertSupportedUrl(value: string, field: string, knownFiles: Set<string>): void {
+    if (isEmbeddedEntryUrl(value)) {
+      this.assertEmbeddedEntryPath(value, field, knownFiles);
+      return;
+    }
+
     let parsed: URL;
     try {
       parsed = new URL(value);
@@ -1935,6 +1968,35 @@ export class BoxService {
     if (parsed.username || parsed.password) {
       throw createError('BOX_SCHEMA_INVALID', `${field} must not embed credentials.`, { value });
     }
+  }
+
+  private assertEmbeddedEntryPath(value: string, field: string, knownFiles: Set<string>): void {
+    const normalized = this.normalizeEmbeddedRelativePath(value, field);
+    if (!knownFiles.has(normalized)) {
+      throw createError(
+        'BOX_SCHEMA_INVALID',
+        `${field} embedded document is missing in the box package: ${normalized}`,
+        { value }
+      );
+    }
+  }
+
+  private normalizeEmbeddedRelativePath(value: string, field: string): string {
+    const normalized = value.replace(/\\/g, '/').trim();
+    if (!normalized) {
+      throw createError('BOX_SCHEMA_INVALID', `${field} must be a non-empty embedded path.`, { value });
+    }
+    if (normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)) {
+      throw createError('BOX_SCHEMA_INVALID', `${field} embedded path must be relative.`, { value });
+    }
+    if (!normalized.toLowerCase().endsWith('.card')) {
+      throw createError('BOX_SCHEMA_INVALID', `${field} embedded path must reference a .card file.`, { value });
+    }
+    const segments = normalized.split('/');
+    if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+      throw createError('BOX_SCHEMA_INVALID', `${field} embedded path contains invalid path segments.`, { value });
+    }
+    return normalized;
   }
 
   private requireSession(sessionId: string, ownerKey: string): BoxSessionRecord {
@@ -2060,7 +2122,22 @@ export class BoxService {
     return '';
   }
 
-  private resolveEntryLocator(url: string): EntryLocator {
+  private resolveEntryLocator(url: string, extractedDir?: string): EntryLocator {
+    if (isEmbeddedEntryUrl(url)) {
+      if (!extractedDir) {
+        throw createError('BOX_RESOLVE_FAILED', `Embedded entry URL requires a box view session: ${url}`, { url });
+      }
+      const filePath = path.join(extractedDir, url);
+      if (!isPathWithinRoot(extractedDir, filePath)) {
+        throw createError('BOX_RESOLVE_FAILED', `Embedded entry path escapes the box package: ${url}`, { url });
+      }
+      return {
+        scheme: 'file:',
+        url,
+        filePath
+      };
+    }
+
     let parsed: URL;
     try {
       parsed = new URL(url);

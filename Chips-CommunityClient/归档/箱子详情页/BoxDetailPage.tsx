@@ -95,7 +95,7 @@ export default function BoxDetailPage() {
 
   const baseUrl = getCommunityApiBaseUrl();
   const coverHref = box.coverUrl ? resolveCommunityUrl(baseUrl, box.coverUrl) : null;
-  const visibleCards = (box.cards ?? []).filter((card) => card.enabled !== false);
+  const visibleCards = box.cards ?? [];
 
   return (
     <div className="page-container box-detail-page">
@@ -134,10 +134,11 @@ export default function BoxDetailPage() {
         {visibleCards.length > 0 ? (
           <ul className="box-detail-page__list">
             {visibleCards.map((card, index) => (
-              <li key={card.communityCardId ?? `${box.id}-${index}`} className="panel box-reference-row">
+              <li key={card.communityCardId ?? `${box.id}-${card.entry_id ?? index}`} className="panel box-reference-row">
                 <div className="box-reference-row__copy">
                   <strong>{card.title || card.communityCardId || card.url}</strong>
                   <span className="muted">{card.communityCardId ?? card.url}</span>
+                  {card.embedded ? <span className="box-reference-row__badge">{t("box.embedded")}</span> : null}
                 </div>
                 {card.communityCardId ? (
                   <button
@@ -150,7 +151,7 @@ export default function BoxDetailPage() {
                     <Icon name="card" />
                   </button>
                 ) : null}
-                {card.url ? (
+                {!card.embedded && card.url ? (
                   <a
                     href={card.url}
                     target="_blank"

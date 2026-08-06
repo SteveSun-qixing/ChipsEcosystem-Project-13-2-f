@@ -98,6 +98,17 @@
   word-break: break-word;
 }
 
+.box-reference-row__badge {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ccps-sys-accent);
+  border: 1px solid color-mix(in srgb, var(--ccps-sys-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--ccps-sys-accent) 10%, transparent);
+}
+
 @media (max-width: 860px) {
   .box-detail-page__panel {
     grid-template-columns: 1fr;

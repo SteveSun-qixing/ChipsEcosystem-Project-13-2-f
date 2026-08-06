@@ -96,23 +96,27 @@ describe("薯片社区客户端预览与质量脚本 smoke", () => {
       'path="/:username"',
       'path="/workspace"',
       'path="/settings"',
-      'path="/boxes/:boxId"',
     ]) {
       expect(shell).toContain(route);
     }
+    expect(shell).not.toContain('path="/boxes/:boxId"');
+    expect(shell).not.toContain("BoxDetailPage");
 
     const settings = readProjectFile("src/community/pages/SettingsPage.tsx");
     expect(settings).toContain("saveCommunityServerUrl");
     expect(settings).toContain("normalizeCommunityServerUrl");
   });
 
-  it("卡片点击应直接打开本地查看器而不是卡片信息页", () => {
+  it("卡片与箱子点击都应直接打开本地查看器而不是信息页", () => {
     const workTile = readProjectFile("src/community/components/WorkTile.tsx");
     expect(workTile).toContain("openInLocalViewer");
+    expect(workTile).toContain("openBoxInLocalViewer");
     expect(workTile).toContain("resolveCommunityUrl");
     expect(workTile).not.toContain("/cards/");
+    expect(workTile).not.toContain('to="/boxes/');
     const shell = readProjectFile("src/app/AppShell.tsx");
     expect(shell).not.toContain("cards/:cardId");
     expect(shell).not.toContain("CardDetailPage");
+    expect(shell).not.toContain("BoxDetailPage");
   });
 });

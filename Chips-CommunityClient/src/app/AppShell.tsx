@@ -19,7 +19,6 @@ import LoginPage from "../community/pages/LoginPage";
 import RegisterPage from "../community/pages/RegisterPage";
 import ProfilePage from "../community/pages/ProfilePage";
 import WorkspacePage from "../community/pages/WorkspacePage";
-import BoxDetailPage from "../community/pages/BoxDetailPage";
 import AdminRedirectPage from "../community/pages/AdminRedirectPage";
 import SettingsPage from "../community/pages/SettingsPage";
 import { getPostAuthPath } from "../community/lib/ui";
@@ -167,7 +166,6 @@ function AppRoutes() {
             }
           />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/boxes/:boxId" element={<BoxDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>

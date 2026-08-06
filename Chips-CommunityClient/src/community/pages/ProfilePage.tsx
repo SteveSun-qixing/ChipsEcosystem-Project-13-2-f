@@ -41,7 +41,7 @@ function toCommunityWorks(cards: CardSummary[], boxes: BoxSummary[]): CommunityW
       title: box.title,
       coverUrl: box.coverUrl,
       coverRatio: box.coverRatio,
-      href: `/boxes/${box.id}`,
+      href: "",
       createdAt: box.createdAt,
     }));
 

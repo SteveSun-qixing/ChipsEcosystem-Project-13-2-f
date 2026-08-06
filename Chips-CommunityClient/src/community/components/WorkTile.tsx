@@ -1,5 +1,4 @@
 import { useRef, useState, type CSSProperties, type MouseEvent } from "react";
-import { Link } from "react-router-dom";
 import type { Client } from "chips-sdk";
 import { chipsClient } from "../../runtime/chips-client";
 import { useAppPreferences } from "../contexts/PreferencesContext";
@@ -46,8 +45,32 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
       })
       .catch((nextError) => {
         void clientRef.current.platform.showMessage({
-          title: t("card.viewFailedTitle"),
-          message: t("card.viewFailed", {
+          title: t("card.viewFailedBoxTitle"),
+          message: t("card.viewFailedBox", {
+            message: getErrorMessage(nextError, t("common.error")),
+          }),
+        });
+      })
+      .finally(() => {
+        setOpening(false);
+      });
+  };
+
+  const handleOpenBox = (event: MouseEvent) => {
+    event.preventDefault();
+    if (opening || isCard) {
+      return;
+    }
+
+    setOpening(true);
+    void transferRef.current
+      .openBoxInLocalViewer(item.id, (progress) => {
+        void progress;
+      })
+      .catch((nextError) => {
+        void clientRef.current.platform.showMessage({
+          title: t("card.viewFailedBoxTitle"),
+          message: t("card.viewFailedBox", {
             message: getErrorMessage(nextError, t("common.error")),
           }),
         });
@@ -62,7 +85,7 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
       <div className="work-tile__cover-stage">
         <div className="work-tile__cover-shell">
           <div className="work-tile__cover-clip">
-            {coverSrc && isCard ? (
+            {coverSrc ? (
               <iframe
                 className="work-tile__cover-frame"
                 src={coverSrc}
@@ -71,8 +94,6 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
                 sandbox="allow-scripts"
                 scrolling="no"
               />
-            ) : coverSrc ? (
-              <img src={coverSrc} alt={item.title} loading="lazy" />
             ) : (
               <div className="work-tile__placeholder">
                 <span>{getInitial(item.title)}</span>
@@ -93,7 +114,6 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
 
       <div className="work-tile__label">
         <h2>{item.title}</h2>
-        {opening ? <span className="work-tile__opening">{t("card.opening")}</span> : null}
       </div>
     </article>
   );
@@ -134,14 +154,16 @@ export function WorkTile({ item, manageMode = false, selected = false, onToggleS
   }
 
   return (
-    <Link
+    <button
       ref={setRootRef}
-      to={item.href}
-      className={`work-tile work-tile--${item.type}`}
+      type="button"
+      className="work-tile work-tile--box"
       style={coverStyle}
+      onClick={handleOpenBox}
+      disabled={opening}
       aria-label={`${item.title} · ${t("common.box")}`}
     >
       {content}
-    </Link>
+    </button>
   );
 }

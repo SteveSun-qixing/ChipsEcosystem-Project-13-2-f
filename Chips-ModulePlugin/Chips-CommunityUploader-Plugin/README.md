@@ -12,6 +12,7 @@
 - 生成可逆恢复清单，记录原始路径、网络 URL 和 ZIP Store 条目信息。
 - 从客户端下载社区卡片时，按下载计划取回网络资源卡片和资源，恢复原始相对路径并重新打包完整离线卡片。
 - 打开远程社区卡片页面时，委托 Host 外部打开能力处理。
+- 上传 `.box` 箱子时，收集散落卡片（`file://` 引用）逐个走卡片上传链路，内嵌/网络卡片跳过，回写工作副本 structure.yaml 后通过 `contentType: 'box'` 控制面会话直传对象存储。
 
 社区服务器只保存元数据、对象位置、恢复清单和渲染任务状态；文件字节由对象存储/CDN 承担。
 
@@ -21,6 +22,7 @@
 community.card.transfer / upload
 community.card.transfer / download
 community.card.transfer / openRemote
+community.card.transfer / uploadBox
 ```
 
 输入输出契约见：
@@ -31,10 +33,12 @@ community.card.transfer / openRemote
 - `contracts/download.output.schema.json`
 - `contracts/openRemote.input.schema.json`
 - `contracts/openRemote.output.schema.json`
+- `contracts/uploadBox.input.schema.json`
+- `contracts/uploadBox.output.schema.json`
 
 ## 运行边界
 
-- Desktop Host：支持上传、下载、远程打开。
+- Desktop Host：支持上传、下载、远程打开、箱子上传。
 - Mobile Host/PAL：按同一能力契约支持。
 - Web 浏览器：不支持上传、下载和打包；浏览器只负责社区网页查看。
 

@@ -76,6 +76,63 @@ describe("community transfer service", () => {
     client.restoreBridge();
   });
 
+  it("openBoxInLocalViewer 应下载社区箱子并通过卡片查看器打开", async () => {
+    const client = createTransferClient();
+    const started: Array<{ capability: string; method: string; input: Record<string, unknown> }> = [];
+
+    client.mockHost.setActionHandler("module.invoke", (payload) => {
+      started.push(toRecord(payload) as never);
+      return { mode: "job", jobId: "job-open-box-1" };
+    });
+    client.mockHost.setActionHandler("module.job.get", (payload) => {
+      if (toRecord(payload).jobId !== "job-open-box-1") {
+        throw new Error(`unexpected job id ${String(toRecord(payload).jobId)}`);
+      }
+      return completedJob("job-open-box-1", "openRemoteBox", {
+        opened: true,
+        url: "https://www.chipscard.space/boxes/box-uuid",
+        localBoxPath: "/tmp/community-open-remote-box-1/美食网格箱子.box",
+        surfaceId: "surface-box-1",
+      });
+    });
+
+    const service = createCommunityTransferService(client);
+    const progress: string[] = [];
+    const result = await service.openBoxInLocalViewer("box-uuid", (update) => {
+      progress.push(update.stage);
+    });
+
+    expect(started[0]).toMatchObject({
+      capability: "community.card.transfer",
+      method: "openRemoteBox",
+      input: {
+        boxId: "box-uuid",
+        server: { baseUrl: "https://www.chipscard.space", accessToken: "access-token" },
+      },
+    });
+    expect(result).toEqual({
+      opened: true,
+      url: "https://www.chipscard.space/boxes/box-uuid",
+      localBoxPath: "/tmp/community-open-remote-box-1/美食网格箱子.box",
+      surfaceId: "surface-box-1",
+    });
+    client.restoreBridge();
+  });
+
+  it("openBoxInLocalViewer 输出缺少 url 时应抛出错误码", async () => {
+    const client = createTransferClient();
+    client.mockHost.setActionHandler("module.invoke", () => ({ mode: "job", jobId: "job-open-box-2" }));
+    client.mockHost.setActionHandler("module.job.get", () =>
+      completedJob("job-open-box-2", "openRemoteBox", { opened: true, url: "" }),
+    );
+
+    const service = createCommunityTransferService(client);
+    await expect(service.openBoxInLocalViewer("box-uuid")).rejects.toThrow(
+      "COMMUNITY_TRANSFER_OPEN_FAILED",
+    );
+    client.restoreBridge();
+  });
+
   it("uploadCard 应提交 cardFile 并返回社区入口", async () => {
     const client = createTransferClient();
     const started: Array<{ capability: string; method: string; input: Record<string, unknown> }> = [];
@@ -133,6 +190,107 @@ describe("community transfer service", () => {
       restoredResourceCount: 3,
       suggestedFileName: "demo.card",
     });
+    client.restoreBridge();
+  });
+
+  it("uploadBox 应提交 boxFile 并返回箱子社区入口与卡片统计", async () => {
+    const client = createTransferClient();
+    const started: Array<{ capability: string; method: string; input: Record<string, unknown> }> = [];
+
+    client.mockHost.setActionHandler("module.invoke", (payload) => {
+      started.push(toRecord(payload) as never);
+      return { mode: "job", jobId: "job-box-upload-1" };
+    });
+    let getCount = 0;
+    client.mockHost.setActionHandler("module.job.get", () => {
+      getCount += 1;
+      if (getCount === 1) {
+        return {
+          job: {
+            jobId: "job-box-upload-1",
+            pluginId: "chips.module.chips.community-uploader",
+            capability: "community.card.transfer",
+            method: "uploadBox",
+            status: "running",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            progress: { stage: "box-upload", percent: 40, message: "uploading box" },
+          },
+        };
+      }
+      return completedJob("job-box-upload-1", "uploadBox", {
+        boxId: "box-uuid",
+        communityUrl: "https://www.chipscard.space/boxes/box-uuid",
+        uploadedCards: [
+          {
+            documentId: "doc-day-01",
+            cardFile: "day-01.card",
+            communityCardId: "card-uuid",
+            communityUrl: "https://www.chipscard.space/cards/card-uuid",
+          },
+        ],
+        skippedCards: [
+          { entryId: "entry-1", url: "https://example.com/day-02.card", reason: "network" },
+        ],
+        warnings: [{ code: "BOX_UPLOAD_PARTIAL", message: "some entries were skipped" }],
+      });
+    });
+
+    const service = createCommunityTransferService(client);
+    const progress: string[] = [];
+    const result = await service.uploadBox("/local/travel.box", (update) => {
+      progress.push(update.stage);
+    });
+
+    expect(started[0]).toMatchObject({
+      capability: "community.card.transfer",
+      method: "uploadBox",
+      input: {
+        boxFile: "/local/travel.box",
+        server: { baseUrl: "https://www.chipscard.space", accessToken: "access-token" },
+        publish: { roomId: null },
+      },
+    });
+    expect(result.boxId).toBe("box-uuid");
+    expect(result.communityUrl).toBe("https://www.chipscard.space/boxes/box-uuid");
+    expect(result.uploadedCards).toHaveLength(1);
+    expect(result.uploadedCards[0]).toMatchObject({
+      documentId: "doc-day-01",
+      communityCardId: "card-uuid",
+    });
+    expect(result.skippedCards).toHaveLength(1);
+    expect(result.skippedCards[0]).toMatchObject({
+      reason: "network",
+    });
+    expect(result.warnings).toEqual([{ code: "BOX_UPLOAD_PARTIAL", message: "some entries were skipped" }]);
+    expect(progress).toContain("box-upload");
+    client.restoreBridge();
+  });
+
+  it("uploadBox 输出缺少 boxId 时应抛出错误码", async () => {
+    const client = createTransferClient();
+    client.mockHost.setActionHandler("module.invoke", () => ({ mode: "job", jobId: "job-box-bad-1" }));
+    client.mockHost.setActionHandler("module.job.get", () =>
+      completedJob("job-box-bad-1", "uploadBox", { communityUrl: "" }),
+    );
+
+    const service = createCommunityTransferService(client);
+    await expect(service.uploadBox("/local/travel.box")).rejects.toThrow(
+      "COMMUNITY_TRANSFER_BOX_UPLOAD_FAILED",
+    );
+    client.restoreBridge();
+  });
+
+  it("uploadBox 缺少登录会话时不应发起模块调用", async () => {
+    const client = createTransferClient();
+    setAccessToken(null);
+    configureCommunityApiBaseUrl("");
+
+    const service = createCommunityTransferService(client);
+    await expect(service.uploadBox("/local/travel.box")).rejects.toThrow(
+      "COMMUNITY_TRANSFER_SESSION_MISSING",
+    );
+    expect(client.calls.map((call) => call.action)).not.toContain("module.invoke");
     client.restoreBridge();
   });
 

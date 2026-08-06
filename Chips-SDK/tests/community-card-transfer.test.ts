@@ -63,4 +63,102 @@ describe("communityCardTransfer API", () => {
       },
     ]);
   });
+
+  it("forwards uploadBox through the official transfer module capability", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "module.invoke") {
+          return { mode: "job", jobId: "job-2" };
+        }
+        throw new Error("Unexpected action: " + action);
+      },
+    });
+
+    await client.communityCardTransfer.uploadBox({
+      boxFile: "/tmp/travel.box",
+      server: {
+        baseUrl: "https://community.example",
+        accessToken: "token",
+      },
+      publish: {
+        roomId: null,
+        idempotencyKey: "client-key-2",
+      },
+      workspace: {
+        tempDir: "/tmp/upload-work",
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        action: "module.invoke",
+        payload: {
+          capability: "community.card.transfer",
+          method: "uploadBox",
+          input: {
+            boxFile: "/tmp/travel.box",
+            server: {
+              baseUrl: "https://community.example",
+              accessToken: "token",
+            },
+            publish: {
+              roomId: null,
+              idempotencyKey: "client-key-2",
+            },
+            workspace: {
+              tempDir: "/tmp/upload-work",
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it("forwards openRemoteBox through the official transfer module capability", async () => {
+    const calls: Array<{ action: string; payload: unknown }> = [];
+    const client = createClient({
+      environment: "node",
+      transport: async (action, payload) => {
+        calls.push({ action, payload });
+        if (action === "module.invoke") {
+          return { mode: "job", jobId: "job-3" };
+        }
+        throw new Error("Unexpected action: " + action);
+      },
+    });
+
+    await client.communityCardTransfer.openRemoteBox({
+      boxId: "box-uuid-1",
+      server: {
+        baseUrl: "https://community.example",
+        accessToken: "token",
+      },
+      workspace: {
+        tempDir: "/tmp/box-open-work",
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        action: "module.invoke",
+        payload: {
+          capability: "community.card.transfer",
+          method: "openRemoteBox",
+          input: {
+            boxId: "box-uuid-1",
+            server: {
+              baseUrl: "https://community.example",
+              accessToken: "token",
+            },
+            workspace: {
+              tempDir: "/tmp/box-open-work",
+            },
+          },
+        },
+      },
+    ]);
+  });
 });

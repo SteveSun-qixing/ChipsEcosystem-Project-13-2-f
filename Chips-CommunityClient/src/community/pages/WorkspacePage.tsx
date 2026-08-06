@@ -4,22 +4,31 @@ import type { Client } from "chips-sdk";
 import { chipsClient } from "../../runtime/chips-client";
 import { useAppPreferences } from "../contexts/PreferencesContext";
 import { useAuth } from "../contexts/AuthContext";
-import { createCommunityTransferService } from "../lib/transfer";
+import { createCommunityTransferService, type TransferJobProgress } from "../lib/transfer";
 import { getErrorMessage } from "../lib/ui";
 import { Icon } from "../runtime/icons/Icon";
 import "./WorkspacePage.css";
 
+type UploadKind = "card" | "box";
+
 type UploadStatus =
   | { kind: "idle" }
   | { kind: "working"; label: string; percent: number | null }
-  | { kind: "success"; message: string; communityUrl: string }
+  | { kind: "success"; message: string; communityUrl: string; openLabel: string }
   | { kind: "error"; message: string };
+
+interface UploadWarning {
+  code: string;
+  message: string;
+}
 
 interface UploadFileResult {
   fileName: string;
+  kind: UploadKind;
   ok: boolean;
   message: string;
   communityUrl: string;
+  warnings?: UploadWarning[];
 }
 
 function formatUploadProgress(stage: string, percent: number): string | null {
@@ -32,6 +41,10 @@ function formatUploadProgress(stage: string, percent: number): string | null {
 function getFileName(filePath: string): string {
   const parts = filePath.split(/[\\/]/).filter(Boolean);
   return parts.at(-1) ?? filePath;
+}
+
+function getUploadKind(filePath: string): UploadKind {
+  return getFileName(filePath).toLowerCase().endsWith(".box") ? "box" : "card";
 }
 
 export default function WorkspacePage() {
@@ -65,7 +78,7 @@ export default function WorkspacePage() {
         mode: "file",
         allowMultiple: true,
         mustExist: true,
-        filters: [{ name: "Chips Card", extensions: ["card"] }],
+        filters: [{ name: t("workspace.uploadFilter"), extensions: ["card", "box"] }],
       });
       filePaths = Array.isArray(selected) ? selected.filter(Boolean) : [];
     } catch (nextError) {
@@ -74,7 +87,7 @@ export default function WorkspacePage() {
     }
 
     if (filePaths.length === 0) {
-      setUploadStatus({ kind: "error", message: t("workspace.uploadSelectCard") });
+      setUploadStatus({ kind: "error", message: t("workspace.uploadSelectFile") });
       return;
     }
 
@@ -84,6 +97,7 @@ export default function WorkspacePage() {
     for (let index = 0; index < filePaths.length; index += 1) {
       const filePath = filePaths[index]!;
       const fileName = getFileName(filePath);
+      const kind = getUploadKind(filePath);
       setBatch({ current: index + 1, total: filePaths.length });
       setUploadStatus({
         kind: "working",
@@ -95,27 +109,46 @@ export default function WorkspacePage() {
         percent: null,
       });
 
+      const reportProgress = (progress: TransferJobProgress) => {
+        setUploadStatus({
+          kind: "working",
+          label: t("workspace.uploadBatchProgress", {
+            current: index + 1,
+            total: filePaths.length,
+            phase: formatUploadProgress(progress.message || progress.stage, progress.percent) ?? t("workspace.uploading"),
+          }),
+          percent: progress.percent > 0 ? progress.percent : null,
+        });
+      };
+
       try {
-        const result = await transferRef.current.uploadCard(filePath, (progress) => {
-          setUploadStatus({
-            kind: "working",
-            label: t("workspace.uploadBatchProgress", {
-              current: index + 1,
-              total: filePaths.length,
-              phase: formatUploadProgress(progress.message || progress.stage, progress.percent) ?? t("workspace.uploading"),
+        if (kind === "box") {
+          const result = await transferRef.current.uploadBox(filePath, reportProgress);
+          outcomes.push({
+            fileName,
+            kind,
+            ok: true,
+            message: t("workspace.boxUploadResultSummary", {
+              uploaded: result.uploadedCards.length,
+              skipped: result.skippedCards.length,
             }),
-            percent: progress.percent > 0 ? progress.percent : null,
+            communityUrl: result.communityUrl,
+            warnings: result.warnings,
           });
-        });
-        outcomes.push({
-          fileName,
-          ok: true,
-          message: t("workspace.uploadResultPublished"),
-          communityUrl: result.communityUrl,
-        });
+        } else {
+          const result = await transferRef.current.uploadCard(filePath, reportProgress);
+          outcomes.push({
+            fileName,
+            kind,
+            ok: true,
+            message: t("workspace.uploadResultPublished"),
+            communityUrl: result.communityUrl,
+          });
+        }
       } catch (nextError) {
         outcomes.push({
           fileName,
+          kind,
           ok: false,
           message: getErrorMessage(nextError, t("common.error")),
           communityUrl: "",
@@ -127,20 +160,34 @@ export default function WorkspacePage() {
 
     setBatch(null);
 
-    const successCount = outcomes.filter((item) => item.ok).length;
-    const failedCount = outcomes.length - successCount;
-    const firstSuccess = outcomes.find((item) => item.ok);
+    const successItems = outcomes.filter((item) => item.ok);
+    const failedCount = outcomes.length - successItems.length;
+    const cardSuccessCount = successItems.filter((item) => item.kind === "card").length;
+    const boxSuccessCount = successItems.filter((item) => item.kind === "box").length;
+    const firstSuccess = successItems[0];
 
     if (failedCount === 0) {
+      let message = t("workspace.uploadComplete", { count: cardSuccessCount });
+      let openLabel = t("workspace.uploadCompleteOpen");
+      if (cardSuccessCount === 0 && boxSuccessCount > 0) {
+        message = t("workspace.boxUploadComplete", { count: boxSuccessCount });
+        openLabel = t("workspace.boxUploadCompleteOpen");
+      } else if (boxSuccessCount > 0) {
+        message = t("workspace.uploadCompleteMixed", { cards: cardSuccessCount, boxes: boxSuccessCount });
+        openLabel = firstSuccess?.kind === "box"
+          ? t("workspace.boxUploadCompleteOpen")
+          : t("workspace.uploadCompleteOpen");
+      }
       setUploadStatus({
         kind: "success",
-        message: t("workspace.uploadComplete", { count: successCount }),
+        message,
         communityUrl: firstSuccess?.communityUrl ?? "",
+        openLabel,
       });
     } else {
       setUploadStatus({
         kind: "error",
-        message: t("workspace.uploadBatchFailed", { success: successCount, failed: failedCount }),
+        message: t("workspace.uploadBatchFailed", { success: successItems.length, failed: failedCount }),
       });
     }
   };
@@ -206,7 +253,7 @@ export default function WorkspacePage() {
                 className="button button--ghost button--sm"
                 onClick={() => void handleOpenCommunityUrl()}
               >
-                {t("workspace.uploadCompleteOpen")}
+                {uploadStatus.openLabel}
               </button>
             ) : null}
           </div>
@@ -222,12 +269,21 @@ export default function WorkspacePage() {
           <ul className="workspace-upload__results" aria-label={t("workspace.uploadResultListLabel")}>
             {results.map((item) => (
               <li
-                key={item.fileName}
+                key={`${item.fileName}-${item.kind}`}
                 className={`workspace-upload__result${item.ok ? " workspace-upload__result--ok" : " workspace-upload__result--fail"}`}
               >
                 <Icon name={item.ok ? "check" : "warning"} size={16} />
-                <span className="workspace-upload__result-name">{item.fileName}</span>
-                <span className="workspace-upload__result-message">{item.message}</span>
+                <div className="workspace-upload__result-body">
+                  <span className="workspace-upload__result-name">{item.fileName}</span>
+                  <span className="workspace-upload__result-message">{item.message}</span>
+                </div>
+                {item.kind === "box" && item.warnings && item.warnings.length > 0 ? (
+                  <ul className="workspace-upload__warnings" aria-label={t("workspace.boxUploadWarningsLabel")}>
+                    {item.warnings.map((warning) => (
+                      <li key={`${warning.code}-${warning.message}`}>{warning.message}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ul>

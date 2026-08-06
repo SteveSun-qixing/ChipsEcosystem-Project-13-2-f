@@ -65,6 +65,60 @@ export interface CommunityCardTransferUploadResult {
   warnings?: CommunityUploaderWarning[];
 }
 
+export interface CommunityCardTransferBoxUploadRequest {
+  boxFile: string;
+  server: CommunityCardTransferServer;
+  publish?: {
+    roomId?: string | null;
+    idempotencyKey?: string;
+  };
+  client?: CommunityCardTransferClientInfo;
+  workspace?: {
+    tempDir?: string;
+  };
+}
+
+export interface NormalizedCommunityCardTransferBoxUploadRequest {
+  boxFile: string;
+  server: CommunityCardTransferServer;
+  publish: {
+    roomId?: string | null;
+    idempotencyKey?: string;
+  };
+  client: Required<Pick<CommunityCardTransferClientInfo, "name" | "version">> & {
+    platform?: string;
+  };
+  workspace: {
+    tempDir?: string;
+  };
+}
+
+export interface CommunityCardTransferBoxUploadedCard {
+  entryId?: string;
+  documentId?: string;
+  cardFile: string;
+  communityCardId: string;
+  communityUrl: string;
+}
+
+export interface CommunityCardTransferBoxSkippedCard {
+  entryId?: string;
+  documentId?: string;
+  url: string;
+  reason: "embedded" | "network";
+}
+
+export interface CommunityCardTransferBoxUploadResult {
+  boxId: string;
+  versionId: string;
+  status: string;
+  communityUrl: string;
+  boxViewUrl?: string;
+  uploadedCards: CommunityCardTransferBoxUploadedCard[];
+  skippedCards: CommunityCardTransferBoxSkippedCard[];
+  warnings?: CommunityUploaderWarning[];
+}
+
 export interface CommunityCardTransferDownloadRequest {
   cardId: string;
   server: CommunityCardTransferServer;
@@ -110,6 +164,21 @@ export interface CommunityCardTransferOpenRemoteResult {
   opened: true;
   url: string;
   localCardPath?: string;
+  surfaceId?: string;
+}
+
+export interface CommunityCardTransferOpenRemoteBoxRequest {
+  boxId: string;
+  server: CommunityCardTransferServer;
+  workspace?: {
+    tempDir?: string;
+  };
+}
+
+export interface CommunityCardTransferOpenRemoteBoxResult {
+  opened: true;
+  url: string;
+  localBoxPath?: string;
   surfaceId?: string;
 }
 

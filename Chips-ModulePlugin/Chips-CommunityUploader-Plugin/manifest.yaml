@@ -8,6 +8,8 @@ author:
   name: sevenstars
   email: chips-community-uploader@example.invalid
 permissions:
+  - box.read
+  - box.write
   - card.read
   - card.write
   - file.read
@@ -53,4 +55,12 @@ module:
           mode: job
           inputSchema: contracts/openRemote.input.schema.json
           outputSchema: contracts/openRemote.output.schema.json
+        - name: openRemoteBox
+          mode: job
+          inputSchema: contracts/openRemoteBox.input.schema.json
+          outputSchema: contracts/openRemoteBox.output.schema.json
+        - name: uploadBox
+          mode: job
+          inputSchema: contracts/uploadBox.input.schema.json
+          outputSchema: contracts/uploadBox.output.schema.json
   consumes: []

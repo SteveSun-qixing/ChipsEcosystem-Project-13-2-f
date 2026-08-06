@@ -111,12 +111,13 @@ export interface BoxDetail {
   fileSizeBytes: number | null;
   metadata: unknown;
   cards?: Array<{
+    entry_id: string;
     url: string;
-    card_id?: string;
+    document_id?: string;
     title?: string;
     cover_url?: string;
-    sort_index?: number;
-    enabled?: boolean;
+    content_type?: string;
+    embedded: boolean;
     communityCardId?: string;
     communityViewUrl?: string;
     communityRenderStatusUrl?: string;

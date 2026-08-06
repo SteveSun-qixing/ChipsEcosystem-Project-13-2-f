@@ -197,9 +197,15 @@ export type {
 } from "./api/module";
 export type {
   CommunityCardTransferApi,
+  CommunityCardTransferBoxSkippedCard,
+  CommunityCardTransferBoxUploadedCard,
+  CommunityCardTransferBoxUploadInput,
+  CommunityCardTransferBoxUploadResult,
   CommunityCardTransferClientInfo,
   CommunityCardTransferDownloadInput,
   CommunityCardTransferOpenRemoteInput,
+  CommunityCardTransferOpenRemoteBoxInput,
+  CommunityCardTransferOpenRemoteBoxResult,
   CommunityCardTransferPublishInput,
   CommunityCardTransferServer,
 } from "./api/community-card-transfer";

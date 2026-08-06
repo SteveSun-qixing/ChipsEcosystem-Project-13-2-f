@@ -24,11 +24,43 @@ export type TransferJobState<T = unknown> =
   | { status: "failed"; code: string; message: string }
   | { status: "cancelled" };
 
+export interface CommunityBoxUploadedCard {
+  entryId?: string;
+  documentId?: string;
+  cardFile: string;
+  communityCardId: string;
+  communityUrl: string;
+}
+
+export interface CommunityBoxSkippedCard {
+  entryId?: string;
+  documentId?: string;
+  url: string;
+  reason: "embedded" | "network";
+}
+
+export interface BoxUploadResult {
+  boxId: string;
+  versionId: string;
+  status: string;
+  communityUrl: string;
+  boxViewUrl?: string;
+  uploadedCards: CommunityBoxUploadedCard[];
+  skippedCards: CommunityBoxSkippedCard[];
+  warnings?: Array<{ code: string; message: string }>;
+}
+
 export interface CommunityTransferService {
   openInLocalViewer(cardId: string, onProgress?: (progress: TransferJobProgress) => void): Promise<{
     opened: boolean;
     url: string;
     localCardPath?: string;
+    surfaceId?: string;
+  }>;
+  openBoxInLocalViewer(boxId: string, onProgress?: (progress: TransferJobProgress) => void): Promise<{
+    opened: boolean;
+    url: string;
+    localBoxPath?: string;
     surfaceId?: string;
   }>;
   uploadCard(cardFile: string, onProgress?: (progress: TransferJobProgress) => void): Promise<{
@@ -41,6 +73,7 @@ export interface CommunityTransferService {
     uploadedResources: unknown[];
     warnings?: Array<{ code: string; message: string }>;
   }>;
+  uploadBox(boxFile: string, onProgress?: (progress: TransferJobProgress) => void): Promise<BoxUploadResult>;
   downloadCard(cardId: string, outputPath: string, onProgress?: (progress: TransferJobProgress) => void): Promise<{
     cardId: string;
     outputPath: string;
@@ -160,6 +193,34 @@ export function createCommunityTransferService(client: Client): CommunityTransfe
       };
     },
 
+    async openBoxInLocalViewer(boxId, onProgress) {
+      const session = resolveServerSession();
+      if (!session) {
+        throw new Error("COMMUNITY_TRANSFER_SESSION_MISSING: Community session is not available.");
+      }
+
+      const started = await client.communityCardTransfer.openRemoteBox({
+        boxId,
+        server: {
+          baseUrl: session.baseUrl,
+          accessToken: session.accessToken,
+        },
+      });
+
+      const { output } = await runJob(started, onProgress);
+      const record = (output ?? {}) as Record<string, unknown>;
+      if (record.opened !== true || typeof record.url !== "string" || record.url.trim().length === 0) {
+        throw new Error("COMMUNITY_TRANSFER_OPEN_FAILED: Failed to open the community box locally.");
+      }
+
+      return {
+        opened: true,
+        url: record.url,
+        localBoxPath: typeof record.localBoxPath === "string" ? record.localBoxPath : undefined,
+        surfaceId: typeof record.surfaceId === "string" ? record.surfaceId : undefined,
+      };
+    },
+
     async uploadCard(cardFile, onProgress) {
       const session = resolveServerSession();
       if (!session) {
@@ -194,6 +255,48 @@ export function createCommunityTransferService(client: Client): CommunityTransfe
         renderStatusUrl: typeof record.renderStatusUrl === "string" ? record.renderStatusUrl : "",
         communityUrl: typeof record.communityUrl === "string" ? record.communityUrl : "",
         uploadedResources: Array.isArray(record.uploadedResources) ? record.uploadedResources : [],
+        warnings: Array.isArray(record.warnings) ? record.warnings as Array<{ code: string; message: string }> : undefined,
+      };
+    },
+
+    async uploadBox(boxFile, onProgress) {
+      const session = resolveServerSession();
+      if (!session) {
+        throw new Error("COMMUNITY_TRANSFER_SESSION_MISSING: Community session is not available.");
+      }
+
+      const started = await client.communityCardTransfer.uploadBox({
+        boxFile,
+        server: {
+          baseUrl: session.baseUrl,
+          accessToken: session.accessToken,
+        },
+        publish: {
+          roomId: null,
+          idempotencyKey: typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `community-box-upload-${Date.now()}`,
+        },
+      });
+
+      const { output } = await runJob(started, onProgress);
+      const record = (output ?? {}) as Record<string, unknown>;
+      if (typeof record.boxId !== "string") {
+        throw new Error("COMMUNITY_TRANSFER_BOX_UPLOAD_FAILED: Failed to publish the community box.");
+      }
+
+      return {
+        boxId: record.boxId,
+        versionId: typeof record.versionId === "string" ? record.versionId : "",
+        status: typeof record.status === "string" ? record.status : "ready",
+        communityUrl: typeof record.communityUrl === "string" ? record.communityUrl : "",
+        boxViewUrl: typeof record.boxViewUrl === "string" ? record.boxViewUrl : undefined,
+        uploadedCards: Array.isArray(record.uploadedCards)
+          ? record.uploadedCards as CommunityBoxUploadedCard[]
+          : [],
+        skippedCards: Array.isArray(record.skippedCards)
+          ? record.skippedCards as CommunityBoxSkippedCard[]
+          : [],
         warnings: Array.isArray(record.warnings) ? record.warnings as Array<{ code: string; message: string }> : undefined,
       };
     },

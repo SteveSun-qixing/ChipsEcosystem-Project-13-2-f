@@ -1,5 +1,7 @@
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 import { createCommunityUploaderError, type CommunityUploaderWarning } from "./errors";
 import { normalizeBinaryPayload, toArrayBuffer } from "./binary";
 import {
@@ -14,10 +16,16 @@ import {
 } from "./card-rewrite";
 import type {
   CommunityCardPublishContext,
+  CommunityCardTransferBoxUploadedCard,
+  CommunityCardTransferBoxUploadRequest,
+  CommunityCardTransferBoxUploadResult,
+  CommunityCardTransferBoxSkippedCard,
   CommunityCardTransferDownloadRequest,
   CommunityCardTransferDownloadResult,
   CommunityCardTransferOpenRemoteRequest,
   CommunityCardTransferOpenRemoteResult,
+  CommunityCardTransferOpenRemoteBoxRequest,
+  CommunityCardTransferOpenRemoteBoxResult,
   CommunityCardTransferUploadedResource,
   CommunityCardTransferUploadRequest,
   CommunityCardTransferUploadResult,
@@ -25,6 +33,7 @@ import type {
   HostFileListEntry,
   HostFileStatLike,
   HostZipEntryMeta,
+  NormalizedCommunityCardTransferBoxUploadRequest,
   NormalizedCommunityCardTransferDownloadRequest,
   NormalizedCommunityCardTransferUploadRequest,
 } from "./types";
@@ -41,7 +50,7 @@ interface ResourceCollection {
 }
 
 interface PresignedObject {
-  role: "network-card" | "resource";
+  role: "network-card" | "resource" | "box-file";
   relativePath: string | null;
   bucket: string;
   objectKey: string;
@@ -83,10 +92,54 @@ interface DownloadPlan {
   manifest?: unknown;
 }
 
+interface HostBoxEntry {
+  entryId?: string;
+  url?: string;
+  enabled?: boolean;
+  snapshot?: Record<string, unknown>;
+}
+
+interface HostBoxInspection {
+  metadata?: Record<string, unknown>;
+  content?: Record<string, unknown>;
+  entries?: HostBoxEntry[];
+  assets?: string[];
+}
+
+interface BoxUploadSession {
+  uploadId: string;
+  boxId: string;
+  versionId: string;
+  resourcePrefix: string;
+  boxFile: {
+    bucket: string;
+    objectKey: string;
+    publicUrl: string;
+  };
+}
+
+interface BoxCompleteResult {
+  boxId: string;
+  versionId: string;
+  status: string;
+  communityUrl: string;
+  boxViewUrl?: string;
+}
+
+interface ScatteredCardReference {
+  entryId?: string;
+  documentId?: string;
+  url: string;
+  localPath: string;
+}
+
 const DEFAULT_CLIENT_NAME = "Chips Community Transfer Plugin";
 const DEFAULT_CLIENT_VERSION = "0.1.0";
 const CARD_MIME_TYPE = "application/vnd.chips.card+zip";
+const BOX_MIME_TYPE = "application/vnd.chips.box+zip";
 const WINDOWS_ABSOLUTE_PATTERN = /^[A-Za-z]:\//;
+const SCHEME_URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+const FILE_URL_PATTERN = /^file:\/\//i;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -215,6 +268,38 @@ const normalizeUploadRequest = (input: CommunityCardTransferUploadRequest): Norm
   };
 };
 
+const normalizeBoxUploadRequest = (input: CommunityCardTransferBoxUploadRequest): NormalizedCommunityCardTransferBoxUploadRequest => {
+  if (!isRecord(input)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "uploadBox input must be an object.");
+  }
+  if (!asString(input.boxFile)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "boxFile is required.");
+  }
+  if (!isRecord(input.server) || !asString(input.server.baseUrl) || !asString(input.server.accessToken)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "server.baseUrl and server.accessToken are required.");
+  }
+
+  return {
+    boxFile: input.boxFile,
+    server: {
+      baseUrl: normalizeServerBaseUrl(input.server.baseUrl),
+      accessToken: input.server.accessToken,
+    },
+    publish: {
+      roomId: input.publish?.roomId ?? null,
+      ...(asString(input.publish?.idempotencyKey) ? { idempotencyKey: input.publish?.idempotencyKey } : undefined),
+    },
+    client: {
+      name: input.client?.name ?? DEFAULT_CLIENT_NAME,
+      version: input.client?.version ?? DEFAULT_CLIENT_VERSION,
+      ...(asString(input.client?.platform) ? { platform: input.client?.platform } : undefined),
+    },
+    workspace: {
+      tempDir: input.workspace?.tempDir,
+    },
+  };
+};
+
 const normalizeDownloadRequest = (input: CommunityCardTransferDownloadRequest): NormalizedCommunityCardTransferDownloadRequest => {
   if (!isRecord(input)) {
     throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "download input must be an object.");
@@ -268,6 +353,25 @@ const assertNotCancelled = (ctx: CommunityCardPublishContext): void => {
 
 const jobSignal = (ctx: CommunityCardPublishContext): AbortSignal | undefined => {
   return ctx.job?.signal ?? undefined;
+};
+
+const withScaledJobProgress = (
+  ctx: CommunityCardPublishContext,
+  fromPercent: number,
+  toPercent: number,
+): CommunityCardPublishContext => {
+  if (!ctx.job) {
+    return ctx;
+  }
+  const job = ctx.job;
+  const reportProgress = async (payload: Record<string, unknown>): Promise<void> => {
+    const rawPercent = typeof payload.percent === "number" ? Math.min(100, Math.max(0, payload.percent)) : 0;
+    await job.reportProgress({
+      ...payload,
+      percent: Math.round(fromPercent + (rawPercent / 100) * (toPercent - fromPercent)),
+    });
+  };
+  return { ...ctx, job: { ...job, reportProgress } };
 };
 
 const getFileStat = async (ctx: CommunityCardPublishContext, filePath: string): Promise<HostFileStatLike> => {
@@ -585,10 +689,10 @@ const createUploadSession = async (
 };
 
 const presignObjects = async (
-  request: NormalizedCommunityCardTransferUploadRequest,
+  request: { server: { baseUrl: string; accessToken: string } },
   uploadId: string,
   objects: Array<{
-    role: "network-card" | "resource";
+    role: "network-card" | "resource" | "box-file" | "cover-file";
     relativePath?: string;
     sizeBytes: number;
     mimeType: string;
@@ -616,7 +720,13 @@ const presignObjects = async (
   }
 
   return payload.data.objects.filter(isRecord).map((object) => ({
-    role: object.role === "network-card" ? "network-card" : "resource",
+    role: object.role === "network-card"
+      ? "network-card"
+      : object.role === "box-file"
+        ? "box-file"
+        : object.role === "cover-file"
+          ? "cover-file"
+          : "resource",
     relativePath: object.relativePath === null || typeof object.relativePath === "undefined" ? null : String(object.relativePath),
     bucket: String(object.bucket ?? ""),
     objectKey: String(object.objectKey ?? ""),
@@ -992,6 +1102,345 @@ const pushWarning = (
   warnings.push({ code, message, ...(details === undefined ? undefined : { details }) });
 };
 
+const createBoxUploadSession = async (
+  request: NormalizedCommunityCardTransferBoxUploadRequest,
+  fileName: string,
+  signal?: AbortSignal,
+): Promise<BoxUploadSession> => {
+  const response = await fetchControlPlane(
+    request,
+    "/card-transfer/upload-sessions",
+    {
+      method: "POST",
+      headers: jsonHeaders(request.server),
+      body: JSON.stringify({
+        contentType: "box",
+        fileName,
+        roomId: request.publish.roomId ?? null,
+        idempotencyKey: request.publish.idempotencyKey,
+        client: request.client,
+      }),
+    },
+    "create box upload session",
+    signal,
+  );
+  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to create box upload session");
+  if (!isRecord(payload.data)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box upload session response is missing identifiers.");
+  }
+  const uploadId = asString(payload.data.uploadId);
+  const boxId = asString(payload.data.boxId);
+  const versionId = asString(payload.data.versionId);
+  if (!uploadId || !boxId || !versionId) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box upload session response is missing identifiers.");
+  }
+  const boxFile = isRecord(payload.data.boxFile) ? payload.data.boxFile : {};
+  return {
+    uploadId,
+    boxId,
+    versionId,
+    resourcePrefix: String(payload.data.resourcePrefix ?? ""),
+    boxFile: {
+      bucket: String(boxFile.bucket ?? ""),
+      objectKey: String(boxFile.objectKey ?? ""),
+      publicUrl: String(boxFile.publicUrl ?? ""),
+    },
+  };
+};
+
+const completeBoxUpload = async (
+  request: NormalizedCommunityCardTransferBoxUploadRequest,
+  uploadId: string,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<BoxCompleteResult> => {
+  const response = await fetchControlPlane(
+    request,
+    `/card-transfer/upload-sessions/${uploadId}/complete`,
+    {
+      method: "POST",
+      headers: jsonHeaders(request.server),
+      body: JSON.stringify(body),
+    },
+    "complete box transfer upload",
+    signal,
+  );
+  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to complete box transfer upload");
+
+  if (!isRecord(payload.data)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box complete response is missing boxId.");
+  }
+  const boxId = asString(payload.data.boxId);
+  if (!boxId) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box complete response is missing boxId.");
+  }
+
+  return {
+    boxId,
+    versionId: String(payload.data.versionId ?? ""),
+    status: String(payload.data.status ?? "ready"),
+    communityUrl: String(payload.data.communityUrl ?? `${request.server.baseUrl}/boxes/${boxId}`),
+    boxViewUrl: typeof payload.data.boxViewUrl === "string" && payload.data.boxViewUrl.trim().length > 0
+      ? payload.data.boxViewUrl
+      : undefined,
+  };
+};
+
+const isEmbeddedEntryUrl = (url: string): boolean => !SCHEME_URL_PATTERN.test(url);
+
+const isFileEntryUrl = (url: string): boolean => FILE_URL_PATTERN.test(url);
+
+const entryFileUrlToPath = (url: string): string | undefined => {
+  try {
+    return toNormalizedPath(fileURLToPath(url));
+  } catch {
+    return undefined;
+  }
+};
+
+const collectScatteredCards = async (
+  ctx: CommunityCardPublishContext,
+  entries: HostBoxEntry[],
+  warnings: CommunityUploaderWarning[],
+): Promise<{ collected: ScatteredCardReference[]; skipped: CommunityCardTransferBoxSkippedCard[] }> => {
+  const collected: ScatteredCardReference[] = [];
+  const skipped: CommunityCardTransferBoxSkippedCard[] = [];
+
+  for (const entry of entries) {
+    const url = asString(entry.url);
+    if (!url) {
+      continue;
+    }
+    const entryId = asString(entry.entryId);
+    const documentId = asString(isRecord(entry.snapshot) ? entry.snapshot.documentId : undefined);
+
+    if (isEmbeddedEntryUrl(url)) {
+      skipped.push({ entryId, documentId, url, reason: "embedded" });
+      continue;
+    }
+
+    if (!isFileEntryUrl(url)) {
+      skipped.push({ entryId, documentId, url, reason: "network" });
+      continue;
+    }
+
+    const localPath = entryFileUrlToPath(url);
+    if (!localPath) {
+      pushWarning(warnings, "COMMUNITY_TRANSFER_BOX_ENTRY_URL_INVALID", `Scattered card entry has an unresolvable file URL: ${url}`, {
+        entryId,
+        documentId,
+        url,
+      });
+      continue;
+    }
+
+    const stat = await getFileStat(ctx, toNativePath(localPath, url));
+    if (stat.isFile !== true) {
+      pushWarning(warnings, "COMMUNITY_TRANSFER_BOX_CARD_FILE_MISSING", `Scattered card file not found: ${localPath}`, {
+        entryId,
+        documentId,
+        url,
+      });
+      continue;
+    }
+
+    collected.push({ entryId, documentId, url, localPath });
+  }
+
+  return { collected, skipped };
+};
+
+const parseBoxYaml = (rawText: string, label: string): unknown => {
+  try {
+    return parse(rawText);
+  } catch (error) {
+    throw createCommunityUploaderError(
+      "COMMUNITY_TRANSFER_BOX_INVALID",
+      `Box ${label} is not valid YAML.`,
+      { label, error: error instanceof Error ? error.message : String(error) },
+    );
+  }
+};
+
+const readBoxYamlFile = async (
+  ctx: CommunityCardPublishContext,
+  filePath: string,
+  label: string,
+): Promise<unknown> => {
+  const rawText = await readTextFile(ctx, filePath);
+  return parseBoxYaml(rawText, label);
+};
+
+/**
+ * 从箱子解包目录解析正式封面图片路径。
+ *
+ * 优先读取 `.box/cover.html` 的 `data-chips-cover-image-source` 属性（图片模式封面，
+ * 路径相对于 `.box/` 目录），其次取 `metadata.cover_asset`（指向 `assets/` 的图片）。
+ * 返回包内相对路径与 MIME。
+ */
+const coverImageMimeType = (relativePath: string): string | null => {
+  if (relativePath.endsWith(".png")) {
+    return "image/png";
+  }
+  if (relativePath.endsWith(".jpg") || relativePath.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (relativePath.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (relativePath.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
+  if (relativePath.endsWith(".gif")) {
+    return "image/gif";
+  }
+  return null;
+};
+
+const coverFileMimeType = (relativePath: string): string => {
+  const lower = relativePath.toLowerCase();
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+    return "text/html";
+  }
+  if (lower.endsWith(".css")) {
+    return "text/css";
+  }
+  if (lower.endsWith(".js")) {
+    return "application/javascript";
+  }
+  if (lower.endsWith(".woff2")) {
+    return "font/woff2";
+  }
+  if (lower.endsWith(".woff")) {
+    return "font/woff";
+  }
+  if (lower.endsWith(".ttf")) {
+    return "font/ttf";
+  }
+  return coverImageMimeType(relativePath) ?? "application/octet-stream";
+};
+
+interface BoxCoverFile {
+  /** 解包目录内的源路径（含 .box 前缀） */
+  sourcePath: string;
+  /** 对象存储发布路径（cover 目录内相对路径） */
+  publishPath: string;
+  mimeType: string;
+}
+
+/**
+ * 收集箱子封面的完整文件清单。
+ *
+ * 箱子封面正式形态是 `.box/cover.html`（HTML 文档），其附属资源位于 `.box/boxcover/`。
+ * 发布时把 cover.html 映射为 `index.html`，boxcover 资源保持相对路径，保证 HTML 内
+ * 相对引用（如 `./boxcover/cover-image.png`）在对象存储上继续有效。
+ */
+const collectBoxCoverFiles = async (
+  ctx: CommunityCardPublishContext,
+  unpackedDir: string,
+  warnings: CommunityUploaderWarning[],
+  boxId: string,
+): Promise<BoxCoverFile[]> => {
+  const files: BoxCoverFile[] = [];
+  const coverHtmlSource = joinNormalized(unpackedDir, ".box", "cover.html");
+  const coverHtml = await readTextFile(ctx, toNativePath(coverHtmlSource, unpackedDir)).catch(() => null);
+  if (coverHtml === null) {
+    return files;
+  }
+  files.push({
+    sourcePath: joinNormalized(".box", "cover.html"),
+    publishPath: "index.html",
+    mimeType: "text/html",
+  });
+
+  const referencedAssets = new Set<string>();
+  const sourceMatches = coverHtml.matchAll(/(?:src|href|data-chips-cover-image-source)=["']([^"']+)["']/g);
+  for (const match of sourceMatches) {
+    const source = match[1]?.trim() ?? "";
+    if (!source || source.startsWith("http://") || source.startsWith("https://") || source.startsWith("data:")) {
+      continue;
+    }
+    const normalized = normalizeCardPath(source).replace(/^\.\//, "");
+    if (normalized === "boxcover" || normalized.startsWith("boxcover/")) {
+      referencedAssets.add(normalized);
+    }
+  }
+
+  for (const assetPath of referencedAssets) {
+    const sourceFull = joinNormalized(unpackedDir, ".box", assetPath);
+    const exists = await getFileStat(ctx, toNativePath(sourceFull, unpackedDir));
+    if (exists.isFile !== true) {
+      pushWarning(warnings, "COMMUNITY_TRANSFER_BOX_COVER_ASSET_MISSING", `Box cover asset missing: ${assetPath}`, { boxId, assetPath });
+      continue;
+    }
+    files.push({
+      sourcePath: joinNormalized(".box", assetPath),
+      publishPath: assetPath,
+      mimeType: coverFileMimeType(assetPath),
+    });
+  }
+
+  return files;
+};
+
+/**
+ * 发布箱子封面 HTML 目录到对象存储。
+ *
+ * 通过 box 上传会话的 `cover-file` 角色直传：`cover.html` → `boxes/{boxId}/cover/index.html`，
+ * `boxcover/*` 资源 → `boxes/{boxId}/cover/boxcover/*`（相对路径保持不变）。
+ * 返回封面入口对象位置（`{ bucket, objectKey }`），供 complete 提交 `coverObject`。
+ * 提取或上传失败不阻断箱子上传，记入 warning。
+ */
+const publishBoxCover = async (
+  ctx: CommunityCardPublishContext,
+  request: NormalizedCommunityCardTransferBoxUploadRequest,
+  session: BoxUploadSession,
+  unpackedDir: string,
+  boxId: string,
+  signal?: AbortSignal,
+  warnings: CommunityUploaderWarning[] = [],
+): Promise<{ bucket: string; objectKey: string } | null> => {
+  try {
+    const files = await collectBoxCoverFiles(ctx, unpackedDir, warnings, boxId);
+    if (files.length === 0) {
+      return null;
+    }
+
+    const presigned = await presignObjects(request, session.uploadId, files.map((file) => ({
+      role: "cover-file",
+      relativePath: file.publishPath,
+      sizeBytes: 0,
+      mimeType: file.mimeType,
+    })), signal);
+    const presignedByPath = new Map(presigned.map((item) => [normalizeCardPath(item.relativePath ?? ""), item]));
+
+    for (const file of files) {
+      const target = presignedByPath.get(file.publishPath);
+      if (!target) {
+        throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", `Cover presign response is missing ${file.publishPath}.`);
+      }
+      const fileBytes = await readBinaryFile(ctx, toNativePath(joinNormalized(unpackedDir, file.sourcePath), unpackedDir));
+      await uploadBytesToStorage(file.publishPath, fileBytes, target, signal);
+    }
+
+    const indexTarget = presignedByPath.get("index.html");
+    if (!indexTarget || !indexTarget.bucket || !indexTarget.objectKey) {
+      return null;
+    }
+    return { bucket: indexTarget.bucket, objectKey: indexTarget.objectKey };
+  } catch (error) {
+    const errorCode = isRecord(error) ? String((error as { code?: unknown }).code ?? "") : "";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    pushWarning(warnings, "COMMUNITY_TRANSFER_BOX_COVER_UPLOAD_FAILED", `Box cover upload failed: ${errorCode} ${errorMessage}`, {
+      boxId,
+      code: errorCode,
+      error: errorMessage,
+    });
+    ctx.logger.warn("Box cover upload failed; cover URL stays unset.", { boxId, code: errorCode });
+    return null;
+  }
+};
+
 export const uploadCommunityCard = async (
   ctx: CommunityCardPublishContext,
   input: CommunityCardTransferUploadRequest,
@@ -1004,14 +1453,18 @@ export const uploadCommunityCard = async (
   }
 
   await reportProgress(ctx, "inspect", 2, "Reading card metadata");
-  const [cardInfo, zipEntries] = await Promise.all([
+  const [cardInfoResponse, zipEntries] = await Promise.all([
     ctx.host.invoke<{ info?: HostCardReadInfo }>("card.readInfo", {
       cardFile: request.cardFile,
     }),
     getZipEntries(ctx, request.cardFile),
   ]);
   assertZipStoreEntries(zipEntries);
-  const cardName = asString(cardInfo.info?.metadata?.name) ?? asString(cardInfo.info?.metadata?.title) ?? path.basename(request.cardFile);
+  const cardInfo = isRecord(cardInfoResponse?.info)
+    ? (isRecord(cardInfoResponse.info.info) ? cardInfoResponse.info : cardInfoResponse)
+    : cardInfoResponse;
+  const cardMetadata = isRecord(cardInfo?.info?.metadata) ? cardInfo.info.metadata : {};
+  const cardName = asString(cardMetadata.name) ?? asString(cardMetadata.title) ?? path.basename(request.cardFile);
 
   const workspace = await createWorkspaceRoot(ctx, request.cardFile, request.workspace.tempDir);
   const unpackedDir = joinNormalized(workspace.rootDir, "unpacked.card");
@@ -1109,8 +1562,8 @@ export const uploadCommunityCard = async (
     });
     const submitResult = await completeUpload(request, uploadSession.uploadId, {
       title: cardName,
-      cardFileId: asString(cardInfo.info?.metadata?.card_id) ?? asString(cardInfo.info?.metadata?.id) ?? null,
-      coverRatio: asString(cardInfo.info?.metadata?.cover_ratio) ?? null,
+      cardFileId: asString(cardMetadata.card_id) ?? asString(cardMetadata.cardId) ?? null,
+      coverRatio: asString(cardMetadata.cover_ratio) ?? null,
       networkCard: {
         bucket: networkCardPresigned.bucket,
         objectKey: networkCardPresigned.objectKey,
@@ -1120,7 +1573,7 @@ export const uploadCommunityCard = async (
       },
       resources: uploadedResources,
       restoreManifest,
-      cardMetadata: cardInfo.info?.metadata ?? null,
+      cardMetadata,
     }, jobSignal(ctx));
 
     await reportProgress(ctx, "completed", 100, "Community card transfer upload completed");
@@ -1166,6 +1619,192 @@ export const uploadCommunityCard = async (
     if (workspace.createdByModule && !request.workspace.keepNetworkCard && !request.workspace.networkCardPath) {
       await ctx.host.invoke("file.delete", {
         path: toNativePath(workspace.rootDir, request.cardFile),
+        options: { recursive: true },
+      }).catch(() => undefined);
+    }
+  }
+};
+
+export const uploadCommunityBox = async (
+  ctx: CommunityCardPublishContext,
+  input: CommunityCardTransferBoxUploadRequest,
+): Promise<CommunityCardTransferBoxUploadResult> => {
+  const request = normalizeBoxUploadRequest(input);
+  const warnings: CommunityUploaderWarning[] = [];
+
+  const boxStat = await getFileStat(ctx, request.boxFile);
+  if (boxStat.isFile !== true) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", `boxFile is not a readable file: ${request.boxFile}`);
+  }
+  if (!path.basename(request.boxFile).toLowerCase().endsWith(".box")) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", `boxFile must use the .box extension: ${request.boxFile}`);
+  }
+
+  await reportProgress(ctx, "inspect", 3, "Reading box metadata");
+  const inspectionResponse = await ctx.host.invoke<{ inspection?: HostBoxInspection }>("box.inspect", {
+    boxFile: request.boxFile,
+  });
+  const inspection = isRecord(inspectionResponse) && isRecord(inspectionResponse.inspection)
+    ? inspectionResponse.inspection
+    : (inspectionResponse as HostBoxInspection);
+  const inspectedMetadata = isRecord(inspection.metadata) ? inspection.metadata : {};
+  const entries = Array.isArray(inspection.entries) ? inspection.entries.filter(isRecord) : [];
+
+  const workspace = await createWorkspaceRoot(ctx, request.boxFile, request.workspace.tempDir);
+  const unpackedDir = joinNormalized(workspace.rootDir, "unpacked.box");
+  const repackedBoxPath = joinNormalized(workspace.rootDir, "upload.box");
+  const scatteredCardsRoot = joinNormalized(workspace.rootDir, "scattered-cards");
+
+  try {
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "unpack", 8, "Unpacking box");
+    await ctx.host.invoke("box.unpack", {
+      boxFile: request.boxFile,
+      outputDir: toNativePath(unpackedDir, request.boxFile),
+    });
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "collect", 12, "Collecting scattered card entries");
+    const { collected, skipped } = await collectScatteredCards(ctx, entries, warnings);
+
+    const uploadedCards: CommunityCardTransferBoxUploadedCard[] = [];
+    for (let index = 0; index < collected.length; index += 1) {
+      const reference = collected[index]!;
+      assertNotCancelled(ctx);
+      const windowStart = 16 + (index / collected.length) * 56;
+      const windowEnd = 16 + ((index + 1) / collected.length) * 56;
+      await reportProgress(ctx, "upload-cards", Math.round(windowStart), `Uploading scattered card ${index + 1}/${collected.length}`);
+      try {
+        const cardResult = await uploadCommunityCard(withScaledJobProgress(ctx, windowStart, windowEnd), {
+          cardFile: reference.localPath,
+          server: request.server,
+          publish: request.publish,
+          client: request.client,
+          workspace: {
+            tempDir: joinNormalized(scatteredCardsRoot, String(index)),
+          },
+        });
+        uploadedCards.push({
+          entryId: reference.entryId,
+          documentId: reference.documentId,
+          cardFile: reference.localPath,
+          communityCardId: cardResult.cardId,
+          communityUrl: cardResult.communityUrl,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        pushWarning(warnings, "COMMUNITY_TRANSFER_BOX_CARD_UPLOAD_FAILED", `Scattered card upload failed: ${reference.documentId ?? reference.localPath}`, {
+          entryId: reference.entryId,
+          documentId: reference.documentId,
+          cardFile: reference.localPath,
+          error: errorMessage,
+        });
+        ctx.logger.warn("Scattered card upload failed; entry keeps its file:// URL.", {
+          entryId: reference.entryId,
+          cardFile: reference.localPath,
+        });
+      }
+    }
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "box-session", 78, "Creating box upload session");
+    const session = await createBoxUploadSession(request, path.basename(request.boxFile), jobSignal(ctx));
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "box-pack", 84, "Packing box");
+    await ctx.host.invoke("box.pack", {
+      boxDir: toNativePath(unpackedDir, request.boxFile),
+      outputPath: toNativePath(repackedBoxPath, request.boxFile),
+    });
+    const boxBytes = await readBinaryFile(ctx, toNativePath(repackedBoxPath, request.boxFile));
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "box-presign", 88, "Presigning box object");
+    const [boxPresigned] = await presignObjects(request, session.uploadId, [
+      {
+        role: "box-file",
+        sizeBytes: boxBytes.byteLength,
+        mimeType: BOX_MIME_TYPE,
+      },
+    ], jobSignal(ctx));
+    if (!boxPresigned || boxPresigned.role !== "box-file") {
+      throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box presign response is missing the box-file object.");
+    }
+    await uploadBytesToStorage("box", boxBytes, boxPresigned, jobSignal(ctx));
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "box-cover", 90, "Publishing box cover");
+    const coverObject = await publishBoxCover(ctx, request, session, unpackedDir, session.boxId, jobSignal(ctx), warnings);
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "box-submit", 94, "Submitting box transfer manifest");
+    const metadataFilePath = joinNormalized(unpackedDir, ".box", "metadata.yaml");
+    const structureFilePath = joinNormalized(unpackedDir, ".box", "structure.yaml");
+    const contentFilePath = joinNormalized(unpackedDir, ".box", "content.yaml");
+    const metadata = await readBoxYamlFile(ctx, toNativePath(metadataFilePath, request.boxFile), "metadata.yaml");
+    const structure = await readBoxYamlFile(ctx, toNativePath(structureFilePath, request.boxFile), "structure.yaml");
+    const content = await readBoxYamlFile(ctx, toNativePath(contentFilePath, request.boxFile), "content.yaml");
+    const rawMetadata = isRecord(metadata) ? metadata : {};
+    const submitResult = await completeBoxUpload(request, session.uploadId, {
+      title: asString(rawMetadata.name) ?? asString(inspectedMetadata.name) ?? path.basename(request.boxFile, ".box"),
+      boxFileId: asString(rawMetadata.box_id) ?? asString(inspectedMetadata.boxId) ?? null,
+      layoutPlugin: asString(rawMetadata.active_layout_type) ?? asString(inspectedMetadata.activeLayoutType) ?? null,
+      coverRatio: asString(rawMetadata.cover_ratio) ?? asString(inspectedMetadata.coverRatio) ?? null,
+      ...(coverObject ? { coverObject } : undefined),
+      boxFile: {
+        bucket: boxPresigned.bucket,
+        objectKey: boxPresigned.objectKey,
+        publicUrl: boxPresigned.publicUrl.trim().length > 0 ? boxPresigned.publicUrl : null,
+        sizeBytes: boxBytes.byteLength,
+        mimeType: BOX_MIME_TYPE,
+      },
+      metadata: rawMetadata,
+      structure,
+      content: content ?? {},
+    }, jobSignal(ctx));
+
+    await reportProgress(ctx, "completed", 100, "Community box transfer upload completed");
+    ctx.logger.info("Community box transfer upload completed.", {
+      boxId: submitResult.boxId,
+      uploadedCardCount: uploadedCards.length,
+      skippedCardCount: skipped.length,
+    });
+
+    return {
+      boxId: submitResult.boxId,
+      versionId: submitResult.versionId,
+      status: submitResult.status,
+      communityUrl: submitResult.communityUrl,
+      ...(submitResult.boxViewUrl ? { boxViewUrl: submitResult.boxViewUrl } : undefined),
+      uploadedCards,
+      skippedCards: skipped,
+      ...(warnings.length > 0 ? { warnings } : undefined),
+    };
+  } catch (error) {
+    if (error instanceof Error && "code" in error) {
+      throw error;
+    }
+    throw createCommunityUploaderError(
+      "COMMUNITY_TRANSFER_BOX_UPLOAD_FAILED",
+      error instanceof Error ? error.message : String(error),
+      { boxFile: request.boxFile },
+      true,
+    );
+  } finally {
+    await ctx.host.invoke("file.delete", {
+      path: toNativePath(unpackedDir, request.boxFile),
+      options: { recursive: true },
+    }).catch(() => undefined);
+    await ctx.host.invoke("file.delete", {
+      path: toNativePath(repackedBoxPath, request.boxFile),
+    }).catch(() => undefined);
+    await ctx.host.invoke("file.delete", {
+      path: toNativePath(scatteredCardsRoot, request.boxFile),
+      options: { recursive: true },
+    }).catch(() => undefined);
+    if (workspace.createdByModule) {
+      await ctx.host.invoke("file.delete", {
+        path: toNativePath(workspace.rootDir, request.boxFile),
         options: { recursive: true },
       }).catch(() => undefined);
     }
@@ -1493,6 +2132,125 @@ export const openRemoteCommunityCard = async (
       "Failed to open remote community card locally.",
       {
         cardId,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorDetail: isRecord(error)
+          ? {
+              code: String((error as { code?: unknown }).code ?? ""),
+              message: String((error as { message?: unknown }).message ?? ""),
+              details: (error as { details?: unknown }).details,
+            }
+          : undefined,
+      },
+    );
+  }
+};
+
+/**
+ * 在本地查看器中打开社区箱子。
+ *
+ * 链路：下载会话（预签名 GET）→ 下载 `.box` 到临时目录 → `surface.open` 启动
+ * 卡片查看器（`com.chips.card-viewer`），以 `documentKind: 'box'` 渲染箱子。
+ */
+export const openRemoteCommunityBox = async (
+  ctx: CommunityCardPublishContext,
+  input: CommunityCardTransferOpenRemoteBoxRequest,
+): Promise<CommunityCardTransferOpenRemoteBoxResult> => {
+  const boxId = asString(input.boxId);
+  if (!boxId) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "openRemoteBox requires boxId.");
+  }
+  if (!isRecord(input.server) || !asString(input.server.baseUrl) || !asString(input.server.accessToken)) {
+    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "openRemoteBox requires server.baseUrl and server.accessToken.");
+  }
+
+  const server = {
+    baseUrl: normalizeServerBaseUrl(input.server.baseUrl),
+    accessToken: input.server.accessToken,
+  };
+
+  try {
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "session", 10, "Requesting box download plan");
+    const planResponse = await fetchControlPlane(
+      { server },
+      `/boxes/${encodeURIComponent(boxId)}/download`,
+      {
+        method: "GET",
+        headers: jsonHeaders(server),
+      },
+      "fetch box download plan",
+      jobSignal(ctx),
+    );
+    const payload = await parseJsonResponse<{ data?: unknown }>(planResponse, "Failed to fetch box download plan");
+    if (!isRecord(payload.data)) {
+      throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box download plan is missing data.");
+    }
+    const downloadUrl = asString(payload.data.downloadUrl);
+    const suggestedFileName = asString(payload.data.suggestedFileName) ?? `${boxId}.box`;
+    if (!downloadUrl) {
+      throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Box download plan is missing downloadUrl.");
+    }
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "download-box", 40, "Downloading box file");
+    const boxBytes = await downloadBinary({ downloadUrl, headers: {} }, "box", jobSignal(ctx));
+
+    const workspace = await createWorkspaceRoot(
+      ctx,
+      path.join(os.tmpdir(), `community-open-remote-box-${randomId()}`),
+      input.workspace?.tempDir,
+    );
+    const localBoxPath = joinNormalized(workspace.rootDir, suggestedFileName.endsWith(".box") ? suggestedFileName : `${suggestedFileName}.box`);
+    await writeBinaryFile(ctx, toNativePath(localBoxPath, os.tmpdir()), boxBytes);
+
+    assertNotCancelled(ctx);
+    await reportProgress(ctx, "open", 80, "Opening box in local viewer");
+
+    const surface = await ctx.host.invoke<{ surface: { id: string } }>("surface.open", {
+      request: {
+        kind: "window",
+        target: {
+          type: "plugin",
+          pluginId: "com.chips.card-viewer",
+          launchParams: {
+            trigger: "community-open-remote-box",
+            cardSource: {
+              kind: "local-file",
+              documentKind: "box",
+              filePath: toNativePath(localBoxPath, os.tmpdir()),
+            },
+            communityServer: {
+              baseUrl: server.baseUrl,
+              accessToken: server.accessToken,
+            },
+          },
+        },
+        presentation: {
+          title: suggestedFileName,
+          width: 1024,
+          height: 720,
+          resizable: true,
+        },
+      },
+    });
+
+    await reportProgress(ctx, "completed", 100, "Remote box opened in local viewer");
+    return {
+      opened: true,
+      url: `${server.baseUrl}/boxes/${boxId}`,
+      localBoxPath: toNativePath(localBoxPath, os.tmpdir()),
+      surfaceId: isRecord(surface.surface) ? String(surface.surface.id ?? "") : undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && "code" in error) {
+      throw error;
+    }
+    throw createCommunityUploaderError(
+      "COMMUNITY_TRANSFER_OPEN_REMOTE_BOX_FAILED",
+      "Failed to open remote community box locally.",
+      {
+        boxId,
         errorName: error instanceof Error ? error.name : typeof error,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorDetail: isRecord(error)

@@ -38,6 +38,7 @@ describe("community uploader transfer module", () => {
     expect(typeof provider?.methods.upload).toBe("function");
     expect(typeof provider?.methods.download).toBe("function");
     expect(typeof provider?.methods.openRemote).toBe("function");
+    expect(typeof provider?.methods.openRemoteBox).toBe("function");
     expect(provider?.methods).not.toHaveProperty("publish");
   });
 
@@ -851,5 +852,104 @@ describe("community uploader transfer module", () => {
     expect(String(rewrittenYaml)).toContain("# 富文本正文");
     expect(String(rewrittenYaml)).not.toContain("content_file:");
     expect(result.cardId).toBe("card-rt");
+  });
+});
+
+describe("community uploader box remote open", () => {
+  it("downloads the community box and launches the local card viewer with documentKind box", async () => {
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url.endsWith("/api/v1/boxes/box-uuid-1/download")) {
+        const body = JSON.stringify({
+          data: {
+            boxId: "box-uuid-1",
+            bucket: "chips-box-files",
+            objectKey: "boxes/box-uuid-1/versions/v1/box.box",
+            suggestedFileName: "旅行箱.box",
+            downloadUrl: "https://cdn.example/box.box",
+            method: "GET",
+            headers: {},
+            expiresInSeconds: 900,
+          },
+        });
+        return {
+          ok: true,
+          text: async () => body,
+          json: async () => JSON.parse(body),
+        };
+      }
+      if (url === "https://cdn.example/box.box") {
+        return {
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode("box-bytes").buffer,
+        };
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hostActions: Array<{ action: string; payload?: Record<string, unknown> }> = [];
+    const ctx = createContext(async (action, payload) => {
+      if (action === "file.mkdir") {
+        return { ack: true };
+      }
+      if (action === "file.write") {
+        return { ack: true };
+      }
+      if (action === "surface.open") {
+        hostActions.push({ action, payload });
+        return { surface: { id: "surface-box-1" } };
+      }
+      throw new Error(`Unexpected host action: ${action}`);
+    });
+
+    const result = await moduleDefinition.providers[0]!.methods.openRemoteBox(ctx, {
+      boxId: "box-uuid-1",
+      server: {
+        baseUrl: "https://community.example",
+        accessToken: "token-1",
+      },
+    });
+
+    expect(result.opened).toBe(true);
+    expect(result.url).toBe("https://community.example/boxes/box-uuid-1");
+    expect(result.localBoxPath).toBeTruthy();
+
+    const openAction = hostActions.find((entry) => entry.action === "surface.open");
+    expect(openAction).toBeTruthy();
+    const request = (openAction?.payload as { request?: Record<string, unknown> })?.request;
+    expect(request?.kind).toBe("window");
+    const target = (request as { target?: Record<string, unknown> }).target;
+    expect(target?.type).toBe("plugin");
+    expect(target?.pluginId).toBe("com.chips.card-viewer");
+    const launchParams = (target as { launchParams?: Record<string, unknown> }).launchParams;
+    const cardSource = (launchParams as { cardSource?: Record<string, unknown> }).cardSource;
+    expect(cardSource?.kind).toBe("local-file");
+    expect(cardSource?.documentKind).toBe("box");
+    expect(String(cardSource?.filePath)).toContain("旅行箱.box");
+    const communityServer = (launchParams as { communityServer?: Record<string, unknown> }).communityServer;
+    expect(communityServer?.baseUrl).toBe("https://community.example");
+    expect(communityServer?.accessToken).toBe("token-1");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects openRemoteBox without boxId or server session", async () => {
+    const ctx = createContext(async () => {
+      throw new Error("unexpected host action");
+    });
+
+    await expect(
+      moduleDefinition.providers[0]!.methods.openRemoteBox(ctx, {
+        boxId: "",
+        server: { baseUrl: "https://community.example", accessToken: "token-1" },
+      }),
+    ).rejects.toMatchObject({ code: "COMMUNITY_TRANSFER_INPUT_INVALID" });
+
+    await expect(
+      moduleDefinition.providers[0]!.methods.openRemoteBox(ctx, {
+        boxId: "box-uuid-1",
+        server: { baseUrl: "", accessToken: "" },
+      }),
+    ).rejects.toMatchObject({ code: "COMMUNITY_TRANSFER_INPUT_INVALID" });
   });
 });

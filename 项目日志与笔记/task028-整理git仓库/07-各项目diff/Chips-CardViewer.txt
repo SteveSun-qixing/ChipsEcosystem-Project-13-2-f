@@ -1,0 +1,1424 @@
+diff --git a/Chips-CardViewer/i18n/en-US.json b/Chips-CardViewer/i18n/en-US.json
+index 7dbbe43b..01e9f3cd 100644
+--- a/Chips-CardViewer/i18n/en-US.json
++++ b/Chips-CardViewer/i18n/en-US.json
+@@ -4,7 +4,12 @@
+       "open": "Open File",
+       "returnHome": "Back to Home",
+       "viewCover": "View Cover",
+-      "viewContent": "View Content"
++      "viewContent": "View Content",
++      "downloadCard": "Download Card",
++      "downloadingCard": "Downloading card…",
++      "downloadComplete": "Card downloaded",
++      "downloadFailed": "Card download failed",
++      "downloadUnavailable": "This community card cannot be downloaded in the current client"
+     },
+     "commands": {
+       "openFile": {
+diff --git a/Chips-CardViewer/i18n/zh-CN.json b/Chips-CardViewer/i18n/zh-CN.json
+index 32a9c299..12b2ec9c 100644
+--- a/Chips-CardViewer/i18n/zh-CN.json
++++ b/Chips-CardViewer/i18n/zh-CN.json
+@@ -4,7 +4,12 @@
+       "open": "打开文件",
+       "returnHome": "返回首页",
+       "viewCover": "查看封面",
+-      "viewContent": "查看内容"
++      "viewContent": "查看内容",
++      "downloadCard": "下载卡片",
++      "downloadingCard": "正在下载卡片…",
++      "downloadComplete": "卡片已下载",
++      "downloadFailed": "卡片下载失败",
++      "downloadUnavailable": "当前社区卡片暂不支持在此客户端下载"
+     },
+     "commands": {
+       "openFile": {
+diff --git a/Chips-CardViewer/manifest.yaml b/Chips-CardViewer/manifest.yaml
+index 0861de2e..18c8000e 100644
+--- a/Chips-CardViewer/manifest.yaml
++++ b/Chips-CardViewer/manifest.yaml
+@@ -4,7 +4,7 @@ version: 0.1.0
+ type: app
+ entry: dist/index.html
+ 
+-description: 卡片查看器应用，用于通过统一卡片显示链路查看复合卡片内容。
++description: 卡片查看器应用，用于通过统一卡片显示链路查看复合卡片内容。Web target 只负责查看社区卡片页面与查看缓存，不提供上传和下载 .card；Desktop/Mobile 客户端 target 可接入统一卡片传输模块，支持打开社区卡片和下载完整卡片。
+ 
+ author:
+   name: CardViewer
+@@ -25,6 +25,9 @@ permissions:
+   - plugin.read
+   - resource.read
+   - platform.read
++  - platform.external
++  - module.invoke
++  - network.request
+   - theme.read
+   - i18n.read
+   - command.read
+@@ -38,7 +41,7 @@ runtime:
+     web:
+       supported: true
+     mobile:
+-      supported: false
++      supported: true
+     headless:
+       supported: false
+ 
+diff --git a/Chips-CardViewer/src/app/AppRuntimeProvider.tsx b/Chips-CardViewer/src/app/AppRuntimeProvider.tsx
+index 6ffba4a6..75bb7dcc 100644
+--- a/Chips-CardViewer/src/app/AppRuntimeProvider.tsx
++++ b/Chips-CardViewer/src/app/AppRuntimeProvider.tsx
+@@ -73,6 +73,8 @@ export interface CardViewerRuntimeValue {
+   returnHome(): void;
+   openFile(): Promise<void>;
+   openFilePath(filePath: string): void;
++  downloadActiveCard(): Promise<void>;
++  canDownloadActiveCard: boolean;
+ }
+ 
+ const AppRuntimeContext = React.createContext<CardViewerRuntimeValue | null>(null);
+@@ -173,6 +175,27 @@ function resolveWebDocumentUrl(launchParams: Record<string, unknown>): string |
+   return documentUrl.length > 0 ? documentUrl : null;
+ }
+ 
++interface CommunityTransferServerConfig {
++  baseUrl: string;
++  accessToken: string;
++}
++
++function resolveCommunityTransferServer(launchParams: Record<string, unknown>): CommunityTransferServerConfig | null {
++  const rawServer = launchParams.communityServer;
++  if (!isRecord(rawServer)) {
++    return null;
++  }
++  const baseUrl = normalizeString(rawServer.baseUrl);
++  if (!baseUrl) {
++    return null;
++  }
++  const accessToken = normalizeString(rawServer.accessToken);
++  if (!accessToken) {
++    return null;
++  }
++  return { baseUrl, accessToken };
++}
++
+ function resolveHostSceneId(launchContext: PlatformLaunchContext): string {
+   return launchContext.surfaceContext?.sceneId ?? launchContext.sceneId ?? appConfig.defaultSceneId;
+ }
+@@ -294,7 +317,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+ 
+     const nextTarget = resolveOpenedTarget(targetPath);
+ 
+-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
++    if (!nextTarget || nextTarget.kind !== "file" || client.document.detectType(nextTarget.filePath) === null) {
+       setError(text("card-viewer.errors.unsupportedFile"));
+       return;
+     }
+@@ -307,7 +330,9 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+     setError(null);
+   }, [client, logger, text]);
+ 
+-  const surfaceMode = openedTarget?.kind === "document" ? "document" : "immersive";
++  // Every opened document uses document flow so the outer host owns scrolling.
++  // The empty landing surface remains immersive and viewport-bound.
++  const surfaceMode = openedTarget ? "document" : "immersive";
+ 
+   React.useEffect(() => {
+     if (typeof document === "undefined") {
+@@ -356,7 +381,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+ 
+   const openFilePath = React.useCallback((filePath: string) => {
+     const nextTarget = resolveOpenedTarget(filePath);
+-    if (!nextTarget || client.document.detectType(nextTarget.filePath) === null) {
++    if (!nextTarget || nextTarget.kind !== "file" || client.document.detectType(nextTarget.filePath) === null) {
+       logger.warn("选择的文件类型当前不受支持", {
+         filePath,
+       });
+@@ -503,16 +528,6 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+   const showCover = React.useCallback(() => {
+     setViewerMode("cover");
+   }, []);
+-  const returnHome = React.useCallback(() => {
+-    logger.info("用户返回卡片查看器首页", {
+-      targetKind: openedTarget?.kind ?? null,
+-      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
+-      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
+-    });
+-    setError(null);
+-    setViewerMode("content");
+-    setOpenedTarget(null);
+-  }, [logger, openedTarget]);
+   const environment = React.useMemo<CardViewerRuntimeEnvironment>(() => ({
+     appId: appConfig.appId,
+     pluginId: launchContext.surfaceContext?.pluginId ?? launchContext.pluginId ?? appConfig.appId,
+@@ -523,6 +538,62 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+     surfaceKind: resolveSurfaceKind(launchContext),
+     launchParams: resolveLaunchParams(launchContext),
+   }), [activeSceneId, launchContext]);
++  const canDownloadActiveCard =
++    openedTarget?.kind === "document"
++    && openedTarget.source?.kind === "community-card"
++    && resolveCommunityTransferServer(environment.launchParams) !== null
++    && surfaceMode !== "document";
++  const downloadActiveCard = React.useCallback(async () => {
++    if (openedTarget?.kind !== "document" || openedTarget.source?.kind !== "community-card") {
++      setError(text("card-viewer.actions.downloadUnavailable"));
++      return;
++    }
++
++    const server = resolveCommunityTransferServer(environment.launchParams);
++    if (!server) {
++      setError(text("card-viewer.actions.downloadUnavailable"));
++      return;
++    }
++
++    try {
++      const outputPath = await client.platform.saveFile({
++        title: text("card-viewer.actions.downloadCard"),
++        defaultPath: `${openedTarget.title ?? openedTarget.source.cardId}.card`,
++      });
++      if (!outputPath) {
++        return;
++      }
++
++      await client.communityCardTransfer.download({
++        cardId: openedTarget.source.cardId,
++        outputPath,
++        server: {
++          baseUrl: server.baseUrl,
++          accessToken: server.accessToken,
++        },
++      });
++      await client.platform.showMessage({
++        title: text("card-viewer.actions.downloadComplete"),
++        message: outputPath,
++      });
++    } catch (runtimeError) {
++      logger.error("社区卡片下载失败", runtimeError);
++      await client.platform.showMessage({
++        title: text("card-viewer.actions.downloadFailed"),
++        message: resolveErrorMessage(runtimeError, text("card-viewer.actions.downloadUnavailable")),
++      });
++    }
++  }, [client, environment.launchParams, logger, openedTarget, text]);
++  const returnHome = React.useCallback(() => {
++    logger.info("用户返回卡片查看器首页", {
++      targetKind: openedTarget?.kind ?? null,
++      filePath: openedTarget?.kind === "file" ? openedTarget.filePath : null,
++      documentUrl: openedTarget?.kind === "document" ? openedTarget.documentUrl : null,
++    });
++    setError(null);
++    setViewerMode("content");
++    setOpenedTarget(null);
++  }, [logger, openedTarget]);
+ 
+   const value = React.useMemo<CardViewerRuntimeValue>(() => ({
+     client,
+@@ -546,6 +617,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+     returnHome,
+     openFile,
+     openFilePath,
++    downloadActiveCard,
++    canDownloadActiveCard,
+   }), [
+     activeScene,
+     activeSceneId,
+@@ -567,6 +640,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+     text,
+     traceId,
+     viewerMode,
++    downloadActiveCard,
++    canDownloadActiveCard,
+   ]);
+ 
+   return <AppRuntimeContext.Provider value={value}>{children}</AppRuntimeContext.Provider>;
+diff --git a/Chips-CardViewer/src/app/AppShell.tsx b/Chips-CardViewer/src/app/AppShell.tsx
+index db435e41..d5195750 100644
+--- a/Chips-CardViewer/src/app/AppShell.tsx
++++ b/Chips-CardViewer/src/app/AppShell.tsx
+@@ -7,11 +7,16 @@ import {
+ } from "../commands/card-viewer-commands";
+ import { useCardViewerCommands } from "../commands/useCardViewerCommands";
+ import { CardViewerShell } from "../components/CardViewerShell";
++import { ViewerChrome, type ViewerChromeState } from "../components/ViewerChrome";
+ import { DocumentFileScene } from "../scenes/DocumentFileScene";
+ import { EmptyScene } from "../scenes/EmptyScene";
+ import { HostedDocumentScene } from "../scenes/HostedDocumentScene";
+ import { useAppRuntime } from "./AppRuntimeProvider";
+ 
++const CARD_VIEWER_TOGGLE_COVER_ACTION_ID = "toggle-cover";
++const CARD_VIEWER_DOWNLOAD_ACTION_ID = "download-card";
++const DOCUMENT_SURFACE_CHROME_SAFE_BLOCK_START = 96;
++
+ export function AppShell(): React.ReactElement {
+   const runtime = useAppRuntime();
+   const commands = useCardViewerCommands();
+@@ -36,6 +41,12 @@ export function AppShell(): React.ReactElement {
+   }, [commands.lastInvoked, runtime]);
+ 
+   const returnHomeLabel = runtime.t("card-viewer.actions.returnHome");
++  const coverActionLabel =
++    runtime.viewerMode === "cover"
++      ? runtime.t("card-viewer.actions.viewContent")
++      : runtime.t("card-viewer.actions.viewCover");
++  const coverActionIcon = runtime.viewerMode === "cover" ? "document" : "cover";
++  const usesExternalChrome = runtime.openedTarget?.kind === "document";
+   const backAction = runtime.openedTarget ? (
+     <button
+       type="button"
+@@ -60,16 +71,8 @@ export function AppShell(): React.ReactElement {
+       type="button"
+       className="card-viewer-shell__floating-action card-viewer-shell__floating-action--cover"
+       onClick={runtime.viewerMode === "cover" ? runtime.showContent : runtime.showCover}
+-      aria-label={
+-        runtime.viewerMode === "cover"
+-          ? runtime.t("card-viewer.actions.viewContent")
+-          : runtime.t("card-viewer.actions.viewCover")
+-      }
+-      title={
+-        runtime.viewerMode === "cover"
+-          ? runtime.t("card-viewer.actions.viewContent")
+-          : runtime.t("card-viewer.actions.viewCover")
+-      }
++      aria-label={coverActionLabel}
++      title={coverActionLabel}
+     >
+       <ChipsIcon
+         descriptor={{
+@@ -80,12 +83,90 @@ export function AppShell(): React.ReactElement {
+       />
+     </button>
+   ) : null;
+-  const action = backAction || coverAction ? (
++  const downloadActionLabel = runtime.t("card-viewer.actions.downloadCard");
++  const downloadAction = runtime.canDownloadActiveCard ? (
++    <button
++      type="button"
++      className="card-viewer-shell__floating-action card-viewer-shell__floating-action--download"
++      onClick={() => void runtime.downloadActiveCard()}
++      aria-label={downloadActionLabel}
++      title={downloadActionLabel}
++    >
++      <ChipsIcon
++        descriptor={{
++          name: "download",
++          decorative: true,
++        }}
++        size={22}
++      />
++    </button>
++  ) : null;
++  const action = backAction || coverAction || downloadAction ? (
+     <>
+       {backAction}
+       {coverAction}
++      {downloadAction}
+     </>
+   ) : null;
++  const chromeState = React.useMemo<ViewerChromeState>(
++    () => ({
++      title: runtime.openedTarget ? runtime.activeTitle ?? undefined : undefined,
++      metaLines: [],
++      back: {
++        label: returnHomeLabel,
++        enabled: Boolean(runtime.openedTarget),
++        handledByPlugin: true,
++      },
++      actions: [
++        ...(runtime.openedTarget && runtime.canViewCover
++          ? [
++              {
++                id: CARD_VIEWER_TOGGLE_COVER_ACTION_ID,
++                label: coverActionLabel,
++                icon: coverActionIcon,
++              },
++            ]
++          : []),
++        ...(runtime.canDownloadActiveCard
++          ? [
++              {
++                id: CARD_VIEWER_DOWNLOAD_ACTION_ID,
++                label: runtime.t("card-viewer.actions.downloadCard"),
++                icon: "download",
++              },
++            ]
++          : []),
++      ],
++      safeBlockStart: DOCUMENT_SURFACE_CHROME_SAFE_BLOCK_START,
++    }),
++    [
++      coverActionIcon,
++      coverActionLabel,
++      returnHomeLabel,
++      runtime.activeTitle,
++      runtime.canDownloadActiveCard,
++      runtime.canViewCover,
++      runtime.openedTarget,
++      runtime.t,
++    ],
++  );
++  const handleChromeAction = React.useCallback(
++    (actionId: string) => {
++      if (actionId === CARD_VIEWER_DOWNLOAD_ACTION_ID) {
++        void runtime.downloadActiveCard();
++        return;
++      }
++      if (actionId !== CARD_VIEWER_TOGGLE_COVER_ACTION_ID) {
++        return;
++      }
++      if (runtime.viewerMode === "cover") {
++        runtime.showContent();
++        return;
++      }
++      runtime.showCover();
++    },
++    [runtime],
++  );
+ 
+   const content =
+     runtime.openedTarget === null ? (
+@@ -95,6 +176,13 @@ export function AppShell(): React.ReactElement {
+     ) : (
+       <DocumentFileScene target={runtime.openedTarget} />
+     );
++  const shell = (
++    <CardViewerShell
++      surfaceMode={runtime.surfaceMode}
++      content={content}
++      action={usesExternalChrome ? null : action}
++    />
++  );
+ 
+   return (
+     <ChipsCommandProvider
+@@ -103,11 +191,17 @@ export function AppShell(): React.ReactElement {
+       i18n={runtime.t}
+       query={{ includeDisabled: true }}
+     >
+-      <CardViewerShell
+-        surfaceMode={runtime.surfaceMode}
+-        content={content}
+-        action={action}
+-      />
++      {usesExternalChrome ? (
++        <ViewerChrome.Provider
++          client={runtime.client}
++          state={chromeState}
++          externalChrome
++          onBack={runtime.returnHome}
++          onAction={handleChromeAction}
++        >
++          {shell}
++        </ViewerChrome.Provider>
++      ) : shell}
+     </ChipsCommandProvider>
+   );
+ }
+diff --git a/Chips-CardViewer/src/components/CardViewerShell.tsx b/Chips-CardViewer/src/components/CardViewerShell.tsx
+index 52a7950b..b0893a01 100644
+--- a/Chips-CardViewer/src/components/CardViewerShell.tsx
++++ b/Chips-CardViewer/src/components/CardViewerShell.tsx
+@@ -30,7 +30,7 @@ export function CardViewerShell({
+             : "card-viewer-shell__main--immersive",
+         ].join(" ")}
+       >
+-        {children}
++        {content}
+       </main>
+       {action}
+     </div>
+diff --git a/Chips-CardViewer/src/components/CardWindow.css b/Chips-CardViewer/src/components/CardWindow.css
+index 9bf3e0af..b5f42e2b 100644
+--- a/Chips-CardViewer/src/components/CardWindow.css
++++ b/Chips-CardViewer/src/components/CardWindow.css
+@@ -34,7 +34,7 @@
+   min-width: 0;
+   border: 0;
+   overflow: hidden;
+-  background: #ffffff;
++  background: var(--chips-sys-color-surface, #ffffff);
+ }
+ 
+ .card-viewer-window__iframe {
+diff --git a/Chips-CardViewer/src/components/CardWindow.tsx b/Chips-CardViewer/src/components/CardWindow.tsx
+index ec0e5f23..53df1219 100644
+--- a/Chips-CardViewer/src/components/CardWindow.tsx
++++ b/Chips-CardViewer/src/components/CardWindow.tsx
+@@ -1,6 +1,6 @@
+ import React, { useEffect, useMemo, useRef, useState } from "react";
+ import { useThemeRuntime } from "@chips/component-library";
+-import type { Client, FrameRenderResult } from "chips-sdk";
++import type { Client, DocumentWindowResizePayload, FrameRenderResult } from "chips-sdk";
+ import { createScopedLogger } from "../../config/logging";
+ import type { ViewerDocumentKind } from "../types/viewer-source";
+ import "./CardWindow.css";
+@@ -244,29 +244,38 @@ export function CardWindow({
+         <div
+           data-chips-app="card-viewer.viewport"
+           className="card-viewer-window__viewport card-viewer-window__viewport--document-flow"
++          style={{ "--card-viewer-document-frame-height": `${documentHeight}px` } as React.CSSProperties}
+         >
+           <div
++            ref={containerRef}
+             data-scope="document-window"
+-            data-part="overlay"
+-            data-state="loading"
+-            role="status"
+-            aria-live="polite"
+-            className="card-viewer-window__overlay"
+-          >
+-            {loadingLabel}
+-          </div>
+-        )}
+-        {error && (
+-          <div
+-            data-scope="document-window"
+-            data-part="overlay"
+-            data-state="error"
+-            role="alert"
+-            className="card-viewer-window__overlay card-viewer-window__overlay--error"
+-          >
+-            <span>{error}</span>
+-          </div>
+-        )}
++            data-part="frame-host"
++            className="card-viewer-window__frame-host card-viewer-window__frame-host--document-flow"
++          />
++          {isLoading && (
++            <div
++              data-scope="document-window"
++              data-part="overlay"
++              data-state="loading"
++              role="status"
++              aria-live="polite"
++              className="card-viewer-window__overlay"
++            >
++              {loadingLabel}
++            </div>
++          )}
++          {error && (
++            <div
++              data-scope="document-window"
++              data-part="overlay"
++              data-state="error"
++              role="alert"
++              className="card-viewer-window__overlay card-viewer-window__overlay--error"
++            >
++              <span>{error}</span>
++            </div>
++          )}
++        </div>
+       </div>
+       <div className="card-viewer-window__safe-area" aria-hidden="true" />
+     </div>
+diff --git a/Chips-CardViewer/src/components/ViewerChrome.tsx b/Chips-CardViewer/src/components/ViewerChrome.tsx
+index bb1054aa..2fc1b76c 100644
+--- a/Chips-CardViewer/src/components/ViewerChrome.tsx
++++ b/Chips-CardViewer/src/components/ViewerChrome.tsx
+@@ -1,5 +1,5 @@
+ import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+-import { useChipsBridge } from "../hooks/useChipsBridge";
++import type { Client } from "chips-sdk";
+ import "./ViewerChrome.css";
+ 
+ export interface ViewerChromeAction {
+@@ -34,6 +34,7 @@ interface ViewerChromeContextValue {
+ const ViewerChromeContext = createContext<ViewerChromeContextValue | null>(null);
+ 
+ interface ViewerChromeProviderProps {
++  client: Pick<Client, "events">;
+   state: ViewerChromeState;
+   externalChrome: boolean;
+   onBack: () => void;
+@@ -59,13 +60,13 @@ function normalizeActionPayload(payload: unknown): string | null {
+ }
+ 
+ function ViewerChromeProvider({
++  client,
+   state,
+   externalChrome,
+   onBack,
+   onAction,
+   children,
+ }: ViewerChromeProviderProps) {
+-  const bridge = useChipsBridge();
+   const trigger = useCallback(
+     (actionId: string) => {
+       if (actionId === "back" && state.back.enabled) {
+@@ -78,25 +79,25 @@ function ViewerChromeProvider({
+   );
+ 
+   useEffect(() => {
+-    if (!externalChrome || typeof bridge.emit !== "function") {
++    if (!externalChrome) {
+       return;
+     }
+ 
+-    void bridge.emit("plugin.chrome.update", {
++    void client.events.emit("plugin.chrome.update", {
+       title: state.title,
+       metaLines: state.metaLines,
+       back: state.back,
+       actions: state.actions,
+       safeBlockStart: state.safeBlockStart,
+     }).catch(() => undefined);
+-  }, [bridge, externalChrome, state]);
++  }, [client, externalChrome, state]);
+ 
+   useEffect(() => {
+-    if (!externalChrome || typeof bridge.on !== "function") {
++    if (!externalChrome) {
+       return undefined;
+     }
+ 
+-    const unsubscribe = bridge.on("plugin.chrome.action", (payload: unknown) => {
++    const unsubscribe = client.events.on("plugin.chrome.action", (payload: unknown) => {
+       const actionId = normalizeActionPayload(payload);
+       if (actionId) {
+         trigger(actionId);
+@@ -106,7 +107,7 @@ function ViewerChromeProvider({
+     return () => {
+       unsubscribe?.();
+     };
+-  }, [bridge, externalChrome, trigger]);
++  }, [client, externalChrome, trigger]);
+ 
+   const value = useMemo<ViewerChromeContextValue>(
+     () => ({
+diff --git a/Chips-CardViewer/src/components/ViewerCoverSurface.tsx b/Chips-CardViewer/src/components/ViewerCoverSurface.tsx
+index 79f8e5f1..51ef8469 100644
+--- a/Chips-CardViewer/src/components/ViewerCoverSurface.tsx
++++ b/Chips-CardViewer/src/components/ViewerCoverSurface.tsx
+@@ -1,9 +1,11 @@
+ import React from "react";
+ import { EmbeddedDocumentFrame } from "@chips/component-library";
++import type { Client } from "chips-sdk";
+ import type { ViewerCoverSource } from "../types/viewer-source";
+ import "./ViewerCoverSurface.css";
+ 
+ interface ViewerCoverSurfaceProps {
++  client?: Pick<Client, "events">;
+   cover: ViewerCoverSource;
+   title: string;
+   closeLabel: string;
+@@ -11,6 +13,12 @@ interface ViewerCoverSurfaceProps {
+   onClose: () => void;
+ }
+ 
++const COVER_SURFACE_MIN_HEIGHT = 320;
++const COVER_SURFACE_SAFE_BLOCK_END_FALLBACK = 72;
++const COVER_SURFACE_STABLE_DELAY_MS = 160;
++
++type CoverSurfaceResizeReason = "content-resize" | "viewport-resize";
++
+ export function resolveCoverAspectRatioStyle(ratio: string): React.CSSProperties | undefined {
+   const match = ratio.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+   if (!match) {
+@@ -32,19 +40,103 @@ export function resolveCoverAspectRatioStyle(ratio: string): React.CSSProperties
+   } as React.CSSProperties;
+ }
+ 
++function getViewportHeight(): number {
++  if (typeof window === "undefined" || !Number.isFinite(window.innerHeight)) {
++    return COVER_SURFACE_MIN_HEIGHT;
++  }
++  return Math.max(COVER_SURFACE_MIN_HEIGHT, Math.ceil(window.innerHeight));
++}
++
++function readDocumentCssPixels(name: string, fallback: number): number {
++  if (typeof window === "undefined" || typeof document === "undefined") {
++    return fallback;
++  }
++
++  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name);
++  const parsed = Number.parseFloat(value);
++  return Number.isFinite(parsed) && parsed >= 0 ? Math.ceil(parsed) : fallback;
++}
++
+ export function ViewerCoverSurface({
++  client,
+   cover,
+   title,
+   closeLabel,
+   unavailableLabel,
+   onClose,
+ }: ViewerCoverSurfaceProps): React.ReactElement {
++  const rootRef = React.useRef<HTMLElement | null>(null);
++  const stableTimerRef = React.useRef<number | null>(null);
+   const ratio = cover.ratio ?? "4:3";
+   const aspectRatioStyle = resolveCoverAspectRatioStyle(ratio);
+ 
++  const publishResize = React.useCallback(
++    (reason: CoverSurfaceResizeReason, stable: boolean) => {
++      if (!client) {
++        return;
++      }
++
++      const root = rootRef.current;
++      const measuredHeight = root
++        ? Math.max(
++            root.scrollHeight,
++            root.offsetHeight,
++            Math.ceil(root.getBoundingClientRect().height),
++          )
++        : 0;
++      const contentHeight = Math.max(COVER_SURFACE_MIN_HEIGHT, measuredHeight, getViewportHeight());
++      const safeBlockEnd = readDocumentCssPixels(
++        "--chips-document-safe-area-block-end",
++        COVER_SURFACE_SAFE_BLOCK_END_FALLBACK,
++      );
++
++      void client.events.emit("plugin.surface.resize", {
++        height: contentHeight,
++        contentHeight,
++        safeBlockEnd,
++        viewportHeight: getViewportHeight(),
++        reason,
++        stable,
++      }).catch(() => undefined);
++    },
++    [client],
++  );
++
++  React.useLayoutEffect(() => {
++    if (!client) {
++      return undefined;
++    }
++
++    const publishStablePair = (reason: CoverSurfaceResizeReason) => {
++      publishResize(reason, false);
++      if (stableTimerRef.current !== null) {
++        window.clearTimeout(stableTimerRef.current);
++      }
++      stableTimerRef.current = window.setTimeout(() => {
++        stableTimerRef.current = null;
++        publishResize(reason, true);
++      }, COVER_SURFACE_STABLE_DELAY_MS);
++    };
++
++    publishStablePair("content-resize");
++
++    const handleResize = () => {
++      publishStablePair("viewport-resize");
++    };
++    window.addEventListener("resize", handleResize);
++
++    return () => {
++      window.removeEventListener("resize", handleResize);
++      if (stableTimerRef.current !== null) {
++        window.clearTimeout(stableTimerRef.current);
++        stableTimerRef.current = null;
++      }
++    };
++  }, [client, cover.coverUrl, publishResize, ratio, title]);
++
+   if (!cover.coverUrl) {
+     return (
+-      <section className="viewer-cover-surface viewer-cover-surface--state" aria-live="polite">
++      <section ref={rootRef} className="viewer-cover-surface viewer-cover-surface--state" aria-live="polite">
+         <div className="viewer-cover-surface__state-panel">
+           <h2>{unavailableLabel}</h2>
+         </div>
+@@ -54,6 +146,7 @@ export function ViewerCoverSurface({
+ 
+   return (
+     <section
++      ref={rootRef}
+       className="viewer-cover-surface"
+       data-chips-app="card-viewer.cover"
+       aria-label={title}
+diff --git a/Chips-CardViewer/src/components/ViewerSourceProvider.tsx b/Chips-CardViewer/src/components/ViewerSourceProvider.tsx
+deleted file mode 100644
+index a470044b..00000000
+--- a/Chips-CardViewer/src/components/ViewerSourceProvider.tsx
++++ /dev/null
+@@ -1,261 +0,0 @@
+-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+-import type { Client } from "chips-sdk";
+-import type { CardViewerSource, ResolvedViewerSource, ViewerCoverSource } from "../types/viewer-source";
+-
+-interface ViewerSourceState {
+-  source: ResolvedViewerSource | null;
+-  error: string | null;
+-}
+-
+-interface ViewerSourceContextValue {
+-  state: ViewerSourceState;
+-}
+-
+-interface ViewerSourceProviderProps {
+-  client: Client;
+-  source: CardViewerSource | null;
+-  metadataErrorFallback: string;
+-  children: React.ReactNode;
+-}
+-
+-const ViewerSourceContext = createContext<ViewerSourceContextValue | null>(null);
+-
+-function getFileName(filePath: string): string {
+-  const parts = filePath.split(/[\\/]/).filter(Boolean);
+-  return parts.at(-1) ?? filePath;
+-}
+-
+-function isRecord(value: unknown): value is Record<string, unknown> {
+-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+-}
+-
+-function normalizeString(value: unknown): string | undefined {
+-  if (typeof value !== "string") {
+-    return undefined;
+-  }
+-  const normalized = value.trim();
+-  return normalized.length > 0 ? normalized : undefined;
+-}
+-
+-function normalizeCoverRatio(value: unknown): string | undefined {
+-  const normalized = normalizeString(value);
+-  if (!normalized || !/^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(normalized)) {
+-    return undefined;
+-  }
+-  return normalized;
+-}
+-
+-function readCardMetadataTitle(rawMetadata: unknown): string | undefined {
+-  if (!isRecord(rawMetadata)) {
+-    return undefined;
+-  }
+-  return normalizeString(rawMetadata.name) ?? normalizeString(rawMetadata.title);
+-}
+-
+-function normalizeCoverRenderMode(value: unknown): "fragment-shadow" | "iframe" | undefined {
+-  return value === "fragment-shadow" || value === "iframe" ? value : undefined;
+-}
+-
+-function resolveCommunityCover(source: Extract<CardViewerSource, { kind: "community-card" | "community-box" }>): ViewerCoverSource | undefined {
+-  if (!source.coverUrl) {
+-    return undefined;
+-  }
+-
+-  const coverRatio = normalizeCoverRatio(source.coverRatio);
+-
+-  return {
+-    title: source.title,
+-    coverUrl: source.coverUrl,
+-    ...(source.coverFragmentUrl ? { coverFragmentUrl: source.coverFragmentUrl } : undefined),
+-    ...(source.coverRenderMode ? { coverRenderMode: source.coverRenderMode } : undefined),
+-    ...(coverRatio ? { ratio: coverRatio } : undefined),
+-  };
+-}
+-
+-function resolveImmediateSource(source: CardViewerSource | null): ResolvedViewerSource | null {
+-  if (!source) {
+-    return null;
+-  }
+-
+-  if (source.kind === "community-card" || source.kind === "community-box") {
+-    return {
+-      renderKind: "hosted-document",
+-      source,
+-      title: source.title,
+-      createdAt: source.createdAt,
+-      documentUrl: source.documentUrl,
+-      cover: resolveCommunityCover(source),
+-    };
+-  }
+-
+-  if (source.kind === "remote-card-file") {
+-    return {
+-      renderKind: "unsupported",
+-      source,
+-      title: source.title,
+-      createdAt: source.createdAt,
+-      reason: "remote-card-file",
+-    };
+-  }
+-
+-  return {
+-    renderKind: "local-file",
+-    source,
+-    title: getFileName(source.filePath),
+-  };
+-}
+-
+-async function readLocalCardCover(
+-  client: Client,
+-  filePath: string,
+-  title: string,
+-): Promise<ViewerCoverSource | undefined> {
+-  const coverInfo = await client.card.readInfo(filePath, ["cover"]).catch(() => null);
+-  const cover = coverInfo?.info.cover;
+-  const coverRenderMode = normalizeCoverRenderMode(cover?.renderMode);
+-  if (!cover?.resourceUrl) {
+-    return undefined;
+-  }
+-
+-  const coverRatio = normalizeCoverRatio(cover.ratio);
+-
+-  return {
+-    title: normalizeString(cover.title) ?? title,
+-    coverUrl: cover.resourceUrl,
+-    ...(cover.fragmentUrl ? { coverFragmentUrl: cover.fragmentUrl } : undefined),
+-    ...(coverRenderMode ? { coverRenderMode } : undefined),
+-    ...(coverRatio ? { ratio: coverRatio } : undefined),
+-  };
+-}
+-
+-async function readLocalBoxCover(
+-  client: Client,
+-  filePath: string,
+-  title: string,
+-): Promise<ViewerCoverSource | undefined> {
+-  const cover = await client.box.renderCover(filePath).catch(() => null);
+-  const coverRenderMode = normalizeCoverRenderMode(cover?.coverRenderMode);
+-  if (!cover?.coverUrl) {
+-    return undefined;
+-  }
+-
+-  const coverRatio = normalizeCoverRatio(cover.ratio);
+-
+-  return {
+-    title: normalizeString(cover.title) ?? title,
+-    coverUrl: cover.coverUrl,
+-    ...(cover.coverFragmentUrl ? { coverFragmentUrl: cover.coverFragmentUrl } : undefined),
+-    ...(coverRenderMode ? { coverRenderMode } : undefined),
+-    ...(coverRatio ? { ratio: coverRatio } : undefined),
+-  };
+-}
+-
+-function useViewerSource() {
+-  const value = useContext(ViewerSourceContext);
+-  if (!value) {
+-    throw new Error("useViewerSource must be used inside ViewerSource.Provider.");
+-  }
+-  return value;
+-}
+-
+-function ViewerSourceProvider({
+-  client,
+-  source,
+-  metadataErrorFallback,
+-  children,
+-}: ViewerSourceProviderProps) {
+-  const [state, setState] = useState<ViewerSourceState>(() => ({
+-    source: resolveImmediateSource(source),
+-    error: null,
+-  }));
+-
+-  useEffect(() => {
+-    let cancelled = false;
+-    const immediateSource = resolveImmediateSource(source);
+-    setState({
+-      source: immediateSource,
+-      error: null,
+-    });
+-
+-    if (!source || source.kind !== "local-file") {
+-      return () => {
+-        cancelled = true;
+-      };
+-    }
+-
+-    const loadMetadata = async () => {
+-      try {
+-        if (source.documentKind === "card") {
+-          const info = await client.card.readInfo(source.filePath, ["metadata"]);
+-          const metadata = info.info.metadata;
+-          const title = normalizeString(metadata?.name) ?? readCardMetadataTitle(metadata?.raw) ?? getFileName(source.filePath);
+-          const cover = await readLocalCardCover(client, source.filePath, title);
+-          if (!cancelled) {
+-            setState({
+-              source: {
+-                renderKind: "local-file",
+-                source,
+-                title,
+-                createdAt: normalizeString(metadata?.createdAt) ?? normalizeString(metadata?.raw?.created_at),
+-                ...(cover ? { cover } : undefined),
+-              },
+-              error: null,
+-            });
+-          }
+-          return;
+-        }
+-
+-        const metadata = await client.box.readMetadata(source.filePath);
+-        const title = normalizeString(metadata.name) ?? getFileName(source.filePath);
+-        const cover = await readLocalBoxCover(client, source.filePath, title);
+-        if (!cancelled) {
+-          setState({
+-            source: {
+-              renderKind: "local-file",
+-              source,
+-              title,
+-              createdAt: normalizeString(metadata.createdAt),
+-              ...(cover ? { cover } : undefined),
+-            },
+-            error: null,
+-          });
+-        }
+-      } catch {
+-        if (!cancelled) {
+-          setState({
+-            source: immediateSource,
+-            error: metadataErrorFallback,
+-          });
+-        }
+-      }
+-    };
+-
+-    void loadMetadata();
+-
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [client, metadataErrorFallback, source]);
+-
+-  const value = useMemo<ViewerSourceContextValue>(() => ({ state }), [state]);
+-
+-  return (
+-    <ViewerSourceContext.Provider value={value}>
+-      {children}
+-    </ViewerSourceContext.Provider>
+-  );
+-}
+-
+-function ViewerSourceOutlet({
+-  children,
+-}: {
+-  children: (state: ViewerSourceState) => React.ReactNode;
+-}) {
+-  const { state } = useViewerSource();
+-  return <>{children(state)}</>;
+-}
+-
+-export const ViewerSource = {
+-  Provider: ViewerSourceProvider,
+-  Outlet: ViewerSourceOutlet,
+-};
+diff --git a/Chips-CardViewer/src/components/ViewerStage.tsx b/Chips-CardViewer/src/components/ViewerStage.tsx
+index 5615cc30..0e2e255d 100644
+--- a/Chips-CardViewer/src/components/ViewerStage.tsx
++++ b/Chips-CardViewer/src/components/ViewerStage.tsx
+@@ -1,4 +1,5 @@
+ import React from "react";
++import type { Client } from "chips-sdk";
+ import type { ResolvedViewerSource } from "../types/viewer-source";
+ import { CardWindow } from "./CardWindow";
+ import { HostedDocumentWindow } from "./HostedDocumentWindow";
+@@ -7,6 +8,7 @@ import { ViewerCoverSurface } from "./ViewerCoverSurface";
+ type ViewerMode = "content" | "cover";
+ 
+ interface ViewerStageProps {
++  client: Client;
+   source: ResolvedViewerSource | null;
+   viewerMode: ViewerMode;
+   error: string | null;
+@@ -26,6 +28,7 @@ interface ViewerStageProps {
+ }
+ 
+ export function ViewerStage({
++  client,
+   source,
+   viewerMode,
+   error,
+@@ -58,16 +61,19 @@ export function ViewerStage({
+   }
+ 
+   if (viewerMode === "cover") {
+-    if (source.cover) {
+-      return (
+-        <ViewerCoverSurface
+-          cover={source.cover}
+-          title={source.title ?? source.cover.title ?? coverCloseLabel}
+-          closeLabel={coverCloseLabel}
+-          unavailableLabel={coverUnavailableLabel}
+-          onClose={onCloseCover}
+-        />
+-      );
++    if (source.renderKind === "local-file" || source.renderKind === "hosted-document") {
++      if (source.cover) {
++        return (
++          <ViewerCoverSurface
++            client={client}
++            cover={source.cover}
++            title={source.title ?? source.cover.title ?? coverCloseLabel}
++            closeLabel={coverCloseLabel}
++            unavailableLabel={coverUnavailableLabel}
++            onClose={onCloseCover}
++          />
++        );
++      }
+     }
+ 
+     return (
+@@ -82,8 +88,10 @@ export function ViewerStage({
+   if (source.renderKind === "hosted-document") {
+     return (
+       <HostedDocumentWindow
++        client={client}
+         documentUrl={source.documentUrl}
+         traceId={traceId}
++        iframeTitle={loadingLabel}
+         loadingLabel={loadingLabel}
+         containerErrorLabel={containerErrorLabel}
+         resourceOpenErrorTitle={resourceOpenErrorTitle}
+@@ -95,6 +103,7 @@ export function ViewerStage({
+   if (source.renderKind === "local-file") {
+     return (
+       <CardWindow
++        client={client}
+         filePath={source.source.filePath}
+         documentType={source.source.documentKind}
+         traceId={traceId}
+diff --git a/Chips-CardViewer/src/scenes/DocumentFileScene.tsx b/Chips-CardViewer/src/scenes/DocumentFileScene.tsx
+index b9fd7882..88b1a220 100644
+--- a/Chips-CardViewer/src/scenes/DocumentFileScene.tsx
++++ b/Chips-CardViewer/src/scenes/DocumentFileScene.tsx
+@@ -12,6 +12,7 @@ export function DocumentFileScene({ target }: DocumentFileSceneProps): React.Rea
+   if (runtime.viewerMode === "cover" && runtime.activeCover) {
+     return (
+       <ViewerCoverSurface
++        client={runtime.client}
+         cover={runtime.activeCover}
+         title={runtime.activeTitle ?? runtime.activeCover.title ?? runtime.t("card-viewer.viewer.documentTitle")}
+         closeLabel={runtime.t("card-viewer.actions.viewContent")}
+diff --git a/Chips-CardViewer/src/scenes/HostedDocumentScene.tsx b/Chips-CardViewer/src/scenes/HostedDocumentScene.tsx
+index 18d10921..5f0fcfce 100644
+--- a/Chips-CardViewer/src/scenes/HostedDocumentScene.tsx
++++ b/Chips-CardViewer/src/scenes/HostedDocumentScene.tsx
+@@ -12,6 +12,7 @@ export function HostedDocumentScene({ target }: HostedDocumentSceneProps): React
+   if (runtime.viewerMode === "cover" && runtime.activeCover) {
+     return (
+       <ViewerCoverSurface
++        client={runtime.client}
+         cover={runtime.activeCover}
+         title={runtime.activeTitle ?? runtime.activeCover.title ?? runtime.t("card-viewer.viewer.hostedDocumentTitle")}
+         closeLabel={runtime.t("card-viewer.actions.viewContent")}
+diff --git a/Chips-CardViewer/tests/e2e/basic-flow.test.tsx b/Chips-CardViewer/tests/e2e/basic-flow.test.tsx
+index c6e84788..e6cb297e 100644
+--- a/Chips-CardViewer/tests/e2e/basic-flow.test.tsx
++++ b/Chips-CardViewer/tests/e2e/basic-flow.test.tsx
+@@ -18,11 +18,13 @@ type ResourceOpenPayload = {
+   fileName?: string;
+   payload?: Record<string, unknown>;
+ };
++type ResizePayload = { documentType: 'card' | 'box'; height: number; reason: string };
+ type DocumentWindowHandlerPayloads = {
+   onReady: ReadyPayload;
+   onError: ErrorPayload;
+   onNodeError: NodeErrorPayload;
+   onResourceOpen: ResourceOpenPayload;
++  onResize: ResizePayload;
+ };
+ type DocumentWindowHandlerName = keyof DocumentWindowHandlerPayloads;
+ 
+@@ -33,18 +35,20 @@ const mockState = vi.hoisted(() => {
+     onError: vi.fn(),
+     onNodeError: vi.fn(),
+     onResourceOpen: vi.fn(),
++    onResize: vi.fn(),
+   };
+   const handlers = {
+     onReady: [] as Array<() => void>,
+     onError: [] as Array<(payload: ErrorPayload) => void>,
+     onNodeError: [] as Array<(payload: NodeErrorPayload) => void>,
+     onResourceOpen: [] as Array<(payload: ResourceOpenPayload) => void>,
++    onResize: [] as Array<(payload: ResizePayload) => void>,
+   };
+-  const render = vi.fn(async () => ({
++  const render = vi.fn(async (options: { filePath: string; locale?: string; mode?: string }) => ({
+     frame: document.createElement('iframe'),
+     origin: 'file://',
+     dispose,
+-    documentType: 'box' as const,
++    documentType: options.filePath.endsWith('.box') ? 'box' as const : 'card' as const,
+   }));
+ 
+   return {
+@@ -57,6 +61,10 @@ const mockState = vi.hoisted(() => {
+             handlers.onReady.push(handler);
+             return cleanup.onReady;
+           }),
++          onResize: vi.fn((_frame: HTMLIFrameElement, handler: (payload: ResizePayload) => void) => {
++            handlers.onResize.push(handler);
++            return cleanup.onResize;
++          }),
+           onError: vi.fn((_frame: HTMLIFrameElement, handler: (payload: ErrorPayload) => void) => {
+             handlers.onError.push(handler);
+             return cleanup.onError;
+@@ -127,7 +135,6 @@ describe('统一文档查看窗口基础流程', () => {
+     }));
+     mockState.client.resource.open.mockResolvedValue(undefined);
+   });
+-
+   afterEach(async () => {
+     await act(async () => {
+       root.unmount();
+@@ -313,12 +320,13 @@ describe('统一文档查看窗口基础流程', () => {
+     });
+     mockState.client.document.window.onResize.mockImplementationOnce((_frame, handler) => {
+       resizeHandler = handler;
+-      return () => undefined;
++      return mockState.cleanup.onResize;
+     });
+ 
+     await act(async () => {
+       root.render(
+         <CardWindow
++          client={mockState.client as any}
+           filePath="/tmp/demo.card"
+           traceId="trace-document-height"
+           locale="zh-CN"
+diff --git a/Chips-CardViewer/tests/unit/app.test.tsx b/Chips-CardViewer/tests/unit/app.test.tsx
+index 214bd56d..baae9fd6 100644
+--- a/Chips-CardViewer/tests/unit/app.test.tsx
++++ b/Chips-CardViewer/tests/unit/app.test.tsx
+@@ -271,6 +271,9 @@ const appRuntimeMock = vi.hoisted(() => {
+         timestamp: "2026-05-25T00:00:00.000Z",
+       }));
+     },
++    emitEvent(event: string, payload: unknown) {
++      (eventListeners.get(event) ?? []).forEach((handler) => handler(payload));
++    },
+   };
+ });
+ 
+@@ -301,6 +304,8 @@ describe("App（卡片查看器根组件）", () => {
+     document.documentElement.removeAttribute("lang");
+     document.documentElement.removeAttribute("dir");
+     document.documentElement.removeAttribute("data-chips-locale");
++    document.documentElement.removeAttribute("data-chips-surface-mode");
++    document.body.removeAttribute("data-chips-surface-mode");
+   });
+ 
+   it("应当导出一个可用的 React 组件", () => {
+@@ -450,6 +455,44 @@ describe("App（卡片查看器根组件）", () => {
+     expect(frame).toBeInstanceOf(HTMLIFrameElement);
+     expect(frame?.getAttribute("src")).toBe("https://community.example/cards/card-1/view");
+     expect(appRuntimeMock.client.document.window.render).not.toHaveBeenCalled();
++    expect(appRuntimeMock.client.events.emit).toHaveBeenCalledWith(
++      "plugin.chrome.update",
++      expect.objectContaining({
++        title: "社区卡片",
++        back: expect.objectContaining({
++          handledByPlugin: true,
++        }),
++        actions: [
++          expect.objectContaining({
++            id: "toggle-cover",
++            label: "查看封面",
++            icon: "cover",
++          }),
++        ],
++      }),
++    );
++
++    await act(async () => {
++      appRuntimeMock.emitEvent("plugin.chrome.action", { actionId: "toggle-cover" });
++      await Promise.resolve();
++      await Promise.resolve();
++    });
++
++    const coverFrame = container.querySelector('[data-chips-app="card-viewer.cover"] iframe');
++    expect(coverFrame).toBeInstanceOf(HTMLIFrameElement);
++    expect(coverFrame?.getAttribute("src")).toBe("https://community.example/cards/card-1/cover");
++    expect(appRuntimeMock.client.events.emit).toHaveBeenCalledWith(
++      "plugin.chrome.update",
++      expect.objectContaining({
++        actions: [
++          expect.objectContaining({
++            id: "toggle-cover",
++            label: "查看内容",
++            icon: "document",
++          }),
++        ],
++      }),
++    );
+   });
+ 
+   it("本地卡片读取封面后可以切换封面与内容", async () => {
+@@ -495,6 +538,32 @@ describe("App（卡片查看器根组件）", () => {
+     expect(container.querySelector('[data-chips-app="card-viewer.cover"]')).toBeNull();
+   });
+ 
++  it("打开本地文档时使用 document-flow surface，并保留查看器本地操作栏", async () => {
++    expectRealDocumentFixturesAvailable(["foodGridBox"]);
++    appRuntimeMock.setLaunchParams({
++      trigger: "file-association",
++      targetPath: realDocumentFixtures.foodGridBox,
++    });
++
++    await act(async () => {
++      root.render(<App />);
++      await Promise.resolve();
++      await Promise.resolve();
++    });
++
++    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("document");
++    expect(document.body.getAttribute("data-chips-surface-mode")).toBe("document");
++    expect(container.querySelector(".card-viewer-shell--document")).not.toBeNull();
++    expect(container.querySelector(".card-viewer-shell--immersive")).toBeNull();
++    expect(container.querySelector(".card-viewer-shell__floating-action--back")).not.toBeNull();
++    expect(container.querySelector(".card-viewer-window--document-flow")).not.toBeNull();
++    expect(container.querySelector("iframe")?.getAttribute("scrolling")).toBe("no");
++    expect(appRuntimeMock.client.events.emit).not.toHaveBeenCalledWith(
++      "plugin.chrome.update",
++      expect.anything(),
++    );
++  });
++
+   it("查看态左上角返回按钮会取消当前查看并回到首页", async () => {
+     expectRealDocumentFixturesAvailable(["foodGridBox"]);
+     appRuntimeMock.setLaunchParams({
+@@ -509,6 +578,7 @@ describe("App（卡片查看器根组件）", () => {
+     });
+ 
+     expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeInstanceOf(HTMLDivElement);
++    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("document");
+     const backButton = Array.from(container.querySelectorAll("button"))
+       .find((element) => element.getAttribute("aria-label") === "返回首页");
+     expect(backButton).toBeInstanceOf(HTMLButtonElement);
+@@ -521,6 +591,8 @@ describe("App（卡片查看器根组件）", () => {
+ 
+     expect(container.querySelector('[data-chips-app="card-viewer.window"]')).toBeNull();
+     expect(container.textContent).toContain("拖入卡片或箱子文件");
++    expect(document.documentElement.getAttribute("data-chips-surface-mode")).toBe("immersive");
++    expect(document.body.getAttribute("data-chips-surface-mode")).toBe("immersive");
+     expect(Array.from(container.querySelectorAll("button"))
+       .some((element) => element.getAttribute("aria-label") === "返回首页")).toBe(false);
+   });
+diff --git a/Chips-CardViewer/tests/unit/hosted-document-window.test.tsx b/Chips-CardViewer/tests/unit/hosted-document-window.test.tsx
+index 3442aeae..73dbbb68 100644
+--- a/Chips-CardViewer/tests/unit/hosted-document-window.test.tsx
++++ b/Chips-CardViewer/tests/unit/hosted-document-window.test.tsx
+@@ -248,7 +248,7 @@ describe("HostedDocumentWindow（文档 Surface 高度协议）", () => {
+     });
+ 
+     expect(latestResizePayload()).toMatchObject({
+-      contentHeight: 1400,
++      contentHeight: 1568,
+       stable: false,
+     });
+   });
+diff --git a/Chips-CardViewer/tests/unit/viewer-cover-surface.test.tsx b/Chips-CardViewer/tests/unit/viewer-cover-surface.test.tsx
+index 9cb59fbf..50a74be6 100644
+--- a/Chips-CardViewer/tests/unit/viewer-cover-surface.test.tsx
++++ b/Chips-CardViewer/tests/unit/viewer-cover-surface.test.tsx
+@@ -7,15 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import { ViewerCoverSurface } from "../../src/components/ViewerCoverSurface";
+ 
+ const coverSurfaceMock = vi.hoisted(() => ({
+-  bridge: {
+-    emit: vi.fn(async () => undefined),
++  client: {
++    events: {
++      emit: vi.fn(async () => undefined),
++      on: vi.fn(() => () => undefined),
++      once: vi.fn(() => () => undefined),
++    },
+   },
+ }));
+ 
+-vi.mock("../../src/hooks/useChipsBridge", () => ({
+-  useChipsBridge: () => coverSurfaceMock.bridge,
+-}));
+-
+ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
+   let container: HTMLDivElement;
+   let root: Root;
+@@ -41,6 +41,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
+     await act(async () => {
+       root.render(
+         <ViewerCoverSurface
++          client={coverSurfaceMock.client}
+           cover={{
+             title: "卡片封面",
+             coverUrl: "https://example.test/cover.html",
+@@ -55,7 +56,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
+       await Promise.resolve();
+     });
+ 
+-    expect(coverSurfaceMock.bridge.emit).toHaveBeenCalledWith(
++    expect(coverSurfaceMock.client.events.emit).toHaveBeenCalledWith(
+       "plugin.surface.resize",
+       expect.objectContaining({
+         height: expect.any(Number),
+@@ -69,7 +70,7 @@ describe("ViewerCoverSurface（封面 Surface 高度协议）", () => {
+       await vi.advanceTimersByTimeAsync(180);
+     });
+ 
+-    expect(coverSurfaceMock.bridge.emit).toHaveBeenCalledWith(
++    expect(coverSurfaceMock.client.events.emit).toHaveBeenCalledWith(
+       "plugin.surface.resize",
+       expect.objectContaining({
+         height: expect.any(Number),
+diff --git a/Chips-CardViewer/tsconfig.json b/Chips-CardViewer/tsconfig.json
+index bf1ba38d..505ffae0 100644
+--- a/Chips-CardViewer/tsconfig.json
++++ b/Chips-CardViewer/tsconfig.json
+@@ -22,6 +22,10 @@
+   "include": [
+     "src",
+     "tests"
++  ],
++  "exclude": [
++    "归档",
++    "src/**/归档"
+   ]
+ }
+ 
+diff --git "a/Chips-CardViewer/\346\212\200\346\234\257\346\226\207\346\241\243/\345\215\241\347\211\207\346\237\245\347\234\213\345\231\250\345\272\224\347\224\250\346\236\266\346\236\204\344\270\216\351\252\214\346\224\266\347\237\251\351\230\265.md" "b/Chips-CardViewer/\346\212\200\346\234\257\346\226\207\346\241\243/\345\215\241\347\211\207\346\237\245\347\234\213\345\231\250\345\272\224\347\224\250\346\236\266\346\236\204\344\270\216\351\252\214\346\224\266\347\237\251\351\230\265.md"
+index f3787dc0..4bc436ca 100644
+--- "a/Chips-CardViewer/\346\212\200\346\234\257\346\226\207\346\241\243/\345\215\241\347\211\207\346\237\245\347\234\213\345\231\250\345\272\224\347\224\250\346\236\266\346\236\204\344\270\216\351\252\214\346\224\266\347\237\251\351\230\265.md"
++++ "b/Chips-CardViewer/\346\212\200\346\234\257\346\226\207\346\241\243/\345\215\241\347\211\207\346\237\245\347\234\213\345\231\250\345\272\224\347\224\250\346\236\266\346\236\204\344\270\216\351\252\214\346\224\266\347\237\251\351\230\265.md"
+@@ -25,8 +25,8 @@
+ - `src/App.tsx`：轻量导出根组件；
+ - `src/app/AppRoot.tsx`：组合 providers 与 shell；
+ - `src/app/AppProviders.tsx`：注入 SDK client、`ChipsEnvironmentProvider`、`ChipsThemeProvider`；
+-- `src/app/AppRuntimeProvider.tsx`：解析 launch context、surface context、打开目标、错误、语言和 trace；
+-- `src/app/AppShell.tsx`：注册命令处理与快捷入口，并按 scene 渲染内容；进入查看态后在左上角提供“返回首页”按钮，清空当前打开目标并回到 `empty` scene。
++- `src/app/AppRuntimeProvider.tsx`：解析 launch context、surface context、打开目标、错误、语言和 trace；空态使用 `immersive` surface，任一已打开目标使用 `document` surface，使滚动所有权收口到最外层页面；
++- `src/app/AppShell.tsx`：注册命令处理与快捷入口，并按 scene 渲染内容；本地文档查看态在左上角提供“返回首页”按钮，清空当前打开目标并回到 `empty` scene；托管文档通过 `plugin.chrome.update` 把插件接管的返回语义、标题和封面切换动作交给 Web 外层宿主渲染。
+ 
+ 内部 scene：
+ 
+@@ -56,10 +56,18 @@ client.document.window.render({
+ 事件消费：
+ 
+ - `onReady`：关闭加载态；
++- `onResize`：消费卡片 `chips.composite:resize` 或箱子 `chips.box-layout:resize`，同步撑开内容 iframe；
+ - `onError`：显示整张文档 fatal 错误；
+ - `onNodeError`：记录复合卡片节点降级日志，不把单节点失败升级成整张文档失败；
+ - `onResourceOpen`：调用 `client.resource.open(...)`，失败时通过 `client.platform.showMessage(...)` 显示可诊断错误。
+ 
++滚动与高度职责：
++
++- 内容 iframe 设置 `scrolling="no"`，不创建中间全高滚动容器；
++- `CardWindow` 根据 `onResize` 的正式文档高度更新 iframe 高度；
++- `html/body/#root` 与查看器壳层在已打开目标存在时保持普通 document flow，由最外层页面负责滚动；
++- 返回空态后恢复 `immersive` surface，并重新使用视口约束。
++
+ 生命周期：
+ 
+ - 目标变化、主题缓存键变化或组件卸载时，清理 SDK 事件订阅；
+@@ -82,6 +90,8 @@ sandbox 固定为 `allow-scripts allow-forms`。消息来源允许当前应用 o
+ 
+ 高度变化通过 `plugin.surface.resize` 发布，载荷包含 `height`、`contentHeight`、`safeBlockEnd`、`viewportHeight`、`reason` 和 `stable`。
+ 
++当托管文档来源携带 `coverUrl` 时，查看器在 Web 文档型 surface 中通过外层 chrome 发布封面切换动作；宿主点击该动作后以 `plugin.chrome.action` 回传，查看器切换到 `ViewerCoverSurface`。封面 surface 也通过 `plugin.surface.resize` 发布自身文档高度，避免从长正文切换到封面时沿用旧 iframe 高度。
++
+ ## 6. 命令系统
+ 
+ 当前命令定义位于 `src/commands/card-viewer-commands.ts`：
+@@ -114,8 +124,8 @@ i18n 链路：
+ 
+ | 范围 | 文件 | 验收点 |
+ |---|---|---|
+-| 根组件 | `tests/unit/app.test.tsx` | 空启动、命令打开、`targetPath`、unsupported file、查看态无顶部菜单栏、查看态返回首页、`webDocumentUrl`、主题刷新、语言同步 |
+-| 文档窗口 | `tests/e2e/basic-flow.test.tsx` | 真实 `.card/.box` 素材、`document.window.render`、ready/error/node-error/resource-open、cleanup |
++| 根组件 | `tests/unit/app.test.tsx` | 空启动、命令打开、`targetPath`、unsupported file、本地 document-flow surface、返回空态恢复 immersive、查看态无顶部菜单栏、查看态返回首页、`webDocumentUrl`、主题刷新、语言同步 |
++| 文档窗口 | `tests/e2e/basic-flow.test.tsx` | 真实 `.card/.box` 素材、`document.window.render`、ready/resize/error/node-error/resource-open、iframe 禁用内部滚动、cleanup |
+ | 托管文档 | `tests/unit/hosted-document-window.test.tsx` | sandbox、origin、resize、resource-open 错误诊断 |
+ | 命令 | `tests/unit/commands.test.ts` | metadata 可序列化、无 raw 文案、菜单/工具栏 placement、manifest 权限 |
+ | 空态 | `tests/unit/dropzone.test.tsx` | region、aria 描述、错误播报、`.card/.box` 文件标记 |

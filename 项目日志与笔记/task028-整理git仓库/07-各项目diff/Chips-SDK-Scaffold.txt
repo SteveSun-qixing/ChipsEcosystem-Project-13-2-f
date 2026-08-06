@@ -1,0 +1,132 @@
+diff --git a/Chips-SDK/package.json b/Chips-SDK/package.json
+index 3db1d3d8..98680665 100644
+--- a/Chips-SDK/package.json
++++ b/Chips-SDK/package.json
+@@ -18,7 +18,7 @@
+     "chipsdev": "cli/index.js"
+   },
+   "scripts": {
+-    "test": "vitest run tests/client.test.ts tests/card.test.ts tests/document-window.test.ts tests/resource.test.ts tests/testing.test.ts tests/route-manifest.test.ts tests/tooling/contract-drift.test.ts && node ./tests/run-cli-smoke-tests.cjs && node ./tests/run-cli-host-managed-tests.cjs && node ./tests/run-cli-create-workspace-tests.cjs && node ./tests/run-cli-create-card-workspace-tests.cjs && node ./tests/run-cli-create-layout-workspace-tests.cjs && node ./tests/run-cli-create-module-workspace-tests.cjs && node ./tests/run-cli-create-theme-workspace-tests.cjs && node ./tests/run-cli-module-invoke-tests.cjs && node ./tests/run-cli-package-compatibility-tests.cjs && node ./tests/run-cli-tooling-tests.cjs"
++    "test": "vitest run tests/client.test.ts tests/card.test.ts tests/document-window.test.ts tests/resource.test.ts tests/testing.test.ts tests/route-manifest.test.ts tests/community-card-transfer.test.ts tests/tooling/contract-drift.test.ts && node ./tests/run-cli-smoke-tests.cjs && node ./tests/run-cli-host-managed-tests.cjs && node ./tests/run-cli-create-workspace-tests.cjs && node ./tests/run-cli-create-card-workspace-tests.cjs && node ./tests/run-cli-create-layout-workspace-tests.cjs && node ./tests/run-cli-create-module-workspace-tests.cjs && node ./tests/run-cli-create-theme-workspace-tests.cjs && node ./tests/run-cli-module-invoke-tests.cjs && node ./tests/run-cli-package-compatibility-tests.cjs && node ./tests/run-cli-tooling-tests.cjs"
+   },
+   "dependencies": {
+     "jsdom": "^28.1.0",
+diff --git a/Chips-SDK/src/core/client.ts b/Chips-SDK/src/core/client.ts
+index 70443365..62585945 100644
+--- a/Chips-SDK/src/core/client.ts
++++ b/Chips-SDK/src/core/client.ts
+@@ -20,6 +20,7 @@ import { createCliCommandApi } from "../api/cli-command";
+ import { createCliTaskApi } from "../api/cli-task";
+ import { createPluginApi } from "../api/plugin";
+ import { createModuleApi } from "../api/module";
++import { createCommunityCardTransferApi } from "../api/community-card-transfer";
+ import { createWindowApi } from "../api/window";
+ import { createSurfaceApi } from "../api/surface";
+ import { createTransferApi } from "../api/transfer";
+@@ -229,6 +230,7 @@ export function createClient(config: ClientConfig = {}): Client {
+     cliTask: createCliTaskApi(core),
+     plugin: createPluginApi(core),
+     module: createModuleApi(core),
++    communityCardTransfer: createCommunityCardTransferApi(core),
+     window: createWindowApi(core),
+     surface: createSurfaceApi(core),
+     transfer: createTransferApi(core),
+diff --git a/Chips-SDK/src/index.ts b/Chips-SDK/src/index.ts
+index ee4e28da..2fcb7ec6 100644
+--- a/Chips-SDK/src/index.ts
++++ b/Chips-SDK/src/index.ts
+@@ -195,6 +195,15 @@ export type {
+   ModuleResolveOptions,
+   ModuleSyncInvokeResult,
+ } from "./api/module";
++export type {
++  CommunityCardTransferApi,
++  CommunityCardTransferClientInfo,
++  CommunityCardTransferDownloadInput,
++  CommunityCardTransferOpenRemoteInput,
++  CommunityCardTransferPublishInput,
++  CommunityCardTransferServer,
++} from "./api/community-card-transfer";
++export { COMMUNITY_CARD_TRANSFER_CAPABILITY } from "./api/community-card-transfer";
+ export type {
+   ImageColorPaletteEntry,
+   ImageColorPaletteRole,
+diff --git a/Chips-SDK/src/types/client.ts b/Chips-SDK/src/types/client.ts
+index 2993104c..51bf45d9 100644
+--- a/Chips-SDK/src/types/client.ts
++++ b/Chips-SDK/src/types/client.ts
+@@ -78,6 +78,7 @@ export interface Client extends CoreClient {
+   cliTask: import("../api/cli-task").CliTaskApi;
+   plugin: import("../api/plugin").PluginApi;
+   module: import("../api/module").ModuleApi;
++  communityCardTransfer: import("../api/community-card-transfer").CommunityCardTransferApi;
+   window: import("../api/window").WindowApi;
+   surface: import("../api/surface").SurfaceApi;
+   transfer: import("../api/transfer").TransferApi;
+diff --git a/Chips-Scaffold/chips-scaffold-app/scripts/run-generated-e2e.mjs b/Chips-Scaffold/chips-scaffold-app/scripts/run-generated-e2e.mjs
+index eb05e9e0..93f3b063 100644
+--- a/Chips-Scaffold/chips-scaffold-app/scripts/run-generated-e2e.mjs
++++ b/Chips-Scaffold/chips-scaffold-app/scripts/run-generated-e2e.mjs
+@@ -1,6 +1,6 @@
+ #!/usr/bin/env node
+ 
+-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
++import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+ import path from "node:path";
+ import os from "node:os";
+ import { fileURLToPath } from "node:url";
+@@ -195,6 +195,16 @@ async function main() {
+       }
+     }
+ 
++    let templateMetaPresent = true;
++    try {
++      await stat(path.join(projectDir, "template.json"));
++    } catch {
++      templateMetaPresent = false;
++    }
++    if (templateMetaPresent) {
++      throw new Error("E2E: 生成工程不得包含模板元数据文件 template.json");
++    }
++
+     const commandSource = await readFile(
+       path.join(projectDir, "src", "commands", "app-commands.ts"),
+       "utf8",
+diff --git a/Chips-Scaffold/chips-scaffold-app/src/core/template-engine.ts b/Chips-Scaffold/chips-scaffold-app/src/core/template-engine.ts
+index c0e2e7ad..06b152b4 100644
+--- a/Chips-Scaffold/chips-scaffold-app/src/core/template-engine.ts
++++ b/Chips-Scaffold/chips-scaffold-app/src/core/template-engine.ts
+@@ -32,6 +32,7 @@ function resolveTemplatesRoot(): string {
+ }
+ 
+ const TEMPLATES_ROOT = resolveTemplatesRoot();
++const SCAFFOLD_METADATA_FILE_NAMES = new Set(["template.json"]);
+ const HOST_FIXED_CLI_COMMAND_ROOTS = new Set([
+   "help",
+   "host",
+@@ -211,6 +212,9 @@ async function copyTemplateDir(
+   let filesCreated = 0;
+   const entries = await fs.readdir(templateDir, { withFileTypes: true });
+   for (const entry of entries) {
++    if (entry.isFile() && SCAFFOLD_METADATA_FILE_NAMES.has(entry.name)) {
++      continue;
++    }
+     const sourcePath = path.join(templateDir, entry.name);
+     const renderedName = renderTemplateString(entry.name, context).replace(
+       /\.tpl$/,
+diff --git a/Chips-Scaffold/chips-scaffold-app/tests/template-engine.test.ts b/Chips-Scaffold/chips-scaffold-app/tests/template-engine.test.ts
+index d75872c4..df515295 100644
+--- a/Chips-Scaffold/chips-scaffold-app/tests/template-engine.test.ts
++++ b/Chips-Scaffold/chips-scaffold-app/tests/template-engine.test.ts
+@@ -327,6 +327,11 @@ test("createAppProjectInternal 可在临时目录生成完整工程骨架", asyn
+       { code: "ENOENT" },
+       "初始化工程不应生成旧 ExamplePanel 示例组件",
+     );
++    await assert.rejects(
++      stat(path.join(targetDir, "template.json")),
++      { code: "ENOENT" },
++      "初始化工程不应生成模板元数据文件 template.json",
++    );
+     assert.ok(
+       !/style=\{\{/.test(appRuntimeContent),
+       "初始化工程源码不应使用 inline style",

@@ -1,0 +1,3918 @@
+diff --git a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/README.md b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/README.md
+index 5d81039b..303a59b2 100644
+--- a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/README.md
++++ b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/README.md
+@@ -27,9 +27,10 @@
+ 
+ ## 当前输出
+ 
+-- `directory`：写出 `index.html`，按需写出 `assets/content/` 与 `conversion-manifest.json`。
++- `directory`：写出 `index.html`，按需写出 `assets/content/`、`assets/theme/` 与 `conversion-manifest.json`。
+ - `zip`：先构建同结构目录，再通过 `zip.compress` 打包为最终 ZIP。
+ - 复合卡片中的基础卡片 iframe 会外置为同级 HTML 文件；文件名优先采用 `data-node-id`，遇到重复节点或混合 `iframe[src]` / `iframe[srcdoc]` 时自动追加序号，避免覆盖。
++- `assets/theme/` 承载 Host 注入主题 CSS 中引用的本地字体、图标字体等根外文件资源，导出 HTML 会改写为相对 URL，不保留 Host worker 本机路径。
+ - `conversion-manifest.json` 会记录 Host `card.render` 返回的 `diagnostics`、`consistency` 与 `contentFiles`，供下游模块和排查工具保留渲染诊断语义。
+ - `includeAssets=false` 只允许目录态直接导出，结果会保留原始 `file://` 引用并返回警告。
+ - `includeManifest=false` 会省略 `conversion-manifest.json`，仅适用于不再进入下游转换链路的直接 HTML 导出。
+diff --git a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/src/exporter.ts b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/src/exporter.ts
+index c9993650..5f71dcfb 100644
+--- a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/src/exporter.ts
++++ b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/src/exporter.ts
+@@ -12,7 +12,8 @@ import type {
+ const ENTRY_FILE = "index.html" as const;
+ const MANIFEST_FILE = "conversion-manifest.json" as const;
+ const CONTENT_ASSET_DIR = "assets/content";
+-const ABSOLUTE_URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/.*?(?=(?:&quot;|&#39;|["'<>\s`]))/gi;
++const THEME_ASSET_DIR = "assets/theme";
++const ABSOLUTE_URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/.*?(?=(?:\\["']|&quot;|&#39;|["'<>\s`]))/gi;
+ const BASE_HREF_PATTERN = /base href=(?:&quot;|")([^"&]+)(?:&quot;|")/gi;
+ const WINDOWS_ABSOLUTE_PATTERN = /^[A-Za-z]:\//;
+ const HTML_OPEN_PATTERN = /<html([^>]*)>/i;
+@@ -20,6 +21,17 @@ const EXPORT_HEAD_CLOSE_PATTERN = /<\/head>/i;
+ const EXPORT_BODY_PATTERN = /<body([^>]*)>([\s\S]*)<\/body>/i;
+ const IFRAME_SRCDOC_PATTERN = /<iframe\b([^>]*?)\bsrcdoc="([^"]*)"([^>]*)><\/iframe>/gi;
+ const IFRAME_SRC_PATTERN = /<iframe\b([^>]*?)\bsrc="([^"]+)"([^>]*)><\/iframe>/gi;
++
++interface ResolvedAssetReference {
++  rawUrl: string;
++  resolvedPath: string;
++}
++
++interface OfflineAssetRewriteState {
++  copiedAssetRoots: Set<string>;
++  copiedStandaloneAssets: Map<string, string>;
++  usedStandaloneAssetPaths: Set<string>;
++}
+ const EXPORT_PRESENTATION_STYLE = `
+ <style data-chips-export-shell="card-html">
+ html,
+@@ -156,6 +168,11 @@ const dirnameNormalized = (filePath: string): string => {
+   return parent ? `${root}${parent}` : root;
+ };
+ 
++const basenameNormalized = (filePath: string): string => {
++  const segments = splitSegments(filePath);
++  return segments.at(-1) ?? "";
++};
++
+ const relativeNormalized = (fromPath: string, toPath: string): string => {
+   const fromNormalized = toNormalizedPath(fromPath);
+   const toNormalized = toNormalizedPath(toPath);
+@@ -190,6 +207,10 @@ const encodeRelativeUrl = (relativePath: string, trailingSlash = false): string
+   return trailingSlash ? `${encoded}/` : encoded;
+ };
+ 
++const encodeAssetReferenceUrl = (assetPath: string): string => {
++  return `./${encodeRelativeUrl(assetPath)}`;
++};
++
+ const fromFileUrl = (fileUrl: string): string => {
+   const url = new URL(fileUrl);
+   if (url.protocol !== "file:") {
+@@ -213,6 +234,20 @@ const toFileStat = (value: unknown): HostFileStatLike | undefined => {
+   };
+ };
+ 
++const isDirectoryLikeReference = async (
++  ctx: CardToHtmlContext,
++  resolvedPath: string,
++): Promise<boolean> => {
++  const stat = await safeStat(ctx, toNativePath(resolvedPath, resolvedPath));
++  if (stat?.isDirectory === true) {
++    return true;
++  }
++  if (stat?.isFile === true) {
++    return false;
++  }
++  return !isLikelyFilePath(resolvedPath);
++};
++
+ const isWithinRoot = (rootPath: string, targetPath: string): boolean => {
+   const relative = relativeNormalized(rootPath, targetPath);
+   return relative === "" || (!relative.startsWith("..") && !relative.startsWith("/") && !WINDOWS_ABSOLUTE_PATTERN.test(relative));
+@@ -262,6 +297,20 @@ const isLikelyFilePath = (value: string): boolean => {
+   return /\/[^/]+\.[^/]+$/.test(value);
+ };
+ 
++const isHostThemeAssetPath = (value: string): boolean => {
++  const normalized = toNormalizedPath(value).toLowerCase();
++  return /(?:^|\/)theme\.theme\.[^/]+\/dist\//.test(normalized);
++};
++
++const createStablePathHash = (value: string): string => {
++  let hash = 0x811c9dc5;
++  for (let index = 0; index < value.length; index += 1) {
++    hash ^= value.charCodeAt(index);
++    hash = Math.imul(hash, 0x01000193);
++  }
++  return (hash >>> 0).toString(16).padStart(8, "0");
++};
++
+ const pushWarning = (
+   warnings: CardToHtmlWarning[],
+   code: string,
+@@ -407,8 +456,8 @@ const extractBaseHrefUrls = (html: string): string[] => {
+ const extractResolvedUrlReferences = async (
+   ctx: CardToHtmlContext,
+   html: string,
+-): Promise<Array<{ rawUrl: string; resolvedPath: string }>> => {
+-  const references: Array<{ rawUrl: string; resolvedPath: string }> = [];
++): Promise<ResolvedAssetReference[]> => {
++  const references: ResolvedAssetReference[] = [];
+   const seen = new Set<string>();
+ 
+   for (const rawUrl of extractFileUrls(html)) {
+@@ -443,8 +492,8 @@ const extractResolvedUrlReferences = async (
+ const extractAssetRoot = async (
+   ctx: CardToHtmlContext,
+   html: string,
+-): Promise<{ rootPath: string; baseHrefUrls: string[]; references: Array<{ rawUrl: string; resolvedPath: string }> } | undefined> => {
+-  const references = await extractResolvedUrlReferences(ctx, html);
++  references: ResolvedAssetReference[],
++): Promise<{ rootPath: string; baseHrefUrls: string[]; references: ResolvedAssetReference[] } | undefined> => {
+   if (references.length === 0) {
+     return undefined;
+   }
+@@ -474,9 +523,15 @@ const extractAssetRoot = async (
+     }
+   }
+ 
+-  const fallbackRoots = references.map((reference) =>
+-    isLikelyFilePath(reference.resolvedPath) ? dirnameNormalized(reference.resolvedPath) : reference.resolvedPath,
+-  );
++  const fallbackReferences = references.filter((reference) => !isHostThemeAssetPath(reference.resolvedPath));
++  const fallbackRoots: string[] = [];
++  for (const reference of fallbackReferences) {
++    fallbackRoots.push(
++      (await isDirectoryLikeReference(ctx, reference.resolvedPath))
++        ? reference.resolvedPath
++        : dirnameNormalized(reference.resolvedPath),
++    );
++  }
+   const sharedRoot = findSharedAncestor(fallbackRoots);
+   if (!sharedRoot) {
+     return undefined;
+@@ -493,7 +548,7 @@ const rewriteHtmlAssetUrls = (
+   html: string,
+   assetRootPath: string,
+   baseHrefUrls: string[],
+-  references: Array<{ rawUrl: string; resolvedPath: string }>,
++  references: ResolvedAssetReference[],
+ ): string => {
+   let rewrittenHtml = html;
+ 
+@@ -527,12 +582,98 @@ const rewriteHtmlAssetUrls = (
+   return rewrittenHtml;
+ };
+ 
++const sanitizeAssetFileName = (value: string): string => {
++  const sanitized = value.trim().replace(/[<>:"|?*\x00-\x1f]+/g, "-").replace(/^-+|-+$/g, "");
++  return sanitized || "asset";
++};
++
++const allocateStandaloneAssetPath = (
++  resolvedPath: string,
++  usedStandaloneAssetPaths: Set<string>,
++): string => {
++  const hash = createStablePathHash(resolvedPath);
++  const fileName = sanitizeAssetFileName(basenameNormalized(resolvedPath));
++  const baseCandidate = joinNormalized(THEME_ASSET_DIR, `${hash}-${fileName}`);
++  let candidate = baseCandidate;
++  let duplicateIndex = 2;
++
++  while (usedStandaloneAssetPaths.has(candidate)) {
++    candidate = joinNormalized(THEME_ASSET_DIR, `${hash}-${duplicateIndex}-${fileName}`);
++    duplicateIndex += 1;
++  }
++
++  usedStandaloneAssetPaths.add(candidate);
++  return candidate;
++};
++
++const ensureStandaloneAssetCopied = async (
++  ctx: CardToHtmlContext,
++  resolvedPath: string,
++  state: OfflineAssetRewriteState,
++  buildRoot: string,
++  outputPathReference: string,
++): Promise<{ assetPath: string; copiedFiles: number } | undefined> => {
++  if (await isDirectoryLikeReference(ctx, resolvedPath)) {
++    return undefined;
++  }
++
++  const existingAssetPath = state.copiedStandaloneAssets.get(resolvedPath);
++  if (existingAssetPath) {
++    return { assetPath: existingAssetPath, copiedFiles: 0 };
++  }
++
++  const assetPath = allocateStandaloneAssetPath(resolvedPath, state.usedStandaloneAssetPaths);
++  const destination = joinNormalized(buildRoot, assetPath);
++  await ensureDirectory(ctx, toNativePath(dirnameNormalized(destination), outputPathReference));
++  await ctx.host.invoke("file.copy", {
++    sourcePath: toNativePath(resolvedPath, resolvedPath),
++    destPath: toNativePath(destination, outputPathReference),
++  });
++  state.copiedStandaloneAssets.set(resolvedPath, assetPath);
++  return { assetPath, copiedFiles: 1 };
++};
++
++const rewriteStandaloneAssetUrls = async (
++  ctx: CardToHtmlContext,
++  html: string,
++  references: ResolvedAssetReference[],
++  assetRootPath: string | undefined,
++  state: OfflineAssetRewriteState,
++  buildRoot: string,
++  outputPathReference: string,
++): Promise<{ html: string; copiedFiles: number }> => {
++  let rewrittenHtml = html;
++  let copiedFiles = 0;
++
++  for (const reference of references) {
++    if (assetRootPath && isWithinRoot(assetRootPath, reference.resolvedPath)) {
++      continue;
++    }
++
++    const copied = await ensureStandaloneAssetCopied(
++      ctx,
++      reference.resolvedPath,
++      state,
++      buildRoot,
++      outputPathReference,
++    );
++    if (!copied) {
++      continue;
++    }
++
++    copiedFiles += copied.copiedFiles;
++    rewrittenHtml = rewrittenHtml.split(reference.rawUrl).join(encodeAssetReferenceUrl(copied.assetPath));
++  }
++
++  return { html: rewrittenHtml, copiedFiles };
++};
++
+ const rewriteOfflineHtmlDocument = async (
+   ctx: CardToHtmlContext,
+   html: string,
+   includeAssets: boolean,
+   warnings: CardToHtmlWarning[],
+-  copiedAssetRoots: Set<string>,
++  state: OfflineAssetRewriteState,
+   buildRoot: string,
+   outputPathReference: string,
+   label: string,
+@@ -541,9 +682,44 @@ const rewriteOfflineHtmlDocument = async (
+     return { html, copiedFiles: 0 };
+   }
+ 
+-  const assetRoot = await extractAssetRoot(ctx, html);
+-  if (!assetRoot) {
+-    if (extractFileUrls(html).length > 0) {
++  const references = await extractResolvedUrlReferences(ctx, html);
++  const assetRoot = await extractAssetRoot(ctx, html, references);
++  let rewrittenHtml = html;
++  let copiedFiles = 0;
++
++  if (assetRoot) {
++    rewrittenHtml = rewriteHtmlAssetUrls(
++      rewrittenHtml,
++      assetRoot.rootPath,
++      assetRoot.baseHrefUrls,
++      assetRoot.references,
++    );
++
++    if (!state.copiedAssetRoots.has(assetRoot.rootPath)) {
++      state.copiedAssetRoots.add(assetRoot.rootPath);
++      copiedFiles += await copyAssetTree(
++        ctx,
++        assetRoot.rootPath,
++        joinNormalized(buildRoot, CONTENT_ASSET_DIR),
++        outputPathReference,
++      );
++    }
++  }
++
++  const rewrittenStandaloneAssets = await rewriteStandaloneAssetUrls(
++    ctx,
++    rewrittenHtml,
++    references,
++    assetRoot?.rootPath,
++    state,
++    buildRoot,
++    outputPathReference,
++  );
++  rewrittenHtml = rewrittenStandaloneAssets.html;
++  copiedFiles += rewrittenStandaloneAssets.copiedFiles;
++
++  if (!assetRoot && copiedFiles === 0 && rewrittenHtml === html) {
++    if (references.length > 0) {
+       pushWarning(
+         warnings,
+         "CONVERTER_HTML_NO_ASSET_ROOT",
+@@ -554,25 +730,6 @@ const rewriteOfflineHtmlDocument = async (
+     return { html, copiedFiles: 0 };
+   }
+ 
+-  const rewrittenHtml = rewriteHtmlAssetUrls(
+-    html,
+-    assetRoot.rootPath,
+-    assetRoot.baseHrefUrls,
+-    assetRoot.references,
+-  );
+-
+-  if (copiedAssetRoots.has(assetRoot.rootPath)) {
+-    return { html: rewrittenHtml, copiedFiles: 0 };
+-  }
+-
+-  copiedAssetRoots.add(assetRoot.rootPath);
+-  const copiedFiles = await copyAssetTree(
+-    ctx,
+-    assetRoot.rootPath,
+-    joinNormalized(buildRoot, CONTENT_ASSET_DIR),
+-    outputPathReference,
+-  );
+-
+   return { html: rewrittenHtml, copiedFiles };
+ };
+ 
+@@ -581,7 +738,7 @@ const externalizeIframeSrcdocDocuments = async (
+   html: string,
+   includeAssets: boolean,
+   warnings: CardToHtmlWarning[],
+-  copiedAssetRoots: Set<string>,
++  state: OfflineAssetRewriteState,
+   buildRoot: string,
+   outputPathReference: string,
+   allocateFrameFileName: (attrs: string) => string,
+@@ -612,7 +769,7 @@ const externalizeIframeSrcdocDocuments = async (
+       frameContent,
+       includeAssets,
+       warnings,
+-      copiedAssetRoots,
++      state,
+       buildRoot,
+       outputPathReference,
+       fileName,
+@@ -643,7 +800,7 @@ const externalizeIframeSrcDocuments = async (
+   documentUrl: string,
+   includeAssets: boolean,
+   warnings: CardToHtmlWarning[],
+-  copiedAssetRoots: Set<string>,
++  state: OfflineAssetRewriteState,
+   buildRoot: string,
+   outputPathReference: string,
+   allocateFrameFileName: (attrs: string) => string,
+@@ -681,7 +838,7 @@ const externalizeIframeSrcDocuments = async (
+       frameContent,
+       includeAssets,
+       warnings,
+-      copiedAssetRoots,
++      state,
+       buildRoot,
+       outputPathReference,
+       fileName,
+@@ -1083,7 +1240,11 @@ export const convertCardToHtml = async (
+     renderSessionId = renderView.sessionId;
+     let htmlBody = applyExportPresentationShell(renderView.body);
+     let assetCount = 0;
+-    const copiedAssetRoots = new Set<string>();
++    const offlineAssetState: OfflineAssetRewriteState = {
++      copiedAssetRoots: new Set<string>(),
++      copiedStandaloneAssets: new Map<string, string>(),
++      usedStandaloneAssetPaths: new Set<string>(),
++    };
+     const allocateFrameFileName = createFrameFileAllocator();
+ 
+     failureStage = "rewrite-assets";
+@@ -1102,7 +1263,7 @@ export const convertCardToHtml = async (
+       renderView.documentUrl,
+       request.options.includeAssets,
+       warnings,
+-      copiedAssetRoots,
++      offlineAssetState,
+       buildRoot,
+       request.output.path,
+       allocateFrameFileName,
+@@ -1115,7 +1276,7 @@ export const convertCardToHtml = async (
+       htmlBody,
+       request.options.includeAssets,
+       warnings,
+-      copiedAssetRoots,
++      offlineAssetState,
+       buildRoot,
+       request.output.path,
+       allocateFrameFileName,
+@@ -1128,7 +1289,7 @@ export const convertCardToHtml = async (
+       htmlBody,
+       request.options.includeAssets,
+       warnings,
+-      copiedAssetRoots,
++      offlineAssetState,
+       buildRoot,
+       request.output.path,
+       ENTRY_FILE,
+diff --git a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/tests/unit/module-definition.test.ts b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/tests/unit/module-definition.test.ts
+index 2ade42d3..1e8a6590 100644
+--- a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/tests/unit/module-definition.test.ts
++++ b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/tests/unit/module-definition.test.ts
+@@ -29,6 +29,10 @@ const createContext = (
+   };
+ };
+ 
++const escapeRegExpForTest = (value: string): string => {
++  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++};
++
+ describe("card to html module", () => {
+   it("exports the formal converter.card.to-html capability", () => {
+     expect(moduleDefinition.providers[0]?.capability).toBe("converter.card.to-html");
+@@ -234,6 +238,281 @@ describe("card to html module", () => {
+     });
+   });
+ 
++  it("keeps exported base-card resource bases relative for Host runtime URL normalization", async () => {
++    const outputDir = path.resolve("/tmp/export-html-relative-resource-base");
++    const cardRoot = path.resolve("/tmp/card-source-relative-resource-base");
++    const renderedBody = [
++      "<!doctype html>",
++      "<html lang=\"zh-CN\">",
++      "<body>",
++      "<iframe data-node-id=\"gallery\" srcdoc=\"&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;base href=&quot;file:///tmp/card-source-relative-resource-base/&quot; /&gt;&lt;/head&gt;&lt;body&gt;&lt;script&gt;const resourceBaseUrl = &quot;file:///tmp/card-source-relative-resource-base/&quot;; const resolveResourceUrl = async (resourcePath) =&gt; new URL(resourcePath, resourceBaseUrl).toString();&lt;/script&gt;&lt;img src=&quot;file:///tmp/card-source-relative-resource-base/assets/hero.png&quot; /&gt;&lt;/body&gt;&lt;/html&gt;\"></iframe>",
++      "</body>",
++      "</html>",
++    ].join("");
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        if (payload?.path === path.resolve("/tmp/demo.card")) {
++          return { meta: { isFile: true, isDirectory: false } };
++        }
++        if (payload?.path === cardRoot) {
++          return { meta: { isFile: false, isDirectory: true } };
++        }
++        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
++      }
++
++      if (action === "card.render") {
++        return {
++          view: {
++            title: "Relative Resource Base Demo",
++            body: renderedBody,
++            documentUrl: "file:///tmp/render-session-relative-resource-base/index.html",
++            sessionId: "render-session-relative-resource-base",
++            semanticHash: "semantic-relative-resource-base",
++            target: "offscreen-render",
++          },
++        };
++      }
++
++      if (action === "file.list") {
++        expect(payload).toEqual({
++          dir: cardRoot,
++          options: { recursive: true },
++        });
++        return {
++          entries: [
++            { path: path.join(cardRoot, "assets"), isFile: false, isDirectory: true },
++            { path: path.join(cardRoot, "assets", "hero.png"), isFile: true, isDirectory: false },
++          ],
++        };
++      }
++
++      return { ack: true };
++    });
++
++    await moduleDefinition.providers[0]!.methods.convert(ctx, {
++      cardFile: path.resolve("/tmp/demo.card"),
++      output: {
++        path: outputDir,
++        packageMode: "directory",
++      },
++    });
++
++    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "gallery.html"),
++      content: expect.stringContaining('<base href="./assets/content/" />'),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "gallery.html"),
++      content: expect.stringContaining('const resourceBaseUrl = "./assets/content/";'),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "gallery.html"),
++      content: expect.stringContaining('new URL(resourcePath, resourceBaseUrl).toString()'),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "gallery.html"),
++      content: expect.stringContaining('<img src="./assets/content/assets/hero.png" />'),
++    });
++  });
++
++  it("copies and rewrites Host theme font file URLs injected into exported HTML", async () => {
++    const outputDir = path.resolve("/tmp/export-html-theme-font");
++    const cardRoot = path.resolve("/tmp/card-source-theme-font");
++    const themeFontPath = path.resolve(
++      "/tmp/.chips-server-host-worker/plugins/theme.theme.chips-official-default-theme/dist/icons/variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].woff2",
++    );
++    const themeFontUrl = `file://${themeFontPath.replace(/\[/g, "%5B").replace(/\]/g, "%5D")}`;
++    const renderedBody = [
++      "<!doctype html>",
++      '<html lang="zh-CN">',
++      "<head>",
++      `<style>@font-face { font-family: "Material Symbols Outlined"; src: url("${themeFontUrl}") format("woff2"); }</style>`,
++      "</head>",
++      "<body>",
++      `<iframe srcdoc="&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;base href=&quot;file:///tmp/card-source-theme-font/&quot; /&gt;&lt;style&gt;@font-face { font-family: &quot;Material Symbols Outlined&quot;; src: url(&quot;${themeFontUrl}&quot;) format(&quot;woff2&quot;); }&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;img src=&quot;file:///tmp/card-source-theme-font/content/pic.png&quot; /&gt;&lt;/body&gt;&lt;/html&gt;"></iframe>`,
++      "</body>",
++      "</html>",
++    ].join("");
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        const target = payload?.path;
++        if (target === path.resolve("/tmp/demo.card")) {
++          return { meta: { isFile: true, isDirectory: false } };
++        }
++        if (target === themeFontPath) {
++          return { meta: { isFile: true, isDirectory: false } };
++        }
++        if (target === cardRoot) {
++          return { meta: { isFile: false, isDirectory: true } };
++        }
++        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
++      }
++
++      if (action === "card.render") {
++        return {
++          view: {
++            title: "Theme Font Demo",
++            body: renderedBody,
++            documentUrl: "file:///tmp/render-session-theme-font/index.html",
++            sessionId: "render-session-theme-font",
++            semanticHash: "semantic-theme-font",
++            target: "offscreen-render",
++          },
++        };
++      }
++
++      if (action === "file.list") {
++        expect(payload).toEqual({
++          dir: cardRoot,
++          options: { recursive: true },
++        });
++        return {
++          entries: [
++            { path: path.join(cardRoot, "content"), isFile: false, isDirectory: true },
++            { path: path.join(cardRoot, "content", "pic.png"), isFile: true, isDirectory: false },
++          ],
++        };
++      }
++
++      return { ack: true };
++    });
++
++    const result = await moduleDefinition.providers[0]!.methods.convert(ctx, {
++      cardFile: path.resolve("/tmp/demo.card"),
++      output: {
++        path: outputDir,
++        packageMode: "directory",
++      },
++    });
++
++    expect(result.assetCount).toBe(2);
++
++    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
++    expect(hostInvoke).toHaveBeenCalledWith("file.copy", {
++      sourcePath: themeFontPath,
++      destPath: expect.stringMatching(new RegExp(`${escapeRegExpForTest(path.join(outputDir, "assets", "theme"))}.+MaterialSymbolsOutlined`)),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "index.html"),
++      content: expect.not.stringContaining("file://"),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "index.html"),
++      content: expect.stringContaining("./assets/theme/"),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "frame-1.html"),
++      content: expect.not.stringContaining("file://"),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "frame-1.html"),
++      content: expect.stringContaining("./assets/theme/"),
++    });
++  });
++
++  it("rewrites Host theme font file URLs inside escaped JavaScript theme CSS strings", async () => {
++    const outputDir = path.resolve("/tmp/export-html-theme-font-script");
++    const cardRoot = path.resolve("/tmp/card-source-theme-font-script");
++    const themeFontPath = path.resolve(
++      "/tmp/.chips-server-host-worker/plugins/theme.theme.chips-official-default-theme/dist/icons/variablefont/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].woff2",
++    );
++    const themeFontUrl = `file://${themeFontPath.replace(/\[/g, "%5B").replace(/\]/g, "%5D")}`;
++    const frameHtml = [
++      "<!doctype html>",
++      "<html>",
++      `<head><base href="file:///tmp/card-source-theme-font-script/" /></head>`,
++      "<body>",
++      `<script>const themeCssText = "@font-face {\\n  src: url(\\\"${themeFontUrl}\\\") format(\\\"woff2\\\");\\n}"; const resourceBaseUrl = "file:///tmp/card-source-theme-font-script/";</script>`,
++      "</body>",
++      "</html>",
++    ].join("");
++    const renderedBody = [
++      "<!doctype html>",
++      '<html lang="zh-CN">',
++      "<body>",
++      `<iframe srcdoc="${frameHtml
++        .replace(/&/g, "&amp;")
++        .replace(/"/g, "&quot;")
++        .replace(/</g, "&lt;")
++        .replace(/>/g, "&gt;")}"></iframe>`,
++      "</body>",
++      "</html>",
++    ].join("");
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        const target = payload?.path;
++        if (target === path.resolve("/tmp/demo.card")) {
++          return { meta: { isFile: true, isDirectory: false } };
++        }
++        if (target === themeFontPath) {
++          return { meta: { isFile: true, isDirectory: false } };
++        }
++        if (target === cardRoot) {
++          return { meta: { isFile: false, isDirectory: true } };
++        }
++        throw Object.assign(new Error("not found"), { code: "FILE_NOT_FOUND" });
++      }
++
++      if (action === "card.render") {
++        return {
++          view: {
++            title: "Theme Font Script Demo",
++            body: renderedBody,
++            documentUrl: "file:///tmp/render-session-theme-font-script/index.html",
++            sessionId: "render-session-theme-font-script",
++            semanticHash: "semantic-theme-font-script",
++            target: "offscreen-render",
++          },
++        };
++      }
++
++      if (action === "file.list") {
++        expect(payload).toEqual({
++          dir: cardRoot,
++          options: { recursive: true },
++        });
++        return {
++          entries: [
++            { path: path.join(cardRoot, ".card"), isFile: false, isDirectory: true },
++            { path: path.join(cardRoot, ".card", "metadata.yaml"), isFile: true, isDirectory: false },
++          ],
++        };
++      }
++
++      return { ack: true };
++    });
++
++    await moduleDefinition.providers[0]!.methods.convert(ctx, {
++      cardFile: path.resolve("/tmp/demo.card"),
++      output: {
++        path: outputDir,
++        packageMode: "directory",
++      },
++    });
++
++    const hostInvoke = ctx.host.invoke as ReturnType<typeof vi.fn>;
++    expect(hostInvoke).toHaveBeenCalledWith("file.copy", {
++      sourcePath: themeFontPath,
++      destPath: expect.stringMatching(new RegExp(`${escapeRegExpForTest(path.join(outputDir, "assets", "theme"))}.+MaterialSymbolsRounded`)),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "frame-1.html"),
++      content: expect.not.stringContaining("file://"),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "frame-1.html"),
++      content: expect.stringContaining('url(\\"./assets/theme/'),
++    });
++    expect(hostInvoke).toHaveBeenCalledWith("file.write", {
++      path: path.join(outputDir, "frame-1.html"),
++      content: expect.stringContaining('const resourceBaseUrl = "./assets/content/";'),
++    });
++  });
++
+   it("packages zip exports through zip.compress and cleans temporary directories", async () => {
+     const tempRoots: string[] = [];
+     const ctx = createContext(async (action, payload) => {
+diff --git "a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\346\212\200\346\234\257\346\226\271\346\241\210.md" "b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\346\212\200\346\234\257\346\226\271\346\241\210.md"
+index 56bee16e..8023a92b 100644
+--- "a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\346\212\200\346\234\257\346\226\271\346\241\210.md"
++++ "b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\346\212\200\346\234\257\346\226\271\346\241\210.md"
+@@ -32,8 +32,9 @@
+      - 旧口径 `iframe[srcdoc]`
+      - 当前正式 render session 口径 `iframe[src]`
+    - 对 `iframe[src]` 通过 `card.resolveDocumentPath` 解析 render session 子文档真实落点
+-   - 从基础卡片子文档内的 `base href="file://..."`、`base href="chips-render://card-root/..."` 或其他受控绝对资源引用推导资源根目录
+-   - 把资源复制到 `assets/content/`
++   - 从基础卡片子文档内的 `base href="file://..."`、`base href="chips-render://card-root/..."` 或其他受控绝对资源引用推导卡片资源根目录
++   - 把卡片资源根目录复制到 `assets/content/`
++   - 把 Host 注入主题 CSS 中引用的根外本地文件资源复制到 `assets/theme/`
+    - 把 HTML 内的 `file://` 与受控渲染协议资源地址改写为相对路径
+ 4. `write-output`
+    - 在最终 HTML 上补充导出展示壳层
+@@ -73,10 +74,12 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
+ 
+ 当前实现遵循以下规则：
+ 
+-- 资源根优先从基础卡片子文档中的 `base href` 推导，既支持 `file://` 也支持受控渲染协议资源根
+-- 若不存在唯一 `base href`，则回退到所有可解析绝对资源引用的共享祖先目录
+-- 复制时保留资源树相对结构，统一落到 `assets/content/`
+-- 仅改写资源根范围内的本地/受控资源链接；根外链接保持原样
++- 卡片资源根优先从基础卡片子文档中的 `base href` 推导，既支持 `file://` 也支持受控渲染协议资源根
++- 若不存在唯一 `base href`，则回退到所有可解析绝对资源引用的共享祖先目录；Host 主题插件产物路径不参与卡片资源根推导
++- 卡片资源复制时保留资源树相对结构，统一落到 `assets/content/`
++- Host 注入主题 CSS 引用的根外本地文件资源按单文件复制到 `assets/theme/`，并以内容来源路径哈希生成稳定文件名，避免不同主题资产重名覆盖
++- 仅目录型卡片资源根继续整树复制；根外本地文件资源按文件粒度复制，避免把 Host worker 插件目录整体打入导出产物
++- HTML 内所有已解析并复制的 `file://` 与受控渲染协议资源链接必须改写为导出目录相对路径
+ - render session 子文档通过 `card.resolveDocumentPath` 解析真实文件路径后再读取，避免依赖 `documentUrl` 的协议前缀或磁盘目录结构
+ - `includeAssets=false` 时不复制资源、不改写链接，并返回 `CONVERTER_HTML_ASSETS_SKIPPED`
+ 
+@@ -94,12 +97,11 @@ HTML 原文必须来自 Host 正式卡片渲染结果：
+ ├─ index.html
+ ├─ <node-id>.html               # 复合卡片中每个基础卡片 iframe 的离线文档
+ ├─ assets/
+-│  └─ content/                  # includeAssets=true 时存在
++│  ├─ content/                  # includeAssets=true 且存在卡片资源根时存在
++│  └─ theme/                    # includeAssets=true 且存在 Host 注入主题文件资源时存在
+ └─ conversion-manifest.json     # includeManifest=true 时存在
+ ```
+ 
+-当前版本不单独产出 `assets/theme/`。若未来 Host 渲染链路输出独立主题工件，应在不改变公共入口能力的前提下落位到该目录。
+-
+ 补充约束：
+ 
+ - `index.html` 只负责复合卡片壳层与 iframe `src` 引用，不再保留大体积 `srcdoc`，也不再继续引用 render session 内部的 `./nodes/*`
+diff --git "a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\351\234\200\346\261\202\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\351\234\200\346\261\202\350\247\204\346\240\274\350\257\264\346\230\216.md" "b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\351\234\200\346\261\202\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\351\234\200\346\261\202\350\247\204\346\240\274\350\257\264\346\230\216.md"
+index d6c6d5bb..9303aea5 100644
+--- "a/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\351\234\200\346\261\202\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\351\234\200\346\261\202\350\247\204\346\240\274\350\257\264\346\230\216.md"
++++ "b/Chips-ModulePlugin/Chips-CardtoHTML-Plugin/\351\234\200\346\261\202\346\226\207\346\241\243/01-\345\215\241\347\211\207\350\275\254HTML\346\250\241\345\235\227\351\234\200\346\261\202\350\247\204\346\240\274\350\257\264\346\230\216.md"
+@@ -22,10 +22,10 @@
+ - `FR-03` 必须通过 Host `card.render(..., { target: "offscreen-render" })` 获取正式 HTML 视图
+ - `FR-04` HTML 导出结果中的卡片内容必须与 Host `card.render` 一致
+ - `FR-05` 支持将请求中的 `themeId / locale` 透传到 Host `card.render` 单次调用覆盖参数
+-- `FR-06` `includeAssets=true` 时，模块必须识别 `file://` 资源根、复制资源树，并改写为导出目录相对路径
++- `FR-06` `includeAssets=true` 时，模块必须识别 `file://` 或受控渲染协议资源根、复制卡片资源树，并改写为导出目录相对路径
+ - `FR-07` `includeAssets=false` 时，仅允许 `directory` 输出，并返回“保留原始 `file://` 引用”的结构化警告
+ - `FR-08` `includeManifest=true` 时必须生成 `conversion-manifest.json`；`includeManifest=false` 时允许省略，但结果不得作为 PDF / 图片链路中间产物
+-- `FR-09` 目录态输出至少包含 `index.html`；当 `includeAssets=true` 时包含 `assets/content/`；当 `includeManifest=true` 时包含 `conversion-manifest.json`
++- `FR-09` 目录态输出至少包含 `index.html`；当 `includeAssets=true` 且存在卡片资源时包含 `assets/content/`；当存在 Host 注入主题文件资源时包含 `assets/theme/`；当 `includeManifest=true` 时包含 `conversion-manifest.json`
+ - `FR-10` `zip` 输出必须复用同一份目录构建逻辑，并在末阶段通过 Host ZIP 能力打包
+ - `FR-11` 输出已存在且 `overwrite=false` 时必须拒绝覆盖
+ - `FR-12` 资源复制、文件写入或打包失败时，必须清理本次产生的部分输出与临时目录
+@@ -34,6 +34,7 @@
+ - `FR-15` 导出展示壳层不得引入查看器运行时逻辑，不得改写卡片内部语义结构
+ - `FR-16` 复合卡片 iframe 外置 sibling HTML 文件名必须全局唯一，重复 `data-node-id` 或混合旧新 iframe 来源时不得互相覆盖
+ - `FR-17` `conversion-manifest.json` 必须保留 Host `card.render` 返回的渲染诊断、内容文件列表和一致性信息，便于下游转换和排查工具消费
++- `FR-18` Host 注入主题 CSS 中的本地字体、图标字体等根外 `file://` 文件资源必须复制到导出产物并改写为相对 URL，最终 HTML 不得继续引用 Host worker 或本机绝对路径
+ 
+ ## 4. 非功能需求
+ 
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/README.md b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/README.md
+index 2e54cf15..f1b995aa 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/README.md
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/README.md
+@@ -1,26 +1,42 @@
+-# Chips Community Uploader
++# Chips Community Transfer
+ 
+-官方社区上传模块，提供 `community.card.publish/publish` 能力。
++官方社区卡片传输模块，提供 `community.card.transfer` 能力。该模块只在薯片客户端/Host 中运行，浏览器 Web 运行时不加载。
+ 
+ ## 职责
+ 
+-- 在用户设备上解包 `.card`。
++- 在用户设备上解包完整离线 `.card`。
+ - 扫描卡片内部资源和封面资源。
+-- 通过社区上传会话申请资源直传地址。
+-- 将资源直传到资源服务器。
+-- 替换 `content/*.yaml` 与 `.card/cover.html` 中的内部资源引用。
+-- 删除已外置资源并重新打包处理后的 `.card`。
+-- 把处理后的 `.card` 提交给社区服务器。
++- 通过社区 `card-transfer` 控制面申请对象存储上传地址。
++- 将资源和网络资源卡片直接上传到对象存储。
++- 把配置中的卡片根相对资源路径改写为对象存储/CDN URL。
++- 生成可逆恢复清单，记录原始路径、网络 URL 和 ZIP Store 条目信息。
++- 从客户端下载社区卡片时，按下载计划取回网络资源卡片和资源，恢复原始相对路径并重新打包完整离线卡片。
++- 打开远程社区卡片页面时，委托 Host 外部打开能力处理。
+ 
+-社区服务器保存 `.card` 源文件并异步生成查看缓存；本模块不做图形界面，也不在本地渲染社区查看页。
++社区服务器只保存元数据、对象位置、恢复清单和渲染任务状态；文件字节由对象存储/CDN 承担。
+ 
+ ## 能力
+ 
+ ```ts
+-community.card.publish / publish
++community.card.transfer / upload
++community.card.transfer / download
++community.card.transfer / openRemote
+ ```
+ 
+-输入见 `contracts/publish.input.schema.json`，输出见 `contracts/publish.output.schema.json`。
++输入输出契约见：
++
++- `contracts/upload.input.schema.json`
++- `contracts/upload.output.schema.json`
++- `contracts/download.input.schema.json`
++- `contracts/download.output.schema.json`
++- `contracts/openRemote.input.schema.json`
++- `contracts/openRemote.output.schema.json`
++
++## 运行边界
++
++- Desktop Host：支持上传、下载、远程打开。
++- Mobile Host/PAL：按同一能力契约支持。
++- Web 浏览器：不支持上传、下载和打包；浏览器只负责社区网页查看。
+ 
+ ## 验证
+ 
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.input.schema.json b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.input.schema.json
+deleted file mode 100644
+index f9b90687..00000000
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.input.schema.json
++++ /dev/null
+@@ -1,69 +0,0 @@
+-{
+-  "type": "object",
+-  "required": ["cardFile", "server"],
+-  "properties": {
+-    "cardFile": {
+-      "type": "string"
+-    },
+-    "server": {
+-      "type": "object",
+-      "required": ["baseUrl", "accessToken"],
+-      "properties": {
+-        "baseUrl": {
+-          "type": "string"
+-        },
+-        "accessToken": {
+-          "type": "string"
+-        }
+-      },
+-      "additionalProperties": false
+-    },
+-    "publish": {
+-      "type": "object",
+-      "properties": {
+-        "roomId": {
+-          "type": "string"
+-        },
+-        "visibility": {
+-          "type": "string",
+-          "enum": ["public", "private"]
+-        },
+-        "idempotencyKey": {
+-          "type": "string"
+-        }
+-      },
+-      "additionalProperties": false
+-    },
+-    "client": {
+-      "type": "object",
+-      "properties": {
+-        "name": {
+-          "type": "string"
+-        },
+-        "version": {
+-          "type": "string"
+-        },
+-        "platform": {
+-          "type": "string"
+-        }
+-      },
+-      "additionalProperties": false
+-    },
+-    "workspace": {
+-      "type": "object",
+-      "properties": {
+-        "tempDir": {
+-          "type": "string"
+-        },
+-        "keepProcessedCard": {
+-          "type": "boolean"
+-        },
+-        "processedCardPath": {
+-          "type": "string"
+-        }
+-      },
+-      "additionalProperties": false
+-    }
+-  },
+-  "additionalProperties": false
+-}
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.output.schema.json b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.output.schema.json
+deleted file mode 100644
+index 276bb20b..00000000
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/contracts/publish.output.schema.json
++++ /dev/null
+@@ -1,68 +0,0 @@
+-{
+-  "type": "object",
+-  "required": ["cardId", "status", "renderStatus", "renderStatusUrl", "communityUrl", "uploadedResources"],
+-  "properties": {
+-    "cardId": {
+-      "type": "string"
+-    },
+-    "status": {
+-      "type": "string"
+-    },
+-    "renderStatus": {
+-      "type": "string"
+-    },
+-    "renderStatusUrl": {
+-      "type": "string"
+-    },
+-    "communityUrl": {
+-      "type": "string"
+-    },
+-    "processedCardPath": {
+-      "type": "string"
+-    },
+-    "uploadedResources": {
+-      "type": "array",
+-      "items": {
+-        "type": "object",
+-        "required": ["relativePath", "publicUrl", "sizeBytes", "sha256", "mimeType"],
+-        "properties": {
+-          "relativePath": {
+-            "type": "string"
+-          },
+-          "publicUrl": {
+-            "type": "string"
+-          },
+-          "sizeBytes": {
+-            "type": "integer"
+-          },
+-          "sha256": {
+-            "type": "string"
+-          },
+-          "mimeType": {
+-            "type": "string"
+-          }
+-        },
+-        "additionalProperties": false
+-      }
+-    },
+-    "warnings": {
+-      "type": "array",
+-      "items": {
+-        "type": "object",
+-        "required": ["code", "message"],
+-        "properties": {
+-          "code": {
+-            "type": "string"
+-          },
+-          "message": {
+-            "type": "string"
+-          },
+-          "details": {
+-            "type": "object"
+-          }
+-        }
+-      }
+-    }
+-  },
+-  "additionalProperties": false
+-}
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/manifest.yaml b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/manifest.yaml
+index 19a170dd..d690210e 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/manifest.yaml
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/manifest.yaml
+@@ -3,7 +3,7 @@ name: Chips Community Uploader
+ version: 0.1.0
+ type: module
+ entry: dist/index.mjs
+-description: 在用户设备上处理 .card 资源外置、链接替换、重新打包并发布到社区服务器的官方上传模块。
++description: 在用户设备上处理 .card 上传、网络资源卡片生成、远程打开和完整卡片下载恢复的官方社区卡片传输模块。
+ author:
+   name: sevenstars
+   email: chips-community-uploader@example.invalid
+@@ -13,6 +13,10 @@ permissions:
+   - file.read
+   - file.write
+   - network.request
++  - platform.external
++  - plugin.manage
++  - window.control
++  - zip.manage
+ runtime:
+   targets:
+     desktop:
+@@ -20,7 +24,7 @@ runtime:
+     web:
+       supported: false
+     mobile:
+-      supported: false
++      supported: true
+     headless:
+       supported: true
+ engines:
+@@ -34,11 +38,19 @@ module:
+   runtime: worker
+   activation: onDemand
+   provides:
+-    - capability: community.card.publish
++    - capability: community.card.transfer
+       version: "1.0.0"
+       methods:
+-        - name: publish
++        - name: upload
++          mode: job
++          inputSchema: contracts/upload.input.schema.json
++          outputSchema: contracts/upload.output.schema.json
++        - name: download
++          mode: job
++          inputSchema: contracts/download.input.schema.json
++          outputSchema: contracts/download.output.schema.json
++        - name: openRemote
+           mode: job
+-          inputSchema: contracts/publish.input.schema.json
+-          outputSchema: contracts/publish.output.schema.json
++          inputSchema: contracts/openRemote.input.schema.json
++          outputSchema: contracts/openRemote.output.schema.json
+   consumes: []
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/card-rewrite.ts b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/card-rewrite.ts
+index ee6064b4..0dce13d1 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/card-rewrite.ts
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/card-rewrite.ts
+@@ -81,6 +81,23 @@ const resolveReferenceUrl = (
+   return undefined;
+ };
+ 
++const splitUrlSuffix = (value: string): { url: string; suffix: string } => {
++  const match = /[?#]/.exec(value);
++  if (!match || match.index < 0) {
++    return { url: value, suffix: "" };
++  }
++  return {
++    url: value.slice(0, match.index),
++    suffix: value.slice(match.index),
++  };
++};
++
++const resolveOriginalPath = (rawReference: string, pathMap: Map<string, string>): string | undefined => {
++  const { url, suffix } = splitUrlSuffix(rawReference);
++  const originalPath = pathMap.get(url);
++  return originalPath ? `${originalPath}${suffix}` : undefined;
++};
++
+ const replaceInValue = (
+   value: unknown,
+   urlMap: Map<string, string>,
+@@ -155,6 +172,77 @@ const replaceInValue = (
+   return value;
+ };
+ 
++const restoreInValue = (
++  value: unknown,
++  pathMap: Map<string, string>,
++  sourceFilePath: string,
++  richTextContentFileMap: Map<string, string>,
++): unknown => {
++  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
++    const record = value as Record<string, unknown>;
++    const cardType = typeof record.card_type === "string" ? record.card_type.trim() : "";
++    const contentSource = typeof record.content_source === "string" ? record.content_source.trim() : "";
++    const rawContentText = typeof record.content_text === "string" ? record.content_text : undefined;
++
++    if (RICHTEXT_CARD_TYPES.has(cardType) && contentSource === "inline" && rawContentText) {
++      const originalContentFile = richTextContentFileMap.get(sourceFilePath);
++      if (originalContentFile) {
++        const result: Record<string, unknown> = {};
++        for (const [key, val] of Object.entries(record)) {
++          if (key === "content_source") {
++            result[key] = "file";
++            continue;
++          }
++          if (key === "content_text") {
++            continue;
++          }
++          result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
++        }
++        result.content_file = originalContentFile;
++        return result;
++      }
++    }
++
++    const source = record.source;
++    const rawUrl = typeof record.url === "string" ? record.url : undefined;
++    const originalPath = rawUrl ? resolveOriginalPath(rawUrl, pathMap) : undefined;
++
++    if (source === "url" && originalPath) {
++      const result: Record<string, unknown> = {};
++      for (const [key, val] of Object.entries(record)) {
++        if (key === "source") {
++          result[key] = "file";
++          continue;
++        }
++        if (key === "url") {
++          continue;
++        }
++        result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
++      }
++      result.file_path = originalPath;
++      return result;
++    }
++  }
++
++  if (typeof value === "string") {
++    return resolveOriginalPath(value, pathMap) ?? value;
++  }
++
++  if (Array.isArray(value)) {
++    return value.map((item) => restoreInValue(item, pathMap, sourceFilePath, richTextContentFileMap));
++  }
++
++  if (value !== null && typeof value === "object") {
++    const result: Record<string, unknown> = {};
++    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
++      result[key] = restoreInValue(val, pathMap, sourceFilePath, richTextContentFileMap);
++    }
++    return result;
++  }
++
++  return value;
++};
++
+ export const replaceYamlResourceUrls = (
+   yamlText: string,
+   urlMap: Map<string, string>,
+@@ -166,6 +254,17 @@ export const replaceYamlResourceUrls = (
+   return stringify(replaced, { indent: 2 });
+ };
+ 
++export const restoreYamlResourcePaths = (
++  yamlText: string,
++  pathMap: Map<string, string>,
++  sourceFilePath: string,
++  richTextContentFileMap: Map<string, string>,
++): string => {
++  const parsed = parse(yamlText) as unknown;
++  const restored = restoreInValue(parsed, pathMap, sourceFilePath, richTextContentFileMap);
++  return stringify(restored, { indent: 2 });
++};
++
+ export const collectFileBackedRichTextResourcePaths = (
+   yamlText: string,
+   sourceFilePath: string,
+@@ -202,6 +301,22 @@ export const replaceCoverHtmlUrls = (coverHtml: string, urlMap: Map<string, stri
+   return result;
+ };
+ 
++export const restoreCoverHtmlPaths = (coverHtml: string, pathMap: Map<string, string>): string => {
++  let result = coverHtml;
++
++  result = result.replace(/=([\"'])([^\"']+)\1/g, (match, quote: string, value: string) => {
++    const restored = resolveOriginalPath(value, pathMap);
++    return restored ? `=${quote}${restored}${quote}` : match;
++  });
++
++  result = result.replace(/url\(([\"']?)([^)"']+)\1\)/g, (match, quote: string, value: string) => {
++    const restored = resolveOriginalPath(value, pathMap);
++    return restored ? `url(${quote}${restored}${quote})` : match;
++  });
++
++  return result;
++};
++
+ export const readTextFile = async (
+   ctx: CommunityCardPublishContext,
+   filePath: string,
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/index.ts b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/index.ts
+index 21f82c56..364c0146 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/index.ts
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/index.ts
+@@ -1,18 +1,49 @@
+-import { publishCommunityCard } from "./publisher";
+-import type { CommunityCardPublishContext, CommunityCardPublishRequest, CommunityCardPublishResult } from "./types";
++import {
++  downloadCommunityCard,
++  openRemoteCommunityCard,
++  uploadCommunityCard,
++} from "./publisher";
++import type {
++  CommunityCardPublishContext,
++  CommunityCardTransferDownloadRequest,
++  CommunityCardTransferDownloadResult,
++  CommunityCardTransferOpenRemoteRequest,
++  CommunityCardTransferOpenRemoteResult,
++  CommunityCardTransferUploadRequest,
++  CommunityCardTransferUploadResult,
++} from "./types";
+ 
+-export type { CommunityCardPublishRequest, CommunityCardPublishResult } from "./types";
++export type {
++  CommunityCardTransferDownloadRequest,
++  CommunityCardTransferDownloadResult,
++  CommunityCardTransferOpenRemoteRequest,
++  CommunityCardTransferOpenRemoteResult,
++  CommunityCardTransferUploadRequest,
++  CommunityCardTransferUploadResult,
++} from "./types";
+ 
+ const moduleDefinition = {
+   providers: [
+     {
+-      capability: "community.card.publish",
++      capability: "community.card.transfer",
+       methods: {
+-        async publish(
++        async upload(
+           ctx: CommunityCardPublishContext,
+-          input: CommunityCardPublishRequest,
+-        ): Promise<CommunityCardPublishResult> {
+-          return publishCommunityCard(ctx, input);
++          input: CommunityCardTransferUploadRequest,
++        ): Promise<CommunityCardTransferUploadResult> {
++          return uploadCommunityCard(ctx, input);
++        },
++        async download(
++          ctx: CommunityCardPublishContext,
++          input: CommunityCardTransferDownloadRequest,
++        ): Promise<CommunityCardTransferDownloadResult> {
++          return downloadCommunityCard(ctx, input);
++        },
++        async openRemote(
++          ctx: CommunityCardPublishContext,
++          input: CommunityCardTransferOpenRemoteRequest,
++        ): Promise<CommunityCardTransferOpenRemoteResult> {
++          return openRemoteCommunityCard(ctx, input);
+         },
+       },
+     },
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/publisher.ts b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/publisher.ts
+index 78369427..49de5926 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/publisher.ts
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/publisher.ts
+@@ -1,5 +1,5 @@
+-import crypto from "node:crypto";
+ import path from "node:path";
++import os from "node:os";
+ import { createCommunityUploaderError, type CommunityUploaderWarning } from "./errors";
+ import { normalizeBinaryPayload, toArrayBuffer } from "./binary";
+ import {
+@@ -9,45 +9,81 @@ import {
+   readTextFile,
+   replaceCoverHtmlUrls,
+   replaceYamlResourceUrls,
++  restoreCoverHtmlPaths,
++  restoreYamlResourcePaths,
+ } from "./card-rewrite";
+ import type {
+   CommunityCardPublishContext,
+-  CommunityCardPublishRequest,
+-  CommunityCardPublishResult,
++  CommunityCardTransferDownloadRequest,
++  CommunityCardTransferDownloadResult,
++  CommunityCardTransferOpenRemoteRequest,
++  CommunityCardTransferOpenRemoteResult,
++  CommunityCardTransferUploadedResource,
++  CommunityCardTransferUploadRequest,
++  CommunityCardTransferUploadResult,
+   HostCardReadInfo,
+   HostFileListEntry,
+   HostFileStatLike,
+-  NormalizedCommunityCardPublishRequest,
++  HostZipEntryMeta,
++  NormalizedCommunityCardTransferDownloadRequest,
++  NormalizedCommunityCardTransferUploadRequest,
+ } from "./types";
+ 
+ interface LocalResource {
+   absolutePath: string;
+   relativePath: string;
+   sizeBytes: number;
+-  sha256: string;
+   mimeType: string;
+-  bytes: Uint8Array;
+ }
+ 
+ interface ResourceCollection {
+   resources: LocalResource[];
+-  textResourceMap: Map<string, string>;
+-  textResources: Array<{
+-    absolutePath: string;
+-    relativePath: string;
+-  }>;
+ }
+ 
+-interface PresignedResource {
+-  relativePath: string;
++interface PresignedObject {
++  role: "network-card" | "resource";
++  relativePath: string | null;
++  bucket: string;
++  objectKey: string;
+   publicUrl: string;
+   uploadUrl: string;
+   method: "PUT";
+   headers: Record<string, string>;
+-  expiresAt: string;
+ }
+ 
+-const DEFAULT_CLIENT_NAME = "Chips Community Uploader Plugin";
++interface DownloadPlanResource {
++  originalRelativePath: string;
++  networkUrl: string;
++  bucket: string;
++  objectKey: string;
++  publicUrl?: string | null;
++  downloadUrl: string;
++  method?: "GET";
++  headers?: Record<string, string>;
++  sizeBytes: number;
++  mimeType?: string | null;
++}
++
++interface DownloadPlan {
++  cardId: string;
++  versionId?: string | null;
++  suggestedFileName?: string;
++  networkCard: {
++    bucket: string;
++    objectKey: string;
++    publicUrl?: string | null;
++    downloadUrl: string;
++    method?: "GET";
++    headers?: Record<string, string>;
++    sizeBytes: number;
++    mimeType?: string | null;
++  };
++  resources: DownloadPlanResource[];
++  restoreManifest?: unknown;
++  manifest?: unknown;
++}
++
++const DEFAULT_CLIENT_NAME = "Chips Community Transfer Plugin";
+ const DEFAULT_CLIENT_VERSION = "0.1.0";
+ const CARD_MIME_TYPE = "application/vnd.chips.card+zip";
+ const WINDOWS_ABSOLUTE_PATTERN = /^[A-Za-z]:\//;
+@@ -120,6 +156,10 @@ const dirnameNormalized = (filePath: string): string => {
+   return parent ? `${root}${parent}` : root;
+ };
+ 
++const basenameWithoutCardExtension = (filePath: string): string => {
++  return path.posix.basename(toNormalizedPath(filePath), ".card");
++};
++
+ const randomId = (): string => {
+   if (typeof globalThis.crypto?.randomUUID === "function") {
+     return globalThis.crypto.randomUUID();
+@@ -131,29 +171,25 @@ const normalizeServerBaseUrl = (value: string): string => {
+   try {
+     return new URL(value).toString().replace(/\/+$/, "");
+   } catch {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", "server.baseUrl must be a valid URL.");
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "server.baseUrl must be a valid URL.");
+   }
+ };
+ 
+ const buildApiUrl = (baseUrl: string, apiPath: string): string => {
+   const normalizedBase = baseUrl.endsWith("/api/v1") ? baseUrl.slice(0, -"/api/v1".length) : baseUrl;
+-  return `${normalizedBase}/api/v1${apiPath}`;
++  const normalizedPath = apiPath.startsWith("/api/v1") ? apiPath.slice("/api/v1".length) : apiPath;
++  return `${normalizedBase}/api/v1${normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`}`;
+ };
+ 
+-const normalizeRequest = (input: CommunityCardPublishRequest): NormalizedCommunityCardPublishRequest => {
++const normalizeUploadRequest = (input: CommunityCardTransferUploadRequest): NormalizedCommunityCardTransferUploadRequest => {
+   if (!isRecord(input)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", "publish input must be an object.");
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "upload input must be an object.");
+   }
+   if (!asString(input.cardFile)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", "cardFile is required.");
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "cardFile is required.");
+   }
+   if (!isRecord(input.server) || !asString(input.server.baseUrl) || !asString(input.server.accessToken)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", "server.baseUrl and server.accessToken are required.");
+-  }
+-
+-  const visibility = input.publish?.visibility ?? "public";
+-  if (visibility !== "public" && visibility !== "private") {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", "publish.visibility must be public or private.");
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "server.baseUrl and server.accessToken are required.");
+   }
+ 
+   return {
+@@ -164,7 +200,6 @@ const normalizeRequest = (input: CommunityCardPublishRequest): NormalizedCommuni
+     },
+     publish: {
+       roomId: input.publish?.roomId ?? null,
+-      visibility,
+       ...(asString(input.publish?.idempotencyKey) ? { idempotencyKey: input.publish?.idempotencyKey } : undefined),
+     },
+     client: {
+@@ -174,8 +209,41 @@ const normalizeRequest = (input: CommunityCardPublishRequest): NormalizedCommuni
+     },
+     workspace: {
+       tempDir: input.workspace?.tempDir,
+-      keepProcessedCard: input.workspace?.keepProcessedCard ?? false,
+-      processedCardPath: input.workspace?.processedCardPath,
++      keepNetworkCard: input.workspace?.keepNetworkCard ?? false,
++      networkCardPath: input.workspace?.networkCardPath,
++    },
++  };
++};
++
++const normalizeDownloadRequest = (input: CommunityCardTransferDownloadRequest): NormalizedCommunityCardTransferDownloadRequest => {
++  if (!isRecord(input)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "download input must be an object.");
++  }
++  if (!asString(input.cardId)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "cardId is required.");
++  }
++  if (!asString(input.outputPath)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "outputPath is required.");
++  }
++  if (!isRecord(input.server) || !asString(input.server.baseUrl) || !asString(input.server.accessToken)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "server.baseUrl and server.accessToken are required.");
++  }
++
++  return {
++    cardId: input.cardId,
++    outputPath: input.outputPath,
++    versionId: input.versionId,
++    server: {
++      baseUrl: normalizeServerBaseUrl(input.server.baseUrl),
++      accessToken: input.server.accessToken,
++    },
++    client: {
++      name: input.client?.name ?? DEFAULT_CLIENT_NAME,
++      version: input.client?.version ?? DEFAULT_CLIENT_VERSION,
++      ...(asString(input.client?.platform) ? { platform: input.client?.platform } : undefined),
++    },
++    workspace: {
++      tempDir: input.workspace?.tempDir,
+     },
+   };
+ };
+@@ -194,10 +262,14 @@ const reportProgress = async (
+ 
+ const assertNotCancelled = (ctx: CommunityCardPublishContext): void => {
+   if (ctx.job?.isCancelled()) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_CANCELLED", "Community card publishing was cancelled.");
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_CANCELLED", "Community card transfer was cancelled.");
+   }
+ };
+ 
++const jobSignal = (ctx: CommunityCardPublishContext): AbortSignal | undefined => {
++  return ctx.job?.signal ?? undefined;
++};
++
+ const getFileStat = async (ctx: CommunityCardPublishContext, filePath: string): Promise<HostFileStatLike> => {
+   const response = await ctx.host.invoke<{ meta?: unknown }>("file.stat", { path: filePath });
+   const meta = response && typeof response === "object" && "meta" in response ? response.meta : response;
+@@ -219,6 +291,14 @@ const readBinaryFile = async (ctx: CommunityCardPublishContext, filePath: string
+   return normalizeBinaryPayload(payload);
+ };
+ 
++const writeBinaryFile = async (ctx: CommunityCardPublishContext, filePath: string, bytes: Uint8Array): Promise<void> => {
++  await ctx.host.invoke("file.write", {
++    path: filePath,
++    content: Array.from(bytes),
++    encoding: "binary",
++  });
++};
++
+ const listFiles = async (ctx: CommunityCardPublishContext, dir: string): Promise<HostFileListEntry[]> => {
+   const response = await ctx.host.invoke<{ entries?: unknown }>("file.list", {
+     dir,
+@@ -226,7 +306,7 @@ const listFiles = async (ctx: CommunityCardPublishContext, dir: string): Promise
+   });
+   const entries = response && typeof response === "object" && "entries" in response ? response.entries : response;
+   if (!Array.isArray(entries)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_FILE_LIST_FAILED", `Host returned invalid file.list result for ${dir}.`);
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_FILE_LIST_FAILED", `Host returned invalid file.list result for ${dir}.`);
+   }
+   return entries
+     .filter(isRecord)
+@@ -238,36 +318,36 @@ const listFiles = async (ctx: CommunityCardPublishContext, dir: string): Promise
+     .filter((entry) => entry.path.length > 0);
+ };
+ 
+-const createWorkspaceRoot = async (ctx: CommunityCardPublishContext, request: NormalizedCommunityCardPublishRequest): Promise<{
++const createWorkspaceRoot = async (ctx: CommunityCardPublishContext, baseFilePath: string, tempDir?: string): Promise<{
+   rootDir: string;
+   createdByModule: boolean;
+ }> => {
+-  if (request.workspace.tempDir) {
+-    const rootDir = toNormalizedPath(request.workspace.tempDir);
++  if (tempDir) {
++    const rootDir = toNormalizedPath(tempDir);
+     await ctx.host.invoke("file.mkdir", {
+-      path: toNativePath(rootDir, request.cardFile),
++      path: toNativePath(rootDir, baseFilePath),
+       options: { recursive: true },
+     });
+     return { rootDir, createdByModule: false };
+   }
+ 
+-  const rootDir = joinNormalized(dirnameNormalized(request.cardFile), `.chips-community-upload-${randomId()}`);
++  const rootDir = joinNormalized(dirnameNormalized(baseFilePath), `.chips-community-transfer-${randomId()}`);
+   await ctx.host.invoke("file.mkdir", {
+-    path: toNativePath(rootDir, request.cardFile),
++    path: toNativePath(rootDir, baseFilePath),
+     options: { recursive: true },
+   });
+   return { rootDir, createdByModule: true };
+ };
+ 
+-const resolveProcessedCardPath = (
+-  request: NormalizedCommunityCardPublishRequest,
++const resolveNetworkCardPath = (
++  request: NormalizedCommunityCardTransferUploadRequest,
+   workspaceRoot: string,
+ ): string => {
+-  if (request.workspace.processedCardPath) {
+-    return toNormalizedPath(request.workspace.processedCardPath);
++  if (request.workspace.networkCardPath) {
++    return toNormalizedPath(request.workspace.networkCardPath);
+   }
+ 
+-  return joinNormalized(workspaceRoot, `${path.posix.basename(toNormalizedPath(request.cardFile), ".card")}.processed.card`);
++  return joinNormalized(workspaceRoot, `${basenameWithoutCardExtension(request.cardFile)}.network.card`);
+ };
+ 
+ const detectMimeType = (relativePath: string): string => {
+@@ -296,28 +376,17 @@ const detectMimeType = (relativePath: string): string => {
+     ".yaml": "application/yaml; charset=utf-8",
+     ".yml": "application/yaml; charset=utf-8",
+     ".txt": "text/plain; charset=utf-8",
++    ".md": "text/markdown; charset=utf-8",
+     ".vtt": "text/vtt; charset=utf-8",
+     ".srt": "application/x-subrip; charset=utf-8",
+   };
+   return map[ext] ?? "application/octet-stream";
+ };
+ 
+-const sha256Bytes = (bytes: Uint8Array): string => {
+-  return crypto.createHash("sha256").update(bytes).digest("hex");
+-};
+-
+-const collectRichTextTextResources = async (
+-  ctx: CommunityCardPublishContext,
+-  unpackedDir: string,
+-  entries: HostFileListEntry[],
+-): Promise<{
+-  textResourceMap: Map<string, string>;
+-  textResources: Array<{ absolutePath: string; relativePath: string }>;
+-}> => {
++const collectResources = async (ctx: CommunityCardPublishContext, unpackedDir: string): Promise<ResourceCollection> => {
++  const entries = await listFiles(ctx, unpackedDir);
++  const resources: LocalResource[] = [];
+   const normalizedRoot = toNormalizedPath(unpackedDir);
+-  const textResourceCandidateGroups: string[][] = [];
+-  const textResourceMap = new Map<string, string>();
+-  const textResources: Array<{ absolutePath: string; relativePath: string }> = [];
+ 
+   for (const entry of entries) {
+     if (!entry.isFile) {
+@@ -325,91 +394,126 @@ const collectRichTextTextResources = async (
+     }
+     const absolutePath = toNormalizedPath(entry.path);
+     const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
+-    if (!relativePath.startsWith("content/") || !relativePath.endsWith(".yaml")) {
++    if (!relativePath || isStructuralCardFile(relativePath)) {
+       continue;
+     }
+ 
+-    const raw = await readTextFile(ctx, toNativePath(absolutePath, unpackedDir));
+-    const candidatePaths = collectFileBackedRichTextResourcePaths(raw, relativePath);
+-    if (candidatePaths.length > 0) {
+-      textResourceCandidateGroups.push(candidatePaths);
+-    }
++    const stat = await getFileStat(ctx, toNativePath(absolutePath, unpackedDir));
++    const sizeBytes = typeof stat.size === "number" && stat.size > 0 ? stat.size : (await readBinaryFile(ctx, toNativePath(absolutePath, unpackedDir))).byteLength;
++    resources.push({
++      absolutePath,
++      relativePath,
++      sizeBytes,
++      mimeType: detectMimeType(relativePath),
++    });
+   }
+ 
+-  if (textResourceCandidateGroups.length === 0) {
+-    return { textResourceMap, textResources };
+-  }
++  resources.sort((left, right) => left.relativePath.localeCompare(right.relativePath, "en"));
++  return { resources };
++};
+ 
+-  const entriesByRelativePath = new Map<string, string>();
+-  for (const entry of entries) {
+-    if (!entry.isFile) {
+-      continue;
+-    }
+-    const absolutePath = toNormalizedPath(entry.path);
+-    const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
+-    entriesByRelativePath.set(relativePath, absolutePath);
+-  }
++const authorizedHeaders = (server: { accessToken: string }): HeadersInit => ({
++  authorization: `Bearer ${server.accessToken}`,
++});
+ 
+-  const selectedResources = new Map<string, string>();
+-  for (const candidatePaths of textResourceCandidateGroups) {
+-    const relativePath = candidatePaths.find((candidatePath) => entriesByRelativePath.has(candidatePath));
+-    if (!relativePath) {
+-      throw createCommunityUploaderError(
+-        "COMMUNITY_UPLOADER_RICHTEXT_RESOURCE_MISSING",
+-        `RichText markdown resource not found: ${candidatePaths[0] ?? ""}`,
+-      );
+-    }
+-    const absolutePath = entriesByRelativePath.get(relativePath);
+-    if (absolutePath) {
+-      selectedResources.set(relativePath, absolutePath);
+-    }
+-  }
++const jsonHeaders = (server: { accessToken: string }): HeadersInit => ({
++  ...authorizedHeaders(server),
++  "content-type": "application/json",
++});
+ 
+-  for (const [relativePath, absolutePath] of selectedResources) {
+-    textResourceMap.set(relativePath, await readTextFile(ctx, toNativePath(absolutePath, unpackedDir)));
+-    textResources.push({ absolutePath, relativePath });
+-  }
++const sleep = async (ms: number): Promise<void> => {
++  await new Promise((resolve) => setTimeout(resolve, ms));
++};
+ 
+-  return { textResourceMap, textResources };
++const isTransientHttpStatus = (status: number): boolean => {
++  return status === 408 || status === 429 || (status >= 500 && status <= 599);
+ };
+ 
+-const collectResources = async (ctx: CommunityCardPublishContext, unpackedDir: string): Promise<ResourceCollection> => {
+-  const entries = await listFiles(ctx, unpackedDir);
+-  const { textResourceMap, textResources } = await collectRichTextTextResources(ctx, unpackedDir, entries);
+-  const resources: LocalResource[] = [];
+-  const normalizedRoot = toNormalizedPath(unpackedDir);
++const isAuthExpiredStatus = (status: number): boolean => {
++  return status === 401 || status === 403;
++};
+ 
+-  for (const entry of entries) {
+-    if (!entry.isFile) {
+-      continue;
++interface RetryOptions {
++  label: string;
++  maxAttempts: number;
++  signal?: AbortSignal;
++}
++
++const fetchWithRetry = async (
++  url: string,
++  init: RequestInit,
++  options: RetryOptions,
++): Promise<Response> => {
++  let lastResponse: Response | null = null;
++  let lastError: unknown = null;
++
++  for (let attempt = 1; attempt <= options.maxAttempts; attempt += 1) {
++    if (options.signal?.aborted) {
++      throw createCommunityUploaderError(
++        "COMMUNITY_TRANSFER_CANCELLED",
++        "Community card transfer was cancelled.",
++      );
+     }
+-    const absolutePath = toNormalizedPath(entry.path);
+-    const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
+-    if (!relativePath || isStructuralCardFile(relativePath)) {
+-      continue;
++
++    try {
++      const response = await fetch(url, init);
++      if (!isTransientHttpStatus(response.status)) {
++        if (isAuthExpiredStatus(response.status)) {
++          throw createCommunityUploaderError(
++            "COMMUNITY_TRANSFER_AUTH_EXPIRED",
++            `${options.label}: access token expired or invalid (HTTP ${response.status}).`,
++            { status: response.status },
++            false,
++          );
++        }
++        return response;
++      }
++
++      lastResponse = response;
++      await response.arrayBuffer().catch(() => undefined);
++    } catch (error) {
++      if (error instanceof Error && "code" in error) {
++        throw error;
++      }
++      lastError = error;
+     }
+-    if (textResourceMap.has(relativePath)) {
+-      continue;
++
++    if (attempt < options.maxAttempts) {
++      const backoffMs = Math.min(100 * 2 ** (attempt - 1), 2_000);
++      await sleep(backoffMs);
+     }
++  }
+ 
+-    const bytes = await readBinaryFile(ctx, toNativePath(absolutePath, unpackedDir));
+-    resources.push({
+-      absolutePath,
+-      relativePath,
+-      sizeBytes: bytes.byteLength,
+-      sha256: sha256Bytes(bytes),
+-      mimeType: detectMimeType(relativePath),
+-      bytes,
+-    });
++  if (lastError) {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_NETWORK_FAILED",
++      `${options.label}: network request failed after ${options.maxAttempts} attempts.`,
++      { label: options.label, attempts: options.maxAttempts, error: lastError instanceof Error ? lastError.message : String(lastError) },
++      true,
++    );
+   }
+ 
+-  resources.sort((left, right) => left.relativePath.localeCompare(right.relativePath, "en"));
+-  return { resources, textResourceMap, textResources };
++  throw createCommunityUploaderError(
++    "COMMUNITY_TRANSFER_HTTP_ERROR",
++    `${options.label}: HTTP ${lastResponse?.status ?? "unknown"} after ${options.maxAttempts} attempts.`,
++    { label: options.label, status: lastResponse?.status, attempts: options.maxAttempts },
++    true,
++  );
+ };
+ 
+-const authorizedHeaders = (request: NormalizedCommunityCardPublishRequest): HeadersInit => ({
+-  authorization: `Bearer ${request.server.accessToken}`,
+-});
++const fetchControlPlane = async (
++  request: { server: { baseUrl: string; accessToken: string } },
++  apiPath: string,
++  init: RequestInit,
++  label: string,
++  signal?: AbortSignal,
++): Promise<Response> => {
++  return fetchWithRetry(buildApiUrl(request.server.baseUrl, apiPath), init, {
++    label,
++    maxAttempts: 3,
++    signal,
++  });
++};
+ 
+ const parseJsonResponse = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
+   let payload: unknown = null;
+@@ -418,7 +522,7 @@ const parseJsonResponse = async <T>(response: Response, fallbackMessage: string)
+     try {
+       payload = JSON.parse(text);
+     } catch {
+-      throw createCommunityUploaderError("COMMUNITY_UPLOADER_RESPONSE_INVALID", `${fallbackMessage}: invalid JSON response.`, {
++      throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", `${fallbackMessage}: invalid JSON response.`, {
+         status: response.status,
+         body: text.slice(0, 500),
+       });
+@@ -428,7 +532,7 @@ const parseJsonResponse = async <T>(response: Response, fallbackMessage: string)
+   if (!response.ok) {
+     const error = isRecord(payload) && isRecord(payload.error) ? payload.error : {};
+     throw createCommunityUploaderError(
+-      asString(error.code) ?? "COMMUNITY_UPLOADER_HTTP_ERROR",
++      asString(error.code) ?? "COMMUNITY_TRANSFER_HTTP_ERROR",
+       asString(error.message) ?? `${fallbackMessage}: HTTP ${response.status}`,
+       {
+         status: response.status,
+@@ -442,109 +546,190 @@ const parseJsonResponse = async <T>(response: Response, fallbackMessage: string)
+ };
+ 
+ const createUploadSession = async (
+-  request: NormalizedCommunityCardPublishRequest,
++  request: NormalizedCommunityCardTransferUploadRequest,
+   fileName: string,
+-): Promise<{ uploadId: string; expiresAt: string; resourcePrefix: string }> => {
+-  const response = await fetch(buildApiUrl(request.server.baseUrl, "/upload-sessions"), {
+-    method: "POST",
+-    headers: {
+-      ...authorizedHeaders(request),
+-      "content-type": "application/json",
++  signal?: AbortSignal,
++): Promise<{ uploadId: string; cardId: string; versionId: string; resourcePrefix: string }> => {
++  const response = await fetchControlPlane(
++    request,
++    "/card-transfer/upload-sessions",
++    {
++      method: "POST",
++      headers: jsonHeaders(request.server),
++      body: JSON.stringify({
++        fileName,
++        roomId: request.publish.roomId ?? null,
++        idempotencyKey: request.publish.idempotencyKey,
++        client: request.client,
++      }),
+     },
+-    body: JSON.stringify({
+-      contentType: "card",
+-      fileName,
+-      roomId: request.publish.roomId ?? null,
+-      visibility: request.publish.visibility,
+-      idempotencyKey: request.publish.idempotencyKey,
+-      client: request.client,
+-    }),
+-  });
++    "create upload session",
++    signal,
++  );
+   const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to create upload session");
+-  if (!isRecord(payload.data) || !asString(payload.data.uploadId)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_RESPONSE_INVALID", "Upload session response is missing uploadId.");
++  if (!isRecord(payload.data)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Upload session response is missing identifiers.");
++  }
++  const uploadId = asString(payload.data.uploadId);
++  const cardId = asString(payload.data.cardId);
++  const versionId = asString(payload.data.versionId);
++  if (!uploadId || !cardId || !versionId) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Upload session response is missing identifiers.");
+   }
+   return {
+-    uploadId: payload.data.uploadId,
+-    expiresAt: String(payload.data.expiresAt ?? ""),
++    uploadId,
++    cardId,
++    versionId,
+     resourcePrefix: String(payload.data.resourcePrefix ?? ""),
+   };
+ };
+ 
+-const presignResources = async (
+-  request: NormalizedCommunityCardPublishRequest,
++const presignObjects = async (
++  request: NormalizedCommunityCardTransferUploadRequest,
+   uploadId: string,
+-  resources: LocalResource[],
+-): Promise<PresignedResource[]> => {
+-  if (resources.length === 0) {
++  objects: Array<{
++    role: "network-card" | "resource";
++    relativePath?: string;
++    sizeBytes: number;
++    mimeType: string;
++  }>,
++  signal?: AbortSignal,
++): Promise<PresignedObject[]> => {
++  if (objects.length === 0) {
+     return [];
+   }
+ 
+-  const response = await fetch(buildApiUrl(request.server.baseUrl, `/upload-sessions/${uploadId}/resources/presign`), {
+-    method: "POST",
+-    headers: {
+-      ...authorizedHeaders(request),
+-      "content-type": "application/json",
++  const response = await fetchControlPlane(
++    request,
++    `/card-transfer/upload-sessions/${uploadId}/objects:presign`,
++    {
++      method: "POST",
++      headers: jsonHeaders(request.server),
++      body: JSON.stringify({ objects }),
+     },
+-    body: JSON.stringify({
+-      resources: resources.map((resource) => ({
+-        relativePath: resource.relativePath,
+-        sizeBytes: resource.sizeBytes,
+-        sha256: resource.sha256,
+-        mimeType: resource.mimeType,
+-      })),
+-    }),
+-  });
+-  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to presign upload resources");
+-  if (!isRecord(payload.data) || !Array.isArray(payload.data.resources)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_RESPONSE_INVALID", "Presign response is missing resources.");
+-  }
+-
+-  return payload.data.resources.filter(isRecord).map((resource) => ({
+-    relativePath: String(resource.relativePath ?? ""),
+-    publicUrl: String(resource.publicUrl ?? ""),
+-    uploadUrl: String(resource.uploadUrl ?? ""),
+-    method: resource.method === "PUT" ? "PUT" : "PUT",
+-    headers: isRecord(resource.headers)
+-      ? Object.fromEntries(Object.entries(resource.headers).map(([key, value]) => [key, String(value)]))
++    "presign transfer objects",
++    signal,
++  );
++  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to presign transfer objects");
++  if (!isRecord(payload.data) || !Array.isArray(payload.data.objects)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Presign response is missing objects.");
++  }
++
++  return payload.data.objects.filter(isRecord).map((object) => ({
++    role: object.role === "network-card" ? "network-card" : "resource",
++    relativePath: object.relativePath === null || typeof object.relativePath === "undefined" ? null : String(object.relativePath),
++    bucket: String(object.bucket ?? ""),
++    objectKey: String(object.objectKey ?? ""),
++    publicUrl: String(object.publicUrl ?? ""),
++    uploadUrl: String(object.uploadUrl ?? ""),
++    method: object.method === "PUT" ? "PUT" : "PUT",
++    headers: isRecord(object.headers)
++      ? Object.fromEntries(Object.entries(object.headers).map(([key, value]) => [key, String(value)]))
+       : {},
+-    expiresAt: String(resource.expiresAt ?? ""),
+   }));
+ };
+ 
+-const uploadResourceToStorage = async (resource: LocalResource, presigned: PresignedResource): Promise<void> => {
+-  const response = await fetch(presigned.uploadUrl, {
+-    method: presigned.method,
+-    headers: presigned.headers,
+-    body: toArrayBuffer(resource.bytes),
+-  });
++const uploadBytesToStorage = async (
++  label: string,
++  bytes: Uint8Array,
++  presigned: PresignedObject,
++  signal?: AbortSignal,
++): Promise<void> => {
++  const response = await fetchWithRetry(
++    presigned.uploadUrl,
++    {
++      method: presigned.method,
++      headers: presigned.headers,
++      body: toArrayBuffer(bytes),
++    },
++    {
++      label: `upload ${label}`,
++      maxAttempts: 3,
++      signal,
++    },
++  );
+ 
+   if (!response.ok) {
+     throw createCommunityUploaderError(
+-      "COMMUNITY_UPLOADER_RESOURCE_UPLOAD_FAILED",
+-      `Failed to upload resource ${resource.relativePath}: HTTP ${response.status}`,
+-      { relativePath: resource.relativePath, status: response.status },
++      "COMMUNITY_TRANSFER_OBJECT_UPLOAD_FAILED",
++      `Failed to upload ${label}: HTTP ${response.status}`,
++      { label, status: response.status },
+       response.status >= 500,
+     );
+   }
+ };
+ 
++const downloadBinary = async (
++  resource: { downloadUrl: string; headers?: Record<string, string> },
++  label: string,
++  signal?: AbortSignal,
++): Promise<Uint8Array> => {
++  const response = await fetchWithRetry(
++    resource.downloadUrl,
++    {
++      method: "GET",
++      headers: resource.headers ?? {},
++    },
++    {
++      label: `download ${label}`,
++      maxAttempts: 3,
++      signal,
++    },
++  );
++  if (!response.ok) {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_OBJECT_DOWNLOAD_FAILED",
++      `Failed to download ${label}: HTTP ${response.status}`,
++      { label, status: response.status },
++      response.status >= 500,
++    );
++  }
++  return new Uint8Array(await response.arrayBuffer());
++};
++
++const getZipEntries = async (ctx: CommunityCardPublishContext, cardFile: string): Promise<HostZipEntryMeta[]> => {
++  const response = await ctx.host.invoke<{ entries?: unknown }>("zip.list", {
++    zipPath: cardFile,
++  });
++  const entries = response && typeof response === "object" && "entries" in response ? response.entries : response;
++  return Array.isArray(entries) ? entries.filter(isRecord).map((entry) => ({
++    path: String(entry.path ?? ""),
++    size: Number(entry.size ?? 0),
++    compressedSize: Number(entry.compressedSize ?? 0),
++    crc32: Number(entry.crc32 ?? 0),
++    offset: Number(entry.offset ?? 0),
++    isDirectory: entry.isDirectory === true,
++    compressionMethod: Number(entry.compressionMethod ?? 0),
++    modifiedTime: typeof entry.modifiedTime === "number" ? entry.modifiedTime : undefined,
++  })) : [];
++};
++
++const assertZipStoreEntries = (entries: HostZipEntryMeta[]): void => {
++  const compressed = entries.filter((entry) => !entry.isDirectory && entry.compressionMethod !== 0);
++  if (compressed.length > 0) {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_CARD_NOT_STORE_ZIP",
++      ".card ZIP entries must use Store mode before publishing.",
++      { entries: compressed.slice(0, 20).map((entry) => entry.path) },
++    );
++  }
++};
++
+ const writeRewrittenCard = async (
+   ctx: CommunityCardPublishContext,
+   unpackedDir: string,
+   resources: LocalResource[],
+-  textResources: Array<{ absolutePath: string; relativePath: string }>,
+   resourceUrlMap: Map<string, string>,
+   textResourceMap: Map<string, string>,
+ ): Promise<void> => {
+   const entries = await listFiles(ctx, unpackedDir);
++  const normalizedRoot = toNormalizedPath(unpackedDir);
+ 
+   for (const entry of entries) {
+     if (!entry.isFile) {
+       continue;
+     }
+ 
+-    const normalizedRoot = toNormalizedPath(unpackedDir);
+     const absolutePath = toNormalizedPath(entry.path);
+     const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
+ 
+@@ -565,41 +750,235 @@ const writeRewrittenCard = async (
+     }
+   }
+ 
+-  for (const resource of [...resources, ...textResources]) {
++  for (const resource of resources) {
+     await ctx.host.invoke("file.delete", {
+       path: toNativePath(resource.absolutePath, unpackedDir),
+     });
+   }
+ };
+ 
+-const submitProcessedCard = async (
+-  request: NormalizedCommunityCardPublishRequest,
++const collectTextResourceMap = async (
++  ctx: CommunityCardPublishContext,
++  unpackedDir: string,
++): Promise<Map<string, string>> => {
++  const textResourceMap = new Map<string, string>();
++  const entries = await listFiles(ctx, unpackedDir);
++  const normalizedRoot = toNormalizedPath(unpackedDir);
++
++  for (const entry of entries) {
++    if (!entry.isFile) {
++      continue;
++    }
++    const absolutePath = toNormalizedPath(entry.path);
++    const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
++    if (!relativePath.startsWith("content/") || !relativePath.endsWith(".yaml")) {
++      continue;
++    }
++
++    const raw = await readTextFile(ctx, toNativePath(absolutePath, unpackedDir));
++    for (const candidatePath of collectFileBackedRichTextResourcePaths(raw, relativePath)) {
++      const candidateAbsolutePath = joinNormalized(unpackedDir, candidatePath);
++      const text = await readTextFile(ctx, toNativePath(candidateAbsolutePath, unpackedDir))
++        .catch(() => null);
++      if (text !== null) {
++        textResourceMap.set(candidatePath, text);
++      }
++    }
++  }
++
++  return textResourceMap;
++};
++
++const collectRichTextContentFileMap = async (
++  ctx: CommunityCardPublishContext,
++  unpackedDir: string,
++): Promise<Map<string, string>> => {
++  const richTextContentFileMap = new Map<string, string>();
++  const entries = await listFiles(ctx, unpackedDir);
++  const normalizedRoot = toNormalizedPath(unpackedDir);
++
++  for (const entry of entries) {
++    if (!entry.isFile) {
++      continue;
++    }
++    const absolutePath = toNormalizedPath(entry.path);
++    const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
++    if (!relativePath.startsWith("content/") || !relativePath.endsWith(".yaml")) {
++      continue;
++    }
++
++    const raw = await readTextFile(ctx, toNativePath(absolutePath, unpackedDir));
++    const candidatePaths = collectFileBackedRichTextResourcePaths(raw, relativePath);
++    if (candidatePaths.length > 0) {
++      richTextContentFileMap.set(relativePath, candidatePaths[0]!);
++    }
++  }
++
++  return richTextContentFileMap;
++};
++
++const extractRichTextContentFileMap = (restoreManifest: unknown): Map<string, string> => {
++  const map = new Map<string, string>();
++  if (!isRecord(restoreManifest) || !Array.isArray(restoreManifest.richTextContentFiles)) {
++    return map;
++  }
++
++  for (const item of restoreManifest.richTextContentFiles) {
++    if (!isRecord(item)) {
++      continue;
++    }
++    const configPath = asString(item.configPath);
++    const contentFile = asString(item.contentFile);
++    if (configPath && contentFile) {
++      map.set(configPath, contentFile);
++    }
++  }
++
++  return map;
++};
++
++const restoreDownloadedCard = async (
++  ctx: CommunityCardPublishContext,
++  unpackedDir: string,
++  resources: DownloadPlanResource[],
++  restoreManifest: unknown,
++): Promise<void> => {
++  const pathMap = new Map<string, string>();
++  for (const resource of resources) {
++    pathMap.set(resource.networkUrl, resource.originalRelativePath);
++    if (resource.publicUrl) {
++      pathMap.set(resource.publicUrl, resource.originalRelativePath);
++    }
++  }
++  const richTextContentFileMap = extractRichTextContentFileMap(restoreManifest);
++
++  const entries = await listFiles(ctx, unpackedDir);
++  const normalizedRoot = toNormalizedPath(unpackedDir);
++  for (const entry of entries) {
++    if (!entry.isFile) {
++      continue;
++    }
++    const absolutePath = toNormalizedPath(entry.path);
++    const relativePath = normalizeCardPath(path.posix.relative(normalizedRoot, absolutePath));
++    if (relativePath.startsWith("content/") && relativePath.endsWith(".yaml")) {
++      const raw = await readTextFile(ctx, toNativePath(absolutePath, unpackedDir));
++      await ctx.host.invoke("file.write", {
++        path: toNativePath(absolutePath, unpackedDir),
++        content: restoreYamlResourcePaths(raw, pathMap, relativePath, richTextContentFileMap),
++      });
++    }
++    if (relativePath === ".card/cover.html") {
++      const raw = await readTextFile(ctx, toNativePath(absolutePath, unpackedDir));
++      await ctx.host.invoke("file.write", {
++        path: toNativePath(absolutePath, unpackedDir),
++        content: restoreCoverHtmlPaths(raw, pathMap),
++      });
++    }
++  }
++
++  for (const resource of resources) {
++    const targetPath = joinNormalized(unpackedDir, resource.originalRelativePath);
++    const parentDir = dirnameNormalized(targetPath);
++    await ctx.host.invoke("file.mkdir", {
++      path: toNativePath(parentDir, unpackedDir),
++      options: { recursive: true },
++    });
++    const bytes = await downloadBinary(resource, resource.originalRelativePath, jobSignal(ctx));
++    await writeBinaryFile(ctx, toNativePath(targetPath, unpackedDir), bytes);
++  }
++};
++
++const createRestoreManifest = (params: {
++  originalFileName: string;
++  cardId: string;
++  versionId: string;
++  zipEntries: HostZipEntryMeta[];
++  resources: CommunityCardTransferUploadedResource[];
++  richTextContentFileMap?: Map<string, string>;
++}): Record<string, unknown> => {
++  return {
++    schemaVersion: "1.0.0",
++    originalFileName: params.originalFileName,
++    cardId: params.cardId,
++    versionId: params.versionId,
++    resources: params.resources.map((resource) => ({
++      originalRelativePath: resource.originalRelativePath,
++      networkUrl: resource.networkUrl,
++      bucket: resource.bucket,
++      objectKey: resource.objectKey,
++      sizeBytes: resource.sizeBytes,
++      mimeType: resource.mimeType,
++    })),
++    zipEntries: params.zipEntries.map((entry, index) => ({
++      order: index,
++      path: entry.path,
++      size: entry.size,
++      compressedSize: entry.compressedSize,
++      crc32: entry.crc32,
++      isDirectory: entry.isDirectory,
++      compressionMethod: entry.compressionMethod,
++      modifiedTime: entry.modifiedTime,
++    })),
++    richTextContentFiles: params.richTextContentFileMap
++      ? Array.from(params.richTextContentFileMap.entries()).map(([configPath, contentFile]) => ({
++          configPath,
++          contentFile,
++        }))
++      : [],
++  };
++};
++
++const extractEntryPlan = (restoreManifest: unknown): Array<{ path: string; modifiedTime?: number }> => {
++  if (!isRecord(restoreManifest) || !Array.isArray(restoreManifest.zipEntries)) {
++    return [];
++  }
++
++  const entries = restoreManifest.zipEntries
++    .filter(isRecord)
++    .sort((left, right) => Number(left.order ?? 0) - Number(right.order ?? 0))
++    .map((entry) => ({
++      path: normalizeCardPath(String(entry.path ?? "")),
++      ...(typeof entry.modifiedTime === "number" ? { modifiedTime: entry.modifiedTime } : undefined),
++    }))
++    .filter((entry) => entry.path.length > 0);
++
++  return entries;
++};
++
++const completeUpload = async (
++  request: NormalizedCommunityCardTransferUploadRequest,
+   uploadId: string,
+-  processedCardPath: string,
+-  processedCardBytes: Uint8Array,
+-  resourceManifest: unknown,
+-): Promise<CommunityCardPublishResult> => {
+-  const form = new FormData();
+-  form.append("file", new Blob([toArrayBuffer(processedCardBytes)], { type: CARD_MIME_TYPE }), path.posix.basename(processedCardPath));
+-  form.append("manifest", JSON.stringify(resourceManifest));
+-
+-  const response = await fetch(buildApiUrl(request.server.baseUrl, `/upload-sessions/${uploadId}/card`), {
+-    method: "POST",
+-    headers: authorizedHeaders(request),
+-    body: form,
+-  });
+-  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to submit processed card");
++  body: Record<string, unknown>,
++  signal?: AbortSignal,
++): Promise<CommunityCardTransferUploadResult> => {
++  const response = await fetchControlPlane(
++    request,
++    `/card-transfer/upload-sessions/${uploadId}/complete`,
++    {
++      method: "POST",
++      headers: jsonHeaders(request.server),
++      body: JSON.stringify(body),
++    },
++    "complete card transfer upload",
++    signal,
++  );
++  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to complete card transfer upload");
+ 
+-  if (!isRecord(payload.data) || !asString(payload.data.cardId)) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_RESPONSE_INVALID", "Card submit response is missing cardId.");
++  if (!isRecord(payload.data)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Complete response is missing cardId.");
++  }
++  const cardId = asString(payload.data.cardId);
++  if (!cardId) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Complete response is missing cardId.");
+   }
+ 
+   return {
+-    cardId: payload.data.cardId,
++    cardId,
++    versionId: String(payload.data.versionId ?? ""),
+     status: String(payload.data.status ?? "ready"),
+     renderStatus: String(payload.data.renderStatus ?? "queued"),
+-    renderStatusUrl: String(payload.data.renderStatusUrl ?? `/api/v1/cards/${payload.data.cardId}/render-status`),
+-    communityUrl: String(payload.data.communityUrl ?? `${request.server.baseUrl}/cards/${payload.data.cardId}`),
++    renderStatusUrl: String(payload.data.renderStatusUrl ?? `/api/v1/cards/${cardId}/render-status`),
++    communityUrl: String(payload.data.communityUrl ?? `${request.server.baseUrl}/cards/${cardId}`),
+     uploadedResources: [],
+   };
+ };
+@@ -613,26 +992,30 @@ const pushWarning = (
+   warnings.push({ code, message, ...(details === undefined ? undefined : { details }) });
+ };
+ 
+-export const publishCommunityCard = async (
++export const uploadCommunityCard = async (
+   ctx: CommunityCardPublishContext,
+-  input: CommunityCardPublishRequest,
+-): Promise<CommunityCardPublishResult> => {
+-  const request = normalizeRequest(input);
++  input: CommunityCardTransferUploadRequest,
++): Promise<CommunityCardTransferUploadResult> => {
++  const request = normalizeUploadRequest(input);
+   const warnings: CommunityUploaderWarning[] = [];
+   const cardStat = await getFileStat(ctx, request.cardFile);
+   if (cardStat.isFile !== true) {
+-    throw createCommunityUploaderError("COMMUNITY_UPLOADER_INPUT_INVALID", `cardFile is not a readable file: ${request.cardFile}`);
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", `cardFile is not a readable file: ${request.cardFile}`);
+   }
+ 
+   await reportProgress(ctx, "inspect", 2, "Reading card metadata");
+-  const cardInfo = await ctx.host.invoke<{ info?: HostCardReadInfo }>("card.readInfo", {
+-    cardFile: request.cardFile,
+-  });
++  const [cardInfo, zipEntries] = await Promise.all([
++    ctx.host.invoke<{ info?: HostCardReadInfo }>("card.readInfo", {
++      cardFile: request.cardFile,
++    }),
++    getZipEntries(ctx, request.cardFile),
++  ]);
++  assertZipStoreEntries(zipEntries);
+   const cardName = asString(cardInfo.info?.metadata?.name) ?? asString(cardInfo.info?.metadata?.title) ?? path.basename(request.cardFile);
+ 
+-  const workspace = await createWorkspaceRoot(ctx, request);
++  const workspace = await createWorkspaceRoot(ctx, request.cardFile, request.workspace.tempDir);
+   const unpackedDir = joinNormalized(workspace.rootDir, "unpacked.card");
+-  const processedCardPath = resolveProcessedCardPath(request, workspace.rootDir);
++  const networkCardPath = resolveNetworkCardPath(request, workspace.rootDir);
+ 
+   try {
+     assertNotCancelled(ctx);
+@@ -644,69 +1027,104 @@ export const publishCommunityCard = async (
+ 
+     assertNotCancelled(ctx);
+     await reportProgress(ctx, "scan", 18, "Scanning card resources");
+-    const collected = await collectResources(ctx, unpackedDir);
+-    const { resources, textResourceMap, textResources } = collected;
++    const { resources } = await collectResources(ctx, unpackedDir);
+ 
+     assertNotCancelled(ctx);
+-    await reportProgress(ctx, "session", 26, "Creating community upload session");
+-    const uploadSession = await createUploadSession(request, path.basename(request.cardFile));
++    await reportProgress(ctx, "session", 26, "Creating community transfer session");
++    const uploadSession = await createUploadSession(request, path.basename(request.cardFile), jobSignal(ctx));
+ 
+     assertNotCancelled(ctx);
+-    const presigned = await presignResources(request, uploadSession.uploadId, resources);
+-    const presignedByPath = new Map(presigned.map((item) => [normalizeCardPath(item.relativePath), item]));
++    await reportProgress(ctx, "upload-resources", 38, "Uploading resources");
++    const resourcePresigned = await presignObjects(
++      request,
++      uploadSession.uploadId,
++      resources.map((resource) => ({
++        role: "resource",
++        relativePath: resource.relativePath,
++        sizeBytes: resource.sizeBytes,
++        mimeType: resource.mimeType,
++      })),
++      jobSignal(ctx),
++    );
++    const presignedByPath = new Map(resourcePresigned.map((item) => [normalizeCardPath(item.relativePath ?? ""), item]));
+ 
+     const resourceUrlMap = new Map<string, string>();
++    const uploadedResources: CommunityCardTransferUploadedResource[] = [];
+     for (const resource of resources) {
+       const target = presignedByPath.get(resource.relativePath);
+       if (!target) {
+         throw createCommunityUploaderError(
+-          "COMMUNITY_UPLOADER_RESPONSE_INVALID",
++          "COMMUNITY_TRANSFER_RESPONSE_INVALID",
+           `Presign response did not include ${resource.relativePath}.`,
+         );
+       }
+-
+-      await uploadResourceToStorage(resource, target);
++      const resourceBytes = await readBinaryFile(ctx, toNativePath(resource.absolutePath, unpackedDir));
++      await uploadBytesToStorage(resource.relativePath, resourceBytes, target, jobSignal(ctx));
+       resourceUrlMap.set(resource.relativePath, target.publicUrl);
++      uploadedResources.push({
++        originalRelativePath: resource.relativePath,
++        networkUrl: target.publicUrl,
++        publicUrl: target.publicUrl,
++        bucket: target.bucket,
++        objectKey: target.objectKey,
++        sizeBytes: resource.sizeBytes,
++        mimeType: resource.mimeType,
++      });
+     }
+ 
+     assertNotCancelled(ctx);
+-    await reportProgress(ctx, "rewrite", 58, "Rewriting card resource links");
+-    await writeRewrittenCard(ctx, unpackedDir, resources, textResources, resourceUrlMap, textResourceMap);
++    await reportProgress(ctx, "rewrite", 58, "Generating network resource card");
++    const textResourceMap = await collectTextResourceMap(ctx, unpackedDir);
++    const richTextContentFileMap = await collectRichTextContentFileMap(ctx, unpackedDir);
++    await writeRewrittenCard(ctx, unpackedDir, resources, resourceUrlMap, textResourceMap);
+ 
+     assertNotCancelled(ctx);
+-    await reportProgress(ctx, "pack", 72, "Packing processed card");
++    await reportProgress(ctx, "pack", 72, "Packing network resource card");
+     await ctx.host.invoke("card.pack", {
+       cardDir: toNativePath(unpackedDir, request.cardFile),
+-      outputPath: toNativePath(processedCardPath, request.cardFile),
++      outputPath: toNativePath(networkCardPath, request.cardFile),
+     });
+-
+-    const processedBytes = await readBinaryFile(ctx, toNativePath(processedCardPath, request.cardFile));
+-    const uploadedResources = resources.map((resource) => ({
+-      relativePath: resource.relativePath,
+-      publicUrl: resourceUrlMap.get(resource.relativePath) ?? "",
+-      sizeBytes: resource.sizeBytes,
+-      sha256: resource.sha256,
+-      mimeType: resource.mimeType,
+-    }));
++    const networkCardBytes = await readBinaryFile(ctx, toNativePath(networkCardPath, request.cardFile));
++    const [networkCardPresigned] = await presignObjects(request, uploadSession.uploadId, [
++      {
++        role: "network-card",
++        sizeBytes: networkCardBytes.byteLength,
++        mimeType: CARD_MIME_TYPE,
++      },
++    ], jobSignal(ctx));
++    if (!networkCardPresigned || networkCardPresigned.role !== "network-card") {
++      throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Presign response is missing network card object.");
++    }
++    await uploadBytesToStorage("network-card", networkCardBytes, networkCardPresigned, jobSignal(ctx));
+ 
+     assertNotCancelled(ctx);
+-    await reportProgress(ctx, "submit", 86, "Submitting processed card");
+-    const submitResult = await submitProcessedCard(
+-      request,
+-      uploadSession.uploadId,
+-      processedCardPath,
+-      processedBytes,
+-      {
+-        cardName,
+-        sourceCardFile: request.cardFile,
+-        uploadId: uploadSession.uploadId,
+-        resourcePrefix: uploadSession.resourcePrefix,
+-        resources: uploadedResources,
++    await reportProgress(ctx, "submit", 86, "Submitting transfer manifest");
++    const restoreManifest = createRestoreManifest({
++      originalFileName: path.basename(request.cardFile),
++      cardId: uploadSession.cardId,
++      versionId: uploadSession.versionId,
++      zipEntries,
++      resources: uploadedResources,
++      richTextContentFileMap,
++    });
++    const submitResult = await completeUpload(request, uploadSession.uploadId, {
++      title: cardName,
++      cardFileId: asString(cardInfo.info?.metadata?.card_id) ?? asString(cardInfo.info?.metadata?.id) ?? null,
++      coverRatio: asString(cardInfo.info?.metadata?.cover_ratio) ?? null,
++      networkCard: {
++        bucket: networkCardPresigned.bucket,
++        objectKey: networkCardPresigned.objectKey,
++        publicUrl: networkCardPresigned.publicUrl,
++        sizeBytes: networkCardBytes.byteLength,
++        mimeType: CARD_MIME_TYPE,
+       },
+-    );
++      resources: uploadedResources,
++      restoreManifest,
++      cardMetadata: cardInfo.info?.metadata ?? null,
++    }, jobSignal(ctx));
+ 
+-    await reportProgress(ctx, "completed", 100, "Community card publishing completed");
+-    ctx.logger.info("Community card publishing completed.", {
++    await reportProgress(ctx, "completed", 100, "Community card transfer upload completed");
++    ctx.logger.info("Community card transfer upload completed.", {
+       cardId: submitResult.cardId,
+       resourceCount: uploadedResources.length,
+     });
+@@ -714,8 +1132,8 @@ export const publishCommunityCard = async (
+     return {
+       ...submitResult,
+       uploadedResources,
+-      ...(request.workspace.keepProcessedCard || request.workspace.processedCardPath
+-        ? { processedCardPath: toNativePath(processedCardPath, request.cardFile) }
++      ...(request.workspace.keepNetworkCard || request.workspace.networkCardPath
++        ? { networkCardPath: toNativePath(networkCardPath, request.cardFile) }
+         : undefined),
+       ...(warnings.length > 0 ? { warnings } : undefined),
+     };
+@@ -724,19 +1142,19 @@ export const publishCommunityCard = async (
+       throw error;
+     }
+     throw createCommunityUploaderError(
+-      "COMMUNITY_UPLOADER_PUBLISH_FAILED",
++      "COMMUNITY_TRANSFER_UPLOAD_FAILED",
+       error instanceof Error ? error.message : String(error),
+       { cardFile: request.cardFile },
+       true,
+     );
+   } finally {
+-    if (!request.workspace.keepProcessedCard && !request.workspace.processedCardPath) {
++    if (!request.workspace.keepNetworkCard && !request.workspace.networkCardPath) {
+       await ctx.host.invoke("file.delete", {
+-        path: toNativePath(processedCardPath, request.cardFile),
++        path: toNativePath(networkCardPath, request.cardFile),
+       }).catch(() => undefined);
+-    } else if (request.workspace.keepProcessedCard && !request.workspace.processedCardPath) {
+-      pushWarning(warnings, "COMMUNITY_UPLOADER_PROCESSED_CARD_KEPT", "Processed card file was kept in the temporary workspace.", {
+-        processedCardPath,
++    } else if (request.workspace.keepNetworkCard && !request.workspace.networkCardPath) {
++      pushWarning(warnings, "COMMUNITY_TRANSFER_NETWORK_CARD_KEPT", "Network resource card file was kept in the temporary workspace.", {
++        networkCardPath,
+       });
+     }
+ 
+@@ -745,7 +1163,7 @@ export const publishCommunityCard = async (
+       options: { recursive: true },
+     }).catch(() => undefined);
+ 
+-    if (workspace.createdByModule && !request.workspace.keepProcessedCard && !request.workspace.processedCardPath) {
++    if (workspace.createdByModule && !request.workspace.keepNetworkCard && !request.workspace.networkCardPath) {
+       await ctx.host.invoke("file.delete", {
+         path: toNativePath(workspace.rootDir, request.cardFile),
+         options: { recursive: true },
+@@ -753,3 +1171,338 @@ export const publishCommunityCard = async (
+     }
+   }
+ };
++
++const createDownloadSession = async (
++  request: NormalizedCommunityCardTransferDownloadRequest,
++  signal?: AbortSignal,
++): Promise<{ planUrl: string; cardId: string; versionId?: string | null }> => {
++  const response = await fetchControlPlane(
++    request,
++    "/card-transfer/download-sessions",
++    {
++      method: "POST",
++      headers: jsonHeaders(request.server),
++      body: JSON.stringify({
++        cardId: request.cardId,
++        versionId: request.versionId,
++        client: request.client,
++      }),
++    },
++    "create download session",
++    signal,
++  );
++  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to create download session");
++  if (!isRecord(payload.data)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Download session response is missing planUrl.");
++  }
++  const planUrl = asString(payload.data.planUrl);
++  if (!planUrl) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Download session response is missing planUrl.");
++  }
++  return {
++    planUrl,
++    cardId: String(payload.data.cardId ?? request.cardId),
++    versionId: typeof payload.data.versionId === "string" ? payload.data.versionId : null,
++  };
++};
++
++const getDownloadPlan = async (
++  request: NormalizedCommunityCardTransferDownloadRequest,
++  planUrl: string,
++  signal?: AbortSignal,
++): Promise<DownloadPlan> => {
++  const response = await fetchControlPlane(
++    request,
++    planUrl,
++    {
++      method: "GET",
++      headers: authorizedHeaders(request.server),
++    },
++    "get download plan",
++    signal,
++  );
++  const payload = await parseJsonResponse<{ data?: unknown }>(response, "Failed to get download plan");
++  if (!isRecord(payload.data) || !isRecord(payload.data.networkCard) || !Array.isArray(payload.data.resources)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_RESPONSE_INVALID", "Download plan is missing networkCard or resources.");
++  }
++  return {
++    cardId: String(payload.data.cardId ?? request.cardId),
++    versionId: typeof payload.data.versionId === "string" ? payload.data.versionId : null,
++    suggestedFileName: typeof payload.data.suggestedFileName === "string" ? payload.data.suggestedFileName : undefined,
++    networkCard: {
++      bucket: String(payload.data.networkCard.bucket ?? ""),
++      objectKey: String(payload.data.networkCard.objectKey ?? ""),
++      publicUrl: typeof payload.data.networkCard.publicUrl === "string" ? payload.data.networkCard.publicUrl : null,
++      downloadUrl: String(payload.data.networkCard.downloadUrl ?? ""),
++      headers: isRecord(payload.data.networkCard.headers)
++        ? Object.fromEntries(Object.entries(payload.data.networkCard.headers).map(([key, value]) => [key, String(value)]))
++        : {},
++      sizeBytes: Number(payload.data.networkCard.sizeBytes ?? 0),
++      mimeType: typeof payload.data.networkCard.mimeType === "string" ? payload.data.networkCard.mimeType : null,
++    },
++    resources: payload.data.resources.filter(isRecord).map((resource) => ({
++      originalRelativePath: normalizeCardPath(String(resource.originalRelativePath ?? "")),
++      networkUrl: String(resource.networkUrl ?? resource.publicUrl ?? ""),
++      bucket: String(resource.bucket ?? ""),
++      objectKey: String(resource.objectKey ?? ""),
++      publicUrl: typeof resource.publicUrl === "string" ? resource.publicUrl : null,
++      downloadUrl: String(resource.downloadUrl ?? resource.publicUrl ?? resource.networkUrl ?? ""),
++      headers: isRecord(resource.headers)
++        ? Object.fromEntries(Object.entries(resource.headers).map(([key, value]) => [key, String(value)]))
++        : {},
++      sizeBytes: Number(resource.sizeBytes ?? 0),
++      mimeType: typeof resource.mimeType === "string" ? resource.mimeType : null,
++    })),
++    restoreManifest: payload.data.restoreManifest,
++    manifest: payload.data.manifest,
++  };
++};
++
++const verifyRestoredCard = async (
++  ctx: CommunityCardPublishContext,
++  restoredCardPath: string,
++): Promise<void> => {
++  const info = await ctx.host.invoke<{ info?: unknown }>("card.readInfo", {
++    cardFile: restoredCardPath,
++  });
++  if (!info || !isRecord(info.info)) {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_DOWNLOAD_VERIFY_FAILED",
++      `Restored card failed readInfo verification: ${restoredCardPath}`,
++      { restoredCardPath },
++    );
++  }
++
++  await ctx.host.invoke("card.render", {
++    cardFile: restoredCardPath,
++  }).catch((error) => {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_DOWNLOAD_VERIFY_FAILED",
++      `Restored card failed render verification: ${restoredCardPath}`,
++      {
++        restoredCardPath,
++        error: error instanceof Error ? error.message : String(error),
++      },
++    );
++  });
++
++  await ctx.host.invoke("card.open", {
++    cardFile: restoredCardPath,
++  }).catch((error) => {
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_DOWNLOAD_VERIFY_FAILED",
++      `Restored card failed open verification: ${restoredCardPath}`,
++      {
++        restoredCardPath,
++        error: error instanceof Error ? error.message : String(error),
++      },
++    );
++  });
++};
++
++const completeDownload = async (
++  ctx: CommunityCardPublishContext,
++  plan: DownloadPlan,
++  unpackedDir: string,
++  outputPath: string,
++  request: NormalizedCommunityCardTransferDownloadRequest,
++): Promise<CommunityCardTransferDownloadResult> => {
++  assertNotCancelled(ctx);
++  await reportProgress(ctx, "pack", 85, "Packing restored card");
++  const entryPlan = extractEntryPlan(plan.restoreManifest ?? plan.manifest);
++  await ctx.host.invoke("card.pack", {
++    cardDir: toNativePath(unpackedDir, outputPath),
++    outputPath: toNativePath(outputPath, outputPath),
++    ...(entryPlan.length > 0 ? { entryPlan } : undefined),
++  });
++
++  assertNotCancelled(ctx);
++  await reportProgress(ctx, "verify", 95, "Verifying restored card");
++  await verifyRestoredCard(ctx, toNativePath(outputPath, outputPath));
++
++  await reportProgress(ctx, "completed", 100, "Community card transfer download completed");
++  ctx.logger.info("Community card transfer download completed.", {
++    cardId: plan.cardId,
++    resourceCount: plan.resources.length,
++  });
++
++  return {
++    cardId: plan.cardId,
++    versionId: plan.versionId,
++    outputPath: toNativePath(outputPath, outputPath),
++    restoredResourceCount: plan.resources.length,
++    suggestedFileName: plan.suggestedFileName,
++  };
++};
++
++export const downloadCommunityCard = async (
++  ctx: CommunityCardPublishContext,
++  input: CommunityCardTransferDownloadRequest,
++): Promise<CommunityCardTransferDownloadResult> => {
++  const request = normalizeDownloadRequest(input);
++  const outputPath = toNormalizedPath(request.outputPath);
++  const workspace = await createWorkspaceRoot(ctx, outputPath, request.workspace.tempDir);
++  const networkCardPath = joinNormalized(workspace.rootDir, "network.card");
++  const unpackedDir = joinNormalized(workspace.rootDir, "restored.card");
++
++  try {
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "session", 10, "Creating download session");
++    const session = await createDownloadSession(request, jobSignal(ctx));
++    const plan = await getDownloadPlan(request, session.planUrl, jobSignal(ctx));
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "download-card", 25, "Downloading network resource card");
++    const networkCardBytes = await downloadBinary(plan.networkCard, "network-card", jobSignal(ctx));
++    await writeBinaryFile(ctx, toNativePath(networkCardPath, outputPath), networkCardBytes);
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "unpack", 35, "Unpacking network resource card");
++    await ctx.host.invoke("card.unpack", {
++      cardFile: toNativePath(networkCardPath, outputPath),
++      outputDir: toNativePath(unpackedDir, outputPath),
++    });
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "restore", 55, "Restoring original card resources");
++    await restoreDownloadedCard(ctx, unpackedDir, plan.resources, plan.restoreManifest ?? plan.manifest);
++
++    return await completeDownload(ctx, plan, unpackedDir, outputPath, request);
++  } catch (error) {
++    await ctx.host.invoke("file.delete", {
++      path: toNativePath(outputPath, outputPath),
++    }).catch(() => undefined);
++    if (error instanceof Error && "code" in error) {
++      throw error;
++    }
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_DOWNLOAD_FAILED",
++      error instanceof Error ? error.message : String(error),
++      { cardId: request.cardId },
++      true,
++    );
++  } finally {
++    await ctx.host.invoke("file.delete", {
++      path: toNativePath(networkCardPath, outputPath),
++    }).catch(() => undefined);
++    await ctx.host.invoke("file.delete", {
++      path: toNativePath(unpackedDir, outputPath),
++      options: { recursive: true },
++    }).catch(() => undefined);
++    if (workspace.createdByModule) {
++      await ctx.host.invoke("file.delete", {
++        path: toNativePath(workspace.rootDir, outputPath),
++        options: { recursive: true },
++      }).catch(() => undefined);
++    }
++  }
++};
++
++export const openRemoteCommunityCard = async (
++  ctx: CommunityCardPublishContext,
++  input: CommunityCardTransferOpenRemoteRequest,
++): Promise<CommunityCardTransferOpenRemoteResult> => {
++  const cardId = asString(input.cardId);
++  if (!cardId) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "openRemote requires cardId.");
++  }
++  if (!isRecord(input.server) || !asString(input.server.baseUrl) || !asString(input.server.accessToken)) {
++    throw createCommunityUploaderError("COMMUNITY_TRANSFER_INPUT_INVALID", "openRemote requires server.baseUrl and server.accessToken.");
++  }
++
++  const server = {
++    baseUrl: normalizeServerBaseUrl(input.server.baseUrl),
++    accessToken: input.server.accessToken,
++  };
++
++  try {
++    const request: NormalizedCommunityCardTransferDownloadRequest = {
++      cardId,
++      server,
++      outputPath: "",
++      client: {
++        name: DEFAULT_CLIENT_NAME,
++        version: DEFAULT_CLIENT_VERSION,
++      },
++      workspace: {
++        tempDir: input.workspace?.tempDir,
++      },
++    };
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "session", 10, "Creating download session");
++    const session = await createDownloadSession(request, jobSignal(ctx));
++    const plan = await getDownloadPlan(request, session.planUrl, jobSignal(ctx));
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "download-card", 40, "Downloading network resource card");
++    const networkCardBytes = await downloadBinary(plan.networkCard, "network-card", jobSignal(ctx));
++
++    const workspace = await createWorkspaceRoot(
++      ctx,
++      path.join(os.tmpdir(), `community-open-remote-${randomId()}`),
++      request.workspace.tempDir,
++    );
++    const localCardPath = joinNormalized(workspace.rootDir, `${plan.suggestedFileName ?? `${cardId}.card`}`);
++    await writeBinaryFile(ctx, toNativePath(localCardPath, os.tmpdir()), networkCardBytes);
++
++    assertNotCancelled(ctx);
++    await reportProgress(ctx, "open", 80, "Opening card in local viewer");
++
++    const surface = await ctx.host.invoke<{ surface: { id: string } }>("surface.open", {
++      request: {
++        kind: "window",
++        target: {
++          type: "plugin",
++          pluginId: "com.chips.card-viewer",
++          launchParams: {
++            trigger: "community-open-remote",
++            cardSource: {
++              kind: "local-file",
++              documentKind: "card",
++              filePath: toNativePath(localCardPath, os.tmpdir()),
++            },
++            communityServer: {
++              baseUrl: server.baseUrl,
++              accessToken: server.accessToken,
++            },
++          },
++        },
++        presentation: {
++          title: plan.suggestedFileName ?? "社区卡片",
++          width: 1024,
++          height: 720,
++          resizable: true,
++        },
++      },
++    });
++
++    await reportProgress(ctx, "completed", 100, "Remote card opened in local viewer");
++    return {
++      opened: true,
++      url: `${server.baseUrl}/cards/${cardId}`,
++      localCardPath: toNativePath(localCardPath, os.tmpdir()),
++      surfaceId: isRecord(surface.surface) ? String(surface.surface.id ?? "") : undefined,
++    };
++  } catch (error) {
++    if (error instanceof Error && "code" in error) {
++      throw error;
++    }
++    throw createCommunityUploaderError(
++      "COMMUNITY_TRANSFER_OPEN_REMOTE_FAILED",
++      "Failed to open remote community card locally.",
++      {
++        cardId,
++        errorName: error instanceof Error ? error.name : typeof error,
++        errorMessage: error instanceof Error ? error.message : String(error),
++        errorDetail: isRecord(error)
++          ? {
++              code: String((error as { code?: unknown }).code ?? ""),
++              message: String((error as { message?: unknown }).message ?? ""),
++              details: (error as { details?: unknown }).details,
++            }
++          : undefined,
++      },
++    );
++  }
++};
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/types.ts b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/types.ts
+index 77466dbf..95251911 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/types.ts
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/types.ts
+@@ -1,68 +1,118 @@
+ import type { CommunityUploaderWarning } from "./errors";
+ 
+-export interface CommunityCardPublishRequest {
++export interface CommunityCardTransferServer {
++  baseUrl: string;
++  accessToken: string;
++}
++
++export interface CommunityCardTransferClientInfo {
++  name?: string;
++  version?: string;
++  platform?: string;
++}
++
++export interface CommunityCardTransferUploadRequest {
+   cardFile: string;
+-  server: {
+-    baseUrl: string;
+-    accessToken: string;
+-  };
++  server: CommunityCardTransferServer;
+   publish?: {
+     roomId?: string | null;
+-    visibility?: "public" | "private";
+     idempotencyKey?: string;
+   };
+-  client?: {
+-    name?: string;
+-    version?: string;
+-    platform?: string;
+-  };
++  client?: CommunityCardTransferClientInfo;
+   workspace?: {
+     tempDir?: string;
+-    keepProcessedCard?: boolean;
+-    processedCardPath?: string;
++    keepNetworkCard?: boolean;
++    networkCardPath?: string;
+   };
+ }
+ 
+-export interface NormalizedCommunityCardPublishRequest {
++export interface NormalizedCommunityCardTransferUploadRequest {
+   cardFile: string;
+-  server: {
+-    baseUrl: string;
+-    accessToken: string;
+-  };
++  server: CommunityCardTransferServer;
+   publish: {
+     roomId?: string | null;
+-    visibility: "public" | "private";
+     idempotencyKey?: string;
+   };
+-  client: {
+-    name: string;
+-    version: string;
++  client: Required<Pick<CommunityCardTransferClientInfo, "name" | "version">> & {
+     platform?: string;
+   };
+   workspace: {
+     tempDir?: string;
+-    keepProcessedCard: boolean;
+-    processedCardPath?: string;
++    keepNetworkCard: boolean;
++    networkCardPath?: string;
+   };
+ }
+ 
+-export interface CommunityCardPublishResult {
++export interface CommunityCardTransferUploadedResource {
++  originalRelativePath: string;
++  networkUrl: string;
++  publicUrl: string;
++  bucket: string;
++  objectKey: string;
++  sizeBytes: number;
++  mimeType: string;
++}
++
++export interface CommunityCardTransferUploadResult {
+   cardId: string;
++  versionId: string;
+   status: string;
+   renderStatus: string;
+   renderStatusUrl: string;
+   communityUrl: string;
+-  processedCardPath?: string;
+-  uploadedResources: Array<{
+-    relativePath: string;
+-    publicUrl: string;
+-    sizeBytes: number;
+-    sha256: string;
+-    mimeType: string;
+-  }>;
++  networkCardPath?: string;
++  uploadedResources: CommunityCardTransferUploadedResource[];
+   warnings?: CommunityUploaderWarning[];
+ }
+ 
++export interface CommunityCardTransferDownloadRequest {
++  cardId: string;
++  server: CommunityCardTransferServer;
++  outputPath: string;
++  versionId?: string;
++  client?: CommunityCardTransferClientInfo;
++  workspace?: {
++    tempDir?: string;
++  };
++}
++
++export interface NormalizedCommunityCardTransferDownloadRequest {
++  cardId: string;
++  server: CommunityCardTransferServer;
++  outputPath: string;
++  versionId?: string;
++  client: Required<Pick<CommunityCardTransferClientInfo, "name" | "version">> & {
++    platform?: string;
++  };
++  workspace: {
++    tempDir?: string;
++  };
++}
++
++export interface CommunityCardTransferDownloadResult {
++  cardId: string;
++  versionId?: string | null;
++  outputPath: string;
++  restoredResourceCount: number;
++  suggestedFileName?: string;
++}
++
++export interface CommunityCardTransferOpenRemoteRequest {
++  cardId?: string;
++  url?: string;
++  server?: CommunityCardTransferServer;
++  workspace?: {
++    tempDir?: string;
++  };
++}
++
++export interface CommunityCardTransferOpenRemoteResult {
++  opened: true;
++  url: string;
++  localCardPath?: string;
++  surfaceId?: string;
++}
++
+ export interface HostFileStatLike {
+   size?: number;
+   isFile?: boolean;
+@@ -80,6 +130,17 @@ export interface HostCardReadInfo {
+   status?: unknown;
+ }
+ 
++export interface HostZipEntryMeta {
++  path: string;
++  size: number;
++  compressedSize: number;
++  crc32: number;
++  offset: number;
++  isDirectory: boolean;
++  compressionMethod: number;
++  modifiedTime?: number;
++}
++
+ export interface CommunityCardPublishContext {
+   logger: {
+     debug(message: string, metadata?: Record<string, unknown>): void;
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tests/unit/module-definition.test.ts b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tests/unit/module-definition.test.ts
+index 05f96065..2fa6a5bf 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tests/unit/module-definition.test.ts
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tests/unit/module-definition.test.ts
+@@ -6,6 +6,7 @@ import type { CommunityCardPublishContext } from "../../src/types";
+ const textEncoder = new TextEncoder();
+ 
+ const bytes = (value: string): number[] => Array.from(textEncoder.encode(value));
++const arrayBuffer = (value: string): ArrayBuffer => textEncoder.encode(value).buffer.slice(0);
+ 
+ const createContext = (
+   invokeImpl: (action: string, payload?: Record<string, unknown>) => Promise<unknown>,
+@@ -17,7 +18,9 @@ const createContext = (
+     error: vi.fn(),
+   },
+   host: {
+-    invoke: vi.fn(invokeImpl),
++    invoke: vi.fn(async (action: string, payload?: Record<string, unknown>) => {
++      return await invokeImpl(action, payload) as never;
++    }) as unknown as CommunityCardPublishContext["host"]["invoke"],
+   },
+   job: {
+     id: "job-1",
+@@ -27,31 +30,41 @@ const createContext = (
+   },
+ });
+ 
+-describe("community uploader module", () => {
+-  it("exports the formal community.card.publish capability", () => {
+-    expect(moduleDefinition.providers[0]?.capability).toBe("community.card.publish");
+-    expect(typeof moduleDefinition.providers[0]?.methods.publish).toBe("function");
++describe("community uploader transfer module", () => {
++  it("exports the formal community.card.transfer capability", () => {
++    const provider = moduleDefinition.providers[0];
++
++    expect(provider?.capability).toBe("community.card.transfer");
++    expect(typeof provider?.methods.upload).toBe("function");
++    expect(typeof provider?.methods.download).toBe("function");
++    expect(typeof provider?.methods.openRemote).toBe("function");
++    expect(provider?.methods).not.toHaveProperty("publish");
+   });
+ 
+-  it("uploads resources, rewrites the card and submits the processed card", async () => {
++  it("uploads resources, writes a network resource card, and completes the transfer session", async () => {
+     const cardFile = path.resolve("/tmp/source.card");
+-    const workspace = path.resolve("/tmp/community-upload-work");
++    const workspace = path.resolve("/tmp/community-transfer-work");
+     const unpackedDir = path.join(workspace, "unpacked.card");
+-    const processedCardPath = path.join(workspace, "source.processed.card");
++    const networkCardPath = path.join(workspace, "source.network.card");
+     const writtenFiles = new Map<string, unknown>();
+     const deletedPaths: string[] = [];
+     const storageUploads: Array<{ url: string; headers: Record<string, string>; body: ArrayBuffer }> = [];
+-    const submittedForms: FormData[] = [];
++    const completedUploads: Array<Record<string, unknown>> = [];
+ 
+     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+-      if (url.endsWith("/api/v1/upload-sessions")) {
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions")) {
+         expect(init?.method).toBe("POST");
+         expect((init?.headers as Record<string, string>).authorization).toBe("Bearer token-1");
++        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
++        expect(body.fileName).toBe("source.card");
++        expect(body.roomId).toBe("room-1");
+         return new Response(
+           JSON.stringify({
+             data: {
+               uploadId: "upload-1",
+-              resourcePrefix: "users/user-1/uploads/upload-1/resources",
++              cardId: "card-1",
++              versionId: "version-1",
++              resourcePrefix: "cards/card-1/versions/version-1/resources",
+               expiresAt: "2026-05-24T00:00:00.000Z",
+             },
+           }),
+@@ -59,24 +72,33 @@ describe("community uploader module", () => {
+         );
+       }
+ 
+-      if (url.endsWith("/api/v1/upload-sessions/upload-1/resources/presign")) {
+-        const body = JSON.parse(String(init?.body)) as { resources: Array<{ relativePath: string; sha256: string }> };
+-        expect(body.resources.map((item) => item.relativePath)).toEqual([".card/cardcover/cover.png", "hero.png"]);
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-1/objects:presign")) {
++        expect(init?.method).toBe("POST");
++        const body = JSON.parse(String(init?.body)) as {
++          objects: Array<{ role: "network-card" | "resource"; relativePath?: string; mimeType: string; sizeBytes: number }>;
++        };
+         return new Response(
+           JSON.stringify({
+             data: {
+-              resources: body.resources.map((resource) => ({
+-                relativePath: resource.relativePath,
+-                publicUrl: `https://file.example/chips-card-resources/${resource.relativePath}`,
+-                uploadUrl: `https://s3.example/${resource.relativePath}`,
+-                method: "PUT",
+-                headers: {
+-                  "content-type": "image/png",
+-                  "x-amz-meta-chips-sha256": resource.sha256,
+-                  "x-amz-meta-chips-upload-session": "upload-1",
+-                },
+-                expiresAt: "2026-05-24T00:00:00.000Z",
+-              })),
++              objects: body.objects.map((object) => {
++                const objectName = object.role === "network-card"
++                  ? "network-card/card.card"
++                  : `resources/${object.relativePath}`;
++                return {
++                  role: object.role,
++                  relativePath: object.relativePath ?? null,
++                  bucket: "card-resources",
++                  objectKey: `cards/card-1/versions/version-1/${objectName}`,
++                  publicUrl: `https://cdn.example/cards/card-1/versions/version-1/${objectName}`,
++                  uploadUrl: `https://s3.example/cards/card-1/versions/version-1/${objectName}`,
++                  method: "PUT",
++                  headers: {
++                    "content-type": object.mimeType,
++                    "x-amz-meta-chips-upload-session": "upload-1",
++                  },
++                  expiresAt: "2026-05-24T00:00:00.000Z",
++                };
++              }),
+             },
+           }),
+           { status: 200, headers: { "content-type": "application/json" } },
+@@ -92,12 +114,14 @@ describe("community uploader module", () => {
+         return new Response("", { status: 200 });
+       }
+ 
+-      if (url.endsWith("/api/v1/upload-sessions/upload-1/card")) {
+-        submittedForms.push(init?.body as FormData);
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-1/complete")) {
++        expect(init?.method).toBe("POST");
++        completedUploads.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+         return new Response(
+           JSON.stringify({
+             data: {
+               cardId: "card-1",
++              versionId: "version-1",
+               status: "ready",
+               renderStatus: "queued",
+               renderStatusUrl: "/api/v1/cards/card-1/render-status",
+@@ -121,7 +145,18 @@ describe("community uploader module", () => {
+       }
+ 
+       if (action === "card.readInfo") {
+-        return { info: { metadata: { name: "Demo Card" } } };
++        return { info: { metadata: { card_id: "cardfile01", name: "Demo Card", cover_ratio: "3:4" } } };
++      }
++
++      if (action === "zip.list") {
++        return {
++          entries: [
++            { path: ".card/metadata.yaml", isDirectory: false, size: 80, compressedSize: 80, crc32: 1, offset: 0, compressionMethod: 0, modifiedTime: 1000 },
++            { path: "content/node-1.yaml", isDirectory: false, size: 120, compressedSize: 120, crc32: 2, offset: 80, compressionMethod: 0, modifiedTime: 1001 },
++            { path: "hero.png", isDirectory: false, size: 10, compressedSize: 10, crc32: 3, offset: 200, compressionMethod: 0, modifiedTime: 1002 },
++            { path: ".card/cardcover/cover.png", isDirectory: false, size: 11, compressedSize: 11, crc32: 4, offset: 210, compressionMethod: 0, modifiedTime: 1003 },
++          ],
++        };
+       }
+ 
+       if (action === "file.mkdir") {
+@@ -142,9 +177,7 @@ describe("community uploader module", () => {
+             { path: path.join(unpackedDir, ".card", "cover.html"), isFile: true, isDirectory: false },
+             { path: path.join(unpackedDir, ".card", "cardcover", "cover.png"), isFile: true, isDirectory: false },
+             { path: path.join(unpackedDir, "content", "node-1.yaml"), isFile: true, isDirectory: false },
+-            { path: path.join(unpackedDir, "content", "node-2.yaml"), isFile: true, isDirectory: false },
+             { path: path.join(unpackedDir, "hero.png"), isFile: true, isDirectory: false },
+-            { path: path.join(unpackedDir, "story.md"), isFile: true, isDirectory: false },
+           ],
+         };
+       }
+@@ -159,7 +192,7 @@ describe("community uploader module", () => {
+         if (payload?.path === path.join(unpackedDir, "content", "node-1.yaml")) {
+           return {
+             content: [
+-              "card_type: ImageCard",
++              "card_type: base.image",
+               "images:",
+               "  - id: image-1",
+               "    source: file",
+@@ -167,24 +200,11 @@ describe("community uploader module", () => {
+             ].join("\n"),
+           };
+         }
+-        if (payload?.path === path.join(unpackedDir, "content", "node-2.yaml")) {
+-          return {
+-            content: [
+-              "card_type: RichTextCard",
+-              "content_format: markdown",
+-              "content_source: file",
+-              "content_file: story.md",
+-            ].join("\n"),
+-          };
+-        }
+-        if (payload?.path === path.join(unpackedDir, "story.md")) {
+-          return { content: "# Story\n\nLocal markdown should be inlined." };
+-        }
+         if (payload?.path === path.join(unpackedDir, ".card", "cover.html")) {
+           return { content: "<img src=\"./cardcover/cover.png\">" };
+         }
+-        if (payload?.path === processedCardPath) {
+-          return { content: { type: "Buffer", data: bytes("processed-card") } };
++        if (payload?.path === networkCardPath) {
++          return { content: { type: "Buffer", data: bytes("network-card") } };
+         }
+       }
+ 
+@@ -199,21 +219,21 @@ describe("community uploader module", () => {
+       }
+ 
+       if (action === "card.pack") {
+-        expect(payload).toEqual({ cardDir: unpackedDir, outputPath: processedCardPath });
+-        return { cardFile: processedCardPath };
++        expect(payload).toEqual({ cardDir: unpackedDir, outputPath: networkCardPath });
++        return { cardFile: networkCardPath };
+       }
+ 
+       throw new Error(`Unexpected host action: ${action}`);
+     });
+ 
+-    const result = await moduleDefinition.providers[0]!.methods.publish(ctx, {
++    const result = await moduleDefinition.providers[0]!.methods.upload(ctx, {
+       cardFile,
+       server: {
+         baseUrl: "https://community.example",
+         accessToken: "token-1",
+       },
+       publish: {
+-        visibility: "public",
++        roomId: "room-1",
+         idempotencyKey: "idem-1",
+       },
+       workspace: {
+@@ -222,20 +242,614 @@ describe("community uploader module", () => {
+     });
+ 
+     expect(result.cardId).toBe("card-1");
++    expect(result.versionId).toBe("version-1");
+     expect(result.uploadedResources).toHaveLength(2);
+-    expect(storageUploads).toHaveLength(2);
+-    expect(submittedForms).toHaveLength(1);
++    expect(storageUploads).toHaveLength(3);
++    expect(storageUploads.map((item) => item.url)).toContain("https://s3.example/cards/card-1/versions/version-1/network-card/card.card");
++    expect(completedUploads).toHaveLength(1);
++    expect((completedUploads[0]?.networkCard as Record<string, unknown>).objectKey).toBe("cards/card-1/versions/version-1/network-card/card.card");
++    expect(completedUploads[0]?.restoreManifest).toMatchObject({
++      schemaVersion: "1.0.0",
++      originalFileName: "source.card",
++      cardId: "card-1",
++      versionId: "version-1",
++    });
+     expect(writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"))).toContain("source: url");
+-    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"))).toContain("https://file.example/chips-card-resources/hero.png");
+-    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-2.yaml"))).toContain("content_source: inline");
+-    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-2.yaml"))).toContain("Local markdown should be inlined.");
+-    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-2.yaml"))).not.toContain("content_file");
++    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"))).toContain("https://cdn.example/cards/card-1/versions/version-1/resources/hero.png");
+     expect(writtenFiles.get(path.join(unpackedDir, ".card", "cover.html"))).toBe(
+-      "<img src=\"https://file.example/chips-card-resources/.card/cardcover/cover.png\">",
++      "<img src=\"https://cdn.example/cards/card-1/versions/version-1/resources/.card/cardcover/cover.png\">",
+     );
+     expect(deletedPaths).toContain(path.join(unpackedDir, "hero.png"));
+-    expect(deletedPaths).toContain(path.join(unpackedDir, "story.md"));
+     expect(deletedPaths).toContain(path.join(unpackedDir, ".card", "cardcover", "cover.png"));
+-    expect(deletedPaths).toContain(processedCardPath);
++    expect(deletedPaths).toContain(networkCardPath);
++  });
++
++  it("downloads a network resource card and restores relative resource paths before packing", async () => {
++    const outputPath = path.resolve("/tmp/restored.card");
++    const workspace = path.resolve("/tmp/community-download-work");
++    const networkCardPath = path.join(workspace, "network.card");
++    const unpackedDir = path.join(workspace, "restored.card");
++    const writtenFiles = new Map<string, unknown>();
++    const deletedPaths: string[] = [];
++
++    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
++      if (url.endsWith("/api/v1/card-transfer/download-sessions")) {
++        expect(init?.method).toBe("POST");
++        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
++        expect(body.cardId).toBe("card-1");
++        return new Response(
++          JSON.stringify({
++            data: {
++              cardId: "card-1",
++              versionId: "version-1",
++              planUrl: "/api/v1/card-transfer/download-sessions/download-1/plan",
++            },
++          }),
++          { status: 201, headers: { "content-type": "application/json" } },
++        );
++      }
++
++      if (url.endsWith("/api/v1/card-transfer/download-sessions/download-1/plan")) {
++        expect(init?.method).toBe("GET");
++        expect((init?.headers as Record<string, string>).authorization).toBe("Bearer token-1");
++        return new Response(
++          JSON.stringify({
++            data: {
++              cardId: "card-1",
++              versionId: "version-1",
++              suggestedFileName: "Demo.card",
++              networkCard: {
++                bucket: "card-resources",
++                objectKey: "cards/card-1/versions/version-1/network-card/card.card",
++                publicUrl: "https://cdn.example/cards/card-1/versions/version-1/network-card/card.card",
++                downloadUrl: "https://cdn.example/download/network-card.card",
++                sizeBytes: 1024,
++                mimeType: "application/vnd.chips.card+zip",
++              },
++              resources: [
++                {
++                  originalRelativePath: "hero.png",
++                  networkUrl: "https://cdn.example/cards/card-1/versions/version-1/resources/hero.png",
++                  publicUrl: "https://cdn.example/cards/card-1/versions/version-1/resources/hero.png",
++                  bucket: "card-resources",
++                  objectKey: "cards/card-1/versions/version-1/resources/hero.png",
++                  downloadUrl: "https://cdn.example/download/hero.png",
++                  sizeBytes: 10,
++                  mimeType: "image/png",
++                },
++                {
++                  originalRelativePath: ".card/cardcover/cover.png",
++                  networkUrl: "https://cdn.example/cards/card-1/versions/version-1/resources/.card/cardcover/cover.png",
++                  publicUrl: "https://cdn.example/cards/card-1/versions/version-1/resources/.card/cardcover/cover.png",
++                  bucket: "card-resources",
++                  objectKey: "cards/card-1/versions/version-1/resources/.card/cardcover/cover.png",
++                  downloadUrl: "https://cdn.example/download/cover.png",
++                  sizeBytes: 11,
++                  mimeType: "image/png",
++                },
++              ],
++              restoreManifest: {
++                schemaVersion: "1.0.0",
++                originalFileName: "Demo.card",
++                zipEntries: [
++                  { order: 0, path: ".card/metadata.yaml", modifiedTime: 1767225600000 },
++                  { order: 1, path: "content/node-1.yaml", modifiedTime: 1767229200000 },
++                  { order: 2, path: "hero.png", modifiedTime: 1767232800000 },
++                  { order: 3, path: ".card/cardcover/cover.png", modifiedTime: 1767236400000 },
++                ],
++              },
++            },
++          }),
++          { status: 200, headers: { "content-type": "application/json" } },
++        );
++      }
++
++      if (url === "https://cdn.example/download/network-card.card") {
++        return new Response(arrayBuffer("network-card"), { status: 200 });
++      }
++      if (url === "https://cdn.example/download/hero.png") {
++        return new Response(arrayBuffer("hero-bytes"), { status: 200 });
++      }
++      if (url === "https://cdn.example/download/cover.png") {
++        return new Response(arrayBuffer("cover-bytes"), { status: 200 });
++      }
++
++      throw new Error(`Unexpected fetch: ${url}`);
++    });
++    vi.stubGlobal("fetch", fetchMock);
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.mkdir") {
++        return { ack: true };
++      }
++
++      if (action === "file.write") {
++        writtenFiles.set(String(payload?.path), payload?.content);
++        return { ack: true };
++      }
++
++      if (action === "card.unpack") {
++        expect(payload).toEqual({ cardFile: networkCardPath, outputDir: unpackedDir });
++        return { outputDir: unpackedDir };
++      }
++
++      if (action === "file.list") {
++        expect(payload?.dir).toBe(unpackedDir);
++        return {
++          entries: [
++            { path: path.join(unpackedDir, ".card", "cover.html"), isFile: true, isDirectory: false },
++            { path: path.join(unpackedDir, "content", "node-1.yaml"), isFile: true, isDirectory: false },
++          ],
++        };
++      }
++
++      if (action === "file.read") {
++        if (payload?.path === path.join(unpackedDir, "content", "node-1.yaml")) {
++          return {
++            content: [
++              "card_type: base.image",
++              "images:",
++              "  - id: image-1",
++              "    source: url",
++              "    url: https://cdn.example/cards/card-1/versions/version-1/resources/hero.png",
++            ].join("\n"),
++          };
++        }
++        if (payload?.path === path.join(unpackedDir, ".card", "cover.html")) {
++          return {
++            content: "<img src=\"https://cdn.example/cards/card-1/versions/version-1/resources/.card/cardcover/cover.png\">",
++          };
++        }
++      }
++
++      if (action === "card.pack") {
++        expect(payload).toEqual({
++          cardDir: unpackedDir,
++          outputPath,
++          entryPlan: [
++            { path: ".card/metadata.yaml", modifiedTime: 1767225600000 },
++            { path: "content/node-1.yaml", modifiedTime: 1767229200000 },
++            { path: "hero.png", modifiedTime: 1767232800000 },
++            { path: ".card/cardcover/cover.png", modifiedTime: 1767236400000 },
++          ],
++        });
++        return { cardFile: outputPath };
++      }
++
++      if (action === "card.readInfo") {
++        expect(payload?.cardFile).toBe(outputPath);
++        return { info: { metadata: { name: "Demo Card" } } };
++      }
++
++      if (action === "card.render") {
++        expect(payload?.cardFile).toBe(outputPath);
++        return { view: { frame: "verified" } };
++      }
++
++      if (action === "card.open") {
++        expect(payload?.cardFile).toBe(outputPath);
++        return { result: { sessionId: "verified-session" } };
++      }
++
++      if (action === "file.delete") {
++        deletedPaths.push(String(payload?.path));
++        return { ack: true };
++      }
++
++      throw new Error(`Unexpected host action: ${action}`);
++    });
++
++    const result = await moduleDefinition.providers[0]!.methods.download(ctx, {
++      cardId: "card-1",
++      outputPath,
++      server: {
++        baseUrl: "https://community.example",
++        accessToken: "token-1",
++      },
++      workspace: {
++        tempDir: workspace,
++      },
++    });
++
++    expect(result).toMatchObject({
++      cardId: "card-1",
++      versionId: "version-1",
++      outputPath,
++      restoredResourceCount: 2,
++      suggestedFileName: "Demo.card",
++    });
++    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"))).toContain("source: file");
++    expect(writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"))).toContain("file_path: hero.png");
++    expect(writtenFiles.get(path.join(unpackedDir, ".card", "cover.html"))).toBe("<img src=\".card/cardcover/cover.png\">");
++    expect(writtenFiles.get(path.join(unpackedDir, "hero.png"))).toEqual(bytes("hero-bytes"));
++    expect(writtenFiles.get(path.join(unpackedDir, ".card", "cardcover", "cover.png"))).toEqual(bytes("cover-bytes"));
++    expect(deletedPaths).toContain(networkCardPath);
++    expect(deletedPaths).toContain(unpackedDir);
++  });
++
++  it("opens remote community cards by downloading the network resource card and launching the local viewer", async () => {
++    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
++      if (url.endsWith("/api/v1/card-transfer/download-sessions")) {
++        const body = JSON.stringify({
++          data: {
++            downloadId: "download-1",
++            cardId: "card-1",
++            versionId: "version-1",
++            planUrl: "/api/v1/card-transfer/download-sessions/download-1/plan",
++          },
++        });
++        return {
++          ok: true,
++          text: async () => body,
++          json: async () => JSON.parse(body),
++        };
++      }
++      if (url.endsWith("/api/v1/card-transfer/download-sessions/download-1/plan")) {
++        const body = JSON.stringify({
++          data: {
++            cardId: "card-1",
++            versionId: "version-1",
++            suggestedFileName: "Demo.card",
++            networkCard: {
++              bucket: "chips-card-resources",
++              objectKey: "cards/card-1/versions/version-1/network-card/card.card",
++              publicUrl: "https://cdn.example/network-card.card",
++              downloadUrl: "https://cdn.example/network-card.card",
++              sizeBytes: 2048,
++              mimeType: "application/vnd.chips.card+zip",
++            },
++            resources: [],
++          },
++        });
++        return {
++          ok: true,
++          text: async () => body,
++          json: async () => JSON.parse(body),
++        };
++      }
++      if (url === "https://cdn.example/network-card.card") {
++        return {
++          ok: true,
++          arrayBuffer: async () => new TextEncoder().encode("network-card-bytes").buffer,
++        };
++      }
++      throw new Error(`Unexpected fetch URL: ${url}`);
++    });
++
++    vi.stubGlobal("fetch", fetchMock);
++
++    const hostActions: Array<{ action: string; payload?: Record<string, unknown> }> = [];
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.mkdir") {
++        return { ack: true };
++      }
++      if (action === "file.write") {
++        return { ack: true };
++      }
++      if (action === "surface.open") {
++        hostActions.push({ action, payload });
++        return { surface: { id: "surface-1" } };
++      }
++      throw new Error(`Unexpected host action: ${action}`);
++    });
++
++    const result = await moduleDefinition.providers[0]!.methods.openRemote(ctx, {
++      cardId: "card-1",
++      server: {
++        baseUrl: "https://community.example",
++        accessToken: "token-1",
++      },
++    });
++
++    expect(result.opened).toBe(true);
++    expect(result.url).toBe("https://community.example/cards/card-1");
++    expect(result.localCardPath).toBeTruthy();
++
++    const openAction = hostActions.find((entry) => entry.action === "surface.open");
++    expect(openAction).toBeTruthy();
++    const request = (openAction?.payload as { request?: Record<string, unknown> })?.request;
++    expect(request?.kind).toBe("window");
++    const target = (request as { target?: Record<string, unknown> }).target;
++    expect(target?.type).toBe("plugin");
++    expect(target?.pluginId).toBe("com.chips.card-viewer");
++    const launchParams = (target as { launchParams?: Record<string, unknown> }).launchParams;
++    const cardSource = (launchParams as { cardSource?: Record<string, unknown> }).cardSource;
++    expect(cardSource?.kind).toBe("local-file");
++    expect(cardSource?.documentKind).toBe("card");
++    expect(String(cardSource?.filePath)).toContain("Demo.card");
++    const communityServer = (launchParams as { communityServer?: Record<string, unknown> }).communityServer;
++    expect(communityServer?.baseUrl).toBe("https://community.example");
++    expect(communityServer?.accessToken).toBe("token-1");
++
++    vi.unstubAllGlobals();
++  });
++
++  it("retries transient control-plane failures and cancels on job signal", async () => {
++    const cardFile = path.resolve("/tmp/retry-source.card");
++    const workspace = path.resolve("/tmp/community-retry-work");
++    const unpackedDir = path.join(workspace, "unpacked.card");
++    let createSessionAttempts = 0;
++
++    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions")) {
++        createSessionAttempts += 1;
++        if (createSessionAttempts < 3) {
++          return new Response(JSON.stringify({ error: { code: "INTERNAL_ERROR", message: "temporary" } }), {
++            status: 503,
++            headers: { "content-type": "application/json" },
++          });
++        }
++        return new Response(
++          JSON.stringify({
++            data: { uploadId: "upload-1", cardId: "card-1", versionId: "version-1", resourcePrefix: "prefix" },
++          }),
++          { status: 201, headers: { "content-type": "application/json" } },
++        );
++      }
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-1/objects:presign")) {
++        const body = JSON.parse(String(init?.body)) as {
++          objects: Array<{ role: "network-card" | "resource"; relativePath?: string }>;
++        };
++        return new Response(
++          JSON.stringify({
++            data: {
++              objects: body.objects.map((object) => ({
++                role: object.role,
++                relativePath: object.relativePath ?? null,
++                bucket: "card-resources",
++                objectKey: `cards/card-1/versions/version-1/${object.role === "network-card" ? "network-card/card.card" : `resources/${object.relativePath}`}`,
++                publicUrl: `https://cdn.example/${object.role}`,
++                uploadUrl: `https://s3.example/${object.role}`,
++                method: "PUT",
++                headers: {},
++              })),
++            },
++          }),
++          { status: 200, headers: { "content-type": "application/json" } },
++        );
++      }
++      if (url.startsWith("https://s3.example/")) {
++        return new Response("", { status: 200 });
++      }
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-1/complete")) {
++        return new Response(
++          JSON.stringify({
++            data: { cardId: "card-1", versionId: "version-1", status: "ready", renderStatus: "queued", renderStatusUrl: "/render-status", communityUrl: "https://community.example/cards/card-1" },
++          }),
++          { status: 202, headers: { "content-type": "application/json" } },
++        );
++      }
++      throw new Error(`Unexpected fetch: ${url}`);
++    });
++    vi.stubGlobal("fetch", fetchMock);
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        return { meta: { isFile: true, isDirectory: false } };
++      }
++      if (action === "card.readInfo") {
++        return { info: { metadata: { name: "Retry Card" } } };
++      }
++      if (action === "zip.list") {
++        return { entries: [] };
++      }
++      if (action === "file.mkdir") {
++        return { ack: true };
++      }
++      if (action === "card.unpack") {
++        return { outputDir: unpackedDir };
++      }
++      if (action === "file.list") {
++        return { entries: [] };
++      }
++      if (action === "card.pack") {
++        return { cardFile: path.join(workspace, "retry.network.card") };
++      }
++      if (action === "file.read") {
++        return { content: { type: "Buffer", data: bytes("network-card") } };
++      }
++      if (action === "file.write" || action === "file.delete") {
++        return { ack: true };
++      }
++      throw new Error(`Unexpected host action: ${action}`);
++    });
++
++    const result = await moduleDefinition.providers[0]!.methods.upload(ctx, {
++      cardFile,
++      server: { baseUrl: "https://community.example", accessToken: "token-1" },
++      workspace: { tempDir: workspace },
++    });
++
++    expect(createSessionAttempts).toBe(3);
++    expect(result.cardId).toBe("card-1");
++  });
++
++  it("signals auth expiration as a non-retryable transfer error", async () => {
++    const cardFile = path.resolve("/tmp/auth-source.card");
++    const workspace = path.resolve("/tmp/community-auth-work");
++    const unpackedDir = path.join(workspace, "unpacked.card");
++
++    const fetchMock = vi.fn(async (url: string) => {
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions")) {
++        return new Response(JSON.stringify({ error: { code: "AUTH_TOKEN_EXPIRED", message: "expired" } }), {
++          status: 401,
++          headers: { "content-type": "application/json" },
++        });
++      }
++      throw new Error(`Unexpected fetch: ${url}`);
++    });
++    vi.stubGlobal("fetch", fetchMock);
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        return { meta: { isFile: true, isDirectory: false } };
++      }
++      if (action === "card.readInfo") {
++        return { info: { metadata: { name: "Auth Card" } } };
++      }
++      if (action === "zip.list") {
++        return { entries: [] };
++      }
++      if (action === "file.mkdir") {
++        return { ack: true };
++      }
++      if (action === "card.unpack") {
++        return { outputDir: unpackedDir };
++      }
++      if (action === "file.list") {
++        return { entries: [] };
++      }
++      if (action === "card.pack") {
++        return { cardFile: path.join(workspace, "auth.network.card") };
++      }
++      if (action === "file.read") {
++        return { content: { type: "Buffer", data: bytes("network-card") } };
++      }
++      if (action === "file.write" || action === "file.delete") {
++        return { ack: true };
++      }
++      throw new Error(`Unexpected host action: ${action}`);
++    });
++
++    const result = moduleDefinition.providers[0]!.methods.upload(ctx, {
++      cardFile,
++      server: { baseUrl: "https://community.example", accessToken: "token-1" },
++      workspace: { tempDir: workspace },
++    });
++
++    await expect(result).rejects.toMatchObject({
++      code: "COMMUNITY_TRANSFER_AUTH_EXPIRED",
++      retryable: false,
++    });
++  });
++
++  it("inlines file-backed rich text content during upload and records the original content file in the restore manifest", async () => {
++    const cardFile = path.resolve("/tmp/richtext-source.card");
++    const workspace = path.resolve("/tmp/community-richtext-work");
++    const unpackedDir = path.join(workspace, "unpacked.card");
++    const writtenFiles = new Map<string, unknown>();
++
++    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions")) {
++        return new Response(
++          JSON.stringify({
++            data: { uploadId: "upload-rt", cardId: "card-rt", versionId: "version-rt", resourcePrefix: "prefix" },
++          }),
++          { status: 201, headers: { "content-type": "application/json" } },
++        );
++      }
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-rt/objects:presign")) {
++        const body = JSON.parse(String(init?.body)) as {
++          objects: Array<{ role: "network-card" | "resource"; relativePath?: string }>;
++        };
++        return new Response(
++          JSON.stringify({
++            data: {
++              objects: body.objects.map((object) => ({
++                role: object.role,
++                relativePath: object.relativePath ?? null,
++                bucket: "card-resources",
++                objectKey: `cards/card-rt/versions/version-rt/${object.role === "network-card" ? "network-card/card.card" : `resources/${object.relativePath}`}`,
++                publicUrl: `https://cdn.example/${object.role === "network-card" ? "network-card" : object.relativePath}`,
++                uploadUrl: `https://s3.example/${object.role}`,
++                method: "PUT",
++                headers: {},
++              })),
++            },
++          }),
++          { status: 200, headers: { "content-type": "application/json" } },
++        );
++      }
++      if (url.startsWith("https://s3.example/")) {
++        return new Response("", { status: 200 });
++      }
++      if (url.endsWith("/api/v1/card-transfer/upload-sessions/upload-rt/complete")) {
++        return new Response(
++          JSON.stringify({
++            data: {
++              cardId: "card-rt",
++              versionId: "version-rt",
++              status: "ready",
++              renderStatus: "queued",
++              renderStatusUrl: "/render-status",
++              communityUrl: "https://community.example/cards/card-rt",
++            },
++          }),
++          { status: 202, headers: { "content-type": "application/json" } },
++        );
++      }
++      throw new Error(`Unexpected fetch: ${url}`);
++    });
++    vi.stubGlobal("fetch", fetchMock);
++
++    const ctx = createContext(async (action, payload) => {
++      if (action === "file.stat") {
++        return { meta: { isFile: true, isDirectory: false } };
++      }
++      if (action === "card.readInfo") {
++        return { info: { metadata: { name: "Rich Text Card" } } };
++      }
++      if (action === "zip.list") {
++        return { entries: [] };
++      }
++      if (action === "file.mkdir") {
++        return { ack: true };
++      }
++      if (action === "card.unpack") {
++        return { outputDir: unpackedDir };
++      }
++      if (action === "file.list") {
++        return {
++          entries: [
++            { path: path.join(unpackedDir, "content", "node-1.yaml"), isFile: true, isDirectory: false },
++            { path: path.join(unpackedDir, "richtext", "node-1.md"), isFile: true, isDirectory: false },
++            { path: path.join(unpackedDir, ".card", "cover.html"), isFile: true, isDirectory: false },
++          ],
++        };
++      }
++      if (action === "file.read") {
++        if (payload?.path === path.join(unpackedDir, "content", "node-1.yaml")) {
++          return {
++            content: [
++              "card_type: base.richtext",
++              "content_source: file",
++              "content_file: richtext/node-1.md",
++            ].join("\n"),
++          };
++        }
++        if (payload?.path === path.join(unpackedDir, "richtext", "node-1.md")) {
++          return { content: "# 富文本正文\n\n这是内容。" };
++        }
++        if (payload?.path === path.join(unpackedDir, ".card", "cover.html")) {
++          return { content: "<html></html>" };
++        }
++        if (payload?.path === path.join(workspace, "richtext-source.network.card")) {
++          return { content: { type: "Buffer", data: bytes("network-card") } };
++        }
++      }
++      if (action === "file.write") {
++        writtenFiles.set(String(payload?.path), payload?.content);
++        return { ack: true };
++      }
++      if (action === "file.delete") {
++        return { ack: true };
++      }
++      if (action === "card.pack") {
++        return { cardFile: path.join(workspace, "richtext-source.network.card") };
++      }
++      throw new Error(`Unexpected host action: ${action}`);
++    });
++
++    const result = await moduleDefinition.providers[0]!.methods.upload(ctx, {
++      cardFile,
++      server: { baseUrl: "https://community.example", accessToken: "token-1" },
++      workspace: { tempDir: workspace },
++    });
++
++    const rewrittenYaml = writtenFiles.get(path.join(unpackedDir, "content", "node-1.yaml"));
++    expect(String(rewrittenYaml)).toContain("content_source: inline");
++    expect(String(rewrittenYaml)).toContain("# 富文本正文");
++    expect(String(rewrittenYaml)).not.toContain("content_file:");
++    expect(result.cardId).toBe("card-rt");
+   });
+ });
+diff --git a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tsconfig.json b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tsconfig.json
+index 985a6630..ba4e2372 100644
+--- a/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tsconfig.json
++++ b/Chips-ModulePlugin/Chips-CommunityUploader-Plugin/tsconfig.json
+@@ -18,5 +18,8 @@
+   "include": [
+     "src/**/*.ts",
+     "tests/**/*.ts"
++  ],
++  "exclude": [
++    "src/**/归档"
+   ]
+ }

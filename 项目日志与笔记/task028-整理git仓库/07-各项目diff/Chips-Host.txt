@@ -1,0 +1,444 @@
+diff --git a/Chips-Host/packages/card-packer/src/card-packer.ts b/Chips-Host/packages/card-packer/src/card-packer.ts
+index 9454b96f..6e48b68d 100644
+--- a/Chips-Host/packages/card-packer/src/card-packer.ts
++++ b/Chips-Host/packages/card-packer/src/card-packer.ts
+@@ -4,7 +4,7 @@ import os from 'node:os';
+ import path from 'node:path';
+ import yaml from 'yaml';
+ import { createError } from '../../../src/shared/errors';
+-import { StoreZipService } from '../../zip-service/src';
++import { StoreZipService, type ZipEntryPlan } from '../../zip-service/src';
+ 
+ export interface CardPackResourceEntry {
+   path: string;
+@@ -95,7 +95,7 @@ const deepCloneRecord = (value: Record<string, unknown>): Record<string, unknown
+ export class CardPacker {
+   public constructor(private readonly zip = new StoreZipService()) {}
+ 
+-  public async pack(cardDir: string, outputPath: string): Promise<string> {
++  public async pack(cardDir: string, outputPath: string, options?: { entryPlan?: ZipEntryPlan[] }): Promise<string> {
+     const sourceStats = await this.safeStat(cardDir);
+     if (!sourceStats?.isDirectory()) {
+       throw createError('CARD_PACK_FAILED', `Card directory does not exist: ${cardDir}`, {
+@@ -121,13 +121,13 @@ export class CardPacker {
+         generated_at: generatedAt
+       };
+ 
+-      const totalSize = await this.packUntilSizeStabilizes(stagingDir, outputPath, context.metadata);
++      const totalSize = await this.packUntilSizeStabilizes(stagingDir, outputPath, context.metadata, options?.entryPlan);
+       context.metadata.file_info = {
+         ...asRecord(context.metadata.file_info),
+         total_size: totalSize
+       };
+       await this.writeYamlFile(path.join(stagingDir, '.card/metadata.yaml'), context.metadata);
+-      await this.zip.compress(stagingDir, outputPath);
++      await this.zip.compress(stagingDir, outputPath, { entryPlan: options?.entryPlan });
+       return outputPath;
+     } finally {
+       await fs.rm(stagingRoot, { recursive: true, force: true });
+@@ -279,7 +279,8 @@ export class CardPacker {
+   private async packUntilSizeStabilizes(
+     cardDir: string,
+     outputPath: string,
+-    metadata: Record<string, unknown>
++    metadata: Record<string, unknown>,
++    entryPlan?: ZipEntryPlan[]
+   ): Promise<number> {
+     let expectedSize = 0;
+     for (let attempt = 0; attempt < 8; attempt += 1) {
+@@ -288,7 +289,7 @@ export class CardPacker {
+         total_size: expectedSize
+       };
+       await this.writeYamlFile(path.join(cardDir, '.card/metadata.yaml'), metadata);
+-      await this.zip.compress(cardDir, outputPath);
++      await this.zip.compress(cardDir, outputPath, { entryPlan });
+       const archiveStat = await fs.stat(outputPath);
+       if (archiveStat.size === expectedSize) {
+         return archiveStat.size;
+diff --git a/Chips-Host/packages/card-service/src/card-service.ts b/Chips-Host/packages/card-service/src/card-service.ts
+index 91ce9156..8054e998 100644
+--- a/Chips-Host/packages/card-service/src/card-service.ts
++++ b/Chips-Host/packages/card-service/src/card-service.ts
+@@ -22,7 +22,7 @@ import type {
+   RenderViewport,
+   ThemeSnapshot
+ } from '../../unified-rendering/src';
+-import { StoreZipService } from '../../zip-service/src';
++import { StoreZipService, type ZipEntryPlan } from '../../zip-service/src';
+ 
+ export interface CardAst {
+   metadata: Record<string, unknown>;
+@@ -986,17 +986,51 @@ const createBasecardFrameDocument = (options: {
+     '        }',
+     '        return segments.join("/");',
+     '      };',
++    '      const resolveRuntimeResourceBaseUrl = () => {',
++    '        if (!resourceBaseUrl) {',
++    '          return "";',
++    '        }',
++    '        try {',
++    '          return new URL(resourceBaseUrl, window.location.href).toString();',
++    '        } catch {',
++    '          return "";',
++    '        }',
++    '      };',
+     '      const resolveResourceUrl = async (resourcePath) => {',
+     '        const normalizedResourcePath = normalizeRelativeResourcePath(resourcePath);',
+     '        if (!normalizedResourcePath) {',
+     '          throw new Error(`Invalid base card resource path: ${String(resourcePath)}`);',
+     '        }',
+-    '        if (resourceBaseUrl) {',
+-    '          return new URL(normalizedResourcePath, resourceBaseUrl).toString();',
++    '        const runtimeResourceBaseUrl = resolveRuntimeResourceBaseUrl();',
++    '        if (runtimeResourceBaseUrl) {',
++    '          return new URL(normalizedResourcePath, runtimeResourceBaseUrl).toString();',
+     '        }',
+     '        return normalizedResourcePath;',
+     '      };',
+     '      const releaseResourceUrl = () => undefined;',
++    '      const resolveOpenResourceId = (resourceId) => {',
++    '        const normalizedResourceId = typeof resourceId === "string" ? resourceId.trim() : "";',
++    '        if (!normalizedResourceId) {',
++    '          return "";',
++    '        }',
++    '        try {',
++    '          return new URL(normalizedResourceId).toString();',
++    '        } catch {',
++    '          const normalizedResourcePath = normalizeRelativeResourcePath(normalizedResourceId);',
++    '          if (!normalizedResourcePath) {',
++    '            return normalizedResourceId;',
++    '          }',
++    '          const runtimeResourceBaseUrl = resolveRuntimeResourceBaseUrl();',
++    '          if (runtimeResourceBaseUrl) {',
++    '            try {',
++    '              return new URL(normalizedResourcePath, runtimeResourceBaseUrl).toString();',
++    '            } catch {',
++    '              return normalizedResourceId;',
++    '            }',
++    '          }',
++    '          return normalizedResourcePath;',
++    '        }',
++    '      };',
+     '      const openResource = (input) => {',
+     '        if (!input || typeof input !== "object") {',
+     '          return;',
+@@ -1004,12 +1038,16 @@ const createBasecardFrameDocument = (options: {
+     '        if (typeof input.resourceId !== "string" || input.resourceId.trim().length === 0) {',
+     '          return;',
+     '        }',
++    '        const resourceId = resolveOpenResourceId(input.resourceId);',
++    '        if (!resourceId) {',
++    '          return;',
++    '        }',
+     '        const structuredPayload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)',
+     '          ? input.payload',
+     '          : undefined;',
+     "        emit('chips.basecard:resource-open', {",
+     '          nodeId,',
+-    '          resourceId: input.resourceId.trim(),',
++    '          resourceId,',
+     '          mimeType: typeof input.mimeType === "string" ? input.mimeType : undefined,',
+     '          title: typeof input.title === "string" ? input.title : undefined,',
+     '          fileName: typeof input.fileName === "string" ? input.fileName : undefined,',
+@@ -1724,8 +1762,8 @@ export class CardService {
+     this.packer = new CardPacker(this.zip);
+   }
+ 
+-  public async pack(cardDir: string, outputPath: string): Promise<string> {
+-    return this.packer.pack(cardDir, outputPath);
++  public async pack(cardDir: string, outputPath: string, options?: { entryPlan?: ZipEntryPlan[] }): Promise<string> {
++    return this.packer.pack(cardDir, outputPath, { entryPlan: options?.entryPlan });
+   }
+ 
+   public async unpack(cardFile: string, outputDir: string): Promise<string> {
+diff --git a/Chips-Host/packages/zip-service/src/index.ts b/Chips-Host/packages/zip-service/src/index.ts
+index 8970832c..ef5714ef 100644
+--- a/Chips-Host/packages/zip-service/src/index.ts
++++ b/Chips-Host/packages/zip-service/src/index.ts
+@@ -1,2 +1,2 @@
+ export { StoreZipService } from './zip-store';
+-export type { ZipEntryInput, ZipEntryMeta } from './types';
++export type { ZipEntryInput, ZipEntryMeta, ZipEntryPlan } from './types';
+diff --git a/Chips-Host/packages/zip-service/src/types.ts b/Chips-Host/packages/zip-service/src/types.ts
+index cd1b0ac8..c846e88c 100644
+--- a/Chips-Host/packages/zip-service/src/types.ts
++++ b/Chips-Host/packages/zip-service/src/types.ts
+@@ -4,6 +4,11 @@ export interface ZipEntryInput {
+   modifiedTime?: number;
+ }
+ 
++export interface ZipEntryPlan {
++  path: string;
++  modifiedTime?: number;
++}
++
+ export interface ZipEntryMeta {
+   path: string;
+   size: number;
+diff --git a/Chips-Host/packages/zip-service/src/zip-store.ts b/Chips-Host/packages/zip-service/src/zip-store.ts
+index 2c4f2581..ee1b3518 100644
+--- a/Chips-Host/packages/zip-service/src/zip-store.ts
++++ b/Chips-Host/packages/zip-service/src/zip-store.ts
+@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
+ import path from 'node:path';
+ import zlib from 'node:zlib';
+ import { crc32 } from './crc32';
+-import type { ZipEntryInput, ZipEntryMeta } from './types';
++import type { ZipEntryInput, ZipEntryMeta, ZipEntryPlan } from './types';
+ 
+ const LFH_SIGNATURE = 0x04034b50;
+ const CD_SIGNATURE = 0x02014b50;
+@@ -125,9 +125,49 @@ const collectFiles = async (inputDir: string): Promise<ZipEntryInput[]> => {
+   return files;
+ };
+ 
++const applyEntryPlan = (
++  files: ZipEntryInput[],
++  plan: ZipEntryPlan[] | undefined,
++): ZipEntryInput[] => {
++  if (!plan || plan.length === 0) {
++    return files;
++  }
++
++  const byPath = new Map(files.map((file) => [file.path, file]));
++  const ordered: ZipEntryInput[] = [];
++  const plannedPaths = new Set<string>();
++
++  for (const item of plan) {
++    if (plannedPaths.has(item.path)) {
++      continue;
++    }
++    const file = byPath.get(item.path);
++    if (!file) {
++      continue;
++    }
++    plannedPaths.add(item.path);
++    ordered.push({
++      ...file,
++      ...(typeof item.modifiedTime === 'number' ? { modifiedTime: item.modifiedTime } : {})
++    });
++  }
++
++  for (const file of files) {
++    if (!plannedPaths.has(file.path)) {
++      ordered.push(file);
++    }
++  }
++
++  return ordered;
++};
++
+ export class StoreZipService {
+-  public async compress(inputDir: string, outputZip: string): Promise<void> {
+-    const files = await collectFiles(inputDir);
++  public async compress(
++    inputDir: string,
++    outputZip: string,
++    options?: { entryPlan?: ZipEntryPlan[] },
++  ): Promise<void> {
++    const files = applyEntryPlan(await collectFiles(inputDir), options?.entryPlan);
+     const chunks: Buffer[] = [];
+     const centralDirectory: Buffer[] = [];
+     const metadata: ZipEntryMeta[] = [];
+diff --git a/Chips-Host/src/main/services/register-host-services.ts b/Chips-Host/src/main/services/register-host-services.ts
+index a3d93509..73596fce 100644
+--- a/Chips-Host/src/main/services/register-host-services.ts
++++ b/Chips-Host/src/main/services/register-host-services.ts
+@@ -6571,14 +6571,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
+     name: 'card',
+     actions: {
+       pack: {
+-        descriptor: descriptor<{ cardDir: string; outputPath: string }, { cardFile: string }>(
++        descriptor: descriptor<{ cardDir: string; outputPath: string; entryPlan?: Array<{ path: string; modifiedTime?: number }> }, { cardFile: string }>(
+           'card.pack',
+           ['card.write'],
+           12_000,
+           false,
+           0,
+           withMetrics(state, 'card.pack', async (input) => {
+-            const cardFile = await ctx.getCardService().pack(input.cardDir, input.outputPath);
++            const cardFile = await ctx.getCardService().pack(input.cardDir, input.outputPath, {
++              entryPlan: input.entryPlan
++            });
+             return { cardFile };
+           })
+         )
+@@ -7208,14 +7210,16 @@ const createServices = (ctx: HostServiceContext, state: RuntimeState): ServiceRe
+     name: 'zip',
+     actions: {
+       compress: {
+-        descriptor: descriptor<{ inputDir: string; outputZip: string }, { outputZip: string }>(
++        descriptor: descriptor<{ inputDir: string; outputZip: string; entryPlan?: Array<{ path: string; modifiedTime?: number }> }, { outputZip: string }>(
+           'zip.compress',
+           ['zip.manage'],
+           12_000,
+           false,
+           0,
+           withMetrics(state, 'zip.compress', async (input) => {
+-            await ctx.getZipService().compress(input.inputDir, input.outputZip);
++            await ctx.getZipService().compress(input.inputDir, input.outputZip, {
++              entryPlan: input.entryPlan
++            });
+             return { outputZip: input.outputZip };
+           })
+         )
+diff --git a/Chips-Host/tests/unit/card-service-rendering.test.ts b/Chips-Host/tests/unit/card-service-rendering.test.ts
+index 4e5b396a..a12363ab 100644
+--- a/Chips-Host/tests/unit/card-service-rendering.test.ts
++++ b/Chips-Host/tests/unit/card-service-rendering.test.ts
+@@ -169,6 +169,7 @@ const createRichTextPluginEntry = (pluginId: string, cardTypes: string[], displa
+ const createImagePluginEntry = (pluginId: string, cardTypes: string[], displayName: string): string => [
+   'const asImages = (config) => Array.isArray(config?.images) ? config.images : [];',
+   'export function renderBasecardView(ctx = {}) {',
++  '  globalThis.__chipsLastBasecardContext = ctx;',
+   '  const documentRef = ctx.container?.ownerDocument ?? globalThis.document;',
+   '  const root = documentRef.createElement("section");',
+   '  root.dataset.scope = "image-card";',
+@@ -742,6 +743,92 @@ describe('CardService rendering', () => {
+     expect(view.body).not.toContain('160cpx');
+   }, CARD_RENDER_TEST_TIMEOUT_MS);
+ 
++  it('normalizes relative resource bases inside exported single-card documents', async () => {
++    const cardDir = await createImageCardDirectory();
++    const themeContext = await loadThemeRenderContext();
++    const workspace = await createTempDir('chips-card-runtime-');
++    const runtime = new PluginRuntime(workspace, {
++      locale: 'zh-CN',
++      themeId: 'chips-official.default-theme',
++    });
++    await runtime.load();
++    await installBaseCardPluginFixture(runtime, workspace, 'image');
++    const service = new CardService({ runtime, workspaceRoot: process.cwd() });
++
++    const view = await service.renderBasecard({
++      baseCardId: 'gallery',
++      cardType: 'ImageCard',
++      title: 'Hero',
++      config: {
++        card_type: 'ImageCard',
++        layout_type: 'single',
++        layout_options: {
++          grid_mode: '2x2',
++          single_width_percent: 100,
++          single_alignment: 'center',
++          spacing_mode: 'comfortable',
++        },
++        images: [
++          {
++            id: 'image-1',
++            source: 'file',
++            file_path: 'assets/hero.png',
++            title: 'Hero',
++            alt: 'Hero',
++          },
++        ],
++      },
++      resourceBaseUrl: './assets/content/',
++      interactionPolicy: 'native',
++      ...themeContext,
++    });
++
++    const postedMessages: Array<{ type?: string; payload?: unknown }> = [];
++    const dom = new JSDOM(view.body, {
++      runScripts: 'dangerously',
++      url: 'https://community.example/cache/gallery.html',
++      beforeParse(window: JsdomWindowLike) {
++        installBlobUrlSupport(window);
++        Object.defineProperty(window, 'parent', {
++          configurable: true,
++          value: {
++            postMessage(message: { type?: string; payload?: unknown }) {
++              postedMessages.push(message);
++            },
++          },
++        });
++      },
++    });
++
++    try {
++      await new Promise((resolve) => setTimeout(resolve, 20));
++
++      const image = dom.window.document?.querySelector?.(
++        '[data-scope="image-card"] img',
++      ) as { getAttribute(name: string): string | null } | null;
++      expect(image?.getAttribute('src')).toBe('https://community.example/cache/assets/content/assets/hero.png');
++
++      postedMessages.length = 0;
++      const openResource = (dom.window as unknown as { __chipsLastBasecardContext?: { openResource?: (input: { resourceId: string; mimeType?: string }) => void } })
++        .__chipsLastBasecardContext?.openResource;
++      expect(typeof openResource).toBe('function');
++      openResource?.({
++        resourceId: 'assets/hero.png',
++        mimeType: 'image/png',
++      });
++
++      const resourceOpenMessage = postedMessages.find((message) => message.type === 'chips.basecard:resource-open');
++      expect(resourceOpenMessage?.payload).toMatchObject({
++        nodeId: 'gallery',
++        intent: 'view',
++        resourceId: 'https://community.example/cache/assets/content/assets/hero.png',
++        mimeType: 'image/png',
++      });
++    } finally {
++      dom.window.close();
++    }
++  }, CARD_RENDER_TEST_TIMEOUT_MS);
++
+   it('stitches composite image cards from single-card runtime documents instead of pre-rendered static html', async () => {
+     const cardDir = await createImageCardDirectory();
+     const themeContext = await loadThemeRenderContext();
+@@ -1034,7 +1121,7 @@ describe('CardService rendering', () => {
+ 
+       const introFrame = dom.window.document?.querySelector?.(
+         '.chips-composite__frame[data-node-id="intro"]',
+-      );
++      ) as { style?: { height?: string } } | null;
+       expect(introFrame?.style?.height).toBe('512px');
+ 
+       const resizeMessage = postedMessages.find((message) => message.type === 'chips.composite:resize');
+diff --git a/Chips-Host/tests/unit/zip-store.test.ts b/Chips-Host/tests/unit/zip-store.test.ts
+index 92fc55b7..08ab3ba8 100644
+--- a/Chips-Host/tests/unit/zip-store.test.ts
++++ b/Chips-Host/tests/unit/zip-store.test.ts
+@@ -202,4 +202,41 @@ describe('StoreZipService', () => {
+ 
+     await fs.rm(workspace, { recursive: true, force: true });
+   });
++
++  it('preserves original entry order and modified times through an entry plan', async () => {
++    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'chips-zip-plan-test-'));
++    const inputDir = path.join(workspace, 'input');
++    const outputZip = path.join(workspace, 'planned.zip');
++
++    await fs.mkdir(path.join(inputDir, 'content'), { recursive: true });
++    await fs.mkdir(path.join(inputDir, '.card'), { recursive: true });
++    await fs.writeFile(path.join(inputDir, 'content', 'b.yaml'), 'b', 'utf-8');
++    await fs.writeFile(path.join(inputDir, 'hero.png'), 'hero', 'utf-8');
++    await fs.writeFile(path.join(inputDir, '.card', 'metadata.yaml'), 'meta', 'utf-8');
++    await fs.writeFile(path.join(inputDir, 'content', 'a.yaml'), 'a', 'utf-8');
++
++    const zip = new StoreZipService();
++    await zip.compress(inputDir, outputZip, {
++      entryPlan: [
++        { path: '.card/metadata.yaml', modifiedTime: 1767225600000 },
++        { path: 'content/b.yaml', modifiedTime: 1767229200000 },
++        { path: 'hero.png', modifiedTime: 1767232800000 },
++        { path: 'content/a.yaml', modifiedTime: 1767236400000 },
++      ],
++    });
++
++    const entries = await zip.list(outputZip);
++    expect(entries.map((entry) => entry.path)).toEqual([
++      '.card/metadata.yaml',
++      'content/b.yaml',
++      'hero.png',
++      'content/a.yaml',
++    ]);
++    expect(entries[0]?.modifiedTime).toBe(1767225600000);
++    expect(entries[1]?.modifiedTime).toBe(1767229200000);
++    expect(entries[2]?.modifiedTime).toBe(1767232800000);
++    expect(entries[3]?.modifiedTime).toBe(1767236400000);
++
++    await fs.rm(workspace, { recursive: true, force: true });
++  });
+ });

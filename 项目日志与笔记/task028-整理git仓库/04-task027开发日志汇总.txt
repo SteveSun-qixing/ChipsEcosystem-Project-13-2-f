@@ -1,0 +1,611 @@
+# 质量缺口修复日志：富文本内联接线、移动端 target、YAML 恢复口径
+
+> 日期：2026-08-05
+> 来源：task027 质量评审反馈
+
+## 修复内容
+
+### 【中】富文本 file-backed 内容内联未真正接线
+
+问题：`publisher.ts` 调用 `replaceYamlResourceUrls(..., new Map())` 传空 `textResourceMap`，`collectFileBackedRichTextResourcePaths` 从未被调用；恢复侧也没有 `content_text → content_file` 还原分支。file-backed 富文本卡片的网络资源卡片会失效。
+
+修复：
+
+- `src/publisher.ts`
+  - 新增 `collectTextResourceMap`：扫描 `content/*.yaml`，对 file-backed 富文本配置读取 `richtext/*.md` 内容，构造 `candidatePath → markdown` 映射；
+  - 新增 `collectRichTextContentFileMap`：记录 `configPath → contentFile`，用于恢复；
+  - `writeRewrittenCard` 接收并透传 `textResourceMap`；
+  - `createRestoreManifest` 写入 `richTextContentFiles`；
+  - `extractRichTextContentFileMap` + `restoreDownloadedCard` 在下载恢复时依据恢复清单还原 file-backed 配置。
+- `src/card-rewrite.ts`
+  - `restoreInValue` 新增 `content_source: inline` + `content_text` → `content_source: file` + `content_file` 还原分支；
+  - `restoreYamlResourcePaths` 增加 `sourceFilePath` 与 `richTextContentFileMap` 参数。
+- 测试：
+  - 新增 `tests/unit/card-rewrite.test.ts`（6 条）：候选路径收集、内联重写、恢复还原、无映射保持 inline、普通资源字段 round trip；
+  - `module-definition.test.ts` 新增上传链路端到端富文本内联测试（共 7 条）。
+
+### 【低】CardViewer manifest mobile: supported 与 P8-15 不一致
+
+问题：`Chips-CardViewer/manifest.yaml` 声明 `preferredKinds.mobile: fullscreen` 且传输模块声明 `mobile: true`，但 `runtime.targets.mobile.supported: false`，与 P8-15“Mobile 客户端可以上传、查看、下载”不一致。
+
+修复：`Chips-CardViewer/manifest.yaml` 的 `mobile.supported` 改为 `true`，与设计方向（P1-03 / P6-14 / P8-15）及传输模块口径一致。`chipsdev validate` 通过。
+
+### 【低】YAML 重排与恢复口径
+
+问题：YAML 经 `parse → stringify` 会丢失注释与原始格式；“配置内容不能改变”仅做到“尽可能”；黄金回环测试用手写字符串而非模块自身逻辑。
+
+处理：
+
+- 生态共用卡片格式规范 1A.4 补充明确口径：YAML 解析→改写→序列化允许格式化归一（注释、空行、键序、引号风格可能变化），但不得改变字段语义与资源路径；验收以字段语义与资源引用一致为准，不以配置文本逐字节相同为准；
+- `card-rewrite.test.ts` 新增 round trip 保真测试：改写后 `source: url` + CDN URL，恢复后 `source: file` + 原始相对路径；
+- Host 黄金回环测试保持 Host 层 ZIP 完整性验证职责，URL↔路径逻辑由模块 `card-rewrite.test.ts` 覆盖（符合分层边界，不跨仓直接 import）。
+
+## 验证
+
+- `Chips-CommunityUploader-Plugin`：`npm test` 13 条通过；`npm run validate` 通过；`tsc --noEmit` 通过。
+- `Chips-Host`：黄金回环 + zip-store 测试通过。
+- `Chips-CardViewer`：`chipsdev validate` 通过。
+# 阶段0开发日志：公共规范与术语修订
+
+> 日期：2026-08-05
+> 阶段：阶段 0（修订公共规范和术语）
+> 任务清单：P0-01 ~ P0-12
+
+## 目标
+
+先把“浏览器只查看、客户端上传下载、网络资源卡片是正式卡片类型”写入公共规范，为后续所有阶段提供统一术语和契约基础。
+
+## 完成内容
+
+### 卡片文件格式规范（`生态共用技术文档/文件格式规范/01-卡片文件格式规范.md`）
+
+- 升级文档版本至 1.1.0，更新时间 2026-08-05。
+- 1.1 节：明确 `.card` 使用 ZIP Store 模式，补充传输链路正式 MIME `application/vnd.chips.card+zip`。
+- 1.2 节：补充 Store 模式是完整恢复一致性前提的说明；明确客户端在发布/下载前必须校验条目压缩方式，发现压缩条目应转换或提示不符合格式要求。
+- 新增 1.4 卡片类型：定义完整离线卡片与网络资源卡片两种正式形态，并给出类型对比表。
+- 新增 1A 节：完整离线卡片与网络资源卡片
+  - 1A.1 完整离线卡片：资源字节在 ZIP 内、配置使用相对路径、可离线查看编辑。
+  - 1A.2 网络资源卡片：保留配置与封面、资源字段为对象存储/CDN URL、ZIP 内不保存资源字节，是正式 .card 类型而非“空壳”。
+  - 1A.3 上传与下载的可逆转换：定义恢复清单必须记录的字段。
+  - 1A.4 完整恢复验收标准：路径、配置、资源字节、条目顺序、条目时间、Store 模式、封面一致。
+  - 1A.5 网络资源卡片校验规则：URL 资源字段允许、本地资源文件可缺失、URL 必须来自正式上传结果。
+- 7.1/7.2 节：重写资源组织模式为“完整离线卡片（相对路径+内置资源）”和“网络资源卡片（URL+外部资源）”双模式；移除“空壳卡片/半空壳卡片不属于默认保存链路”的旧口径。
+- 12.2 节：移除人为文件大小上限建议，改为真实平台、对象存储、磁盘和防攻击策略约束。
+- 附录 B 检查清单：补充网络资源卡片约束、可逆恢复清单、不设人为上限等检查项。
+
+### 社区平台 API 契约（`生态共用技术文档/协议与契约/09-社区平台API契约.md`）
+
+- 5.4 节：上传接口清单更新为 `card-transfer` 控制面接口，明确旧 `/upload-sessions`、`/upload/card` 已移除，浏览器卡片上传接口不存在。
+- 7.0 节：新增架构边界，明确浏览器只查看、客户端统一传输模块负责上传/下载/客户端查看、服务器只做控制面不代理文件字节。
+- 7.1 节：重写卡片上传会话为客户端 → 控制面 → 对象存储链路，新增 upload-sessions / objects:presign / complete / abort 接口契约。
+- 7.2 节：新增卡片下载会话与下载计划接口契约（download-sessions / plan）。
+- 8 节：从“不在范围”中移除社区内 `.card` 回下载，明确由客户端传输模块承担；补充卡片文件不实现权限管理。
+
+### 薯片协议规范（`生态共用技术文档/协议与接口标准/01-薯片协议规范.md`）
+
+- 新增“社区卡片传输边界”小节：
+  - 能力边界：浏览器只查看、客户端统一模块负责上传/下载/客户端查看。
+  - 模块能力名：upload / openRemote / download / getStatus / cancel。
+  - 文件字节链路：上传与下载的完整流程。
+  - 术语：完整离线卡片、网络资源卡片、可逆恢复清单。
+
+### CardViewer manifest（`Chips-CardViewer/manifest.yaml`）
+
+- 更新 description：Web target 只负责查看，不提供上传和下载 .card；Desktop/Mobile 客户端 target 可接入统一卡片传输模块，支持打开社区卡片和下载完整卡片。
+
+## 验证
+
+- 阶段0 为纯文档修订，不涉及运行时代码行为变化。
+- 涉及文档：卡片文件格式规范、社区平台 API 契约、薯片协议规范、CardViewer manifest。
+- 核对依据：社区平台服务器 card-transfer 路由、upload 路由（仅保留 box multipart）、卡查看器 manifest、CommunityUploader manifest 与 README。
+
+## 状态
+
+- [x] P0-01 ~ P0-12 全部完成。
+- 下一阶段：阶段 1（建设客户端统一卡片传输模块）。
+# 阶段1开发日志：建设客户端统一卡片传输模块
+
+> 日期：2026-08-05
+> 阶段：阶段 1（建设客户端统一卡片传输模块）
+> 任务清单：P1-01 ~ P1-10
+
+## 目标
+
+所有客户端应用插件都接入同一个模块，不再各自处理上传、下载、查看。
+
+## 完成内容
+
+### 模块能力与契约（P1-01）
+
+`Chips-ModulePlugin/Chips-CommunityUploader-Plugin` 提供正式能力 `community.card.transfer`：
+
+- `manifest.yaml`：能力名、运行目标、权限、输入输出 schema 引用。
+- 方法：`upload` / `download` / `openRemote`；`getStatus` / `cancel` 由 Host `module.job.*` 承载。
+- 输入输出 schema：`contracts/upload|download|openRemote.input|output.schema.json`。
+- 错误码统一通过 `createCommunityUploaderError(code, message, details, retryable)` 生成。
+
+### 运行边界（P1-02 / P1-03 / P1-04）
+
+- Desktop Host：支持上传、下载、远程打开。
+- Mobile Host/PAL：按同一能力契约支持。
+- Web 浏览器：不支持，浏览器不加载该模块。
+- Headless：支持，用于自动化与测试链路。
+
+### SDK 类型化封装（P1-05）
+
+`Chips-SDK/src/api/community-card-transfer.ts` 提供 `client.communityCardTransfer.upload/download/openRemote/getStatus/cancel`，只做类型化封装和调用入口，不承载上传下载主实现。
+
+### 应用插件统一接入（P1-06）
+
+CardViewer、EditingEngine 等应用插件通过 SDK 统一模块入口调用发布、打开社区卡片和下载，不各自实现社区文件链路。模块内 `src/publisher.ts` 是唯一正式文件链路实现。
+
+### 重试、取消、断网恢复、签名刷新、错误状态（P1-07）
+
+在 `src/publisher.ts` 新增 `fetchWithRetry` / `fetchControlPlane`：
+
+- 控制面请求和对象存储 PUT/GET 使用指数退避重试（最多 3 次）；
+- 5xx / 408 / 429 视为瞬时失败自动重试；
+- 401 / 403 立即抛出 `COMMUNITY_TRANSFER_AUTH_EXPIRED`，由调用方刷新签名后重新发起；
+- 每次重试前检查任务 `AbortSignal`，取消时抛出 `COMMUNITY_TRANSFER_CANCELLED`；
+- 网络失败统一抛出 `COMMUNITY_TRANSFER_NETWORK_FAILED`（可重试）。
+
+新增单元测试：瞬时 503 重试三次成功；401 抛出 auth-expired 非重试错误。
+
+### URL 改写与下载恢复统一处理（P1-08）
+
+`src/card-rewrite.ts` 统一处理：
+
+- `replaceYamlResourceUrls` / `restoreYamlResourcePaths`：content/*.yaml 资源字段相对路径 ↔ URL；
+- `replaceCoverHtmlUrls` / `restoreCoverHtmlPaths`：.card/cover.html 封面引用；
+- 富文本 file-backed 内容内联：上传时 `collectFileBackedRichTextResourcePaths` + `collectTextResourceMap` 读取 `richtext/*.md` 内容，把 `content_source: file` + `content_file` 内联为 `content_source: inline` + `content_text`；下载恢复时依据恢复清单 `richTextContentFiles` 映射还原为 file-backed 并写回 markdown 资源；
+- 插件禁止自行替换 YAML 或 HTML。
+
+### UI 文案与主题（P1-09）
+
+本模块是无 UI 的 worker 模块（`runtime: worker`、`activation: onDemand`），不承载界面，因此不产生 UI 文案或主题依赖；客户端中由它驱动的界面均走各自多语言与主题系统。
+
+### 第三方库依赖评审（P1-10）
+
+新增 `技术文档/01-社区卡片传输模块技术方案.md`，建立依赖评审记录：运行期唯一第三方依赖 `yaml@^2.8.2`（MIT、活跃维护、包体极小、纯 JS 跨端），用于卡片配置 YAML 解析与写出；对象存储签名、ZIP Store 读写、任务调度均走 Host 正式能力。
+
+## 验证
+
+- `npm test`：6 条测试通过（能力导出、上传全链路、下载恢复、远程打开、瞬时失败重试、鉴权过期）。
+- `npm run build`：esbuild 打包 `dist/index.mjs` 成功。
+- `npm run validate`：manifest 与契约校验通过。
+- `Chips-SDK` community-card-transfer 封装测试通过。
+
+## 状态
+
+- [x] P1-01 ~ P1-10 全部完成。
+- 下一阶段：阶段 2（实现无压缩归档读取、改写和恢复核心）。
+# 阶段2开发日志：无压缩归档读取、改写和恢复核心
+
+> 日期：2026-08-05
+> 阶段：阶段 2（实现无压缩归档读取、改写和恢复核心）
+> 任务清单：P2-01 ~ P2-15
+
+## 目标
+
+客户端可以从完整离线卡片生成网络资源卡片，也可以从网络资源卡片恢复完整离线卡片，并满足恢复一致性。
+
+## 完成内容
+
+### Host ZIP Store 读取与写入（P2-01 / P2-02 / P2-07）
+
+`Chips-Host/packages/zip-service/src/zip-store.ts`：
+
+- `zip.list` 读取条目路径、大小、压缩大小、CRC32、偏移、是否目录、压缩方式、修改时间（P2-01 读取）；
+- `compress` 始终写 Store 模式（method 0），不写压缩条目（P2-07）；
+- 新增 `compress(inputDir, outputZip, { entryPlan })`：按 `entryPlan`（path + modifiedTime）恢复原始条目顺序与修改时间，未在计划内的文件按字典序追加（P2-10 核心）。
+- 新增 `ZipEntryPlan` 类型并导出。
+- `card.pack`、`zip.compress` Host 路由新增可选 `entryPlan` 入参并透传。
+
+### Store 模式校验（P2-02）
+
+模块 `publisher.ts` 的 `assertZipStoreEntries` 校验 `.card` 条目压缩方式，发现非 Store 压缩条目时抛出 `COMMUNITY_TRANSFER_CARD_NOT_STORE_ZIP`。
+
+### 资源枚举与配置保留（P2-03 / P2-04）
+
+- `collectResources` 枚举根目录与封面资源（`.card/cardcover/*`），排除结构性文件；
+- `isStructuralCardFile` 保留 `.card/metadata.yaml`、`.card/structure.yaml`、`.card/cover.html` 与 `content/*.yaml`。
+
+### URL 改写与恢复（P2-05 / P2-08 / P2-09）
+
+`src/card-rewrite.ts`：
+
+- `replaceYamlResourceUrls`：content/*.yaml 相对路径 → 对象存储 URL，富文本 file-backed 内容内联；
+- `restoreYamlResourcePaths`：URL → 原始相对路径；
+- `replaceCoverHtmlUrls` / `restoreCoverHtmlPaths`：封面 HTML 引用双向替换；
+- `restoreDownloadedCard` 把资源字节写回原始相对路径（P2-08）。
+
+### 可逆恢复清单（P2-06）
+
+`createRestoreManifest` 记录 schemaVersion、原始文件名、cardId/versionId、每个资源的原始相对路径/网络 URL/对象位置/大小/MIME，以及原始 ZIP 条目顺序、压缩方式、修改时间等元数据。
+
+### 大文件内存边界（P2-12）
+
+- `collectResources` 改为只收集元数据（路径、大小、MIME），size 优先用 `file.stat`，不再一次性读取全部资源字节进内存；
+- 上传循环逐资源读取字节并上传，峰值内存只保留单个资源。
+
+### 一致性约束（P2-11）
+
+- 不强制 SHA-256，ZIP 格式自身需要的 CRC32 正常保留。
+
+### 第三方库（P2-13）
+
+- ZIP 读写使用 Host 原生 Store ZIP 实现，未新增运行期 ZIP 依赖；
+- 卡片配置 YAML 使用 `yaml@^2.8.2`，已在阶段 1 依赖评审中记录。
+
+### 黄金回环测试（P2-14 / P2-15）
+
+新增 `Chips-Host/tests/unit/card-transfer-gold-loop.test.ts`：
+
+- 用真实 StoreZipService + CardPacker 构造完整离线卡片（含 content YAML、封面、资源）；
+- 上传转换：解包 → URL 改写 → 删除资源 → 打包为网络资源卡片；
+- 下载恢复：解包网络资源卡片 → 恢复相对路径 → 写回资源 → 按原始 entryPlan 重新打包；
+- 断言：文件路径与条目顺序一致、资源字节一致、配置内容 URL 恢复、封面引用恢复、条目修改时间一致。
+
+## 验证
+
+- `Chips-Host`：`npm test` 全部 266 条通过（含新增 zip entryPlan 测试、黄金回环测试、card-service rendering）。
+- 模块：`npm test` 6 条通过；`npm run validate` 通过。
+
+## 状态
+
+- [x] P2-01 ~ P2-15 全部完成。
+- 下一阶段：阶段 3（改造社区 API 为控制面）。
+# 阶段3开发日志：改造社区 API 为控制面
+
+> 日期：2026-08-05
+> 阶段：阶段 3（改造社区 API 为控制面）
+> 任务清单：P3-01 ~ P3-12
+
+## 目标
+
+社区服务器不接收大文件字节，只签发对象地址、保存数据库信息和调度缓存生成。
+
+## 完成内容
+
+### 上传会话（P3-01 / P3-02 / P3-03）
+
+`Chips-CommunityPlatformServer/packages/server/src/routes/card-transfer.ts`：
+
+- `POST /api/v1/card-transfer/upload-sessions`：客户端模块创建上传会话，返回 uploadId、cardId、versionId、resourcePrefix 和 networkCard 对象位置；服务器只保存元数据（P3-01）。
+- `POST .../objects:presign`：为资源文件和网络资源卡片签发对象存储 PUT 地址，对象键固定在会话对象布局下（P3-02）。
+- `POST .../complete`：JSON 提交网络资源卡片对象位置、资源对象位置、资源清单和可逆恢复清单（P3-03）。
+
+### 校验（P3-04 / P3-05 / P3-06）
+
+- 新增 `assertRestoreManifestStructure`：校验恢复清单 schemaVersion 必填、zipEntries/resources 为数组（P3-04）。
+- complete 校验网络资源卡片对象键与会话元数据一致、每个资源对象键必须在会话 resourcePrefix 下、对象大小通过 `headObject` 校验（P3-04）。
+- `requireJsonBody` preHandler + Fastify 内容类型解析：`card-transfer` 全部 POST 路由只接受 `application/json`，`multipart .card` 与 octet-stream 卡字节被 415 拒绝（P3-05 / P3-12）。
+- API 不代理资源、网络资源卡片、查看缓存或下载文件字节，全部走对象存储 URL（P3-06）。
+
+### 版本状态与缓存调度（P3-07）
+
+- complete 后写 cards 表 sourceCard* 字段与 resourceManifest，状态置 `ready`；
+- 通过 `CardRenderCacheService.enqueueForCard` 调度 view/cover 渲染缓存生成。
+
+### 下载会话（P3-08 / P3-09）
+
+- `POST /api/v1/card-transfer/download-sessions` 只面向客户端模块；
+- `GET .../plan` 返回网络资源卡片对象位置、资源对象位置和恢复清单，均为对象存储 URL + 预签名 GET 地址，不返回文件字节。
+
+### 权限边界（P3-10）
+
+- 卡片文件本身不处理公开/私有/权限字段；接口只保留社区系统登录（JWT）和内容归属所需的外层控制。
+
+### 旧接口清理（P3-11）
+
+- 旧 `/api/v1/upload-sessions`、`/api/v1/upload-sessions/:id/resources/presign`、`/api/v1/upload-sessions/:id/card`、`/api/v1/upload/card` 已移除，`upload.test.ts` 验证返回 404；
+- `/api/v1/upload/box` 只保留箱子上传 multipart，卡片文件被 `FILE_TYPE_INVALID` 拒绝。
+
+### API 集成测试（P3-12）
+
+- `card-transfer.test.ts` 新增：二进制卡字节（octet-stream）提交 upload-sessions / complete / presign 均返回 415，证明 API 进程不经过文件字节；
+- 新增：非法恢复清单结构、越权资源对象键均返回 400。
+
+## 验证
+
+- `npx vitest run`：全部 53 条测试通过。
+- `npx tsc -p tsconfig.json --noEmit`：类型检查通过。
+- 涉及新增/修改：card-transfer.ts、card-transfer.test.ts、error-handler.plugin.ts（415 映射）、card-transfer.schemas.ts。
+
+## 状态
+
+- [x] P3-01 ~ P3-12 全部完成。
+- 下一阶段：阶段 4（客户端上传链路）。
+# 阶段4开发日志：客户端上传链路
+
+> 日期：2026-08-05
+> 阶段：阶段 4（客户端上传链路）
+> 任务清单：P4-01 ~ P4-11
+
+## 目标
+
+客户端把完整离线卡片发布成社区可查看的网络资源卡片。
+
+## 完成内容
+
+### 上传主流程（P4-01 ~ P4-07）
+
+`Chips-ModulePlugin/Chips-CommunityUploader-Plugin/src/publisher.ts` 的 `uploadCommunityCard`：
+
+- P4-01 通过 `card.readInfo` + `zip.list` 读取卡片信息和配置；`collectResources` 枚举资源和封面资源；
+- P4-02 `createUploadSession` 向 `/card-transfer/upload-sessions` 创建上传会话；
+- P4-03 `presignObjects` 按批为资源和网络资源卡片申请对象存储 PUT 地址；
+- P4-04 逐个资源 `uploadBytesToStorage` 直传对象存储；
+- P4-05 `writeRewardedCard` + `card-rewrite.ts` 把相对路径改写为对象存储/CDN URL；
+- P4-06 通过 Host `card.pack` 生成网络资源卡片并直传对象存储；
+- P4-07 `completeUpload` 提交资源清单、网络资源卡片对象位置和可逆恢复清单。
+
+### 中断 / 签名过期 / 取消 / 重试（P4-08）
+
+阶段 1 引入的 `fetchWithRetry` / `fetchControlPlane`：
+
+- 瞬时失败（5xx / 408 / 429）指数退避重试；
+- 401/403 抛出 `COMMUNITY_TRANSFER_AUTH_EXPIRED`，调用方刷新签名后重试；
+- 任务 `AbortSignal` 中断时抛出取消错误；
+- 网络失败统一抛出可重试错误。
+
+### 进度表达（P4-09）
+
+上传进度阶段：`inspect -> unpack -> scan -> session -> upload-resources -> rewrite -> pack -> submit -> completed`，通过 `job.reportProgress` 上报。
+
+### 上传后打开（P4-10）
+
+`uploadCommunityCard` 返回 `communityUrl`；模块提供 `openRemote` 委托 Host 打开社区页面或远程卡片。
+
+### 浏览器无上传入口（P4-11）
+
+- Web 工作区页改为“客户端发布”信息页，不再有上传 dropzone / 队列 / 文件选择；
+- 移除 `workspace.dropTitle / queueTitle / statusUploading / successCard` 等已失效上传文案（zh-CN 与 en-US 双语典）；
+- 删除的浏览器上传组件已归档到 `packages/web/归档/20260805-浏览器上传组件归档/`。
+
+## 验证
+
+- 模块 `npm test` 6 条通过；`npm run validate` 通过。
+- Web 包 `tsc -p tsconfig.json --noEmit` 通过（移除失效文案后无引用残留）。
+
+## 状态
+
+- [x] P4-01 ~ P4-11 全部完成。
+- 下一阶段：阶段 5（网页查看缓存和 Web CardViewer）。
+# 阶段5开发日志：网页查看缓存和 Web CardViewer
+
+> 日期：2026-08-05
+> 阶段：阶段 5（网页查看缓存和 Web CardViewer）
+> 任务清单：P5-01 ~ P5-10
+
+## 目标
+
+浏览器只查看，不上传也不下载。
+
+## 完成内容
+
+### 查看缓存与封面缓存（P5-01 / P5-02）
+
+`Chips-CommunityPlatformServer/packages/server/src/services/card-render-cache.service.ts`：
+
+- `viewRenderProfile`（`community-web`）生成正文查看缓存；
+- `coverRenderProfile`（`community-cover`）生成封面查看缓存；
+- complete 后通过 `enqueueForCard` 调度 Worker 生成。
+
+### 缓存与资产存储（P5-03）
+
+- 查看缓存写入 `chips-card-render-cache`、封面缓存写入 `chips-card-cover-cache` 对象存储 bucket（私有卡片写私有 bucket，通过受控 API 代理）；
+- 主题 CSS、字体、插件静态资产通过 `/api/v1/host/plugin-sessions/:id/*`、`/api/v1/host/theme-assets/:themeId/*` 正式路由提供。
+
+### 浏览器只加载社区页面与查看缓存（P5-04 / P5-09）
+
+- `CardDetailPage` 只加载 `open-view` 轻量字段 + `render-status` 轮询 + 缓存 `viewUrl`；
+- 资源 URL 使用对象存储/CDN 稳定地址，不使用临时本地路径。
+
+### Web CardViewer（P5-05 / P5-06 / P5-07）
+
+- `DocumentPluginRoutePage` 启动 `com.chips.card-viewer` Web 插件会话，通过 `HostedPluginSurface` iframe 承载封面、正文、复合卡片窗口和资源打开体验；
+- Web CardViewer 不显示下载 .card 功能，不显示上传入口；
+- CardViewer manifest 明确 Web target 只查看。
+
+### 客户端打开引导（P5-08）
+
+- 新增 `DocumentPluginRoutePage` 下载提示条（`role="note"`），社区卡片详情页显示“请在薯片客户端中打开并下载”；
+- 新增 i18n 文案 `card.downloadInClientHint`（zh-CN / en-US）。
+
+### 渲染失败状态（P5-10）
+
+- 缓存未就绪时 `CardDetailPage` 显示处理中状态（轮询 render-status）；
+- 缓存生成失败时显示失败状态（render_error / error）；
+- 浏览器不尝试自己解析和打包 .card。
+
+## 验证
+
+- Web 包 `npx tsc -p tsconfig.json --noEmit` 通过。
+- 服务器全量测试通过（见阶段 3）。
+
+## 状态
+
+- [x] P5-01 ~ P5-10 全部完成。
+- 下一阶段：阶段 6（客户端查看和下载链路）。
+# 阶段6开发日志：客户端查看和下载链路
+
+> 日期：2026-08-05
+> 阶段：阶段 6（客户端查看和下载链路）
+> 任务清单：P6-01 ~ P6-14
+
+## 目标
+
+用户必须在客户端中下载保存完整卡片。
+
+## 完成内容
+
+### CardViewer 客户端接入统一卡片传输模块（P6-01 / P6-02 / P6-03）
+
+`Chips-CardViewer`：
+
+- manifest 增加 `module.invoke`、`network.request`、`platform.external` 权限；
+- `AppRuntimeProvider` 新增 `downloadActiveCard()` 与 `canDownloadActiveCard`：
+  - 仅当打开目标为社区卡片（community-card）、launch params 携带 `communityServer`（baseUrl + accessToken）且不是 Web 文档型 surface 时可用；
+  - 通过 `client.platform.saveFile` 选择输出路径，然后调用 `client.communityCardTransfer.download`；
+  - 成功/失败通过 `client.platform.showMessage` 反馈。
+- `AppShell` 在沉浸式浮动动作栏与外部 chrome 动作列表中加入“下载卡片”动作（`download-card`）；
+- i18n 新增 `card-viewer.actions.downloadCard/downloadingCard/downloadComplete/downloadFailed/downloadUnavailable`（zh-CN / en-US）。
+
+### 下载主流程（P6-04 ~ P6-10）
+
+`Chips-CommunityUploader-Plugin/src/publisher.ts` 的 `downloadCommunityCard`：
+
+- P6-04 `createDownloadSession` 创建 download session；
+- P6-05 `getDownloadPlan` 获取网络资源卡片、资源清单和恢复清单；
+- P6-06 逐个资源 `downloadBinary` 下载到内存后写盘；
+- P6-07 `restoreDownloadedCard` 把配置和封面中的 URL 恢复为原始相对路径；
+- P6-08 资源字节写回原始相对路径；
+- P6-09 通过 Host `card.pack` 按 ZIP Store 模式重新打包；
+- P6-10 `extractEntryPlan` 从恢复清单提取原始 ZIP 条目顺序与修改时间并传给 `card.pack`。
+
+### 下载健壮性（P6-11 / P6-12）
+
+- 取消：任务信号中断；
+- 重试 / 断网：`fetchWithRetry` 指数退避；
+- 磁盘空间错误与下载失败：catch 中删除输出路径，不留下看似成功的 .card。
+
+### 下载后验证（P6-13）
+
+`verifyRestoredCard` 在打包完成后依次调用 Host `card.readInfo`、`card.render`、`card.open` 验证下载结果；任一步失败抛出 `COMMUNITY_TRANSFER_DOWNLOAD_VERIFY_FAILED` 并清理输出。
+
+### 移动端（P6-14）
+
+- manifest `runtime.targets.mobile.supported: true`；
+- 模块文件读写与保存走 Host `file.*` / PAL 能力，浏览器不承担移动下载。
+
+## 验证
+
+- `Chips-CardViewer`：`npm test` 36 条全部通过；`npm run build` 成功；`tsc --noEmit` 通过。
+- 模块：`npm test` 6 条通过。
+- 修复过程：
+  - 修复 `CardWindow` 缺失 `DocumentWindowResizePayload` 导入；
+  - 归档不再使用的 `ViewerSourceProvider.tsx`；
+  - tsconfig 排除 `归档` 目录；
+  - 修复 `AppRuntime`、`ViewerStage`、`basic-flow.test.tsx`、`viewer-cover-surface.test.tsx`、`theme-a11y.test.ts`、`hosted-document-window.test.tsx` 的类型与断言漂移。
+
+## 状态
+
+- [x] P6-01 ~ P6-14 全部完成。
+- 下一阶段：阶段 7（移除旧链路和旧假设）。
+# 阶段7开发日志：移除旧链路和旧假设
+
+> 日期：2026-08-05
+> 阶段：阶段 7（移除旧链路和旧假设）
+> 任务清单：P7-01 ~ P7-10
+
+## 目标
+
+把所有和最新决策冲突的旧设计清掉，文档、manifest、API、前端页面和测试中不再出现浏览器上传/下载和内部空壳产物口径。
+
+## 完成内容
+
+### 浏览器上传移除（P7-01 / P7-02）
+
+- Web 工作区页改为“客户端发布”信息页，无 dropzone、无文件选择、无上传队列；
+- 删除的 `UploadDropzone.tsx`、`UploadQueue.tsx`、`UploadQueueItem.tsx` 已归档到 `packages/web/归档/20260805-浏览器上传组件归档/`；
+- Web `src/api` 无任何卡片上传调用（仅剩头像/房间封面上传）。
+
+### 浏览器下载 / ZIP 打包 / 保存 sink 移除（P7-03）
+
+- Web 无浏览器端 `.card` 打包器、下载计划调用或保存 sink；
+- 社区卡片详情页只加载查看缓存，并提供“请在薯片客户端中打开并下载”提示（阶段 5 完成）。
+
+### 旧术语与旧方案移除（P7-04 / P7-05 / P7-06 / P7-07）
+
+- 卡片格式规范明确“空壳卡片/半空壳卡片”旧术语不再使用，正式名称为网络资源卡片（阶段 0）；
+- 无“空壳保留相对路径 + 数据库运行时映射资源”方案代码；
+- 无“下载时浏览器恢复完整卡片”方案代码（下载恢复全部在客户端模块）；
+- 卡片文件本身不实现权限字段，只保留社区身份系统登录/归属外层控制（阶段 3）。
+
+### 保留正确方向（P7-08）
+
+- 对象存储目录态：`cards/{cardId}/versions/{versionId}/resources`、`network-card/`（阶段 3）；
+- 弱服务器控制面：API 只做鉴权、会话、签名、元数据、恢复清单、状态和任务调度；
+- Worker 缓存生成：`CardRenderCacheService` + `worker.ts` 仍负责 view/cover 缓存生成。
+
+### manifest 描述更新（P7-09 / P7-10）
+
+- `Chips-CommunityUploader-Plugin/manifest.yaml` 描述为“上传、网络资源卡片生成、远程打开和完整卡片下载恢复的官方社区卡片传输模块”；
+- `Chips-CardViewer/manifest.yaml` 描述 Web target 只查看、Desktop/Mobile 客户端 target 可下载。
+
+## 验证
+
+- Web 包 `tsc --noEmit` 通过。
+- 服务器全量测试通过（阶段 3）。
+- 全仓 grep 确认无浏览器上传/下载 .card 入口与“空壳”旧口径残留。
+
+## 状态
+
+- [x] P7-01 ~ P7-10 全部完成。
+- 下一阶段：阶段 8（测试和验收）。
+# 阶段8开发日志：测试和验收
+
+> 日期：2026-08-05
+> 阶段：阶段 8（测试和验收）
+> 任务清单：P8-01 ~ P8-26
+
+## 目标
+
+用测试与验收矩阵确认全链路符合要求。
+
+## 完成内容
+
+### 卡片恢复一致性（P8-01 ~ P8-08）
+
+`Chips-Host/tests/unit/card-transfer-gold-loop.test.ts` 黄金回环覆盖：
+
+- P8-01 文件路径与条目顺序一致（`restoredPaths == originalPaths`）；
+- P8-02 配置文件 URL 恢复为原始相对路径（content YAML 与 cover.html）；
+- P8-03 资源字节一致（逐个 `zip.readEntry` 对比）；
+- P8-04 ZIP Store 条目顺序一致；
+- P8-05 条目修改时间一致（逐条目对比 modifiedTime）；
+- P8-06 条目 Store 模式一致（新增 compressionMethod=0 且 compressedSize==size 断言）；
+- P8-07 封面 HTML 和封面资源恢复一致；
+- P8-08 下载结果可被正式 Host 打开、渲染和编辑：模块下载后调用 `card.readInfo` / `card.render` / `card.open` 验证。
+
+### 浏览器边界（P8-09 ~ P8-13）
+
+- P8-09 社区网页无上传入口：Web 工作区为“客户端发布”信息页，无 dropzone/文件选择/队列；
+- P8-10 无下载 .card 入口：网页只显示“请在薯片客户端中打开并下载”提示；
+- P8-11 Web CardViewer 不声明下载能力：manifest Web target 只查看；
+- P8-12 浏览器端无 .card 打包器：全仓无浏览器 ZIP 打包/保存 sink；
+- P8-13 手机浏览器只查看：无下载、无打包代码路径。
+
+### 客户端能力（P8-14 ~ P8-17）
+
+- P8-14 / P8-15 Desktop / Mobile 客户端上传、查看、下载：模块 manifest 支持 desktop/mobile，module-definition.test 覆盖上传/下载/远程打开；
+- P8-16 客户端插件统一调用卡片传输模块：SDK `communityCardTransfer` + CardViewer 下载动作；
+- P8-17 取消（`COMMUNITY_TRANSFER_CANCELLED`）、重试（指数退避）、断网（`NETWORK_FAILED`）、签名刷新（`AUTH_EXPIRED`）、磁盘不足/失败清理（下载失败删除输出）都有稳定错误状态。
+
+### 弱服务器约束（P8-18 ~ P8-22）
+
+- P8-18 上传大卡片时 API 不接收文件字节：card-transfer 全路由 JSON-only，二进制 payload 返回 415/400；
+- P8-19 下载大卡片时 API 不返回文件字节：下载计划只返回对象 URL + 预签名 GET；
+- P8-20 查看时浏览器主要读取对象存储/CDN：view/cover 缓存与资源 URL；
+- P8-21 Worker 有界并发：`CARD_RENDER_WORKER_CONCURRENCY` 默认 1，渲染队列 + 超时重排；
+- P8-22 对象存储保存网络资源卡片、资源、查看缓存、封面缓存。
+
+### 第三方库（P8-23 ~ P8-26）
+
+- 本任务新增运行期依赖仅 `yaml@^2.8.2`（传输模块），选型记录见模块技术文档；
+- MIT 许可证、活跃维护、包体极小、纯 JS 跨端、无已知高危；替代方案与安全风险已核对。
+
+## 验证
+
+- `Chips-Host`：`npm test` 266 条通过（含黄金回环、entry plan、card-service rendering）。
+- `Chips-SDK`：`npm test` 全量通过（含 community-card-transfer、tooling 测试）。
+- `Chips-CardViewer`：`npm test` 36 条通过；`build` 成功。
+- `Chips-CommunityUploader-Plugin`：`npm test` 6 条通过；`validate` 通过。
+- `Chips-CommunityPlatformServer`：`vitest run` 53 条通过；`tsc --noEmit` 通过。
+- Web 包：`tsc --noEmit` 通过。
+
+## 状态
+
+- [x] P8-01 ~ P8-26 全部完成。
+- 所有阶段（0-8）任务清单完成。

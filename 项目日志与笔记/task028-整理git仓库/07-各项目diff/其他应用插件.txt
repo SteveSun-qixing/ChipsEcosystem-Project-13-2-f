@@ -1,0 +1,1158 @@
+diff --git a/Chips-BaseCardPlugin/book-BCP/src/render/view.tsx b/Chips-BaseCardPlugin/book-BCP/src/render/view.tsx
+index c8f669d9..c1bff19d 100644
+--- a/Chips-BaseCardPlugin/book-BCP/src/render/view.tsx
++++ b/Chips-BaseCardPlugin/book-BCP/src/render/view.tsx
+@@ -327,13 +327,12 @@ function Cover(props: { src: string; alt: string }) {
+ 
+ function createImagePayload(input: {
+   config: BasecardConfig;
+-  resolvedUrls: Map<string, string>;
+   title: string;
+   author: string;
+ }): BookCardOpenPayload | null {
+   const images = sortImageItems(input.config.image_sequence, input.config.image_sort_basis)
+     .map((image) => buildOpenResourceDescriptor(
+-      input.resolvedUrls.get(image.file_path) || image.file_path,
++      image.file_path,
+       image.file_path,
+       image.mime_type || inferImageMimeTypeFromPath(image.file_path),
+     ))
+@@ -360,12 +359,11 @@ function createImagePayload(input: {
+ 
+ function createEbookPayload(input: {
+   config: BasecardConfig;
+-  resolvedUrls: Map<string, string>;
+   title: string;
+   author: string;
+ }): BookCardOpenPayload | null {
+   const book = buildOpenResourceDescriptor(
+-    input.resolvedUrls.get(input.config.book_file) || input.config.book_file,
++    input.config.book_file,
+     input.config.book_file,
+     inferBookMimeType(input.config.book_format || input.config.book_file),
+   );
+@@ -434,7 +432,6 @@ export function BasecardView({
+ 
+       const payload = createImagePayload({
+         config,
+-        resolvedUrls,
+         title,
+         author,
+       });
+@@ -443,7 +440,7 @@ export function BasecardView({
+       }
+ 
+       openResource({
+-        resourceId: resolvedUrls.get(firstImage.file_path) || firstImage.file_path,
++        resourceId: firstImage.file_path,
+         mimeType: firstImage.mime_type || inferImageMimeTypeFromPath(firstImage.file_path),
+         title,
+         fileName: resolveFileName(firstImage.file_path),
+@@ -454,7 +451,6 @@ export function BasecardView({
+ 
+     const payload = createEbookPayload({
+       config,
+-      resolvedUrls,
+       title,
+       author,
+     });
+@@ -463,7 +459,7 @@ export function BasecardView({
+     }
+ 
+     openResource({
+-      resourceId: resolvedUrls.get(config.book_file) || config.book_file,
++      resourceId: config.book_file,
+       mimeType: inferBookMimeType(config.book_format || config.book_file),
+       title,
+       fileName: resolveFileName(config.book_file),
+diff --git a/Chips-BaseCardPlugin/book-BCP/tests/unit/render-view.test.tsx b/Chips-BaseCardPlugin/book-BCP/tests/unit/render-view.test.tsx
+index 29474a07..6b99fd2e 100644
+--- a/Chips-BaseCardPlugin/book-BCP/tests/unit/render-view.test.tsx
++++ b/Chips-BaseCardPlugin/book-BCP/tests/unit/render-view.test.tsx
+@@ -22,7 +22,7 @@ describe("mountBasecardView", () => {
+     expect(coverRule).toContain("aspect-ratio: 2 / 3;");
+   });
+ 
+-  it("renders ebook metadata and opens the resolved book resource", async () => {
++  it("renders ebook metadata and opens the card-root book resource", async () => {
+     const container = document.createElement("div");
+     const openResource = vi.fn();
+     const config: BasecardConfig = {
+@@ -60,7 +60,7 @@ describe("mountBasecardView", () => {
+     button.click();
+ 
+     expect(openResource).toHaveBeenCalledWith({
+-      resourceId: "file:///tmp/books/demo.epub",
++      resourceId: "books/demo.epub",
+       mimeType: "application/epub+zip",
+       title: "Demo Book",
+       fileName: "demo.epub",
+@@ -71,7 +71,7 @@ describe("mountBasecardView", () => {
+         mode: "ebook",
+         resources: {
+           book: expect.objectContaining({
+-            resourceId: "file:///tmp/books/demo.epub",
++            resourceId: "books/demo.epub",
+             relativePath: "books/demo.epub",
+           }),
+         },
+@@ -134,7 +134,7 @@ describe("mountBasecardView", () => {
+     button.click();
+ 
+     expect(openResource).toHaveBeenCalledWith({
+-      resourceId: "file:///tmp/comic/001.jpg",
++      resourceId: "comic/001.jpg",
+       mimeType: "image/jpeg",
+       title: "Comic",
+       fileName: "001.jpg",
+@@ -143,8 +143,8 @@ describe("mountBasecardView", () => {
+         mode: "image-sequence",
+         resources: {
+           images: [
+-            expect.objectContaining({ relativePath: "comic/001.jpg" }),
+-            expect.objectContaining({ relativePath: "comic/002.jpg" }),
++            expect.objectContaining({ resourceId: "comic/001.jpg", relativePath: "comic/001.jpg" }),
++            expect.objectContaining({ resourceId: "comic/002.jpg", relativePath: "comic/002.jpg" }),
+           ],
+         },
+       }),
+diff --git a/Chips-BaseCardPlugin/video-BCP/tests/unit/editor-panel.test.tsx b/Chips-BaseCardPlugin/video-BCP/tests/unit/editor-panel.test.tsx
+index db89a569..ff52f70e 100644
+--- a/Chips-BaseCardPlugin/video-BCP/tests/unit/editor-panel.test.tsx
++++ b/Chips-BaseCardPlugin/video-BCP/tests/unit/editor-panel.test.tsx
+@@ -34,6 +34,19 @@ function setTextFieldValue(input: HTMLInputElement, value: string): void {
+   input.dispatchEvent(new Event("change", { bubbles: true }));
+ }
+ 
++async function waitForVideoPreviewSrc(root: ParentNode, expectedSrc: string): Promise<void> {
++  for (let attempt = 0; attempt < 8; attempt += 1) {
++    const src = root.querySelector('[data-role="video-resource"] video')?.getAttribute("src");
++    if (src === expectedSrc) {
++      return;
++    }
++    await Promise.resolve();
++    await new Promise((resolve) => setTimeout(resolve, 0));
++  }
++
++  expect(root.querySelector('[data-role="video-resource"] video')?.getAttribute("src")).toBe(expectedSrc);
++}
++
+ describe("createBasecardEditorRoot", () => {
+   it("emits metadata changes only after the user leaves the metadata form", async () => {
+     const initialConfig = createConfig({
+@@ -108,7 +121,7 @@ describe("createBasecardEditorRoot", () => {
+       video_file: "demo.mp4",
+       cover_image: "",
+     });
+-    expect(root.querySelector('[data-role="video-resource"] video')?.getAttribute("src")).toBe("demo.mp4");
++    await waitForVideoPreviewSrc(root, "demo.mp4");
+     expect(root.querySelector('[data-role="cover-resource"]')).toBeNull();
+   });
+ 
+diff --git a/Chips-BookReader/src/utils/launch-resource.ts b/Chips-BookReader/src/utils/launch-resource.ts
+index 1d96c384..e68786b6 100644
+--- a/Chips-BookReader/src/utils/launch-resource.ts
++++ b/Chips-BookReader/src/utils/launch-resource.ts
+@@ -36,6 +36,7 @@ export function resolveLaunchBookTarget(launchContext: PlatformLaunchContext): L
+   if (bookPayload?.resources.book) {
+     const bookResource = readRecord(bookPayload.resources.book);
+     const sourceId =
++      readNonEmptyString(resourceOpen?.resourceId) ??
+       readNonEmptyString(bookResource?.resourceId) ??
+       readNonEmptyString(bookResource?.relativePath);
+     if (sourceId) {
+diff --git a/Chips-BookReader/tests/e2e/basic-flow.test.ts b/Chips-BookReader/tests/e2e/basic-flow.test.ts
+index a2f06fa0..dab17ae5 100644
+--- a/Chips-BookReader/tests/e2e/basic-flow.test.ts
++++ b/Chips-BookReader/tests/e2e/basic-flow.test.ts
+@@ -284,6 +284,42 @@ describe("书籍阅读器基础流程真实回归", () => {
+       author: "Book Card Author",
+       mimeType: "application/pdf",
+     });
++
++    expect(
++      resolveLaunchBookTarget({
++        launchParams: {
++          resourceOpen: {
++            resourceId: "https://community.example/cache/assets/content/books/minimal.epub",
++            fileName: "minimal.epub",
++            mimeType: "application/epub+zip",
++            payload: {
++              kind: "chips.book-card",
++              version: "1.0.0",
++              cardType: "base.book",
++              mode: "ebook",
++              resources: {
++                book: {
++                  resourceId: "books/minimal.epub",
++                  relativePath: "books/minimal.epub",
++                  fileName: "minimal.epub",
++                  mimeType: "application/epub+zip",
++                },
++              },
++              display: {
++                title: "Community Cached Book",
++                author: "Book Card Author",
++              },
++            },
++          },
++        },
++      }),
++    ).toMatchObject({
++      sourceId: "https://community.example/cache/assets/content/books/minimal.epub",
++      relativePath: "books/minimal.epub",
++      title: "Community Cached Book",
++      author: "Book Card Author",
++      mimeType: "application/epub+zip",
++    });
+   });
+ 
+   it("加载并渲染 EPUB / EPUB3 最小样本，保留目录、资源内联和内部链接改写", async () => {
+diff --git a/Chips-BookReader/tests/unit/launch-resource.test.ts b/Chips-BookReader/tests/unit/launch-resource.test.ts
+index 7eed5cd5..f1fadce8 100644
+--- a/Chips-BookReader/tests/unit/launch-resource.test.ts
++++ b/Chips-BookReader/tests/unit/launch-resource.test.ts
+@@ -206,4 +206,46 @@ describe("resolveLaunchBookTarget", () => {
+       relativePath: "电子书.epub",
+     });
+   });
++
++  it("社区 Web 电子书 payload 使用相对路径时优先读取顶层已解析资源", () => {
++    expect(
++      resolveLaunchBookTarget({
++        launchParams: {
++          trigger: "resource-open-service",
++          resourceOpen: {
++            intent: "view",
++            resourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/books/demo.epub",
++            fileName: "demo.epub",
++            mimeType: "application/epub+zip",
++            payload: {
++              kind: "chips.book-card",
++              version: "1.0.0",
++              cardType: "base.book",
++              mode: "ebook",
++              resources: {
++                book: {
++                  resourceId: "books/demo.epub",
++                  relativePath: "books/demo.epub",
++                  fileName: "demo.epub",
++                  mimeType: "application/epub+zip",
++                },
++              },
++              display: {
++                title: "社区缓存电子书",
++                author: "Chips QA",
++              },
++            },
++          },
++        },
++      }),
++    ).toEqual({
++      sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/books/demo.epub",
++      filePath: undefined,
++      fileName: "demo.epub",
++      mimeType: "application/epub+zip",
++      title: "社区缓存电子书",
++      author: "Chips QA",
++      relativePath: "books/demo.epub",
++    });
++  });
+ });
+diff --git "a/Chips-BookReader/\346\212\200\346\234\257\346\226\207\346\241\243/02-\344\271\246\347\261\215\351\230\205\350\257\273\345\231\250\345\256\236\347\216\260\350\257\264\346\230\216.md" "b/Chips-BookReader/\346\212\200\346\234\257\346\226\207\346\241\243/02-\344\271\246\347\261\215\351\230\205\350\257\273\345\231\250\345\256\236\347\216\260\350\257\264\346\230\216.md"
+index f4301021..e48d49b0 100644
+--- "a/Chips-BookReader/\346\212\200\346\234\257\346\226\207\346\241\243/02-\344\271\246\347\261\215\351\230\205\350\257\273\345\231\250\345\256\236\347\216\260\350\257\264\346\230\216.md"
++++ "b/Chips-BookReader/\346\212\200\346\234\257\346\226\207\346\241\243/02-\344\271\246\347\261\215\351\230\205\350\257\273\345\231\250\345\256\236\347\216\260\350\257\264\346\230\216.md"
+@@ -156,7 +156,7 @@
+ 
+ - 读取 `client.platform.getLaunchContext()`。
+ - 通过 `resolveLaunchBookTarget(...)` 归一化 `resourceOpen` / `targetPath` 等启动信息。
+-- 若存在 `resourceOpen.payload.kind = "chips.book-card"` 且 `mode = "ebook"`，优先从 `payload.resources.book` 恢复书籍资源，并从 `payload.display.title/author` 恢复展示上下文。
++- 若存在 `resourceOpen.payload.kind = "chips.book-card"` 且 `mode = "ebook"`，优先使用顶层 `resourceOpen.resourceId/filePath` 作为实际读取入口，再从 `payload.resources.book` 恢复相对路径、文件名、MIME 与 `payload.display.title/author` 展示上下文。
+ - 若存在 `filePath` 则走 `client.file.read(..., { encoding: "binary" })`。
+ - 否则走 `client.resource.readBinary(...)`。
+ 
+diff --git a/Chips-BoxLayoutPlugin/grid-BLP/package.json b/Chips-BoxLayoutPlugin/grid-BLP/package.json
+index 438972f1..f1ab4f90 100644
+--- a/Chips-BoxLayoutPlugin/grid-BLP/package.json
++++ b/Chips-BoxLayoutPlugin/grid-BLP/package.json
+@@ -8,8 +8,10 @@
+     "build": "chipsdev build",
+     "test": "chipsdev test",
+     "lint": "chipsdev lint",
++    "typecheck": "tsc -p tsconfig.json --noEmit",
+     "validate": "chipsdev validate",
+-    "package": "chipsdev package"
++    "package": "chipsdev package",
++    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate && npm run package"
+   },
+   "dependencies": {
+     "@chips/component-library": "0.1.0",
+diff --git a/Chips-BoxLayoutPlugin/grid-BLP/src/editor/frame-region-editor.tsx b/Chips-BoxLayoutPlugin/grid-BLP/src/editor/frame-region-editor.tsx
+index deafe3b3..b8e28d2e 100644
+--- a/Chips-BoxLayoutPlugin/grid-BLP/src/editor/frame-region-editor.tsx
++++ b/Chips-BoxLayoutPlugin/grid-BLP/src/editor/frame-region-editor.tsx
+@@ -378,7 +378,6 @@ export function FrameRegionEditor({
+       commandId: `${id}.upload`,
+       titleKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
+       ariaLabelKey: region.assetPath ? "editor.replace_image" : "editor.upload_image",
+-      icon: { name: "upload_file" },
+       toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 1 }],
+       state: {
+         enabled: hasImageAssetBridge && busyAction !== "delete",
+@@ -389,7 +388,6 @@ export function FrameRegionEditor({
+       commandId: `${id}.clear`,
+       titleKey: "editor.clear_asset",
+       ariaLabelKey: "editor.clear_asset",
+-      icon: { name: "delete" },
+       toolbarPlacement: [{ toolbarId: `${id}.asset-toolbar`, groupId: "asset", order: 2 }],
+       state: {
+         enabled: hasContent && busyAction !== "import",
+diff --git a/Chips-BoxLayoutPlugin/grid-BLP/src/editor/panel.tsx b/Chips-BoxLayoutPlugin/grid-BLP/src/editor/panel.tsx
+index 503f683f..bb49c0a2 100644
+--- a/Chips-BoxLayoutPlugin/grid-BLP/src/editor/panel.tsx
++++ b/Chips-BoxLayoutPlugin/grid-BLP/src/editor/panel.tsx
+@@ -33,6 +33,15 @@ export type LayoutEditorRoot = HTMLElement & {
+ 
+ type LayoutMessageKey = Parameters<typeof getLayoutMessage>[1];
+ 
++const StableSelect = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof ChipsSelect>>((props, ref) => (
++  <ChipsSelect
++    {...props}
++    ref={ref}
++    iconContent={<span aria-hidden="true">{"\u25be"}</span>}
++  />
++));
++StableSelect.displayName = "StableSelect";
++
+ const EDITOR_STYLE_TEXT = `
+ .chips-grid-layout-editor {
+   box-sizing: border-box;
+@@ -43,7 +52,7 @@ const EDITOR_STYLE_TEXT = `
+   overflow: auto;
+   color: var(--chips-sys-color-on-surface, #0f172a);
+   background-color: var(--chips-sys-color-surface, #ffffff);
+-  font: var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif));
++  font: var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, sans-serif));
+ }
+ 
+ .chips-grid-layout-editor,
+@@ -248,7 +257,7 @@ export function LayoutEditorPanel({
+               name="sortMode"
+             >
+               <ChipsForm.Label>{getLayoutMessage(locale, "editor.sort_mode")}</ChipsForm.Label>
+-              <ChipsSelect
++              <StableSelect
+                 value={config.props.sortMode}
+                 placeholder={getLayoutMessage(locale, "editor.sort_mode")}
+                 i18n={i18n}
+@@ -266,7 +275,7 @@ export function LayoutEditorPanel({
+                     label: getLayoutMessage(locale, "editor.sort_name_desc"),
+                   },
+                 ]}
+-                onValueChange={(value) => {
++                onValueChange={(value: string) => {
+                   commit(updateProps(config, {
+                     sortMode: value as SortMode,
+                   }));
+diff --git a/Chips-BoxLayoutPlugin/list-BLP/package.json b/Chips-BoxLayoutPlugin/list-BLP/package.json
+index 12a53ef7..ede3e5dd 100644
+--- a/Chips-BoxLayoutPlugin/list-BLP/package.json
++++ b/Chips-BoxLayoutPlugin/list-BLP/package.json
+@@ -8,8 +8,10 @@
+     "build": "chipsdev build",
+     "test": "chipsdev test",
+     "lint": "chipsdev lint",
++    "typecheck": "tsc -p tsconfig.json --noEmit",
+     "validate": "chipsdev validate",
+-    "package": "chipsdev package"
++    "package": "chipsdev package",
++    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run validate && npm run package"
+   },
+   "dependencies": {
+     "@chips/component-library": "0.1.0",
+diff --git a/Chips-BoxLayoutPlugin/list-BLP/src/editor/frame-region-editor.tsx b/Chips-BoxLayoutPlugin/list-BLP/src/editor/frame-region-editor.tsx
+index f97d6311..a299d91e 100644
+--- a/Chips-BoxLayoutPlugin/list-BLP/src/editor/frame-region-editor.tsx
++++ b/Chips-BoxLayoutPlugin/list-BLP/src/editor/frame-region-editor.tsx
+@@ -1,6 +1,6 @@
+ import React from "react";
+ import { FrameRegionSurface } from "../shared/frame-region";
+-import { hasFrameRegionContent, type FrameRegionConfig } from "../schema/layout-config";
++import { hasFrameRegionContent, isSafeBoxAssetPath, type FrameRegionConfig } from "../schema/layout-config";
+ import type { ResolvedRuntimeResource } from "../shared/types";
+ import { getLayoutMessage } from "../shared/i18n";
+ 
+@@ -62,14 +62,33 @@ const MODE_MESSAGE_KEY = {
+   html: "editor.frame_mode_html",
+ } as const;
+ 
++function sanitizeAssetFileName(name: string): string {
++  const sanitized = name
++    .trim()
++    .replace(/[\\/]+/g, "-")
++    .replace(/[^A-Za-z0-9._-]+/g, "-")
++    .replace(/^-+/, "")
++    .replace(/^\.+/, "")
++    .replace(/-+$/, "");
++  return sanitized.length > 0 ? sanitized : "asset";
++}
++
+ async function safeDeleteAsset(
+   assetPath: string | undefined,
+   deleteBoxAsset?: (assetPath: string) => Promise<void>,
+-): Promise<void> {
+-  if (!assetPath || !deleteBoxAsset) {
+-    return;
++): Promise<boolean> {
++  if (!assetPath) {
++    return true;
++  }
++  if (!deleteBoxAsset) {
++    return false;
++  }
++  try {
++    await deleteBoxAsset(assetPath);
++    return true;
++  } catch {
++    return false;
+   }
+-  await deleteBoxAsset(assetPath).catch(() => undefined);
+ }
+ 
+ export function FrameRegionEditor({
+@@ -94,7 +113,10 @@ export function FrameRegionEditor({
+     }
+ 
+     if (region.mode === "image" && nextMode !== "image") {
+-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
++      const deleted = await safeDeleteAsset(region.assetPath, deleteBoxAsset);
++      if (!deleted) {
++        return;
++      }
+     }
+ 
+     if (nextMode === "image") {
+@@ -127,24 +149,37 @@ export function FrameRegionEditor({
+ 
+     const imported = await importBoxAsset({
+       file,
+-      preferredPath: `${preferredAssetPrefix}/${file.name}`,
++      preferredPath: `${preferredAssetPrefix}/${Date.now()}-${sanitizeAssetFileName(file.name)}`,
+     });
++    if (!isSafeBoxAssetPath(imported.assetPath)) {
++      await safeDeleteAsset(imported.assetPath, deleteBoxAsset);
++      event.currentTarget.value = "";
++      return;
++    }
+     const previousAssetPath = region.mode === "image" ? region.assetPath : undefined;
++    if (previousAssetPath && previousAssetPath !== imported.assetPath) {
++      const deleted = await safeDeleteAsset(previousAssetPath, deleteBoxAsset);
++      if (!deleted) {
++        await safeDeleteAsset(imported.assetPath, deleteBoxAsset);
++        event.currentTarget.value = "";
++        return;
++      }
++    }
++
+     onChange({
+       mode: "image",
+       assetPath: imported.assetPath,
+     });
+ 
+-    if (previousAssetPath && previousAssetPath !== imported.assetPath) {
+-      await safeDeleteAsset(previousAssetPath, deleteBoxAsset);
+-    }
+-
+     event.currentTarget.value = "";
+   };
+ 
+   const handleClear = async () => {
+     if (region.mode === "image") {
+-      await safeDeleteAsset(region.assetPath, deleteBoxAsset);
++      const deleted = await safeDeleteAsset(region.assetPath, deleteBoxAsset);
++      if (!deleted) {
++        return;
++      }
+     }
+     onChange({
+       mode: "none",
+@@ -210,7 +245,7 @@ export function FrameRegionEditor({
+               border: "1px solid rgba(148,163,184,0.24)",
+               background: "#ffffff",
+               padding: "14px 16px",
+-              font: "13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
++              font: "13px/1.6 var(--chips-font-family-mono, ui-monospace)",
+               color: "#0f172a",
+             }}
+             onChange={(event) => {
+diff --git a/Chips-BoxLayoutPlugin/list-BLP/src/editor/panel.tsx b/Chips-BoxLayoutPlugin/list-BLP/src/editor/panel.tsx
+index 22841a6e..44c7225c 100644
+--- a/Chips-BoxLayoutPlugin/list-BLP/src/editor/panel.tsx
++++ b/Chips-BoxLayoutPlugin/list-BLP/src/editor/panel.tsx
+@@ -36,6 +36,25 @@ export type LayoutEditorRoot = HTMLElement & {
+   __chipsDispose?: () => void;
+ };
+ 
++const StableSelect = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof ChipsSelect>>((props, ref) => (
++  <ChipsSelect
++    {...props}
++    ref={ref}
++    iconContent={<span aria-hidden="true">{"\u25be"}</span>}
++  />
++));
++StableSelect.displayName = "StableSelect";
++
++const StableNumberInput = React.forwardRef<HTMLInputElement, React.ComponentProps<typeof ChipsNumberInput>>((props, ref) => (
++  <ChipsNumberInput
++    {...props}
++    ref={ref}
++    decrementContent={<span aria-hidden="true">-</span>}
++    incrementContent={<span aria-hidden="true">+</span>}
++  />
++));
++StableNumberInput.displayName = "StableNumberInput";
++
+ function updateConfig(config: LayoutConfig, patch: Partial<LayoutConfig["props"]>): LayoutConfig {
+   return normalizeLayoutConfig({
+     ...config,
+@@ -80,7 +99,7 @@ const shellStyle: React.CSSProperties = {
+   overflow: "hidden",
+   color: "var(--chips-sys-color-on-surface, #0f172a)",
+   background: "var(--chips-sys-color-surface, #ffffff)",
+-  font: '14px/1.55 var(--chips-font-family-sans, "SF Pro Text", "PingFang SC", sans-serif)',
++  font: "var(--chips-comp-text-root-font, 14px/1.55 var(--chips-font-family-sans, sans-serif))",
+ };
+ 
+ const bodyStyle: React.CSSProperties = {
+@@ -125,14 +144,14 @@ export function LayoutEditorPanel({
+             <ChipsForm.Field name="sortMode">
+               <ChipsForm.Label>{t("editor.sort_mode")}</ChipsForm.Label>
+               <ChipsForm.Control>
+-                <ChipsSelect
++                <StableSelect
+                   value={config.props.sortMode}
+                   options={[
+                     { value: "manual", label: t("editor.sort_manual") },
+                     { value: "name-asc", label: t("editor.sort_name_asc") },
+                     { value: "name-desc", label: t("editor.sort_name_desc") },
+                   ]}
+-                  onValueChange={(value) => {
++                  onValueChange={(value: string) => {
+                     onChange(updateConfig(config, {
+                       sortMode: value as SortMode,
+                     }));
+@@ -189,14 +208,14 @@ export function LayoutEditorPanel({
+             <ChipsForm.Field name="groupMode">
+               <ChipsForm.Label>{t("editor.group_mode")}</ChipsForm.Label>
+               <ChipsForm.Control>
+-                <ChipsSelect
++                <StableSelect
+                   value={config.props.groupMode}
+                   options={[
+                     { value: "none", label: t("editor.group_none") },
+                     { value: "type", label: t("editor.group_type") },
+                     { value: "tag", label: t("editor.group_tag") },
+                   ]}
+-                  onValueChange={(value) => {
++                  onValueChange={(value: string) => {
+                     onChange(updateConfig(config, {
+                       groupMode: value as GroupMode,
+                     }));
+@@ -228,14 +247,14 @@ export function LayoutEditorPanel({
+             <ChipsForm.Field name="pageSize">
+               <ChipsForm.Label>{t("editor.page_size")}</ChipsForm.Label>
+               <ChipsForm.Control>
+-                <ChipsNumberInput
++                <StableNumberInput
+                   value={config.props.pageSize}
+                   min={20}
+                   max={240}
+                   step={20}
+                   largeStep={40}
+                   ariaLabel={t("editor.page_size")}
+-                  onValueChange={(value) => {
++                  onValueChange={(value: number | null) => {
+                     onChange(updateConfig(config, {
+                       pageSize: typeof value === "number" ? value : 120,
+                     }));
+diff --git a/Chips-BoxLayoutPlugin/list-BLP/src/schema/layout-config.ts b/Chips-BoxLayoutPlugin/list-BLP/src/schema/layout-config.ts
+index bf77384d..5f8edc7e 100644
+--- a/Chips-BoxLayoutPlugin/list-BLP/src/schema/layout-config.ts
++++ b/Chips-BoxLayoutPlugin/list-BLP/src/schema/layout-config.ts
+@@ -297,6 +297,19 @@ export function validateLayoutConfigInput(input: Record<string, unknown> | undef
+     });
+   }
+ 
++  const rawProps = typeof input?.props === "object" && input.props
++    ? input.props as Record<string, unknown>
++    : {};
++  for (const key of ["background", "topRegion"] as const) {
++    const rawRegion = typeof rawProps[key] === "object" && rawProps[key]
++      ? rawProps[key] as Record<string, unknown>
++      : {};
++    const rawAssetPath = rawRegion.assetPath;
++    if (typeof rawAssetPath === "string" && rawAssetPath.length > 0 && !isSafeBoxAssetPath(rawAssetPath)) {
++      errors[`props.${key}.assetPath`] = `${key} assetPath must be a box assets/ relative path.`;
++    }
++  }
++
+   return {
+     valid: Object.keys(errors).length === 0,
+     errors,
+diff --git a/Chips-BoxLayoutPlugin/list-BLP/tests/unit/schema.test.ts b/Chips-BoxLayoutPlugin/list-BLP/tests/unit/schema.test.ts
+index 20fe21ea..37998653 100644
+--- a/Chips-BoxLayoutPlugin/list-BLP/tests/unit/schema.test.ts
++++ b/Chips-BoxLayoutPlugin/list-BLP/tests/unit/schema.test.ts
+@@ -124,11 +124,33 @@ describe("layout-config", () => {
+ 
+     expect(result.valid).toBe(false);
+     expect(result.errors).toMatchObject({
+-      "props.background.assetPath": "background assetPath is required when mode is image.",
++      "props.background.assetPath": "background assetPath must be a box assets/ relative path.",
+       "assetRefs[0]": "assetRefs item must be a box assets/ relative path.",
+     });
+   });
+ 
++  it("rejects unsafe raw frame asset paths even when the frame mode does not use them", () => {
++    const result = validateLayoutConfigInput({
++      props: {
++        background: {
++          mode: "none",
++          assetPath: "file:///tmp/background.webp",
++        },
++        topRegion: {
++          mode: "html",
++          html: "<strong>Title</strong>",
++          assetPath: "assets/layouts/list/../secret.webp",
++        },
++      },
++    });
++
++    expect(result.valid).toBe(false);
++    expect(result.errors).toMatchObject({
++      "props.background.assetPath": "background assetPath must be a box assets/ relative path.",
++      "props.topRegion.assetPath": "topRegion assetPath must be a box assets/ relative path.",
++    });
++  });
++
+   it("validates config", () => {
+     const result = validateLayoutConfig(createDefaultLayoutConfig());
+     expect(result.valid).toBe(true);
+diff --git a/Chips-MusicPlayer/index.html b/Chips-MusicPlayer/index.html
+index 23bce60d..711a0bac 100644
+--- a/Chips-MusicPlayer/index.html
++++ b/Chips-MusicPlayer/index.html
+@@ -10,10 +10,10 @@
+         default-src 'self' file: blob:;
+         script-src 'self';
+         style-src 'self' 'unsafe-inline';
+-        img-src 'self' file: data: blob: https:;
+-        media-src 'self' file: data: blob: https:;
+-        font-src 'self' file: data:;
+-        connect-src 'self';
++        img-src 'self' file: data: blob: http: https:;
++        media-src 'self' file: data: blob: http: https:;
++        font-src 'self' file: data: http: https:;
++        connect-src 'self' http: https:;
+         frame-src 'self' file: blob:;
+         worker-src 'self' blob:;
+         object-src 'none';
+diff --git a/Chips-MusicPlayer/src/app/AppRuntimeProvider.tsx b/Chips-MusicPlayer/src/app/AppRuntimeProvider.tsx
+index e517c96e..232832cc 100644
+--- a/Chips-MusicPlayer/src/app/AppRuntimeProvider.tsx
++++ b/Chips-MusicPlayer/src/app/AppRuntimeProvider.tsx
+@@ -421,6 +421,8 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+       let artworkUri = DEFAULT_ARTWORK_URI;
+       let artworkKind: TrackPresentation["artworkKind"] = "default";
+       let nextRevocableArtworkUrl: string | undefined;
++      let embeddedMetadata: ReturnType<typeof parseEmbeddedAudioMetadata> = {};
++      let companionSelection = explicitSelection;
+ 
+       if (metadataReadTarget) {
+         const [binaryResult, companionResult] = await Promise.allSettled([
+@@ -428,7 +430,7 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+           !musicCard && localAudioPath ? discoverCompanionFiles(localAudioPath, explicitSelection) : Promise.resolve(explicitSelection),
+         ]);
+ 
+-        const embeddedMetadata =
++        embeddedMetadata =
+           binaryResult.status === "fulfilled"
+             ? parseEmbeddedAudioMetadata({
+                 bytes: binaryResult.value,
+@@ -444,72 +446,72 @@ export function AppRuntimeProvider({ children }: AppRuntimeProviderProps): React
+           });
+         }
+ 
+-        const companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
++        companionSelection = companionResult.status === "fulfilled" ? companionResult.value : explicitSelection;
+ 
+         resolvedTitle = target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || resolvedTitle;
+         artist = musicCardArtist || embeddedMetadata.artist?.trim() || artist;
+         album = musicCardAlbum || embeddedMetadata.album?.trim() || album;
++      }
+ 
+-        try {
+-          lyrics = musicCard?.resources.lyrics
+-            ? await loadLyricsDocumentFromResourceId(musicCard.resources.lyrics.resourceId)
+-            : await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
+-        } catch (error) {
+-          logger.warn("读取歌词失败，继续回退到嵌入歌词与空歌词视图", {
+-            localAudioPath,
+-            resourceId: musicCard?.resources.lyrics?.resourceId,
+-            error,
+-          });
+-          lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata).catch(() => createEmptyLyricsDocument());
+-        }
++      try {
++        lyrics = musicCard?.resources.lyrics
++          ? await loadLyricsDocumentFromResourceId(musicCard.resources.lyrics.resourceId)
++          : await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata);
++      } catch (error) {
++        logger.warn("读取歌词失败，继续回退到嵌入歌词与空歌词视图", {
++          localAudioPath,
++          resourceId: musicCard?.resources.lyrics?.resourceId,
++          error,
++        });
++        lyrics = await loadLyricsDocument(companionSelection.lyricsPath, embeddedMetadata).catch(() => createEmptyLyricsDocument());
++      }
+ 
+-        resolvedTitle =
+-          target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
+-        artist = musicCardArtist || embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
+-        album = musicCardAlbum || embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
+-
+-        let hasPreferredArtwork = false;
+-        try {
+-          const companionArtwork = musicCard?.resources.cover
+-            ? await resolveArtworkUriFromResource(musicCard.resources.cover.resourceId)
+-            : await resolveArtworkUriFromResource(companionSelection.coverPath);
+-          artworkUri = companionArtwork.uri;
+-          artworkKind = companionArtwork.kind;
+-          hasPreferredArtwork = companionArtwork.kind === "companion";
+-        } catch (error) {
+-          logger.warn("读取卡片封面或伴生封面失败，继续回退默认封面与嵌入封面", {
+-            localAudioPath,
+-            resourceId: musicCard?.resources.cover?.resourceId ?? companionSelection.coverPath,
+-            error,
+-          });
+-        }
++      resolvedTitle =
++        target.title?.trim() || musicCardTitle || embeddedMetadata.title?.trim() || lyrics.metadata.title?.trim() || resolvedTitle;
++      artist = musicCardArtist || embeddedMetadata.artist?.trim() || lyrics.metadata.artist?.trim() || artist;
++      album = musicCardAlbum || embeddedMetadata.album?.trim() || lyrics.metadata.album?.trim() || album;
++
++      let hasPreferredArtwork = false;
++      try {
++        const companionArtwork = musicCard?.resources.cover
++          ? await resolveArtworkUriFromResource(musicCard.resources.cover.resourceId)
++          : await resolveArtworkUriFromResource(companionSelection.coverPath);
++        artworkUri = companionArtwork.uri;
++        artworkKind = companionArtwork.kind;
++        hasPreferredArtwork = companionArtwork.kind === "companion";
++      } catch (error) {
++        logger.warn("读取卡片封面或伴生封面失败，继续回退默认封面与嵌入封面", {
++          localAudioPath,
++          resourceId: musicCard?.resources.cover?.resourceId ?? companionSelection.coverPath,
++          error,
++        });
++      }
++
++      if (!hasPreferredArtwork && embeddedMetadata.artwork) {
++        const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
++          client,
++          workspacePath,
++          sourceId: target.sourceId.trim(),
++          fileName: normalizedFileName,
++          artwork: embeddedMetadata.artwork,
++          logger,
++        });
+ 
+-        if (!hasPreferredArtwork && embeddedMetadata.artwork) {
+-          const persistedArtwork = await persistEmbeddedArtworkPngToWorkspace({
+-            client,
+-            workspacePath,
++        if (persistedArtwork) {
++          artworkUri = persistedArtwork.uri;
++          logger.info("嵌入封面已写入 Host 工作区临时 PNG", {
+             sourceId: target.sourceId.trim(),
+-            fileName: normalizedFileName,
+-            artwork: embeddedMetadata.artwork,
+-            logger,
++            filePath: persistedArtwork.filePath,
++          });
++        } else {
++          nextRevocableArtworkUrl = await resolveEmbeddedArtworkUrl(embeddedMetadata.artwork);
++          artworkUri = nextRevocableArtworkUrl;
++          logger.warn("嵌入封面未能落盘到 Host 工作区，回退为运行时对象 URL", {
++            sourceId: target.sourceId.trim(),
++            mimeType: embeddedMetadata.artwork.mimeType,
+           });
+-
+-          if (persistedArtwork) {
+-            artworkUri = persistedArtwork.uri;
+-            logger.info("嵌入封面已写入 Host 工作区临时 PNG", {
+-              sourceId: target.sourceId.trim(),
+-              filePath: persistedArtwork.filePath,
+-            });
+-          } else {
+-            nextRevocableArtworkUrl = await resolveEmbeddedArtworkUrl(embeddedMetadata.artwork);
+-            artworkUri = nextRevocableArtworkUrl;
+-            logger.warn("嵌入封面未能落盘到 Host 工作区，回退为运行时对象 URL", {
+-              sourceId: target.sourceId.trim(),
+-              mimeType: embeddedMetadata.artwork.mimeType,
+-            });
+-          }
+-          artworkKind = "embedded";
+         }
++        artworkKind = "embedded";
+       }
+ 
+       const source: AudioSource = {
+diff --git a/Chips-MusicPlayer/tests/unit/launch-resource.test.ts b/Chips-MusicPlayer/tests/unit/launch-resource.test.ts
+index b300caec..119dbd44 100644
+--- a/Chips-MusicPlayer/tests/unit/launch-resource.test.ts
++++ b/Chips-MusicPlayer/tests/unit/launch-resource.test.ts
+@@ -172,6 +172,93 @@ describe("resolveLaunchAudioTarget", () => {
+     });
+   });
+ 
++  it("在社区 Web 远端资源场景下保留音乐卡片封面和歌词资源上下文", () => {
++    const audioUrl = "http://localhost:9000/chips-card-render-cache/card-1/track.mp3";
++    const coverUrl = "http://localhost:9000/chips-card-render-cache/card-1/cover.png";
++    const lyricsUrl = "http://localhost:9000/chips-card-render-cache/card-1/lyrics.lrc";
++
++    expect(
++      resolveLaunchAudioTarget({
++        launchParams: {
++          trigger: "resource-open-service",
++          resourceOpen: {
++            intent: "view",
++            resourceId: audioUrl,
++            fileName: "track.mp3",
++            mimeType: "audio/mpeg",
++            title: "Web Track",
++            matchedCapability: "resource-handler:view:audio/*",
++            payload: {
++              kind: "chips.music-card",
++              version: "1.0.0",
++              cardType: "base.music",
++              config: {
++                card_type: "MusicCard",
++                theme: "",
++                audio_file: "track.mp3",
++                music_name: "Web Track",
++                album_cover: "cover.png",
++                lyrics_file: "lyrics.lrc",
++                production_team: [
++                  {
++                    id: "artist",
++                    role: "演唱",
++                    people: ["Web Artist"],
++                  },
++                ],
++                release_date: "2026-07-06",
++                album_name: "Community Cache",
++                language: "中文",
++                genre: "Pop",
++              },
++              resources: {
++                audio: {
++                  resourceId: audioUrl,
++                  relativePath: "track.mp3",
++                  fileName: "track.mp3",
++                  mimeType: "audio/mpeg",
++                },
++                cover: {
++                  resourceId: coverUrl,
++                  relativePath: "cover.png",
++                  fileName: "cover.png",
++                  mimeType: "image/png",
++                },
++                lyrics: {
++                  resourceId: lyricsUrl,
++                  relativePath: "lyrics.lrc",
++                  fileName: "lyrics.lrc",
++                  mimeType: "text/plain",
++                },
++              },
++              display: {
++                title: "Web Track",
++                artist: "Web Artist",
++              },
++            },
++          },
++        },
++      }),
++    ).toEqual({
++      sourceId: audioUrl,
++      filePath: undefined,
++      fileName: "track.mp3",
++      mimeType: "audio/mpeg",
++      title: "Web Track",
++      musicCard: expect.objectContaining({
++        resources: expect.objectContaining({
++          audio: expect.objectContaining({ resourceId: audioUrl }),
++          cover: expect.objectContaining({ resourceId: coverUrl }),
++          lyrics: expect.objectContaining({ resourceId: lyricsUrl }),
++        }),
++        display: {
++          title: "Web Track",
++          artist: "Web Artist",
++        },
++      }),
++    });
++  });
++
+   it("在只有 targetPath 时恢复普通文件关联打开", () => {
+     expect(
+       resolveLaunchAudioTarget({
+diff --git "a/Chips-MusicPlayer/\346\212\200\346\234\257\346\226\207\346\241\243/02-\345\220\257\345\212\250\346\201\242\345\244\215\344\270\216\351\237\263\351\242\221\350\265\204\346\272\220\350\247\243\346\236\220\350\256\276\350\256\241.md" "b/Chips-MusicPlayer/\346\212\200\346\234\257\346\226\207\346\241\243/02-\345\220\257\345\212\250\346\201\242\345\244\215\344\270\216\351\237\263\351\242\221\350\265\204\346\272\220\350\247\243\346\236\220\350\256\276\350\256\241.md"
+index 8e7c94e4..2576b7b5 100644
+--- "a/Chips-MusicPlayer/\346\212\200\346\234\257\346\226\207\346\241\243/02-\345\220\257\345\212\250\346\201\242\345\244\215\344\270\216\351\237\263\351\242\221\350\265\204\346\272\220\350\247\243\346\236\220\350\256\276\350\256\241.md"
++++ "b/Chips-MusicPlayer/\346\212\200\346\234\257\346\226\207\346\241\243/02-\345\220\257\345\212\250\346\201\242\345\244\215\344\270\216\351\237\263\351\242\221\350\265\204\346\272\220\350\247\243\346\236\220\350\256\276\350\256\241.md"
+@@ -87,6 +87,17 @@ interface LaunchAudioTarget {
+ 3. 嵌入封面、歌词、歌曲信息应在“本地打开”和“Host 路由唤起”两条链路下保持一致。
+ 4. 业务层不需要也不允许自行兼容 `readBinary().data` 之类的错误共享形状。
+ 
++### 4.1 音乐卡片辅助资源恢复
++
++当启动上下文包含正式 `MusicCardOpenPayload` 时，播放器会在嵌入元数据读取之外独立恢复卡片辅助资源：
++
++1. `musicCard.resources.cover.resourceId` 会优先通过 `client.resource.resolve(...)` 解析为封面展示 URI；
++2. `musicCard.resources.lyrics.resourceId` 会优先通过 `client.resource.readBinary(...)` 读取歌词；
++3. 即使主音频是 `http://` / `https://` 这类可直接播放的远端对象存储 URL，播放器也不得跳过上述 payload 辅助资源；
++4. 只有 payload 未提供封面或歌词时，才回退到本地伴生文件、嵌入元数据和默认封面。
++
++这样社区 Web Host、桌面 Host 和未来移动 Host 都能用同一套 `resource.open -> launchParams.resourceOpen.payload` 契约恢复音乐卡片信息、封面和歌词。
++
+ ## 5. 本地伴生资源发现
+ 
+ 实现位置：
+diff --git a/Chips-PhotoViewer/src/utils/launch-resource.ts b/Chips-PhotoViewer/src/utils/launch-resource.ts
+index ef7c4c15..e052f230 100644
+--- a/Chips-PhotoViewer/src/utils/launch-resource.ts
++++ b/Chips-PhotoViewer/src/utils/launch-resource.ts
+@@ -43,11 +43,96 @@ function readBookPayload(value: unknown): BookCardOpenPayload | null {
+   return payload as unknown as BookCardOpenPayload;
+ }
+ 
+-function readPayloadImageResource(value: unknown): LaunchImageResource | null {
++function decodePathSegment(value: string): string {
++  try {
++    return decodeURIComponent(value);
++  } catch {
++    return value;
++  }
++}
++
++function normalizePlainPath(value: string): string {
++  return value.replace(/\\/g, "/").replace(/\/+/g, "/");
++}
++
++function isSourceForRelativePath(sourceId: string, relativePath: string | undefined): boolean {
++  if (!relativePath) {
++    return false;
++  }
++
++  if (sourceId === relativePath) {
++    return true;
++  }
++
++  try {
++    const parsed = new URL(sourceId);
++    const sourceSegments = parsed.pathname.split("/").filter(Boolean).map(decodePathSegment);
++    const relativeSegments = normalizePlainPath(relativePath).split("/").filter(Boolean);
++    return relativeSegments.length > 0
++      && sourceSegments.slice(-relativeSegments.length).join("/") === relativeSegments.join("/");
++  } catch {
++    const normalizedSource = normalizePlainPath(sourceId);
++    const normalizedRelative = normalizePlainPath(relativePath);
++    return normalizedSource.endsWith(`/${normalizedRelative}`) || normalizedSource === normalizedRelative;
++  }
++}
++
++function resolveResourceBaseFromDirectSource(
++  directSource: string | undefined,
++  directRelativePath: string | undefined,
++): string | undefined {
++  if (!directSource || !directRelativePath || !isSourceForRelativePath(directSource, directRelativePath)) {
++    return undefined;
++  }
++
++  const relativeSegments = normalizePlainPath(directRelativePath).split("/").filter(Boolean);
++  if (relativeSegments.length === 0) {
++    return undefined;
++  }
++
++  try {
++    const parsed = new URL(directSource);
++    const sourceSegments = parsed.pathname.split("/").filter(Boolean);
++    parsed.pathname = `/${sourceSegments.slice(0, -relativeSegments.length).join("/")}/`;
++    parsed.search = "";
++    parsed.hash = "";
++    return parsed.toString();
++  } catch {
++    const normalizedSource = normalizePlainPath(directSource);
++    const normalizedRelative = normalizePlainPath(directRelativePath);
++    if (normalizedSource.endsWith(normalizedRelative)) {
++      return normalizedSource.slice(0, normalizedSource.length - normalizedRelative.length);
++    }
++  }
++
++  return undefined;
++}
++
++function resolvePayloadSourceId(
++  sourceId: string | undefined,
++  relativePath: string | undefined,
++  resourceBaseUrl: string | undefined,
++): string | undefined {
++  if (sourceId && (!relativePath || sourceId !== relativePath)) {
++    return sourceId;
++  }
++
++  if (relativePath && resourceBaseUrl) {
++    try {
++      return new URL(relativePath, resourceBaseUrl).toString();
++    } catch {
++      return `${resourceBaseUrl}${relativePath}`;
++    }
++  }
++
++  return sourceId ?? relativePath;
++}
++
++function readPayloadImageResource(value: unknown, resourceBaseUrl?: string): LaunchImageResource | null {
+   const record = readRecord(value);
+   const sourceId = readNonEmptyString(record?.resourceId);
+   const relativePath = readNonEmptyString(record?.relativePath);
+-  const resolvedSourceId = sourceId ?? relativePath;
++  const resolvedSourceId = resolvePayloadSourceId(sourceId, relativePath, resourceBaseUrl);
+   if (!resolvedSourceId) {
+     return null;
+   }
+@@ -66,18 +151,36 @@ export function resolveLaunchImageTarget(launchContext: PlatformLaunchContext):
+   const bookPayload = readBookPayload(resourceOpen?.payload);
+ 
+   if (bookPayload) {
+-    const images = (bookPayload.resources.images ?? [])
+-      .map(readPayloadImageResource)
++    const rawImages = bookPayload.resources.images ?? [];
++    const directSources = [
++      readNonEmptyString(resourceOpen?.resourceId),
++      readNonEmptyString(resourceOpen?.filePath),
++    ].filter((item): item is string => Boolean(item));
++    const directImage = rawImages.find((image) => {
++      const record = readRecord(image);
++      const sourceId = readNonEmptyString(record?.resourceId);
++      const relativePath = readNonEmptyString(record?.relativePath);
++      return directSources.some((directSource) => (
++        directSource === sourceId
++        || directSource === relativePath
++        || isSourceForRelativePath(directSource, relativePath)
++      ));
++    });
++    const directImageRecord = readRecord(directImage);
++    const directRelativePath = readNonEmptyString(directImageRecord?.relativePath)
++      ?? readNonEmptyString(directImageRecord?.resourceId);
++    const directSource = directSources.find((source) => (
++      source === directRelativePath || isSourceForRelativePath(source, directRelativePath)
++    ));
++    const resourceBaseUrl = resolveResourceBaseFromDirectSource(directSource, directRelativePath);
++    const images = rawImages
++      .map((image) => readPayloadImageResource(image, resourceBaseUrl))
+       .filter((image): image is LaunchImageResource => image !== null);
+     if (images.length > 0) {
+-      const directSources = [
+-        readNonEmptyString(resourceOpen?.resourceId),
+-        readNonEmptyString(resourceOpen?.filePath),
+-      ].filter((item): item is string => Boolean(item));
+       const initialIndex = directSources.length > 0
+         ? images.findIndex((image) => (
+           directSources.includes(image.sourceId) ||
+-          (image.relativePath ? directSources.includes(image.relativePath) : false)
++          (image.relativePath ? directSources.includes(image.relativePath) || directSources.some((source) => isSourceForRelativePath(source, image.relativePath)) : false)
+         ))
+         : 0;
+ 
+diff --git a/Chips-PhotoViewer/tests/unit/launch-resource.test.ts b/Chips-PhotoViewer/tests/unit/launch-resource.test.ts
+index 3fa497b8..b0b58687 100644
+--- a/Chips-PhotoViewer/tests/unit/launch-resource.test.ts
++++ b/Chips-PhotoViewer/tests/unit/launch-resource.test.ts
+@@ -138,6 +138,62 @@ describe("resolveLaunchImagePath", () => {
+     });
+   });
+ 
++  it("社区 Web 图片序列 payload 使用相对路径时按顶层资源推导同源序列 URL", () => {
++    expect(
++      resolveLaunchImageTarget({
++        launchParams: {
++          resourceOpen: {
++            resourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-02.jpg",
++            fileName: "page-02.jpg",
++            mimeType: "image/jpeg",
++            payload: {
++              kind: "chips.book-card",
++              version: "1.0.0",
++              cardType: "base.book",
++              mode: "image-sequence",
++              resources: {
++                images: [
++                  {
++                    resourceId: "comic/page-01.jpg",
++                    relativePath: "comic/page-01.jpg",
++                    fileName: "page-01.jpg",
++                    mimeType: "image/jpeg",
++                  },
++                  {
++                    resourceId: "comic/page-02.jpg",
++                    relativePath: "comic/page-02.jpg",
++                    fileName: "page-02.jpg",
++                    mimeType: "image/jpeg",
++                  },
++                ],
++              },
++              display: {
++                title: "Community Comic",
++              },
++            },
++          },
++        },
++      }),
++    ).toEqual({
++      images: [
++        {
++          sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-01.jpg",
++          fileName: "page-01.jpg",
++          mimeType: "image/jpeg",
++          relativePath: "comic/page-01.jpg",
++        },
++        {
++          sourceId: "https://community.example/cards/card-1/render-cache/cache-1/assets/content/comic/page-02.jpg",
++          fileName: "page-02.jpg",
++          mimeType: "image/jpeg",
++          relativePath: "comic/page-02.jpg",
++        },
++      ],
++      initialIndex: 1,
++      title: "Community Comic",
++    });
++  });
++
+   it("通过正式资源打开上下文接收成品测试空间真实图片", () => {
+     const imagePath = requireFileMaterial("图片.jpg");
+ 
+diff --git "a/Chips-PhotoViewer/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\233\276\347\211\207\346\237\245\347\234\213\345\231\250\346\212\200\346\234\257\346\226\207\346\241\243.md" "b/Chips-PhotoViewer/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\233\276\347\211\207\346\237\245\347\234\213\345\231\250\346\212\200\346\234\257\346\226\207\346\241\243.md"
+index f0e6fdb3..4dcfa93d 100644
+--- "a/Chips-PhotoViewer/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\233\276\347\211\207\346\237\245\347\234\213\345\231\250\346\212\200\346\234\257\346\226\207\346\241\243.md"
++++ "b/Chips-PhotoViewer/\346\212\200\346\234\257\346\226\207\346\241\243/01-\345\233\276\347\211\207\346\237\245\347\234\213\345\231\250\346\212\200\346\234\257\346\226\207\346\241\243.md"
+@@ -102,7 +102,7 @@ Host 当前处理顺序如下：
+ 打开入口当前统一归一为 `LaunchImageTarget`：
+ 
+ 1. 普通图片打开：优先从 `launchParams.resourceOpen.filePath` 建立单项图片队列，再回退到 `launchParams.targetPath`，最后回退到 `resourceOpen.resourceId`；
+-2. 电子书图片包打开：当 `resourceOpen.payload.kind = "chips.book-card"` 且 `mode = "image-sequence"` 时，从 `payload.resources.images[]` 建立有序图片队列；
++2. 电子书图片包打开：当 `resourceOpen.payload.kind = "chips.book-card"` 且 `mode = "image-sequence"` 时，从 `payload.resources.images[]` 建立有序图片队列；若 payload 内资源仍是卡片根目录相对路径，则以顶层 `resourceOpen.resourceId/filePath` 命中的当前图片推导同一资源基准，恢复图片序列的可读资源标识；
+ 3. 文件对话框返回的本地路径建立单项图片队列。
+ 
+ 入口层只做三件事：
